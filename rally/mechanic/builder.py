@@ -40,8 +40,8 @@ class Builder:
       log_file = "%s/build.%s.log" % (log_dir, task_key)
 
       # FIXME dm: This is just disabled to skip the build for now. Reenable me again later
-      #if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
-      #  os.rename(("%s.tmp" % log_file), log_file)
+      if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
+        os.rename(("%s.tmp" % log_file), log_file)
 
     binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
 
