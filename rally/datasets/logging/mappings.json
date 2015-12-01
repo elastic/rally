@@ -1,0 +1,158 @@
+{
+	"type": {
+	    "dynamic": "strict",
+	    "properties": {
+		"@timestamp": {
+		    "format": "dateOptionalTime",
+		    "type": "date"
+		},
+		"@version": {
+		    "index": "not_analyzed",
+		    "type": "string",
+		    "ignore_above": 256
+		},
+		"agent": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"auth": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"bytes": {
+		    "type": "long"
+		},
+		"clientip": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"geoip": {
+		    "dynamic": "true",
+		    "properties": {
+			"location": {
+			    "type": "geo_point"
+			}
+		    }
+		},
+		"host": {
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    },
+		    "norms": {
+			"enabled": false
+		    },
+		    "type": "string"
+		},
+		"httpversion": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"ident": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"message": {
+		    "type": "string",
+		    "index": "analyzed",
+		    "omit_norms": true
+		},
+		"referrer": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"request": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"rawrequest": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"response": {
+		    "type": "integer"
+		},
+		"tags": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"timestamp": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		},
+		"verb": {
+		    "type": "string",
+		    "fields": {
+			"raw": {
+			    "ignore_above": 256,
+			    "index": "not_analyzed",
+			    "type": "string"
+			}
+		    }
+		}
+	    }
+	}
+}
