@@ -1,6 +1,6 @@
 import track.track as track
-import cluster.cluster as cluster
-import telemetry.metrics as m
+import cluster
+import metrics as m
 
 
 # Benchmark runner

@@ -4,7 +4,7 @@ import mechanic.supplier as supplier
 import mechanic.builder as builder
 import mechanic.provisioner as provisioner
 import mechanic.launcher as launcher
-import telemetry.metrics as metrics
+import metrics
 
 
 class Mechanic:

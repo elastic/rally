@@ -4,8 +4,9 @@ import os
 
 import logging
 
-import racecontrol.racecontrol as rc
+import racecontrol as rc
 import config
+
 
 def print_help():
   print("Usage: %s [options]\n" % sys.argv[0])
@@ -13,7 +14,7 @@ def print_help():
   print("Supported options:\n")
   print("--help\t\tShows this help")
   # Don't advertise this yet, it is not fully working (only for build)
-  #print("--dry-run\tDry run of the whole benchmark (useful for checking the configuration)")
+  # print("--dry-run\tDry run of the whole benchmark (useful for checking the configuration)")
   # TODO dm: This is not yet supported
   # The idea is:
   #
@@ -26,7 +27,8 @@ def print_help():
   # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
   # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
 
-  #print("--benchmark-mode\tSupported values are: single (default), range, tournament")
+  # print("--benchmark-mode\tSupported values are: single (default), range, tournament")
+
 
 def main():
   logging.basicConfig(level=logging.INFO)
@@ -40,6 +42,7 @@ def main():
     cfg.add(config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
     race_control = rc.RaceControl(cfg)
     race_control.start()
+
 
 if __name__ == '__main__':
   main()

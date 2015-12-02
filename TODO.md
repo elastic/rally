@@ -22,6 +22,7 @@
     * Verification of rally against the original version (compare log files (single-threaded test)?)
     * EC2 benchmarks
     * Various minor bits like uploading the report to S3
+    * Reenable timing of builds (currently we don't even run gradle assembly as it is taking up too much time)
     
 * Backtesting support:
     * Maven build

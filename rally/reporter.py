@@ -76,6 +76,7 @@ class Reporter:
     allTimes = list(allTimes)
     allTimes.sort()
 
+    script_dir = self._config.opts("system", "rally.root")
     base_dir = self._config.opts("reporting", "report.base.dir")
     file_name = self._config.opts("reporting", "output.html.report.filename")
 
@@ -83,7 +84,7 @@ class Reporter:
     if os.path.exists(base_dir):
       shutil.rmtree(base_dir)
     utils.io.ensure_dir(base_dir)
-    shutil.copyfile("%s/reporter/dygraph-combined.js" % script_dir, "%s/dygraph-combined.js" % base_dir)
+    shutil.copyfile("%s/resources/dygraph-combined.js" % script_dir, "%s/dygraph-combined.js" % base_dir)
     # TODO dm: We don't get too fancy for now later we should have some kind of archive structure in place...
     full_output_path = "%s/%s" % (base_dir, file_name)
 
