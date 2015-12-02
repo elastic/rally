@@ -7,6 +7,7 @@ import bz2
 import gzip
 
 import config as cfg
+import utils.sysstats as sysstats
 import cluster
 import track.track as track
 
@@ -14,7 +15,6 @@ import track.track as track
 # TODO dm: Remove / encapsulate after porting
 # From the original code:
 DOCS_IN_BLOCK = 5000
-NUM_CLIENT_THREADS = 8
 # VERBOSE_IW = False
 DO_IDS = False
 ID_TYPE = 'random'
@@ -126,7 +126,7 @@ class LoggingTrack(track.Track):
 
     try:
       # TODO dm: Reduce number of parameters...
-      self.indexAllDocs(data_set_path, 'logs', cluster.client(), self._bulk_docs, NUM_CLIENT_THREADS, expectedDocCount)
+      self.indexAllDocs(data_set_path, 'logs', cluster.client(), self._bulk_docs, expectedDocCount)
       finished = True
 
     finally:
@@ -241,28 +241,34 @@ class LoggingTrack(track.Track):
     startingGun.await()
 
     while not stopEvent.isSet():
-      t0 = time.time()
+      #t0 = time.time()
       buffer = bulkDocs.nextNDocs()
       if len(buffer) == 0:
         break
-      t1 = time.time()
-      self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
+      #t1 = time.time()
+      #self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
 
-      count = int(len(buffer) / 2)
+      count = int(len(buffer)/2)
       data = '\n'.join(buffer)
       del buffer[:]
 
-      result = es.bulk(body=data, params={'request_timeout': 600})
-      if result['errors'] != False or len(result['items']) != count:
-        self.print_metrics('bulk failed (count=%s):' % count)
-        self.print_metrics('%s' % json.dumps(result, sort_keys=True,
-                                indent=4, separators=(',', ': ')))
+      try:
+        result = es.bulk(body=data, params={'request_timeout': 60000})
+      except:
         failedEvent.set()
         stopEvent.set()
-        raise RuntimeError('bulk failed')
+        raise
+      else:
+        if result['errors'] != False or len(result['items']) != count:
+          self.print_metrics('bulk failed (count=%s):' % count)
+          self.print_metrics('%s' % json.dumps(result, sort_keys=True,
+                                  indent=4, separators=(',', ': ')))
+          failedEvent.set()
+          stopEvent.set()
+          raise RuntimeError('bulk failed')
 
-      t2 = time.time()
-      self.print_metrics('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
+      #t2 = time.time()
+      #print('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
       self.printStatus(count, len(data))
       if pauseSec is not None:
         time.sleep(pauseSec)
@@ -289,9 +295,9 @@ class LoggingTrack(track.Track):
     # TODO dm: The output of this should probably be logged (not necessary in metrics)
     os.system('find %s -ls' % dataDir)
 
-  def indexAllDocs(self, docsFile, indexName, es, bulkDocs, numClientThreads, expectedDocCount, doFlush=True, doStats=True):
+  def indexAllDocs(self, docsFile, indexName, es, bulkDocs, expectedDocCount, doFlush=True, doStats=True):
     global startTime
-
+    numClientThreads = int(self._config.opts("benchmarks.logging", "index.client.threads"))
     starting_gun = CountDownLatch(1)
     self.print_metrics('json docs file: %s' % docsFile)
 
@@ -354,6 +360,12 @@ class LoggingTrack(track.Track):
       self.print_metrics('Node stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
                                            indent=4, separators=(',', ': ')))
+      t0 = time.time()
+      stats = es.indices.segments(params={'verbose': True})
+      t1 = time.time()
+      self.print_metrics('Segments stats took %.3f msec' % (1000 * (t1 - t0)))
+      self.print_metrics('SEGMENTS STATS: %s' % json.dumps(stats, sort_keys=True,
+                                              indent=4, separators=(',', ': ')))
 
       # TODO dm: Enable debug mode later on
       # if DEBUG == False and expectedDocCount is not None and expectedDocCount != actualDocCount:
@@ -483,7 +495,8 @@ loggingSeries = LoggingSeries("Logging", [
   LoggingTrack("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
   LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
   #TODO dm: Reenable, somehow the cluster does not turn green...
-  #LoggingTrack("two_nodes_defaults", processors=12, nodes=2),
+  # integer divide!
+  #LoggingTrack("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
 
   # TODO dm: Reintroduce beast2
   # LoggingTrack("beast2", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),

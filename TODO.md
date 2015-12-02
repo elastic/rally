@@ -1,7 +1,5 @@
 ### Immediate
 
-* Fix report generation (needs to write everything properly to one file per track)
-* Port latest changes from dev repo
 * Have logging behave (strictly *nothing* from subprocesses is reaching stdout)
 * Reenable scenario with 2 nodes (currently cluster does not turn green in this case - see logging_track.py)
 
@@ -36,7 +34,8 @@
 * Support for multiple benchmarks (not much missing for this one, structure already in place),
     * Pick up benchmarks automatically
     * Add an iteration loop in race control so iterates over multiple benchmarks
-    * Proper reporting for multiple benchmarks -> Spice up reporting by allowing multiple benchmarks with a menu structure 
+    * Proper reporting for multiple benchmarks -> Spice up reporting by allowing multiple benchmarks with a menu structure
+    * Also note that pickling previous results will be broken
   like in http://getbootstrap.com/examples/navbar/)
   
 * Open up the repo
