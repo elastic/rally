@@ -74,11 +74,11 @@ class Launcher:
       if l.find('Initialization Failed') != -1:
         startupEvent.set()
 
-      # TODO dm: Is this really a metric? I think it's best to just put this into the logs (at least we encapsulated the print lock now)
-      self._metrics.collect('%s: %s' % (nodeName, l.replace('\n', '\n%s: ' % nodeName)))
+      print('%s: %s' % (nodeName, l.replace('\n', '\n%s: ' % nodeName)))
       if l.endswith('started') and not startupEvent.isSet():
         startupEvent.set()
-        self._metrics.collect('%s: **started**' % nodeName)
+        print('%s: **started**' % nodeName)
+
 
   def stop(self, cluster):
     # print('shutdown server nodes=%s' % nodes)

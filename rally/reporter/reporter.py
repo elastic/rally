@@ -83,6 +83,7 @@ class Reporter:
     if os.path.exists(base_dir):
       shutil.rmtree(base_dir)
     utils.io.ensure_dir(base_dir)
+    shutil.copyfile("%s/reporter/dygraph-combined.js" % script_dir, "%s/dygraph-combined.js" % base_dir)
     # TODO dm: We don't get too fancy for now later we should have some kind of archive structure in place...
     full_output_path = "%s/%s" % (base_dir, file_name)
 
@@ -158,6 +159,7 @@ class Reporter:
           // containing div
           document.getElementById("chart"),
       ''')
+      #TODO dm: Be very wary of the order here!!! - see similar comment there (see also logging_track.py)
       # Indexing docs/sec:
       headers = ['Date', 'Defaults', 'Defaults (4G heap)', 'Fast', 'FastUpdate', 'Defaults (2 nodes)', 'EC2 i2.2xlarge Defaults 4G']
       f.write('    "%s\\n"\n' % ','.join(headers))
@@ -365,7 +367,7 @@ class Reporter:
 
       f.close()
 
-      # TODO dm: copy graph-combined.js!!
+      # TODO dm: copy dygraph-combined.js!!
 
 
 
@@ -381,7 +383,7 @@ class Reporter:
       #    raise RuntimeError('"%s" failed' % cmd)
 
   def _log_dir(self):
-    #TODO dm: No this is not nice and also not really correct, we should separate the build logs from regular ones -> later
+    #TODO dm: No this is not nice and also not really correct, we should separate the build logs from regular ones -> later (see also metrics.py)
     return self._build_log_dir()
 
   def _build_log_dir(self):
@@ -890,6 +892,7 @@ class Reporter:
         with open('%s/%s' % (buildlogDirectory, fileName), 'r') as fIn:
           success = False
           minutes = None
+          #TODO dm: (a) we're just interested in the result -> read the file backwards (b) have a separate metrics collector intead of the log file
           for line in fIn.readlines():
             if "BUILD SUCCESS" in line:
               success = True

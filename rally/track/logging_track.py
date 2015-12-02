@@ -55,6 +55,7 @@ class LoggingTrack(track.Track):
     self._nextPrint = 0
     self._numDocsIndexed = 0
     self._totBytesIndexed = 0
+    self._metrics = None
 
   def setup(self, config):
     self._config = config
@@ -112,24 +113,30 @@ class LoggingTrack(track.Track):
     docs_to_index = self._config.opts("benchmark.logging", "docs.number")
     data_set_path = self._config.opts("benchmark.logging", "dataset.path")
 
+    #TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
+    self._metrics = metrics
+
     # TODO dm: Check properly -> flag!
     if self._name != 'fastupdates':
       expectedDocCount = docs_to_index
     else:
-      expectedDocCount = 0
+      expectedDocCount = None
 
     finished = False
 
     try:
       # TODO dm: Reduce number of parameters...
-      self.indexAllDocs(data_set_path, 'logs', cluster.client(), self._bulk_docs, NUM_CLIENT_THREADS, expectedDocCount, metrics)
+      self.indexAllDocs(data_set_path, 'logs', cluster.client(), self._bulk_docs, NUM_CLIENT_THREADS, expectedDocCount)
       finished = True
 
     finally:
-      print('Finished?: %s' % finished)
+      #HINT dm: Not reporting relevant
+      self.print_metrics('Finished?: %s' % finished)
       self._bulk_docs.close()
 
-  def benchmark_searching(self, cluster):
+  def benchmark_searching(self, cluster, metrics):
+    #TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
+    self._metrics = metrics
     # TODO dm: (a) configure this properly (use a flag, not a name check), (b) check with Mike if we want to perform search tests in all configurations
     if self._name == 'defaults':
       self.doBasicSearchTests(cluster.client())
@@ -141,7 +148,7 @@ class LoggingTrack(track.Track):
 
     docs_to_index = self._config.opts("benchmark.logging", "docs.number")
 
-    print('build IDs: %s' % ID_TYPE)
+    self.print_metrics('build IDs: %s' % ID_TYPE)
 
     allIDs = [0] * docs_to_index
 
@@ -152,7 +159,7 @@ class LoggingTrack(track.Track):
         allIDs[i] = '%10d' % rand.randint(0, docs_to_index)
       else:
         raise RuntimeError('unknown ID_TYPE %s' % ID_TYPE)
-    print('  done')
+    self.print_metrics('  done')
     return allIDs
 
   # TODO dm: (Conceptual) Introduce warmup iterations!!
@@ -160,7 +167,7 @@ class LoggingTrack(track.Track):
     # NOTE: there are real problems here, e.g. we only suddenly do searching after
     # indexing is done (so hotspot will be baffled), merges are likely still running
     # at this point, etc. ... it's a start:
-    print('\nRun simple search tests...')
+    self.print_metrics('\nRun simple search tests...')
     times = []
     for i in range(120):
       time.sleep(0.5)
@@ -213,18 +220,19 @@ class LoggingTrack(track.Track):
       d['scroll_all'] = (t1 - t0) / count
 
       if False and i == 0:
-        print('SEARCH:\n%s' % json.dumps(resp, sort_keys=True,
+        self.print_metrics('SEARCH:\n%s' % json.dumps(resp, sort_keys=True,
                                          indent=4, separators=(',', ': ')))
-      print('%.2f msec' % (1000*(t1-t0)))
+      self.print_metrics('%.2f msec' % (1000*(t1-t0)))
       times.append(d)
 
     for q in ('default', 'term', 'phrase', 'hourly_agg', 'scroll_all'):
       l = [x[q] for x in times]
       l.sort()
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
-      print('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
+      #HINT dm: Reporting relevant
+      self.print_metrics('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
 
-  def indexBulkDocs(self, es, startingGun, myID, bulkDocs, failedEvent, stopEvent, metrics, pauseSec=None):
+  def indexBulkDocs(self, es, startingGun, myID, bulkDocs, failedEvent, stopEvent, pauseSec=None):
 
     """
     Runs one (client) bulk index thread.
@@ -238,7 +246,7 @@ class LoggingTrack(track.Track):
       if len(buffer) == 0:
         break
       t1 = time.time()
-      print('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
+      self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
 
       count = int(len(buffer) / 2)
       data = '\n'.join(buffer)
@@ -246,52 +254,56 @@ class LoggingTrack(track.Track):
 
       result = es.bulk(body=data, params={'request_timeout': 600})
       if result['errors'] != False or len(result['items']) != count:
-        print('bulk failed (count=%s):' % count)
-        print('%s' % json.dumps(result, sort_keys=True,
+        self.print_metrics('bulk failed (count=%s):' % count)
+        self.print_metrics('%s' % json.dumps(result, sort_keys=True,
                                 indent=4, separators=(',', ': ')))
         failedEvent.set()
         stopEvent.set()
         raise RuntimeError('bulk failed')
 
       t2 = time.time()
-      print('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
-      self.printStatus(count, len(data), metrics)
+      self.print_metrics('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
+      self.printStatus(count, len(data))
       if pauseSec is not None:
         time.sleep(pauseSec)
 
-  def printStatus(self, incDocs, incBytes, metrics):
+  def printStatus(self, incDocs, incBytes):
     # TODO dm: Move (somehow) to metrics collector
     # FIXME dm: Well, the method name says it all
-    with metrics.expose_print_lock_dirty_hack_remove_me_asap():
+    with self._metrics.expose_print_lock_dirty_hack_remove_me_asap():
       self._numDocsIndexed += incDocs
       self._totBytesIndexed += incBytes
       if self._numDocsIndexed >= self._nextPrint or incDocs == 0:
         t = time.time()
+        # FIXME dm: Don't use print_metrics here. Not needed for metrics output, we already hold the print lock and it seems to be non-reentrant
         print('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (
           self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime), (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
         self._nextPrint += 10000
 
   def printIndexStats(self, dataDir):
     indexSizeKB = os.popen('du -s %s' % dataDir).readline().split()[0]
-    print('index size %s KB' % indexSizeKB)
-    print('index files:')
+    #HINT dm: Reporting relevant
+    self.print_metrics('index size %s KB' % indexSizeKB)
+    # TODO dm: The output of this should probably be logged (remove from metrics)
+    self.print_metrics('index files:')
+    # TODO dm: The output of this should probably be logged (not necessary in metrics)
     os.system('find %s -ls' % dataDir)
 
-  def indexAllDocs(self, docsFile, indexName, es, bulkDocs, numClientThreads, expectedDocCount, metrics, doFlush=True, doStats=True):
+  def indexAllDocs(self, docsFile, indexName, es, bulkDocs, numClientThreads, expectedDocCount, doFlush=True, doStats=True):
     global startTime
 
     starting_gun = CountDownLatch(1)
-    print('json docs file: %s' % docsFile)
+    self.print_metrics('json docs file: %s' % docsFile)
 
     stopEvent = threading.Event()
     failedEvent = threading.Event()
 
     try:
       # Launch all threads
-      print('Launching %d client bulk indexing threads' % numClientThreads)
+      self.print_metrics('Launching %d client bulk indexing threads' % numClientThreads)
       threads = []
       for i in range(numClientThreads):
-        t = threading.Thread(target=self.indexBulkDocs, args=(es, starting_gun, i, bulkDocs, failedEvent, stopEvent, metrics))
+        t = threading.Thread(target=self.indexBulkDocs, args=(es, starting_gun, i, bulkDocs, failedEvent, stopEvent))
         t.setDaemon(True)
         t.start()
         threads.append(t)
@@ -304,7 +316,7 @@ class LoggingTrack(track.Track):
         t.join()
 
     except KeyboardInterrupt:
-      print('\nSIGINT: now stop')
+      self.print_metrics('\nSIGINT: now stop')
       stopEvent.set()
       for t in threads:
         t.join()
@@ -313,35 +325,44 @@ class LoggingTrack(track.Track):
       raise RuntimeError('some indexing threads failed')
 
     end_time = time.time()
-    print('Total docs/sec: %.1f' % (expectedDocCount / (end_time - startTime)))
+    #HINT dm: Reporting relevant
+    self.print_metrics('Total docs/sec: %.1f' % (bulkDocs.indexedDocCount / (end_time - startTime)))
 
-    self.printStatus(0, 0, metrics)
+    self.printStatus(0, 0)
 
     if doFlush:
-      print('now force flush')
+      self.print_metrics('now force flush')
       es.indices.flush(index=indexName, params={'request_timeout': 600})
 
     if doStats:
-      print('get stats')
+      self.print_metrics('get stats')
       t0 = time.time()
       stats = es.indices.stats(index=indexName, metric='_all', level='shards')
       t1 = time.time()
-      print('Indices stats took %.3f msec' % (1000 * (t1 - t0)))
-      print('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
+      #HINT dm: Reporting relevant
+      self.print_metrics('Indices stats took %.3f msec' % (1000 * (t1 - t0)))
+      self.print_metrics('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
                                              indent=4, separators=(',', ': ')))
 
+      #TODO dm: Unused?
       actualDocCount = stats['_all']['primaries']['docs']['count']
 
       t0 = time.time()
       stats = es.nodes.stats(metric='_all', level='shards')
       t1 = time.time()
-      print('Node stats took %.3f msec' % (1000 * (t1 - t0)))
-      print('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
+      #HINT dm: Reporting relevant
+      self.print_metrics('Node stats took %.3f msec' % (1000 * (t1 - t0)))
+      self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
                                            indent=4, separators=(',', ': ')))
 
       # TODO dm: Enable debug mode later on
       # if DEBUG == False and expectedDocCount is not None and expectedDocCount != actualDocCount:
       #  raise RuntimeError('wrong number of documents indexed: expected %s but got %s' % (expectedDocCount, actualDocCount))
+
+  #TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
+  #         everything as metrics (which is not true -> but later...)
+  def print_metrics(self, message):
+    self._metrics.collect(message)
 
 
 # TODO dm: Move to a more appropriate place
@@ -383,6 +404,7 @@ class BulkDocs:
     self.docsToIndex = docsToIndex
     self.rand = rand
     self.docsInBlock = docsInBlock
+    self.indexedDocCount = 0
 
   def close(self):
     if self.f is None:
@@ -400,7 +422,7 @@ class BulkDocs:
     with self.fileLock:
       docsLeft = self.docsToIndex - (self.blockCount * self.docsInBlock)
       if self.f is None or docsLeft <= 0:
-        return buffer
+        return []
 
       self.blockCount += 1
 
@@ -438,6 +460,8 @@ class BulkDocs:
         if len(buffer) >= limit:
           break
 
+    self.indexedDocCount += len(buffer)/2
+
     return buffer
 
 
@@ -453,12 +477,13 @@ index.translog.flush_threshold_ops: 500000
 
 # TODO dm: reintroduce 'ec2.i2.2xlarge' although it's more of an environment than a new benchmark... -> EC2 support!
 loggingSeries = LoggingSeries("Logging", [
-  #TODO dm: Reenable, somehow the cluster does not turn green...
-  #LoggingTrack("two_nodes_defaults", processors=12, nodes=2),
+  # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
   LoggingTrack("defaults", requires_metrics=True),
   LoggingTrack("4gheap", heap='4g'),
-  LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
   LoggingTrack("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
+  LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
+  #TODO dm: Reenable, somehow the cluster does not turn green...
+  #LoggingTrack("two_nodes_defaults", processors=12, nodes=2),
 
   # TODO dm: Reintroduce beast2
   # LoggingTrack("beast2", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),

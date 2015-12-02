@@ -16,12 +16,18 @@ class Builder:
     # just Gradle is supported for now
     self._clean()
     self._package()
+    self._add_binary_to_config()
 
   def _clean(self):
     self._exec("gradle.tasks.clean")
 
   def _package(self):
     self._exec("gradle.tasks.package")
+
+  def _add_binary_to_config(self):
+    src_dir = self._config.opts("source", "local.src.dir")
+    binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
+    self._config.add(config.Scope.invocationScope, "builder", "candidate.bin.path", binary)
 
   def _exec(self, task_key):
     src_dir = self._config.opts("source", "local.src.dir")
@@ -39,11 +45,5 @@ class Builder:
       # TODO dm: How should this be called?
       log_file = "%s/build.%s.log" % (log_dir, task_key)
 
-      # FIXME dm: This is just disabled to skip the build for now. Reenable me again later
       if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
         os.rename(("%s.tmp" % log_file), log_file)
-
-    binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
-
-    # TODO dm: Not entirely sure, but it should be invocation scope as it might change across checkouts?
-    self._config.add(config.Scope.invocationScope, "builder", "candidate.bin.path", binary)

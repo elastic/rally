@@ -14,7 +14,9 @@ class Mechanic:
     self._supplier = supplier.Supplier(config, logger)
     self._builder = builder.Builder(config, logger)
     self._provisioner = provisioner.Provisioner(config, logger)
-    self._launcher = launcher.Launcher(config, logger, metrics.MetricsCollector())
+    #self._launcher = launcher.Launcher(config, logger, metrics.MetricsCollector(config, ""))
+    #TODO dm: Remove metrics collector here (maybe)
+    self._launcher = launcher.Launcher(config, logger, None)
 
   def setup_for_series(self):
     # When we iterate over individual benchmark configurations we must not fetch sources or rebuild

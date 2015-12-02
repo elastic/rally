@@ -66,6 +66,8 @@ class Provisioner:
     s += '\nindex.optimize_auto_generated_id: false\n'
     if dataPaths is None:
       dataPaths = ['%s/data' % binary_path]
+
+    self._config.add(cfg.Scope.trackScope, "provisioning", "local.data.paths", dataPaths)
     s += '\npath.data: %s' % ', '.join(dataPaths)
     if additional_config:
       s += '\n%s' % additional_config
