@@ -2,6 +2,8 @@
 
 * Fix report generation (needs to write everything properly to one file per track)
 * Port latest changes from dev repo
+* Have logging behave (strictly *nothing* from subprocesses is reaching stdout)
+* Reenable scenario with 2 nodes (currently cluster does not turn green in this case - see logging_track.py)
 
 ---
 
@@ -12,6 +14,9 @@
     * Easier setup / configuration and clear docs on how to get started (use setup.py for installing dependencies!)
     * Support for downloading the benchmark file directly from rally (without boto!)
     * Nice to have: Command line reporter showing a metrics summary (in addition or instead of graphs)
+
+* Tests
+* [Pydocs](http://sphinxcontrib-napoleon.readthedocs.org/en/latest/example_google.html)
 
 * Support for running nightly benchmarks:
     * Verification of rally against the original version (compare log files (single-threaded test)?)
@@ -36,6 +41,10 @@
 * Open up the repo
 * How can we split benchmark development from rally? (-> logging benchmark shouldn't be directly in rally)
 
+### Internal Refactorings
+
+* Get metrics gathering out of tracks, maybe the benchmark can trigger that but metrics should be gathered by something in metrics.py ("Sensor"?)
+
  
 ### Further Ideas
 
@@ -47,9 +56,11 @@
     * Account for warmup, multiple benchmark iterations (-> also check JIT compiler logs of benchmark candidate)
     * Randomization of order in which benchmarks are run
     * Account for coordinated omission
+    * Check metric gathering, i.e. what's the resolution of the Python time API? Are we staying well above resolution so we don't get fooled by noise? Can we use another API?
     * Metrics reporting (latency distribution, not mean)
     * Physically isolate benchmark driver from benchmark candidate
     * Add ability to dig deeper (flamegraphs etc.)
 * Add scalability benchmarks
+* Time series data for a single benchmark run (Marvel in local benchmark mode?)
 
 TODO dm: Create Github issues

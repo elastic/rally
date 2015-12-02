@@ -25,7 +25,7 @@ class RaceControl:
     config = self._config
     mechanic = m.Mechanic(config)
     mechanic.setup_for_series()
-    driver = d.Driver()
+    driver = d.Driver(config)
     reporter = r.Reporter(config)
 
     t.loggingSeries.setup(config)
