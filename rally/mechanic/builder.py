@@ -14,8 +14,8 @@ class Builder:
 
   def build(self):
     # just Gradle is supported for now
-    #self._clean()
-    #self._package()
+    self._clean()
+    self._package()
     self._add_binary_to_config()
 
   def _clean(self):
