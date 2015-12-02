@@ -39,7 +39,10 @@ class Launcher:
       # print('ES_HEAP_SIZE=%s' % heap)
     # TODO dm: Reenable
     # if verboseGC:
+    #   #env['ES_JAVA_OPTS'] = '-verbose:gc -agentlib:hprof=heap=sites,depth=30'
     #  env['ES_JAVA_OPTS'] = '-verbose:gc'
+
+    # env['ES_GC_OPTS'] = '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC'
     java_home = gear.Gear(self._config).capability(gear.Capability.java)
     # Unix specific!:
     env['PATH'] = '%s/bin' % java_home + ':' + env['PATH']

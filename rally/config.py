@@ -27,6 +27,8 @@ class Config:
     #TODO dm: Add support for Maven (-> backtesting)
     "build::gradle.bin": "/usr/local/bin/gradle",
     "build::gradle.tasks.clean": "clean",
+    #TODO dm: tests.jvm should depend on the number of cores - how to abstract this? we can get the value with sysstats.number_of_cpu_cores()
+    # We have to encode this probably in builder.py...
     # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
     # We just build the ZIP distribution directly for now (instead of the 'check' target)
     "build::gradle.tasks.package": "assemble",
@@ -40,6 +42,8 @@ class Config:
     # Where to download raw benchmark datasets?
     "benchmarks::local.dataset.cache": "/Users/dm/Projects/data/benchmarks",
     "benchmarks::metrics.stats.disk.device": "/dev/disk1",
+    # Specific configuration per benchmark
+    "benchmarks.logging::index.client.threads": "8",
     # separate directory from output file name for now, we may want to gather multiple reports and they should not override each other
     "reporting::report.base.dir": "/Users/dm/Downloads/scratch/rally/reports",
     # We may want to consider output formats (console (summary), html, ES, ...)
