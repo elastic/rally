@@ -9,8 +9,8 @@
 import mechanic.mechanic as m
 # TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
 import track.logging_track as t
-import driver.driver as d
-import reporter.reporter as r
+import driver as d
+import reporter as r
 
 import utils.io
 

@@ -5,8 +5,8 @@ import subprocess
 import signal
 
 import mechanic.gear as gear
-import telemetry.metrics as metrics
-import cluster.cluster as c
+import metrics
+import cluster as c
 import config
 
 

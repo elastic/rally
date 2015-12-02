@@ -7,8 +7,8 @@ import bz2
 import gzip
 
 import config as cfg
+import cluster
 import track.track as track
-import cluster.cluster as cluster
 
 
 # TODO dm: Remove / encapsulate after porting
@@ -71,7 +71,7 @@ class LoggingTrack(track.Track):
   # Set up required for running the benchmark
   def setup_benchmark(self, cluster):
     root_path = self._config.opts("system", "rally.root")
-    mappings = open("%s/datasets/logging/mappings.json" % root_path).read()
+    mappings = open("%s/resources/datasets/logging/mappings.json" % root_path).read()
 
     docs_to_index = self._config.opts("benchmark.logging", "docs.number")
     data_set_path = self._config.opts("benchmark.logging", "dataset.path")
