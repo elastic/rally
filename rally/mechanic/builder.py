@@ -23,11 +23,9 @@ class Builder:
     self._add_binary_to_config()
 
   def _clean(self):
-    # TODO dm: Issue a warning if this task failed (see https://github.com/elastic/dev/commit/04cbcb446f7df929e02f2a3a45dfc4d9ed52f3c6#diff-3516e1c39e49710a814bdbfeb33fa330R46)
     self._exec("gradle.tasks.clean")
 
   def _package(self):
-    # TODO dm: Issue a warning if this task failed (see https://github.com/elastic/dev/commit/04cbcb446f7df929e02f2a3a45dfc4d9ed52f3c6#diff-3516e1c39e49710a814bdbfeb33fa330R46)
     self._exec("gradle.tasks.package")
 
   def _add_binary_to_config(self):
@@ -51,3 +49,4 @@ class Builder:
     # It's ok to call os.system here; we capture all output to a dedicated build log file
     if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
       os.rename(("%s.tmp" % log_file), log_file)
+      self._logger.error("Executing '%s %s' failed" % (gradle, task))
