@@ -1,6 +1,5 @@
 ### Immediate
 
-* Check if build logs are working and configure a proper separation between build log, the benchmark output and metrics output
 * Reenable scenario with 2 nodes (currently cluster does not turn green in this case - see logging_track.py)
 
 ---

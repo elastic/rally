@@ -21,8 +21,10 @@ class MetricsCollector:
     self._bucket_name = bucket_name
     self._print_lock = threading.Lock()
     self._stats = None
-    # TODO dm: No this is not nice and also not really correct, we should separate the build logs from regular ones -> later (see also reporter.py)
-    log_root = self._config.opts("build", "log.dir")
+    # This is a compromise between the new and old folder structure.
+    # Ideally, we'd just have: $LOG_ROOT/$BENCHMARK_TIMESTAMP/metrics/$(BUCKET_NAME).txt
+    #TODO dm: Unify folder structure but also consider backtesting (i.e. migrate the existing folder structure on the benchmark server)
+    log_root = "%s/%s" % (self._config.opts("system", "log.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
     d = self._config.opts("meta", "time.start")
     ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (d.year, d.month, d.day, d.hour, d.minute, d.second)
     metrics_log_dir = "%s/%s" % (log_root, self._bucket_name)
