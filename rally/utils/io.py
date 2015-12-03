@@ -4,7 +4,7 @@ import subprocess
 import signal
 #from zipfile import ZipFile as zip
 
-import utils.process
+import rally.utils.process
 
 def ensure_dir(directory):
   # avoid a race condition by trying to create the checkout directory
@@ -26,7 +26,7 @@ def unzip(zip_name, target_directory):
 #  l = os.listdir('.')
 #  # we leave it just when something is wrong...
 #  l.remove('unzip.log')
-  if not utils.process.run_subprocess("unzip %s -d %s" % (zip_name, target_directory)):
+  if not rally.utils.process.run_subprocess("unzip %s -d %s" % (zip_name, target_directory)):
     raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
 
 

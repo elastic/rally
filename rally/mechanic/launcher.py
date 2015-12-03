@@ -4,10 +4,10 @@ import threading
 import subprocess
 import signal
 
-import mechanic.gear as gear
-import metrics
-import cluster as c
-import config
+import rally.mechanic.gear as gear
+import rally.metrics
+import rally.cluster as c
+import rally.config
 
 
 # Currently only local launch is supported

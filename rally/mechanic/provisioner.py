@@ -2,9 +2,9 @@ import socket
 import os
 import glob
 import shutil
-import config as cfg
+import rally.config as cfg
 
-import utils.io
+import rally.utils.io
 
 # Prepares the runtime environment for execution
 # Supported modes:
@@ -30,9 +30,9 @@ class Provisioner:
       # Clean any old configs first
       if os.path.exists(install_dir):
         shutil.rmtree(install_dir)
-      utils.io.ensure_dir(install_dir)
+      rally.utils.io.ensure_dir(install_dir)
       self._logger.info("Unzipping %s to %s" % (binary, install_dir))
-      utils.io.unzip(binary, install_dir)
+      rally.utils.io.unzip(binary, install_dir)
       binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
       # config may be different for each track so we have to reinitialize every time, hence track scope
       self._config.add(cfg.Scope.trackScope, "provisioning", "local.binary.path", binary_path)

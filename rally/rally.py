@@ -4,9 +4,9 @@ import os
 
 import logging
 
-import racecontrol as rc
-import config
-import utils.io
+import rally.racecontrol as rc
+import rally.config
+import rally.utils.io
 
 
 def print_help():
@@ -38,8 +38,8 @@ def configure_logging(cfg):
   ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
 
   log_dir = "%s/%s" % (log_root_dir, ts)
-  utils.io.ensure_dir(log_dir)
-  cfg.add(config.Scope.globalScope, "system", "log.dir", log_dir)
+  rally.utils.io.ensure_dir(log_dir)
+  cfg.add(rally.config.Scope.globalScope, "system", "log.dir", log_dir)
 
   # console logging
   # logging.basicConfig(level=logging.INFO)
@@ -50,18 +50,24 @@ def configure_logging(cfg):
                       datefmt='%H:%M:%S',
                       level=logging.INFO)
 
-
 def main():
   if "--help" in sys.argv:
     print_help()
   else:
-    cfg = config.Config()
-    cfg.add(config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())
-    cfg.add(config.Scope.globalScope, "system", "dryrun", "--dry-run" in sys.argv)
-    cfg.add(config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+    cfg = rally.config.Config()
+    if cfg.config_present():
+      cfg.load_config()
+    else:
+      cfg.create_config()
+      exit(0)
+
+    cfg.add(rally.config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())
+    cfg.add(rally.config.Scope.globalScope, "system", "dryrun", "--dry-run" in sys.argv)
+    cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
 
     configure_logging(cfg)
 
+    print("Starting Rally...")
     race_control = rc.RaceControl(cfg)
     race_control.start()
 

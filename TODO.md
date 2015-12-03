@@ -7,11 +7,10 @@
 ### After that
 
 * Support for running locally on dev machines:
-    * Introduce subcommands (run, setup) -> use https://docs.python.org/3.5/library/argparse.html#module-argparse for that
-    * Externalize configuration -> hardcoded values must get out of config.py
-    * Easier setup / configuration and clear docs on how to get started (use setup.py for installing dependencies!)
     * Support for downloading the benchmark file directly from rally (without boto!)
-    * Nice to have: Command line reporter showing a metrics summary (in addition or instead of graphs)
+    * Do not force checkout of master because in local development we probably want to benchmark on a feature branch
+      -> introduce a --force-source-update flag for nightly build and do not update by default 
+    * Introduce subcommands (run, setup) -> use https://docs.python.org/3.5/library/argparse.html#module-argparse for that
 
 * Tests
 * [Pydocs](http://sphinxcontrib-napoleon.readthedocs.org/en/latest/example_google.html)
@@ -50,6 +49,7 @@
 
 * Support additional JVM options for the benchmark candidate by setting "ES_GC_OPTS" (e.g. for benchmarking with G1)  
 * Warn if there is not enough disk space on your ROOT_DIR (-> for data files)
+* Command line reporter showing a metrics summary (in addition or instead of graphs)
 * Introduce a tournament mode (candidate vs. baseline)
 * Conceptual topics:
     * Test thoroughly for bottlenecks in every place (I/O, CPU, benchmark driver, metrics gathering, etc. etc.)

@@ -1,9 +1,9 @@
 import os
 import glob
-import config
 
-import utils.io as io
-import utils.process
+import rally.config
+import rally.utils.io as io
+import rally.utils.process
 
 # can build an actual source tree
 #
@@ -30,7 +30,7 @@ class Builder:
   def _add_binary_to_config(self):
     src_dir = self._config.opts("source", "local.src.dir")
     binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
-    self._config.add(config.Scope.invocationScope, "builder", "candidate.bin.path", binary)
+    self._config.add(rally.config.Scope.invocationScope, "builder", "candidate.bin.path", binary)
 
   def _exec(self, task_key):
     src_dir = self._config.opts("source", "local.src.dir")
