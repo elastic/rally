@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 
 
@@ -22,6 +23,9 @@ class Config:
   # TODO dm: Later we'll use ConfigParser, for now it's just a map. ConfigParser uses sections and keys, we separate sections from the key
   #          with two double colons.
   _opts = {
+    # we place all logs there and create a subfolder for each invocation
+    "system::log.root.dir": "/Users/dm/Downloads/scratch/rally/logs",
+
     # TODO dm: We should be able to override this from command line -> new level right "below" global scope
     "source::local.src.dir": "/Users/dm/Downloads/scratch/rally/elasticsearch",
     "source::remote.repo.url": "git@github.com:elastic/elasticsearch.git",
@@ -33,7 +37,7 @@ class Config:
     # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
     # We just build the ZIP distribution directly for now (instead of the 'check' target)
     "build::gradle.tasks.package": "assemble",
-    "build::log.dir": "/Users/dm/Downloads/scratch/rally/logs/build",
+    "build::log.dir": "build",
     # Where to install the benchmark candidate, i.e. Elasticsearch
     "provisioning::local.install.dir": "/Users/dm/Downloads/scratch/rally/install",
 
@@ -43,6 +47,7 @@ class Config:
     # Where to download raw benchmark datasets?
     "benchmarks::local.dataset.cache": "/Users/dm/Projects/data/benchmarks",
     "benchmarks::metrics.stats.disk.device": "/dev/disk1",
+    "benchmarks::metrics.log.dir": "metrics",
     # Specific configuration per benchmark
     "benchmarks.logging::index.client.threads": "8",
     # separate directory from output file name for now, we may want to gather multiple reports and they should not override each other

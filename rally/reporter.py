@@ -129,7 +129,6 @@ class Reporter:
     full_output_path = "%s/%s" % (base_dir, file_name)
 
     with open(full_output_path, 'w') as f:
-      # TODO dm: Consider inlining dygraph-combined.js or at least shipping it somehow...
       f.write('''
       <!DOCTYPE html>
       <html lang="en">
@@ -233,11 +232,14 @@ class Reporter:
   #    raise RuntimeError('"%s" failed' % cmd)
 
   def _log_dir(self):
-    # TODO dm: No this is not nice and also not really correct, we should separate the build logs from regular ones -> later (see also metrics.py)
-    return self._build_log_dir()
+    log_root = self._config.opts("system", "log.dir")
+    metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
+    return "%s/%s" % (log_root, metrics_log_dir)
 
   def _build_log_dir(self):
-    return self._config.opts("build", "log.dir")
+    log_root = self._config.opts("system", "log.dir")
+    build_log_dir = self._config.opts("build", "log.dir")
+    return "%s/%s" % (log_root, build_log_dir)
 
   def msecToSec(self, x):
     return x/1000.0

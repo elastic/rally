@@ -37,10 +37,10 @@ class Builder:
     gradle = self._config.opts("build", "gradle.bin")
     task = self._config.opts("build", task_key)
     dry_run = self._config.opts("system", "dryrun")
-    # store logs for each invocation in a dedicated directory
-    s = self._config.opts("meta", "time.start")
-    timestamp = '%04d-%02d-%02d-%02d-%02d-%02d' % (s.year, s.month, s.day, s.hour, s.minute, s.second)
-    log_dir = "%s/%s" % (self._config.opts("build", "log.dir"), timestamp)
+
+    log_root = self._config.opts("system", "log.dir")
+    build_log_dir = self._config.opts("build", "log.dir")
+    log_dir = "%s/%s" % (log_root, build_log_dir)
 
     self._logger.info("Executing %s %s..." % (gradle, task))
     if not dry_run:
