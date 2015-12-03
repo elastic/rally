@@ -65,7 +65,8 @@ class Config:
       for key in config[section]:
         self.add(Scope.globalScope, section, key, config[section][key])
 
-  def create_config(self):
+  # full_config -> intended for nightlies
+  def create_config(self, advanced_config=False):
     if self.config_present():
       print("\n!!!!!!! WARNING: Will overwrite existing config file: '%s' !!!!!!!\n", self._config_file())
     else:
@@ -77,11 +78,19 @@ class Config:
     source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)")
     # Ask, because not everybody might have SSH access
     repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
-    gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value="/usr/local/bin/gradle", check_path_exists=True)
+    gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value="/usr/local/bin/gradle",
+                                    check_path_exists=True)
+    if advanced_config:
+      maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value="/usr/local/bin/mvn",
+                                     check_path_exists=True)
+    else:
+      maven_bin = ""
     jdk8_home = self._ask_property("Enter the JDK 8 root directory", check_path_exists=True)
-
-    # TODO dm: Check with Mike. It looks this is just interesting for nightlies. A dev typically does not have multiple devices and the stats should be correct then
-    # print("Enter the disk device name where benchmarks are run, e.g. /dev/disk1 (")
+    # TODO dm: Check with Mike. It looks this is just interesting for nightlies.
+    if advanced_config:
+      stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")
+    else:
+      stats_disk_device = ""
 
     config = configparser.ConfigParser()
     config["system"] = {}
@@ -93,20 +102,19 @@ class Config:
     config["source"]["remote.repo.url"] = repo_url
 
     config["build"] = {}
-    #TODO dm: Add support for Maven (-> backtesting)
     config["build"]["gradle.bin"] = gradle_bin
+    config["build"]["maven.bin"] = maven_bin
 
     config["provisioning"] = {}
     config["provisioning"]["local.install.dir"] = "${system:root.dir}/install"
 
-    #TODO dm: Add also java7.home (and maybe we need to be more fine-grained, such as "java7update25.home" but we'll see..
+    # TODO dm: Add also java7.home (and maybe we need to be more fine-grained, such as "java7update25.home" but we'll see..
     config["runtime"] = {}
     config["runtime"]["java8.home"] = jdk8_home
 
     config["benchmarks"] = {}
     config["benchmarks"]["local.dataset.cache"] = "${system:root.dir}/data"
-    #TODO dm: Ask this (maybe) later -> check with Mike
-    config["benchmarks"]["metrics.stats.disk.device"] = ""
+    config["benchmarks"]["metrics.stats.disk.device"] = stats_disk_device
 
     config["reporting"] = {}
     config["reporting"]["report.base.dir"] = "${system:root.dir}/reports"

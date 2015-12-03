@@ -36,7 +36,7 @@ class Supplier:
       if not rally.utils.process.run_subprocess("sh -c 'cd %s; git checkout master && git fetch origin && git rebase origin/master'" % src_dir):
         raise SupplyError("Could not fetch latest source tree")
     else:
-      self._logger.info("Skipping fetching sources")
+      self._logger.info("Skip fetching sources")
 
   def _src_dir(self):
     return self._config.opts("source", "local.src.dir")

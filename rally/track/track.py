@@ -33,7 +33,6 @@ class Track:
   def __init__(self, name):
     self._name = name
 
-  # TODO dm: Is there a more idiomatic way?
   def name(self):
     return self._name
 

@@ -1,6 +1,7 @@
 ### Immediate
 
 * Reenable scenario with 2 nodes (currently cluster does not turn green in this case - see logging_track.py)
+* Iteration code in report.py is broken - does not know about other directories... -> fix traversal
 
 ---
 
@@ -30,9 +31,10 @@
 * Support for multiple benchmarks (not much missing for this one, structure already in place),
     * Pick up benchmarks automatically
     * Add an iteration loop in race control so iterates over multiple benchmarks
-    * Proper reporting for multiple benchmarks -> Spice up reporting by allowing multiple benchmarks with a menu structure
-    * Also note that pickling previous results will be broken
-  like in http://getbootstrap.com/examples/navbar/)
+    * Proper reporting for multiple benchmarks -> Spice up reporting by allowing multiple benchmarks with a menu structure like in http://getbootstrap.com/examples/navbar/)
+    * Also note that pickling previous results will be broken (assume just one benchmark)
+    * Idea: Allow to provide benchmark files externally -> separation between Rally and benchmarks
+  
   
 * Open up the repo
 * How can we split benchmark development from rally? (-> logging benchmark shouldn't be directly in rally)
@@ -47,6 +49,7 @@
 * Support additional JVM options for the benchmark candidate by setting "ES_GC_OPTS" (e.g. for benchmarking with G1)  
 * Warn if there is not enough disk space on your ROOT_DIR (-> for data files)
 * Command line reporter showing a metrics summary (in addition or instead of graphs)
+* Clear documentation in one place on how the benchmark candidate was invoked: Java version, Java options, GC options, ES config file
 * Introduce a tournament mode (candidate vs. baseline)
 * Conceptual topics:
     * Test thoroughly for bottlenecks in every place (I/O, CPU, benchmark driver, metrics gathering, etc. etc.)

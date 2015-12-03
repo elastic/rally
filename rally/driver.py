@@ -14,7 +14,7 @@ class Driver:
     metrics = m.MetricsCollector(self._config, track.name())
     # TODO dm: This is just here to ease the migration, consider gathering metrics for *all* tracks later
     if track.requires_metrics():
-      metrics.startCollection(cluster)
+      metrics.start_collection(cluster)
     # TODO dm: I sense this is too concrete for a driver -> abstract this a bit later (should move to track, they all need a unified interface)
     track.benchmark_indexing(cluster, metrics)
   # TODO dm: *Might* be interesting to gather metrics also for searching (esp. memory consumption) -> later
@@ -23,4 +23,4 @@ class Driver:
     # This is also just a hack for now (should be in track for first step and metrics for second one)
     data_paths = self._config.opts("provisioning", "local.data.paths")
     track.printIndexStats(data_paths[0])
-    metrics.stopCollection()
+    metrics.stop_collection()

@@ -5,18 +5,15 @@ import subprocess
 import signal
 
 import rally.mechanic.gear as gear
-import rally.metrics
 import rally.cluster as c
-import rally.config
 
 
 # Currently only local launch is supported
 class Launcher:
-  def __init__(self, config, logger, metrics):
+  def __init__(self, config, logger):
     self._config = config
     self._logger = logger
     self._servers = []
-    self._metrics = metrics
 
   def start(self):
     num_nodes = self._config.opts("provisioning", "es.nodes")
@@ -26,13 +23,13 @@ class Launcher:
   def _start_node(self, node):
     node_name = self._node_name(node)
     install_dir = self._config.opts("provisioning", "local.binary.path")
+    heap = self._config.opts("provisioning", "es.heap", mandatory=False)
+    processor_count = self._config.opts("provisioning", "es.processors", mandatory=False)
+
     os.chdir(install_dir)
     startup_event = threading.Event()
     env = {}
     env.update(os.environ)
-
-    heap = self._config.opts("provisioning", "es.heap", mandatory=False)
-    processor_count = self._config.opts("provisioning", "es.processors", mandatory=False)
 
     if heap is not None:
       env['ES_HEAP_SIZE'] = heap
@@ -57,14 +54,14 @@ class Launcher:
     t.setDaemon(True)
     t.start()
     startup_event.wait()
-    #self._logger.info('Started node=%s on pid=%s' % (node_name, server.pid))
+    # self._logger.info('Started node=%s on pid=%s' % (node_name, server.pid))
 
     return server
 
   def _node_name(self, node):
     return "node%d" % node
 
-  def _read_output(self, nodeName, server, startupEvent):
+  def _read_output(self, node_name, server, startup_event):
     """
     Reads the output from the ES (node) subprocess.
     """
@@ -75,12 +72,12 @@ class Launcher:
       l = l.rstrip()
 
       if l.find('Initialization Failed') != -1:
-        startupEvent.set()
+        startup_event.set()
 
-      self._logger.debug('%s: %s' % (nodeName, l.replace('\n', '\n%s: ' % nodeName)))
-      if l.endswith('started') and not startupEvent.isSet():
-        startupEvent.set()
-        self._logger.info('%s: **started**' % nodeName)
+      self._logger.debug('%s: %s' % (node_name, l.replace('\n', '\n%s: ' % node_name)))
+      if l.endswith('started') and not startup_event.isSet():
+        startup_event.set()
+        self._logger.info('%s: **started**' % node_name)
 
   def stop(self, cluster):
     self._logger.info('Shutting down ES cluster')

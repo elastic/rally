@@ -33,13 +33,19 @@ def parse_args():
   parser = argparse.ArgumentParser(prog='esrally', description='Benchmark Elasticsearch')
   parser.add_argument(
     '--update-sources',
-    help='force a remote fetch and rebase on master (intended for nightly runs) (default: false)',
+    help='force a remote fetch and rebase on master (intended for CI runs) (default: false)',
     default=False,
     action="store_true")
 
   parser.add_argument(
     '--skip-build',
     help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
+    default=False,
+    action="store_true")
+
+  parser.add_argument(
+    '--advanced-config',
+    help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
     default=False,
     action="store_true")
 
@@ -64,7 +70,7 @@ def main():
   if cfg.config_present():
     cfg.load_config()
   else:
-    cfg.create_config()
+    cfg.create_config(advanced_config=args.advanced_config)
     exit(0)
   # Add global meta info derived by rally itself
   cfg.add(rally.config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())

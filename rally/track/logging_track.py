@@ -495,13 +495,13 @@ index.translog.flush_threshold_ops: 500000
 # TODO dm: reintroduce 'ec2.i2.2xlarge' although it's more of an environment than a new benchmark... -> EC2 support!
 loggingSeries = LoggingSeries("Logging", [
   # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
-  LoggingTrack("defaults", requires_metrics=True),
-  LoggingTrack("4gheap", heap='4g'),
-  LoggingTrack("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
-  LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
+  #LoggingTrack("defaults", requires_metrics=True),
+  #LoggingTrack("4gheap", heap='4g'),
+  #LoggingTrack("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
+  #LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
   #TODO dm: Reenable, somehow the cluster does not turn green...
   # integer divide!
-  #LoggingTrack("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
+  LoggingTrack("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
 
   # TODO dm: Reintroduce beast2
   # LoggingTrack("beast2", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
