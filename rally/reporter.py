@@ -5,8 +5,11 @@ import shutil
 import re
 import datetime
 import pickle
+import logging
 
 import utils.io
+
+logger = logging.getLogger("rally.reporting")
 
 """
 Parses the log files and creates dygraphs.
@@ -91,7 +94,7 @@ class Reporter:
         lastTup = None
         # Dates that had a failed run for this series:
         broken = set()
-        print('Load %s...' % self._toPrettyName[track_name])
+        logger.info('Loading %s...' % self._toPrettyName[track_name])
         for tup in self.loadSeries(track_name):
           timeStamp = tup[0]
           allTimes.add(timeStamp)
@@ -100,7 +103,7 @@ class Reporter:
             if lastTup is None:
               continue
             tup = tup[:1] + lastTup[1:]
-            # print('%s, %s: use last tup ts=%s %s' % (mode, timeStamp, lastTup[0], tup))
+            # logger.debug('%s, %s: use last tup ts=%s %s' % (mode, timeStamp, lastTup[0], tup))
           else:
             lastTup = tup
           d[tup[0]] = tup[1:]
@@ -367,9 +370,9 @@ class Reporter:
           searchType = line[7:line.find(' (median): ')]
           t = float(line.strip().split()[-2])
           searchTimes[searchType] = t
-          #print('search time %s: %s = %s sec' % (fileName, searchType, t))
+          #logger.info('search time %s: %s = %s sec' % (fileName, searchType, t))
 
-    # print('%s: oldGC=%s newGC=%s' % (fileName, oldGCSec, youngGCSec))
+    # logger.info('%s: oldGC=%s newGC=%s' % (fileName, oldGCSec, youngGCSec))
 
     year = int(m.group(1))
     month = int(m.group(2))
@@ -387,12 +390,12 @@ class Reporter:
 
     if oome or exc or dps is None:
       # dps = 1
-      #print('WARNING: exception/oome/no dps in log "%s"; marking failed' % fileName)
+      #logger.warn('Exception/oome/no dps in log "%s"; marking failed' % fileName)
       return timeStamp, None
 
     if indexKB is None:
       if '4gheap' in fileName:
-        #print('WARNING: missing index size for log "%s"; marking failed' % fileName)
+        #logger.warn('Missing index size for log "%s"; marking failed' % fileName)
         return timeStamp, None
       else:
         indexKB = 1
@@ -441,12 +444,12 @@ class Reporter:
     try:
       l = os.listdir(rootDir)
     except FileNotFoundError:
-      print("Warning %s does not exist. Skipping..." % rootDir)
+      logger.warn("%s does not exist. Skipping..." % rootDir)
       return results
     l.sort()
     count = 0
     for fileName in l:
-      # print('visit fileName=%s%s' % (rootDir, fileName))
+      # logger.debug('visit fileName=%s%s' % (rootDir, fileName))
       m = reLogFile.match(fileName)
       if m is not None:
 
@@ -457,7 +460,7 @@ class Reporter:
         try:
           tup = self.loadOneFile('%s%s' % (rootDir, fileName), m)
         except:
-          print('FAILED: exception while parsing %s%s' % (rootDir, fileName))
+          logger.error('Exception while parsing %s%s' % (rootDir, fileName))
           raise
 
         d = tup[0]
@@ -474,9 +477,9 @@ class Reporter:
         results.append(tup)
         count += 1
         if count % 100 == 0:
-          print('  %d of %d files...' % (count, len(l)))
+          logger.info('  %d of %d files...' % (count, len(l)))
 
-    print('  %d of %d files...' % (count, len(l)))
+    logger.info('  %d of %d files...' % (count, len(l)))
 
     # Sort by date:
     results.sort(key=lambda x: x[0])
@@ -710,7 +713,7 @@ class Reporter:
       for mode in 'defaults', '4gheap', 'fastsettings', 'fastupdates', 'two_nodes_defaults', 'ec2.i2.2xlarge':
         if mode in byMode and timeStamp in byMode[mode]:
           dps, indexKB, segCount = byMode[mode][timeStamp][:3]
-          # print('render %s %s: %s' % (mode, timeStamp, dps))
+          # logger.debug('render %s %s: %s' % (mode, timeStamp, dps))
           if dps is None:
             if lastDPS is not None:
               any = True
@@ -946,13 +949,13 @@ class Reporter:
 
       if timeStamp < firstTimeStamp:
         # If this annot is from before this chart started, skip it:
-        # print('skip annot %s %s: %s' % (date, series, reason))
+        # logger.info('skip annot %s %s: %s' % (date, series, reason))
         continue
 
       # Place the annot on the next data point that's <= the annot timestamp, in this chart:
       if type(chartTimes) is dict:
         if series not in chartTimes:
-          print('skip annot %s %s: %s (series not in chartTimes)' % (date, series, reason))
+          logger.info('skip annot %s %s: %s (series not in chartTimes)' % (date, series, reason))
           continue
         l = chartTimes[series]
       else:
@@ -1078,7 +1081,7 @@ class Reporter:
     try:
       l = os.listdir(buildlogDirectory)
     except FileNotFoundError:
-      print("Warning %s does not exist. Skipping build time stats..." % buildlogDirectory)
+      logger.warn("%s does not exist. Skipping build time stats..." % buildlogDirectory)
       l = []
     l.sort()
     for fileName in l:
@@ -1086,7 +1089,7 @@ class Reporter:
       if m is None:
         m = reYMDHMS.match(fileName)
       if m is not None:
-        #print("%s" % fileName)
+        #logger.info("%s" % fileName)
         with open('%s/%s' % (buildlogDirectory, fileName), 'r') as fIn:
           success = False
           minutes = None
@@ -1116,7 +1119,6 @@ class Reporter:
                   raise RuntimeError('unexpected time %s, file %s/%s' % (s, buildlogDirectory, fileName))
                 else:
                   minutes = int(tup[0]) + int(tup[1])/60.
-                  #print('  %s' % minutes)
 
           year = int(m.group(1))
           month = int(m.group(2))

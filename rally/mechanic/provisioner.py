@@ -46,7 +46,7 @@ class Provisioner:
     # TODO dm: Check with Mike
     #dataPaths = ['%s/data/%s' % (install_dir)]
     #dataPaths.extend('/ssd%d' % x for x in range(1, dataPathCount))
-    #print('Using data paths: %s' % dataPaths)
+    #self._logger.info('Using data paths: %s' % dataPaths)
 
     binary_path = self._config.opts("provisioning", "local.binary.path")
 

@@ -1,6 +1,7 @@
 import os
 
 import utils.io as io
+import utils.process
 
 
 class SupplyError(BaseException):
@@ -26,14 +27,14 @@ class Supplier:
       io.ensure_dir(src_dir)
       # clone if necessary
       if not os.path.isdir("%s/.git" % src_dir):
-        if os.system("git clone %s %s" % (repo_url, src_dir)):
+        if not utils.process.run_subprocess("git clone %s %s" % (repo_url, src_dir)):
           raise SupplyError("Could not clone from %s to %s" % (repo_url, src_dir))
 
   def _update(self):
     self._logger.info("Fetching latest sources from %s." % self._repo_url())
     src_dir = self._src_dir()
     if not self._dry_run():
-      if os.system("cd %s; git checkout master && git fetch origin && git rebase origin/master" % src_dir):
+      if not utils.process.run_subprocess("sh -c 'cd %s; git checkout master && git fetch origin && git rebase origin/master'" % src_dir):
         raise SupplyError("Could not fetch latest source tree")
 
   def _src_dir(self):

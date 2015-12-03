@@ -1,6 +1,7 @@
 import time
 import socket
 import elasticsearch
+import logging
 
 from enum import Enum
 
@@ -9,6 +10,9 @@ class ClusterStatus(Enum):
   red = 1
   yellow = 2
   green = 3
+
+
+logger = logging.getLogger("rally.cluster")
 
 
 # Represents the test candidate (i.e. Elasticsearch)
@@ -26,7 +30,7 @@ class Cluster:
 
   def wait_for_status(self, cluster_status):
     cluster_status_name = cluster_status.name
-    print('\nTEST: wait for %s cluster...' % cluster_status_name)
+    logger.info('\nWait for %s cluster...' % cluster_status_name)
     es = self._es
     t0 = time.time()
     while True:
@@ -35,16 +39,15 @@ class Cluster:
       except (socket.timeout, elasticsearch.exceptions.ConnectionError, elasticsearch.exceptions.TransportError):
         pass
       else:
-        print('GOT: %s' % str(result))
-        print('ALLOC:\n%s' % es.cat.allocation(v=True))
-        print('RECOVERY:\n%s' % es.cat.recovery(v=True))
-        print('SHARDS:\n%s' % es.cat.shards(v=True))
+        logger.info('GOT: %s' % str(result))
+        logger.info('ALLOC:\n%s' % es.cat.allocation(v=True))
+        logger.info('RECOVERY:\n%s' % es.cat.recovery(v=True))
+        logger.info('SHARDS:\n%s' % es.cat.shards(v=True))
         if result['status'] == cluster_status_name and result['relocating_shards'] == 0:
           break
         else:
           time.sleep(0.5)
 
-    print('\nTEST: %s cluster done (%.1f sec)' % (cluster_status_name, time.time() - t0))
-    print('\nTEST: cluster health: %s' % str(es.cluster.health()))
-    print('SHARDS:\n%s' % es.cat.shards(v=True))
-
+    logger.info('%s cluster done (%.1f sec)' % (cluster_status_name, time.time() - t0))
+    logger.info('Cluster health: %s' % str(es.cluster.health()))
+    logger.info('SHARDS:\n%s' % es.cat.shards(v=True))

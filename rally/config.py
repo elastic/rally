@@ -22,6 +22,7 @@ class Config:
   # TODO dm: Later we'll use ConfigParser, for now it's just a map. ConfigParser uses sections and keys, we separate sections from the key
   #          with two double colons.
   _opts = {
+    # TODO dm: We should be able to override this from command line -> new level right "below" global scope
     "source::local.src.dir": "/Users/dm/Downloads/scratch/rally/elasticsearch",
     "source::remote.repo.url": "git@github.com:elastic/elasticsearch.git",
     #TODO dm: Add support for Maven (-> backtesting)
@@ -32,7 +33,7 @@ class Config:
     # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
     # We just build the ZIP distribution directly for now (instead of the 'check' target)
     "build::gradle.tasks.package": "assemble",
-    "build::log.dir": "/Users/dm/Downloads/scratch/rally/build_logs",
+    "build::log.dir": "/Users/dm/Downloads/scratch/rally/logs/build",
     # Where to install the benchmark candidate, i.e. Elasticsearch
     "provisioning::local.install.dir": "/Users/dm/Downloads/scratch/rally/install",
 

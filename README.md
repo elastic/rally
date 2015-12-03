@@ -24,7 +24,7 @@ Rally provides a list of supported command line options when it is invoked with 
 
 ### Key Components of Rally
 
-Note: This is just important if you want to hack on Rally and to some extend if you want to add new benchmarks. It is not that interesting if you are just using it.
+Note: This is just important if you want to hack on Rally and to some extent if you want to add new benchmarks. It is not that interesting if you are just using it.
  
 * `Series`: represents a class of benchmarking scenarios, e.g. a logging benchmark. It defines the data set to use.
 * `Track`: A track is a concrete benchmark configuration, e.g. the logging benchmark with Elasticsearch default settings.

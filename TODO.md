@@ -1,6 +1,6 @@
 ### Immediate
 
-* Have logging behave (strictly *nothing* from subprocesses is reaching stdout)
+* Check if build logs are working and configure a proper separation between build log, the benchmark output and metrics output
 * Reenable scenario with 2 nodes (currently cluster does not turn green in this case - see logging_track.py)
 
 ---
@@ -8,6 +8,7 @@
 ### After that
 
 * Support for running locally on dev machines:
+    * Introduce subcommands (run, setup) -> use https://docs.python.org/3.5/library/argparse.html#module-argparse for that
     * Externalize configuration -> hardcoded values must get out of config.py
     * Easier setup / configuration and clear docs on how to get started (use setup.py for installing dependencies!)
     * Support for downloading the benchmark file directly from rally (without boto!)
