@@ -23,23 +23,27 @@ class RaceControl:
     # This is one of the few occasions where we directly log to console in order to give at least some feedback to users.
     # Do not log relevant output, just feedback, that we're still progressing...
     print("Preparing benchmark...")
-    # TODO dm: Iterate over benchmarks here (later when we have more than one)
-    rally.utils.io.kill_java()
     config = self._config
     mechanic = m.Mechanic(config)
-    mechanic.setup_for_series()
     driver = d.Driver(config)
     reporter = r.Reporter(config)
 
-    t.loggingSeries.setup(config)
+    mechanic.pre_setup()
+    for series in self._all_series():
+      print("Running '%s'..." % series.name())
+      rally.utils.io.kill_java()
+      series.setup(config)
+      for track in series.tracks():
+        track.setup(config)
+        # TODO dm: We propably need the track here to perform proper track-specific setup (later)
+        mechanic.setup_for_track()
+        cluster = mechanic.start_engine()
+        driver.setup(cluster, track)
+        driver.go(cluster, track)
+        mechanic.stop_engine(cluster)
 
-    print("Running benchmark...")
-    for track in t.loggingSeries.tracks():
-      track.setup(config)
-      mechanic.setup()
-      cluster = mechanic.start_engine()
-      driver.setup(cluster, track)
-      driver.go(cluster, track)
-      mechanic.stop_engine(cluster)
+      reporter.report(series.tracks())
 
-    reporter.report(t.loggingSeries.tracks())
+  def _all_series(self):
+    # just one series for now
+    return [t.loggingSeries]

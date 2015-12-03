@@ -43,12 +43,12 @@ class MetricsCollector:
       # just for testing
       # self._log_file.flush()
 
-  def startCollection(self, cluster):
+  def start_collection(self, cluster):
+    disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
     # TODO dm: This ties metrics collection completely to a locally running server -> refactor (later)
-    # TODO dm: The second parameter was previously constants.STATS_DISK_DEVICE instead of None -> reintroduced in config as constant 'metrics.stats.disk.device' (-> use later)
-    self._stats = self._gather_process_stats(cluster.servers()[0].pid, None)
+    self._stats = self._gather_process_stats(cluster.servers()[0].pid, disk)
 
-  def stopCollection(self):
+  def stop_collection(self):
     if self._stats is not None:
       cpuPercents, writeCount, writeBytes, writeCount, writeTime, readCount, readBytes, readTime = self._stats.finish()
       self.collect('WRITES: %s bytes, %s time, %s count' % (writeBytes, writeTime, writeCount))
@@ -75,7 +75,7 @@ class GatherProcessStats(threading.Thread):
     self.stop = False
     self.process = psutil.Process(pid)
     self.diskName = disk_name
-    if self.diskName is not None:
+    if self._use_specific_disk():
       self.diskStart = psutil.disk_io_counters(perdisk=True)[self.diskName]
     else:
       self.diskStart = psutil.disk_io_counters(perdisk=False)
@@ -83,7 +83,7 @@ class GatherProcessStats(threading.Thread):
   def finish(self):
     self.stop = True
     self.join()
-    if self.diskName is not None:
+    if self._use_specific_disk():
       diskEnd = psutil.disk_io_counters(perdisk=True)[self.diskName]
     else:
       diskEnd = psutil.disk_io_counters(perdisk=False)
@@ -94,6 +94,9 @@ class GatherProcessStats(threading.Thread):
     readCount = diskEnd.read_count - self.diskStart.read_count
     readTime = diskEnd.read_time - self.diskStart.read_time
     return self.cpuPercents, writeCount, writeBytes, writeCount, writeTime, readCount, readBytes, readTime
+
+  def _use_specific_disk(self):
+    return self.diskName is not None and self.diskName != ""
 
   def run(self):
 

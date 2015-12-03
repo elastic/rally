@@ -13,16 +13,14 @@ class Mechanic:
     self._supplier = supplier.Supplier(config, logger)
     self._builder = builder.Builder(config, logger)
     self._provisioner = provisioner.Provisioner(config, logger)
-    #self._launcher = launcher.Launcher(config, logger, metrics.MetricsCollector(config, ""))
-    #TODO dm: Remove metrics collector here (maybe)
-    self._launcher = launcher.Launcher(config, logger, None)
+    self._launcher = launcher.Launcher(config, logger)
 
-  def setup_for_series(self):
-    # When we iterate over individual benchmark configurations we must not fetch sources or rebuild
+  # This is the one-time setup the mechanic performs (once for all benchmarks run)
+  def pre_setup(self):
     self._supplier.fetch()
     self._builder.build()
 
-  def setup(self):
+  def setup_for_track(self):
     self._provisioner.prepare()
 
   def start_engine(self):
