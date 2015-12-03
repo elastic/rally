@@ -15,8 +15,11 @@ class Builder:
 
   def build(self):
     # just Gradle is supported for now
-    self._clean()
-    self._package()
+    if not self._config.opts("build", "skip"):
+      self._clean()
+      self._package()
+    else:
+      self._logger.info("Skipping build")
     self._add_binary_to_config()
 
   def _clean(self):
@@ -36,17 +39,15 @@ class Builder:
     src_dir = self._config.opts("source", "local.src.dir")
     gradle = self._config.opts("build", "gradle.bin")
     task = self._config.opts("build", task_key)
-    dry_run = self._config.opts("system", "dryrun")
 
     log_root = self._config.opts("system", "log.dir")
     build_log_dir = self._config.opts("build", "log.dir")
     log_dir = "%s/%s" % (log_root, build_log_dir)
 
     self._logger.info("Executing %s %s..." % (gradle, task))
-    if not dry_run:
-      io.ensure_dir(log_dir)
-      log_file = "%s/build.%s.log" % (log_dir, task_key)
+    io.ensure_dir(log_dir)
+    log_file = "%s/build.%s.log" % (log_dir, task_key)
 
-      # It's ok to call os.system here; we capture all output to a dedicated build log file
-      if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
-        os.rename(("%s.tmp" % log_file), log_file)
+    # It's ok to call os.system here; we capture all output to a dedicated build log file
+    if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
+      os.rename(("%s.tmp" % log_file), log_file)

@@ -26,16 +26,15 @@ class Provisioner:
     binary = self._config.opts("builder", "candidate.bin.path")
     install_dir = self._install_dir()
     self._logger.info("Preparing candidate locally in %s." % install_dir)
-    if not self._dry_run():
-      # Clean any old configs first
-      if os.path.exists(install_dir):
-        shutil.rmtree(install_dir)
-      rally.utils.io.ensure_dir(install_dir)
-      self._logger.info("Unzipping %s to %s" % (binary, install_dir))
-      rally.utils.io.unzip(binary, install_dir)
-      binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
-      # config may be different for each track so we have to reinitialize every time, hence track scope
-      self._config.add(cfg.Scope.trackScope, "provisioning", "local.binary.path", binary_path)
+    # Clean any old configs first
+    if os.path.exists(install_dir):
+      shutil.rmtree(install_dir)
+    rally.utils.io.ensure_dir(install_dir)
+    self._logger.info("Unzipping %s to %s" % (binary, install_dir))
+    rally.utils.io.unzip(binary, install_dir)
+    binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
+    # config may be different for each track so we have to reinitialize every time, hence track scope
+    self._config.add(cfg.Scope.trackScope, "provisioning", "local.binary.path", binary_path)
 
   # TODO: needs also to know about the benchmark scenario (e.g. for proper runtime configuration of Elasticsearch)
   # TODO: Do we need to be somehow aware about changing config settings over time, i.e. when options become deprecated / removed that have
@@ -75,6 +74,3 @@ class Provisioner:
 
   def _install_dir(self):
     return self._config.opts("provisioning", "local.install.dir")
-
-  def _dry_run(self):
-    return self._config.opts("system", "dryrun")

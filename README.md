@@ -19,7 +19,7 @@ Rally is only tested on Mac OS X and Linux.
 
 ### Command Line Options
 
-Rally has a list of supported command line options. Just invoke `rally.py` with the option `--help`.
+Rally has a list of supported command line options. Just run `esrally --help`.
 
 ### Key Components of Rally
 

@@ -23,25 +23,23 @@ class Supplier:
     src_dir = self._src_dir()
     repo_url = self._repo_url()
 
-    if not self._dry_run():
-      io.ensure_dir(src_dir)
-      # clone if necessary
-      if not os.path.isdir("%s/.git" % src_dir):
-        if not rally.utils.process.run_subprocess("git clone %s %s" % (repo_url, src_dir)):
-          raise SupplyError("Could not clone from %s to %s" % (repo_url, src_dir))
+    io.ensure_dir(src_dir)
+    # clone if necessary
+    if not os.path.isdir("%s/.git" % src_dir):
+      if not rally.utils.process.run_subprocess("git clone %s %s" % (repo_url, src_dir)):
+        raise SupplyError("Could not clone from %s to %s" % (repo_url, src_dir))
 
   def _update(self):
-    self._logger.info("Fetching latest sources from %s." % self._repo_url())
-    src_dir = self._src_dir()
-    if not self._dry_run():
+    if self._config.opts("source", "force.update"):
+      self._logger.info("Fetching latest sources from %s." % self._repo_url())
+      src_dir = self._src_dir()
       if not rally.utils.process.run_subprocess("sh -c 'cd %s; git checkout master && git fetch origin && git rebase origin/master'" % src_dir):
         raise SupplyError("Could not fetch latest source tree")
+    else:
+      self._logger.info("Skipping fetching sources")
 
   def _src_dir(self):
     return self._config.opts("source", "local.src.dir")
 
   def _repo_url(self):
     return self._config.opts("source", "remote.repo.url")
-
-  def _dry_run(self):
-    return self._config.opts("system", "dryrun")

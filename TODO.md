@@ -8,9 +8,6 @@
 
 * Support for running locally on dev machines:
     * Support for downloading the benchmark file directly from rally (without boto!)
-    * Do not force checkout of master because in local development we probably want to benchmark on a feature branch
-      -> introduce a --force-source-update flag for nightly build and do not update by default 
-    * Introduce subcommands (run, setup) -> use https://docs.python.org/3.5/library/argparse.html#module-argparse for that
 
 * Tests
 * [Pydocs](http://sphinxcontrib-napoleon.readthedocs.org/en/latest/example_google.html)
