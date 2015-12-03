@@ -1,14 +1,17 @@
 import threading
+import logging
+
+logger = logging.getLogger("rally.metrics")
 
 try:
   import psutil
 except ImportError:
-  # TODO dm: Use a logger for that
-  print('WARNING: psutil not installed; no system level cpu/memory stats will be recorded')
+  logger.warn('psutil not installed; no system level cpu/memory stats will be recorded')
   psutil = None
 
 import utils.io
 import config
+
 
 # For now we just support dumping to a log file (as is). This will change *significantly* later. We just want to tear apart normal logs
 # from metrics output
@@ -18,28 +21,25 @@ class MetricsCollector:
     self._bucket_name = bucket_name
     self._print_lock = threading.Lock()
     self._stats = None
-    #TODO dm: No this is not nice and also not really correct, we should separate the build logs from regular ones -> later (see also reporter.py)
+    # TODO dm: No this is not nice and also not really correct, we should separate the build logs from regular ones -> later (see also reporter.py)
     log_root = self._config.opts("build", "log.dir")
     d = self._config.opts("meta", "time.start")
     ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (d.year, d.month, d.day, d.hour, d.minute, d.second)
     metrics_log_dir = "%s/%s" % (log_root, self._bucket_name)
     utils.io.ensure_dir(metrics_log_dir)
-    #TODO dm: As we're not block-bound we don't have the convenience of "with"... - ensure we reliably close the file anyway
+    # TODO dm: As we're not block-bound we don't have the convenience of "with"... - ensure we reliably close the file anyway
     self._log_file = open("%s/%s.txt" % (metrics_log_dir, ts), "w")
 
   def expose_print_lock_dirty_hack_remove_me_asap(self):
     return self._print_lock
 
   def collect(self, message):
-    #print("Collect: " + message)
     # TODO dm: Get rid of the print lock
     with self._print_lock:
-      # mode/timestamp
-      #print(message, file=self._log_file)
       self._log_file.write(message)
       self._log_file.write("\n")
       # just for testing
-      self._log_file.flush()
+      # self._log_file.flush()
 
   def startCollection(self, cluster):
     # TODO dm: This ties metrics collection completely to a locally running server -> refactor (later)
@@ -67,12 +67,12 @@ class MetricsCollector:
 
 
 class GatherProcessStats(threading.Thread):
-  def __init__(self, pid, diskName):
+  def __init__(self, pid, disk_name):
     threading.Thread.__init__(self)
     self.cpuPercents = []
     self.stop = False
     self.process = psutil.Process(pid)
-    self.diskName = diskName
+    self.diskName = disk_name
     if self.diskName is not None:
       self.diskStart = psutil.disk_io_counters(perdisk=True)[self.diskName]
     else:
@@ -99,5 +99,4 @@ class GatherProcessStats(threading.Thread):
 
     while not self.stop:
       self.cpuPercents.append(self.process.cpu_percent(interval=1.0))
-      # TODO dm: this has to be printed by the metrics collector!!
-      print('CPU: %s' % self.cpuPercents[-1])
+      logger.debug('CPU: %s' % self.cpuPercents[-1])

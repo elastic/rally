@@ -3,6 +3,7 @@ import glob
 import config
 
 import utils.io as io
+import utils.process
 
 # can build an actual source tree
 #
@@ -44,8 +45,8 @@ class Builder:
     self._logger.info("Executing %s %s..." % (gradle, task))
     if not dry_run:
       io.ensure_dir(log_dir)
-      # TODO dm: How should this be called?
       log_file = "%s/build.%s.log" % (log_dir, task_key)
 
+      # It's ok to call os.system here; we capture all output to a dedicated build log file
       if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
         os.rename(("%s.tmp" % log_file), log_file)

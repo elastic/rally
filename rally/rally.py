@@ -31,7 +31,14 @@ def print_help():
 
 
 def main():
-  logging.basicConfig(level=logging.INFO)
+  #TODO dm: Configure with a config file
+  #logging.basicConfig(level=logging.INFO)
+  #TODO dm: Setup logging based on the config - we should log to one directory per build / invocation
+  logging.basicConfig(filename="rally.log",
+                      filemode='a',
+                      format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                      datefmt='%H:%M:%S',
+                      level=logging.INFO)
 
   if "--help" in sys.argv:
     print_help()

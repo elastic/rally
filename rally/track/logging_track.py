@@ -5,12 +5,17 @@ import os
 import random
 import bz2
 import gzip
+import logging
 
-import config as cfg
 import utils.sysstats as sysstats
+import utils.process
+
 import cluster
 import track.track as track
+import config as cfg
 
+# logging is the "name" of our benchmark...
+logger = logging.getLogger("rally.track.logging")
 
 # TODO dm: Remove / encapsulate after porting
 # From the original code:
@@ -81,7 +86,7 @@ class LoggingTrack(track.Track):
     else:
       ids = None
 
-    print('Use %d docs per bulk request' % DOCS_IN_BLOCK)
+    logger.info('Use %d docs per bulk request' % DOCS_IN_BLOCK)
     # TODO dm: extract more constants to benchmark settings
     self._bulk_docs = BulkDocs('logs',
                                data_set_path,
@@ -90,8 +95,8 @@ class LoggingTrack(track.Track):
                                rand,
                                DOCS_IN_BLOCK)
 
-    print('create index w/ mappings')
-    print(mappings)
+    logger.debug('create index w/ mappings')
+    logger.debug(mappings)
     # TODO dm: retrieve from cluster
     cluster.client().indices.create(index='logs')
     cluster.client().indices.put_mapping(index='logs',
@@ -268,7 +273,7 @@ class LoggingTrack(track.Track):
           raise RuntimeError('bulk failed')
 
       #t2 = time.time()
-      #print('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
+      #logger.info('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
       self.printStatus(count, len(data))
       if pauseSec is not None:
         time.sleep(pauseSec)
@@ -282,7 +287,7 @@ class LoggingTrack(track.Track):
       if self._numDocsIndexed >= self._nextPrint or incDocs == 0:
         t = time.time()
         # FIXME dm: Don't use print_metrics here. Not needed for metrics output, we already hold the print lock and it seems to be non-reentrant
-        print('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (
+        logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (
           self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime), (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
         self._nextPrint += 10000
 
@@ -293,7 +298,7 @@ class LoggingTrack(track.Track):
     # TODO dm: The output of this should probably be logged (remove from metrics)
     self.print_metrics('index files:')
     # TODO dm: The output of this should probably be logged (not necessary in metrics)
-    os.system('find %s -ls' % dataDir)
+    utils.process.run_subprocess('find %s -ls' % dataDir)
 
   def indexAllDocs(self, docsFile, indexName, es, bulkDocs, expectedDocCount, doFlush=True, doStats=True):
     global startTime
