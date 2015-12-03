@@ -12,12 +12,14 @@ class ConfigError(BaseException):
 class Scope(Enum):
   # Valid for all benchmarks, typically read from the configuration file
   globalScope = 1
+  # Valid for all benchmarks, intended to allow overriding of values in the config file from the command line
+  globalOverrideScope = 2
   # A sole benchmark
-  benchmarkScope = 2
+  benchmarkScope = 3
   # Single benchmark track
-  trackScope = 3
+  trackScope = 4
   # property for every invocation, i.e. for backtesting
-  invocationScope = 4
+  invocationScope = 5
 
 
 # TODO dm: Explicitly clean all values after they've lost their scope to avoid leaving behind outdated entries by accident

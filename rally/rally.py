@@ -1,34 +1,12 @@
 import datetime
 import sys
 import os
-
 import logging
+import argparse
 
 import rally.racecontrol as rc
 import rally.config
 import rally.utils.io
-
-
-def print_help():
-  print("Usage: %s [options]\n" % sys.argv[0])
-
-  print("Supported options:\n")
-  print("--help\t\tShows this help")
-  # Don't advertise this yet, it is not fully working (only for build)
-  # print("--dry-run\tDry run of the whole benchmark (useful for checking the configuration)")
-  # TODO dm: This is not yet supported
-  # The idea is:
-  #
-  # single: can provide
-  # * a specific revision
-  # * a timestamp
-  # * the meta-revision "current" (i.e. assume source tree is already at the right version, which is handy for locally running benchmarks)
-  # * the meta-revision "latest" (fetches latest master, typically for CI / nightly benchmarks)
-  #
-  # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
-  # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
-
-  # print("--benchmark-mode\tSupported values are: single (default), range, tournament")
 
 
 def configure_logging(cfg):
@@ -50,26 +28,56 @@ def configure_logging(cfg):
                       datefmt='%H:%M:%S',
                       level=logging.INFO)
 
+
+def parse_args():
+  parser = argparse.ArgumentParser(prog='esrally', description='Benchmark Elasticsearch')
+  parser.add_argument(
+    '--update-sources',
+    help='force a remote fetch and rebase on master (intended for nightly runs) (default: false)',
+    default=False,
+    action="store_true")
+
+  parser.add_argument(
+    '--skip-build',
+    help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
+    default=False,
+    action="store_true")
+
+  # TODO dm: Add benchmark mode (https://docs.python.org/3.5/library/argparse.html#sub-commands)
+  #
+  # The idea is:
+  #
+  # single: can provide
+  # * a specific revision
+  # * a timestamp
+  # * the meta-revision "current" (i.e. assume source tree is already at the right version, which is handy for locally running benchmarks)
+  # * the meta-revision "latest" (fetches latest master, typically for CI / nightly benchmarks)
+  #
+  # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
+  # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
+  return parser.parse_args()
+
+
 def main():
-  if "--help" in sys.argv:
-    print_help()
+  args = parse_args()
+  cfg = rally.config.Config()
+  if cfg.config_present():
+    cfg.load_config()
   else:
-    cfg = rally.config.Config()
-    if cfg.config_present():
-      cfg.load_config()
-    else:
-      cfg.create_config()
-      exit(0)
+    cfg.create_config()
+    exit(0)
+  # Add global meta info derived by rally itself
+  cfg.add(rally.config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())
+  cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+  # Add command line config
+  cfg.add(rally.config.Scope.globalOverrideScope, "source", "force.update", args.update_sources)
+  cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)
 
-    cfg.add(rally.config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())
-    cfg.add(rally.config.Scope.globalScope, "system", "dryrun", "--dry-run" in sys.argv)
-    cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+  configure_logging(cfg)
 
-    configure_logging(cfg)
-
-    print("Starting Rally...")
-    race_control = rc.RaceControl(cfg)
-    race_control.start()
+  print("Starting Rally...\n")
+  race_control = rc.RaceControl(cfg)
+  race_control.start()
 
 
 if __name__ == '__main__':
