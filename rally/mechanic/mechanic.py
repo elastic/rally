@@ -1,10 +1,9 @@
 import logging
 
-import mechanic.supplier as supplier
-import mechanic.builder as builder
-import mechanic.provisioner as provisioner
-import mechanic.launcher as launcher
-import metrics
+import rally.mechanic.supplier as supplier
+import rally.mechanic.builder as builder
+import rally.mechanic.provisioner as provisioner
+import rally.mechanic.launcher as launcher
 
 
 class Mechanic:

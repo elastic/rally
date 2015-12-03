@@ -1,6 +1,4 @@
-import track.track as track
-import cluster
-import metrics as m
+import rally.metrics as m
 
 
 # Benchmark runner

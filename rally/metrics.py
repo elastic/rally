@@ -9,8 +9,8 @@ except ImportError:
   logger.warn('psutil not installed; no system level cpu/memory stats will be recorded')
   psutil = None
 
-import utils.io
-import config
+import rally.utils.io
+import rally.config
 
 
 # For now we just support dumping to a log file (as is). This will change *significantly* later. We just want to tear apart normal logs
@@ -28,7 +28,7 @@ class MetricsCollector:
     d = self._config.opts("meta", "time.start")
     ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (d.year, d.month, d.day, d.hour, d.minute, d.second)
     metrics_log_dir = "%s/%s" % (log_root, self._bucket_name)
-    utils.io.ensure_dir(metrics_log_dir)
+    rally.utils.io.ensure_dir(metrics_log_dir)
     # TODO dm: As we're not block-bound we don't have the convenience of "with"... - ensure we reliably close the file anyway
     self._log_file = open("%s/%s.txt" % (metrics_log_dir, ts), "w")
 

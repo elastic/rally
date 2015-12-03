@@ -1,0 +1,8 @@
+include MANIFEST.in
+include README.md
+include LICENSE
+include setup.py
+
+recursive-include rally/resources/ *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

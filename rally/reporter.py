@@ -7,7 +7,7 @@ import datetime
 import pickle
 import logging
 
-import utils.io
+import rally.utils.io
 
 logger = logging.getLogger("rally.reporting")
 
@@ -123,7 +123,7 @@ class Reporter:
     # TODO dm: This will be too invasive if create an archive of reports later
     if os.path.exists(base_dir):
       shutil.rmtree(base_dir)
-    utils.io.ensure_dir(base_dir)
+    rally.utils.io.ensure_dir(base_dir)
     shutil.copyfile("%s/resources/dygraph-combined.js" % script_dir, "%s/dygraph-combined.js" % base_dir)
     # TODO dm: We don't get too fancy for now later we should have some kind of archive structure in place...
     full_output_path = "%s/%s" % (base_dir, file_name)
@@ -218,6 +218,9 @@ class Reporter:
       ''')
 
       f.close()
+
+      # One of the very few occasions where we print directly to console to give users a hint
+      print("Reporting data are available in %s" % full_output_path)
 
   # TODO dm: copy dygraph-combined.js!!
   # TODO dm: Copying to ec2 is not yet supported (Prio 1) (for migration)

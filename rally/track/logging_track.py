@@ -7,12 +7,12 @@ import bz2
 import gzip
 import logging
 
-import utils.sysstats as sysstats
-import utils.process
+import rally.utils.sysstats as sysstats
+import rally.utils.process
 
-import cluster
-import track.track as track
-import config as cfg
+import rally.cluster
+import rally.track.track as track
+import rally.config as cfg
 
 # logging is the "name" of our benchmark...
 logger = logging.getLogger("rally.track.logging")
@@ -110,9 +110,9 @@ class LoggingTrack(track.Track):
     #FIXME dm: This depends also on the replica count so we better have a way to derive that, for now we assume that we need green
     # when we have special settings
     if self._nodes == 1 and self._elasticsearch_settings is None:
-      return cluster.ClusterStatus.yellow
+      return rally.cluster.ClusterStatus.yellow
     else:
-      return cluster.ClusterStatus.green
+      return rally.cluster.ClusterStatus.green
 
   def benchmark_indexing(self, cluster, metrics):
     docs_to_index = self._config.opts("benchmark.logging", "docs.number")
@@ -298,7 +298,7 @@ class LoggingTrack(track.Track):
     # TODO dm: The output of this should probably be logged (remove from metrics)
     self.print_metrics('index files:')
     # TODO dm: The output of this should probably be logged (not necessary in metrics)
-    utils.process.run_subprocess('find %s -ls' % dataDir)
+    rally.utils.process.run_subprocess('find %s -ls' % dataDir)
 
   def indexAllDocs(self, docsFile, indexName, es, bulkDocs, expectedDocCount, doFlush=True, doStats=True):
     global startTime

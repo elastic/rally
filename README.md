@@ -3,8 +3,6 @@ Rally is the macrobenchmarking framework for Elasticsearch
 ### Prerequisites
 
 * Python 3.4+ available as `python3` on the path
-* Python Elasticsearch client. Install via `pip3 install elasticsearch`
-* (Optional) Python psutil library. Install via `pip3 install psutil`
 * JDK 8+
 * Gradle 2.8+
 * git
@@ -14,13 +12,14 @@ Rally is only tested on Mac OS X and Linux.
 ### Getting started
 
 * Clone this repo: `git clone git@github.com:elastic/rally.git`
-* Open `rally/config.py` in the editor of your choice and change the configuration. This is not really convenient but we're getting 
-there, promise. :) The idea is to have a setup script that will ask for those values and put them in `~.rally/rally.cfg`.
-* Run rally from the root project directory: `python3 rally/rally.py`.
+* Verify the Python installation: `python3 --version` should print `Python 3.4.0` (or higher)
+* Install Rally and its dependencies: `python3 setup.py develop`. Note: this will change when Rally is available in the Python package repos.
+* Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
+* Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
 
 ### Command Line Options
 
-Rally provides a list of supported command line options when it is invoked with `--help`. 
+Rally has a list of supported command line options. Just invoke `rally.py` with the option `--help`.
 
 ### Key Components of Rally
 
@@ -37,4 +36,14 @@ Note: This is just important if you want to hack on Rally and to some extent if 
 When implementing a new benchmark, create a new file in `track` and subclass `Series` and `Track`. See `track/logging_track.py` for an example.
 Currently, race control does not pick up the new benchmark automatically but adding support for that is coming soon. 
 
-TODO dm: Add a nice diagram for a graphical overview of the key components and their dependencies 
+TODO dm: Add a nice diagram for a graphical overview of the key components and their dependencies
+ 
+### License
+ 
+Copyright 2015 Elasticsearch
+ 
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+ 
+  http://www.apache.org/licenses/LICENSE-2.0
+ 
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.

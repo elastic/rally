@@ -1,5 +1,8 @@
-import os
+import os.path
+import configparser
 from enum import Enum
+
+import rally.utils.io
 
 
 class ConfigError(BaseException):
@@ -7,7 +10,7 @@ class ConfigError(BaseException):
 
 
 class Scope(Enum):
-  # Valid for all benchmarks
+  # Valid for all benchmarks, typically read from the configuration file
   globalScope = 1
   # A sole benchmark
   benchmarkScope = 2
@@ -20,40 +23,18 @@ class Scope(Enum):
 # TODO dm: Explicitly clean all values after they've lost their scope to avoid leaving behind outdated entries by accident
 # Abstracts the configuration format.
 class Config:
-  # TODO dm: Later we'll use ConfigParser, for now it's just a map. ConfigParser uses sections and keys, we separate sections from the key
-  #          with two double colons.
+  # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change them either
   _opts = {
-    # we place all logs there and create a subfolder for each invocation
-    "system::log.root.dir": "/Users/dm/Downloads/scratch/rally/logs",
-
-    # TODO dm: We should be able to override this from command line -> new level right "below" global scope
-    "source::local.src.dir": "/Users/dm/Downloads/scratch/rally/elasticsearch",
-    "source::remote.repo.url": "git@github.com:elastic/elasticsearch.git",
-    #TODO dm: Add support for Maven (-> backtesting)
-    "build::gradle.bin": "/usr/local/bin/gradle",
     "build::gradle.tasks.clean": "clean",
-    #TODO dm: tests.jvm should depend on the number of cores - how to abstract this? we can get the value with sysstats.number_of_cpu_cores()
-    # We have to encode this probably in builder.py...
+    # #TODO dm: tests.jvm should depend on the number of cores - how to abstract this? we can get the value with sysstats.number_of_cpu_cores()
+    # # We have to encode this probably in builder.py...
     # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
     # We just build the ZIP distribution directly for now (instead of the 'check' target)
     "build::gradle.tasks.package": "assemble",
     "build::log.dir": "build",
-    # Where to install the benchmark candidate, i.e. Elasticsearch
-    "provisioning::local.install.dir": "/Users/dm/Downloads/scratch/rally/install",
-
-    "runtime::java8.home": "/Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home",
-    # TODO dm: Add also java7.home (and maybe we need to be more fine-grained, such as "java7update25.home" but we'll see..
-
-    # Where to download raw benchmark datasets?
-    "benchmarks::local.dataset.cache": "/Users/dm/Projects/data/benchmarks",
-    "benchmarks::metrics.stats.disk.device": "/dev/disk1",
     "benchmarks::metrics.log.dir": "metrics",
     # Specific configuration per benchmark
     "benchmarks.logging::index.client.threads": "8",
-    # separate directory from output file name for now, we may want to gather multiple reports and they should not override each other
-    "reporting::report.base.dir": "/Users/dm/Downloads/scratch/rally/reports",
-    # We may want to consider output formats (console (summary), html, ES, ...)
-    "reporting::output.html.report.filename": "index.html"
   }
 
   def __init__(self):
@@ -71,6 +52,97 @@ class Config:
         return default_value
       else:
         raise ConfigError("No value for mandatory configuration: section='%s', key='%s'" % (section, key))
+
+  def config_present(self):
+    return os.path.isfile(self._config_file())
+
+  def load_config(self):
+    config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+    config.read(self._config_file())
+    for section in config.sections():
+      for key in config[section]:
+        self.add(Scope.globalScope, section, key, config[section][key])
+
+  def create_config(self):
+    if self.config_present():
+      print("\n!!!!!!! WARNING: Will overwrite existing config file: '%s' !!!!!!!\n", self._config_file())
+    else:
+      print("Creating new configuration file in '%s'\n" % self._config_file())
+
+    print("The benchmark root directory contains benchmark data, logs, etc.")
+    print("It will consume several tens of GB of free space (expect at least 20 GB).")
+    benchmark_root_dir = self._ask_property("Enter the benchmark root directory (will be created automatically)")
+    source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)")
+    # Ask, because not everybody might have SSH access
+    repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
+    gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value="/usr/local/bin/gradle", check_path_exists=True)
+    jdk8_home = self._ask_property("Enter the JDK 8 root directory", check_path_exists=True)
+
+    # TODO dm: Check with Mike. It looks this is just interesting for nightlies. A dev typically does not have multiple devices and the stats should be correct then
+    # print("Enter the disk device name where benchmarks are run, e.g. /dev/disk1 (")
+
+    config = configparser.ConfigParser()
+    config["system"] = {}
+    config["system"]["root.dir"] = benchmark_root_dir
+    config["system"]["log.root.dir"] = "${system:root.dir}/logs"
+
+    config["source"] = {}
+    config["source"]["local.src.dir"] = source_dir
+    config["source"]["remote.repo.url"] = repo_url
+
+    config["build"] = {}
+    #TODO dm: Add support for Maven (-> backtesting)
+    config["build"]["gradle.bin"] = gradle_bin
+
+    config["provisioning"] = {}
+    config["provisioning"]["local.install.dir"] = "${system:root.dir}/install"
+
+    #TODO dm: Add also java7.home (and maybe we need to be more fine-grained, such as "java7update25.home" but we'll see..
+    config["runtime"] = {}
+    config["runtime"]["java8.home"] = jdk8_home
+
+    config["benchmarks"] = {}
+    config["benchmarks"]["local.dataset.cache"] = "${system:root.dir}/data"
+    #TODO dm: Ask this (maybe) later -> check with Mike
+    config["benchmarks"]["metrics.stats.disk.device"] = ""
+
+    config["reporting"] = {}
+    config["reporting"]["report.base.dir"] = "${system:root.dir}/reports"
+    config["reporting"]["output.html.report.filename"] = "index.html"
+
+    rally.utils.io.ensure_dir(self._config_dir())
+    with open(self._config_file(), 'w') as configfile:
+      config.write(configfile)
+
+    print("Configuration successfully written to '%s'. Please rerun rally now." % self._config_file())
+
+  def _ask_property(self, prompt, mandatory=True, check_path_exists=False, default_value=None):
+    while True:
+      if default_value:
+        value = input("%s [default: %s]: " % (prompt, default_value))
+      else:
+        value = input("%s: " % prompt)
+
+      if not value or value.strip() == "":
+        if mandatory and not default_value:
+          print("  Value is required. Please retry.")
+          continue
+        else:
+          print("  Using default value '%s'" % default_value)
+          # this way, we can still check the path...
+          value = default_value
+
+      if check_path_exists and not os.path.exists(value):
+        print("'%s' does not exist. Please check and retry." % value)
+        continue
+      # user entered a valid value
+      return value
+
+  def _config_dir(self):
+    return "%s/.rally" % os.getenv("HOME")
+
+  def _config_file(self):
+    return "%s/rally.ini" % self._config_dir()
 
   # recursively find the most narrow scope for a key
   def _resolve_scope(self, section, key, start_from=Scope.invocationScope):
