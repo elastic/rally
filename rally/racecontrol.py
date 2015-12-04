@@ -22,7 +22,7 @@ class RaceControl:
   def start(self):
     # This is one of the few occasions where we directly log to console in order to give at least some feedback to users.
     # Do not log relevant output, just feedback, that we're still progressing...
-    print("Preparing benchmark...")
+    print("Preparing for benchmarking ...")
     config = self._config
     mechanic = m.Mechanic(config)
     driver = d.Driver(config)
@@ -30,13 +30,12 @@ class RaceControl:
 
     mechanic.pre_setup()
     for series in self._all_series():
-      print("Running '%s'..." % series.name())
+      print("Running benchmark '%s' ..." % series.name())
       rally.utils.io.kill_java()
       series.setup(config)
       for track in series.tracks():
         track.setup(config)
-        # TODO dm: We propably need the track here to perform proper track-specific setup (later)
-        mechanic.setup_for_track()
+        # TODO dm: We probably need the track here to perform proper track-specific setup (later)
         cluster = mechanic.start_engine()
         driver.setup(cluster, track)
         driver.go(cluster, track)

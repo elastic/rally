@@ -23,13 +23,17 @@ class Provisioner:
     self._install_binary()
     self._configure()
 
+  def cleanup(self):
+    install_dir = self._install_dir()
+    if os.path.exists(install_dir):
+      shutil.rmtree(install_dir)
+
   def _install_binary(self):
     binary = self._config.opts("builder", "candidate.bin.path")
     install_dir = self._install_dir()
     self._logger.info("Preparing candidate locally in %s." % install_dir)
     # Clean any old configs first
-    if os.path.exists(install_dir):
-      shutil.rmtree(install_dir)
+    self.cleanup()
     rally.utils.io.ensure_dir(install_dir)
     self._logger.info("Unzipping %s to %s" % (binary, install_dir))
     rally.utils.io.unzip(binary, install_dir)
