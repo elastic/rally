@@ -117,9 +117,8 @@ class Reporter:
       allTimes = list(allTimes)
       allTimes.sort()
 
-      #FIXME dm: Reenable before checkin
-      #with open('results.pk', 'wb') as f:
-      #  pickle.dump((byMode, byModeBroken, allTimes), f)
+      with open('results.pk', 'wb') as f:
+        pickle.dump((byMode, byModeBroken, allTimes), f)
 
     script_dir = self._config.opts("system", "rally.root")
     base_dir = self._config.opts("reporting", "report.base.dir")
