@@ -38,8 +38,8 @@ class CountriesTrack(track.Track):
     self._config = config
     # Download necessary data etc.
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "docs.number", 8647880)
-    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
-    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
+    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
+    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
     if not os.path.isfile(data_set_path):
       self._download_benchmark_data(data_set_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "dataset.path", data_set_path)
