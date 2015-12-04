@@ -79,7 +79,7 @@ class Reporter:
                           'ec2.i2.2xlarge': 'EC2 i2.2xlarge Defaults 4G',
                           'buildtimes': 'Test time (minutes)'}
 
-  def report(self, track_setups):
+  def report(self, track):
     self._nextGraph = 100
 
     #TODO dm: Beware, this will *not* work as soon as we have multiple benchmarks!
@@ -92,7 +92,7 @@ class Reporter:
       byModeBroken = {}
       allTimes = set()
 
-      for track_setup in track_setups:
+      for track_setup in track.track_setups():
         track_setup_name = track_setup.name()
         d = {}
         lastTup = None
@@ -197,26 +197,12 @@ class Reporter:
 
       f.write('  <div style="position: absolute; top: %spx">\n' % self._nextGraph)
 
+      f.write('<h2>Benchmark Scenarios</h2>')
+      f.write('<p>%s</p>' % track.description())
+      for track_setup in track.track_setups():
+        f.write('<p><tt>%s</tt>: %s</p>' % (track_setup.name(), track_setup.description()))
+
       f.write('''
-      <h2>Benchmark Scenarios</h2>
-      <p>This test indexes 6.9M short documents (log lines, total 14 GB json) using 8 client threads and 500 docs per _bulk request against a single node running on a dual Xeon X5680 (12 real cores, 24 with hyperthreading) and 48 GB RAM. </p>
-      <p><tt>Defaults, 2 nodes</tt> is append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).</p>
-      <p><tt>Defaults</tt> is append-only, using all default settings.</p>
-      <p><tt>Defaults (4G heap)</tt> is the same as <code>Defaults</code> except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.</p>
-      <p><tt>Fast</tt> is append-only, using 4 GB heap, and these settings:
-      <pre>
-      refresh_interval: 30s
-      index.store.throttle.type: none
-      indices.store.throttle.type: none
-
-      index.number_of_shards: 6
-      index.number_of_replicas: 0
-
-      index.translog.flush_threshold_size: 4g
-      index.translog.flush_threshold_ops: 500000
-      </pre>
-      </p>
-      <p><tt>FastUpdate</tt> is the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.</p>
       </div>
       </body>
       </html>

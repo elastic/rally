@@ -28,15 +28,15 @@ rand = random.Random(17)
 # TODO dm: This is a *complete* copy of the logging benchmark (which is by itself already rather ugly -> this code is just there to get us started quickly and will change *completely* in the coming weeks
 # Concrete benchmarking scenario for countries
 class CountriesTrack(track.Track):
-  def __init__(self, name, track_setups):
-    track.Track.__init__(self, name, track_setups)
+  def __init__(self, name, description, track_setups):
+    track.Track.__init__(self, name, description, track_setups)
     self._config = None
 
   def setup(self, config):
     self._config = config
     # Download necessary data etc.
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "docs.number", 8647880)
-    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
+    # data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
     data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
     if not os.path.isfile(data_set_path):
       self._download_benchmark_data(data_set_path)
@@ -57,10 +57,10 @@ class CountriesTrack(track.Track):
       raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
 
 
-
 class CountriesTrackSetup(track.TrackSetup):
-  def __init__(self, name, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None, requires_metrics=False):
-    track.TrackSetup.__init__(self, name)
+  def __init__(self, name, description, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None,
+               requires_metrics=False):
+    track.TrackSetup.__init__(self, name, description)
     self._elasticsearch_settings = elasticsearch_settings
     self._build_ids = build_ids
     self._nodes = nodes
@@ -120,7 +120,7 @@ class CountriesTrackSetup(track.TrackSetup):
     return self._requires_metrics
 
   def required_cluster_status(self):
-    #FIXME dm: This depends also on the replica count so we better have a way to derive that, for now we assume that we need green
+    # FIXME dm: This depends also on the replica count so we better have a way to derive that, for now we assume that we need green
     # when we have special settings
     if self._nodes == 1 and self._elasticsearch_settings is None:
       return rally.cluster.ClusterStatus.yellow
@@ -131,7 +131,7 @@ class CountriesTrackSetup(track.TrackSetup):
     docs_to_index = self._config.opts("benchmark.countries", "docs.number")
     data_set_path = self._config.opts("benchmark.countries", "dataset.path")
 
-    #TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
+    # TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
     self._metrics = metrics
 
     # TODO dm: Check properly -> flag!
@@ -148,12 +148,12 @@ class CountriesTrackSetup(track.TrackSetup):
       finished = True
 
     finally:
-      #HINT dm: Not reporting relevant
+      # HINT dm: Not reporting relevant
       self.print_metrics('Finished?: %s' % finished)
       self._bulk_docs.close()
 
   def benchmark_searching(self, cluster, metrics):
-    #TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
+    # TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
     self._metrics = metrics
     # TODO dm: (a) configure this properly (use a flag, not a name check), (b) check with Mike if we want to perform search tests in all configurations
     if self._name == 'defaults':
@@ -240,15 +240,15 @@ class CountriesTrackSetup(track.TrackSetup):
 
       if False and i == 0:
         self.print_metrics('SEARCH:\n%s' % json.dumps(resp, sort_keys=True,
-                                         indent=4, separators=(',', ': ')))
-      self.print_metrics('%.2f msec' % (1000*(t1-t0)))
+                                                      indent=4, separators=(',', ': ')))
+      self.print_metrics('%.2f msec' % (1000 * (t1 - t0)))
       times.append(d)
 
     for q in ('default', 'term', 'phrase', 'hourly_agg', 'scroll_all'):
       l = [x[q] for x in times]
       l.sort()
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
-      #HINT dm: Reporting relevant
+      # HINT dm: Reporting relevant
       self.print_metrics('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
 
   def indexBulkDocs(self, es, startingGun, myID, bulkDocs, failedEvent, stopEvent, pauseSec=None):
@@ -260,14 +260,14 @@ class CountriesTrackSetup(track.TrackSetup):
     startingGun.await()
 
     while not stopEvent.isSet():
-      #t0 = time.time()
+      # t0 = time.time()
       buffer = bulkDocs.nextNDocs()
       if len(buffer) == 0:
         break
-      #t1 = time.time()
-      #self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
+      # t1 = time.time()
+      # self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
 
-      count = int(len(buffer)/2)
+      count = int(len(buffer) / 2)
       data = '\n'.join(buffer)
       del buffer[:]
 
@@ -281,13 +281,13 @@ class CountriesTrackSetup(track.TrackSetup):
         if result['errors'] != False or len(result['items']) != count:
           self.print_metrics('bulk failed (count=%s):' % count)
           self.print_metrics('%s' % json.dumps(result, sort_keys=True,
-                                  indent=4, separators=(',', ': ')))
+                                               indent=4, separators=(',', ': ')))
           failedEvent.set()
           stopEvent.set()
           raise RuntimeError('bulk failed')
 
-      #t2 = time.time()
-      #logger.info('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
+      # t2 = time.time()
+      # logger.info('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
       self.printStatus(count, len(data))
       if pauseSec is not None:
         time.sleep(pauseSec)
@@ -302,12 +302,13 @@ class CountriesTrackSetup(track.TrackSetup):
         t = time.time()
         # FIXME dm: Don't use print_metrics here. Not needed for metrics output, we already hold the print lock and it seems to be non-reentrant
         logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (
-          self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime), (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
+          self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime),
+          (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
         self._nextPrint += 10000
 
   def printIndexStats(self, dataDir):
     indexSizeKB = os.popen('du -s %s' % dataDir).readline().split()[0]
-    #HINT dm: Reporting relevant
+    # HINT dm: Reporting relevant
     self.print_metrics('index size %s KB' % indexSizeKB)
     # TODO dm: The output of this should probably be logged (remove from metrics)
     self.print_metrics('index files:')
@@ -350,7 +351,7 @@ class CountriesTrackSetup(track.TrackSetup):
       raise RuntimeError('some indexing threads failed')
 
     end_time = time.time()
-    #HINT dm: Reporting relevant
+    # HINT dm: Reporting relevant
     self.print_metrics('Total docs/sec: %.1f' % (bulkDocs.indexedDocCount / (end_time - startTime)))
 
     self.printStatus(0, 0)
@@ -364,33 +365,33 @@ class CountriesTrackSetup(track.TrackSetup):
       t0 = time.time()
       stats = es.indices.stats(index=indexName, metric='_all', level='shards')
       t1 = time.time()
-      #HINT dm: Reporting relevant
+      # HINT dm: Reporting relevant
       self.print_metrics('Indices stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
-                                             indent=4, separators=(',', ': ')))
+                                                          indent=4, separators=(',', ': ')))
 
-      #TODO dm: Unused?
+      # TODO dm: Unused?
       actualDocCount = stats['_all']['primaries']['docs']['count']
 
       t0 = time.time()
       stats = es.nodes.stats(metric='_all', level='shards')
       t1 = time.time()
-      #HINT dm: Reporting relevant
+      # HINT dm: Reporting relevant
       self.print_metrics('Node stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
-                                           indent=4, separators=(',', ': ')))
+                                                        indent=4, separators=(',', ': ')))
       t0 = time.time()
       stats = es.indices.segments(params={'verbose': True})
       t1 = time.time()
       self.print_metrics('Segments stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('SEGMENTS STATS: %s' % json.dumps(stats, sort_keys=True,
-                                              indent=4, separators=(',', ': ')))
+                                                           indent=4, separators=(',', ': ')))
 
       # TODO dm: Enable debug mode later on
       # if DEBUG == False and expectedDocCount is not None and expectedDocCount != actualDocCount:
       #  raise RuntimeError('wrong number of documents indexed: expected %s but got %s' % (expectedDocCount, actualDocCount))
 
-  #TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
+  # TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
   #         everything as metrics (which is not true -> but later...)
   def print_metrics(self, message):
     self._metrics.collect(message)
@@ -491,7 +492,7 @@ class BulkDocs:
         if len(buffer) >= limit:
           break
 
-    self.indexedDocCount += len(buffer)/2
+    self.indexedDocCount += len(buffer) / 2
 
     return buffer
 
@@ -506,12 +507,39 @@ index.translog.flush_threshold_size: 4g
 index.translog.flush_threshold_ops: 500000
 '''
 
-countriesTrack = CountriesTrack("Countries", [
-  # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
-  CountriesTrackSetup("defaults", requires_metrics=True),
-  CountriesTrackSetup("4gheap", heap='4g'),
-  CountriesTrackSetup("fastsettings", elasticsearch_settings=countriesBenchmarkFastSettings, heap='4g'),
-  CountriesTrackSetup("fastupdates", elasticsearch_settings=countriesBenchmarkFastSettings, heap='4g', build_ids=True),
-  # integer divide!
-  CountriesTrackSetup("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
-])
+countriesTrack = CountriesTrack(
+  "Countries",
+  "This test indexes 8.6M documents (countries from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+  track_setups=[
+    # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
+    CountriesTrackSetup(
+      "defaults",
+      "append-only, using all default settings.",
+      requires_metrics=True),
+
+    CountriesTrackSetup(
+      "4gheap",
+      "same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
+      heap='4g'),
+
+    CountriesTrackSetup(
+      "fastsettings",
+      "append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % countriesBenchmarkFastSettings,
+      elasticsearch_settings=countriesBenchmarkFastSettings,
+      heap='4g'),
+    CountriesTrackSetup(
+      "fastupdates",
+      "the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
+      elasticsearch_settings=countriesBenchmarkFastSettings,
+      heap='4g',
+      build_ids=True),
+    # integer divide!
+    CountriesTrackSetup(
+      "two_nodes_defaults",
+      "append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
+      processors=sysstats.number_of_cpu_cores() // 2,
+      nodes=2),
+
+    # TODO dm: Reintroduce beast2
+    # CountriesTrackSetup("beast2", description="", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
+  ])

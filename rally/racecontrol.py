@@ -42,7 +42,7 @@ class RaceControl:
         driver.go(cluster, track_setup)
         mechanic.stop_engine(cluster)
 
-      reporter.report(track.track_setups())
+      reporter.report(track)
 
   def _all_tracks(self):
     # just one track for now

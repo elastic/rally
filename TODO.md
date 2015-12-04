@@ -1,7 +1,6 @@
 ### Immediate
 
 * Kill Java -> restrict to ES?
-* Reporting Footer -> Provide benchmark-specific footer? Maybe also system configuration?
 * Change --update-sources -> --benchmark-mode=current (because that's what it actually is) -> already more stable interface 
 
 ---
