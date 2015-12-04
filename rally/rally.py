@@ -31,15 +31,16 @@ def configure_logging(cfg):
 
 def parse_args():
   parser = argparse.ArgumentParser(prog='esrally', description='Benchmark Elasticsearch')
-  parser.add_argument(
-    '--update-sources',
-    help='force a remote fetch and rebase on master (intended for CI runs) (default: false)',
-    default=False,
-    action="store_true")
 
   parser.add_argument(
     '--skip-build',
     help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
+    default=False,
+    action="store_true")
+
+  parser.add_argument(
+    '--update-sources',
+    help='force a remote fetch and rebase on master (intended for CI runs) (default: false)',
     default=False,
     action="store_true")
 
