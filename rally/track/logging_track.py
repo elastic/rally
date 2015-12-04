@@ -36,12 +36,24 @@ class LoggingSeries(track.Series):
     self._config = config
     # Download necessary data etc.
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.logging", "docs.number", 6881288)
-    # TODO dm: Download benchmark data if necessary (later)
-    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408.json.gz")
-    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408-5k.json.gz")
-    # TODO dm: Remove this after the prototype stage (i.e. when we're able to download the file ourselves
+    # TODO dm: Provide support to just *specify* the benchmark data location and have the infrastructure figure out the details
+    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408.json.gz")
+    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408-5k.json.gz")
     if not os.path.isfile(data_set_path):
-      raise RuntimeError("Cannot locate benchmark data set in '%s'. Please download the file first and put it there." % data_set_path)
+      logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
+      # A 2 GB download justifies user feedback ...
+      print("Could  not find benchmark data. Trying to download from S3 (around 2 GB) ...")
+      s3cmd = "s3cmd -v get s3://users.elasticsearch.org/etsy/jls/web-access_log-20140408.json.gz %s" % data_set_path
+      success = rally.utils.process.run_subprocess(s3cmd)
+      # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
+      if not success or os.path.getsize(data_set_path) != 1843865288:
+        # cleanup probably corrupt data file...
+        if os.path.isfile(data_set_path):
+          os.remove(data_set_path)
+        raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
+    else:
+      print("Could find benchmark data")
+
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.logging", "dataset.path", data_set_path)
 
 
@@ -495,10 +507,10 @@ index.translog.flush_threshold_ops: 500000
 # TODO dm: reintroduce 'ec2.i2.2xlarge' although it's more of an environment than a new benchmark... -> EC2 support!
 loggingSeries = LoggingSeries("Logging", [
   # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
-  #LoggingTrack("defaults", requires_metrics=True),
-  #LoggingTrack("4gheap", heap='4g'),
-  #LoggingTrack("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
-  #LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
+  LoggingTrack("defaults", requires_metrics=True),
+  LoggingTrack("4gheap", heap='4g'),
+  LoggingTrack("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
+  LoggingTrack("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
   #TODO dm: Reenable, somehow the cluster does not turn green...
   # integer divide!
   LoggingTrack("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
