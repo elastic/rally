@@ -17,6 +17,7 @@ Parses the log files and creates dygraphs.
 
 # TODO dm: Can we separate data and output format better? Use some kind of template engine and just transform the metrics structure here?
 
+# TODO dm: This is very specific to the current nightlies -> should move to some build-specific postprocessing step
 KNOWN_CHANGES = (
   ('2014-03-18', 'Switch to SerialMergeScheduler by default'),
   ('2014-04-15', 'Switch back to ConcurrentMergeScheduler'),
@@ -51,6 +52,7 @@ KNOWN_CHANGES = (
   ('2015-10-05', 'Randomize what time of day the benchmark runs'),
   ('2015-10-14', 'Use 30s refresh_interval instead of default 1s', 'Fast'),
   ('2015-11-22', 'Benchmark uncovers LUCENE-6906 bug', 'FastUpdate'),
+  ('2015-12-01-19-40-30', 'Upgrade to beast2 (72 cores, 256 GB RAM)'),
 )
 
 KNOWN_CHANGES_IN_BUILD = (
@@ -60,6 +62,7 @@ KNOWN_CHANGES_IN_BUILD = (
   ('2015-06-10', 'Add more plugins into master build'),
   ('2015-08-19', 'Run "mvn clean verify" instead of "mvn clean test"'),
   ('2015-11-01', 'Switch from maven to gradle'),
+  ('2015-12-01-19-40-30', 'Upgrade to beast2 (72 cores, 256 GB RAM)'),
 )
 
 
