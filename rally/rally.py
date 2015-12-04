@@ -1,5 +1,4 @@
 import datetime
-import sys
 import os
 import logging
 import argparse
@@ -38,12 +37,19 @@ def parse_args():
     default=False,
     action="store_true")
 
-  # FIXME dm: This is actually already a benchmark mode!!!
+  # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
+  # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
   parser.add_argument(
-    '--update-sources',
-    help='force a remote fetch and rebase on master (intended for CI runs) (default: false)',
-    default=False,
-    action="store_true")
+    '--benchmark-mode',
+    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
+    choices=["single", "range"],  # later also 'tournament'
+    default="single")
+
+  parser.add_argument(
+    '--revision',
+    help="defines which sources to use for 'single'_benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest version on master (default: current).",
+    choices=["current", "latest"],
+    default="current")  # optimized for local usage, don't fetch sources
 
   parser.add_argument(
     '--advanced-config',
@@ -51,18 +57,6 @@ def parse_args():
     default=False,
     action="store_true")
 
-  # TODO dm: Add benchmark mode (https://docs.python.org/3.5/library/argparse.html#sub-commands)
-  #
-  # The idea is:
-  #
-  # single: can provide
-  # * a specific revision
-  # * a timestamp
-  # * the meta-revision "current" (i.e. assume source tree is already at the right version, which is handy for locally running benchmarks)
-  # * the meta-revision "latest" (fetches latest master, typically for CI / nightly benchmarks)
-  #
-  # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
-  # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
   return parser.parse_args()
 
 
@@ -78,7 +72,7 @@ def main():
   cfg.add(rally.config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())
   cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
   # Add command line config
-  cfg.add(rally.config.Scope.globalOverrideScope, "source", "force.update", args.update_sources)
+  cfg.add(rally.config.Scope.globalOverrideScope, "source", "revision", args.revision)
   cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)
 
   configure_logging(cfg)

@@ -1,7 +1,6 @@
 ### Immediate
 
 * Kill Java -> restrict to ES?
-* Change --update-sources -> --benchmark-mode=current (because that's what it actually is) -> already more stable interface 
 
 ---
 
