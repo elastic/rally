@@ -38,8 +38,8 @@ class CountriesTrack(track.Track):
     self._config = config
     # Download necessary data etc.
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "docs.number", 8647880)
-    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
-    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
+    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
+    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
     if not os.path.isfile(data_set_path):
       self._download_benchmark_data(data_set_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "dataset.path", data_set_path)
@@ -48,10 +48,10 @@ class CountriesTrack(track.Track):
     logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
     # A 200 MB download justifies user feedback ...
     url = "http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2"
-    print("Could not find benchmark data. Downloading from %s... (around 200 MB)" % url, end='')
+    print("Could not find benchmark data. Downloading from %s... (around 200 MB) " % url, end='')
     with urllib.request.urlopen(url) as response, open(data_set_path, 'wb') as out_file:
       shutil.copyfileobj(response, out_file)
-    print("Done")
+    print("done")
 
 
 class CountriesTrackSetup(track.TrackSetup):
@@ -194,32 +194,38 @@ class CountriesTrackSetup(track.TrackSetup):
       d['default'] = t1 - t0
 
       t0 = time.time()
-      # FIXME dm: Obviously we should search for something else here
-      resp = es.search(index='countries', doc_type='type', q='message:en')
+      resp = es.search(index='countries', doc_type='type', q='country_code:AT')
       t1 = time.time()
       d['term'] = t1 - t0
 
-      t0 = time.time()
-      resp = es.search(index='countries', doc_type='type', q='"ab_international.languages.ja+off"')
-      t1 = time.time()
-      d['phrase'] = t1 - t0
+      # Cannot do phrase queries on not_analyzed fields...
+      #t0 = time.time()
+      #resp = es.search(index='countries', doc_type='type', q='"ab_international.languages.ja+off"')
+      #t1 = time.time()
+      #d['phrase'] = t1 - t0
 
       t0 = time.time()
       resp = es.search(index='countries', doc_type='type', body='''
-  {
-      "size": 0,
-      "aggregations": {
-    "by_hour": {
-        "date_histogram": {
-      "field": "@timestamp",
-      "interval": "hour"
+{
+  "size": 0,
+  "aggs": {
+    "country_population": {
+      "terms": {
+        "field": "country_code"
+      },
+      "aggs": {
+        "sum_population": {
+            "sum": {
+              "field": "population"
+            }
+          }
         }
     }
-      }
-  }''')
+  }
+}''')
 
       t1 = time.time()
-      d['hourly_agg'] = t1 - t0
+      d['country_agg'] = t1 - t0
 
       # Scroll, 1K docs at a time, 25 times:
       t0 = time.time()
@@ -241,7 +247,8 @@ class CountriesTrackSetup(track.TrackSetup):
       self.print_metrics('%.2f msec' % (1000 * (t1 - t0)))
       times.append(d)
 
-    for q in ('default', 'term', 'phrase', 'hourly_agg', 'scroll_all'):
+    # No phrase query!
+    for q in ('default', 'term', 'country_agg', 'scroll_all'):
       l = [x[q] for x in times]
       l.sort()
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
@@ -270,7 +277,8 @@ class CountriesTrackSetup(track.TrackSetup):
 
       try:
         result = es.bulk(body=data, params={'request_timeout': 60000})
-      except:
+      except BaseException as e:
+        logger.error("Indexing failed: %s" % e)
         failedEvent.set()
         stopEvent.set()
         raise

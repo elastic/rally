@@ -616,7 +616,8 @@ class Reporter:
               'phrase': 'Phrase',
               'default': 'Default',
               'scroll_all': 'Scroll All',
-              'hourly_agg': 'Aggs (hourly timeStamp)'}
+              'hourly_agg': 'Aggs (hourly timeStamp)',
+              'country_agg': 'Aggs (Population by Country)'}
 
     for searchType in searchTypes:
       headers.append('%s (msec)' % pretty.get(searchType, searchType))
