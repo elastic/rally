@@ -30,13 +30,16 @@ class Supplier:
         raise SupplyError("Could not clone from %s to %s" % (repo_url, src_dir))
 
   def _update(self):
-    if self._config.opts("source", "force.update"):
+    revision = self._config.opts("source", "revision")
+    if revision == "latest":
       self._logger.info("Fetching latest sources from %s." % self._repo_url())
       src_dir = self._src_dir()
       if not rally.utils.process.run_subprocess("sh -c 'cd %s; git checkout master && git fetch origin && git rebase origin/master'" % src_dir):
         raise SupplyError("Could not fetch latest source tree")
-    else:
+    elif revision == "current":
       self._logger.info("Skip fetching sources")
+    else:
+      raise RuntimeError("Unrecognized revision option '%s'" % revision)
 
   def _src_dir(self):
     return self._config.opts("source", "local.src.dir")
