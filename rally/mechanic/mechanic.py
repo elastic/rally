@@ -20,11 +20,10 @@ class Mechanic:
     self._supplier.fetch()
     self._builder.build()
 
-  def setup_for_track(self):
-    self._provisioner.prepare()
-
   def start_engine(self):
+    self._provisioner.prepare()
     return self._launcher.start()
 
   def stop_engine(self, cluster):
     self._launcher.stop(cluster)
+    self._provisioner.cleanup()
