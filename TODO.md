@@ -1,6 +1,8 @@
 ### Immediate
 
-* Total times and GC times are not working -> check
+* Kill Java -> restrict to ES?
+* Reporting Footer -> Provide benchmark-specific footer? Maybe also system configuration?
+* Change --update-sources -> --benchmark-mode=current (because that's what it actually is) -> already more stable interface 
 
 ---
 
@@ -31,7 +33,7 @@
     * Idea: Allow to provide benchmark files externally -> separation between Rally and benchmarks
   
 * Open up the repo
-* How can we split benchmark development from rally? (-> logging benchmark shouldn't be directly in rally)
+* Split actual benchmarks and Rally: extract data, mappings and possible queries and download them from one common place like http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2I'
 
 ### Internal Refactorings
 

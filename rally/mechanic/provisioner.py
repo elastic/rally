@@ -38,8 +38,8 @@ class Provisioner:
     self._logger.info("Unzipping %s to %s" % (binary, install_dir))
     rally.utils.io.unzip(binary, install_dir)
     binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
-    # config may be different for each track so we have to reinitialize every time, hence track scope
-    self._config.add(cfg.Scope.trackScope, "provisioning", "local.binary.path", binary_path)
+    # config may be different for each track setup so we have to reinitialize every time, hence track setup scope
+    self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.binary.path", binary_path)
 
   # TODO: needs also to know about the benchmark scenario (e.g. for proper runtime configuration of Elasticsearch)
   # TODO: Do we need to be somehow aware about changing config settings over time, i.e. when options become deprecated / removed that have
@@ -63,7 +63,7 @@ class Provisioner:
     binary_path = self._config.opts("provisioning", "local.binary.path")
     additional_config = self._config.opts("provisioning", "es.config", mandatory=False)
     data_paths = self._data_paths()
-    self._config.add(cfg.Scope.trackScope, "provisioning", "local.data.paths", data_paths)
+    self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
     # TODO dm: We should probably have the cluster log also to our common log directory, otherwise the logs are gone as the install dir is constantly wiped
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
     # TODO dm: Maybe the cluster name should change to something more generic than 'nightlybench'. Also consider multi-node setups

@@ -7,10 +7,11 @@
 # tournament: checking two revisions against each other
 
 import rally.mechanic.mechanic as m
-# TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
-import rally.track.logging_track as t
 import rally.driver as d
 import rally.reporter as r
+# TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
+import rally.track.countries_track as ct
+import rally.track.logging_track as lt
 
 import rally.utils.io
 
@@ -22,27 +23,28 @@ class RaceControl:
   def start(self):
     # This is one of the few occasions where we directly log to console in order to give at least some feedback to users.
     # Do not log relevant output, just feedback, that we're still progressing...
-    print("Preparing for benchmarking ...")
+    print("Preparing for race ...")
     config = self._config
     mechanic = m.Mechanic(config)
     driver = d.Driver(config)
     reporter = r.Reporter(config)
 
     mechanic.pre_setup()
-    for series in self._all_series():
-      print("Running benchmark '%s' ..." % series.name())
+    for track in self._all_tracks():
+      print("Running on track '%s' ..." % track.name())
       rally.utils.io.kill_java()
-      series.setup(config)
-      for track in series.tracks():
-        track.setup(config)
-        # TODO dm: We probably need the track here to perform proper track-specific setup (later)
+      track.setup(config)
+      for track_setup in track.track_setups():
+        track_setup.setup(config)
+        # TODO dm: We probably need the track here to perform proper track-setup-specific setup (later)
         cluster = mechanic.start_engine()
-        driver.setup(cluster, track)
-        driver.go(cluster, track)
+        driver.setup(cluster, track_setup)
+        driver.go(cluster, track_setup)
         mechanic.stop_engine(cluster)
 
-      reporter.report(series.tracks())
+      reporter.report(track.track_setups())
 
-  def _all_series(self):
-    # just one series for now
-    return [t.loggingSeries]
+  def _all_tracks(self):
+    # just one track for now
+    # return [lt.loggingSeries]
+    return [ct.countriesTrack]

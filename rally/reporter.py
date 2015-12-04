@@ -79,7 +79,7 @@ class Reporter:
                           'ec2.i2.2xlarge': 'EC2 i2.2xlarge Defaults 4G',
                           'buildtimes': 'Test time (minutes)'}
 
-  def report(self, tracks):
+  def report(self, track_setups):
     self._nextGraph = 100
 
     #TODO dm: Beware, this will *not* work as soon as we have multiple benchmarks!
@@ -92,14 +92,14 @@ class Reporter:
       byModeBroken = {}
       allTimes = set()
 
-      for track in tracks:
-        track_name = track.name()
+      for track_setup in track_setups:
+        track_setup_name = track_setup.name()
         d = {}
         lastTup = None
         # Dates that had a failed run for this series:
         broken = set()
-        logger.info('Loading %s...' % self._toPrettyName[track_name])
-        for tup in self.loadSeries(track_name):
+        logger.info('Loading %s...' % self._toPrettyName[track_setup_name])
+        for tup in self.loadSeries(track_setup_name):
           timeStamp = tup[0]
           allTimes.add(timeStamp)
           if len(tup) == 2 or tup[1] is None:
@@ -111,14 +111,15 @@ class Reporter:
           else:
             lastTup = tup
           d[tup[0]] = tup[1:]
-        byMode[track_name] = d
-        byModeBroken[track_name] = broken
+        byMode[track_setup_name] = d
+        byModeBroken[track_setup_name] = broken
 
       allTimes = list(allTimes)
       allTimes.sort()
 
-      with open('results.pk', 'wb') as f:
-        pickle.dump((byMode, byModeBroken, allTimes), f)
+      #FIXME dm: check why this is not working...
+      #with open('results.pk', 'wb') as f:
+      #  pickle.dump((byMode, byModeBroken, allTimes), f)
 
     script_dir = self._config.opts("system", "rally.root")
     base_dir = self._config.opts("reporting", "report.base.dir")
@@ -364,7 +365,8 @@ class Reporter:
           refreshTimeMillis = primaries['refresh']['total_time_in_millis']
           flushTimeMillis = primaries['flush']['total_time_in_millis']
 
-        if line.startswith('NODES STATS: ') and '/defaults/' in fileName:
+        #TODO dm: specific name should move out of here...
+        if line.startswith('NODES STATS: ') and '/defaults.txt' in fileName:
           d = self.parseStats(line, f)
           nodes = d['nodes']
           if len(nodes) != 1:
@@ -465,7 +467,7 @@ class Reporter:
     l.sort()
     count = 0
     for fileName in l:
-      logger.info('visit fileName=%s' % fileName)
+      #logger.info('visit fileName=%s' % fileName)
       m = reLogFile.match(fileName)
       if m is not None:
 
@@ -524,11 +526,11 @@ class Reporter:
     # Translate broken timestamps into index:
     brokenIndex = {}
     f.write('     var brokenIndexMap = {};\n')
-    # TODO dm: Use tracks here
+    # TODO dm: Use track setups here
     for mode in 'defaults', '4gheap', 'fastsettings', 'fastupdates', 'two_nodes_defaults', 'ec2.i2.2xlarge', 'buildtimes':
       f.write('    brokenIndexMap["%s"] = [' % self._toPrettyName[mode])
       for timeStamp in allTimes:
-        # TODO dm: We don't need to check 'mode in byModeBroken' when we use tracks here
+        # TODO dm: We don't need to check 'mode in byModeBroken' when we use track setups here
         if mode in byModeBroken and timeStamp in byModeBroken[mode]:
           x = 1
         else:
@@ -725,7 +727,7 @@ class Reporter:
       l = []
       any = False
       lastDPS = None
-      # TODO dm: Pass tracks in here!!
+      # TODO dm: Pass track setups in here!!
       for mode in 'defaults', '4gheap', 'fastsettings', 'fastupdates', 'two_nodes_defaults', 'ec2.i2.2xlarge':
         if mode in byMode and timeStamp in byMode[mode]:
           dps, indexKB, segCount = byMode[mode][timeStamp][:3]
@@ -752,7 +754,7 @@ class Reporter:
 
       f.write('    + "%s,%s\\n"\n' % (self.toString(timeStamp), ','.join(l)))
 
-    self.writeGraphFooter(f, 'indexing', 'Nightly indexing performance on master', 'K docs/sec')
+    self.writeGraphFooter(f, 'indexing', 'Indexing throughput on master', 'K docs/sec')
 
     self.writeAnnots(f, chartTimes, KNOWN_CHANGES, 'Defaults (4G heap)')
 
@@ -775,7 +777,7 @@ class Reporter:
     chartTimes = []
     for timeStamp in allTimes:
       l = []
-      # TODO dm: Mentions specific track -> abstract
+      # TODO dm: Mentions specific track setup -> abstract
       if timeStamp in byMode['defaults']:
         cpuPct = byMode['defaults'][timeStamp][8]
         if cpuPct is not None:
@@ -902,7 +904,7 @@ class Reporter:
 
     for timeStamp in allTimes:
       l = []
-      # TODO dm: Mentions specific track -> abstract
+      # TODO dm: Mentions specific track setup -> abstract
       if timeStamp in byMode['defaults'] and self.yearMonthDay(timeStamp) not in ((2014, 5, 18), (2014, 5, 19)):
         dps, indexKB, segCount, defaultSearchSec, indicesStatsMSec, nodesStatsMSec, oldGCSec, youngGCSec = byMode['defaults'][timeStamp][:8]
         if youngGCSec is not None:

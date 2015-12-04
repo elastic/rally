@@ -14,8 +14,7 @@ import rally.cluster
 import rally.track.track as track
 import rally.config as cfg
 
-# logging is the "name" of our benchmark...
-logger = logging.getLogger("rally.track.logging")
+logger = logging.getLogger("rally.track.countries")
 
 # TODO dm: Remove / encapsulate after porting
 # From the original code:
@@ -26,8 +25,9 @@ ID_TYPE = 'random'
 rand = random.Random(17)
 
 
-# Concrete benchmarking scenario for logging
-class LoggingTrack(track.Track):
+# TODO dm: This is a *complete* copy of the logging benchmark (which is by itself already rather ugly -> this code is just there to get us started quickly and will change *completely* in the coming weeks
+# Concrete benchmarking scenario for countries
+class CountriesTrack(track.Track):
   def __init__(self, name, track_setups):
     track.Track.__init__(self, name, track_setups)
     self._config = None
@@ -35,19 +35,19 @@ class LoggingTrack(track.Track):
   def setup(self, config):
     self._config = config
     # Download necessary data etc.
-    self._config.add(cfg.Scope.benchmarkScope, "benchmark.logging", "docs.number", 6881288)
-    # TODO dm: Provide support to just *specify* the benchmark data location and have the infrastructure figure out the details
-    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408.json.gz")
-    # data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408-5k.json.gz")
+    self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "docs.number", 8647880)
+    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
+    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
     if not os.path.isfile(data_set_path):
       self._download_benchmark_data(data_set_path)
-    self._config.add(cfg.Scope.benchmarkScope, "benchmark.logging", "dataset.path", data_set_path)
+    self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "dataset.path", data_set_path)
 
   def _download_benchmark_data(self, data_set_path):
     logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
     # A 2 GB download justifies user feedback ...
-    print("Could  not find benchmark data. Trying to download from S3 (around 2 GB) ...")
-    s3cmd = "s3cmd -v get s3://users.elasticsearch.org/etsy/jls/web-access_log-20140408.json.gz %s" % data_set_path
+    print("Could  not find benchmark data. Trying to download (around 200 MB) ...")
+    # TODO dm: Download me!!!
+    s3cmd = "http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2 %s" % data_set_path
     success = rally.utils.process.run_subprocess(s3cmd)
     # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
     if not success or os.path.getsize(data_set_path) != 1843865288:
@@ -57,7 +57,8 @@ class LoggingTrack(track.Track):
       raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
 
 
-class LoggingTrackSetup(track.TrackSetup):
+
+class CountriesTrackSetup(track.TrackSetup):
   def __init__(self, name, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None, requires_metrics=False):
     track.TrackSetup.__init__(self, name)
     self._elasticsearch_settings = elasticsearch_settings
@@ -88,10 +89,10 @@ class LoggingTrackSetup(track.TrackSetup):
   # Set up required for running the benchmark
   def setup_benchmark(self, cluster):
     root_path = self._config.opts("system", "rally.root")
-    mappings = open("%s/resources/datasets/logging/mappings.json" % root_path).read()
+    mappings = open("%s/resources/datasets/countries/mappings.json" % root_path).read()
 
-    docs_to_index = self._config.opts("benchmark.logging", "docs.number")
-    data_set_path = self._config.opts("benchmark.logging", "dataset.path")
+    docs_to_index = self._config.opts("benchmark.countries", "docs.number")
+    data_set_path = self._config.opts("benchmark.countries", "dataset.path")
 
     if DO_IDS:
       ids = self.buildIDs()
@@ -100,7 +101,7 @@ class LoggingTrackSetup(track.TrackSetup):
 
     logger.info('Use %d docs per bulk request' % DOCS_IN_BLOCK)
     # TODO dm: extract more constants to benchmark settings
-    self._bulk_docs = BulkDocs('logs',
+    self._bulk_docs = BulkDocs('countries',
                                data_set_path,
                                ids,
                                docs_to_index,
@@ -110,8 +111,8 @@ class LoggingTrackSetup(track.TrackSetup):
     logger.debug('create index w/ mappings')
     logger.debug(mappings)
     # TODO dm: retrieve from cluster
-    cluster.client().indices.create(index='logs')
-    cluster.client().indices.put_mapping(index='logs',
+    cluster.client().indices.create(index='countries')
+    cluster.client().indices.put_mapping(index='countries',
                                          doc_type='type',
                                          body=json.loads(mappings))
 
@@ -119,7 +120,7 @@ class LoggingTrackSetup(track.TrackSetup):
     return self._requires_metrics
 
   def required_cluster_status(self):
-    # FIXME dm: This depends also on the replica count so we better have a way to derive that, for now we assume that we need green
+    #FIXME dm: This depends also on the replica count so we better have a way to derive that, for now we assume that we need green
     # when we have special settings
     if self._nodes == 1 and self._elasticsearch_settings is None:
       return rally.cluster.ClusterStatus.yellow
@@ -127,10 +128,10 @@ class LoggingTrackSetup(track.TrackSetup):
       return rally.cluster.ClusterStatus.green
 
   def benchmark_indexing(self, cluster, metrics):
-    docs_to_index = self._config.opts("benchmark.logging", "docs.number")
-    data_set_path = self._config.opts("benchmark.logging", "dataset.path")
+    docs_to_index = self._config.opts("benchmark.countries", "docs.number")
+    data_set_path = self._config.opts("benchmark.countries", "dataset.path")
 
-    # TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
+    #TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
     self._metrics = metrics
 
     # TODO dm: Check properly -> flag!
@@ -143,16 +144,16 @@ class LoggingTrackSetup(track.TrackSetup):
 
     try:
       # TODO dm: Reduce number of parameters...
-      self.indexAllDocs(data_set_path, 'logs', cluster.client(), self._bulk_docs, expectedDocCount)
+      self.indexAllDocs(data_set_path, 'countries', cluster.client(), self._bulk_docs, expectedDocCount)
       finished = True
 
     finally:
-      # HINT dm: Not reporting relevant
+      #HINT dm: Not reporting relevant
       self.print_metrics('Finished?: %s' % finished)
       self._bulk_docs.close()
 
   def benchmark_searching(self, cluster, metrics):
-    # TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
+    #TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
     self._metrics = metrics
     # TODO dm: (a) configure this properly (use a flag, not a name check), (b) check with Mike if we want to perform search tests in all configurations
     if self._name == 'defaults':
@@ -163,7 +164,7 @@ class LoggingTrackSetup(track.TrackSetup):
     if not self._build_ids:
       return
 
-    docs_to_index = self._config.opts("benchmark.logging", "docs.number")
+    docs_to_index = self._config.opts("benchmark.countries", "docs.number")
 
     self.print_metrics('build IDs: %s' % ID_TYPE)
 
@@ -191,22 +192,23 @@ class LoggingTrackSetup(track.TrackSetup):
       d = {}
 
       t0 = time.time()
-      resp = es.search(index='logs')
+      resp = es.search(index='countries')
       t1 = time.time()
       d['default'] = t1 - t0
 
       t0 = time.time()
-      resp = es.search(index='logs', doc_type='type', q='message:en')
+      # FIXME dm: Obviously we should search for something else here
+      resp = es.search(index='countries', doc_type='type', q='message:en')
       t1 = time.time()
       d['term'] = t1 - t0
 
       t0 = time.time()
-      resp = es.search(index='logs', doc_type='type', q='"ab_international.languages.ja+off"')
+      resp = es.search(index='countries', doc_type='type', q='"ab_international.languages.ja+off"')
       t1 = time.time()
       d['phrase'] = t1 - t0
 
       t0 = time.time()
-      resp = es.search(index='logs', doc_type='type', body='''
+      resp = es.search(index='countries', doc_type='type', body='''
   {
       "size": 0,
       "aggregations": {
@@ -224,7 +226,7 @@ class LoggingTrackSetup(track.TrackSetup):
 
       # Scroll, 1K docs at a time, 25 times:
       t0 = time.time()
-      r = es.search(index='logs', doc_type='type', sort='_doc', scroll='10m', size=1000)
+      r = es.search(index='countries', doc_type='type', sort='_doc', scroll='10m', size=1000)
       count = 1
       for i in range(24):
         numHits = len(r['hits']['hits'])
@@ -238,15 +240,15 @@ class LoggingTrackSetup(track.TrackSetup):
 
       if False and i == 0:
         self.print_metrics('SEARCH:\n%s' % json.dumps(resp, sort_keys=True,
-                                                      indent=4, separators=(',', ': ')))
-      self.print_metrics('%.2f msec' % (1000 * (t1 - t0)))
+                                         indent=4, separators=(',', ': ')))
+      self.print_metrics('%.2f msec' % (1000*(t1-t0)))
       times.append(d)
 
     for q in ('default', 'term', 'phrase', 'hourly_agg', 'scroll_all'):
       l = [x[q] for x in times]
       l.sort()
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
-      # HINT dm: Reporting relevant
+      #HINT dm: Reporting relevant
       self.print_metrics('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
 
   def indexBulkDocs(self, es, startingGun, myID, bulkDocs, failedEvent, stopEvent, pauseSec=None):
@@ -258,14 +260,14 @@ class LoggingTrackSetup(track.TrackSetup):
     startingGun.await()
 
     while not stopEvent.isSet():
-      # t0 = time.time()
+      #t0 = time.time()
       buffer = bulkDocs.nextNDocs()
       if len(buffer) == 0:
         break
-      # t1 = time.time()
-      # self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
+      #t1 = time.time()
+      #self.print_metrics('IndexerThread%d: get took %.1f msec' % (myID, 1000*(t1-t0)))
 
-      count = int(len(buffer) / 2)
+      count = int(len(buffer)/2)
       data = '\n'.join(buffer)
       del buffer[:]
 
@@ -279,13 +281,13 @@ class LoggingTrackSetup(track.TrackSetup):
         if result['errors'] != False or len(result['items']) != count:
           self.print_metrics('bulk failed (count=%s):' % count)
           self.print_metrics('%s' % json.dumps(result, sort_keys=True,
-                                               indent=4, separators=(',', ': ')))
+                                  indent=4, separators=(',', ': ')))
           failedEvent.set()
           stopEvent.set()
           raise RuntimeError('bulk failed')
 
-      # t2 = time.time()
-      # logger.info('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
+      #t2 = time.time()
+      #logger.info('IndexerThread%d: index took %.1f msec' % (myID, 1000*(t2-t1)))
       self.printStatus(count, len(data))
       if pauseSec is not None:
         time.sleep(pauseSec)
@@ -300,13 +302,12 @@ class LoggingTrackSetup(track.TrackSetup):
         t = time.time()
         # FIXME dm: Don't use print_metrics here. Not needed for metrics output, we already hold the print lock and it seems to be non-reentrant
         logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (
-          self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime),
-          (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
+          self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime), (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
         self._nextPrint += 10000
 
   def printIndexStats(self, dataDir):
     indexSizeKB = os.popen('du -s %s' % dataDir).readline().split()[0]
-    # HINT dm: Reporting relevant
+    #HINT dm: Reporting relevant
     self.print_metrics('index size %s KB' % indexSizeKB)
     # TODO dm: The output of this should probably be logged (remove from metrics)
     self.print_metrics('index files:')
@@ -315,7 +316,7 @@ class LoggingTrackSetup(track.TrackSetup):
 
   def indexAllDocs(self, docsFile, indexName, es, bulkDocs, expectedDocCount, doFlush=True, doStats=True):
     global startTime
-    numClientThreads = int(self._config.opts("benchmarks.logging", "index.client.threads"))
+    numClientThreads = int(self._config.opts("benchmarks.countries", "index.client.threads"))
     starting_gun = CountDownLatch(1)
     self.print_metrics('json docs file: %s' % docsFile)
 
@@ -349,7 +350,7 @@ class LoggingTrackSetup(track.TrackSetup):
       raise RuntimeError('some indexing threads failed')
 
     end_time = time.time()
-    # HINT dm: Reporting relevant
+    #HINT dm: Reporting relevant
     self.print_metrics('Total docs/sec: %.1f' % (bulkDocs.indexedDocCount / (end_time - startTime)))
 
     self.printStatus(0, 0)
@@ -363,33 +364,33 @@ class LoggingTrackSetup(track.TrackSetup):
       t0 = time.time()
       stats = es.indices.stats(index=indexName, metric='_all', level='shards')
       t1 = time.time()
-      # HINT dm: Reporting relevant
+      #HINT dm: Reporting relevant
       self.print_metrics('Indices stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
-                                                          indent=4, separators=(',', ': ')))
+                                             indent=4, separators=(',', ': ')))
 
-      # TODO dm: Unused?
+      #TODO dm: Unused?
       actualDocCount = stats['_all']['primaries']['docs']['count']
 
       t0 = time.time()
       stats = es.nodes.stats(metric='_all', level='shards')
       t1 = time.time()
-      # HINT dm: Reporting relevant
+      #HINT dm: Reporting relevant
       self.print_metrics('Node stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
-                                                        indent=4, separators=(',', ': ')))
+                                           indent=4, separators=(',', ': ')))
       t0 = time.time()
       stats = es.indices.segments(params={'verbose': True})
       t1 = time.time()
       self.print_metrics('Segments stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('SEGMENTS STATS: %s' % json.dumps(stats, sort_keys=True,
-                                                           indent=4, separators=(',', ': ')))
+                                              indent=4, separators=(',', ': ')))
 
       # TODO dm: Enable debug mode later on
       # if DEBUG == False and expectedDocCount is not None and expectedDocCount != actualDocCount:
       #  raise RuntimeError('wrong number of documents indexed: expected %s but got %s' % (expectedDocCount, actualDocCount))
 
-  # TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
+  #TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
   #         everything as metrics (which is not true -> but later...)
   def print_metrics(self, message):
     self._metrics.collect(message)
@@ -490,12 +491,12 @@ class BulkDocs:
         if len(buffer) >= limit:
           break
 
-    self.indexedDocCount += len(buffer) / 2
+    self.indexedDocCount += len(buffer)/2
 
     return buffer
 
 
-loggingBenchmarkFastSettings = '''
+countriesBenchmarkFastSettings = '''
 index.refresh_interval: 30s
 
 index.number_of_shards: 6
@@ -505,16 +506,12 @@ index.translog.flush_threshold_size: 4g
 index.translog.flush_threshold_ops: 500000
 '''
 
-# TODO dm: reintroduce 'ec2.i2.2xlarge' although it's more of an environment than a new benchmark... -> EC2 support!
-loggingTrack = LoggingTrack("Logging", [
+countriesTrack = CountriesTrack("Countries", [
   # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
-  LoggingTrackSetup("defaults", requires_metrics=True),
-  LoggingTrackSetup("4gheap", heap='4g'),
-  LoggingTrackSetup("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
-  LoggingTrackSetup("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
+  CountriesTrackSetup("defaults", requires_metrics=True),
+  CountriesTrackSetup("4gheap", heap='4g'),
+  CountriesTrackSetup("fastsettings", elasticsearch_settings=countriesBenchmarkFastSettings, heap='4g'),
+  CountriesTrackSetup("fastupdates", elasticsearch_settings=countriesBenchmarkFastSettings, heap='4g', build_ids=True),
   # integer divide!
-  LoggingTrackSetup("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
-
-  # TODO dm: Reintroduce beast2
-  # LoggingTrack("beast2", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
+  CountriesTrackSetup("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
 ])
