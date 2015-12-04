@@ -132,7 +132,7 @@
         }
       },
       "population": {
-        "type": "integer"
+        "type": "long"
       }
     }
   }
