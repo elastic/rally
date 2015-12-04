@@ -36,15 +36,15 @@ class CountriesTrack(track.Track):
     self._config = config
     # Download necessary data etc.
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "docs.number", 8647880)
-    # data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
-    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
+    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents.json.bz2")
+    #data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "documents-2k.json.bz2")
     if not os.path.isfile(data_set_path):
       self._download_benchmark_data(data_set_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "dataset.path", data_set_path)
 
   def _download_benchmark_data(self, data_set_path):
     logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
-    # A 2 GB download justifies user feedback ...
+    # A 200 MB download justifies user feedback ...
     print("Could  not find benchmark data. Trying to download (around 200 MB) ...")
     # TODO dm: Download me!!!
     s3cmd = "http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2 %s" % data_set_path
