@@ -1,6 +1,7 @@
 import bisect
 import json
 import os
+import glob
 import shutil
 import re
 import datetime
@@ -116,8 +117,9 @@ class Reporter:
       allTimes = list(allTimes)
       allTimes.sort()
 
-      with open('results.pk', 'wb') as f:
-        pickle.dump((byMode, byModeBroken, allTimes), f)
+      #FIXME dm: Reenable before checkin
+      #with open('results.pk', 'wb') as f:
+      #  pickle.dump((byMode, byModeBroken, allTimes), f)
 
     script_dir = self._config.opts("system", "rally.root")
     base_dir = self._config.opts("reporting", "report.base.dir")
@@ -444,31 +446,38 @@ class Reporter:
   def loadSeries(self, subdir):
     results = []
 
-    reLogFile = re.compile(r'^(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\.txt$')
+    # That's the root for a single build, we want here all builds
+    #log_root = self._config.opts("system", "log.dir")
+    log_root = self._config.opts("system", "log.root.dir")
+    metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
 
-    rootDir = '%s/%s/' % (self._log_dir(), subdir)
+    reLogFile = re.compile(r'^%s/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\/%s' % (log_root, metrics_log_dir))
+
+    #rootDir = '%s/%s/' % (self._log_dir(), subdir)
 
     l = []
     try:
-      l = os.listdir(rootDir)
+      #l = os.listdir(rootDir)
+      # TODO dm: With the new structure, "subdir" is the wrong name, this is actually the file name...
+      l = glob.glob("%s/*/%s/%s.txt" % (log_root, metrics_log_dir, subdir))
     except FileNotFoundError:
-      logger.warn("%s does not exist. Skipping..." % rootDir)
+      logger.warn("%s does not exist. Skipping..." % subdir)
       return results
     l.sort()
     count = 0
     for fileName in l:
-      # logger.debug('visit fileName=%s%s' % (rootDir, fileName))
+      logger.info('visit fileName=%s' % fileName)
       m = reLogFile.match(fileName)
       if m is not None:
 
-        if False and os.path.getsize('%s%s' % (rootDir, fileName)) < 10 * 1024:
+        if False and os.path.getsize(fileName) < 10 * 1024:
           # Something silly went wrong:
           continue
 
         try:
-          tup = self.loadOneFile('%s%s' % (rootDir, fileName), m)
+          tup = self.loadOneFile(fileName, m)
         except:
-          logger.error('Exception while parsing %s%s' % (rootDir, fileName))
+          logger.error('Exception while parsing %s' % fileName)
           raise
 
         d = tup[0]
