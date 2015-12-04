@@ -13,12 +13,16 @@
 #
 # Contains of 1 .. n track setups
 class Track:
-  def __init__(self, name, track_setups):
+  def __init__(self, name, description, track_setups):
     self._name = name
+    self._description = description
     self._track_setups = track_setups
 
   def name(self):
     return self._name
+
+  def description(self):
+    return self._description
 
   def track_setups(self):
     return self._track_setups
@@ -37,11 +41,15 @@ class Track:
 #
 # A track setup defines the concrete operations that will be done and also influences system configuration
 class TrackSetup:
-  def __init__(self, name):
+  def __init__(self, name, description):
     self._name = name
+    self._description = description
 
   def name(self):
     return self._name
+
+  def description(self):
+    return self._description
 
   # TODO dm: Consider using abc (http://stackoverflow.com/questions/4382945/abstract-methods-in-python)
   def required_cluster_status(self):

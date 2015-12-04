@@ -28,8 +28,8 @@ rand = random.Random(17)
 
 # Concrete benchmarking scenario for logging
 class LoggingTrack(track.Track):
-  def __init__(self, name, track_setups):
-    track.Track.__init__(self, name, track_setups)
+  def __init__(self, name, description, track_setups):
+    track.Track.__init__(self, name, description, track_setups)
     self._config = None
 
   def setup(self, config):
@@ -58,8 +58,8 @@ class LoggingTrack(track.Track):
 
 
 class LoggingTrackSetup(track.TrackSetup):
-  def __init__(self, name, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None, requires_metrics=False):
-    track.TrackSetup.__init__(self, name)
+  def __init__(self, name, description, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None, requires_metrics=False):
+    track.TrackSetup.__init__(self, name, description)
     self._elasticsearch_settings = elasticsearch_settings
     self._build_ids = build_ids
     self._nodes = nodes
@@ -506,15 +506,39 @@ index.translog.flush_threshold_ops: 500000
 '''
 
 # TODO dm: reintroduce 'ec2.i2.2xlarge' although it's more of an environment than a new benchmark... -> EC2 support!
-loggingTrack = LoggingTrack("Logging", [
-  # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
-  LoggingTrackSetup("defaults", requires_metrics=True),
-  LoggingTrackSetup("4gheap", heap='4g'),
-  LoggingTrackSetup("fastsettings", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g'),
-  LoggingTrackSetup("fastupdates", elasticsearch_settings=loggingBenchmarkFastSettings, heap='4g', build_ids=True),
-  # integer divide!
-  LoggingTrackSetup("two_nodes_defaults", processors=sysstats.number_of_cpu_cores() // 2, nodes=2),
+loggingTrack = LoggingTrack(
+  "Logging",
+  "This test indexes 6.9M short documents (log lines, total 14 GB json) using 8 client threads and 5000 docs per _bulk request against a single node running on a dual Xeon X5680 (12 real cores, 24 with hyperthreading) and 48 GB RAM. ",
+  track_setups=[
+    # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
+    LoggingTrackSetup(
+      "defaults",
+      "append-only, using all default settings.",
+      requires_metrics=True),
 
-  # TODO dm: Reintroduce beast2
-  # LoggingTrack("beast2", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
-])
+    LoggingTrackSetup(
+      "4gheap",
+      "same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
+      heap='4g'),
+
+    LoggingTrackSetup(
+      "fastsettings",
+      "append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % loggingBenchmarkFastSettings,
+      elasticsearch_settings=loggingBenchmarkFastSettings,
+      heap='4g'),
+    LoggingTrackSetup(
+      "fastupdates",
+      "the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
+      elasticsearch_settings=loggingBenchmarkFastSettings,
+      heap='4g',
+      build_ids=True),
+    # integer divide!
+    LoggingTrackSetup(
+      "two_nodes_defaults",
+      "append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
+      processors=sysstats.number_of_cpu_cores() // 2,
+      nodes=2),
+
+    # TODO dm: Reintroduce beast2
+    # LoggingTrack("beast2", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
+  ])
