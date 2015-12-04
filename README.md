@@ -6,6 +6,7 @@ Rally is the macrobenchmarking framework for Elasticsearch
 * JDK 8+
 * Gradle 2.8+
 * git
+* Optional: [s3cmd](https://github.com/s3tools/s3cmd) for downloading benchmark data from S3
 
 Rally is only tested on Mac OS X and Linux.
 
@@ -16,6 +17,8 @@ Rally is only tested on Mac OS X and Linux.
 * Install Rally and its dependencies: `python3 setup.py develop`. Note: this will change when Rally is available in the Python package repos.
 * Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
 * Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
+
+Caveat: The diagrams are intended for performance regression testing so they only show a single data point per build. After the first build only a single data point is shown (will change in the future).  
 
 ### Command Line Options
 
