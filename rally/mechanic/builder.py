@@ -50,4 +50,4 @@ class Builder:
     # It's ok to call os.system here; we capture all output to a dedicated build log file
     if not os.system("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
       os.rename(("%s.tmp" % log_file), log_file)
-      self._logger.error("Executing '%s %s' failed" % (gradle, task))
+      self._logger.warn("Executing '%s %s' failed" % (gradle, task))
