@@ -17,7 +17,7 @@ class Driver:
       metrics.start_collection(cluster)
     # TODO dm: I sense this is too concrete for a driver -> abstract this a bit later (should move to track, they all need a unified interface)
     track.benchmark_indexing(cluster, metrics)
-  # TODO dm: *Might* be interesting to gather metrics also for searching (esp. memory consumption) -> later
+    # TODO dm: *Might* be interesting to gather metrics also for searching (esp. memory consumption) -> later
     track.benchmark_searching(cluster, metrics)
     # TODO dm: Check with Mike if it is ok to include this here (original code shut down the server first)
     # This is also just a hack for now (should be in track for first step and metrics for second one)
