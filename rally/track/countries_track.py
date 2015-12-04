@@ -6,6 +6,8 @@ import random
 import bz2
 import gzip
 import logging
+import urllib.request
+import shutil
 
 import rally.utils.sysstats as sysstats
 import rally.utils.process
@@ -45,16 +47,11 @@ class CountriesTrack(track.Track):
   def _download_benchmark_data(self, data_set_path):
     logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
     # A 200 MB download justifies user feedback ...
-    print("Could  not find benchmark data. Trying to download (around 200 MB) ...")
-    # TODO dm: Download me!!!
-    s3cmd = "http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2 %s" % data_set_path
-    success = rally.utils.process.run_subprocess(s3cmd)
-    # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
-    if not success or os.path.getsize(data_set_path) != 1843865288:
-      # cleanup probably corrupt data file...
-      if os.path.isfile(data_set_path):
-        os.remove(data_set_path)
-      raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
+    url = "http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2"
+    print("Could not find benchmark data. Downloading from %s... (around 200 MB)" % url, end='')
+    with urllib.request.urlopen(url) as response, open(data_set_path, 'wb') as out_file:
+      shutil.copyfileobj(response, out_file)
+    print("Done")
 
 
 class CountriesTrackSetup(track.TrackSetup):
