@@ -27,19 +27,16 @@ Rally has a list of supported command line options. Just run `esrally --help`.
 ### Key Components of Rally
 
 Note: This is just important if you want to hack on Rally and to some extent if you want to add new benchmarks. It is not that interesting if you are just using it.
- 
-* `Series`: represents a class of benchmarking scenarios, e.g. a logging benchmark. It defines the data set to use.
-* `Track`: A track is a concrete benchmark configuration, e.g. the logging benchmark with Elasticsearch default settings.
-* `Mechanic`: A mechanic can build and prepare a benchmark candidate for the race. It checks out the source, builds Elasticsearch, provisions and starts the cluster.
-* `Race Control`: Race control is responsible for proper setup of the race.
-* `Telemetry`: Telemetry allows us to gather metrics during the race. 
+
+* `Race Control`: is responsible for proper execution of the race. It sets up all components and acts as a high-level controller.
+* `Mechanic`: can build and prepare a benchmark candidate for the race. It checks out the source, builds Elasticsearch, provisions and starts the cluster.
+* `Track`: is a concrete benchmarking scenario, e.g. the logging benchmark. It defines the data set to use.
+* `TrackSetup`: is a concrete system configuration for a benchmark, e.g. Elasticsearch default settings. Note: There are some lose ends in the code due to the porting efforts. The implementation is very likely to change significantly.
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
-When implementing a new benchmark, create a new file in `track` and subclass `Series` and `Track`. See `track/logging_track.py` for an example.
+When implementing a new benchmark, create a new file in `track` and subclass `Track` and `TrackSetup`. See `track/countries_track.py` for an example.
 Currently, race control does not pick up the new benchmark automatically but adding support for that is coming soon. 
-
-TODO dm: Add a nice diagram for a graphical overview of the key components and their dependencies
  
 ### License
  

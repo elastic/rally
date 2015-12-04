@@ -38,6 +38,7 @@ def parse_args():
     default=False,
     action="store_true")
 
+  # FIXME dm: This is actually already a benchmark mode!!!
   parser.add_argument(
     '--update-sources',
     help='force a remote fetch and rebase on master (intended for CI runs) (default: false)',
@@ -82,7 +83,6 @@ def main():
 
   configure_logging(cfg)
 
-  print("Starting Rally...\n")
   race_control = rc.RaceControl(cfg)
   race_control.start()
 

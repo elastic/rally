@@ -16,8 +16,8 @@ class Scope(Enum):
   globalOverrideScope = 2
   # A sole benchmark
   benchmarkScope = 3
-  # Single benchmark track
-  trackScope = 4
+  # Single benchmark track setup (e.g. default, multinode, ...)
+  trackSetupScope = 4
   # property for every invocation, i.e. for backtesting
   invocationScope = 5
 
@@ -37,6 +37,7 @@ class Config:
     "benchmarks::metrics.log.dir": "metrics",
     # Specific configuration per benchmark
     "benchmarks.logging::index.client.threads": "8",
+    "benchmarks.countries::index.client.threads": "8",
   }
 
   def __init__(self):
