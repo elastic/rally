@@ -6,7 +6,6 @@ Rally is the macrobenchmarking framework for Elasticsearch
 * JDK 8+
 * Gradle 2.8+
 * git
-* Optional: [s3cmd](https://github.com/s3tools/s3cmd) for downloading benchmark data from S3
 
 Rally is only tested on Mac OS X and Linux.
 
