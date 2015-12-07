@@ -6,10 +6,12 @@ import rally.utils.io as io
 import rally.utils.process
 
 
-# can build an actual source tree
-#
-# Idea: Think about a "skip-build" flag for local use (or a pre-build check whether there is already a binary (prio: low)
 class Builder:
+  """
+  A builder is responsible for creating an installable binary from the source files.
+
+  It is not intended to be used directly but should be triggered by its mechanic.
+  """
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger

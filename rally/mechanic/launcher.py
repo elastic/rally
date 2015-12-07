@@ -8,8 +8,12 @@ import rally.mechanic.gear as gear
 import rally.cluster as c
 
 
-# Currently only local launch is supported
 class Launcher:
+  """
+  Launcher is responsible for starting and stopping the benchmark candidate.
+
+  Currently, only local launching is supported.
+  """
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger

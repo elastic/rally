@@ -22,9 +22,12 @@ class Scope(Enum):
   invocationScope = 5
 
 
-# TODO dm: Explicitly clean all values after they've lost their scope to avoid leaving behind outdated entries by accident
-# Abstracts the configuration format.
 class Config:
+  """
+  Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
+  different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are transparently
+  resolved when a property is retrieved and the value on the most specific level is returned.
+  """
   # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change them either
   _opts = {
     "build::gradle.tasks.clean": "clean",
@@ -44,9 +47,27 @@ class Config:
     pass
 
   def add(self, scope, section, key, value):
+    """
+    Adds or overrides a new configuration property.
+
+    :param scope: The scope of this property. More specific scopes (higher values) override more generic ones (lower values).
+    :param section: The configuration section.
+    :param key: The configuration key within this section. Same keys in different sections will not collide.
+    :param value: The associated value.
+    """
     self._opts[self._k(scope, section, key)] = value
 
   def opts(self, section, key, default_value=None, mandatory=True):
+    """
+    Resolves a configuratin property.
+
+    :param section: The configuration section.
+    :param key: The configuration key.
+    :param default_value: The default value to use for optional properties as a fallback. Default: None
+    :param mandatory: Whether a value is expected to exist for the given section and key. Note that the default_value is ignored for
+    mandatory properties. It must be ensured that a value exists. Default: True
+    :return: The associated value.
+    """
     try:
       scope = self._resolve_scope(section, key)
       return self._opts[self._k(scope, section, key)]
@@ -57,9 +78,15 @@ class Config:
         raise ConfigError("No value for mandatory configuration: section='%s', key='%s'" % (section, key))
 
   def config_present(self):
+    """
+    :return: true iff a config file already exists.
+    """
     return os.path.isfile(self._config_file())
 
   def load_config(self):
+    """
+    Loads an existing config file.
+    """
     config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
     config.read(self._config_file())
     for section in config.sections():
@@ -68,6 +95,12 @@ class Config:
 
   # full_config -> intended for nightlies
   def create_config(self, advanced_config=False):
+    """
+    Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
+    and writes them to the configuration file in ~/.rally/rally.ini.
+
+    :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a developer machine). Default: False.
+    """
     if self.config_present():
       print("\n!!!!!!! WARNING: Will overwrite existing config file: '%s' !!!!!!!\n", self._config_file())
 

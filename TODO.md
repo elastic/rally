@@ -6,9 +6,6 @@
 
 ### After that
 
-* Tests
-* [Pydocs](http://sphinxcontrib-napoleon.readthedocs.org/en/latest/example_google.html)
-
 * Support for running nightly benchmarks:
     * Verification of rally against the original version (compare log files (single-threaded test)?)
     * EC2 benchmarks

@@ -15,8 +15,11 @@ class ClusterStatus(Enum):
 logger = logging.getLogger("rally.cluster")
 
 
-# Represents the test candidate (i.e. Elasticsearch)
 class Cluster:
+  """
+  Cluster exposes APIs of the running benchmark candidate.
+  """
+
   def __init__(self, servers):
     self._es = elasticsearch.Elasticsearch()
     self._servers = servers

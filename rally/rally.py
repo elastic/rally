@@ -41,13 +41,15 @@ def parse_args():
   # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
   parser.add_argument(
     '--benchmark-mode',
-    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
+    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across "
+         "a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
     choices=["single", "range"],  # later also 'tournament'
     default="single")
 
   parser.add_argument(
     '--revision',
-    help="defines which sources to use for 'single'_benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest version on master (default: current).",
+    help="defines which sources to use for 'single'_benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
+         "version on master (default: current).",
     choices=["current", "latest"],
     default="current")  # optimized for local usage, don't fetch sources
 
