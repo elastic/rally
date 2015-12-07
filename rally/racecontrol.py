@@ -30,18 +30,20 @@ class RaceControl:
     reporter = r.Reporter(config)
 
     mechanic.pre_setup()
-    for track in self._all_tracks():
-      print("Running on track '%s' ..." % track.name())
+    for index, track in enumerate(self._all_tracks(), start=1):
+      print("Running on track '%s' [track %d/%d]. Best effort ETA for this track: %d minutes (may be less or more depending on your hardware)" %
+            (track.name(), index, len(self._all_tracks()), track.estimated_runtime_in_minutes()))
       rally.utils.io.kill_java()
       track.setup(config)
       for track_setup in track.track_setups():
+        print("\tCurrent track setup: %s" % track_setup.name())
         track_setup.setup(config)
         # TODO dm: We probably need the track here to perform proper track-setup-specific setup (later)
         cluster = mechanic.start_engine()
         driver.setup(cluster, track_setup)
         driver.go(cluster, track_setup)
         mechanic.stop_engine(cluster)
-
+      print("All tracks done. Generating reports...")
       reporter.report(track)
 
   def _all_tracks(self):

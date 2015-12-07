@@ -70,23 +70,27 @@ class Config:
   def create_config(self, advanced_config=False):
     if self.config_present():
       print("\n!!!!!!! WARNING: Will overwrite existing config file: '%s' !!!!!!!\n", self._config_file())
-    else:
-      print("Creating new configuration file in '%s'\n" % self._config_file())
 
     print("The benchmark root directory contains benchmark data, logs, etc.")
-    print("It will consume several tens of GB of free space (expect at least 20 GB).")
+    print("It will consume several GB of free space depending on which benchmarks are executed (expect at least 10 GB).")
     benchmark_root_dir = self._ask_property("Enter the benchmark root directory (will be created automatically)")
     source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)")
     # Ask, because not everybody might have SSH access
     repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
-    gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value="/usr/local/bin/gradle",
+    default_gradle_location = rally.utils.io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
+    gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value=default_gradle_location,
                                     check_path_exists=True)
     if advanced_config:
-      maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value="/usr/local/bin/mvn",
+      default_mvn_location = rally.utils.io.guess_install_location("mvn", fallback="/usr/local/bin/mvn")
+      maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value=default_mvn_location,
                                      check_path_exists=True)
     else:
       maven_bin = ""
-    jdk8_home = self._ask_property("Enter the JDK 8 root directory", check_path_exists=True)
+    default_jdk_8 = rally.utils.io.guess_java_home(major_version=8, fallback="")
+    jdk8_home = self._ask_property(
+      "Enter the JDK 8 root directory (e.g. something like /Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home on a Mac)",
+      default_value=default_jdk_8,
+      check_path_exists=True)
     # TODO dm: Check with Mike. It looks this is just interesting for nightlies.
     if advanced_config:
       stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")

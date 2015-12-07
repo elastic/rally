@@ -31,6 +31,9 @@ class Track:
     # TODO dm: Implement a best-effort guess and provide a proper info the user at startup (+ startup option to suppress this for CI builds)
     return 0
 
+  def estimated_runtime_in_minutes(self):
+    return 60
+
   # TODO dm: Consider using abc (http://stackoverflow.com/questions/4382945/abstract-methods-in-python)
   def setup(self, config):
     # Download necessary data etc.
