@@ -9,6 +9,7 @@ import logging
 
 import rally.utils.sysstats as sysstats
 import rally.utils.process
+import rally.utils.io
 
 import rally.cluster
 import rally.track.track as track
@@ -37,13 +38,15 @@ class LoggingTrack(track.Track):
     # Download necessary data etc.
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.logging", "docs.number", 6881288)
     # TODO dm: Provide support to just *specify* the benchmark data location and have the infrastructure figure out the details
-    data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408.json.gz")
+    data_set_root = self._config.opts("benchmarks", "local.dataset.cache")
+    data_set_path = "%s/%s" % (data_set_root, "web-access_log-20140408.json.gz")
     # data_set_path = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), "web-access_log-20140408-5k.json.gz")
     if not os.path.isfile(data_set_path):
-      self._download_benchmark_data(data_set_path)
+      self._download_benchmark_data(data_set_root, data_set_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.logging", "dataset.path", data_set_path)
 
-  def _download_benchmark_data(self, data_set_path):
+  def _download_benchmark_data(self, data_set_root, data_set_path):
+    rally.utils.io.ensure_dir(data_set_root)
     logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
     # A 2 GB download justifies user feedback ...
     print("Could  not find benchmark data. Trying to download from S3 (around 2 GB) ...")
