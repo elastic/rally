@@ -51,7 +51,8 @@ class CountriesTrack(track.Track):
     logger.info("Benchmark data for %s not available in '%s'" % (self.name(), data_set_path))
     # A 200 MB download justifies user feedback ...
     url = "http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2"
-    print("Downloading benchmark data from %s... (around 200 MB) " % url, end='')
+    # ensure output appears immediately
+    print("Downloading benchmark data from %s... (around 200 MB) " % url, end='', flush=True)
     with urllib.request.urlopen(url) as response, open(data_set_path, 'wb') as out_file:
       shutil.copyfileobj(response, out_file)
     print("done")
