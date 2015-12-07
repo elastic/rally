@@ -7,8 +7,10 @@ class SupplyError(BaseException):
   pass
 
 
-# gets the actual source, currently only git is supported (implicitly)
 class Supplier:
+  """
+  Supplier fetches the benchmark candidate source tree from the remote repository. In the current implementation, only git is supported.
+  """
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger

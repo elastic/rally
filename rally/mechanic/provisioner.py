@@ -7,14 +7,16 @@ import rally.config as cfg
 import rally.utils.io
 
 
-# Prepares the runtime environment for execution
-# Supported modes:
-# local
-# ec2 (not yet - to be implemented)
-#
-# Input: binary distribution files
-# Output: Distribution set up for benchmarking (binary in place + config is done)
 class Provisioner:
+  """
+  The provisioner prepares the runtime environment for running the benchmark.  It prepares all configuration files and copies the binary of
+  the benchmark candidate to the appropriate place.
+
+  Supported modes:
+
+  * Local
+  * EC2 (not yet implemented)
+  """
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger

@@ -1,8 +1,10 @@
 import rally.metrics as m
 
 
-# Benchmark runner
 class Driver:
+  """
+  Driver runs the benchmark.
+  """
   def __init__(self, config):
     self._config = config
 

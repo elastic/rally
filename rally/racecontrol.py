@@ -13,7 +13,7 @@ import rally.reporter as r
 import rally.track.countries_track as ct
 import rally.track.logging_track as lt
 
-import rally.utils.io
+import rally.utils.process
 
 
 class RaceControl:
@@ -33,7 +33,7 @@ class RaceControl:
     for index, track in enumerate(self._all_tracks(), start=1):
       print("Running on track '%s' [track %d/%d]. Best effort ETA for this track: %d minutes (may be less or more depending on your hardware)" %
             (track.name(), index, len(self._all_tracks()), track.estimated_runtime_in_minutes()))
-      rally.utils.io.kill_java()
+      rally.utils.process.kill_java()
       track.setup(config)
       for track_setup in track.track_setups():
         print("\tCurrent track setup: %s" % track_setup.name())

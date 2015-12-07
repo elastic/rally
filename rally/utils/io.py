@@ -2,7 +2,6 @@ import os
 import errno
 import glob
 import subprocess
-import signal
 import bz2
 # from zipfile import ZipFile as zip
 
@@ -10,8 +9,14 @@ import rally.utils.process
 
 
 def ensure_dir(directory):
-  # avoid a race condition by trying to create the checkout directory
+  """
+  Ensure that the provided directory and all of its parent directories exist.
+  This function is safe to execute on existing directories (no op).
+
+  :param directory: The directory to create (if it does not exist).
+  """
   try:
+    # avoid a race condition by trying to create the checkout directory
     os.makedirs(directory)
   except OSError as exception:
     if exception.errno != errno.EEXIST:
@@ -19,6 +24,18 @@ def ensure_dir(directory):
 
 
 def unzip(zip_name, target_directory):
+  """
+  Decompresses the provided archive to the target directory. The following file extensions are supported:
+
+  * zip: Relies that the 'unzip' tool is available on the path
+  * bz2
+
+  The decompression method is chosen based on the file extension.
+
+  :param zip_name: The full path name to the file that should be decompressed.
+  :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling this function.
+  """
+  # TODO dm: Should we ensure the target directory exists?
   filename, extension = os.path.splitext(zip_name)
   if extension == ".zip":
     # Actually this would be much better if it just would preserve file permissions...
@@ -38,6 +55,13 @@ def unzip(zip_name, target_directory):
 
 
 def guess_install_location(binary_name, fallback=None):
+  """
+  Checks whether a given binary is available on the user's path.
+
+  :param binary_name: The name of the binary, e.g. tail, gradle, mvn.
+  :param fallback: A fallback to return if the binary could not be found on the path.
+  :return: The full path to the provided binary or the provided fallback.
+  """
   try:
     lines = subprocess.Popen(['which', binary_name], stdout=subprocess.PIPE).communicate()[0].splitlines()
     return lines[0].decode('utf-8')
@@ -47,6 +71,13 @@ def guess_install_location(binary_name, fallback=None):
 
 
 def guess_java_home(major_version=8, fallback=None):
+  """
+  Tries to find the JDK root directory for the provided version.
+
+  :param major_version: The JDK major version that is expected.
+  :param fallback: The fallback if the JDK home could not be found.
+  :return: The full path to the JDK root directory or the fallback.
+  """
   try:
     return os.environ['JAVA_HOME']
   except KeyError:
@@ -58,13 +89,3 @@ def guess_java_home(major_version=8, fallback=None):
     return results[0] + "/Contents/Home"
   else:
     return fallback
-
-
-# TODO dm: Consider creating a ps.py
-# TODO dm: This is quite brutal - can we change it to just killing running Elasticsearch instances? -> Check with Mike on the intention.
-def kill_java():
-  for line in subprocess.Popen(['ps', '-A'], stdout=subprocess.PIPE).communicate()[0].splitlines():
-    line = line.decode('utf-8')
-    if 'java' in line and 'com.intellij' not in line and 'org.jetbrains.idea' not in line:
-      pid = int(line.split(None, 1)[0])
-      os.kill(pid, signal.SIGKILL)
