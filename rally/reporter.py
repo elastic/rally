@@ -1055,7 +1055,7 @@ class Reporter:
       l = []
       any = False
       for mode in 'defaults', '4gheap', 'fastsettings', 'fastupdates':
-        if timeStamp in byMode[mode]:
+        if mode in byMode and timeStamp in byMode[mode]:
           dps, indexKB, segCount = byMode[mode][timeStamp][:3]
           if segCount is not None:
             any = True
