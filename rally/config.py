@@ -123,7 +123,7 @@ class Config:
       "Enter the JDK 8 root directory (e.g. something like /Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home on a Mac)",
       default_value=default_jdk_8,
       check_path_exists=True)
-    # TODO dm: Check with Mike. It looks this is just interesting for nightlies.
+    # TODO dm: This could also be useful for local testing (can we somehow derive it ourselves?)
     if advanced_config:
       stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")
     else:

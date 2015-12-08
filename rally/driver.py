@@ -27,11 +27,7 @@ class Driver:
   def __init__(self, config):
     self._config = config
 
-  def setup(self, cluster, track_setup):
-    track_setup.setup_benchmark(cluster)
-    cluster.wait_for_status(track_setup.required_cluster_status())
-
-  def setup2(self, cluster, track, track_setup):
+  def setup(self, cluster, track, track_setup):
     # TODO dm: Should we encapsulate this in the index benchmark class?
     mapping_path = self._config.opts("benchmarks", "mapping.path")
     mappings = open(mapping_path).read()
@@ -44,25 +40,10 @@ class Driver:
                                          body=json.loads(mappings))
     cluster.wait_for_status(track_setup.required_cluster_status)
 
-  def go(self, cluster, track_setup):
-    metrics = m.MetricsCollector(self._config, track_setup.name())
-    # TODO dm: This is just here to ease the migration, consider gathering metrics for *all* track setups later
-    if track_setup.requires_metrics():
-      metrics.start_collection(cluster)
-    # TODO dm: I sense this is too concrete for a driver -> abstract this a bit later (should move to trac setupk, they all need a unified interface)
-    track_setup.benchmark_indexing(cluster, metrics)
-    # TODO dm: *Might* be interesting to gather metrics also for searching (esp. memory consumption) -> later
-    track_setup.benchmark_searching(cluster, metrics)
-    # TODO dm: Check with Mike if it is ok to include this here (original code shut down the server first)
-    # This is also just a hack for now (should be in track for first step and metrics for second one)
-    data_paths = self._config.opts("provisioning", "local.data.paths")
-    track_setup.printIndexStats(data_paths[0])
-    metrics.stop_collection()
-
-  def go2(self, cluster, track, track_setup):
+  def go(self, cluster, track, track_setup):
     metrics = m.MetricsCollector(self._config, track_setup.name)
     # TODO dm [High Priority]: This is just here to ease the migration, consider gathering metrics for *all* track setups later
-    if track_setup.name == 'default':
+    if track_setup.name == 'defaults':
       metrics.start_collection(cluster)
     index_benchmark = IndexBenchmark(self._config, track, track_setup, cluster, metrics)
     if track_setup.test_settings.benchmark_indexing:
@@ -76,7 +57,6 @@ class Driver:
     data_paths = self._config.opts("provisioning", "local.data.paths")
     if track_setup.test_settings.benchmark_indexing:
       index_benchmark.printIndexStats(data_paths[0])
-
     metrics.stop_collection()
 
 
@@ -104,26 +84,25 @@ class SearchBenchmark(TimedOperation):
   # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
   def run(self):
     es = self._cluster.client()
-    logger.info('\nRun simple search tests...')
+    logger.info("Running search benchmark")
     # NOTE: there are real problems here, e.g. we only suddenly do searching after
     # indexing is done (so hotspot will be baffled), merges are likely still running
     # at this point, etc. ... it's a start:
     times = []
     for i in range(120):
+      d = {}
       for query in self._track.queries:
         time.sleep(0.5)
-        d = {}
-
         duration, result = self.timed(query.run, es)
         d[query.name] = duration / query.normalization_factor
-        times.append(d)
+      times.append(d)
 
     for q in self._track.queries:
       l = [x[q.name] for x in times]
       l.sort()
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
       # HINT dm: Reporting relevant
-      self.print_metrics('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
+      self.print_metrics('SEARCH %s (median): %.6f sec' % (q.name, l[int(len(l) / 2)]))
 
 
 class IndexBenchmark(TimedOperation):
@@ -148,7 +127,6 @@ class IndexBenchmark(TimedOperation):
       ids = None
 
     logger.info('Use %d docs per bulk request' % DOCS_IN_BLOCK)
-    # TODO dm: How do we know which index to use?!?
     self._bulk_docs = BulkDocs(track.index_name,
                                track.type_name,
                                data_set_path,
