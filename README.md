@@ -18,7 +18,7 @@ Rally is only tested on Mac OS X and Linux.
 3. Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
 4. Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
 
-Caveat: The reports that are curently created by Rally are intended for performance regression testing so they only show a single data point per build. After the first build only a single data point is shown (will change in the future).
+Caveat: The reports that are currently created by Rally are intended for performance regression testing so they only show a single data point per build. So do not be surprised to find only a single dot after the first build on the graphs. More reports are on the [roadmap](TODO.md).
 
 ### Non-sudo install
 
