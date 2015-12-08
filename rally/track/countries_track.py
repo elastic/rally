@@ -57,6 +57,10 @@ class CountriesTrack(track.Track):
       shutil.copyfileobj(response, out_file)
     print("done")
 
+  def estimated_runtime_in_minutes(self):
+    # we have commented out all track setups but default for now -> much faster for local devs to get started
+    return 20
+
 
 class CountriesTrackSetup(track.TrackSetup):
   def __init__(self, name, description, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None,
@@ -525,29 +529,29 @@ countriesTrack = CountriesTrack(
       "defaults",
       "append-only, using all default settings.",
       requires_metrics=True),
-
-    CountriesTrackSetup(
-      "4gheap",
-      "same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-      heap='4g'),
-
-    CountriesTrackSetup(
-      "fastsettings",
-      "append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % countriesBenchmarkFastSettings,
-      elasticsearch_settings=countriesBenchmarkFastSettings,
-      heap='4g'),
-    CountriesTrackSetup(
-      "fastupdates",
-      "the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
-      elasticsearch_settings=countriesBenchmarkFastSettings,
-      heap='4g',
-      build_ids=True),
-    # integer divide!
-    CountriesTrackSetup(
-      "two_nodes_defaults",
-      "append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
-      processors=sysstats.number_of_cpu_cores() // 2,
-      nodes=2),
+  # run only 'defaults' for now on local
+    # CountriesTrackSetup(
+    #   "4gheap",
+    #   "same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
+    #   heap='4g'),
+    #
+    # CountriesTrackSetup(
+    #   "fastsettings",
+    #   "append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % countriesBenchmarkFastSettings,
+    #   elasticsearch_settings=countriesBenchmarkFastSettings,
+    #   heap='4g'),
+    # CountriesTrackSetup(
+    #   "fastupdates",
+    #   "the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
+    #   elasticsearch_settings=countriesBenchmarkFastSettings,
+    #   heap='4g',
+    #   build_ids=True),
+    # # integer divide!
+    # CountriesTrackSetup(
+    #   "two_nodes_defaults",
+    #   "append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
+    #   processors=sysstats.number_of_cpu_cores() // 2,
+    #   nodes=2),
 
     # TODO dm: Reintroduce beast2
     # CountriesTrackSetup("beast2", description="", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
