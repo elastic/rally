@@ -20,7 +20,7 @@ class Mechanic:
     self._launcher = launcher.Launcher(config, logger)
 
   # This is the one-time setup the mechanic performs (once for all benchmarks run)
-  def pre_setup(self):
+  def prepare_candidate(self):
     self._supplier.fetch()
     self._builder.build()
 
