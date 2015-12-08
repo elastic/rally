@@ -9,6 +9,7 @@ import pickle
 import logging
 
 import rally.utils.io
+import rally.utils.format
 
 logger = logging.getLogger("rally.reporting")
 
@@ -92,8 +93,8 @@ class Reporter:
       byModeBroken = {}
       allTimes = set()
 
-      for track_setup in track.track_setups():
-        track_setup_name = track_setup.name()
+      for track_setup in track.track_setups:
+        track_setup_name = track_setup.name
         d = {}
         lastTup = None
         # Dates that had a failed run for this series:
@@ -198,9 +199,9 @@ class Reporter:
       f.write('  <div style="position: absolute; top: %spx">\n' % self._nextGraph)
 
       f.write('<h2>Benchmark Scenarios</h2>')
-      f.write('<p>%s</p>' % track.description())
-      for track_setup in track.track_setups():
-        f.write('<p><tt>%s</tt>: %s</p>' % (track_setup.name(), track_setup.description()))
+      f.write('<p>%s</p>' % track.description)
+      for track_setup in track.track_setups:
+        f.write('<p><tt>%s</tt>: %s</p>' % (track_setup.name, track_setup.description))
 
       f.write('''
       </div>
@@ -237,9 +238,6 @@ class Reporter:
 
   def msecToSec(self, x):
     return x/1000.0
-
-  def bytesToMB(self, x):
-    return x/1024.0/1024.0
 
   def msecToMinutes(self, x):
     return x/1000.0/60.0
@@ -806,15 +804,15 @@ class Reporter:
         segTotalMemoryBytes = tup[10]
         dvTotalMemoryBytes, storedFieldsTotalMemoryBytes, termsTotalMemoryBytes, normsTotalMemoryBytes = tup[15:19]
         if segTotalMemoryBytes is not None:
-          l.append('%.2f' % self.bytesToMB(segTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.format.bytes_to_mb(segTotalMemoryBytes))
           chartTimes.append(timeStamp)
         else:
           l.append('')
         if dvTotalMemoryBytes is not None:
-          l.append('%.2f' % self.bytesToMB(dvTotalMemoryBytes))
-          l.append('%.2f' % self.bytesToMB(termsTotalMemoryBytes))
-          l.append('%.2f' % self.bytesToMB(normsTotalMemoryBytes))
-          l.append('%.2f' % self.bytesToMB(storedFieldsTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.format.bytes_to_mb(dvTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.format.bytes_to_mb(termsTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.format.bytes_to_mb(normsTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.format.bytes_to_mb(storedFieldsTotalMemoryBytes))
         else:
           l.extend(['', '', '', ''])
       else:
