@@ -61,7 +61,7 @@ class LoggingTrack(track.Track):
 
 
 class LoggingTrackSetup(track.TrackSetup):
-  def __init__(self, name, description, elasticsearch_settings=None, build_ids=False, nodes=1, processors=1, heap=None, requires_metrics=False):
+  def __init__(self, name, description, elasticsearch_settings=None, build_ids=False, nodes=1, processors=None, heap=None, requires_metrics=False):
     track.TrackSetup.__init__(self, name, description)
     self._elasticsearch_settings = elasticsearch_settings
     self._build_ids = build_ids
