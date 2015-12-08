@@ -78,7 +78,7 @@ class Launcher:
       if l.find('Initialization Failed') != -1:
         startup_event.set()
 
-      self._logger.debug('%s: %s' % (node_name, l.replace('\n', '\n%s: ' % node_name)))
+      self._logger.info('%s: %s' % (node_name, l.replace('\n', '\n%s (stdout): ' % node_name)))
       if l.endswith('started') and not startup_event.isSet():
         startup_event.set()
         self._logger.info('%s: **started**' % node_name)
