@@ -38,6 +38,11 @@ There is not much missing for this one; the structure is already in place.
 * Physically isolate benchmark driver from benchmark candidate
 * Add ability to dig deeper (flamegraphs etc.)
 
+### Usability
+
+* Progress indication on console based on knowledge of the total corpus size and tracking of indexing requests
+* Warn if there is not enough disk space on your ROOT_DIR (-> for data files)
+
 ### Internal Refactorings
 
 * Get metrics gathering out of tracks, maybe the benchmark can trigger that but metrics should be gathered by something in metrics.py ("Sensor"?)
@@ -45,7 +50,6 @@ There is not much missing for this one; the structure is already in place.
 ### Further Ideas
 
 * Support additional JVM options for the benchmark candidate by setting "ES_GC_OPTS" (e.g. for benchmarking with G1)  
-* Warn if there is not enough disk space on your ROOT_DIR (-> for data files)
 * Command line reporter showing a metrics summary (in addition or instead of graphs)
 * Clear documentation in one place on how the benchmark candidate was invoked: Java version, Java options, GC options, ES config file
 * Introduce a tournament mode (candidate vs. baseline)
