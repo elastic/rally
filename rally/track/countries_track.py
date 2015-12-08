@@ -109,6 +109,7 @@ class CountriesTrackSetup(track.TrackSetup):
                                rand,
                                DOCS_IN_BLOCK)
 
+    # TODO dm: Move this to driver! It will set up all indexes as first step of the benchmark
     logger.debug('create index w/ mappings')
     logger.debug(mappings)
     # TODO dm: retrieve from cluster
@@ -178,7 +179,6 @@ class CountriesTrackSetup(track.TrackSetup):
         allIDs[i] = '%10d' % rand.randint(0, docs_to_index)
       else:
         raise RuntimeError('unknown ID_TYPE %s' % ID_TYPE)
-    self.print_metrics('  done')
     return allIDs
 
   # TODO dm: (Conceptual) Introduce warmup iterations!!
@@ -258,6 +258,12 @@ class CountriesTrackSetup(track.TrackSetup):
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
       # HINT dm: Reporting relevant
       self.print_metrics('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
+
+  ################################################################################################################################
+  #
+  # Obsolete - START !!!! This code has now moved to driver -> remove me after migration
+  #
+  ################################################################################################################################
 
   def indexBulkDocs(self, es, startingGun, myID, bulkDocs, failedEvent, stopEvent, pauseSec=None):
 
@@ -466,11 +472,6 @@ class BulkDocs:
         return []
 
       self.blockCount += 1
-
-      # TODO dm: Maybe reenable debugging later
-      # if DEBUG and self.blockCount >= 50:
-      #  return []
-
       limit = 2 * min(self.docsInBlock, docsLeft)
 
       while True:
@@ -479,7 +480,6 @@ class BulkDocs:
           self.close()
           break
         line = line.decode('utf-8')
-
         line = line.rstrip()
 
         if self.ids is not None:
@@ -505,6 +505,11 @@ class BulkDocs:
 
     return buffer
 
+################################################################################################################################
+#
+# Obsolete - END !!!! This code has now moved to driver -> remove me after migration
+#
+################################################################################################################################
 
 countriesBenchmarkFastSettings = '''
 index.refresh_interval: 30s
@@ -550,5 +555,76 @@ countriesTrack = CountriesTrack(
       nodes=2),
 
     # TODO dm: Reintroduce beast2
-    # CountriesTrackSetup("beast2", description="", elasticSearchSettings=loggingBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
+    # CountriesTrackSetup("beast2", description="", elasticSearchSettings=countriesBenchmarkFastSettings, nodes=4, heap='8g', processors=9),
   ])
+
+
+########################################################################
+#
+# IGNORE THIS FOR NOW!!
+#
+# This will be the new config format which is descriptive instead of
+# imperative for the standard cases.
+#
+########################################################################
+
+countriesTrackSpec = track.TrackSpecification(
+  name="Countries",
+  description="This test indexes 8.6M documents (countries from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+  #TODO dm: Specify a source provider type (like http or s3) which knows how to download the file
+  source_url="http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2",
+  # TODO dm: Have Mike upload the mappings file
+  mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
+  number_of_documents=8647880,
+  compressed_size_in_bytes=197857614,
+  uncompressed_size_in_bytes=2790927196,
+  local_file_name="documents.json.bz2",
+  estimated_benchmark_time_in_minutes=60,
+
+  track_setups=[
+    track.TrackSetupSpecification(
+      name="defaults",
+      description="append-only, using all default settings.",
+      candidate_settings=track.CandidateSettings(),
+      test_settings=track.TestSettings(benchmark_search=True)
+    ),
+
+    track.TrackSetupSpecification(
+      name="4gheap",
+      description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
+      candidate_settings=track.CandidateSettings(heap='4g'),
+      test_settings=track.TestSettings()
+    ),
+
+    track.TrackSetupSpecification(
+      name="fastsettings",
+      description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % countriesBenchmarkFastSettings,
+      candidate_settings=track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='4g'),
+      test_settings=track.TestSettings()
+    ),
+
+    track.TrackSetupSpecification(
+      name="fastupdates",
+      description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
+      candidate_settings=track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='4g'),
+      test_settings=track.TestSettings(id_conflicts=track.IndexIdConflict.SequentialConflicts)
+    ),
+
+    track.TrackSetupSpecification(
+      name="two_nodes_defaults",
+      description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
+      # integer divide!
+      candidate_settings=track.CandidateSettings(nodes=2, processors=sysstats.number_of_cpu_cores() // 2),
+      test_settings=track.TestSettings()
+    ),
+
+    # TODO dm: Reintroduce beast2
+    #track.TrackSetupSpecification(
+    #  name="two_nodes_defaults",
+    #  description="",
+    #  # integer divide!
+    #  candidate_settings=track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='8g', nodes=4, processors=9,
+    #  test_settings=track.TestSettings()
+    #),
+  ]
+)
