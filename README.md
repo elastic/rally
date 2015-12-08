@@ -2,22 +2,33 @@ Rally is the macrobenchmarking framework for Elasticsearch
 
 ### Prerequisites
 
-* Python 3.4+ available as `python3` on the path
+* Python 3.4+ available as `python3` on the path (verify with: `python3 --version` which should print `Python 3.4.0` (or higher))
+* `pip3` available on the path (verify with `pip3 --version`)
 * JDK 8+
 * Gradle 2.8+
 * git
+* unzip (install via `apt-get install unzip` on  Debian based distributions or check your distribution's documentation)
 
 Rally is only tested on Mac OS X and Linux.
 
 ### Getting started
 
-* Clone this repo: `git clone git@github.com:elastic/rally.git`
-* Verify the Python installation: `python3 --version` should print `Python 3.4.0` (or higher)
-* Install Rally and its dependencies: `python3 setup.py develop`. Depending on your local setup and file system permission it might be necessary to use `sudo` in this step. `sudo`ing is required as this script will install two Python libraries which Rally needs to run:`psutil` to gather process metrics and `elasticsearch` to connect to the benchmark cluster. Note: this step will change when Rally is available in the Python package repos.
-* Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
-* Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
+1. Clone this repo: `git clone git@github.com:elastic/rally.git`
+2. Install Rally and its dependencies: `python3 setup.py develop`. Depending on your local setup and file system permission it might be necessary to use `sudo` in this step. `sudo`ing is required as this script will install two Python libraries which Rally needs to run:`psutil` to gather process metrics and `elasticsearch` to connect to the benchmark cluster. Additionally, the setup procedure will set symlinks to the script `esrally` so it can be easily invoked. Note: this step will change when Rally is available in the Python package repos.
+3. Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
+4. Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
 
-Caveat: The diagrams are intended for performance regression testing so they only show a single data point per build. After the first build only a single data point is shown (will change in the future).  
+Caveat: The reports that are curently created by Rally are intended for performance regression testing so they only show a single data point per build. After the first build only a single data point is shown (will change in the future).
+
+### Non-sudo install
+
+If you don't want to use `sudo` when installing Rally, installation is still possible but a little more involved:
+ 
+1. Specify the `--user` option when installing Rally (step 2 above), so the command to be issued is: `python3 setup.py develop --user`
+2. Check the output of the install script or lookup the [Python documentation on the variable site.USER_BASE](https://docs.python.org/3.5/library/site.html#site.USER_BASE) to find out where the script is located. On Linux, this is typically `~/.local/bin`.
+
+You can now either add `~/.local/bin` to your path or invoke Rally via `~/.local/bin/esrally` instead of just `esrally`.
+
 
 ### Command Line Options
 
