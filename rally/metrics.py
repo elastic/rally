@@ -1,16 +1,11 @@
 import threading
 import logging
-
-logger = logging.getLogger("rally.metrics")
-
-try:
-  import psutil
-except ImportError:
-  logger.warn('psutil not installed; no system level cpu/memory stats will be recorded')
-  psutil = None
+import psutil
 
 import rally.utils.io
 import rally.config
+
+logger = logging.getLogger("rally.metrics")
 
 
 # For now we just support dumping to a log file (as is). This will change *significantly* later. We just want to tear apart normal logs
@@ -23,14 +18,14 @@ class MetricsCollector:
     self._stats = None
     # This is a compromise between the new and old folder structure.
     # Ideally, we'd just have: $LOG_ROOT/$BENCHMARK_TIMESTAMP/metrics/$(BUCKET_NAME).txt
-    #TODO dm: Unify folder structure but also consider backtesting (i.e. migrate the existing folder structure on the benchmark server)
+    # TODO dm: Unify folder structure but also consider backtesting (i.e. migrate the existing folder structure on the benchmark server)
     log_root = "%s/%s" % (self._config.opts("system", "log.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
-    #d = self._config.opts("meta", "time.start")
-    #ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (d.year, d.month, d.day, d.hour, d.minute, d.second)
-    #metrics_log_dir = "%s/%s" % (log_root, self._bucket_name)
+    # d = self._config.opts("meta", "time.start")
+    # ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (d.year, d.month, d.day, d.hour, d.minute, d.second)
+    # metrics_log_dir = "%s/%s" % (log_root, self._bucket_name)
     rally.utils.io.ensure_dir(log_root)
     # TODO dm: As we're not block-bound we don't have the convenience of "with"... - ensure we reliably close the file anyway
-    #self._log_file = open("%s/%s.txt" % (metrics_log_dir, ts), "w")
+    # self._log_file = open("%s/%s.txt" % (metrics_log_dir, ts), "w")
     self._log_file = open("%s/%s.txt" % (log_root, self._bucket_name), "w")
 
   def expose_print_lock_dirty_hack_remove_me_asap(self):
@@ -61,9 +56,6 @@ class MetricsCollector:
     self._log_file.close()
 
   def _gather_process_stats(self, pid, diskName):
-    if psutil is None:
-      return None
-
     t = GatherProcessStats(pid, diskName)
     t.start()
     return t
