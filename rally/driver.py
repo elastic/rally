@@ -8,7 +8,7 @@ import os
 import logging
 
 import rally.metrics as m
-import rally.track as track
+import rally.track.track
 import rally.utils.process
 
 # TODO dm: Remove / encapsulate after porting
@@ -31,20 +31,18 @@ class Driver:
     track_setup.setup_benchmark(cluster)
     cluster.wait_for_status(track_setup.required_cluster_status())
 
-  def setup2(self, cluster, track_setup):
+  def setup2(self, cluster, track, track_setup):
     # TODO dm: Should we encapsulate this in the index benchmark class?
     mapping_path = self._config.opts("benchmarks", "mapping.path")
     mappings = open(mapping_path).read()
     logger.debug('create index w/ mappings')
     logger.debug(mappings)
     # TODO dm: retrieve from cluster
-    # FIXME dm: Hardcoded index name!!!
-    cluster.client().indices.create(index='countries')
-    cluster.client().indices.put_mapping(index='countries',
-                                          doc_type='type',
-                                          body=json.loads(mappings))
-    cluster.wait_for_status(track_setup.required_cluster_status())
-
+    cluster.client().indices.create(index=track.index_name)
+    cluster.client().indices.put_mapping(index=track.index_name,
+                                         doc_type=track.type_name,
+                                         body=json.loads(mappings))
+    cluster.wait_for_status(track_setup.required_cluster_status)
 
   def go(self, cluster, track_setup):
     metrics = m.MetricsCollector(self._config, track_setup.name())
@@ -61,26 +59,25 @@ class Driver:
     track_setup.printIndexStats(data_paths[0])
     metrics.stop_collection()
 
-  # TODO dm: Implement the new benchmarking approach here
   def go2(self, cluster, track, track_setup):
-    metrics = m.MetricsCollector(self._config, track_setup.name())
-    # TODO dm: This is just here to ease the migration, consider gathering metrics for *all* track setups later
-    if track_setup.requires_metrics():
+    metrics = m.MetricsCollector(self._config, track_setup.name)
+    # TODO dm [High Priority]: This is just here to ease the migration, consider gathering metrics for *all* track setups later
+    if track_setup.name == 'default':
       metrics.start_collection(cluster)
-
-    # TODO dm: provide track
-    index_benchmark = IndexBenchmark(self._config, track, track_setup)
-    index_benchmark.run()
+    index_benchmark = IndexBenchmark(self._config, track, track_setup, cluster, metrics)
+    if track_setup.test_settings.benchmark_indexing:
+      index_benchmark.run()
     # TODO dm: *Might* be interesting to gather metrics also for searching (esp. memory consumption) -> later
-    track_setup.benchmark_searching(cluster, metrics)
+    if track_setup.test_settings.benchmark_search:
+      search_benchmark = SearchBenchmark(self._config, track, track_setup, cluster, metrics)
+      search_benchmark.run()
     # TODO dm: Check with Mike if it is ok to include this here (original code shut down the server first)
     # This is also just a hack for now (should be in track for first step and metrics for second one)
     data_paths = self._config.opts("provisioning", "local.data.paths")
-    track_setup.printIndexStats(data_paths[0])
-
+    if track_setup.test_settings.benchmark_indexing:
+      index_benchmark.printIndexStats(data_paths[0])
 
     metrics.stop_collection()
-
 
 
 class TimedOperation:
@@ -92,30 +89,68 @@ class TimedOperation:
 
 
 class SearchBenchmark(TimedOperation):
-  pass
-  # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
+  def __init__(self, config, track, track_setup, cluster, metrics):
+    self._config = config
+    self._track = track
+    self._track_setup = track_setup
+    self._cluster = cluster
+    self._metrics = metrics
 
+  # TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
+  #         everything as metrics (which is not true -> but later...)
+  def print_metrics(self, message):
+    self._metrics.collect(message)
+
+  # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
   def run(self):
-    pass
-    # TODO dm: Execute queries timed and provide a proper data structure (e.g. a hash of results)
+    es = self._cluster.client()
+    logger.info('\nRun simple search tests...')
+    # NOTE: there are real problems here, e.g. we only suddenly do searching after
+    # indexing is done (so hotspot will be baffled), merges are likely still running
+    # at this point, etc. ... it's a start:
+    times = []
+    for i in range(120):
+      for query in self._track.queries:
+        time.sleep(0.5)
+        d = {}
+
+        duration, result = self.timed(query.run, es)
+        d[query.name] = duration / query.normalization_factor
+        times.append(d)
+
+    for q in self._track.queries:
+      l = [x[q.name] for x in times]
+      l.sort()
+      # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
+      # HINT dm: Reporting relevant
+      self.print_metrics('SEARCH %s (median): %.6f sec' % (q, l[int(len(l) / 2)]))
 
 
 class IndexBenchmark(TimedOperation):
-  def __init__(self, config, track, track_setup):
+  def __init__(self, config, track, track_setup, cluster, metrics):
     self._config = config
-    # TODO dm: read docs_to_index probably from the spec itself... this one will not work anyway
-    docs_to_index = self._config.opts("benchmarks", "docs.number")
+    self._track = track
+    self._track_setup = track_setup
+    self._cluster = cluster
+    self._metrics = metrics
+    # TODO dm: Just needed for print output - can we simplify this?
+    self._nextPrint = 0
+    self._numDocsIndexed = 0
+    self._totBytesIndexed = 0
+
+    docs_to_index = track.number_of_documents
     data_set_path = self._config.opts("benchmarks", "dataset.path")
 
-    conflicts = track_setup.spec().test_settings.id_conflicts
-    if conflicts is not track.IndexIdConflict.NoConflicts:
+    conflicts = track_setup.test_settings.id_conflicts
+    if conflicts is not rally.track.track.IndexIdConflict.NoConflicts:
       ids = self.buildIDs(conflicts)
     else:
       ids = None
 
     logger.info('Use %d docs per bulk request' % DOCS_IN_BLOCK)
     # TODO dm: How do we know which index to use?!?
-    self._bulk_docs = BulkDocs('countries',
+    self._bulk_docs = BulkDocs(track.index_name,
+                               track.type_name,
                                data_set_path,
                                ids,
                                docs_to_index,
@@ -123,31 +158,25 @@ class IndexBenchmark(TimedOperation):
                                DOCS_IN_BLOCK)
 
   def buildIDs(self, conflicts):
-    # TODO dm: read docs_to_index probably from the spec itself... this one will not work anyway
-    docs_to_index = self._config.opts("benchmarks", "docs.number")
+    docs_to_index = self._track.number_of_documents
     logger.info('build ids with id conflicts of type %s' % conflicts)
 
     all_ids = [0] * docs_to_index
     for i in range(docs_to_index):
-      if conflicts == track.IndexIdConflict.SequentialConflicts:
+      if conflicts == rally.track.track.IndexIdConflict.SequentialConflicts:
         all_ids[i] = '%10d' % i
-      elif conflicts == track.IndexIdConflict.RandomConflicts:
+      elif conflicts == rally.track.track.IndexIdConflict.RandomConflicts:
         all_ids[i] = '%10d' % rand.randint(0, docs_to_index)
       else:
         raise RuntimeError('Unknown id conflict type %s' % conflicts)
     return all_ids
 
-
   def run(self):
-    # TODO dm: read docs_to_index probably from the spec itself... this one will not work anyway
-    docs_to_index = self._config.opts("benchmark.countries", "docs.number")
-    data_set_path = self._config.opts("benchmark.countries", "dataset.path")
-
-    # TODO dm: This is also one of the many workarounds to get us going. Set up metrics properly
-    self._metrics = metrics
+    docs_to_index = self._track.number_of_documents
+    data_set_path = self._config.opts("benchmarks", "dataset.path")
 
     # We cannot know how many docs have been updated if we produce id conflicts
-    if self._track_setup.spec().test_settings.id_conflicts == track.IndexIdConflict.NoConflicts:
+    if self._track_setup.test_settings.id_conflicts == rally.track.track.IndexIdConflict.NoConflicts:
       expectedDocCount = docs_to_index
     else:
       expectedDocCount = None
@@ -156,14 +185,13 @@ class IndexBenchmark(TimedOperation):
 
     try:
       # TODO dm: Reduce number of parameters...
-      self.indexAllDocs(data_set_path, 'countries', cluster.client(), self._bulk_docs, expectedDocCount)
+      self.indexAllDocs(data_set_path, self._track.index_name, self._cluster.client(), self._bulk_docs, expectedDocCount)
       finished = True
 
     finally:
       # HINT dm: Not reporting relevant
       self.print_metrics('Finished?: %s' % finished)
       self._bulk_docs.close()
-
 
   def indexBulkDocs(self, es, startingGun, myID, bulkDocs, failedEvent, stopEvent, pauseSec=None):
 
@@ -209,7 +237,7 @@ class IndexBenchmark(TimedOperation):
 
   def indexAllDocs(self, docsFile, indexName, es, bulkDocs, expectedDocCount, doFlush=True, doStats=True):
     global startTime
-    numClientThreads = int(self._config.opts("benchmarks.countries", "index.client.threads"))
+    numClientThreads = int(self._config.opts("benchmarks", "index.client.threads"))
     starting_gun = CountDownLatch(1)
     self.print_metrics('json docs file: %s' % docsFile)
 
@@ -311,9 +339,7 @@ class IndexBenchmark(TimedOperation):
     rally.utils.process.run_subprocess('find %s -ls' % dataDir)
 
 
-
-# TODO dm: Move to a more appropriate place
-class CountDownLatch(object):
+class CountDownLatch:
   def __init__(self, count=1):
     self.count = count
     self.lock = threading.Condition()
@@ -336,7 +362,7 @@ class BulkDocs:
   Pulls docs out of a one-json-line-per-doc file and makes bulk requests.
   """
 
-  def __init__(self, indexName, docsFile, ids, docsToIndex, rand, docsInBlock):
+  def __init__(self, indexName, typeName, docsFile, ids, docsToIndex, rand, docsInBlock):
     if docsFile.endswith('.bz2'):
       self.f = bz2.BZ2File(docsFile)
     elif docsFile.endswith('.gz'):
@@ -344,6 +370,7 @@ class BulkDocs:
     else:
       self.f = open(docsFile, 'rb')
     self.indexName = indexName
+    self.typeName = typeName
     self.blockCount = 0
     self.idUpto = 0
     self.ids = ids
@@ -390,10 +417,10 @@ class BulkDocs:
             id = self.ids[self.idUpto]
             self.idUpto += 1
           # TODO: can't we set default index & type in the bulk request, instead of per doc here?
-          cmd = '{"index": {"_index": "%s", "_type": "type", "_id": "%s"}}' % (self.indexName, id)
+          cmd = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.indexName, self.typeName, id)
         else:
           # TODO: can't we set default index & type in the bulk request, instead of per doc here?
-          cmd = '{"index": {"_index": "%s", "_type": "type"}}' % self.indexName
+          cmd = '{"index": {"_index": "%s", "_type": "%s"}}' % (self.indexName, self.typeName)
 
         buffer.append(cmd)
         buffer.append(line)

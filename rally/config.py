@@ -38,9 +38,8 @@ class Config:
     "build::gradle.tasks.package": "assemble",
     "build::log.dir": "build",
     "benchmarks::metrics.log.dir": "metrics",
-    # Specific configuration per benchmark
-    "benchmarks.logging::index.client.threads": "8",
-    "benchmarks.countries::index.client.threads": "8",
+    # No more specific configuration per benchmark - if needed this has to be put into the track specification
+    "benchmarks::index.client.threads": "8",
   }
 
   def __init__(self):

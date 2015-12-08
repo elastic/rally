@@ -84,7 +84,7 @@ def main():
   configure_logging(cfg)
 
   race_control = rc.RaceControl(cfg)
-  race_control.start()
+  race_control.start2()
 
 
 if __name__ == '__main__':

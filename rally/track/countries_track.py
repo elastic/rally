@@ -41,7 +41,7 @@ class CountriesTrack(track.Track):
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "docs.number", 8647880)
     data_set_root = self._config.opts("benchmarks", "local.dataset.cache")
     data_set_path = "%s/%s" % (data_set_root, "documents.json.bz2")
-    #data_set_path = "%s/%s" % (data_set_root, "documents-2k.json.bz2")
+    # data_set_path = "%s/%s" % (data_set_root, "documents-2k.json.bz2")
     if not os.path.isfile(data_set_path):
       self._download_benchmark_data(data_set_root, data_set_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmark.countries", "dataset.path", data_set_path)
@@ -207,10 +207,10 @@ class CountriesTrackSetup(track.TrackSetup):
       d['term'] = t1 - t0
 
       # Cannot do phrase queries on not_analyzed fields...
-      #t0 = time.time()
-      #resp = es.search(index='countries', doc_type='type', q='"ab_international.languages.ja+off"')
-      #t1 = time.time()
-      #d['phrase'] = t1 - t0
+      # t0 = time.time()
+      # resp = es.search(index='countries', doc_type='type', q='"ab_international.languages.ja+off"')
+      # t1 = time.time()
+      # d['phrase'] = t1 - t0
 
       t0 = time.time()
       resp = es.search(index='countries', doc_type='type', body='''
@@ -509,6 +509,7 @@ class BulkDocs:
 
     return buffer
 
+
 ################################################################################################################################
 #
 # Obsolete - END !!!! This code has now moved to driver -> remove me after migration
@@ -534,7 +535,7 @@ countriesTrack = CountriesTrack(
       "defaults",
       "append-only, using all default settings.",
       requires_metrics=True),
-  # run only 'defaults' for now on local
+    # run only 'defaults' for now on local
     # CountriesTrackSetup(
     #   "4gheap",
     #   "same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
@@ -572,19 +573,83 @@ countriesTrack = CountriesTrack(
 #
 ########################################################################
 
+
+class DefaultQuery(rally.track.track.Query):
+  def __init__(self):
+    rally.track.track.Query.__init__(self, "default")
+
+  def run(self, es):
+    return es.search(index='countries')
+
+
+class TermQuery(rally.track.track.Query):
+  def __init__(self):
+    rally.track.track.Query.__init__(self, "term")
+
+  def run(self, es):
+    return es.search(index='countries', doc_type='type', q='country_code:AT')
+
+
+class CountryAggQuery(rally.track.track.Query):
+  def __init__(self):
+    rally.track.track.Query.__init__(self, "country_agg")
+
+  def run(self, es):
+    return es.search(index='countries', doc_type='type', body='''
+    {
+      "size": 0,
+      "aggs": {
+        "country_population": {
+          "terms": {
+            "field": "country_code"
+          },
+          "aggs": {
+            "sum_population": {
+                "sum": {
+                  "field": "population"
+                }
+              }
+            }
+        }
+      }
+    }''')
+
+
+class ScrollAllQuery(rally.track.track.Query):
+  def __init__(self):
+    rally.track.track.Query.__init__(self, "scroll_all", normalization_factor=1000)
+
+  def run(self, es):
+    # Scroll, 1K docs at a time, 25 times:
+    r = es.search(index='countries', doc_type='type', sort='_doc', scroll='10m', size=1000)
+    count = 1
+    for i in range(24):
+      numHits = len(r['hits']['hits'])
+      if numHits == 0:
+        # done
+        break
+      r = es.scroll(scroll_id=r['_scroll_id'], scroll='10m')
+      count += 1
+
+
 countriesTrackSpec = track.TrackSpecification(
   name="Countries",
   description="This test indexes 8.6M documents (countries from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
-  #TODO dm: Specify a source provider type (like http or s3) which knows how to download the file
+  # TODO dm: Specify a source provider type (like http or s3) which knows how to download the file
   source_url="http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2",
   # TODO dm: Have Mike upload the mappings file
   mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
-  number_of_documents=8647880,
+  index_name="countries",
+  type_name="type",
+  # number_of_documents=8647880,
+  number_of_documents=2000,
   compressed_size_in_bytes=197857614,
   uncompressed_size_in_bytes=2790927196,
-  local_file_name="documents.json.bz2",
+  # local_file_name="documents.json.bz2",
+  local_file_name="documents-2k.json.bz2",
   estimated_benchmark_time_in_minutes=60,
-
+  # Queries to use in the search benchmark
+  queries=[DefaultQuery(), TermQuery(), CountryAggQuery(), ScrollAllQuery()],
   track_setups=[
     track.TrackSetupSpecification(
       name="defaults",
@@ -604,14 +669,16 @@ countriesTrackSpec = track.TrackSpecification(
       name="fastsettings",
       description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % countriesBenchmarkFastSettings,
       candidate_settings=track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='4g'),
-      test_settings=track.TestSettings()
+      test_settings=track.TestSettings(),
+      required_cluster_status=rally.cluster.ClusterStatus.green
     ),
 
     track.TrackSetupSpecification(
       name="fastupdates",
       description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
       candidate_settings=track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='4g'),
-      test_settings=track.TestSettings(id_conflicts=track.IndexIdConflict.SequentialConflicts)
+      test_settings=track.TestSettings(id_conflicts=track.IndexIdConflict.SequentialConflicts),
+      required_cluster_status=rally.cluster.ClusterStatus.green
     ),
 
     track.TrackSetupSpecification(
@@ -619,16 +686,18 @@ countriesTrackSpec = track.TrackSpecification(
       description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
       # integer divide!
       candidate_settings=track.CandidateSettings(nodes=2, processors=sysstats.number_of_cpu_cores() // 2),
-      test_settings=track.TestSettings()
+      test_settings=track.TestSettings(),
+      required_cluster_status=rally.cluster.ClusterStatus.green
     ),
 
     # TODO dm: Reintroduce beast2
-    #track.TrackSetupSpecification(
+    # track.TrackSetupSpecification(
     #  name="two_nodes_defaults",
     #  description="",
     #  # integer divide!
     #  candidate_settings=track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='8g', nodes=4, processors=9,
-    #  test_settings=track.TestSettings()
-    #),
+    #  test_settings=track.TestSettings(),
+    #  required_cluster_status=rally.cluster.ClusterStatus.green
+    # ),
   ]
 )
