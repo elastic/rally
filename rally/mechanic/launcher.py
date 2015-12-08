@@ -29,6 +29,7 @@ class Launcher:
     install_dir = self._config.opts("provisioning", "local.binary.path")
     heap = self._config.opts("provisioning", "es.heap", mandatory=False)
     processor_count = self._config.opts("provisioning", "es.processors", mandatory=False)
+    server_log_dir = "%s/server" % self._config.opts("system", "log.dir")
 
     os.chdir(install_dir)
     startup_event = threading.Event()
@@ -52,6 +53,7 @@ class Launcher:
     cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
     if processor_count is not None and processor_count > 0:
       cmd.append('-Des.processors=%s' % processor_count)
+    cmd.append('-Dpath.logs=%s' % server_log_dir)
     self._logger.info('ES launch: %s' % str(cmd))
     server = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
     t = threading.Thread(target=self._read_output, args=(node_name, server, startup_event))
