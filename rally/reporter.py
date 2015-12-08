@@ -93,8 +93,8 @@ class Reporter:
       byModeBroken = {}
       allTimes = set()
 
-      for track_setup in track.track_setups():
-        track_setup_name = track_setup.name()
+      for track_setup in track.track_setups:
+        track_setup_name = track_setup.name
         d = {}
         lastTup = None
         # Dates that had a failed run for this series:
@@ -199,9 +199,9 @@ class Reporter:
       f.write('  <div style="position: absolute; top: %spx">\n' % self._nextGraph)
 
       f.write('<h2>Benchmark Scenarios</h2>')
-      f.write('<p>%s</p>' % track.description())
-      for track_setup in track.track_setups():
-        f.write('<p><tt>%s</tt>: %s</p>' % (track_setup.name(), track_setup.description()))
+      f.write('<p>%s</p>' % track.description)
+      for track_setup in track.track_setups:
+        f.write('<p><tt>%s</tt>: %s</p>' % (track_setup.name, track_setup.description))
 
       f.write('''
       </div>

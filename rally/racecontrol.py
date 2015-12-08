@@ -12,6 +12,7 @@ import rally.reporter as r
 # TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
 import rally.track.countries_track as ct
 import rally.track.logging_track as lt
+import rally.track.track
 
 import rally.utils.process
 
@@ -61,19 +62,22 @@ class RaceControl:
     reporter = r.Reporter(config)
 
     mechanic.prepare_candidate()
+
+    marshal = rally.track.track.Marshal(config)
+
     for index, track in enumerate(self._all_track_specs(), start=1):
-      # TODO dm: Somewhere we must wrap a Track Spec in a Track....
       print("Running on track '%s' [track %d/%d]. Best effort ETA for this track: %d minutes (may be less or more depending on your hardware)" %
-            (track.name(), index, len(self._all_tracks()), track.estimated_runtime_in_minutes()))
+            (track.name, index, len(self._all_track_specs()), track.estimated_benchmark_time_in_minutes))
       rally.utils.process.kill_java()
-      track.setup(config)
-      for track_setup in track.track_setups():
-        print("\tCurrent track setup: %s" % track_setup.name())
+      marshal.setup(track)
+      for track_setup in track.track_setups:
+        print("\tCurrent track setup: %s" % track_setup.name)
+        # TODO dm [Refactoring] Don't call this method at all, just have the appropriate class interpret the specification
         track_setup.setup(config)
         # TODO dm: We probably need the track here to perform proper track-setup-specific setup (later)
         cluster = mechanic.start_engine()
-        driver.setup2(cluster, track_setup)
-        driver.go2(cluster, track_setup)
+        driver.setup2(cluster, track, track_setup)
+        driver.go2(cluster, track, track_setup)
         mechanic.stop_engine(cluster)
       print("All tracks done. Generating reports...")
       reporter.report(track)
