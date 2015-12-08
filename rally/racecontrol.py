@@ -36,7 +36,7 @@ class RaceControl:
       rally.utils.process.kill_java()
       track.setup(config)
       for track_setup in track.track_setups():
-        print("\tCurrent track setup: %s" % track_setup.name())
+        print("\tRunning: %s" % track_setup.name())
         track_setup.setup(config)
         # TODO dm: We probably need the track here to perform proper track-setup-specific setup (later)
         cluster = mechanic.start_engine()

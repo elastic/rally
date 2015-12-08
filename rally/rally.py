@@ -18,10 +18,14 @@ def configure_logging(cfg):
   rally.utils.io.ensure_dir(log_dir)
   cfg.add(rally.config.Scope.globalScope, "system", "log.dir", log_dir)
 
+  log_file = "%s/rally_out.log" % log_dir
+
+  print("Writing additional logs to %s." % log_file)
+
   # console logging
   # logging.basicConfig(level=logging.INFO)
 
-  logging.basicConfig(filename="%s/rally_out.log" % log_dir,
+  logging.basicConfig(filename=log_file,
                       filemode='a',
                       format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                       datefmt='%H:%M:%S',
