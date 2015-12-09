@@ -30,4 +30,6 @@ class Mechanic:
 
   def stop_engine(self, cluster):
     self._launcher.stop(cluster)
+
+  def revise_candidate(self):
     self._provisioner.cleanup()
