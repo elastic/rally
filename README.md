@@ -18,8 +18,6 @@ Rally is only tested on Mac OS X and Linux.
 3. Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
 4. Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
 
-Caveat: The reports that are currently created by Rally are intended for performance regression testing so they only show a single data point per build. So do not be surprised to find only a single dot after the first build on the graphs. More reports are on the [roadmap](TODO.md).
-
 ### Non-sudo install
 
 If you don't want to use `sudo` when installing Rally, installation is still possible but a little more involved:
@@ -28,7 +26,6 @@ If you don't want to use `sudo` when installing Rally, installation is still pos
 2. Check the output of the install script or lookup the [Python documentation on the variable site.USER_BASE](https://docs.python.org/3.5/library/site.html#site.USER_BASE) to find out where the script is located. On Linux, this is typically `~/.local/bin`.
 
 You can now either add `~/.local/bin` to your path or invoke Rally via `~/.local/bin/esrally` instead of just `esrally`.
-
 
 ### Command Line Options
 
