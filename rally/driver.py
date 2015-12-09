@@ -10,6 +10,8 @@ import logging
 import rally.metrics as m
 import rally.track.track
 import rally.utils.process
+import rally.utils.format
+import rally.utils.progress
 
 # TODO dm: Remove / encapsulate after porting
 # From the original code:
@@ -75,6 +77,7 @@ class SearchBenchmark(TimedOperation):
     self._track_setup = track_setup
     self._cluster = cluster
     self._metrics = metrics
+    self._progress = rally.utils.progress.CmdLineProgressReporter()
 
   # TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
   #         everything as metrics (which is not true -> but later...)
@@ -89,7 +92,12 @@ class SearchBenchmark(TimedOperation):
     # indexing is done (so hotspot will be baffled), merges are likely still running
     # at this point, etc. ... it's a start:
     times = []
-    for i in range(120):
+    repetitions = 120
+    for i in range(repetitions):
+      self._progress.print(
+        "  Benchmarking search (%s)" % ', '.join(map(str, self._track.queries)),
+        "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
+      )
       d = {}
       for query in self._track.queries:
         time.sleep(0.5)
@@ -97,6 +105,7 @@ class SearchBenchmark(TimedOperation):
         d[query.name] = duration / query.normalization_factor
       times.append(d)
 
+    print("")
     for q in self._track.queries:
       l = [x[q.name] for x in times]
       l.sort()
@@ -116,6 +125,7 @@ class IndexBenchmark(TimedOperation):
     self._nextPrint = 0
     self._numDocsIndexed = 0
     self._totBytesIndexed = 0
+    self._progress = rally.utils.progress.CmdLineProgressReporter()
 
     docs_to_index = track.number_of_documents
     data_set_path = self._config.opts("benchmarks", "dataset.path")
@@ -164,6 +174,8 @@ class IndexBenchmark(TimedOperation):
     try:
       # TODO dm: Reduce number of parameters...
       self.indexAllDocs(data_set_path, self._track.index_name, self._cluster.client(), self._bulk_docs, expectedDocCount)
+      # just for ending the progress output
+      print("")
       finished = True
 
     finally:
@@ -301,10 +313,14 @@ class IndexBenchmark(TimedOperation):
       self._totBytesIndexed += incBytes
       if self._numDocsIndexed >= self._nextPrint or incDocs == 0:
         t = time.time()
-        # FIXME dm: Don't use print_metrics here. Not needed for metrics output, we already hold the print lock and it seems to be non-reentrant
-        logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (
-          self._numDocsIndexed, t - startTime, self._numDocsIndexed / (t - startTime),
-          (self._totBytesIndexed / 1024 / 1024.) / (t - startTime)))
+        docs_per_second = self._numDocsIndexed / (t - startTime)
+        mb_per_second = rally.utils.format.bytes_to_mb(self._totBytesIndexed) / (t - startTime)
+        self._progress.print(
+          "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
+          #"docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
+          "[%3d%% done]" % round(100 * self._numDocsIndexed / self._track.number_of_documents)
+        )
+        logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (self._numDocsIndexed, t - startTime, docs_per_second, mb_per_second))
         self._nextPrint += 10000
 
   def printIndexStats(self, dataDir):

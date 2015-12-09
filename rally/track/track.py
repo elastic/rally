@@ -212,6 +212,9 @@ class Query:
   def normalization_factor(self):
     return self._normalization_factor
 
+  def __str__(self):
+    return self._name
+
 
 class Marshal:
   def __init__(self, config):
