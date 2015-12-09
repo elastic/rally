@@ -236,7 +236,6 @@ class IndexBenchmark(TimedOperation):
         time.sleep(pauseSec)
 
   def indexAllDocs(self, docsFile, indexName, es, bulkDocs, expectedDocCount, doFlush=True, doStats=True):
-    global startTime
     numClientThreads = int(self._config.opts("benchmarks", "index.client.threads"))
     starting_gun = CountDownLatch(1)
     self.print_metrics('json docs file: %s' % docsFile)
@@ -256,7 +255,7 @@ class IndexBenchmark(TimedOperation):
 
       # Tell all threads to start:
       starting_gun.countDown()
-      startTime = time.time()
+      self.startTime = time.time()
 
       for t in threads:
         t.join()
@@ -272,7 +271,7 @@ class IndexBenchmark(TimedOperation):
 
     end_time = time.time()
     # HINT dm: Reporting relevant
-    self.print_metrics('Total docs/sec: %.1f' % (bulkDocs.indexedDocCount / (end_time - startTime)))
+    self.print_metrics('Total docs/sec: %.1f' % (bulkDocs.indexedDocCount / (end_time - self.startTime)))
 
     self.printStatus(0, 0)
 
@@ -323,15 +322,15 @@ class IndexBenchmark(TimedOperation):
       self._totBytesIndexed += incBytes
       if self._numDocsIndexed >= self._nextPrint or incDocs == 0:
         t = time.time()
-        docs_per_second = self._numDocsIndexed / (t - startTime)
-        mb_per_second = rally.utils.format.bytes_to_mb(self._totBytesIndexed) / (t - startTime)
+        docs_per_second = self._numDocsIndexed / (t - self.startTime)
+        mb_per_second = rally.utils.format.bytes_to_mb(self._totBytesIndexed) / (t - self.startTime)
         self._progress.print(
           "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
           # "docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
           "[%3d%% done]" % round(100 * self._numDocsIndexed / self._track.number_of_documents)
         )
         logger.info(
-          'Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (self._numDocsIndexed, t - startTime, docs_per_second, mb_per_second))
+          'Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (self._numDocsIndexed, t - self.startTime, docs_per_second, mb_per_second))
         self._nextPrint += 10000
 
   def printIndexStats(self, dataDir):
