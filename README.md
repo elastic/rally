@@ -44,7 +44,7 @@ Note: This is just important if you want to hack on Rally and to some extent if 
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
-When implementing a new benchmark, create a new file in `track` and create a new `Track` and one or `TrackSetup`s. See `track/countries_track.py` for an example.
+When implementing a new benchmark, create a new file in `track` and create a new `Track` and one or more `TrackSetup` instances. See `track/countries_track.py` for an example.
 Currently, race control does not pick up the new benchmark automatically but adding support for that is coming soon. 
  
 ### License
