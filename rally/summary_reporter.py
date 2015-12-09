@@ -324,7 +324,7 @@ class SummaryReporter:
     pretty = {'term': 'Term',
               'phrase': 'Phrase',
               'default': 'Default',
-              'scroll_all': 'Scroll All',
+              'scroll': 'Scroll',
               'hourly_agg': 'Aggs (hourly timeStamp)',
               'country_agg': 'Aggs (Population by Country)'}
 
