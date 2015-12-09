@@ -58,7 +58,7 @@ class HourlyAggQuery(rally.track.track.Query):
 
 class ScrollAllQuery(rally.track.track.Query):
   def __init__(self):
-    rally.track.track.Query.__init__(self, "scroll_all", normalization_factor=1000)
+    rally.track.track.Query.__init__(self, "scroll", normalization_factor=1000)
 
   def run(self, es):
     # Scroll, 1K docs at a time, 25 times:
