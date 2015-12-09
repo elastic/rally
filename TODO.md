@@ -50,6 +50,7 @@ There is not much missing for this one; the structure is already in place.
 
 ### Reporting
 
+* Write command line summary also as report to disk
 * Time series data for a single benchmark run (Marvel in local benchmark mode?)
 * More metrics / graphs (see also 'Conceptual Topics')
 
