@@ -66,3 +66,4 @@ There is not much missing for this one; the structure is already in place.
 * Introduce a tournament mode (candidate vs. baseline)
 * Add scalability benchmarks
 * Add benchmarks running on Found
+* Measure single-shot latency of search requests (what's the latency of a query that is just executed once without any caching)
