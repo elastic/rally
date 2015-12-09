@@ -47,6 +47,7 @@ There is not much missing for this one; the structure is already in place.
 
 * Progress indication on console based on knowledge of the total corpus size and tracking of indexing requests
 * Warn if there is not enough disk space on your ROOT_DIR (-> for data files)
+* Simulate "no space left on device" will running. Ensure that Rally will work the next time after freeing up enough space.
 
 ### Reporting
 
