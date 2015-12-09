@@ -4,6 +4,7 @@ import glob
 import rally.config
 import rally.utils.io as io
 import rally.utils.process
+from rally.exceptions import ImproperlyConfigured
 
 
 class Builder:
@@ -34,7 +35,10 @@ class Builder:
 
   def _add_binary_to_config(self):
     src_dir = self._config.opts("source", "local.src.dir")
-    binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
+    try:
+        binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
+    except IndexError:
+        raise ImproperlyConfigured("Couldn't find a zip distribution.")
     self._config.add(rally.config.Scope.invocationScope, "builder", "candidate.bin.path", binary)
 
   def _exec(self, task_key):
