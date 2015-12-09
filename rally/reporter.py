@@ -211,8 +211,7 @@ class Reporter:
 
       f.close()
 
-      # One of the very few occasions where we print directly to console to give users a hint
-      print("Reporting data are available in %s" % full_output_path)
+      logger.info("Reporting data are available in %s" % full_output_path)
 
   # TODO dm: copy dygraph-combined.js!!
   # TODO dm: Copying to ec2 is not yet supported (Prio 1) (for migration)

@@ -50,7 +50,6 @@ There is not much missing for this one; the structure is already in place.
 
 ### Reporting
 
-* Command line reporter showing a metrics summary (in addition or instead of graphs)
 * Time series data for a single benchmark run (Marvel in local benchmark mode?)
 * More metrics / graphs (see also 'Conceptual Topics')
 
