@@ -29,6 +29,7 @@ class Builder:
     self._exec("gradle.tasks.clean")
 
   def _package(self):
+    print("  Building from sources ...")
     self._exec("gradle.tasks.package")
 
   def _add_binary_to_config(self):
