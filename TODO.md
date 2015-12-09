@@ -65,3 +65,4 @@ There is not much missing for this one; the structure is already in place.
 * Clear documentation in one place on how the benchmark candidate was invoked: Java version, Java options, GC options, ES config file
 * Introduce a tournament mode (candidate vs. baseline)
 * Add scalability benchmarks
+* Add benchmarks running on Found
