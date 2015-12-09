@@ -51,7 +51,7 @@ class Launcher:
     env['JAVA_HOME'] = java_home
     self._logger.debug('ENV: %s' % str(env))
     cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
-    if processor_count is not None and processor_count > 0:
+    if processor_count is not None and processor_count > 1:
       cmd.append('-Des.processors=%s' % processor_count)
     cmd.append('-Dpath.logs=%s' % server_log_dir)
     self._logger.info('ES launch: %s' % str(cmd))
