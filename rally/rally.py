@@ -20,7 +20,7 @@ def configure_logging(cfg):
 
   log_file = "%s/rally_out.log" % log_dir
 
-  print("Writing additional logs to %s." % log_file)
+  print("\nWriting additional logs to %s\n" % log_file)
 
   # console logging
   # logging.basicConfig(level=logging.INFO)
@@ -66,7 +66,17 @@ def parse_args():
   return parser.parse_args()
 
 
+def print_banner():
+  print("    ____        ____     ")
+  print("   / __ \____ _/ / /_  __")
+  print("  / /_/ / __ `/ / / / / /")
+  print(" / _, _/ /_/ / / / /_/ / ")
+  print("/_/ |_|\__,_/_/_/\__, /  ")
+  print("                /____/   ")
+
+
 def main():
+  print_banner()
   args = parse_args()
   cfg = rally.config.Config()
   if cfg.config_present():
