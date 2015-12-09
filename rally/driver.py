@@ -28,6 +28,8 @@ class Driver:
 
   def __init__(self, config):
     self._config = config
+    self._metrics = None
+    self._index_benchmark = None
 
   def setup(self, cluster, track, track_setup):
     # TODO dm: Should we encapsulate this in the index benchmark class?
@@ -43,23 +45,25 @@ class Driver:
     cluster.wait_for_status(track_setup.required_cluster_status)
 
   def go(self, cluster, track, track_setup):
-    metrics = m.MetricsCollector(self._config, track_setup.name)
+    self._metrics = m.MetricsCollector(self._config, track_setup.name)
     # TODO dm [High Priority]: This is just here to ease the migration, consider gathering metrics for *all* track setups later
     if track_setup.name == 'defaults':
-      metrics.start_collection(cluster)
-    index_benchmark = IndexBenchmark(self._config, track, track_setup, cluster, metrics)
+      self._metrics.start_collection(cluster)
+    self._index_benchmark = IndexBenchmark(self._config, track, track_setup, cluster, self._metrics)
     if track_setup.test_settings.benchmark_indexing:
-      index_benchmark.run()
+      self._index_benchmark.run()
     # TODO dm: *Might* be interesting to gather metrics also for searching (esp. memory consumption) -> later
     if track_setup.test_settings.benchmark_search:
-      search_benchmark = SearchBenchmark(self._config, track, track_setup, cluster, metrics)
+      search_benchmark = SearchBenchmark(self._config, track, track_setup, cluster, self._metrics)
       search_benchmark.run()
-    # TODO dm: Check with Mike if it is ok to include this here (original code shut down the server first)
+    self._metrics.collect_total_stats()
+
+  def tear_down(self, track, track_setup):
     # This is also just a hack for now (should be in track for first step and metrics for second one)
     data_paths = self._config.opts("provisioning", "local.data.paths")
     if track_setup.test_settings.benchmark_indexing:
-      index_benchmark.printIndexStats(data_paths[0])
-    metrics.stop_collection()
+      self._index_benchmark.printIndexStats(data_paths[0])
+    self._metrics.stop_collection()
 
 
 class TimedOperation:
@@ -317,10 +321,11 @@ class IndexBenchmark(TimedOperation):
         mb_per_second = rally.utils.format.bytes_to_mb(self._totBytesIndexed) / (t - startTime)
         self._progress.print(
           "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
-          #"docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
+          # "docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
           "[%3d%% done]" % round(100 * self._numDocsIndexed / self._track.number_of_documents)
         )
-        logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (self._numDocsIndexed, t - startTime, docs_per_second, mb_per_second))
+        logger.info(
+          'Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (self._numDocsIndexed, t - startTime, docs_per_second, mb_per_second))
         self._nextPrint += 10000
 
   def printIndexStats(self, dataDir):

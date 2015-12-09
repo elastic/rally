@@ -48,6 +48,9 @@ class RaceControl:
         driver.setup(cluster, track, track_setup)
         driver.go(cluster, track, track_setup)
         mechanic.stop_engine(cluster)
+        driver.tear_down(track, track_setup)
+        mechanic.revise_candidate()
+
       print("\nAll tracks done. Generating reports...")
       reporter.report(track)
 

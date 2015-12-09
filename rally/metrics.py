@@ -44,7 +44,7 @@ class MetricsCollector:
     # TODO dm: This ties metrics collection completely to a locally running server -> refactor (later)
     self._stats = self._gather_process_stats(cluster.servers()[0].pid, disk)
 
-  def stop_collection(self):
+  def collect_total_stats(self):
     if self._stats is not None:
       cpuPercents, writeCount, writeBytes, writeCount, writeTime, readCount, readBytes, readTime = self._stats.finish()
       self.collect('WRITES: %s bytes, %s time, %s count' % (writeBytes, writeTime, writeCount))
@@ -53,6 +53,8 @@ class MetricsCollector:
       self.collect('CPU median: %s' % cpuPercents[int(len(cpuPercents) / 2)])
       for pct in cpuPercents:
         self.collect('  %s' % pct)
+
+  def stop_collection(self):
     self._log_file.close()
 
   def _gather_process_stats(self, pid, diskName):
