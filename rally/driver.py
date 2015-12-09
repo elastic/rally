@@ -104,7 +104,6 @@ class SearchBenchmark(TimedOperation):
       )
       d = {}
       for query in self._track.queries:
-        time.sleep(0.5)
         duration, result = self.timed(query.run, es)
         d[query.name] = duration / query.normalization_factor
       times.append(d)
