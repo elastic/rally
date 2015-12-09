@@ -8,7 +8,8 @@
 
 import rally.mechanic.mechanic as m
 import rally.driver as d
-import rally.reporter as r
+import rally.reporter
+import rally.summary_reporter
 # TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
 import rally.track.countries_track as ct
 import rally.track.logging_track as lt
@@ -28,7 +29,8 @@ class RaceControl:
     config = self._config
     mechanic = m.Mechanic(config)
     driver = d.Driver(config)
-    reporter = r.Reporter(config)
+    summary_reporter = rally.summary_reporter.SummaryReporter(config)
+    reporter = rally.reporter.Reporter(config)
 
     mechanic.prepare_candidate()
 
@@ -51,7 +53,9 @@ class RaceControl:
         driver.tear_down(track, track_setup)
         mechanic.revise_candidate()
 
-      print("\nAll tracks done. Generating reports...")
+      print("\nAll tracks done.")
+      summary_reporter.report(track)
+      # also write the HTML reports
       reporter.report(track)
 
   def _all_tracks(self):
