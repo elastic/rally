@@ -55,9 +55,11 @@ class SummaryReporter:
       allTimes = list(allTimes)
       allTimes.sort()
 
-    self.print_header("********************")
-    self.print_header("** Summary Report **")
-    self.print_header("********************")
+    self.print_header("    _______             __   _____                    ")
+    self.print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
+    self.print_header("  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \\")
+    self.print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
+    self.print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ \n\n")
 
     self.writeIndexPerformanceChart(byMode, allTimes)
     self.writeSearchTimesGraph(byMode, allTimes)
@@ -399,8 +401,10 @@ class SummaryReporter:
 
           # Record the chart time even for failed runs so annots on failure are attached to the orange dots:
           series = self._toPrettyName[mode]
-          print("  %s K docs/sec (track setup: %s)" % (dps, mode))
-
+          if len(byMode) > 1:
+            print("  %s K docs/sec (track setup: %s)" % (dps, mode))
+          else:
+            print("  %s K docs/sec" % dps)
           if series not in chartTimes:
             chartTimes[series] = []
           chartTimes[series].append(timeStamp)
@@ -541,7 +545,10 @@ class SummaryReporter:
           if segCount is not None:
             any = True
             x = '%d' % segCount
-            print("  Index segment count: %s (track setup: %s)" % (x, mode))
+            if len(byMode) > 1:
+              print("  Index segment count: %s (track setup: %s)" % (x, mode))
+            else:
+              print("  Index segment count: %s" % x)
           else:
             x = ''
         else:
