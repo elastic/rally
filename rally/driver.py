@@ -67,11 +67,12 @@ class Driver:
 
 
 class TimedOperation:
-  def timed(self, target, args):
+  def timed(self, target, args, repeat=1):
     start = time.time()
-    result = target(args)
+    for i in range(repeat):
+      result = target(args)
     stop = time.time()
-    return (stop - start), result
+    return (stop - start) / repeat, result
 
 
 class SearchBenchmark(TimedOperation):
@@ -92,29 +93,35 @@ class SearchBenchmark(TimedOperation):
   def run(self):
     es = self._cluster.client()
     logger.info("Running search benchmark")
-    # NOTE: there are real problems here, e.g. we only suddenly do searching after
-    # indexing is done (so hotspot will be baffled), merges are likely still running
-    # at this point, etc. ... it's a start:
-    times = []
-    repetitions = 120
-    for i in range(repetitions):
-      self._progress.print(
-        "  Benchmarking search (%s)" % ', '.join(map(str, self._track.queries)),
-        "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
-      )
-      d = {}
-      for query in self._track.queries:
-        duration, result = self.timed(query.run, es)
-        d[query.name] = duration / query.normalization_factor
-      times.append(d)
+    # Run a few (untimed) warmup iterations before the actual benchmark
+    self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)")
+    times = self._run_benchmark(es, "  Benchmarking search (iteration %d/%d)")
 
-    print("")
     for q in self._track.queries:
       l = [x[q.name] for x in times]
       l.sort()
       # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
       # HINT dm: Reporting relevant
       self.print_metrics('SEARCH %s (median): %.6f sec' % (q.name, l[int(len(l) / 2)]))
+
+  def _run_benchmark(self, es, message, repetitions=10):
+    times = []
+    for i in range(repetitions):
+      self._progress.print(
+        message % ((i + 1), repetitions),
+        "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
+      )
+      times.append(self._run_one_round(es))
+    print("")
+    return times
+
+  def _run_one_round(self, es):
+    d = {}
+    for query in self._track.queries:
+      # repeat multiple times within one run to guard against timer resolution problems
+      duration, result = self.timed(query.run, es, repeat=10)
+      d[query.name] = duration / query.normalization_factor
+    return d
 
 
 class IndexBenchmark(TimedOperation):
