@@ -27,12 +27,14 @@ KNOWN_CHANGES = (
   ('2014-04-26', 'Upgraded to Ubuntu 14.04 LTS (kernel 3.13.0-32-generic #57)'),
   ('2014-05-13', 'Install broken with NoClassDefFoundError[com/tdunning/math/stats/TDigest]'),
   ('2014-05-20', 'Add index throttling when merges fall behind'),
+  ('2014-05-22', 'Elasticsearch 1.2.0 released'),
   ('2014-07-10', 'Switch to official Elasticsearch Python client'),
   ('2014-07-24', 'Don\'t load bloom filters by default', 'FastUpdate'),
   # ('2014-07-26', 'Disabled transparent huge pages'),
   # ('2014-08-31', 'Re-enabled transparent huge pages'),
   ('2014-09-03', 'Switch auto id from random UUIDs to Flake IDs'),
   ('2014-09-06', 'Upgrade to Lucene 4.10'),
+  ('2014-11-05', 'Elasticsearch 1.4.0 released'),
   ('2014-11-25', 'Workaround for LUCENE-6094, so ES shuts down quickly'),
   ('2014-12-13', 'Enable compound-file-format by default (#8934)'),
   ('2015-01-17', 'Switch to Lucene\'s auto-io-throttling for merge rate limiting'),
@@ -41,6 +43,7 @@ KNOWN_CHANGES = (
   # ('2015-02-05', 'Index raw (not_analyzed) for all string fields'),
   ('2015-02-28', 'Upgrade Lucene to include LUCENE-6260 (Simplify ExactPhraseScorer)', 'Phrase (msec)'),
   ('2015-03-10', 'Upgraded JDK from 1.8.0_25-b17 to 1.8.0_40-b25'),
+  ('2015-03-23', 'Elasticsearch 1.5.0 released'),
   ('2015-03-23-05-00-00', 'Upgrade to Jackson 2.5.1 (git show 9f9ada4)'),
   ('2015-03-24', 'Remove garbage-creating dead code (git show f34c6b7)'),
   ('2015-03-28', 'Enable doc-values by default (#10209)'),
@@ -48,12 +51,16 @@ KNOWN_CHANGES = (
   # no longer true, because of back-testing:
   # ('2015-05-05', 'Increase bulk index size from 500 docs to 5000 docs'),
   ('2015-05-08', 'Make modifying operations durable by default (#11011)'),
+  ('2015-06-09', 'Elasticsearch 1.6.0 released'),
+  ('2015-07-16', 'Elasticsearch 1.7.0 released'),
   ('2015-08-30', 'Transport shard level actions by node (#12944)'),
   ('2015-09-04', 'Upgrade to Lucene 5.4-snapshot-r1701068'),
   ('2015-09-04', 'Upgrade Lucene to include LUCENE-6756 (Give MatchAllDocsQuery a specialized BulkScorer)', 'Default (msec)'),
   ('2015-10-05', 'Randomize what time of day the benchmark runs'),
   ('2015-10-14', 'Use 30s refresh_interval instead of default 1s', 'Fast'),
+  ('2015-10-28', 'Elasticsearch 2.0.0 released'),
   ('2015-11-22', 'Benchmark uncovers LUCENE-6906 bug', 'FastUpdate'),
+  ('2015-11-24', 'Elasticsearch 2.1.0 released'),
   ('2015-12-01-19-40-30', 'Upgrade to beast2 (72 cores, 256 GB RAM)'),
 )
 
@@ -81,9 +88,9 @@ class Reporter:
                           'buildtimes': 'Test time (minutes)'}
 
   def report(self, track):
-    self._nextGraph = 100
+    self._nextGraph = 150
 
-    #TODO dm: Beware, this will *not* work as soon as we have multiple benchmarks!
+    # TODO dm: Beware, this will *not* work as soon as we have multiple benchmarks!
     # NOTE: turn this back on for faster iterations on just UI changes:
     if False and os.path.exists('results.pk'):
       with open('results.pk', 'rb') as f:
@@ -118,8 +125,8 @@ class Reporter:
       allTimes = list(allTimes)
       allTimes.sort()
 
-      #FIXME dm: check why this is not working...
-      #with open('results.pk', 'wb') as f:
+      # FIXME dm: check why this is not working...
+      # with open('results.pk', 'wb') as f:
       #  pickle.dump((byMode, byModeBroken, allTimes), f)
 
     script_dir = self._config.opts("system", "rally.root")
@@ -159,6 +166,7 @@ class Reporter:
       </head>
       <body>
       <p>Below are the results of the Elasticsearch nightly benchmark runs. The Apache Software Foundation also provides a similar page for the <a href="https://people.apache.org/~mikemccand/lucenebench/">Lucene nightly benchmarks</a>.</p>
+      <p>On each chart, you can click + drag (vertically or horizontally) to zoom in and then shift + drag to move around.</p>
       <h2>Results</h2>
       ''')
 
@@ -236,10 +244,10 @@ class Reporter:
     return "%s/%s" % (log_root, build_log_dir)
 
   def msecToSec(self, x):
-    return x/1000.0
+    return x / 1000.0
 
   def msecToMinutes(self, x):
-    return x/1000.0/60.0
+    return x / 1000.0 / 60.0
 
   def toString(self, timeStamp):
     return '%04d-%02d-%02d %02d:%02d:%02d' % \
@@ -257,7 +265,7 @@ class Reporter:
     if label < 26:
       s = chr(65 + label)
     else:
-      s = '%s%s' % (chr(65 + (label / 26 - 1)), chr(65 + (label % 26)))
+      s = '%s%s' % (chr(65 + (label // 26 - 1)), chr(65 + (label % 26)))
     return s
 
   def writeGraphHeader(self, f, id):
@@ -348,7 +356,7 @@ class Reporter:
           refreshTimeMillis = primaries['refresh']['total_time_in_millis']
           flushTimeMillis = primaries['flush']['total_time_in_millis']
 
-        #TODO dm: specific name should move out of here...
+        # TODO dm: specific name should move out of here...
         if line.startswith('NODES STATS: ') and '/defaults.txt' in fileName:
           d = self.parseStats(line, f)
           nodes = d['nodes']
@@ -357,14 +365,14 @@ class Reporter:
           node = list(nodes.keys())[0]
           node = nodes[node]
           d = node['jvm']['gc']['collectors']
-          oldGCSec = d['old']['collection_time_in_millis']/1000.0
-          youngGCSec = d['young']['collection_time_in_millis']/1000.0
+          oldGCSec = d['old']['collection_time_in_millis'] / 1000.0
+          youngGCSec = d['young']['collection_time_in_millis'] / 1000.0
 
         if line.startswith('SEARCH ') and ' (median): ' in line:
           searchType = line[7:line.find(' (median): ')]
           t = float(line.strip().split()[-2])
           searchTimes[searchType] = t
-          #logger.info('search time %s: %s = %s sec' % (fileName, searchType, t))
+          # logger.info('search time %s: %s = %s sec' % (fileName, searchType, t))
 
     # logger.info('%s: oldGC=%s newGC=%s' % (fileName, oldGCSec, youngGCSec))
 
@@ -384,12 +392,12 @@ class Reporter:
 
     if oome or exc or dps is None:
       # dps = 1
-      #logger.warn('Exception/oome/no dps in log "%s"; marking failed' % fileName)
+      # logger.warn('Exception/oome/no dps in log "%s"; marking failed' % fileName)
       return timeStamp, None
 
     if indexKB is None:
       if '4gheap' in fileName:
-        #logger.warn('Missing index size for log "%s"; marking failed' % fileName)
+        # logger.warn('Missing index size for log "%s"; marking failed' % fileName)
         return timeStamp, None
       else:
         indexKB = 1
@@ -431,17 +439,17 @@ class Reporter:
     results = []
 
     # That's the root for a single build, we want here all builds
-    #log_root = self._config.opts("system", "log.dir")
+    # log_root = self._config.opts("system", "log.dir")
     log_root = self._config.opts("system", "log.root.dir")
     metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
 
     reLogFile = re.compile(r'^%s/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\/%s' % (log_root, metrics_log_dir))
 
-    #rootDir = '%s/%s/' % (self._log_dir(), subdir)
+    # rootDir = '%s/%s/' % (self._log_dir(), subdir)
 
     l = []
     try:
-      #l = os.listdir(rootDir)
+      # l = os.listdir(rootDir)
       # TODO dm: With the new structure, "subdir" is the wrong name, this is actually the file name...
       l = glob.glob("%s/*/%s/%s.txt" % (log_root, metrics_log_dir, subdir))
     except FileNotFoundError:
@@ -450,7 +458,7 @@ class Reporter:
     l.sort()
     count = 0
     for fileName in l:
-      #logger.info('visit fileName=%s' % fileName)
+      # logger.info('visit fileName=%s' % fileName)
       m = reLogFile.match(fileName)
       if m is not None:
 
@@ -745,7 +753,7 @@ class Reporter:
 
       f.write('    + "%s,%s\\n"\n' % (self.toString(timeStamp), ','.join(l)))
 
-    self.writeGraphFooter(f, 'indexing', 'Indexing throughput on master', 'K docs/sec')
+    self.writeGraphFooter(f, 'indexing', 'Indexing performance', 'K docs/sec')
 
     self.writeAnnots(f, chartTimes, KNOWN_CHANGES, 'Defaults (4G heap)')
 
@@ -1022,7 +1030,7 @@ class Reporter:
             l.append('')
           bytesWritten = byMode['defaults'][timeStamp][9]
           if bytesWritten is not None:
-            x = '%.2f' % (bytesWritten/1024./1024./1024.)
+            x = '%.2f' % (bytesWritten / 1024. / 1024. / 1024.)
             any = True
           else:
             x = ''
@@ -1098,7 +1106,7 @@ class Reporter:
       if m is None:
         m = reYMDHMS.match(fileName)
       if m is not None:
-        #logger.info("%s" % fileName)
+        # logger.info("%s" % fileName)
         with open('%s/%s' % (buildlogDirectory, fileName), 'r') as fIn:
           success = False
           minutes = None
@@ -1110,24 +1118,24 @@ class Reporter:
             if i != -1:
               if 'secs' in line:
                 # Gradle:
-                tup = line[i+11:].strip().split()
+                tup = line[i + 11:].strip().split()
                 if len(tup) == 2 and tup[1] == 'secs':
-                  minutes = float(tup[0])/60.0
+                  minutes = float(tup[0]) / 60.0
                 elif len(tup) != 4:
                   raise RuntimeError('unexpected time %s, file %s/%s' % (line, buildlogDirectory, fileName))
                 else:
                   if tup[1] != 'mins' or tup[3] != 'secs':
                     raise RuntimeError('unexpected time %s, file %s/%s' % (line, buildlogDirectory, fileName))
-                  minutes = int(tup[0]) + float(tup[2])/60.
+                  minutes = int(tup[0]) + float(tup[2]) / 60.
               else:
-                s = line[i+11:].replace(' min', '').strip()
+                s = line[i + 11:].replace(' min', '').strip()
                 tup = s.split(':')
                 if len(tup) == 1 and tup[0].endswith(' s'):
-                  minutes = float(tup[0][:-2].strip())/60.0
+                  minutes = float(tup[0][:-2].strip()) / 60.0
                 elif len(tup) != 2:
                   raise RuntimeError('unexpected time %s, file %s/%s' % (s, buildlogDirectory, fileName))
                 else:
-                  minutes = int(tup[0]) + int(tup[1])/60.
+                  minutes = int(tup[0]) + int(tup[1]) / 60.
 
           year = int(m.group(1))
           month = int(m.group(2))
