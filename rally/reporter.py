@@ -521,7 +521,7 @@ class Reporter:
         f.write('%s,' % x)
       f.write('];\n')
 
-    for name in 'Total bytes written', 'Final index size', 'Defaults (%)', 'Phrase (msec)', 'Aggs (hourly timeStamp) (msec)', 'Term (msec)', 'Default (msec)', 'Scroll All (msec)', 'Indices stats (msec)', 'Nodes stats (msec)', 'GC young gen (sec)', 'GC old gen (sec)', 'Total heap used (MB)', 'Indexing time (min)', 'Merge time (min)', 'Refresh time (min)', 'Flush time (min)', 'Merge throttle time (min)', 'Doc values (MB)', 'Terms (MB)', 'Norms (MB)', 'Stored fields (MB)':
+    for name in 'Total bytes written', 'Final index size', 'Defaults (%)', 'Phrase (msec)', 'Aggs (hourly timeStamp) (msec)', 'Term (msec)', 'Default (msec)', 'Scroll (msec)', 'Indices stats (msec)', 'Nodes stats (msec)', 'GC young gen (sec)', 'GC old gen (sec)', 'Total heap used (MB)', 'Indexing time (min)', 'Merge time (min)', 'Refresh time (min)', 'Flush time (min)', 'Merge throttle time (min)', 'Doc values (MB)', 'Terms (MB)', 'Norms (MB)', 'Stored fields (MB)':
       f.write('    brokenIndexMap["%s"] = brokenIndexMap["Defaults"];\n' % name)
 
     f.write('''
@@ -605,6 +605,10 @@ class Reporter:
         dps, indexKB, segCount, searchTimes = byMode['defaults'][timeStamp][:4]
         searchTypes.update(searchTimes.keys())
 
+    if 'scroll_all' in searchTypes:
+      # We renamed to just "scroll" since it does not actually scroll through ALL hits:
+      searchTypes.add('scroll')
+      searchTypes.remove('scroll_all')
     searchTypes = list(searchTypes)
 
     headers = ['Date']
@@ -626,6 +630,9 @@ class Reporter:
       l = []
       if timeStamp in byMode['defaults']:
         searchTimes = byMode['defaults'][timeStamp][3]
+        if 'scroll_all' in searchTimes:
+          searchTimes['scroll'] = searchTimes['scroll_all']
+          del searchTimes['scroll_all']
       else:
         searchTimes = {}
       any = False
