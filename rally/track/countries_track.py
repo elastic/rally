@@ -73,7 +73,7 @@ class ScrollAllQuery(rally.track.track.Query):
 
 countriesTrackSpec = rally.track.track.Track(
   name="Countries",
-  description="This test indexes 8.6M documents (countries from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+  description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
   source_url="http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2",
   # TODO dm: Have Mike upload the mappings file
   mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
