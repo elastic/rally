@@ -35,16 +35,13 @@ class RaceControl:
     mechanic.prepare_candidate()
 
     marshal = rally.track.track.Marshal(config)
-    print("Racing on %d track(s). overall ETA: %d minutes (depending on your hardware)\n" % (len(self._all_tracks()), self._eta()))
+    print("Racing on %d track(s). Overall ETA: %d minutes (depending on your hardware)\n" % (len(self._all_tracks()), self._eta()))
     for index, track in enumerate(self._all_tracks(), start=1):
-      rally.utils.process.kill_java()
+      rally.utils.process.kill_running_es_instances()
       marshal.setup(track)
       for track_setup in track.track_setups:
         print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
-        # TODO dm [Refactoring] Don't call this method at all, just have the appropriate class interpret the specification
-        track_setup.setup(config)
-        # TODO dm: We probably need the track here to perform proper track-setup-specific setup (later)
-        cluster = mechanic.start_engine()
+        cluster = mechanic.start_engine(track_setup)
         driver.setup(cluster, track, track_setup)
         driver.go(cluster, track, track_setup)
         mechanic.stop_engine(cluster)

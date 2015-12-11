@@ -11,7 +11,7 @@ from elasticsearch.helpers import parallel_bulk, streaming_bulk
 import rally.metrics as m
 import rally.track.track
 import rally.utils.process
-import rally.utils.format
+import rally.utils.convert
 import rally.utils.progress
 
 logger = logging.getLogger("rally.driver")
@@ -296,7 +296,7 @@ class IndexBenchmark(TimedOperation):
     with self._metrics.expose_print_lock_dirty_hack_remove_me_asap():
       t = time.time()
       docs_per_second = docs_processed / (t - self.startTime)
-      mb_per_second = rally.utils.format.bytes_to_mb(self._sent_bytes) / (t - self.startTime)
+      mb_per_second = rally.utils.convert.bytes_to_mb(self._sent_bytes) / (t - self.startTime)
       self._progress.print(
         "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
         # "docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))

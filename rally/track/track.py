@@ -8,7 +8,7 @@ from enum import Enum
 
 import rally.config as cfg
 import rally.utils.io
-import rally.utils.format
+import rally.utils.convert
 import rally.utils.process
 
 import rally.cluster
@@ -105,17 +105,6 @@ class TrackSetup:
     self._test_settings = benchmark_settings
     self._required_cluster_status = required_cluster_status
 
-  # TODO dm [Refactoring]: This class is supposed to be just a specification and should not play an active role - move this code
-  def setup(self, config):
-    # Provide runtime configuration
-    if self.candidate_settings.heap:
-      config.add(cfg.Scope.trackSetupScope, "provisioning", "es.heap", self.candidate_settings.heap)
-    if self.candidate_settings.custom_config_snippet:
-      config.add(cfg.Scope.trackSetupScope, "provisioning", "es.config", self.candidate_settings.custom_config_snippet)
-
-    config.add(cfg.Scope.trackSetupScope, "provisioning", "es.processors", self.candidate_settings.processors)
-    config.add(cfg.Scope.trackSetupScope, "provisioning", "es.nodes", self.candidate_settings.nodes)
-
   @property
   def name(self):
     return self._name
@@ -138,12 +127,13 @@ class TrackSetup:
 
 
 class CandidateSettings:
-  # TODO dm: Allow also other settings such as custom JVM options
-  def __init__(self, custom_config_snippet=None, nodes=1, processors=1, heap=None):
+  def __init__(self, custom_config_snippet=None, nodes=1, processors=1, heap=None, java_opts=None, gc_opts=None):
     self._custom_config_snippet = custom_config_snippet
     self._nodes = nodes
     self._processors = processors
     self._heap = heap
+    self._java_opts = java_opts
+    self._gc_opts = gc_opts
 
   @property
   def custom_config_snippet(self):
@@ -160,6 +150,14 @@ class CandidateSettings:
   @property
   def heap(self):
     return self._heap
+
+  @property
+  def java_opts(self):
+    return self._java_opts
+
+  @property
+  def gc_opts(self):
+    return self._gc_opts
 
 
 class IndexIdConflict(Enum):
@@ -235,14 +233,14 @@ class Marshal:
     # that the mapping file is called resources/datasets/track.lower()/mappings.json
     mapping_path = "%s/mappings.json" % data_set_root
     if not os.path.isfile(mapping_path):
-      self._download_mapping_data(mapping_path)
+      self._download_mapping_data(track, mapping_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmarks", "mapping.path", mapping_path)
 
   def _download_benchmark_data(self, track, data_set_root, data_set_path):
     rally.utils.io.ensure_dir(data_set_root)
     logger.info("Benchmark data for %s not available in '%s'" % (track.name, data_set_path))
     url = track.source_url
-    size = round(rally.utils.format.bytes_to_mb(track.compressed_size_in_bytes))
+    size = round(rally.utils.convert.bytes_to_mb(track.compressed_size_in_bytes))
     # ensure output appears immediately
     print("Downloading benchmark data from %s (%s MB) ... " % (url, size), end='', flush=True)
     if url.startswith("http"):
@@ -267,7 +265,7 @@ class Marshal:
         os.remove(data_set_path)
       raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
 
-  def _download_mapping_data(self, mapping_path):
+  def _download_mapping_data(self, track, mapping_path):
     root_path = self._config.opts("system", "rally.root")
-    mapping_source = "%s/resources/datasets/countries/mappings.json" % root_path
+    mapping_source = "%s/resources/datasets/%s/mappings.json" % (root_path, track.name.lower())
     shutil.copyfile(mapping_source, mapping_path)

@@ -6,7 +6,7 @@ import datetime
 import logging
 
 import rally.utils.io
-import rally.utils.format
+import rally.utils.convert
 
 # this is somewhat of a hack. I'd rather have a reporting data model in place and have a reporter just output that...
 
@@ -442,13 +442,13 @@ class SummaryReporter:
         segTotalMemoryBytes = tup[10]
         dvTotalMemoryBytes, storedFieldsTotalMemoryBytes, termsTotalMemoryBytes, normsTotalMemoryBytes = tup[15:19]
         if segTotalMemoryBytes is not None:
-          print('  Total heap used for segments     : %.2fMB' % rally.utils.format.bytes_to_mb(segTotalMemoryBytes))
+          print('  Total heap used for segments     : %.2fMB' % rally.utils.convert.bytes_to_mb(segTotalMemoryBytes))
           chartTimes.append(timeStamp)
         if dvTotalMemoryBytes is not None:
-          print('  Total heap used for doc values   : %.2fMB' % rally.utils.format.bytes_to_mb(dvTotalMemoryBytes))
-          print('  Total heap used for terms        : %.2fMB' % rally.utils.format.bytes_to_mb(termsTotalMemoryBytes))
-          print('  Total heap used for norms        : %.2fMB' % rally.utils.format.bytes_to_mb(normsTotalMemoryBytes))
-          print('  Total heap used for stored fields: %.2fMB' % rally.utils.format.bytes_to_mb(storedFieldsTotalMemoryBytes))
+          print('  Total heap used for doc values   : %.2fMB' % rally.utils.convert.bytes_to_mb(dvTotalMemoryBytes))
+          print('  Total heap used for terms        : %.2fMB' % rally.utils.convert.bytes_to_mb(termsTotalMemoryBytes))
+          print('  Total heap used for norms        : %.2fMB' % rally.utils.convert.bytes_to_mb(normsTotalMemoryBytes))
+          print('  Total heap used for stored fields: %.2fMB' % rally.utils.convert.bytes_to_mb(storedFieldsTotalMemoryBytes))
 
   def writeTotalTimesChart(self, byMode, allTimes):
 

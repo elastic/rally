@@ -9,7 +9,7 @@ import pickle
 import logging
 
 import rally.utils.io
-import rally.utils.format
+import rally.utils.convert
 
 logger = logging.getLogger("rally.reporting")
 
@@ -818,15 +818,15 @@ class Reporter:
         segTotalMemoryBytes = tup[10]
         dvTotalMemoryBytes, storedFieldsTotalMemoryBytes, termsTotalMemoryBytes, normsTotalMemoryBytes = tup[15:19]
         if segTotalMemoryBytes is not None:
-          l.append('%.2f' % rally.utils.format.bytes_to_mb(segTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.convert.bytes_to_mb(segTotalMemoryBytes))
           chartTimes.append(timeStamp)
         else:
           l.append('')
         if dvTotalMemoryBytes is not None:
-          l.append('%.2f' % rally.utils.format.bytes_to_mb(dvTotalMemoryBytes))
-          l.append('%.2f' % rally.utils.format.bytes_to_mb(termsTotalMemoryBytes))
-          l.append('%.2f' % rally.utils.format.bytes_to_mb(normsTotalMemoryBytes))
-          l.append('%.2f' % rally.utils.format.bytes_to_mb(storedFieldsTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.convert.bytes_to_mb(dvTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.convert.bytes_to_mb(termsTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.convert.bytes_to_mb(normsTotalMemoryBytes))
+          l.append('%.2f' % rally.utils.convert.bytes_to_mb(storedFieldsTotalMemoryBytes))
         else:
           l.extend(['', '', '', ''])
       else:

@@ -3,7 +3,6 @@ import errno
 import glob
 import subprocess
 import bz2
-# from zipfile import ZipFile as zip
 
 import rally.utils.process
 
@@ -28,20 +27,15 @@ def unzip(zip_name, target_directory):
   Decompresses the provided archive to the target directory. The following file extensions are supported:
 
   * zip: Relies that the 'unzip' tool is available on the path
-  * bz2
+  * bz2: Can be uncompressed using standard library facilities, so no external tool is required.
 
   The decompression method is chosen based on the file extension.
 
   :param zip_name: The full path name to the file that should be decompressed.
   :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling this function.
   """
-  # TODO dm: Should we ensure the target directory exists?
   filename, extension = os.path.splitext(zip_name)
   if extension == ".zip":
-    # Actually this would be much better if it just would preserve file permissions...
-    # z = zip(zip_name)
-    # for f in z.namelist():
-    #  z.extract(f, path=target_directory)
     if not rally.utils.process.run_subprocess("unzip %s -d %s" % (zip_name, target_directory)):
       raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
   elif extension == ".bz2":

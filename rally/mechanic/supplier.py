@@ -11,6 +11,7 @@ class Supplier:
   """
   Supplier fetches the benchmark candidate source tree from the remote repository. In the current implementation, only git is supported.
   """
+
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger
@@ -45,9 +46,10 @@ class Supplier:
     elif revision.startswith('@'):
       # concert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
       ts = revision[1:]
-      if os.system("sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" master`'" % (src_dir, ts)):
+      if os.system(
+              "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" master`'" % (src_dir, ts)):
         raise SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
-    else: #assume a git commit hash
+    else:  # assume a git commit hash
       if os.system("sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet %s'" % (src_dir, revision)):
         raise SupplyError("Could not fetch source tree for revision %s" % revision)
 

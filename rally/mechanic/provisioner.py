@@ -2,7 +2,9 @@ import socket
 import os
 import glob
 import shutil
+
 import rally.config as cfg
+import rally.track.track
 
 import rally.utils.io
 
@@ -11,19 +13,14 @@ class Provisioner:
   """
   The provisioner prepares the runtime environment for running the benchmark.  It prepares all configuration files and copies the binary of
   the benchmark candidate to the appropriate place.
-
-  Supported modes:
-
-  * Local
-  * EC2 (not yet implemented)
   """
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger
 
-  def prepare(self):
+  def prepare(self, setup):
     self._install_binary()
-    self._configure()
+    self._configure(setup)
 
   def cleanup(self):
     install_dir = self._install_dir()
@@ -43,14 +40,11 @@ class Provisioner:
     # config may be different for each track setup so we have to reinitialize every time, hence track setup scope
     self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.binary.path", binary_path)
 
-  # TODO: needs also to know about the benchmark scenario (e.g. for proper runtime configuration of Elasticsearch)
-  # TODO: Do we need to be somehow aware about changing config settings over time, i.e. when options become deprecated / removed that have
-  # been used before? -> Check with Mike
-  def _configure(self):
-    self._configure_logging()
-    self._configure_cluster()
+  def _configure(self, setup):
+    self._configure_logging(setup)
+    self._configure_cluster(setup)
 
-  def _configure_logging(self):
+  def _configure_logging(self, setup):
     # TODO dm: The larger idea behind this seems to be that we want sometimes to modify the (log) configuration. -> Check with Mike
     # So we see IW infoStream messages:
     # s = open('config/logging.yml').read()
@@ -61,9 +55,9 @@ class Provisioner:
     # open('config/logging.yml', 'w').write(s)
     pass
 
-  def _configure_cluster(self):
+  def _configure_cluster(self, setup):
     binary_path = self._config.opts("provisioning", "local.binary.path")
-    additional_config = self._config.opts("provisioning", "es.config", mandatory=False)
+    additional_config = setup.candidate_settings.custom_config_snippet
     data_paths = self._data_paths()
     self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
     # TODO dm: We should probably have the cluster log also to our common log directory, otherwise the logs are gone as the install dir is constantly wiped

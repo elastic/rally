@@ -24,9 +24,9 @@ class Mechanic:
     self._supplier.fetch()
     self._builder.build()
 
-  def start_engine(self):
-    self._provisioner.prepare()
-    return self._launcher.start()
+  def start_engine(self, setup):
+    self._provisioner.prepare(setup)
+    return self._launcher.start(setup)
 
   def stop_engine(self, cluster):
     self._launcher.stop(cluster)

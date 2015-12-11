@@ -24,6 +24,7 @@ class Cluster:
     self._es = elasticsearch.Elasticsearch()
     self._servers = servers
 
+  @property
   def servers(self):
     return self._servers
 

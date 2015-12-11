@@ -3,8 +3,6 @@ Below is a list of the shortcomings we are aware of and other areas to investiga
 
 ### Support for running nightly benchmarks:
 
-* EC2 benchmarks
-* Various minor bits like uploading the report to S3
 * Reenable timing of builds (currently we don't even run gradle assembly as it is taking up too much time)
 * The original version printed more information like full path to java, the mappings being used, how many indexing threads (in the python client) are used, git hash tested, etc. -> Check whether this information has been lost and add it again if necessary.
 * Verification of rally against the original version (compare log files (single-threaded test)?)

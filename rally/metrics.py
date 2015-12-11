@@ -42,7 +42,7 @@ class MetricsCollector:
   def start_collection(self, cluster):
     disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
     # TODO dm: This ties metrics collection completely to a locally running server -> refactor (later)
-    self._stats = self._gather_process_stats(cluster.servers()[0].pid, disk)
+    self._stats = self._gather_process_stats(cluster.servers[0].pid, disk)
 
   def collect_total_stats(self):
     if self._stats is not None:

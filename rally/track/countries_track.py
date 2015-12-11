@@ -54,21 +54,23 @@ class CountryAggQuery(rally.track.track.Query):
     }''')
 
 
-class ScrollAllQuery(rally.track.track.Query):
+class ScrollQuery(rally.track.track.Query):
+  PAGES = 25
+  ITEMS_PER_PAGE = 1000
+
   def __init__(self):
-    rally.track.track.Query.__init__(self, "scroll", normalization_factor=25)
+    rally.track.track.Query.__init__(self, "scroll", normalization_factor=self.PAGES)
 
   def run(self, es):
-    # Scroll, 1K docs at a time, 25 times:
-    r = es.search(index='countries', doc_type='type', sort='_doc', scroll='10m', size=1000)
-    count = 1
-    for i in range(24):
-      numHits = len(r['hits']['hits'])
-      if numHits == 0:
+    r = es.search(index='countries', doc_type='type', sort='_doc', scroll='10m', size=self.ITEMS_PER_PAGE)
+    # Note that starting with ES 2.0, the initial call to search() returns already the first result page
+    # so we have to retrieve one page less
+    for i in range(self.PAGES - 1):
+      hit_count = len(r['hits']['hits'])
+      if hit_count == 0:
         # done
         break
       r = es.scroll(scroll_id=r['_scroll_id'], scroll='10m')
-      count += 1
 
 
 countriesTrackSpec = rally.track.track.Track(
@@ -79,14 +81,16 @@ countriesTrackSpec = rally.track.track.Track(
   mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
   index_name="countries",
   type_name="type",
-  number_of_documents=8647880,
+  #number_of_documents=8647880,
+  number_of_documents=2000,
   compressed_size_in_bytes=197857614,
   uncompressed_size_in_bytes=2790927196,
-  local_file_name="documents.json.bz2",
+  #local_file_name="documents.json.bz2",
+  local_file_name="documents-2k.json.bz2",
   # for defaults alone, it's just around 20 minutes, for all it's about 60
   estimated_benchmark_time_in_minutes=20,
   # Queries to use in the search benchmark
-  queries=[DefaultQuery(), TermQuery(), CountryAggQuery(), ScrollAllQuery()],
+  queries=[DefaultQuery(), TermQuery(), CountryAggQuery(), ScrollQuery()],
   # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
   track_setups=[
     rally.track.track.TrackSetup(

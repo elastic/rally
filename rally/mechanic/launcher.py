@@ -19,32 +19,28 @@ class Launcher:
     self._logger = logger
     self._servers = []
 
-  def start(self):
-    num_nodes = self._config.opts("provisioning", "es.nodes")
-    # TODO dm: Should we warn here if _servers is not empty? Might have missed shutdown?
-    return c.Cluster([self._start_node(node) for node in range(num_nodes)])
+  def start(self, setup):
+    if self._servers:
+      self._logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
+    num_nodes = setup.candidate_settings.nodes
+    return c.Cluster([self._start_node(node, setup) for node in range(num_nodes)])
 
-  def _start_node(self, node):
-    node_name = self._node_name(node)
+  def _start_node(self, node, setup):
     install_dir = self._config.opts("provisioning", "local.binary.path")
-    heap = self._config.opts("provisioning", "es.heap", mandatory=False)
-    processor_count = self._config.opts("provisioning", "es.processors", mandatory=False)
     server_log_dir = "%s/server" % self._config.opts("system", "log.dir")
+
+    node_name = self._node_name(node)
+    processor_count = setup.candidate_settings.processors
 
     os.chdir(install_dir)
     startup_event = threading.Event()
     env = {}
     env.update(os.environ)
 
-    if heap is not None:
-      env['ES_HEAP_SIZE'] = heap
-      # self._logger.info('ES_HEAP_SIZE=%s' % heap)
-    # TODO dm: Reenable
-    # if verboseGC:
-    #   #env['ES_JAVA_OPTS'] = '-verbose:gc -agentlib:hprof=heap=sites,depth=30'
-    #  env['ES_JAVA_OPTS'] = '-verbose:gc'
+    self._set_env(env, 'ES_HEAP_SIZE', setup.candidate_settings.heap)
+    self._set_env(env, 'ES_JAVA_OPTS', setup.candidate_settings.java_opts)
+    self._set_env(env, 'ES_GC_OPTS', setup.candidate_settings.gc_opts)
 
-    # env['ES_GC_OPTS'] = '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC'
     java_home = gear.Gear(self._config).capability(gear.Capability.java)
     # Unix specific!:
     env['PATH'] = '%s/bin' % java_home + ':' + env['PATH']
@@ -60,9 +56,13 @@ class Launcher:
     t.setDaemon(True)
     t.start()
     startup_event.wait()
-    # self._logger.info('Started node=%s on pid=%s' % (node_name, server.pid))
+    self._logger.info('Started node=%s with pid=%s' % (node_name, server.pid))
 
     return server
+
+  def _set_env(self, env, k, v):
+    if v is not None:
+      env[k] = v
 
   def _node_name(self, node):
     return "node%d" % node
@@ -83,14 +83,14 @@ class Launcher:
       self._logger.info('%s: %s' % (node_name, l.replace('\n', '\n%s (stdout): ' % node_name)))
       if l.endswith('started') and not startup_event.isSet():
         startup_event.set()
-        self._logger.info('%s: **started**' % node_name)
+        self._logger.info('%s: started' % node_name)
 
   def stop(self, cluster):
     self._logger.info('Shutting down ES cluster')
 
     # Ask all nodes to shutdown:
     t0 = time.time()
-    for idx, server in enumerate(cluster.servers()):
+    for idx, server in enumerate(cluster.servers):
       node = self._node_name(idx)
       os.kill(server.pid, signal.SIGINT)
 
@@ -118,3 +118,4 @@ class Launcher:
           server.kill()
         except ProcessLookupError:
           self._logger.warn('No such process')
+    self._servers = []
