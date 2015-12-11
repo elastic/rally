@@ -35,6 +35,17 @@ def configure_logging(cfg):
 def parse_args():
   parser = argparse.ArgumentParser(prog='esrally', description='Benchmark Elasticsearch')
 
+  # TODO dm: Come up with a more descriptive help message
+  subparsers = parser.add_subparsers(
+    title='subcommands',
+    dest='subcommand',
+    help='Subcommands define what Rally will do')
+
+  subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
+  subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
+  subparsers.add_parser('report', help="Generate only reports based on existing data")
+  config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
+
   parser.add_argument(
     '--skip-build',
     help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
@@ -67,7 +78,7 @@ def parse_args():
     type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
     default=datetime.datetime.now())
 
-  parser.add_argument(
+  config_parser.add_argument(
     '--advanced-config',
     help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
     default=False,
@@ -85,15 +96,34 @@ def print_banner():
   print("                /____/   ")
 
 
+def derive_subcommand(args, cfg):
+  subcommand = args.subcommand
+  # first, trust the user...
+  if subcommand is not None:
+    return subcommand
+  # we apply some smarts in case the user did not specify a subcommand
+  if cfg.config_present():
+    return "all"
+  else:
+    return "configure"
+
+
 def main():
   print_banner()
   args = parse_args()
   cfg = rally.config.Config()
-  if cfg.config_present():
-    cfg.load_config()
-  else:
+  subcommand = derive_subcommand(args, cfg)
+
+  if subcommand == "configure":
     cfg.create_config(advanced_config=args.advanced_config)
     exit(0)
+  else:
+    if cfg.config_present():
+      cfg.load_config()
+    else:
+      print("Error: No config present. Please run 'esrally configure' first.")
+      exit(64)
+
   # Add global meta info derived by rally itself
   cfg.add(rally.config.Scope.globalScope, "meta", "time.start", args.effective_start_date)
   cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
@@ -104,8 +134,7 @@ def main():
   configure_logging(cfg)
 
   race_control = rc.RaceControl(cfg)
-  race_control.start()
-
+  race_control.start(subcommand)
 
 if __name__ == '__main__':
   main()

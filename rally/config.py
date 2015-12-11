@@ -101,7 +101,7 @@ class Config:
     :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a developer machine). Default: False.
     """
     if self.config_present():
-      print("\n!!!!!!! WARNING: Will overwrite existing config file: '%s' !!!!!!!\n", self._config_file())
+      print("\nWARNING: Will overwrite existing config file at [%s]\n" % self._config_file())
 
     print("The benchmark root directory contains benchmark data, logs, etc.")
     print("It will consume several GB of free space depending on which benchmarks are executed (expect at least 10 GB).")

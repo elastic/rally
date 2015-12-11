@@ -17,8 +17,8 @@ Rally is only tested on Mac OS X and Linux.
 
 1. Clone this repo: `git clone git@github.com:elastic/rally.git`
 2. Install Rally and its dependencies: `python3 setup.py develop`. Depending on your local setup and file system permission it might be necessary to use `sudo` in this step. `sudo`ing is required as this script will install two Python libraries which Rally needs to run:`psutil` to gather process metrics and `elasticsearch` to connect to the benchmark cluster. Additionally, the setup procedure will set symlinks to the script `esrally` so it can be easily invoked. If you don't want do that, see the section below for an alternative. Note: this step will change once Rally is available in the official Python package repos.
-3. Run Rally: `esrally`. The first time it will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
-4. Rerun Rally: `esrally`. It is now properly set up and will run the benchmarks.
+3. Configure Rally: `esrally configure`. It will prompt you for some values and write them to the config file `~/.rally/rally.ini`.
+4. Run Rally: `esrally`. It is now properly set up and will run the benchmarks.
 
 ### Non-sudo Install
 
