@@ -1,6 +1,5 @@
 Below is a list of the shortcomings we are aware of and other areas to investigate. This list is roughly prioritized.
 
-
 ### Support for running nightly benchmarks:
 
 * Reenable timing of builds (currently we don't even run gradle assembly as it is taking up too much time)
@@ -13,12 +12,6 @@ Below is a list of the shortcomings we are aware of and other areas to investiga
 * Maven build
 * Choose Java and build tool based on timestamp, commit id, ... . -> Already fleshed out in gear/gear.py
 * Iteration loop around race control
-
-### Finishing Touches on nightly benchmarks
-
-* Triggering via Jenkins (at random times, how?)
-* Rally auto-update (run some kind of "pre-script"? Maybe also in Jenkins?)
-
 
 ### Multi Benchmark Support
 
@@ -43,9 +36,8 @@ There is not much missing for this one; the structure is already in place.
 
 ### Usability
 
-* Progress indication on console based on knowledge of the total corpus size and tracking of indexing requests
 * Warn if there is not enough disk space on your ROOT_DIR (-> for data files)
-* Simulate "no space left on device" will running. Ensure that Rally will work the next time after freeing up enough space.
+* Simulate "no space left on device" while running. Ensure that Rally will work the next time after freeing up enough space.
 
 ### Reporting
 
