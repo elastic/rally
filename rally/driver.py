@@ -1,6 +1,5 @@
 import time
 import json
-import threading
 import random
 import bz2
 import gzip
@@ -14,11 +13,6 @@ import rally.track.track
 import rally.utils.process
 import rally.utils.format
 import rally.utils.progress
-
-# TODO dm: Remove / encapsulate after porting
-# From the original code:
-DOCS_IN_BLOCK = 5000
-rand = random.Random(17)
 
 logger = logging.getLogger("rally.driver")
 
@@ -126,7 +120,6 @@ class SearchBenchmark(TimedOperation):
     return d
 
 
-
 class IndexBenchmark(TimedOperation):
   def __init__(self, config, track, track_setup, cluster, metrics):
     self._config = config
@@ -139,12 +132,13 @@ class IndexBenchmark(TimedOperation):
     self._numDocsIndexed = 0
     self._totBytesIndexed = 0
     self._progress = rally.utils.progress.CmdLineProgressReporter()
+    self._rand = random.Random(17)
+    self._bulk_size = 5000
 
     docs_to_index = track.number_of_documents
     data_set_path = self._config.opts("benchmarks", "dataset.path")
 
-
-    logger.info('Use %d docs per bulk request' % DOCS_IN_BLOCK)
+    logger.info('Use %d docs per bulk request' % self._bulk_size)
 
   def run(self):
     docs_to_index = self._track.number_of_documents
@@ -152,23 +146,20 @@ class IndexBenchmark(TimedOperation):
 
     # We cannot know how many docs have been updated if we produce id conflicts
     if self._track_setup.test_settings.id_conflicts == rally.track.track.IndexIdConflict.NoConflicts:
-      expectedDocCount = docs_to_index
+      expected_doc_count = docs_to_index
     else:
-      expectedDocCount = None
+      expected_doc_count = None
 
     finished = False
 
     try:
-      # TODO dm: Reduce number of parameters...
-      self.indexAllDocs(data_set_path, expectedDocCount)
+      self.indexAllDocs(data_set_path, expected_doc_count)
       # just for ending the progress output
       print("")
       finished = True
-
     finally:
       # HINT dm: Not reporting relevant
       self.print_metrics('Finished?: %s' % finished)
-
 
   def generate_ids(self, conflicts):
     docs_to_index = self._track.number_of_documents
@@ -176,21 +167,21 @@ class IndexBenchmark(TimedOperation):
 
     if conflicts == rally.track.track.IndexIdConflict.SequentialConflicts:
       yield from (
-          '%10d' % (
-              rand.randint(0, i)
-              # pick already returned id in 25% of cases
-              if i > 0 and self.rand.randint(0, 3) == 3
-              else i
-          ) for i in range(docs_to_index)
+        '%10d' % (
+          self._rand.randint(0, i)
+          # pick already returned id in 25% of cases
+          if i > 0 and self._rand.randint(0, 3) == 3
+          else i
+        ) for i in range(docs_to_index)
       )
     elif conflicts == rally.track.track.IndexIdConflict.RandomConflicts:
       ids = []
       for _ in range(docs_to_index):
-        if ids and selfrand.randint(0, 3) == 3:
+        if ids and self._rand.randint(0, 3) == 3:
           # pick already returned id in 25%
-          id = rand.choice(ids)
+          id = self._rand.choice(ids)
         else:
-          id = '%10i' % rand.randint(0, docs_to_index)
+          id = '%10i' % self._rand.randint(0, docs_to_index)
           ids.append(id)
       yield id
     else:
@@ -205,12 +196,12 @@ class IndexBenchmark(TimedOperation):
 
     def expand_action(data):
       if id_generator:
-        id = next(id_generator)
         action = '{"index": {"_id": %d}}' % next(id_generator)
       else:
         action = '{"index": {}}'
       self._sent_bytes += len(data)
       return action, data.strip()
+
     return expand_action
 
   def _open_file(self, docsFile):
@@ -233,7 +224,6 @@ class IndexBenchmark(TimedOperation):
     typeName = self._track.type_name
     es = self._cluster.client()
 
-
     self.print_metrics('Launching %d client bulk indexing threads' % numClientThreads)
     self.startTime = time.time()
     self._sent_bytes = 0
@@ -242,13 +232,13 @@ class IndexBenchmark(TimedOperation):
     self.printStatus(processed)
     try:
       for _ in parallel_bulk(es,
-                        self._read_records(docsFile),
-                        thread_count=numClientThreads,
-                        index=indexName,
-                        doc_type=typeName,
-                        chunk_size=DOCS_IN_BLOCK,
-                        expand_action_callback=self.get_expand_action(),
-                        ):
+                             self._read_records(docsFile),
+                             thread_count=numClientThreads,
+                             index=indexName,
+                             doc_type=typeName,
+                             chunk_size=self._bulk_size,
+                             expand_action_callback=self.get_expand_action(),
+                             ):
         if processed % 10000 == 0:
           self.printStatus(processed)
         processed += 1
@@ -260,7 +250,6 @@ class IndexBenchmark(TimedOperation):
     end_time = time.time()
     # HINT dm: Reporting relevant
     self.print_metrics('Total docs/sec: %.1f' % (processed / (end_time - self.startTime)))
-
 
     if doFlush:
       self.print_metrics('now force flush')
@@ -305,16 +294,16 @@ class IndexBenchmark(TimedOperation):
     # TODO dm: Move (somehow) to metrics collector
     # FIXME dm: Well, the method name says it all
     with self._metrics.expose_print_lock_dirty_hack_remove_me_asap():
-        t = time.time()
-        docs_per_second = docs_processed / (t - self.startTime)
-        mb_per_second = rally.utils.format.bytes_to_mb(self._sent_bytes) / (t - self.startTime)
-        self._progress.print(
-          "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
-          # "docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
-          "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
-        )
-        logger.info(
-          'Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, t - self.startTime, docs_per_second, mb_per_second))
+      t = time.time()
+      docs_per_second = docs_processed / (t - self.startTime)
+      mb_per_second = rally.utils.format.bytes_to_mb(self._sent_bytes) / (t - self.startTime)
+      self._progress.print(
+        "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
+        # "docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
+        "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
+      )
+      logger.info(
+        'Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, t - self.startTime, docs_per_second, mb_per_second))
 
   def printIndexStats(self, dataDir):
     indexSizeKB = os.popen('du -s %s' % dataDir).readline().split()[0]
@@ -324,6 +313,3 @@ class IndexBenchmark(TimedOperation):
     self.print_metrics('index files:')
     # TODO dm: The output of this should probably be logged (not necessary in metrics)
     rally.utils.process.run_subprocess('find %s -ls' % dataDir)
-
-
-
