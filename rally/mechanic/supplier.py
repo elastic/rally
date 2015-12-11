@@ -34,16 +34,25 @@ class Supplier:
 
   def _update(self):
     revision = self._config.opts("source", "revision")
+    src_dir = self._src_dir()
     if revision == "latest":
       self._logger.info("Fetching latest sources from %s." % self._repo_url())
-      src_dir = self._src_dir()
       # Don't swallow output but silence git at least a bit... (--quiet)
-      if os.system("sh -c 'cd %s; git checkout --quiet master && git --quiet fetch origin && git --quiet rebase origin/master'" % src_dir):
+      if os.system("sh -c 'cd %s; git checkout --quiet master && git fetch --quiet origin && git rebase --quiet origin/master'" % src_dir):
         raise SupplyError("Could not fetch latest source tree")
     elif revision == "current":
       self._logger.info("Skip fetching sources")
-    else:
-      raise RuntimeError("Unrecognized revision option '%s'" % revision)
+    elif revision.startswith('@'):
+      # concert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
+      ts = revision[1:]
+      if os.system("sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" master`'" % (src_dir, ts)):
+        raise SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
+    else: #assume a git commit hash
+      if os.system("sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet %s'" % (src_dir, revision)):
+        raise SupplyError("Could not fetch source tree for revision %s" % revision)
+
+    git_revision = os.popen("sh -c 'cd %s; git rev-parse --short HEAD'" % src_dir).readline().split()[0]
+    self._logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))
 
   def _src_dir(self):
     return self._config.opts("source", "local.src.dir")

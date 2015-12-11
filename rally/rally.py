@@ -52,9 +52,9 @@ def parse_args():
 
   parser.add_argument(
     '--revision',
-    help="defines which sources to use for 'single'_benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
-         "version on master (default: current).",
-    choices=["current", "latest"],
+    help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
+         "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
+         "specified as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
     default="current")  # optimized for local usage, don't fetch sources
 
   parser.add_argument(
