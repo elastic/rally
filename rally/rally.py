@@ -57,6 +57,16 @@ def parse_args():
          "specified as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
     default="current")  # optimized for local usage, don't fetch sources
 
+  # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
+  # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
+  #
+  # That's why we add this just as an undocumented option.
+  parser.add_argument(
+    '--effective-start-date',
+    help=argparse.SUPPRESS,
+    type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
+    default=datetime.datetime.now())
+
   parser.add_argument(
     '--advanced-config',
     help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
@@ -85,7 +95,7 @@ def main():
     cfg.create_config(advanced_config=args.advanced_config)
     exit(0)
   # Add global meta info derived by rally itself
-  cfg.add(rally.config.Scope.globalScope, "meta", "time.start", datetime.datetime.now())
+  cfg.add(rally.config.Scope.globalScope, "meta", "time.start", args.effective_start_date)
   cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
   # Add command line config
   cfg.add(rally.config.Scope.globalOverrideScope, "source", "revision", args.revision)
