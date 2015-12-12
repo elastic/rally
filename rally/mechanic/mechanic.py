@@ -21,6 +21,7 @@ class Mechanic:
 
   # This is the one-time setup the mechanic performs (once for all benchmarks run)
   def prepare_candidate(self):
+    print("Preparing for race (might take a few moments) ...")
     self._supplier.fetch()
     self._builder.build()
 

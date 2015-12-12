@@ -60,7 +60,6 @@ class Provisioner:
     additional_config = setup.candidate_settings.custom_config_snippet
     data_paths = self._data_paths()
     self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
-    # TODO dm: We should probably have the cluster log also to our common log directory, otherwise the logs are gone as the install dir is constantly wiped
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
     # TODO dm: Maybe the cluster name should change to something more generic than 'nightlybench'. Also consider multi-node setups
     s += '\ncluster.name: %s\n' % 'nightlybench.%s' % socket.gethostname()

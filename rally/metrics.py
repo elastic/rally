@@ -8,6 +8,8 @@ import rally.config
 logger = logging.getLogger("rally.metrics")
 
 
+#TODO dm [Refactoring]: Convert to the new telemetry infrastructure (see https://github.com/elastic/rally/issues/21)
+
 # For now we just support dumping to a log file (as is). This will change *significantly* later. We just want to tear apart normal logs
 # from metrics output
 class MetricsCollector:

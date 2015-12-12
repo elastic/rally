@@ -134,10 +134,6 @@ class IndexBenchmark(TimedOperation):
     self._progress = rally.utils.progress.CmdLineProgressReporter()
     self._rand = random.Random(17)
     self._bulk_size = 5000
-
-    docs_to_index = track.number_of_documents
-    data_set_path = self._config.opts("benchmarks", "dataset.path")
-
     logger.info('Use %d docs per bulk request' % self._bulk_size)
 
   def run(self):

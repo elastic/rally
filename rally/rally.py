@@ -3,7 +3,9 @@ import os
 import logging
 import argparse
 
-import rally.racecontrol as rc
+import rally.racecontrol
+import rally.telemetry
+
 import rally.config
 import rally.utils.io
 
@@ -44,7 +46,14 @@ def parse_args():
   subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
   subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
   subparsers.add_parser('report', help="Generate only reports based on existing data")
+  subparsers.add_parser('list-telemetry', help='Lists all of the available telemetry devices')
+
   config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
+  config_parser.add_argument(
+    '--advanced-config',
+    help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
+    default=False,
+    action="store_true")
 
   parser.add_argument(
     '--skip-build',
@@ -62,6 +71,12 @@ def parse_args():
     default="single")
 
   parser.add_argument(
+    '--telemetry',
+    help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
+         'provided as a comma-separated list.',
+    default="")
+
+  parser.add_argument(
     '--revision',
     help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
          "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
@@ -77,12 +92,6 @@ def parse_args():
     help=argparse.SUPPRESS,
     type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
     default=datetime.datetime.now())
-
-  config_parser.add_argument(
-    '--advanced-config',
-    help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
-    default=False,
-    action="store_true")
 
   return parser.parse_args()
 
@@ -130,11 +139,20 @@ def main():
   # Add command line config
   cfg.add(rally.config.Scope.globalOverrideScope, "source", "revision", args.revision)
   cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)
+  cfg.add(rally.config.Scope.globalOverrideScope, "telemetry", "devices", args.telemetry)
 
   configure_logging(cfg)
 
-  race_control = rc.RaceControl(cfg)
-  race_control.start(subcommand)
+
+  # TODO dm [Refactoring]: I am not too happy with dispatching commands on such a high-level. Can we push this down?
+  if subcommand == "list-telemetry":
+    telemetry = rally.telemetry.Telemetry(cfg)
+    telemetry.list()
+    exit(0)
+  else:
+    race_control = rally.racecontrol.RaceControl(cfg)
+    race_control.start(subcommand)
+
 
 if __name__ == '__main__':
   main()

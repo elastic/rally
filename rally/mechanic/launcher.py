@@ -4,8 +4,9 @@ import threading
 import subprocess
 import signal
 
-import rally.mechanic.gear as gear
-import rally.cluster as c
+import rally.mechanic.gear
+import rally.cluster
+import rally.telemetry
 
 
 class Launcher:
@@ -14,6 +15,7 @@ class Launcher:
 
   Currently, only local launching is supported.
   """
+
   def __init__(self, config, logger):
     self._config = config
     self._logger = logger
@@ -23,7 +25,7 @@ class Launcher:
     if self._servers:
       self._logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
     num_nodes = setup.candidate_settings.nodes
-    return c.Cluster([self._start_node(node, setup) for node in range(num_nodes)])
+    return rally.cluster.Cluster([self._start_node(node, setup) for node in range(num_nodes)])
 
   def _start_node(self, node, setup):
     install_dir = self._config.opts("provisioning", "local.binary.path")
@@ -37,13 +39,21 @@ class Launcher:
     env = {}
     env.update(os.environ)
 
+    # For now we keep telemetry quite constrained to the launcher. It is expected that we move it elsewhere later but keep it simple now
+    telemetry = rally.telemetry.Telemetry(self._config)
+    # we just blindly trust telemetry here...
+    for k, v in telemetry.install(setup).items():
+      self._set_env(env, k, v)
+
     self._set_env(env, 'ES_HEAP_SIZE', setup.candidate_settings.heap)
     self._set_env(env, 'ES_JAVA_OPTS', setup.candidate_settings.java_opts)
     self._set_env(env, 'ES_GC_OPTS', setup.candidate_settings.gc_opts)
 
-    java_home = gear.Gear(self._config).capability(gear.Capability.java)
+    java_home = rally.mechanic.gear.Gear(self._config).capability(rally.mechanic.gear.Capability.java)
     # Unix specific!:
-    env['PATH'] = '%s/bin' % java_home + ':' + env['PATH']
+    self._set_env(env, 'PATH', '%s/bin' % java_home, separator=':')
+    #env['PATH'] = '%s/bin' % java_home + ':' + env['PATH']
+    # Don't merge here!
     env['JAVA_HOME'] = java_home
     self._logger.debug('ENV: %s' % str(env))
     cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
@@ -60,9 +70,13 @@ class Launcher:
 
     return server
 
-  def _set_env(self, env, k, v):
+  def _set_env(self, env, k, v, separator=' '):
     if v is not None:
-      env[k] = v
+      if k not in env:
+        env[k] = v
+      else:  # merge
+        env[k] = v + separator + env[k]
+
 
   def _node_name(self, node):
     return "node%d" % node

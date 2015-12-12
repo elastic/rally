@@ -7,8 +7,8 @@
 # tournament: checking two revisions against each other
 import logging
 
-import rally.mechanic.mechanic as m
-import rally.driver as d
+import rally.mechanic.mechanic
+import rally.driver
 import rally.reporter
 import rally.summary_reporter
 # TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
@@ -27,7 +27,7 @@ class RaceControl:
     self._config = config
 
   def start(self, command):
-    participants = self.choose_participants(command)
+    participants = self._choose_participants(command)
 
     for p in participants:
       p.prepare(self._all_tracks(), self._config)
@@ -38,7 +38,7 @@ class RaceControl:
 
     print("\nAll tracks done.")
 
-  def choose_participants(self, command):
+  def _choose_participants(self, command):
     logger.info("Executing command [%s]" % command)
     if command == "all":
       return [RacingTeam(), Press(report_only=False)]
@@ -61,11 +61,8 @@ class RacingTeam:
     self._marshal = None
 
   def prepare(self, tracks, config):
-    # This is one of the few occasions where we directly log to console in order to give at least some feedback to users.
-    # Do not log relevant output, just feedback, that we're still progressing...
-    print("Preparing for race (might take a few moments) ...")
-    self._mechanic = m.Mechanic(config)
-    self._driver = d.Driver(config)
+    self._mechanic = rally.mechanic.mechanic.Mechanic(config)
+    self._driver = rally.driver.Driver(config)
     self._marshal = rally.track.track.Marshal(config)
     self._mechanic.prepare_candidate()
     print("Racing on %d track(s). Overall ETA: %d minutes (depending on your hardware)\n" % (len(tracks), self._eta(tracks)))

@@ -33,6 +33,13 @@ You can now either add `~/.local/bin` to your path or invoke Rally via `~/.local
 
 Rally has a list of supported command line options. Just run `esrally --help`.
 
+#### Telemetry
+
+Rally can add telemetry during the race. Currently, only [Java Flight Recorder](http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html) is supported. 
+
+To see the list of available telemetry devices, use `esrally list-telemetry`. To enable telemetry devices, run Rally with the `--telemetry` option, e.g.: `esrally --telemetry=jfr` enables the Java Flight Recorder based profiler.
+
+
 ### Key Components of Rally
 
 Note: This is just important if you want to hack on Rally and to some extent if you want to add new benchmarks. It is not that interesting if you are just using it.
