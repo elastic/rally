@@ -11,7 +11,7 @@ class Telemetry:
     print("Available telemetry devices:")
     for device in self._devices:
       print("\t%s (%s): %s" % (device.command, device.human_name, device.help))
-    print("\nKeep in mind that each telemetry devices may come with a runtime overhead which can skew results.")
+    print("\nKeep in mind that each telemetry devices may incur a runtime overhead which can skew results.")
 
   def install(self, setup):
     enabled_devices = [e.strip() for e in self._config.opts("telemetry", "devices").split(",")]
