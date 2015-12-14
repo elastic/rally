@@ -11,13 +11,11 @@ import rally.mechanic.mechanic
 import rally.driver
 import rally.reporter
 import rally.summary_reporter
-# TODO dm: we need to autodiscover all tracks later. For now, we import the sole track explicitly
-import rally.track.countries_track as ct
-import rally.track.logging_track as lt
-import rally.track.track
-
 import rally.utils.process
 import rally.exceptions
+import rally.track.track
+
+import rally.track.geonames_track
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -51,7 +49,7 @@ class RaceControl:
 
   def _all_tracks(self):
     # just one track for now
-    return [ct.countriesTrackSpec]
+    return [rally.track.geonames_track.geonamesTrackSpec]
 
 
 class RacingTeam:

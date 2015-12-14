@@ -2,7 +2,7 @@ import rally.track.track
 import rally.cluster
 import rally.utils.sysstats
 
-countriesBenchmarkFastSettings = '''
+geonamesBenchmarkFastSettings = '''
 index.refresh_interval: 30s
 
 index.number_of_shards: 6
@@ -18,7 +18,7 @@ class DefaultQuery(rally.track.track.Query):
     rally.track.track.Query.__init__(self, "default")
 
   def run(self, es):
-    return es.search(index='countries')
+    return es.search(index=geonamesTrackSpec.index_name)
 
 
 class TermQuery(rally.track.track.Query):
@@ -26,7 +26,7 @@ class TermQuery(rally.track.track.Query):
     rally.track.track.Query.__init__(self, "term")
 
   def run(self, es):
-    return es.search(index='countries', doc_type='type', q='country_code:AT')
+    return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, q='country_code:AT')
 
 
 class CountryAggQuery(rally.track.track.Query):
@@ -34,7 +34,7 @@ class CountryAggQuery(rally.track.track.Query):
     rally.track.track.Query.__init__(self, "country_agg")
 
   def run(self, es):
-    return es.search(index='countries', doc_type='type', body='''
+    return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, body='''
     {
       "size": 0,
       "aggs": {
@@ -62,7 +62,12 @@ class ScrollQuery(rally.track.track.Query):
     rally.track.track.Query.__init__(self, "scroll", normalization_factor=self.PAGES)
 
   def run(self, es):
-    r = es.search(index='countries', doc_type='type', sort='_doc', scroll='10m', size=self.ITEMS_PER_PAGE)
+    r = es.search(
+      index=geonamesTrackSpec.index_name,
+      doc_type=geonamesTrackSpec.type_name,
+      sort='_doc',
+      scroll='10m',
+      size=self.ITEMS_PER_PAGE)
     # Note that starting with ES 2.0, the initial call to search() returns already the first result page
     # so we have to retrieve one page less
     for i in range(self.PAGES - 1):
@@ -73,18 +78,19 @@ class ScrollQuery(rally.track.track.Query):
       r = es.scroll(scroll_id=r['_scroll_id'], scroll='10m')
 
 
-countriesTrackSpec = rally.track.track.Track(
-  name="Countries",
+geonamesTrackSpec = rally.track.track.Track(
+  name="Geonames",
   description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+  # TODO dm: Change URL schema to: $ROOT/$benchmark-name/$index-name/$type-name/ (see https://github.com/elastic/rally/issues/26)
   source_url="http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2",
-  # TODO dm: Have Mike upload the mappings file
   mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
-  index_name="countries",
+  index_name="geonames",
   type_name="type",
   number_of_documents=8647880,
   compressed_size_in_bytes=197857614,
   uncompressed_size_in_bytes=2790927196,
   local_file_name="documents.json.bz2",
+  local_mapping_name="mappings.json",
   # for defaults alone, it's just around 20 minutes, for all it's about 60
   estimated_benchmark_time_in_minutes=20,
   # Queries to use in the search benchmark
@@ -106,8 +112,8 @@ countriesTrackSpec = rally.track.track.Track(
     #
     # rally.track.track.TrackSetup(
     #   name="fastsettings",
-    #   description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % countriesBenchmarkFastSettings,
-    #   candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='4g'),
+    #   description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % geonamesBenchmarkFastSettings,
+    #   candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=geonamesBenchmarkFastSettings, heap='4g'),
     #   benchmark_settings=rally.track.track.TestSettings(),
     #   required_cluster_status=rally.cluster.ClusterStatus.green
     # ),
@@ -115,7 +121,7 @@ countriesTrackSpec = rally.track.track.Track(
     # rally.track.track.TrackSetup(
     #   name="fastupdates",
     #   description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
-    #   candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='4g'),
+    #   candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=geonamesBenchmarkFastSettings, heap='4g'),
     #   benchmark_settings=rally.track.track.TestSettings(id_conflicts=track.IndexIdConflict.SequentialConflicts),
     #   required_cluster_status=rally.cluster.ClusterStatus.green
     # ),

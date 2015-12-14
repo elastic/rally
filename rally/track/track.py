@@ -24,7 +24,7 @@ class Track:
   # TODO dm: For now we allow just one index with one type. Change this later
   def __init__(self, name, description, source_url, mapping_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
                uncompressed_size_in_bytes,
-               local_file_name, estimated_benchmark_time_in_minutes, track_setups, queries):
+               local_file_name, local_mapping_name, estimated_benchmark_time_in_minutes, track_setups, queries):
     self._name = name
     self._description = description
     self._source_url = source_url
@@ -35,6 +35,7 @@ class Track:
     self._compressed_size_in_bytes = compressed_size_in_bytes
     self._uncompressed_size_in_bytes = uncompressed_size_in_bytes
     self._local_file_name = local_file_name
+    self._local_mapping_name = local_mapping_name
     self._estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
     self._track_setups = track_setups
     self._queries = queries
@@ -78,6 +79,10 @@ class Track:
   @property
   def local_file_name(self):
     return self._local_file_name
+
+  @property
+  def local_mapping_name(self):
+    return self._local_mapping_name
 
   @property
   def estimated_benchmark_time_in_minutes(self):
@@ -229,11 +234,10 @@ class Marshal:
       self._download_benchmark_data(track, data_set_root, data_set_path)
     # global per benchmark (we never run benchmarks in parallel)
     self._config.add(cfg.Scope.benchmarkScope, "benchmarks", "dataset.path", data_set_path)
-    # TODO dm: Also download the mapping file. For now we deliver the mapping file with Rally as a workaround and rely on the convention
-    # that the mapping file is called resources/datasets/track.lower()/mappings.json
-    mapping_path = "%s/mappings.json" % data_set_root
+
+    mapping_path = "%s/%s" % (data_set_root, track.local_mapping_name)
     if not os.path.isfile(mapping_path):
-      self._download_mapping_data(track, mapping_path)
+      self._download_mapping_data(track, data_set_root, mapping_path)
     self._config.add(cfg.Scope.benchmarkScope, "benchmarks", "mapping.path", mapping_path)
 
   def _download_benchmark_data(self, track, data_set_root, data_set_path):
@@ -248,8 +252,18 @@ class Marshal:
     elif url.startswith("s3"):
       self._do_download_via_s3(track, url, data_set_path)
     else:
-      raise RuntimeError("Cannot download benchmark data. No protocol handler for %s available." % url)
+      raise RuntimeError("Cannot download benchmark data. No protocol handler for [%s] available." % url)
     print("done")
+
+  def _download_mapping_data(self, track, data_set_root, mapping_path):
+    rally.utils.io.ensure_dir(data_set_root)
+    logger.info("Mappings for %s not available in '%s'" % (track.name, mapping_path))
+    url = track.mapping_url
+    # for now, we just allow HTTP downloads for mappings (S3 support is probably remove anyway...)
+    if url.startswith("http"):
+      self._do_download_via_http(url, mapping_path)
+    else:
+      raise RuntimeError("Cannot download mappings. No protocol handler for [%s] available." % url)
 
   def _do_download_via_http(self, url, data_set_path):
     with urllib.request.urlopen(url) as response, open(data_set_path, 'wb') as out_file:
@@ -264,8 +278,3 @@ class Marshal:
       if os.path.isfile(data_set_path):
         os.remove(data_set_path)
       raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
-
-  def _download_mapping_data(self, track, mapping_path):
-    root_path = self._config.opts("system", "rally.root")
-    mapping_source = "%s/resources/datasets/%s/mappings.json" % (root_path, track.name.lower())
-    shutil.copyfile(mapping_source, mapping_path)
