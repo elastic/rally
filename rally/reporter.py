@@ -62,6 +62,8 @@ KNOWN_CHANGES = (
   ('2015-11-22', 'Benchmark uncovers LUCENE-6906 bug', 'FastUpdate'),
   ('2015-11-24', 'Elasticsearch 2.1.0 released'),
   ('2015-12-01-19-40-30', 'Upgrade to beast2 (72 cores, 256 GB RAM)'),
+  ('2015-12-01-19-40-30', 'Bug in benchmark causes EC2 run to pretend it has 24 cores', 'EC2 i2.2xlarge Defaults 4G'),
+  ('2015-12-11-20-00-00', 'Fix ug in benchmark causing EC2 run to pretend it has 24 cores', 'EC2 i2.2xlarge Defaults 4G'),
 )
 
 KNOWN_CHANGES_IN_BUILD = (
@@ -86,6 +88,8 @@ class Reporter:
                           'two_nodes_defaults': 'Defaults (2 nodes)',
                           'ec2.i2.2xlarge': 'EC2 i2.2xlarge Defaults 4G',
                           'buildtimes': 'Test time (minutes)'}
+
+    self._reMergeTime = re.compile(r': (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]')
 
   def report(self, track):
     self._nextGraph = 150
@@ -165,8 +169,8 @@ class Reporter:
       </style>
       </head>
       <body>
-      <p>Below are the results of the Elasticsearch nightly benchmark runs. The Apache Software Foundation also provides a similar page for the <a href="https://people.apache.org/~mikemccand/lucenebench/">Lucene nightly benchmarks</a>.</p>
-      <p>On each chart, you can click + drag (vertically or horizontally) to zoom in and then shift + drag to move around.</p>
+      <p>Below are the results of the Elasticsearch nightly benchmarks based on the <a href="https://github.com/elastic/elasticsearch">master</a> branch as of that point in time. The Apache Software Foundation also provides a similar page for the <a href="https://people.apache.org/~mikemccand/lucenebench/">Lucene nightly benchmarks</a>.</p>
+      <p>On each chart, you can click + drag (vertically or horizontally) to zoom in and then shift + drag to move around.  Click on a point to see the full log file.  Orange points show failed runs.</p>
       <h2>Results</h2>
       ''')
 
@@ -184,6 +188,10 @@ class Reporter:
       self.writeIndexPerformanceChart(f, byMode, allTimes)
 
       self.writeTotalTimesChart(f, byMode, allTimes)
+
+      # TODO dm: And there is another hack...
+      if 'defaults_verbose_iw' in byMode:
+        self.writeMergePartsChart(f, byMode, allTimes)
 
       self.writeSegmentMemory(f, byMode, allTimes)
 
@@ -318,6 +326,7 @@ class Reporter:
     storedFieldsTotalMemoryBytes = None
     termsTotalMemoryBytes = None
     normsTotalMemoryBytes = None
+    mergeTimes = {}
 
     with open(fileName) as f:
       while True:
@@ -340,6 +349,17 @@ class Reporter:
           cpuPct = float(line.strip()[12:])
         if line.startswith('WRITES: '):
           bytesWritten = int(line[8:].split()[0])
+
+        m2 = self._reMergeTime.search(line)
+        if m2 is not None:
+          msec, part, docCount = m2.groups()
+          msec = int(msec)
+          docCount = int(docCount)
+          if part not in mergeTimes:
+            mergeTimes[part] = [0, 0]
+          l = mergeTimes[part]
+          l[0] += msec/1000.0
+          l[1] += docCount
 
         if line.startswith('STATS: ') or line.startswith('INDICES STATS:'):
           d = self.parseStats(line, f)
@@ -409,7 +429,30 @@ class Reporter:
         (2015, 6, 2)):
       return timeStamp, None
 
-    return timeStamp, dps, indexKB, segCount, searchTimes, indicesStatsMSec, nodesStatsMSec, oldGCSec, youngGCSec, cpuPct, bytesWritten, segTotalMemoryBytes, indexingTimeMillis, mergeTimeMillis, refreshTimeMillis, flushTimeMillis, dvTotalMemoryBytes, storedFieldsTotalMemoryBytes, termsTotalMemoryBytes, normsTotalMemoryBytes, mergeThrottleTimeMillis
+      # print('  mergeTimes: %s' % str(mergeTimes))
+    return (timeStamp, # 0
+          dps,
+          indexKB,
+          segCount,
+          searchTimes,
+          indicesStatsMSec, # 5
+          nodesStatsMSec,
+          oldGCSec,
+          youngGCSec,
+          cpuPct,
+          bytesWritten, # 10
+          segTotalMemoryBytes,
+          indexingTimeMillis,
+          mergeTimeMillis,
+          refreshTimeMillis,
+          flushTimeMillis, # 15
+          dvTotalMemoryBytes,
+          storedFieldsTotalMemoryBytes,
+          termsTotalMemoryBytes,
+          normsTotalMemoryBytes,
+          mergeThrottleTimeMillis, # 20
+          mergeTimes)
+
 
   def parseStats(self, line, f):
     x = line.find('STATS: ')
@@ -529,7 +572,7 @@ class Reporter:
         f.write('%s,' % x)
       f.write('];\n')
 
-    for name in 'Total bytes written', 'Final index size', 'Defaults (%)', 'Phrase (msec)', 'Aggs (hourly timeStamp) (msec)', 'Term (msec)', 'Default (msec)', 'Scroll (msec)', 'Indices stats (msec)', 'Nodes stats (msec)', 'GC young gen (sec)', 'GC old gen (sec)', 'Total heap used (MB)', 'Indexing time (min)', 'Merge time (min)', 'Refresh time (min)', 'Flush time (min)', 'Merge throttle time (min)', 'Doc values (MB)', 'Terms (MB)', 'Norms (MB)', 'Stored fields (MB)':
+    for name in 'Total bytes written', 'Final index size', 'Defaults (%)', 'Phrase (msec)', 'Aggs (hourly timeStamp) (msec)', 'Term (msec)', 'Default (msec)', 'Scroll (msec)', 'Indices stats (msec)', 'Nodes stats (msec)', 'GC young gen (sec)', 'GC old gen (sec)', 'Total heap used (MB)', 'Indexing time (min)', 'Merge time (min)', 'Refresh time (min)', 'Flush time (min)', 'Merge throttle time (min)', 'Doc values (MB)', 'Terms (MB)', 'Norms (MB)', 'Stored fields (MB)', 'Postings (min)', 'Norms (min)', 'Doc values (min)', 'Stored fields (min)':
       f.write('    brokenIndexMap["%s"] = brokenIndexMap["Defaults"];\n' % name)
 
     f.write('''
@@ -862,7 +905,7 @@ class Reporter:
       if timeStamp in byMode['defaults'] and timeStamp >= startTime:
         tup = byMode['defaults'][timeStamp]
         indexingTimeMillis, mergeTimeMillis, refreshTimeMillis, flushTimeMillis = tup[11:15]
-        mergeThrottleTimeMillis = tup[18]
+        mergeThrottleTimeMillis = tup[19]
         if indexingTimeMillis is not None:
           l.append('%.1f' % self.msecToMinutes(indexingTimeMillis))
           l.append('%.1f' % self.msecToMinutes(mergeTimeMillis))
@@ -882,6 +925,56 @@ class Reporter:
     self.writeGraphFooter(f, 'total_times', 'Total times', 'Time (min)')
 
     self.writeAnnots(f, chartTimes, KNOWN_CHANGES, 'Indexing time (min)')
+
+    f.write('</script>')
+
+  def writeMergePartsChart(self, f, byMode, allTimes):
+    f.write('\n\n<br><br>')
+    self.writeGraphHeader(f, 'merge_parts')
+    f.write('''
+    <script type="text/javascript">
+      g = new Dygraph(
+
+        // containing div
+        document.getElementById("chart_merge_parts"),
+  ''')
+
+    mergeParts = set()
+    for timeStamp, tup in byMode['defaults_verbose_iw'].items():
+      mergeTimes = tup[20]
+      for part, (totalTime, totalDocCount) in mergeTimes.items():
+        mergeParts.add(part)
+
+    mergePartsList = list(mergeParts)
+    headers = ['Date', ] + list(x[0].upper() + x[1:] + ' (min)' for x in mergePartsList)
+    f.write('    "%s\\n"\n' % ','.join(headers))
+
+    # Before this the times were off-the-chart for some reason!
+    startTime = datetime.datetime(year=2014, month=5, day=20)
+
+    chartTimes = []
+    for timeStamp in allTimes:
+      l = []
+      if timeStamp in byMode['defaults_verbose_iw'] and timeStamp >= startTime:
+        tup = byMode['defaults_verbose_iw'][timeStamp]
+
+        if timeStamp in byMode['defaults_verbose_iw']:
+          mergeTimes = byMode['defaults_verbose_iw'][timeStamp][20]
+          for part in mergePartsList:
+            x = mergeTimes.get(part)
+            if x is not None:
+              l.append('%.1f' % (x[0] / 60.0))
+            else:
+              l.append('')
+        else:
+          l.extend([''] * len(mergePartsList))
+      else:
+        l.extend([''] * len(mergePartsList))
+      f.write('    + "%s,%s\\n"\n' % (self.toString(timeStamp), ','.join(l)))
+
+    self.writeGraphFooter(f, 'merge_parts', 'Merge times, by part', 'Time (min)')
+
+    self.writeAnnots(f, chartTimes, KNOWN_CHANGES, 'Postings (min)')
 
     f.write('</script>')
 

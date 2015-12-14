@@ -97,7 +97,6 @@ countriesTrackSpec = rally.track.track.Track(
       candidate_settings=rally.track.track.CandidateSettings(),
       benchmark_settings=rally.track.track.BenchmarkSettings(benchmark_search=True)
     ),
-
     # rally.track.track.TrackSetup(
     #   name="4gheap",
     #   description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
@@ -128,16 +127,6 @@ countriesTrackSpec = rally.track.track.Track(
     #   candidate_settings=track.CandidateSettings(nodes=2, processors=sysstats.number_of_cpu_cores() // 2),
     #   benchmark_settings=track.TestSettings(),
     #   required_cluster_status=rally.cluster.ClusterStatus.green
-    # ),
-
-    # # TODO dm: Reintroduce beast2
-    # rally.track.track.TrackSetup(
-    #  name="two_nodes_defaults",
-    #  description="",
-    #  # integer divide!
-    #  candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=countriesBenchmarkFastSettings, heap='8g', nodes=4, processors=9,
-    #  benchmark_settings=rally.track.track.TestSettings(),
-    #  required_cluster_status=rally.cluster.ClusterStatus.green
     # ),
   ]
 )
