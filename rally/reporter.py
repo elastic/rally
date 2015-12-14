@@ -229,18 +229,6 @@ class Reporter:
 
       logger.info("Reporting data are available in %s" % full_output_path)
 
-  # TODO dm: copy dygraph-combined.js!!
-  # TODO dm: Copying to ec2 is not yet supported (Prio 1) (for migration)
-  # TODO dm: Ensure that clicking on logs also works locally (not just for the EC2 version) (low prio)
-  # if '-copy' in sys.argv:
-  #  cmd = 's3cmd put -P %s s3://benchmarks.elasticsearch.org/index.html' % constants.GRAPH_OUT_FILE_NAME
-  #  if os.system(cmd):
-  #    raise RuntimeError('"%s" failed' % cmd)
-  #  for mode in '4gheap', 'fastsettings', 'fastupdates', 'defaults', 'two_nodes_defaults', 'ec2.i2.2xlarge', 'buildtime':
-  #    cmd = 's3cmd -m text/plain sync -P %s/%s/ s3://benchmarks.elasticsearch.org/logs/%s/' % (constants.LOGS_DIR, mode, mode)
-  #  if os.system(cmd):
-  #    raise RuntimeError('"%s" failed' % cmd)
-
   def _log_dir(self):
     log_root = self._config.opts("system", "log.dir")
     metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
@@ -630,9 +618,8 @@ class Reporter:
           mode = "defaults";
         }
 
-        var s = "https://benchmarks.elastic.co/logs/" + mode + "/" + d.getFullYear() + "-" + zp(1+d.getMonth(), 2) + "-" + zp(d.getDate(), 2);
-        s += "-" + zp(d.getHours(), 2) + "-" + zp(d.getMinutes(), 2) + "-" + zp(d.getSeconds(), 2);
-        s += ".txt";
+        var s = "https://benchmarks.elastic.co/rally/logs/" + d.getFullYear() + "-" + zp(1+d.getMonth(), 2) + "-" + zp(d.getDate(), 2);
+        s += "-" + zp(d.getHours(), 2) + "-" + zp(d.getMinutes(), 2) + "-" + zp(d.getSeconds(), 2) + "/index.html";
         // console.log(s);
         top.location = s;
       }
