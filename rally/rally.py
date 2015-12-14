@@ -43,9 +43,9 @@ def parse_args():
     dest='subcommand',
     help='Subcommands define what Rally will do')
 
-  subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
-  subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
-  subparsers.add_parser('report', help="Generate only reports based on existing data")
+  all_parser = subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
+  race_parser = subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
+  report_parser = subparsers.add_parser('report', help="Generate only reports based on existing data")
   subparsers.add_parser('list-telemetry', help='Lists all of the available telemetry devices')
 
   config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
@@ -55,7 +55,8 @@ def parse_args():
     default=False,
     action="store_true")
 
-  parser.add_argument(
+  for p in [parser, all_parser, race_parser]:
+    p.add_argument(
     '--skip-build',
     help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
     default=False,
@@ -63,12 +64,13 @@ def parse_args():
 
   # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
   # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
-  parser.add_argument(
-    '--benchmark-mode',
-    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across "
-         "a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
-    choices=["single", "range"],  # later also 'tournament'
-    default="single")
+  for p in [parser, all_parser, race_parser]:
+    p.add_argument(
+      '--benchmark-mode',
+      help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across "
+           "a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
+      choices=["single", "range"],  # later also 'tournament'
+      default="single")
 
   parser.add_argument(
     '--telemetry',
@@ -76,7 +78,8 @@ def parse_args():
          'provided as a comma-separated list.',
     default="")
 
-  parser.add_argument(
+  for p in [parser, all_parser, race_parser]:
+    p.add_argument(
     '--revision',
     help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
          "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
@@ -87,7 +90,8 @@ def parse_args():
   # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
   #
   # That's why we add this just as an undocumented option.
-  parser.add_argument(
+  for p in [parser, all_parser, race_parser, report_parser]:
+    p.add_argument(
     '--effective-start-date',
     help=argparse.SUPPRESS,
     type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
