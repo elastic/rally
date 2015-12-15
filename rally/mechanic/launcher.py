@@ -52,7 +52,6 @@ class Launcher:
     java_home = rally.mechanic.gear.Gear(self._config).capability(rally.mechanic.gear.Capability.java)
     # Unix specific!:
     self._set_env(env, 'PATH', '%s/bin' % java_home, separator=':')
-    #env['PATH'] = '%s/bin' % java_home + ':' + env['PATH']
     # Don't merge here!
     env['JAVA_HOME'] = java_home
     self._logger.debug('ENV: %s' % str(env))

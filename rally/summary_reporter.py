@@ -256,7 +256,8 @@ class SummaryReporter:
 
     log_root = self._config.opts("system", "log.dir")
     # That's the root for all builds, we want here a single build
-    overall_log_root = self._config.opts("system", "log.root.dir")
+    root_dir = cfg.opts("system", "root.dir")
+    overall_log_root = "%s/%s" % (root_dir, self._config.opts("system", "log.root.dir"))
     metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
 
     reLogFile = re.compile(r'^%s/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\/%s' % (overall_log_root, metrics_log_dir))

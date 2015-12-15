@@ -9,14 +9,19 @@ import rally.telemetry
 import rally.config
 import rally.utils.io
 
+# we want to use some basic logging even before the output to log file is configured
+def preconfigure_logging():
+  logging.basicConfig(level=logging.INFO)
+
 
 def configure_logging(cfg):
+  root_dir = cfg.opts("system", "root.dir")
   log_root_dir = cfg.opts("system", "log.root.dir")
   start = cfg.opts("meta", "time.start")
 
   ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
 
-  log_dir = "%s/%s" % (log_root_dir, ts)
+  log_dir = "%s/%s/%s" % (root_dir, log_root_dir, ts)
   rally.utils.io.ensure_dir(log_dir)
   cfg.add(rally.config.Scope.globalScope, "system", "log.dir", log_dir)
 
@@ -26,6 +31,10 @@ def configure_logging(cfg):
 
   # console logging
   # logging.basicConfig(level=logging.INFO)
+
+  # Remove all handlers associated with the root logger object.
+  for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 
   logging.basicConfig(filename=log_file,
                       filemode='a',
@@ -51,11 +60,12 @@ def parse_args():
   subparsers.add_parser('list-telemetry', help='Lists all of the available telemetry devices')
 
   config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
-  config_parser.add_argument(
-    '--advanced-config',
-    help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
-    default=False,
-    action="store_true")
+  for p in [parser, config_parser]:
+    p.add_argument(
+      '--advanced-config',
+      help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
+      default=False,
+      action="store_true")
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
@@ -74,11 +84,12 @@ def parse_args():
       choices=["single", "range"],  # later also 'tournament'
       default="single")
 
-  parser.add_argument(
-    '--telemetry',
-    help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
-         'provided as a comma-separated list.',
-    default="")
+  for p in [parser, all_parser, race_parser]:
+    p.add_argument(
+      '--telemetry',
+      help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
+           'provided as a comma-separated list.',
+      default="")
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
@@ -134,6 +145,7 @@ def csv_to_list(csv):
 
 
 def main():
+  preconfigure_logging()
   print_banner()
   args = parse_args()
   cfg = rally.config.Config()
@@ -145,6 +157,11 @@ def main():
   else:
     if cfg.config_present():
       cfg.load_config()
+      if not cfg.config_compatible():
+        #logger.info("Detected incompatible configuration file. Trying to upgrade.")
+        cfg.migrate_config()
+        # Reload config after upgrading
+        cfg.load_config()
     else:
       print("Error: No config present. Please run 'esrally configure' first.")
       exit(64)

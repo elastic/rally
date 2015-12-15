@@ -134,7 +134,7 @@ class Reporter:
       #  pickle.dump((byMode, byModeBroken, allTimes), f)
 
     script_dir = self._config.opts("system", "rally.root")
-    base_dir = self._config.opts("reporting", "report.base.dir")
+    base_dir = "%s/%s" % (self._config.opts("system", "root.dir"), self._config.opts("reporting", "report.base.dir"))
     file_name = self._config.opts("reporting", "output.html.report.filename")
 
     # TODO dm: This will be too invasive if create an archive of reports later
@@ -469,9 +469,8 @@ class Reporter:
   def loadSeries(self, subdir):
     results = []
 
-    # That's the root for a single build, we want here all builds
-    # log_root = self._config.opts("system", "log.dir")
-    log_root = self._config.opts("system", "log.root.dir")
+    root_dir = self._config.opts("system", "root.dir")
+    log_root = "%s/%s" % (root_dir, self._config.opts("system", "log.root.dir"))
     metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
 
     reLogFile = re.compile(r'^%s/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\/%s' % (log_root, metrics_log_dir))

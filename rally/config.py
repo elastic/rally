@@ -1,8 +1,12 @@
 import os.path
+import shutil
+import logging
 import configparser
 from enum import Enum
 
 import rally.utils.io
+
+logger = logging.getLogger("rally.config")
 
 
 class ConfigError(BaseException):
@@ -23,27 +27,16 @@ class Scope(Enum):
 
 
 class Config:
+  CURRENT_CONFIG_VERSION = 1
+
   """
   Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
   different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are transparently
   resolved when a property is retrieved and the value on the most specific level is returned.
   """
-  # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change them either
-  _opts = {
-    "build::gradle.tasks.clean": "clean",
-    # #TODO dm: tests.jvm should depend on the number of cores - how to abstract this? we can get the value with sysstats.number_of_cpu_cores()
-    # # We have to encode this probably in builder.py...
-    # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
-    # We just build the ZIP distribution directly for now (instead of the 'check' target)
-    "build::gradle.tasks.package": "assemble",
-    "build::log.dir": "build",
-    "benchmarks::metrics.log.dir": "metrics",
-    # No more specific configuration per benchmark - if needed this has to be put into the track specification
-    "benchmarks::index.client.threads": "8",
-  }
 
   def __init__(self):
-    pass
+    self._opts = {}
 
   def add(self, scope, section, key, value):
     """
@@ -86,11 +79,65 @@ class Config:
     """
     Loads an existing config file.
     """
-    config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+    config = self._load_config_file()
+    # It's possible that we just reload the configuration
+    self._clear_config()
+    self._fill_from_config_file(config)
+
+  def _load_config_file(self, interpolation=configparser.ExtendedInterpolation()):
+    config = configparser.ConfigParser(interpolation=interpolation)
     config.read(self._config_file())
+    return config
+
+  def _clear_config(self):
+    # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change them either
+    self._opts = {
+      "build::gradle.tasks.clean": "clean",
+      # #TODO dm: tests.jvm should depend on the number of cores - how to abstract this? we can get the value with sysstats.number_of_cpu_cores()
+      # # We have to encode this probably in builder.py...
+      # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
+      # We just build the ZIP distribution directly for now (instead of the 'check' target)
+      "build::gradle.tasks.package": "assemble",
+      "build::log.dir": "build",
+      "benchmarks::metrics.log.dir": "metrics",
+      # No more specific configuration per benchmark - if needed this has to be put into the track specification
+      "benchmarks::index.client.threads": "8",
+    }
+
+  def _fill_from_config_file(self, config):
     for section in config.sections():
       for key in config[section]:
         self.add(Scope.globalScope, section, key, config[section][key])
+
+  def config_compatible(self):
+    return self.CURRENT_CONFIG_VERSION == self._stored_config_version()
+
+  def migrate_config(self):
+    # do migration one at a time, starting at the current one...
+    current_version = self._stored_config_version()
+    logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, self.CURRENT_CONFIG_VERSION))
+    # but first a backup...
+    config_file = self._config_file()
+    logger.info("Creating a backup of the current config file at [%s]." % config_file)
+    shutil.copyfile(config_file, "%s.bak" % config_file)
+    config = self._load_config_file(interpolation=None)
+
+    if current_version == 0:
+      logger.debug("Migrating config from version [0] to [1]")
+      current_version = 1
+      config["meta"] = {}
+      config["meta"]["config.version"] = str(current_version)
+      # in version 1 we changed some directories from being absolute to being relative
+      config["system"]["log.root.dir"] = "logs"
+      config["provisioning"]["local.install.dir"] = "install"
+      config["reporting"]["report.base.dir"] = "reports"
+
+    # all migrations done
+    self._write_to_config_file(config)
+    logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
+
+  def _stored_config_version(self):
+    return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
   # full_config -> intended for nightlies
   def create_config(self, advanced_config=False):
@@ -130,9 +177,12 @@ class Config:
       stats_disk_device = ""
 
     config = configparser.ConfigParser()
+    config["meta"] = {}
+    config["meta"]["config.version"] = str(self.CURRENT_CONFIG_VERSION)
+
     config["system"] = {}
     config["system"]["root.dir"] = benchmark_root_dir
-    config["system"]["log.root.dir"] = "${system:root.dir}/logs"
+    config["system"]["log.root.dir"] = "logs"
 
     config["source"] = {}
     config["source"]["local.src.dir"] = source_dir
@@ -143,7 +193,7 @@ class Config:
     config["build"]["maven.bin"] = maven_bin
 
     config["provisioning"] = {}
-    config["provisioning"]["local.install.dir"] = "${system:root.dir}/install"
+    config["provisioning"]["local.install.dir"] = "install"
 
     # TODO dm: Add also java7.home (and maybe we need to be more fine-grained, such as "java7update25.home" but we'll see..
     config["runtime"] = {}
@@ -154,14 +204,12 @@ class Config:
     config["benchmarks"]["metrics.stats.disk.device"] = stats_disk_device
 
     config["reporting"] = {}
-    config["reporting"]["report.base.dir"] = "${system:root.dir}/reports"
+    config["reporting"]["report.base.dir"] = "reports"
     config["reporting"]["output.html.report.filename"] = "index.html"
 
-    rally.utils.io.ensure_dir(self._config_dir())
-    with open(self._config_file(), 'w') as configfile:
-      config.write(configfile)
+    self._write_to_config_file(config)
 
-    print("Configuration successfully written to '%s'. Please rerun rally now." % self._config_file())
+    print("\nConfiguration successfully written to '%s'. Please rerun rally now." % self._config_file())
 
   def _ask_property(self, prompt, mandatory=True, check_path_exists=False, default_value=None):
     while True:
@@ -184,6 +232,11 @@ class Config:
         continue
       # user entered a valid value
       return value
+
+  def _write_to_config_file(self, config):
+    rally.utils.io.ensure_dir(self._config_dir())
+    with open(self._config_file(), 'w') as configfile:
+      config.write(configfile)
 
   def _config_dir(self):
     return "%s/.rally" % os.getenv("HOME")
