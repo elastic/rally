@@ -266,15 +266,31 @@ class Marshal:
       raise RuntimeError("Cannot download mappings. No protocol handler for [%s] available." % url)
 
   def _do_download_via_http(self, url, data_set_path):
-    with urllib.request.urlopen(url) as response, open(data_set_path, 'wb') as out_file:
-      shutil.copyfileobj(response, out_file)
+    tmp_data_set_path = data_set_path + '.tmp'
+    try:
+      with urllib.request.urlopen(url) as response, open(tmp_data_set_path, 'wb') as out_file:
+        shutil.copyfileobj(response, out_file)
+    except:
+      logger.info('Removing temp file %s' % tmp_data_set_path)
+      os.remove(tmp_data_set_path)
+      raise
+    else:
+      os.rename(tmp_data_set_path, data_set_path)
 
   def _do_download_via_s3(self, track, url, data_set_path):
-    s3cmd = "s3cmd -v get %s %s" % (url, data_set_path)
-    success = rally.utils.process.run_subprocess(s3cmd)
-    # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
-    if not success or os.path.getsize(data_set_path) != track.compressed_size_in_bytes:
-      # cleanup probably corrupt data file...
-      if os.path.isfile(data_set_path):
-        os.remove(data_set_path)
-      raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
+    tmp_data_set_path = data_set_path + '.tmp'
+    s3cmd = "s3cmd -v get %s %s" % (url, tmp_data_set_path)
+    try:
+      success = rally.utils.process.run_subprocess(s3cmd)
+      # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
+      if not success or os.path.getsize(tmp_data_set_path) != track.compressed_size_in_bytes:
+        # cleanup probably corrupt data file...
+        if os.path.isfile(tmp_data_set_path):
+          os.remove(tmp_data_set_path)
+        raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
+    except:
+      logger.info('Removing temp file %s' % tmp_data_set_path)
+      os.remove(tmp_data_set_path)
+      raise
+    else:
+      os.rename(tmp_data_set_path, data_set_path)
