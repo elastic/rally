@@ -14,7 +14,7 @@ class Telemetry:
     print("\nKeep in mind that each telemetry devices may incur a runtime overhead which can skew results.")
 
   def install(self, setup):
-    enabled_devices = [e.strip() for e in self._config.opts("telemetry", "devices").split(",")]
+    enabled_devices = self._config.opts("telemetry", "devices")
     opts = {}
     for device in self._devices:
       if device.command in enabled_devices:

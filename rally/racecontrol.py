@@ -57,8 +57,10 @@ class RacingTeam:
     self._mechanic = None
     self._driver = None
     self._marshal = None
+    self._config = None
 
   def prepare(self, tracks, config):
+    self._config = config
     self._mechanic = rally.mechanic.mechanic.Mechanic(config)
     self._driver = rally.driver.Driver(config)
     self._marshal = rally.track.track.Marshal(config)
@@ -66,16 +68,21 @@ class RacingTeam:
     print("Racing on %d track(s). Overall ETA: %d minutes (depending on your hardware)\n" % (len(tracks), self._eta(tracks)))
 
   def do(self, track):
+    selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
     rally.utils.process.kill_running_es_instances()
     self._marshal.setup(track)
     for track_setup in track.track_setups:
-      print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
-      cluster = self._mechanic.start_engine(track_setup)
-      self._driver.setup(cluster, track, track_setup)
-      self._driver.go(cluster, track, track_setup)
-      self._mechanic.stop_engine(cluster)
-      self._driver.tear_down(track, track_setup)
-      self._mechanic.revise_candidate()
+      if track_setup.name in selected_setups:
+        print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
+        logger.info("Racing on track [%s] with setup [%s]" % (track.name, track_setup.name))
+        cluster = self._mechanic.start_engine(track_setup)
+        self._driver.setup(cluster, track, track_setup)
+        self._driver.go(cluster, track, track_setup)
+        self._mechanic.stop_engine(cluster)
+        self._driver.tear_down(track, track_setup)
+        self._mechanic.revise_candidate()
+      else:
+        logger.debug("Skipping track setup [%s] (not selected)." % track_setup.name)
 
   def _eta(self, tracks):
     eta = 0

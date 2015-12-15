@@ -103,36 +103,36 @@ geonamesTrackSpec = rally.track.track.Track(
       candidate_settings=rally.track.track.CandidateSettings(),
       benchmark_settings=rally.track.track.BenchmarkSettings(benchmark_search=True)
     ),
-    # rally.track.track.TrackSetup(
-    #   name="4gheap",
-    #   description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-    #   candidate_settings=rally.track.track.CandidateSettings(heap='4g'),
-    #   benchmark_settings=rally.track.track.TestSettings()
-    # ),
-    #
-    # rally.track.track.TrackSetup(
-    #   name="fastsettings",
-    #   description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % geonamesBenchmarkFastSettings,
-    #   candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=geonamesBenchmarkFastSettings, heap='4g'),
-    #   benchmark_settings=rally.track.track.TestSettings(),
-    #   required_cluster_status=rally.cluster.ClusterStatus.green
-    # ),
-    #
-    # rally.track.track.TrackSetup(
-    #   name="fastupdates",
-    #   description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
-    #   candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=geonamesBenchmarkFastSettings, heap='4g'),
-    #   benchmark_settings=rally.track.track.TestSettings(id_conflicts=track.IndexIdConflict.SequentialConflicts),
-    #   required_cluster_status=rally.cluster.ClusterStatus.green
-    # ),
-    #
-    # rally.track.track.TrackSetup(
-    #   name="two_nodes_defaults",
-    #   description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
-    #   # integer divide!
-    #   candidate_settings=track.CandidateSettings(nodes=2, processors=sysstats.number_of_cpu_cores() // 2),
-    #   benchmark_settings=track.TestSettings(),
-    #   required_cluster_status=rally.cluster.ClusterStatus.green
-    # ),
+    rally.track.track.TrackSetup(
+      name="4gheap",
+      description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
+      candidate_settings=rally.track.track.CandidateSettings(heap='4g'),
+      benchmark_settings=rally.track.track.BenchmarkSettings()
+    ),
+
+    rally.track.track.TrackSetup(
+      name="fastsettings",
+      description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % geonamesBenchmarkFastSettings,
+      candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=geonamesBenchmarkFastSettings, heap='4g'),
+      benchmark_settings=rally.track.track.BenchmarkSettings(),
+      required_cluster_status=rally.cluster.ClusterStatus.green
+    ),
+
+    rally.track.track.TrackSetup(
+      name="fastupdates",
+      description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.",
+      candidate_settings=rally.track.track.CandidateSettings(custom_config_snippet=geonamesBenchmarkFastSettings, heap='4g'),
+      benchmark_settings=rally.track.track.BenchmarkSettings(id_conflicts=rally.track.track.IndexIdConflict.SequentialConflicts),
+      required_cluster_status=rally.cluster.ClusterStatus.green
+    ),
+
+    rally.track.track.TrackSetup(
+      name="two_nodes_defaults",
+      description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
+      # integer divide!
+      candidate_settings=rally.track.track.CandidateSettings(nodes=2, processors=rally.utils.sysstats.number_of_cpu_cores() // 2),
+      benchmark_settings=rally.track.track.BenchmarkSettings(),
+      required_cluster_status=rally.cluster.ClusterStatus.green
+    ),
   ]
 )

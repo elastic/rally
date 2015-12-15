@@ -46,6 +46,8 @@ def parse_args():
   all_parser = subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
   race_parser = subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
   report_parser = subparsers.add_parser('report', help="Generate only reports based on existing data")
+  # TODO dm: Should we define a generic "list" command which allows us to list all sorts of things and have just options, e.g.
+  # "esrally list --telemetry"?
   subparsers.add_parser('list-telemetry', help='Lists all of the available telemetry devices')
 
   config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
@@ -57,10 +59,10 @@ def parse_args():
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-    '--skip-build',
-    help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
-    default=False,
-    action="store_true")
+      '--skip-build',
+      help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
+      default=False,
+      action="store_true")
 
   # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
   # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
@@ -80,11 +82,17 @@ def parse_args():
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-    '--revision',
-    help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
-         "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
-         "specified as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
-    default="current")  # optimized for local usage, don't fetch sources
+      '--revision',
+      help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
+           "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
+           "specified as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
+      default="current")  # optimized for local usage, don't fetch sources
+
+  for p in [parser, all_parser, race_parser]:
+    p.add_argument(
+      '--track-setup',
+      help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated list.",
+      default="defaults")  # optimized for local usage
 
   # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
   # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
@@ -92,10 +100,10 @@ def parse_args():
   # That's why we add this just as an undocumented option.
   for p in [parser, all_parser, race_parser, report_parser]:
     p.add_argument(
-    '--effective-start-date',
-    help=argparse.SUPPRESS,
-    type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
-    default=datetime.datetime.now())
+      '--effective-start-date',
+      help=argparse.SUPPRESS,
+      type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
+      default=datetime.datetime.now())
 
   return parser.parse_args()
 
@@ -121,6 +129,10 @@ def derive_subcommand(args, cfg):
     return "configure"
 
 
+def csv_to_list(csv):
+  return [e.strip() for e in csv.split(",")]
+
+
 def main():
   print_banner()
   args = parse_args()
@@ -143,7 +155,8 @@ def main():
   # Add command line config
   cfg.add(rally.config.Scope.globalOverrideScope, "source", "revision", args.revision)
   cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)
-  cfg.add(rally.config.Scope.globalOverrideScope, "telemetry", "devices", args.telemetry)
+  cfg.add(rally.config.Scope.globalOverrideScope, "telemetry", "devices", csv_to_list(args.telemetry))
+  cfg.add(rally.config.Scope.globalOverrideScope, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
 
   configure_logging(cfg)
 
