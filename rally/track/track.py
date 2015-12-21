@@ -1,5 +1,3 @@
-# TODO dm [Refactoring: Prio high]: move track.py one level up when we're done (import rally.track.track is just weird)
-
 import os
 import logging
 import urllib.request

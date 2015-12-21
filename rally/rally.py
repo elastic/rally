@@ -114,6 +114,14 @@ def parse_args():
       type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
       default=datetime.datetime.now())
 
+
+  # This is a highly experimental option and will likely be removed
+  for p in [parser, all_parser, race_parser, report_parser]:
+    p.add_argument(
+      '--data-paths',
+      help=argparse.SUPPRESS,
+      default=None)
+
   return parser.parse_args()
 
 
@@ -139,8 +147,10 @@ def derive_subcommand(args, cfg):
 
 
 def csv_to_list(csv):
-  return [e.strip() for e in csv.split(",")]
-
+  if csv is None:
+    return None
+  else:
+    return [e.strip() for e in csv.split(",")]
 
 def invocation_root_dir(cfg):
   root = cfg.opts("system", "root.dir")
@@ -180,6 +190,7 @@ def main():
   cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)
   cfg.add(rally.config.Scope.globalOverrideScope, "telemetry", "devices", csv_to_list(args.telemetry))
   cfg.add(rally.config.Scope.globalOverrideScope, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
+  cfg.add(rally.config.Scope.globalOverrideScope, "provisioning", "datapaths", csv_to_list(args.data_paths))
 
   configure_logging(cfg)
 

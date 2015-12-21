@@ -59,6 +59,7 @@ class Provisioner:
     binary_path = self._config.opts("provisioning", "local.binary.path")
     additional_config = setup.candidate_settings.custom_config_snippet
     data_paths = self._data_paths()
+    self._logger.info('Using data paths: %s' % data_paths)
     self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
     # TODO dm: Maybe the cluster name should change to something more generic than 'nightlybench'. Also consider multi-node setups
@@ -70,13 +71,11 @@ class Provisioner:
     s = open(binary_path + "/config/elasticsearch.yml", 'w').write(s)
 
   def _data_paths(self):
-    data_paths = None
     binary_path = self._config.opts("provisioning", "local.binary.path")
+    data_paths = self._config.opts("provisioning", "datapaths")
     # From the original code
-    # TODO dm: Check with Mike
     # data_paths = ['%s/data/%s' % (install_dir)]
     # data_paths.extend('/ssd%d' % x for x in range(1, dataPathCount))
-    # self._logger.info('Using data paths: %s' % data_paths)
     if data_paths is None:
       return ['%s/data' % binary_path]
     else:
