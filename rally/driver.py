@@ -41,7 +41,7 @@ class Driver:
     cluster.wait_for_status(track_setup.required_cluster_status)
 
   def go(self, cluster, track, track_setup):
-    self._metrics = m.MetricsCollector(self._config, track_setup.name)
+    self._metrics = m.MetricsCollector(self._config)
     # TODO dm [High Priority]: This is just here to ease the migration, consider gathering metrics for *all* track setups later
     if track_setup.name == 'defaults':
       self._metrics.start_collection(cluster)

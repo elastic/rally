@@ -71,8 +71,14 @@ class RacingTeam:
     selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
     rally.utils.process.kill_running_es_instances()
     self._marshal.setup(track)
+    root = self._config.opts("system", "invocation.root.dir")
+    track_root = "%s/%s" % (root, track.name.lower())
+    self._config.add(rally.config.Scope.benchmarkScope, "system", "track.root.dir", track_root)
+
     for track_setup in track.track_setups:
       if track_setup.name in selected_setups:
+        track_setup_root = "%s/%s" % (track_root, track_setup.name)
+        self._config.add(rally.config.Scope.trackSetupScope, "system", "track.setup.root.dir", track_setup_root)
         print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
         logger.info("Racing on track [%s] with setup [%s]" % (track.name, track_setup.name))
         cluster = self._mechanic.start_engine(track_setup)

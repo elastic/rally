@@ -99,7 +99,7 @@ class Config:
       # We just build the ZIP distribution directly for now (instead of the 'check' target)
       "build::gradle.tasks.package": "assemble",
       "build::log.dir": "build",
-      "benchmarks::metrics.log.dir": "metrics",
+      "benchmarks::metrics.log.dir": "telemetry",
       # No more specific configuration per benchmark - if needed this has to be put into the track specification
       "benchmarks::index.client.threads": "8",
     }

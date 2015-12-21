@@ -1,5 +1,7 @@
 import logging
 
+import rally.utils.io
+
 logger = logging.getLogger("rally.telemetry")
 
 class Telemetry:
@@ -45,7 +47,8 @@ class FlightRecorder:
     return "Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)"
 
   def install(self, setup):
-    log_root = "%s/%s" % (self._config.opts("system", "log.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+    log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+    rally.utils.io.ensure_dir(log_root)
     log_file = "%s/%s.jfr" % (log_root, setup.name)
 
     logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))

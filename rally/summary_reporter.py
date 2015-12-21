@@ -111,7 +111,7 @@ class SummaryReporter:
   def yearMonthDay(self, timeStamp):
     return timeStamp.year, timeStamp.month, timeStamp.day
 
-  def loadOneFile(self, fileName, m):
+  def loadOneFile(self, fileName, timeStamp):
     oome = False
     dps = None
     exc = False
@@ -192,20 +192,6 @@ class SummaryReporter:
 
     # logger.info('%s: oldGC=%s newGC=%s' % (fileName, oldGCSec, youngGCSec))
 
-    year = int(m.group(1))
-    month = int(m.group(2))
-    day = int(m.group(3))
-    if len(m.groups()) == 6:
-      hour = int(m.group(4))
-      minute = int(m.group(5))
-      second = int(m.group(6))
-    else:
-      hour = 0
-      minute = 0
-      second = 0
-
-    timeStamp = datetime.datetime(year=year, month=month, day=day, hour=hour, minute=minute, second=second)
-
     if oome or exc or dps is None:
       # dps = 1
       # logger.warn('Exception/oome/no dps in log "%s"; marking failed' % fileName)
@@ -218,7 +204,7 @@ class SummaryReporter:
       else:
         indexKB = 1
 
-    if (year, month, day) in (
+    if (timeStamp.year, timeStamp.month, timeStamp.day) in (
         # Installer was broken?
         (2014, 5, 13),
         # Something went badly wrong:
@@ -253,21 +239,11 @@ class SummaryReporter:
 
   def loadSeries(self, subdir):
     results = []
-
-    log_root = self._config.opts("system", "log.dir")
-    # That's the root for all builds, we want here a single build
-    root_dir = cfg.opts("system", "root.dir")
-    overall_log_root = "%s/%s" % (root_dir, self._config.opts("system", "log.root.dir"))
-    metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
-
-    reLogFile = re.compile(r'^%s/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\/%s' % (overall_log_root, metrics_log_dir))
-
-    # rootDir = '%s/%s/' % (self._log_dir(), subdir)
+    telemetry_root = "%s/%s/%s" % (self._config.opts("system", "track.root.dir"), subdir, self._config.opts("benchmarks", "metrics.log.dir"))
     l = []
     try:
-      logger.info("Searching %s/%s/%s.txt" % (log_root, metrics_log_dir, subdir))
-      # TODO dm: With the new structure, "subdir" is the wrong name, this is actually the file name...
-      l = glob.glob("%s/%s/%s.txt" % (log_root, metrics_log_dir, subdir))
+      logger.info("Searching %s/telemetry.txt" % telemetry_root)
+      l = glob.glob("%s/telemetry.txt" % telemetry_root)
     except FileNotFoundError:
       logger.warn("%s does not exist. Skipping..." % subdir)
       return results
@@ -275,34 +251,32 @@ class SummaryReporter:
     count = 0
     for fileName in l:
       logger.info('visit fileName=%s' % fileName)
-      m = reLogFile.match(fileName)
-      if m is not None:
+      if False and os.path.getsize(fileName) < 10 * 1024:
+        # Something silly went wrong:
+        continue
 
-        if False and os.path.getsize(fileName) < 10 * 1024:
-          # Something silly went wrong:
-          continue
+      try:
+        start_time = self._config.opts("meta", "time.start")
+        tup = self.loadOneFile(fileName, start_time)
+      except:
+        logger.error('Exception while parsing %s' % fileName)
+        raise
 
-        try:
-          tup = self.loadOneFile(fileName, m)
-        except:
-          logger.error('Exception while parsing %s' % fileName)
-          raise
+      d = tup[0]
 
-        d = tup[0]
+      if d <= datetime.datetime(year=2014, month=4, day=15):
+        # For some reason, before this, the number of indexed docs in the end != the number we had indexed, so we can't back-test prior to this
+        continue
 
-        if d <= datetime.datetime(year=2014, month=4, day=15):
-          # For some reason, before this, the number of indexed docs in the end != the number we had indexed, so we can't back-test prior to this
-          continue
+      if d >= datetime.datetime(year=2014, month=8, day=7) and \
+              d <= datetime.datetime(year=2014, month=8, day=18):
+        # #6939 cause a bug on 8/6 in strict mappings, not fixed until #7304 on 8/19
+        tup = d, None
 
-        if d >= datetime.datetime(year=2014, month=8, day=7) and \
-                d <= datetime.datetime(year=2014, month=8, day=18):
-          # #6939 cause a bug on 8/6 in strict mappings, not fixed until #7304 on 8/19
-          tup = d, None
-
-        results.append(tup)
-        count += 1
-        if count % 100 == 0:
-          logger.info('  %d of %d files...' % (count, len(l)))
+      results.append(tup)
+      count += 1
+      if count % 100 == 0:
+        logger.info('  %d of %d files...' % (count, len(l)))
 
     logger.info('  %d of %d files...' % (count, len(l)))
 

@@ -9,19 +9,17 @@ import rally.telemetry
 import rally.config
 import rally.utils.io
 
+
 # we want to use some basic logging even before the output to log file is configured
 def preconfigure_logging():
   logging.basicConfig(level=logging.INFO)
 
 
 def configure_logging(cfg):
-  root_dir = cfg.opts("system", "root.dir")
+  root_dir = cfg.opts("system", "invocation.root.dir")
   log_root_dir = cfg.opts("system", "log.root.dir")
-  start = cfg.opts("meta", "time.start")
 
-  ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
-
-  log_dir = "%s/%s/%s" % (root_dir, log_root_dir, ts)
+  log_dir = "%s/%s" % (root_dir, log_root_dir)
   rally.utils.io.ensure_dir(log_dir)
   cfg.add(rally.config.Scope.globalScope, "system", "log.dir", log_dir)
 
@@ -144,6 +142,13 @@ def csv_to_list(csv):
   return [e.strip() for e in csv.split(",")]
 
 
+def invocation_root_dir(cfg):
+  root = cfg.opts("system", "root.dir")
+  start = cfg.opts("meta", "time.start")
+  ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
+  return "%s/races/%s" % (root, ts)
+
+
 def main():
   preconfigure_logging()
   print_banner()
@@ -158,7 +163,7 @@ def main():
     if cfg.config_present():
       cfg.load_config()
       if not cfg.config_compatible():
-        #logger.info("Detected incompatible configuration file. Trying to upgrade.")
+        # logger.info("Detected incompatible configuration file. Trying to upgrade.")
         cfg.migrate_config()
         # Reload config after upgrading
         cfg.load_config()
@@ -169,6 +174,7 @@ def main():
   # Add global meta info derived by rally itself
   cfg.add(rally.config.Scope.globalScope, "meta", "time.start", args.effective_start_date)
   cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+  cfg.add(rally.config.Scope.globalScope, "system", "invocation.root.dir", invocation_root_dir(cfg))
   # Add command line config
   cfg.add(rally.config.Scope.globalOverrideScope, "source", "revision", args.revision)
   cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)

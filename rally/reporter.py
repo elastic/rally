@@ -111,7 +111,7 @@ class Reporter:
         # Dates that had a failed run for this series:
         broken = set()
         logger.info('Loading %s...' % self._toPrettyName[track_setup_name])
-        for tup in self.loadSeries(track_setup_name):
+        for tup in self.loadSeries(track.name, track_setup_name):
           timeStamp = tup[0]
           allTimes.add(timeStamp)
           if len(tup) == 2 or tup[1] is None:
@@ -134,15 +134,13 @@ class Reporter:
       #  pickle.dump((byMode, byModeBroken, allTimes), f)
 
     script_dir = self._config.opts("system", "rally.root")
-    base_dir = "%s/%s" % (self._config.opts("system", "root.dir"), self._config.opts("reporting", "report.base.dir"))
+    base_dir = "%s/%s" % (self._config.opts("system", "invocation.root.dir"), self._config.opts("reporting", "report.base.dir"))
     file_name = self._config.opts("reporting", "output.html.report.filename")
 
-    # TODO dm: This will be too invasive if create an archive of reports later
     if os.path.exists(base_dir):
       shutil.rmtree(base_dir)
     rally.utils.io.ensure_dir(base_dir)
     shutil.copyfile("%s/resources/dygraph-combined.js" % script_dir, "%s/dygraph-combined.js" % base_dir)
-    # TODO dm: We don't get too fancy for now later we should have some kind of archive structure in place...
     full_output_path = "%s/%s" % (base_dir, file_name)
 
     with open(full_output_path, 'w') as f:
@@ -466,24 +464,20 @@ class Reporter:
       d = eval(s)
     return d
 
-  def loadSeries(self, subdir):
+  def loadSeries(self, track_name, track_setup_name):
     results = []
 
     root_dir = self._config.opts("system", "root.dir")
-    log_root = "%s/%s" % (root_dir, self._config.opts("system", "log.root.dir"))
     metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
 
-    reLogFile = re.compile(r'^%s/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)\/%s' % (log_root, metrics_log_dir))
-
-    # rootDir = '%s/%s/' % (self._log_dir(), subdir)
-
+    reLogFile = re.compile(r'^%s/races/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)' % root_dir)
     l = []
     try:
       # l = os.listdir(rootDir)
-      # TODO dm: With the new structure, "subdir" is the wrong name, this is actually the file name...
-      l = glob.glob("%s/*/%s/%s.txt" % (log_root, metrics_log_dir, subdir))
+      # TODO dm: We're reimplementing the directory structure here, not good...
+      l = glob.glob("%s/races/*/%s/%s/%s/telemetry.txt" % (root_dir, track_name, track_setup_name, metrics_log_dir))
     except FileNotFoundError:
-      logger.warn("%s does not exist. Skipping..." % subdir)
+      logger.warn("%s does not exist. Skipping..." % track_setup_name)
       return results
     l.sort()
     count = 0

@@ -13,22 +13,14 @@ logger = logging.getLogger("rally.metrics")
 # For now we just support dumping to a log file (as is). This will change *significantly* later. We just want to tear apart normal logs
 # from metrics output
 class MetricsCollector:
-  def __init__(self, config, bucket_name):
+  def __init__(self, config):
     self._config = config
-    self._bucket_name = bucket_name
     self._print_lock = threading.Lock()
     self._stats = None
-    # This is a compromise between the new and old folder structure.
-    # Ideally, we'd just have: $LOG_ROOT/$BENCHMARK_TIMESTAMP/metrics/$(BUCKET_NAME).txt
-    # TODO dm: Unify folder structure but also consider backtesting (i.e. migrate the existing folder structure on the benchmark server)
-    log_root = "%s/%s" % (self._config.opts("system", "log.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
-    # d = self._config.opts("meta", "time.start")
-    # ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (d.year, d.month, d.day, d.hour, d.minute, d.second)
-    # metrics_log_dir = "%s/%s" % (log_root, self._bucket_name)
-    rally.utils.io.ensure_dir(log_root)
-    # TODO dm: As we're not block-bound we don't have the convenience of "with"... - ensure we reliably close the file anyway
-    # self._log_file = open("%s/%s.txt" % (metrics_log_dir, ts), "w")
-    self._log_file = open("%s/%s.txt" % (log_root, self._bucket_name), "w")
+    telemetry_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+    rally.utils.io.ensure_dir(telemetry_root)
+
+    self._log_file = open("%s/telemetry.txt" % telemetry_root, "w")
 
   def expose_print_lock_dirty_hack_remove_me_asap(self):
     return self._print_lock
@@ -38,8 +30,6 @@ class MetricsCollector:
     with self._print_lock:
       self._log_file.write(message)
       self._log_file.write("\n")
-      # just for testing
-      # self._log_file.flush()
 
   def start_collection(self, cluster):
     disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)

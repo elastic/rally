@@ -11,6 +11,7 @@ class Mechanic:
   Mechanic is responsible for preparing the benchmark candidate (i.e. all benchmark candidate related activities before and after
   running the benchmark).
   """
+
   def __init__(self, config):
     self._config = config
     logger = logging.getLogger("rally.mechanic")

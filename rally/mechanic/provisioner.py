@@ -83,6 +83,6 @@ class Provisioner:
       return data_paths
 
   def _install_dir(self):
-    root = self._config.opts("system", "root.dir")
+    root = self._config.opts("system", "track.setup.root.dir")
     install = self._config.opts("provisioning", "local.install.dir")
     return "%s/%s" % (root, install)

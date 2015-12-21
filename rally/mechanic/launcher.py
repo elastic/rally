@@ -29,7 +29,7 @@ class Launcher:
 
   def _start_node(self, node, setup):
     install_dir = self._config.opts("provisioning", "local.binary.path")
-    server_log_dir = "%s/server" % self._config.opts("system", "log.dir")
+    server_log_dir = "%s/%s/server" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("system", "log.root.dir"))
 
     node_name = self._node_name(node)
     processor_count = setup.candidate_settings.processors
