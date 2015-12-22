@@ -108,7 +108,7 @@ class SearchBenchmark(TimedOperation):
         "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
       )
       times.append(self._run_one_round(es))
-    print("")
+    self._progress.finish()
     return times
 
   def _run_one_round(self, es):
@@ -149,13 +149,11 @@ class IndexBenchmark(TimedOperation):
     finished = False
 
     try:
-      self.indexAllDocs(data_set_path, expected_doc_count)
-      # just for ending the progress output
-      print("")
+      self.index(data_set_path, expected_doc_count)
       finished = True
     finally:
-      # HINT dm: Not reporting relevant
-      self.print_metrics('Finished?: %s' % finished)
+      self._progress.finish()
+      logger.info('IndexBenchmark finished successfully: %s' % finished)
 
   def generate_ids(self, conflicts):
     docs_to_index = self._track.number_of_documents
@@ -176,6 +174,7 @@ class IndexBenchmark(TimedOperation):
         if ids and self._rand.randint(0, 3) == 3:
           # pick already returned id in 25%
           id = self._rand.choice(ids)
+          #FIXME dm: Shouldn't we put the conflicting id also into this set?
         else:
           id = '%10i' % self._rand.randint(0, docs_to_index)
           ids.append(id)
@@ -208,24 +207,24 @@ class IndexBenchmark(TimedOperation):
     else:
       return open(docsFile, 'rt')
 
-  def _read_records(self, docsFile):
-    with self._open_file(docsFile) as f:
+  def _read_records(self, documents):
+    with self._open_file(documents) as f:
       yield from f
 
-  def indexAllDocs(self, docsFile, expectedDocCount, doFlush=True, doStats=True):
+  def index(self, docsFile, expected_doc_count, doFlush=True, doStats=True):
     numClientThreads = int(self._config.opts("benchmarks", "index.client.threads"))
-    self.print_metrics('json docs file: %s' % docsFile)
+    logger.info('Indexing JSON docs file: [%s]' % docsFile)
+    logger.info('Launching %d client bulk indexing threads' % numClientThreads)
 
     indexName = self._track.index_name
     typeName = self._track.type_name
     es = self._cluster.client()
 
-    self.print_metrics('Launching %d client bulk indexing threads' % numClientThreads)
     self.startTime = time.time()
     self._sent_bytes = 0
 
     processed = 0
-    self.printStatus(processed)
+    self._print_progress(processed)
     try:
       for _ in parallel_bulk(es,
                              self._read_records(docsFile),
@@ -236,23 +235,25 @@ class IndexBenchmark(TimedOperation):
                              expand_action_callback=self.get_expand_action(),
                              ):
         if processed % 10000 == 0:
-          self.printStatus(processed)
+          self._print_progress(processed)
         processed += 1
     except KeyboardInterrupt:
-      self.print_metrics('\nSIGINT: now stop')
+      logger.info('Received SIGINT: IndexBenchmark will be stopped prematurely.')
 
-    self.printStatus(processed)
+    self._print_progress(processed)
 
     end_time = time.time()
     # HINT dm: Reporting relevant
     self.print_metrics('Total docs/sec: %.1f' % (processed / (end_time - self.startTime)))
 
     if doFlush:
-      self.print_metrics('now force flush')
+      logger.info("Force flushing index [%s]." % indexName)
       es.indices.flush(index=indexName, params={'request_timeout': 600})
+      logger.info("Force flush has finished successfully.")
 
     if doStats:
-      self.print_metrics('get stats')
+      logger.info("Gathering indices stats")
+      # TODO dm: This should be a profiler
       t0 = time.time()
       stats = es.indices.stats(index=indexName, metric='_all', level='shards')
       t1 = time.time()
@@ -260,9 +261,9 @@ class IndexBenchmark(TimedOperation):
       self.print_metrics('Indices stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
                                                           indent=4, separators=(',', ': ')))
+      actual_doc_count = stats['_all']['primaries']['docs']['count']
 
-      actualDocCount = stats['_all']['primaries']['docs']['count']
-
+      logger.info("Gathering nodes stats")
       t0 = time.time()
       stats = es.nodes.stats(metric='_all', level='shards')
       t1 = time.time()
@@ -270,42 +271,42 @@ class IndexBenchmark(TimedOperation):
       self.print_metrics('Node stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
                                                         indent=4, separators=(',', ': ')))
+
+      logger.info("Gathering segments stats")
       t0 = time.time()
       stats = es.indices.segments(params={'verbose': True})
       t1 = time.time()
       self.print_metrics('Segments stats took %.3f msec' % (1000 * (t1 - t0)))
       self.print_metrics('SEGMENTS STATS: %s' % json.dumps(stats, sort_keys=True,
                                                            indent=4, separators=(',', ': ')))
-
-      # TODO dm: Enable debug mode later on
-      # if DEBUG == False and expectedDocCount is not None and expectedDocCount != actualDocCount:
-      #  raise RuntimeError('wrong number of documents indexed: expected %s but got %s' % (expectedDocCount, actualDocCount))
+      if expected_doc_count is not None and expected_doc_count != actual_doc_count:
+          msg = "wrong number of documents indexed: expected %s but got %s" % (expected_doc_count, actual_doc_count)
+          logger.error(msg)
+          raise RuntimeError(msg)
 
   # TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
   #         everything as metrics (which is not true -> but later...)
   def print_metrics(self, message):
     self._metrics.collect(message)
 
-  def printStatus(self, docs_processed):
-    # TODO dm: Move (somehow) to metrics collector
-    # FIXME dm: Well, the method name says it all
-    with self._metrics.expose_print_lock_dirty_hack_remove_me_asap():
-      t = time.time()
-      docs_per_second = docs_processed / (t - self.startTime)
-      mb_per_second = rally.utils.convert.bytes_to_mb(self._sent_bytes) / (t - self.startTime)
-      self._progress.print(
-        "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
-        # "docs: %d / %d [%3d%%]" % (self._numDocsIndexed, self._track.number_of_documents, round(100 * self._numDocsIndexed / self._track.number_of_documents))
-        "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
-      )
-      logger.info(
-        'Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, t - self.startTime, docs_per_second, mb_per_second))
+  def _print_progress(self, docs_processed):
+    # TODO dm: Think about silencing this on "non" dev machines, it introduces another unnecessary pause and I/O
+    # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
+    # accurate here as this is "just" a progress report for the user
+    sent = self._sent_bytes
+    elapsed = time.time() - self.startTime
+    docs_per_second = docs_processed / elapsed
+    mb_per_second = rally.utils.convert.bytes_to_mb(sent) / elapsed
 
+    self._progress.print(
+      "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
+      "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
+    )
+    logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
+
+  # TODO dm: This should probably be a profiler
   def printIndexStats(self, dataDir):
     indexSizeKB = os.popen('du -s %s' % dataDir).readline().split()[0]
     # HINT dm: Reporting relevant
     self.print_metrics('index size %s KB' % indexSizeKB)
-    # TODO dm: The output of this should probably be logged (remove from metrics)
-    self.print_metrics('index files:')
-    # TODO dm: The output of this should probably be logged (not necessary in metrics)
-    rally.utils.process.run_subprocess_with_logging('find %s -ls' % dataDir)
+    rally.utils.process.run_subprocess_with_logging("find %s -ls" % dataDir, header="index files:")

@@ -28,3 +28,7 @@ class CmdLineProgressReporter:
     formatted_progress = progress.rjust(w - len(message))
     print('\033[{0}D{1}{2}'.format(w, message, formatted_progress), end='')
     sys.stdout.flush()
+
+  def finish(self):
+    # print a final statement in order to end the progress line
+    print("")

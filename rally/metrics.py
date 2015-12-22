@@ -22,9 +22,6 @@ class MetricsCollector:
 
     self._log_file = open("%s/telemetry.txt" % telemetry_root, "w")
 
-  def expose_print_lock_dirty_hack_remove_me_asap(self):
-    return self._print_lock
-
   def collect(self, message):
     # TODO dm: Get rid of the print lock
     with self._print_lock:
@@ -55,6 +52,7 @@ class MetricsCollector:
     return t
 
 
+#TODO dm: This should be a profiler
 class GatherProcessStats(threading.Thread):
   def __init__(self, pid, disk_name):
     threading.Thread.__init__(self)

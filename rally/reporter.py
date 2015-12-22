@@ -363,7 +363,7 @@ class Reporter:
           flushTimeMillis = primaries['flush']['total_time_in_millis']
 
         # TODO dm: specific name should move out of here...
-        if line.startswith('NODES STATS: ') and '/defaults.txt' in fileName:
+        if line.startswith('NODES STATS: ') and 'defaults' in fileName:
           d = self.parseStats(line, f)
           nodes = d['nodes']
           if len(nodes) != 1:
@@ -1097,7 +1097,7 @@ class Reporter:
         if timeStamp in byMode[mode]:
           indexKB = byMode[mode][timeStamp][1]
           if indexKB is not None:
-            l.append('%.1f' % (indexKB / 1024 / 1024.))
+            l.append('%.1f' % (indexKB / 1024. / 1024.))
             any = True
           else:
             l.append('')

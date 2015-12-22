@@ -173,7 +173,7 @@ class SummaryReporter:
           flushTimeMillis = primaries['flush']['total_time_in_millis']
 
         # TODO dm: specific name should move out of here...
-        if line.startswith('NODES STATS: ') and '/defaults.txt' in fileName:
+        if line.startswith('NODES STATS: ') and 'defaults' in fileName:
           d = self.parseStats(line, f)
           nodes = d['nodes']
           if len(nodes) != 1:

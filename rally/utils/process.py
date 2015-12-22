@@ -11,14 +11,17 @@ def run_subprocess(command_line):
   return os.system(command_line)
 
 
-def run_subprocess_with_logging(command_line):
+def run_subprocess_with_logging(command_line, header=None):
   """
   Runs the provided command line in a subprocess. All output will be captured by a logger.
 
   :param command_line: The command line of the subprocess to launch.
+  :param header: An optional header line that should be logged (on info level)
   :return: True iff the subprocess has terminated successfully.
   """
   command_line_args = shlex.split(command_line)
+  if header is not None:
+    logger.info(header)
   logger.debug("Invoking subprocess '%s'" % command_line)
   try:
     command_line_process = subprocess.Popen(
