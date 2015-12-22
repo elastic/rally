@@ -45,6 +45,7 @@ class Driver:
     # TODO dm [High Priority]: This is just here to ease the migration, consider gathering metrics for *all* track setups later
     if track_setup.name == 'defaults':
       self._metrics.start_collection(cluster)
+    cluster.on_benchmark_start()
     self._index_benchmark = IndexBenchmark(self._config, track, track_setup, cluster, self._metrics)
     if track_setup.test_settings.benchmark_indexing:
       self._index_benchmark.run()
@@ -52,6 +53,7 @@ class Driver:
     if track_setup.test_settings.benchmark_search:
       search_benchmark = SearchBenchmark(self._config, track, track_setup, cluster, self._metrics)
       search_benchmark.run()
+    cluster.on_benchmark_stop()
     self._metrics.collect_total_stats()
 
   def tear_down(self, track, track_setup):

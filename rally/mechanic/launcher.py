@@ -7,6 +7,7 @@ import signal
 import rally.mechanic.gear
 import rally.cluster
 import rally.telemetry
+import rally.metrics
 
 
 class Launcher:
@@ -20,29 +21,36 @@ class Launcher:
     self._config = config
     self._logger = logger
     self._servers = []
+    self._metrics_store = None
 
-  def start(self, setup):
+  def start(self, track, setup):
     if self._servers:
       self._logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
+
+    invocation = self._config.opts("meta", "time.start")
+    self._metrics_store = rally.metrics.MetricsStore(self._config, invocation, track, setup)
+    self._metrics_store.open_for_write()
+
     num_nodes = setup.candidate_settings.nodes
     return rally.cluster.Cluster([self._start_node(node, setup) for node in range(num_nodes)])
 
   def _start_node(self, node, setup):
-    install_dir = self._config.opts("provisioning", "local.binary.path")
-    server_log_dir = "%s/%s/server" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("system", "log.root.dir"))
-
     node_name = self._node_name(node)
-    processor_count = setup.candidate_settings.processors
 
-    os.chdir(install_dir)
-    startup_event = threading.Event()
+    telemetry = rally.telemetry.Telemetry(self._config, self._metrics_store)
+
+    env = self._prepare_env(setup, telemetry)
+    cmd = self.prepare_cmd(setup, node_name)
+    process = self._start_process(cmd, env, node_name)
+    telemetry.attach_to_process(process)
+
+    return rally.cluster.Server(process, telemetry)
+
+  def _prepare_env(self, setup, telemetry):
     env = {}
     env.update(os.environ)
-
-    # For now we keep telemetry quite constrained to the launcher. It is expected that we move it elsewhere later but keep it simple now
-    telemetry = rally.telemetry.Telemetry(self._config)
     # we just blindly trust telemetry here...
-    for k, v in telemetry.install(setup).items():
+    for k, v in telemetry.instrument_candidate_env(setup).items():
       self._set_env(env, k, v)
 
     self._set_env(env, 'ES_HEAP_SIZE', setup.candidate_settings.heap)
@@ -55,19 +63,7 @@ class Launcher:
     # Don't merge here!
     env['JAVA_HOME'] = java_home
     self._logger.debug('ENV: %s' % str(env))
-    cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
-    if processor_count is not None and processor_count > 1:
-      cmd.append('-Des.processors=%s' % processor_count)
-    cmd.append('-Dpath.logs=%s' % server_log_dir)
-    self._logger.info('ES launch: %s' % str(cmd))
-    server = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
-    t = threading.Thread(target=self._read_output, args=(node_name, server, startup_event))
-    t.setDaemon(True)
-    t.start()
-    startup_event.wait()
-    self._logger.info('Started node=%s with pid=%s' % (node_name, server.pid))
-
-    return server
+    return env
 
   def _set_env(self, env, k, v, separator=' '):
     if v is not None:
@@ -76,6 +72,28 @@ class Launcher:
       else:  # merge
         env[k] = v + separator + env[k]
 
+  def prepare_cmd(self, setup, node_name):
+    server_log_dir = "%s/%s/server" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("system", "log.root.dir"))
+    processor_count = setup.candidate_settings.processors
+
+    cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
+    if processor_count is not None and processor_count > 1:
+      cmd.append('-Des.processors=%s' % processor_count)
+    cmd.append('-Dpath.logs=%s' % server_log_dir)
+    self._logger.info('ES launch: %s' % str(cmd))
+    return cmd
+
+  def _start_process(self, cmd, env, node_name):
+    install_dir = self._config.opts("provisioning", "local.binary.path")
+    os.chdir(install_dir)
+    startup_event = threading.Event()
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
+    t = threading.Thread(target=self._read_output, args=(node_name, process, startup_event))
+    t.setDaemon(True)
+    t.start()
+    startup_event.wait()
+    self._logger.info('Started node=%s with pid=%s' % (node_name, process.pid))
+    return process
 
   def _node_name(self, node):
     return "node%d" % node
@@ -104,23 +122,26 @@ class Launcher:
     # Ask all nodes to shutdown:
     t0 = time.time()
     for idx, server in enumerate(cluster.servers):
+      process = server.process
+      server.telemetry.detach_from_process(process)
       node = self._node_name(idx)
-      os.kill(server.pid, signal.SIGINT)
+
+      os.kill(process.pid, signal.SIGINT)
 
       try:
-        server.wait(10.0)
+        process.wait(10.0)
         self._logger.info('Done shutdown server (%.1f sec)' % (time.time() - t0))
       except subprocess.TimeoutExpired:
         # kill -9
         self._logger.warn('Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:' % node)
         try:
-          os.kill(server.pid, signal.SIGQUIT)
+          os.kill(process.pid, signal.SIGQUIT)
         except OSError:
           self._logger.warn('  no such process')
           return
 
         try:
-          server.wait(120.0)
+          process.wait(120.0)
           self._logger.info('Done shutdown server (%.1f sec)' % (time.time() - t0))
           return
         except subprocess.TimeoutExpired:
@@ -128,7 +149,8 @@ class Launcher:
 
         self._logger.info('kill -KILL server')
         try:
-          server.kill()
+          process.kill()
         except ProcessLookupError:
           self._logger.warn('No such process')
     self._servers = []
+    self._metrics_store.close()

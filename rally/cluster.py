@@ -15,6 +15,26 @@ class ClusterStatus(Enum):
 logger = logging.getLogger("rally.cluster")
 
 
+class Server:
+  def __init__(self, process, telemetry):
+    self._process = process
+    self._telemetry = telemetry
+
+  @property
+  def process(self):
+    return self._process
+
+  @property
+  def telemetry(self):
+    return self._telemetry
+
+  def on_benchmark_start(self):
+    self._telemetry.on_benchmark_start()
+
+  def on_benchmark_stop(self):
+    self._telemetry.on_benchmark_stop()
+
+
 class Cluster:
   """
   Cluster exposes APIs of the running benchmark candidate.
@@ -55,3 +75,11 @@ class Cluster:
     logger.info('%s cluster done (%.1f sec)' % (cluster_status_name, time.time() - t0))
     logger.info('Cluster health: %s' % str(es.cluster.health()))
     logger.info('SHARDS:\n%s' % es.cat.shards(v=True))
+
+  def on_benchmark_start(self):
+    for server in self._servers:
+      server.on_benchmark_start()
+
+  def on_benchmark_stop(self):
+    for server in self._servers:
+      server.on_benchmark_stop()
