@@ -15,7 +15,7 @@ class Mechanic:
   def __init__(self, config):
     self._config = config
     logger = logging.getLogger("rally.mechanic")
-    self._supplier = supplier.Supplier(config, logger)
+    self._supplier = supplier.Supplier(config, logger, supplier.GitRepository(config))
     self._builder = builder.Builder(config, logger)
     self._provisioner = provisioner.Provisioner(config, logger)
     self._launcher = launcher.Launcher(config, logger)

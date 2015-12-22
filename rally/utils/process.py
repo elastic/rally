@@ -8,6 +8,10 @@ logger = logging.getLogger("rally.process")
 
 
 def run_subprocess(command_line):
+  return os.system(command_line)
+
+
+def run_subprocess_with_logging(command_line):
   """
   Runs the provided command line in a subprocess. All output will be captured by a logger.
 

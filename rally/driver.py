@@ -308,4 +308,4 @@ class IndexBenchmark(TimedOperation):
     # TODO dm: The output of this should probably be logged (remove from metrics)
     self.print_metrics('index files:')
     # TODO dm: The output of this should probably be logged (not necessary in metrics)
-    rally.utils.process.run_subprocess('find %s -ls' % dataDir)
+    rally.utils.process.run_subprocess_with_logging('find %s -ls' % dataDir)

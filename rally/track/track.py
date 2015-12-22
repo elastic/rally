@@ -95,40 +95,6 @@ class Track:
     return self._queries
 
 
-class TrackSetup:
-  """
-  A track setup defines the concrete operations that will be done and also influences system configuration
-  """
-
-  # TODO dm [Refactoring]: Specifying the required cluster status is just a workaround...
-  def __init__(self, name, description, candidate_settings, benchmark_settings, required_cluster_status=rally.cluster.ClusterStatus.yellow):
-    self._name = name
-    self._description = description
-    self._candidate_settings = candidate_settings
-    self._test_settings = benchmark_settings
-    self._required_cluster_status = required_cluster_status
-
-  @property
-  def name(self):
-    return self._name
-
-  @property
-  def description(self):
-    return self._description
-
-  @property
-  def candidate_settings(self):
-    return self._candidate_settings
-
-  @property
-  def test_settings(self):
-    return self._test_settings
-
-  @property
-  def required_cluster_status(self):
-    return self._required_cluster_status
-
-
 class CandidateSettings:
   def __init__(self, custom_config_snippet=None, nodes=1, processors=1, heap=None, java_opts=None, gc_opts=None):
     self._custom_config_snippet = custom_config_snippet
@@ -195,6 +161,45 @@ class BenchmarkSettings:
   @property
   def id_conflicts(self):
     return self._id_conflicts
+
+
+class TrackSetup:
+  """
+  A track setup defines the concrete operations that will be done and also influences system configuration
+  """
+
+  def __init__(self,
+               name,
+               description,
+               candidate_settings=CandidateSettings(),
+               benchmark_settings=BenchmarkSettings(),
+               # TODO dm [Refactoring]: Specifying the required cluster status is just a workaround...
+               required_cluster_status=rally.cluster.ClusterStatus.yellow):
+    self._name = name
+    self._description = description
+    self._candidate_settings = candidate_settings
+    self._test_settings = benchmark_settings
+    self._required_cluster_status = required_cluster_status
+
+  @property
+  def name(self):
+    return self._name
+
+  @property
+  def description(self):
+    return self._description
+
+  @property
+  def candidate_settings(self):
+    return self._candidate_settings
+
+  @property
+  def test_settings(self):
+    return self._test_settings
+
+  @property
+  def required_cluster_status(self):
+    return self._required_cluster_status
 
 
 class Query:
@@ -279,7 +284,7 @@ class Marshal:
     tmp_data_set_path = data_set_path + '.tmp'
     s3cmd = "s3cmd -v get %s %s" % (url, tmp_data_set_path)
     try:
-      success = rally.utils.process.run_subprocess(s3cmd)
+      success = rally.utils.process.run_subprocess_with_logging(s3cmd)
       # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
       if not success or os.path.getsize(tmp_data_set_path) != track.compressed_size_in_bytes:
         # cleanup probably corrupt data file...
