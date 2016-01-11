@@ -10,8 +10,8 @@ import logging
 import rally.mechanic.mechanic
 import rally.driver
 import rally.reporter
+import rally.reporter2
 import rally.summary_reporter
-import rally.meporter
 import rally.utils.process
 import rally.utils.paths
 import rally.exceptions
@@ -102,19 +102,19 @@ class RacingTeam:
 class Press:
   def __init__(self, report_only):
     self._reporter = None
+    self._reporter2 = None
     self._summary_reporter = None
-    self._summary_reporter2 = None
     self.report_only = report_only
 
   def prepare(self, tracks, config):
     self._reporter = rally.reporter.Reporter(config)
+    self._reporter2 = rally.reporter2.Reporter(config)
     self._summary_reporter = rally.summary_reporter.SummaryReporter(config)
-    self._summary_reporter2 = rally.meporter.SummaryReporter(config)
 
   def do(self, track):
     # always write the HTML reports
-    self._reporter.report(track)
+    #self._reporter.report(track)
+    self._reporter2.report(track)
     # Producing a summary report only makes sense if we have current metrics
     if not self.report_only:
       self._summary_reporter.report(track)
-      self._summary_reporter2.report(track)

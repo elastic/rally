@@ -3,6 +3,7 @@ import threading
 import psutil
 
 import rally.utils.io
+import rally.utils.process
 import rally.metrics
 
 logger = logging.getLogger("rally.telemetry")
@@ -12,7 +13,7 @@ class Telemetry:
   def __init__(self, config, metrics_store):
     self._config = config
     self._devices = [
-      FlightRecorder(config),
+      FlightRecorder(config, metrics_store),
       Ps(config, metrics_store)
     ]
     self._enabled_devices = self._config.opts("telemetry", "devices")
@@ -54,15 +55,61 @@ class Telemetry:
   def _enabled(self, device):
     return device.mandatory or device.command in self._enabled_devices
 
+
 ########################################################################################
 #
 # Telemetry devices
 #
 ########################################################################################
 
-class FlightRecorder:
-  def __init__(self, config):
+class TelemetryDevice:
+  def __init__(self, config, metrics_store):
     self._config = config
+    self._metrics_store = metrics_store
+
+  @property
+  def metrics_store(self):
+    return self._metrics_store
+
+  @property
+  def config(self):
+    return self._config
+
+  @property
+  def mandatory(self):
+    raise NotImplementedError("abstract method")
+
+  @property
+  def command(self):
+    raise NotImplementedError("abstract method")
+
+  @property
+  def human_name(self):
+    raise NotImplementedError("abstract method")
+
+  @property
+  def help(self):
+    pass
+
+  def instrument_env(self, setup):
+    return {}
+
+  def attach_to_process(self, process):
+    pass
+
+  def detach_from_process(self, process):
+    pass
+
+  def on_benchmark_start(self):
+    pass
+
+  def on_benchmark_stop(self):
+    pass
+
+
+class FlightRecorder(TelemetryDevice):
+  def __init__(self, config, metrics_store):
+    super().__init__(config, metrics_store)
 
   @property
   def mandatory(self):
@@ -92,23 +139,10 @@ class FlightRecorder:
     return {"ES_JAVA_OPTS": "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
                             "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s" % (log_file)}
 
-  def attach_to_process(self, process):
-    pass
 
-  def detach_from_process(self, process):
-    pass
-
-  def on_benchmark_start(self):
-    pass
-
-  def on_benchmark_stop(self):
-    pass
-
-
-class Ps:
+class Ps(TelemetryDevice):
   def __init__(self, config, metrics_store):
-    self._config = config
-    self._metrics_store = metrics_store
+    super().__init__(config, metrics_store)
     self._t = None
 
   @property
@@ -127,25 +161,9 @@ class Ps:
   def help(self):
     return "Gathers process statistics like CPU usage or disk I/O."
 
-  def instrument_env(self, setup):
-    # nothing to instrument
-    return {}
-
   def attach_to_process(self, process):
     disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
     self._t = GatherProcessStats(process.pid, disk, self._metrics_store)
-
-  def detach_from_process(self, process):
-    pass
-    #writeCount, writeBytes, writeCount, writeTime, readCount, readBytes, readTime = self._t.finish()
-    # TODO dm: Now put these into the metrics store
-    #self.collect('WRITES: %s bytes, %s time, %s count' % (writeBytes, writeTime, writeCount))
-    #self.collect('READS: %s bytes, %s time, %s count' % (readBytes, readTime, readCount))
-    # We write raw metrics into the metrics store... (not the median)
-    #cpuPercents.sort()
-    #self.collect('CPU median: %s' % cpuPercents[int(len(cpuPercents) / 2)])
-    #for pct in cpuPercents:
-    #  self.collect('  %s' % pct)
 
   def on_benchmark_start(self):
     self._t.start()
@@ -154,46 +172,37 @@ class Ps:
     self._t.finish()
 
 
-
-
-
-
 class GatherProcessStats(threading.Thread):
   def __init__(self, pid, disk_name, metrics_store):
     threading.Thread.__init__(self)
-    #self.cpuPercents = []
     self.stop = False
     self.process = psutil.Process(pid)
     self.disk_name = disk_name
     self.metrics_store = metrics_store
-    if self._use_specific_disk():
-      self.diskStart = psutil.disk_io_counters(perdisk=True)[self.disk_name]
-    else:
-      self.diskStart = psutil.disk_io_counters(perdisk=False)
+    self.disk_start = self._disk_io_counters()
 
   def finish(self):
     self.stop = True
     self.join()
-    # TODO dm: Write also these metrics to the metrics store
+    disk_end = self._disk_io_counters()
+
+    self.metrics_store.put("disk_io_write_bytes", disk_end.write_bytes - self.disk_start.write_bytes)
+    self.metrics_store.put("disk_io_write_count", disk_end.write_count - self.disk_start.write_count)
+    self.metrics_store.put("disk_io_write_time", disk_end.write_time - self.disk_start.write_time)
+
+    self.metrics_store.put("disk_io_read_bytes", disk_end.read_bytes - self.disk_start.read_bytes)
+    self.metrics_store.put("disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
+    self.metrics_store.put("disk_io_read_time", disk_end.read_time - self.disk_start.read_time)
+
+  def _disk_io_counters(self):
     if self._use_specific_disk():
-      diskEnd = psutil.disk_io_counters(perdisk=True)[self.disk_name]
+      return psutil.disk_io_counters(perdisk=True)[self.disk_name]
     else:
-      diskEnd = psutil.disk_io_counters(perdisk=False)
-    writeBytes = diskEnd.write_bytes - self.diskStart.write_bytes
-    writeCount = diskEnd.write_count - self.diskStart.write_count
-    writeTime = diskEnd.write_time - self.diskStart.write_time
-    readBytes = diskEnd.read_bytes - self.diskStart.read_bytes
-    readCount = diskEnd.read_count - self.diskStart.read_count
-    readTime = diskEnd.read_time - self.diskStart.read_time
-    return writeCount, writeBytes, writeCount, writeTime, readCount, readBytes, readTime
+      return psutil.disk_io_counters(perdisk=False)
 
   def _use_specific_disk(self):
     return self.disk_name is not None and self.disk_name != ""
 
   def run(self):
-
-    # TODO: disk counters too
-
     while not self.stop:
       self.metrics_store.put("cpu_utilization_1s", self.process.cpu_percent(interval=1.0))
-      #logger.debug('CPU: %s' % self.cpuPercents[-1])

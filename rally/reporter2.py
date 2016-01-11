@@ -7,9 +7,11 @@ import re
 import datetime
 import pickle
 import logging
+import statistics
 
 import rally.utils.io
 import rally.utils.convert
+import rally.metrics
 
 logger = logging.getLogger("rally.reporting")
 
@@ -91,47 +93,55 @@ class Reporter:
 
     self._reMergeTime = re.compile(r': (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]')
 
+  # TODO dm: Bring back the results.pk feature if needed (for performance reasons; not sure...)
   def report(self, track):
     self._nextGraph = 150
 
-    # TODO dm: Beware, this will *not* work as soon as we have multiple benchmarks!
-    # NOTE: turn this back on for faster iterations on just UI changes:
-    if False and os.path.exists('results.pk'):
-      with open('results.pk', 'rb') as f:
-        byMode, byModeBroken, allTimes = pickle.load(f)
-    else:
-      byMode = {}
-      byModeBroken = {}
-      allTimes = set()
+    locator = rally.metrics.MetricsStoreLocator(self._config)
 
-      for track_setup in track.track_setups:
-        track_setup_name = track_setup.name
-        d = {}
+    allTimes = locator.invocations()
+    allTimes.sort()
+    byMode = {}
+    byModeBroken = {}
+    brokenBuildTimes = set()
+
+    for invocation in allTimes:
+      # build results are only once per invocation
+      buildTimes = self.loadBuildTimeResults(invocation)
+
+
+      for timeStamp, minutes in buildTimes:
+        if minutes is None:
+          brokenBuildTimes.add(timeStamp)
+
+
+
+      for track_setup in locator.get_track_setups(invocation, track):
+        store = rally.metrics.MetricsStore(self._config, invocation, track, track_setup)
+        store.open_for_read()
+
         lastTup = None
-        # Dates that had a failed run for this series:
-        broken = set()
-        logger.info('Loading %s...' % self._toPrettyName[track_setup_name])
-        for tup in self.loadSeries(track.name, track_setup_name):
-          timeStamp = tup[0]
-          allTimes.add(timeStamp)
-          if len(tup) == 2 or tup[1] is None:
-            broken.add(timeStamp)
-            if lastTup is None:
-              continue
+        #TODO dm: Implement this..
+        # if d <= datetime.datetime(year=2014, month=4, day=15):
+        #   # For some reason, before this, the number of indexed docs in the end != the number we had indexed, so we can't back-test prior to this
+        #   continue
+        #
+        # if d >= datetime.datetime(year=2014, month=8, day=7) and \
+        #         d <= datetime.datetime(year=2014, month=8, day=18):
+        #   # #6939 cause a bug on 8/6 in strict mappings, not fixed until #7304 on 8/19
+        #   tup = d, None
+        tup = self.loadOneFile(store, track, invocation)
+        if len(tup) == 2 or tup[1] is None:
+          byModeBroken[track_setup].add(invocation)
+          if lastTup is not None:
             tup = tup[:1] + lastTup[1:]
-            # logger.debug('%s, %s: use last tup ts=%s %s' % (mode, timeStamp, lastTup[0], tup))
-          else:
-            lastTup = tup
-          d[tup[0]] = tup[1:]
-        byMode[track_setup_name] = d
-        byModeBroken[track_setup_name] = broken
+        else:
+          lastTup = tup
+        if not track_setup in byMode:
+          byMode[track_setup] = {}
+        byMode[track_setup][tup[0]] = tup[1:]
 
-      allTimes = list(allTimes)
-      allTimes.sort()
-
-      # FIXME dm: check why this is not working...
-      # with open('results.pk', 'wb') as f:
-      #  pickle.dump((byMode, byModeBroken, allTimes), f)
+    byModeBroken['buildtimes'] = brokenBuildTimes
 
     script_dir = self._config.opts("system", "rally.root")
     base_dir = "%s/%s" % (self._config.opts("system", "invocation.root.dir"), self._config.opts("reporting", "report.base.dir"))
@@ -171,14 +181,6 @@ class Reporter:
       <p>On each chart, you can click + drag (vertically or horizontally) to zoom in and then shift + drag to move around.  Click on a point to see the full log file.  Orange points show failed runs.</p>
       <h2>Results</h2>
       ''')
-
-      buildTimes = self.loadBuildTimeResults()
-
-      brokenBuildTimes = set()
-      for timeStamp, minutes in buildTimes:
-        if minutes is None:
-          brokenBuildTimes.add(timeStamp)
-      byModeBroken['buildtimes'] = brokenBuildTimes
 
       self.writeCommonGraphFunctions(f, byMode, byModeBroken, allTimes)
 
@@ -226,11 +228,6 @@ class Reporter:
       f.close()
 
       logger.info("Reporting data are available in %s" % full_output_path)
-
-  def _log_dir(self):
-    log_root = self._config.opts("system", "log.dir")
-    metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
-    return "%s/%s" % (log_root, metrics_log_dir)
 
   def _build_log_dir(self):
     log_root = self._config.opts("system", "log.dir")
@@ -289,235 +286,95 @@ class Reporter:
       );
       ''' % (id, title, yLabel, id))
 
-  def loadOneFile(self, fileName, m):
+  def loadOneFile(self, store, track, timestamp):
     oome = False
-    dps = None
     exc = False
-    indexKB = None
-    segCount = None
+
+    dps = store.get_one("indexing_throughput", value_converter=int)
+    indexSize = store.get_one("final_index_size_bytes", value_converter=int)
+    segCount = store.get_one("segments_count", value_converter=int)
     searchTimes = {}
-    nodesStatsMSec = None
-    indicesStatsMSec = None
-    youngGCSec = None
-    oldGCSec = None
-    cpuPct = None
-    bytesWritten = None
-    segTotalMemoryBytes = None
-    flushTimeMillis = None
-    refreshTimeMillis = None
-    mergeTimeMillis = None
-    mergeThrottleTimeMillis = None
-    indexingTimeMillis = None
-    dvTotalMemoryBytes = None
-    storedFieldsTotalMemoryBytes = None
-    termsTotalMemoryBytes = None
-    normsTotalMemoryBytes = None
+    for query in track.queries:
+      latencies = store.get("query_latency", additional_dimensions=[query.name], value_converter=float)
+      if latencies:
+        searchTimes[query.name] = statistics.median(latencies)
+    nodesStatsMSec = store.get_one("node_stats_latency", value_converter=float)
+    indicesStatsMSec = store.get_one("indices_stats_latency", value_converter=float)
+
+    young_gc_time = store.get_one("node_total_young_gen_gc_time", value_converter=float)
+    old_gc_time = store.get_one("node_total_old_gen_gc_time", value_converter=float)
+
+    youngGCSec = rally.utils.convert.ms_to_seconds(young_gc_time)
+    oldGCSec = rally.utils.convert.ms_to_seconds(old_gc_time)
+
+    percentages = store.get("cpu_utilization_1s", value_converter=float)
+    if percentages:
+      cpuPct = statistics.median(percentages)
+    else:
+      cpuPct = None
+
+    bytesWritten = store.get_one("disk_io_write_bytes", value_converter=int)
+    segTotalMemoryBytes = store.get_one("segments_memory_in_bytes", value_converter=int)
+    flushTimeMillis = store.get_one("flush_total_time", value_converter=float)
+    refreshTimeMillis = store.get_one("refresh_total_time", value_converter=float)
+    mergeTimeMillis = store.get_one("merges_total_time", value_converter=float)
+    mergeThrottleTimeMillis = store.get_one("merges_total_throttled_time", value_converter=float)
+    indexingTimeMillis = store.get_one("indexing_total_time", value_converter=float)
+    dvTotalMemoryBytes = store.get_one("segments_doc_values_memory_in_bytes", value_converter=int)
+    storedFieldsTotalMemoryBytes = store.get_one("segments_stored_fields_memory_in_bytes", value_converter=int)
+    termsTotalMemoryBytes = store.get_one("segments_terms_memory_in_bytes", value_converter=int)
+    normsTotalMemoryBytes = store.get_one("segments_norms_memory_in_bytes", value_converter=int)
+    # TODO dm: Where is this written?
     mergeTimes = {}
 
-    with open(fileName) as f:
-      while True:
-        line = f.readline()
-        if line == '':
-          break
-        if line.find('java.lang.OutOfMemoryError') != -1 or line.find('abort: OOME') != -1:
-          oome = True
-        if line.startswith('Total docs/sec: '):
-          dps = float(line[16:].strip())
-        if line.startswith('index size '):
-          indexKB = int(line[11:].strip().replace(' KB', ''))
-        if line.find('.py", line') != -1:
-          exc = True
-        if line.startswith('Indices stats took'):
-          indicesStatsMSec = float(line.strip().split()[3])
-        if line.startswith('Node stats took'):
-          nodesStatsMSec = float(line.strip().split()[3])
-        if line.startswith('CPU median: '):
-          cpuPct = float(line.strip()[12:])
-        if line.startswith('WRITES: '):
-          bytesWritten = int(line[8:].split()[0])
-
-        m2 = self._reMergeTime.search(line)
-        if m2 is not None:
-          msec, part, docCount = m2.groups()
-          msec = int(msec)
-          docCount = int(docCount)
-          if part not in mergeTimes:
-            mergeTimes[part] = [0, 0]
-          l = mergeTimes[part]
-          l[0] += msec/1000.0
-          l[1] += docCount
-
-        if line.startswith('STATS: ') or line.startswith('INDICES STATS:'):
-          d = self.parseStats(line, f)
-          primaries = d['_all']['primaries']
-          segCount = primaries['segments']['count']
-          segTotalMemoryBytes = primaries['segments']['memory_in_bytes']
-          dvTotalMemoryBytes = primaries['segments'].get('doc_values_memory_in_bytes')
-          storedFieldsTotalMemoryBytes = primaries['segments'].get('stored_fields_memory_in_bytes')
-          termsTotalMemoryBytes = primaries['segments'].get('terms_memory_in_bytes')
-          normsTotalMemoryBytes = primaries['segments'].get('norms_memory_in_bytes')
-          mergeTimeMillis = primaries['merges']['total_time_in_millis']
-          mergeThrottleTimeMillis = primaries['merges'].get('total_throttled_time_in_millis')
-          indexingTimeMillis = primaries['indexing']['index_time_in_millis']
-          refreshTimeMillis = primaries['refresh']['total_time_in_millis']
-          flushTimeMillis = primaries['flush']['total_time_in_millis']
-
-        # TODO dm: specific name should move out of here...
-        if line.startswith('NODES STATS: ') and 'defaults' in fileName:
-          d = self.parseStats(line, f)
-          nodes = d['nodes']
-          if len(nodes) != 1:
-            raise RuntimeError('expected one node but got %s' % len(nodes))
-          node = list(nodes.keys())[0]
-          node = nodes[node]
-          d = node['jvm']['gc']['collectors']
-          oldGCSec = d['old']['collection_time_in_millis'] / 1000.0
-          youngGCSec = d['young']['collection_time_in_millis'] / 1000.0
-
-        if line.startswith('SEARCH ') and ' (median): ' in line:
-          searchType = line[7:line.find(' (median): ')]
-          t = float(line.strip().split()[-2])
-          searchTimes[searchType] = t
-          # logger.info('search time %s: %s = %s sec' % (fileName, searchType, t))
-
-    # logger.info('%s: oldGC=%s newGC=%s' % (fileName, oldGCSec, youngGCSec))
-
-    year = int(m.group(1))
-    month = int(m.group(2))
-    day = int(m.group(3))
-    if len(m.groups()) == 6:
-      hour = int(m.group(4))
-      minute = int(m.group(5))
-      second = int(m.group(6))
-    else:
-      hour = 0
-      minute = 0
-      second = 0
-
-    timeStamp = datetime.datetime(year=year, month=month, day=day, hour=hour, minute=minute, second=second)
+    # TODO dm: How do we handle these cases?
+    # if line.find('java.lang.OutOfMemoryError') != -1 or line.find('abort: OOME') != -1:
+    #   oome = True
+    # if line.find('.py", line') != -1:
+    #   exc = True
 
     if oome or exc or dps is None:
       # dps = 1
       # logger.warn('Exception/oome/no dps in log "%s"; marking failed' % fileName)
-      return timeStamp, None
+      return timestamp, None
 
-    if indexKB is None:
-      if '4gheap' in fileName:
-        # logger.warn('Missing index size for log "%s"; marking failed' % fileName)
-        return timeStamp, None
-      else:
-        indexKB = 1
+    #TODO dm: How do we handle this case?
+    #if indexSize is None:
+    #  if '4gheap' in fileName:
+    #    # logger.warn('Missing index size for log "%s"; marking failed' % fileName)
+    #    return timeStamp, None
+    #  else:
+    #    indexSize = 1
 
-    if (year, month, day) in (
+    if (timestamp.year, timestamp.month, timestamp.day) in (
         # Installer was broken?
         (2014, 5, 13),
         # Something went badly wrong:
         (2015, 6, 2)):
-      return timeStamp, None
+      return timestamp, None
 
-      # print('  mergeTimes: %s' % str(mergeTimes))
-    return (timeStamp, # 0
+    return (timestamp,  # 0
           dps,
-          indexKB,
+          indexSize,
           segCount,
           searchTimes,
-          indicesStatsMSec, # 5
+          indicesStatsMSec,  # 5
           nodesStatsMSec,
           oldGCSec,
           youngGCSec,
           cpuPct,
-          bytesWritten, # 10
+          bytesWritten,  # 10
           segTotalMemoryBytes,
           indexingTimeMillis,
           mergeTimeMillis,
           refreshTimeMillis,
-          flushTimeMillis, # 15
+          flushTimeMillis,  # 15
           dvTotalMemoryBytes,
           storedFieldsTotalMemoryBytes,
           termsTotalMemoryBytes,
           normsTotalMemoryBytes,
-          mergeThrottleTimeMillis, # 20
+          mergeThrottleTimeMillis,  # 20
           mergeTimes)
-
-
-  def parseStats(self, line, f):
-    x = line.find('STATS: ')
-    s = line[x + 7:].strip()
-    if s == '{':
-      # Handle pretty-printed node stats:
-      statsLines = [s]
-      while True:
-        line = f.readline()
-        if line == '':
-          raise RuntimeError('hit EOF trying to parse node stats output')
-        statsLines.append(line)
-        if line.rstrip() == '}':
-          break
-        if line.startswith('}node1: [GC') or line.startswith('}node0: [GC'):
-          statsLines[-1] = '}'
-          break
-      d = json.loads(''.join(statsLines))
-    else:
-      idx = s.find('node1: [GC')
-      if idx != -1:
-        s = s[:idx]
-      d = eval(s)
-    return d
-
-  def loadSeries(self, track_name, track_setup_name):
-    results = []
-
-    root_dir = self._config.opts("system", "root.dir")
-    metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
-
-    reLogFile = re.compile(r'^%s/races/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)/tracks' % root_dir)
-    l = []
-    try:
-      # l = os.listdir(rootDir)
-      # TODO dm: We're reimplementing the directory structure here, not good...
-      l = glob.glob("%s/races/*/tracks/%s/%s/%s/telemetry.txt" % (root_dir, track_name, track_setup_name, metrics_log_dir))
-    except FileNotFoundError:
-      logger.warn("%s does not exist. Skipping..." % track_setup_name)
-      return results
-    l.sort()
-    count = 0
-    for fileName in l:
-      # logger.info('visit fileName=%s' % fileName)
-      m = reLogFile.match(fileName)
-      if m is not None:
-
-        if False and os.path.getsize(fileName) < 10 * 1024:
-          # Something silly went wrong:
-          continue
-
-        try:
-          tup = self.loadOneFile(fileName, m)
-        except:
-          logger.error('Exception while parsing %s' % fileName)
-          raise
-
-        d = tup[0]
-
-        if d <= datetime.datetime(year=2014, month=4, day=15):
-          # For some reason, before this, the number of indexed docs in the end != the number we had indexed, so we can't back-test prior to this
-          continue
-
-        if d >= datetime.datetime(year=2014, month=8, day=7) and \
-                d <= datetime.datetime(year=2014, month=8, day=18):
-          # #6939 cause a bug on 8/6 in strict mappings, not fixed until #7304 on 8/19
-          tup = d, None
-
-        results.append(tup)
-        count += 1
-        if count % 100 == 0:
-          logger.info('  %d of %d files...' % (count, len(l)))
-
-    logger.info('  %d of %d files...' % (count, len(l)))
-
-    # Sort by date:
-    results.sort(key=lambda x: x[0])
-
-    return results
 
   def writeCommonGraphFunctions(self, f, byMode, byModeBroken, allTimes):
 
@@ -672,7 +529,7 @@ class Reporter:
         if t is None:
           x = ''
         else:
-          x = '%.2f' % (1000.0 * t)
+          x = '%.2f' % t
           any = True
         l.append(x)
       if any:
@@ -1095,15 +952,15 @@ class Reporter:
       any = False
       for mode in 'defaults',:
         if timeStamp in byMode[mode]:
-          indexKB = byMode[mode][timeStamp][1]
-          if indexKB is not None:
-            l.append('%.1f' % (indexKB / 1024. / 1024.))
+          indexSize = byMode[mode][timeStamp][1]
+          if indexSize is not None:
+            l.append('%.1f' % rally.utils.convert.bytes_to_mb(indexSize))
             any = True
           else:
             l.append('')
           bytesWritten = byMode['defaults'][timeStamp][9]
           if bytesWritten is not None:
-            x = '%.2f' % (bytesWritten / 1024. / 1024. / 1024.)
+            x = '%.2f' % rally.utils.convert.bytes_to_mb(bytesWritten)
             any = True
           else:
             x = ''
@@ -1115,7 +972,8 @@ class Reporter:
         chartTimes.append(timeStamp)
       f.write('    + "%s,%s\\n"\n' % (self.toString(timeStamp), ','.join(l)))
 
-    self.writeGraphFooter(f, 'disk_usage', 'Indexing disk usage', 'GB')
+    #TODO dm: Convert back to GB
+    self.writeGraphFooter(f, 'disk_usage', 'Indexing disk usage', 'MB')
 
     self.writeAnnots(f, chartTimes, KNOWN_CHANGES, 'Final index size')
     f.write('</script>')
@@ -1144,6 +1002,10 @@ class Reporter:
       for mode in 'defaults', '4gheap', 'fastsettings', 'fastupdates':
         if mode in byMode and timeStamp in byMode[mode]:
           dps, indexKB, segCount = byMode[mode][timeStamp][:3]
+
+          # TODO dm: Delete me
+          #print("dps = [%s], indexKB = [%s], segCount = [%s]" % (dps, indexKB, segCount))
+
           if segCount is not None:
             any = True
             x = '%d' % segCount
@@ -1162,7 +1024,8 @@ class Reporter:
 
     f.write('</script>')
 
-  def loadBuildTimeResults(self):
+  def loadBuildTimeResults(self, invocation):
+    # TODO dm: Implement me
     # Load/parse "gradle assemble" times:
     results = []
     reYMD = re.compile(r'^(\d\d\d\d)-(\d\d)-(\d\d)\.txt$')

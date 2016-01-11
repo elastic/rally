@@ -1,6 +1,8 @@
+import statistics
 import threading
 import logging
 import psutil
+import os
 from collections import defaultdict
 
 import rally.config
@@ -12,16 +14,18 @@ logger = logging.getLogger("rally.metrics")
 
 # Encapsulates path name
 class MetricsFile:
-  def __init__(self, config, invocation, track, track_setup):
+  def __init__(self, config, invocation, track, track_setup_name):
     # We could use invocation root dir from config directly as long as we're only interested in the *current* run, but that's not
     # always the case (for reporting)
     invocation_root = rally.utils.paths.invocation_root_dir(config.opts("system", "root.dir"), invocation)
     track_root = rally.utils.paths.track_root_dir(invocation_root, track.name)
-    track_setup_root = rally.utils.paths.track_setup_root_dir(track_root, track_setup.name)
-    telemetry_root = "%s/%s" % (track_setup_root, config.opts("benchmarks", "metrics.log.dir"))
-    # TODO dm: We should not this here, should be managed by the store...
-    rally.utils.io.ensure_dir(telemetry_root)
-    self._log_file = "%s/metrics_store.txt" % telemetry_root
+    track_setup_root = rally.utils.paths.track_setup_root_dir(track_root, track_setup_name)
+    self._telemetry_root = "%s/%s" % (track_setup_root, config.opts("benchmarks", "metrics.log.dir"))
+    self._log_file = "%s/metrics_store.txt" % self._telemetry_root
+
+  @property
+  def parent_directory(self):
+    return self._telemetry_root
 
   @property
   def path(self):
@@ -37,6 +41,7 @@ class MetricsReader:
     metrics = defaultdict(list)
     with open(self._metrics_file.path, "r") as f:
       for line in f:
+        line = line.strip()
         k, v = line.split(";")
         metrics[k].append(v)
     return metrics
@@ -47,13 +52,40 @@ class MetricsWriter:
     self._metrics_file = metrics_file
 
   def write(self, metrics):
-    #print("Writing to [%s]" % self._metrics_file.path)
+    rally.utils.io.ensure_dir(self._metrics_file.parent_directory)
     with open(self._metrics_file.path, "w") as f:
       for k, v in metrics.items():
         # v is a list...
         for item in v:
           # TODO dm: Consider using the CSV library...
           f.write("{0};{1}\n".format(k, item))
+
+
+class IllegalUsageError(Exception):
+  pass
+
+
+# TODO dm: Not sure how to call that...
+class MetricsStoreLocator:
+  def __init__(self, config):
+    self._config = config
+
+  def invocations(self):
+    root = rally.utils.paths.all_invocations_root_dir(self._config.opts("system", "root.dir"))
+    invocations = self._find_child_dirs(root)
+    return [rally.utils.paths.to_timestamp(ts) for ts in invocations]
+
+  def get_tracks(self, invocation):
+    invocation_root = rally.utils.paths.invocation_root_dir(self._config.opts("system", "root.dir"), invocation)
+    return self._find_child_dirs(rally.utils.paths.all_tracks_root_root_dir(invocation_root))
+
+  def get_track_setups(self, invocation, track):
+    invocation_root = rally.utils.paths.invocation_root_dir(self._config.opts("system", "root.dir"), invocation)
+    track_root = rally.utils.paths.track_root_dir(invocation_root, track.name)
+    return self._find_child_dirs(track_root)
+
+  def _find_child_dirs(self, root):
+    return [c for c in os.listdir(root) if os.path.isdir(os.path.join(root, c))]
 
 
 class MetricsStore:
@@ -63,27 +95,20 @@ class MetricsStore:
   It is intended as a first step towards a "proper" metrics store (like Elasticsearch itself) without sacrificing the text based format
   """
 
-  # Query operations:
-  # put metrics into it: time_stamp of Rally's invocation, track, track_setup, timestamp when put into store, name, value
-
-  # get invocations
-
-  # get metrics (also from other invocations!! -> must be able to load multiple files)
-
-  # store current invocation (i.e. flush map to file)
-
-  def __init__(self, config, invocation, track, track_setup):
+  def __init__(self, config, invocation, track, track_setup_name):
     self._config = config
-    self._metrics_file = MetricsFile(config, invocation, track, track_setup)
+    self._metrics_file = MetricsFile(config, invocation, track, track_setup_name)
     invocation_ts = '%04d-%02d-%02d-%02d-%02d-%02d' % \
                     (invocation.year, invocation.month, invocation.day, invocation.hour, invocation.minute, invocation.second)
-    self._key_prefix = "%s:%s:%s" % (invocation_ts, track.name.lower(), track_setup.name.lower())
-    # TODO dm: Consider using a proper multimap
+    self._key_prefix = "%s:%s:%s" % (invocation_ts, track.name.lower(), track_setup_name.lower())
     self._metrics = None
+    self._writer = None
+    self._closed = True
 
   def open_for_write(self):
     self._metrics = defaultdict(list)
     self._writer = MetricsWriter(self._metrics_file)
+    self._closed = False
 
   def open_for_read(self):
     reader = MetricsReader(self._metrics_file)
@@ -92,31 +117,40 @@ class MetricsStore:
   def close(self):
     # TODO dm: Guard against wrong usage... (we could open for read and fail then on close as the write is None)
     self._writer.write(self._metrics)
+    self._closed = True
 
   # we have to store also multiple dimensions here (like track, track-setup, invocation-timestamp(already encoded in the path?)
-  def put(self, key, value):
+  def put(self, key, value, additional_dimensions=None):
+    self._ensure_open()
     # TODO dm: Consider adding also a timestamp here... (what's the overhead of calling time.time()??)
-    self._metrics["%s::%s" % (self._key_prefix, key)].append(value)
+    self._metrics[self._key(key, additional_dimensions)].append(value)
 
-  # query for all invocations - returns a list of timestamps?
-  def invocations(self):
-    pass
-
-  # works entirely on the file system
-  def get_tracks(self, invocation):
-    pass
-
-  # works entirely on the file system
-  def get_track_setups(self, invocation, track):
-    pass
-
-  # note that we may get multiple values here, e.g. if we store multiple statistics... => k -> [v]
-  def get(self, key, value_converter=str):
-    v = self._metrics["%s::%s" % (self._key_prefix, key)]
+  def get_one(self, key, additional_dimensions=None, value_converter=str):
+    v = self.get(key, additional_dimensions, value_converter)
     if v:
-      return map(value_converter, v)
+      return v[0]
     else:
       return v
+
+  # note that we may get multiple values here, e.g. if we store multiple statistics... => k -> [v]
+  def get(self, key, additional_dimensions=None, value_converter=str):
+    v = self._metrics[self._key(key, additional_dimensions)]
+    if v:
+      return [value_converter(e) for e in v]
+    else:
+      return v
+
+  def _key(self, key, additional_dimensions):
+    # This is really just bolted on
+    if additional_dimensions:
+      dimension_key = "::".join(additional_dimensions) + "-"
+    else:
+      dimension_key = ""
+    return "%s%s::%s" % (dimension_key, self._key_prefix, key)
+
+  def _ensure_open(self):
+    if self._closed:
+      raise IllegalUsageError("Attempted to use a closed metrics store")
 
 
 # TODO dm [Refactoring]: Convert to the new telemetry infrastructure (see https://github.com/elastic/rally/issues/21)
@@ -149,8 +183,7 @@ class MetricsCollector:
       cpuPercents, writeCount, writeBytes, writeCount, writeTime, readCount, readBytes, readTime = self._stats.finish()
       self.collect('WRITES: %s bytes, %s time, %s count' % (writeBytes, writeTime, writeCount))
       self.collect('READS: %s bytes, %s time, %s count' % (readBytes, readTime, readCount))
-      cpuPercents.sort()
-      self.collect('CPU median: %s' % cpuPercents[int(len(cpuPercents) / 2)])
+      self.collect('CPU median: %s' % statistics.median(cpuPercents))
       for pct in cpuPercents:
         self.collect('  %s' % pct)
 

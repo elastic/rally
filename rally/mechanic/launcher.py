@@ -7,7 +7,6 @@ import signal
 import rally.mechanic.gear
 import rally.cluster
 import rally.telemetry
-import rally.metrics
 
 
 class Launcher:
@@ -21,23 +20,17 @@ class Launcher:
     self._config = config
     self._logger = logger
     self._servers = []
-    self._metrics_store = None
 
-  def start(self, track, setup):
+  def start(self, track, setup, metrics_store):
     if self._servers:
       self._logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
-
-    invocation = self._config.opts("meta", "time.start")
-    self._metrics_store = rally.metrics.MetricsStore(self._config, invocation, track, setup)
-    self._metrics_store.open_for_write()
-
     num_nodes = setup.candidate_settings.nodes
-    return rally.cluster.Cluster([self._start_node(node, setup) for node in range(num_nodes)])
+    return rally.cluster.Cluster([self._start_node(node, setup, metrics_store) for node in range(num_nodes)], metrics_store)
 
-  def _start_node(self, node, setup):
+  def _start_node(self, node, setup, metrics_store):
     node_name = self._node_name(node)
 
-    telemetry = rally.telemetry.Telemetry(self._config, self._metrics_store)
+    telemetry = rally.telemetry.Telemetry(self._config, metrics_store)
 
     env = self._prepare_env(setup, telemetry)
     cmd = self.prepare_cmd(setup, node_name)
@@ -62,7 +55,7 @@ class Launcher:
     self._set_env(env, 'PATH', '%s/bin' % java_home, separator=':')
     # Don't merge here!
     env['JAVA_HOME'] = java_home
-    self._logger.debug('ENV: %s' % str(env))
+    self._logger.info('ENV: %s' % str(env))
     return env
 
   def _set_env(self, env, k, v, separator=' '):
@@ -153,4 +146,3 @@ class Launcher:
         except ProcessLookupError:
           self._logger.warn('No such process')
     self._servers = []
-    self._metrics_store.close()

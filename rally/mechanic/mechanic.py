@@ -4,6 +4,7 @@ import rally.mechanic.supplier as supplier
 import rally.mechanic.builder as builder
 import rally.mechanic.provisioner as provisioner
 import rally.mechanic.launcher as launcher
+import rally.metrics
 
 
 class Mechanic:
@@ -19,6 +20,7 @@ class Mechanic:
     self._builder = builder.Builder(config, logger)
     self._provisioner = provisioner.Provisioner(config, logger)
     self._launcher = launcher.Launcher(config, logger)
+    self._metrics_store = None
 
   # This is the one-time setup the mechanic performs (once for all benchmarks run)
   def prepare_candidate(self):
@@ -28,10 +30,14 @@ class Mechanic:
 
   def start_engine(self, track, setup):
     self._provisioner.prepare(setup)
-    return self._launcher.start(track, setup)
+    invocation = self._config.opts("meta", "time.start")
+    self._metrics_store = rally.metrics.MetricsStore(self._config, invocation, track, setup.name)
+    self._metrics_store.open_for_write()
+    return self._launcher.start(track, setup, self._metrics_store)
 
   def stop_engine(self, cluster):
     self._launcher.stop(cluster)
 
   def revise_candidate(self):
     self._provisioner.cleanup()
+    self._metrics_store.close()

@@ -11,7 +11,7 @@ from elasticsearch.helpers import parallel_bulk, streaming_bulk
 import rally.metrics as m
 import rally.track.track
 import rally.utils.process
-import rally.utils.convert
+import rally.utils.convert as convert
 import rally.utils.progress
 
 logger = logging.getLogger("rally.driver")
@@ -34,10 +34,10 @@ class Driver:
     logger.debug('create index w/ mappings')
     logger.debug(mappings)
     # TODO dm: retrieve from cluster
-    cluster.client().indices.create(index=track.index_name)
-    cluster.client().indices.put_mapping(index=track.index_name,
-                                         doc_type=track.type_name,
-                                         body=json.loads(mappings))
+    cluster.client.indices.create(index=track.index_name)
+    cluster.client.indices.put_mapping(index=track.index_name,
+                                       doc_type=track.type_name,
+                                       body=json.loads(mappings))
     cluster.wait_for_status(track_setup.required_cluster_status)
 
   def go(self, cluster, track, track_setup):
@@ -60,15 +60,15 @@ class Driver:
     # This is also just a hack for now (should be in track for first step and metrics for second one)
     data_paths = self._config.opts("provisioning", "local.data.paths")
     if track_setup.test_settings.benchmark_indexing:
-      self._index_benchmark.printIndexStats(data_paths[0])
+      self._index_benchmark.print_index_stats(data_paths[0])
     self._metrics.stop_collection()
 
 
 class TimedOperation:
-  def timed(self, target, args, repeat=1):
+  def timed(self, target, repeat=1, *args, **kwargs):
     start = time.time()
     for i in range(repeat):
-      result = target(args)
+      result = target(*args, **kwargs)
     stop = time.time()
     return (stop - start) / repeat, result
 
@@ -79,6 +79,7 @@ class SearchBenchmark(TimedOperation):
     self._track = track
     self._track_setup = track_setup
     self._cluster = cluster
+    self._metrics_store = cluster.metrics_store
     self._metrics = metrics
     self._progress = rally.utils.progress.CmdLineProgressReporter()
 
@@ -89,7 +90,7 @@ class SearchBenchmark(TimedOperation):
 
   # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
   def run(self):
-    es = self._cluster.client()
+    es = self._cluster.client
     logger.info("Running search benchmark")
     # Run a few (untimed) warmup iterations before the actual benchmark
     self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)")
@@ -98,7 +99,8 @@ class SearchBenchmark(TimedOperation):
     for q in self._track.queries:
       l = [x[q.name] for x in times]
       l.sort()
-      # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
+      for latency in l:
+        self._metrics_store.put("query_latency", convert.seconds_to_ms(latency), additional_dimensions=[q.name])
       # HINT dm: Reporting relevant
       self.print_metrics('SEARCH %s (median): %.6f sec' % (q.name, l[int(len(l) / 2)]))
 
@@ -106,8 +108,8 @@ class SearchBenchmark(TimedOperation):
     times = []
     for i in range(repetitions):
       self._progress.print(
-        message % ((i + 1), repetitions),
-        "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
+          message % ((i + 1), repetitions),
+          "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
       )
       times.append(self._run_one_round(es))
     self._progress.finish()
@@ -117,7 +119,7 @@ class SearchBenchmark(TimedOperation):
     d = {}
     for query in self._track.queries:
       # repeat multiple times within one run to guard against timer resolution problems
-      duration, result = self.timed(query.run, es, repeat=10)
+      duration, result = self.timed(query.run, 10, es)
       d[query.name] = duration / query.normalization_factor
     return d
 
@@ -128,6 +130,7 @@ class IndexBenchmark(TimedOperation):
     self._track = track
     self._track_setup = track_setup
     self._cluster = cluster
+    self._metrics_store = cluster.metrics_store
     self._metrics = metrics
     # TODO dm: Just needed for print output - can we simplify this?
     self._nextPrint = 0
@@ -176,7 +179,7 @@ class IndexBenchmark(TimedOperation):
         if ids and self._rand.randint(0, 3) == 3:
           # pick already returned id in 25%
           id = self._rand.choice(ids)
-          #FIXME dm: Shouldn't we put the conflicting id also into this set?
+          # FIXME dm: Shouldn't we put the conflicting id also into this set?
         else:
           id = '%10i' % self._rand.randint(0, docs_to_index)
           ids.append(id)
@@ -220,9 +223,9 @@ class IndexBenchmark(TimedOperation):
 
     indexName = self._track.index_name
     typeName = self._track.type_name
-    es = self._cluster.client()
+    es = self._cluster.client
 
-    self.startTime = time.time()
+    self.start_time = time.time()
     self._sent_bytes = 0
 
     processed = 0
@@ -246,7 +249,9 @@ class IndexBenchmark(TimedOperation):
 
     end_time = time.time()
     # HINT dm: Reporting relevant
-    self.print_metrics('Total docs/sec: %.1f' % (processed / (end_time - self.startTime)))
+    docs_per_sec = (processed / (end_time - self.start_time))
+    self.print_metrics('Total docs/sec: %.1f' % docs_per_sec)
+    self._metrics_store.put("indexing_throughput", round(docs_per_sec))
 
     if doFlush:
       logger.info("Force flushing index [%s]." % indexName)
@@ -254,40 +259,57 @@ class IndexBenchmark(TimedOperation):
       logger.info("Force flush has finished successfully.")
 
     if doStats:
-      logger.info("Gathering indices stats")
-      # TODO dm: This should be a profiler
-      t0 = time.time()
-      stats = es.indices.stats(index=indexName, metric='_all', level='shards')
-      t1 = time.time()
-      # HINT dm: Reporting relevant
-      self.print_metrics('Indices stats took %.3f msec' % (1000 * (t1 - t0)))
-      self.print_metrics('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
-                                                          indent=4, separators=(',', ': ')))
-      actual_doc_count = stats['_all']['primaries']['docs']['count']
+      self._index_stats(expected_doc_count)
+      self._node_stats()
 
-      logger.info("Gathering nodes stats")
-      t0 = time.time()
-      stats = es.nodes.stats(metric='_all', level='shards')
-      t1 = time.time()
-      # HINT dm: Reporting relevant
-      self.print_metrics('Node stats took %.3f msec' % (1000 * (t1 - t0)))
-      self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
+  def _index_stats(self, expected_doc_count):
+    indexName = self._track.index_name
+    logger.info("Gathering indices stats")
+    # t0 = time.time()
+    # stats = self._cluster.client.indices.stats(index=indexName, metric='_all', level='shards')
+    # t1 = time.time()
+    # duration = t1 - t0
+    duration, stats = self.timed(self._cluster.client.indices.stats, index=indexName, metric='_all', level='shards')
+    # HINT dm: Reporting relevant
+    self.print_metrics('Indices stats took %.3f msec' % convert.seconds_to_ms(duration))
+    self.print_metrics('INDICES STATS: %s' % json.dumps(stats, sort_keys=True,
                                                         indent=4, separators=(',', ': ')))
+    self._metrics_store.put("indices_stats_latency", convert.seconds_to_ms(duration))
+    primaries = stats['_all']['primaries']
+    self._metrics_store.put("segments_count", primaries['segments']['count'])
+    self._metrics_store.put("segments_memory_in_bytes", primaries['segments']['memory_in_bytes'])
+    self._metrics_store.put("segments_doc_values_memory_in_bytes", primaries['segments']['doc_values_memory_in_bytes'])
+    self._metrics_store.put("segments_stored_fields_memory_in_bytes", primaries['segments']['stored_fields_memory_in_bytes'])
+    self._metrics_store.put("segments_terms_memory_in_bytes", primaries['segments']['terms_memory_in_bytes'])
+    self._metrics_store.put("segments_norms_memory_in_bytes", primaries['segments']['norms_memory_in_bytes'])
+    self._metrics_store.put("merges_total_time", primaries['merges']['total_time_in_millis'])
+    self._metrics_store.put("merges_total_throttled_time", primaries['merges']['total_throttled_time_in_millis'])
+    self._metrics_store.put("indexing_total_time", primaries['indexing']['index_time_in_millis'])
+    self._metrics_store.put("refresh_total_time", primaries['refresh']['total_time_in_millis'])
+    self._metrics_store.put("flush_total_time", primaries['flush']['total_time_in_millis'])
 
-      logger.info("Gathering segments stats")
-      t0 = time.time()
-      stats = es.indices.segments(params={'verbose': True})
-      t1 = time.time()
-      self.print_metrics('Segments stats took %.3f msec' % (1000 * (t1 - t0)))
-      self.print_metrics('SEGMENTS STATS: %s' % json.dumps(stats, sort_keys=True,
-                                                           indent=4, separators=(',', ': ')))
-      if expected_doc_count is not None and expected_doc_count != actual_doc_count:
-          msg = "wrong number of documents indexed: expected %s but got %s" % (expected_doc_count, actual_doc_count)
-          logger.error(msg)
-          raise RuntimeError(msg)
+    actual_doc_count = primaries['docs']['count']
+    if expected_doc_count is not None and expected_doc_count != actual_doc_count:
+      msg = "wrong number of documents indexed: expected %s but got %s" % (expected_doc_count, actual_doc_count)
+      logger.error(msg)
+      raise RuntimeError(msg)
 
-  # TODO dm: This is just a workaround to get us started. Metrics gathering must move to metrics.py. It is also somewhat brutal to treat
-  #         everything as metrics (which is not true -> but later...)
+  def _node_stats(self):
+    logger.info("Gathering nodes stats")
+    duration, stats = self.timed(self._cluster.client.nodes.stats, metric='_all', level='shards')
+    # HINT dm: Reporting relevant
+    self.print_metrics('Node stats took %.3f msec' % convert.seconds_to_ms(duration))
+    self.print_metrics('NODES STATS: %s' % json.dumps(stats, sort_keys=True,
+                                                      indent=4, separators=(',', ': ')))
+    self._metrics_store.put("node_stats_latency", convert.seconds_to_ms(duration))
+    # for now we only put data for one node in here but we should really put all of them into the metrics store
+    nodes = stats['nodes']
+    node = list(nodes.keys())[0]
+    node = nodes[node]
+    gc = node['jvm']['gc']['collectors']
+    self._metrics_store.put("node_total_old_gen_gc_time", gc['old']['collection_time_in_millis'])
+    self._metrics_store.put("node_total_young_gen_gc_time", gc['young']['collection_time_in_millis'])
+
   def print_metrics(self, message):
     self._metrics.collect(message)
 
@@ -296,19 +318,28 @@ class IndexBenchmark(TimedOperation):
     # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
     # accurate here as this is "just" a progress report for the user
     sent = self._sent_bytes
-    elapsed = time.time() - self.startTime
+    elapsed = time.time() - self.start_time
     docs_per_second = docs_processed / elapsed
-    mb_per_second = rally.utils.convert.bytes_to_mb(sent) / elapsed
+    mb_per_second = convert.bytes_to_mb(sent) / elapsed
 
     self._progress.print(
-      "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
-      "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
+        "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
+        "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
     )
     logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
 
-  # TODO dm: This should probably be a profiler
-  def printIndexStats(self, dataDir):
-    indexSizeKB = os.popen('du -s %s' % dataDir).readline().split()[0]
+  def print_index_stats(self, dataDir):
+    # index_size_kb = os.popen('du -s %s' % dataDir).readline().split()[0]
+    index_size_bytes = self.get_size(dataDir)
+    self._metrics_store.put("final_index_size_bytes", index_size_bytes)
     # HINT dm: Reporting relevant
-    self.print_metrics('index size %s KB' % indexSizeKB)
+    self.print_metrics('index size %s KB' % round(convert.bytes_to_kb(index_size_bytes)))
     rally.utils.process.run_subprocess_with_logging("find %s -ls" % dataDir, header="index files:")
+
+  def get_size(self, start_path='.'):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(start_path):
+      for f in filenames:
+        fp = os.path.join(dirpath, f)
+        total_size += os.path.getsize(fp)
+    return total_size

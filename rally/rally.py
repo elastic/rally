@@ -197,7 +197,7 @@ def main():
 
   # TODO dm [Refactoring]: I am not too happy with dispatching commands on such a high-level. Can we push this down?
   if subcommand == "list-telemetry":
-    telemetry = rally.telemetry.Telemetry(cfg)
+    telemetry = rally.telemetry.Telemetry(cfg, None)
     telemetry.list()
     exit(0)
   else:

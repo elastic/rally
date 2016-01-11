@@ -40,17 +40,22 @@ class Cluster:
   Cluster exposes APIs of the running benchmark candidate.
   """
 
-  def __init__(self, servers):
+  def __init__(self, servers, metrics_store):
     self._es = elasticsearch.Elasticsearch()
     self._servers = servers
+    self._metrics_store = metrics_store
 
   @property
   def servers(self):
     return self._servers
 
-  # Just expose the client API directly (for now)
+  @property
   def client(self):
     return self._es
+
+  @property
+  def metrics_store(self):
+    return self._metrics_store
 
   def wait_for_status(self, cluster_status):
     cluster_status_name = cluster_status.name
