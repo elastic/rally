@@ -186,13 +186,13 @@ class GatherProcessStats(threading.Thread):
     self.join()
     disk_end = self._disk_io_counters()
 
-    self.metrics_store.put("disk_io_write_bytes", disk_end.write_bytes - self.disk_start.write_bytes)
-    self.metrics_store.put("disk_io_write_count", disk_end.write_count - self.disk_start.write_count)
-    self.metrics_store.put("disk_io_write_time", disk_end.write_time - self.disk_start.write_time)
+    self.metrics_store.put_count("disk_io_write_bytes", disk_end.write_bytes - self.disk_start.write_bytes, "byte")
+    self.metrics_store.put_count("disk_io_write_count", disk_end.write_count - self.disk_start.write_count)
+    self.metrics_store.put_value("disk_io_write_time", disk_end.write_time - self.disk_start.write_time, "ms")
 
-    self.metrics_store.put("disk_io_read_bytes", disk_end.read_bytes - self.disk_start.read_bytes)
-    self.metrics_store.put("disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
-    self.metrics_store.put("disk_io_read_time", disk_end.read_time - self.disk_start.read_time)
+    self.metrics_store.put_count("disk_io_read_bytes", disk_end.read_bytes - self.disk_start.read_bytes, "byte")
+    self.metrics_store.put_count("disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
+    self.metrics_store.put_value("disk_io_read_time", disk_end.read_time - self.disk_start.read_time, "ms")
 
   def _disk_io_counters(self):
     if self._use_specific_disk():
@@ -205,4 +205,4 @@ class GatherProcessStats(threading.Thread):
 
   def run(self):
     while not self.stop:
-      self.metrics_store.put("cpu_utilization_1s", self.process.cpu_percent(interval=1.0))
+      self.metrics_store.put_value("cpu_utilization_1s", self.process.cpu_percent(interval=1.0), "%")

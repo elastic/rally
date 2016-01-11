@@ -1,5 +1,6 @@
 import os.path
 import shutil
+import socket
 import logging
 import configparser
 from enum import Enum
@@ -27,7 +28,7 @@ class Scope(Enum):
 
 
 class Config:
-  CURRENT_CONFIG_VERSION = 1
+  CURRENT_CONFIG_VERSION = 2
 
   """
   Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -51,7 +52,7 @@ class Config:
 
   def opts(self, section, key, default_value=None, mandatory=True):
     """
-    Resolves a configuratin property.
+    Resolves a configuration property.
 
     :param section: The configuration section.
     :param key: The configuration key.
@@ -131,8 +132,18 @@ class Config:
       config["system"]["log.root.dir"] = "logs"
       config["provisioning"]["local.install.dir"] = "install"
       config["reporting"]["report.base.dir"] = "reports"
+    if current_version == 1:
+      current_version = 2
+      config["meta"]["config.version"] = str(current_version)
+      # Give the user a hint what's going on
+      print("Metrics data are now stored in a dedicated Elasticsearch instance. Please provide details below")
+      data_store_host, data_store_port = self._ask_data_store()
+      config["reporting"]["datastore.host"] = data_store_host
+      config["reporting"]["datastore.port"] = data_store_port
+      env_name = self._ask_env_name()
+      config["system"]["env.name"] = env_name
 
-    # all migrations done
+  # all migrations done
     self._write_to_config_file(config)
     logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
 
@@ -153,6 +164,7 @@ class Config:
     print("The benchmark root directory contains benchmark data, logs, etc.")
     print("It will consume several GB of free space depending on which benchmarks are executed (expect at least 10 GB).")
     benchmark_root_dir = self._ask_property("Enter the benchmark root directory (will be created automatically)")
+    env_name = self._ask_env_name()
     source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)")
     # Ask, because not everybody might have SSH access
     repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
@@ -176,6 +188,8 @@ class Config:
     else:
       stats_disk_device = ""
 
+    data_store_host, data_store_port = self._ask_data_store()
+
     config = configparser.ConfigParser()
     config["meta"] = {}
     config["meta"]["config.version"] = str(self.CURRENT_CONFIG_VERSION)
@@ -183,6 +197,7 @@ class Config:
     config["system"] = {}
     config["system"]["root.dir"] = benchmark_root_dir
     config["system"]["log.root.dir"] = "logs"
+    config["system"]["env.name"] = env_name
 
     config["source"] = {}
     config["source"]["local.src.dir"] = source_dir
@@ -206,10 +221,20 @@ class Config:
     config["reporting"] = {}
     config["reporting"]["report.base.dir"] = "reports"
     config["reporting"]["output.html.report.filename"] = "index.html"
+    config["reporting"]["datastore.host"] = data_store_host
+    config["reporting"]["datastore.port"] = data_store_port
 
     self._write_to_config_file(config)
 
     print("\nConfiguration successfully written to '%s'. Please rerun rally now." % self._config_file())
+
+  def _ask_data_store(self):
+    data_store_host = self._ask_property("Enter the host name of the ES data store", default_value="localhost")
+    data_store_port = self._ask_property("Enter the port of the ES data store")
+    return data_store_host, data_store_port
+
+  def _ask_env_name(self):
+    return self._ask_property("Enter a descriptive name for this benchmark environment", default_value=socket.gethostname())
 
   def _ask_property(self, prompt, mandatory=True, check_path_exists=False, default_value=None):
     while True:

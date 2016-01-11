@@ -31,8 +31,8 @@ class Mechanic:
   def start_engine(self, track, setup):
     self._provisioner.prepare(setup)
     invocation = self._config.opts("meta", "time.start")
-    self._metrics_store = rally.metrics.MetricsStore(self._config, invocation, track, setup.name)
-    self._metrics_store.open_for_write()
+    self._metrics_store = rally.metrics.EsMetricsStore(self._config)
+    self._metrics_store.open(invocation, track, setup.name, create=True)
     return self._launcher.start(track, setup, self._metrics_store)
 
   def stop_engine(self, cluster):

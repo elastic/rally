@@ -1,0 +1,70 @@
+{
+  "template": "rally-*",
+  "settings": {
+    "index": {
+      "refresh_interval": "5s"
+    }
+  },
+  "mappings": {
+    "_default_": {
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "string",
+              "doc_values": true,
+              "index": "not_analyzed"
+            }
+          }
+        }
+      ],
+      "_all": {
+        "enabled": false
+      },
+      "_source": {
+        "enabled": true
+      },
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "doc_values": true
+        },
+        "trial-timestamp": {
+          "type": "date",
+          "doc_values": true
+        },
+        "environment": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
+        },
+        "track": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
+        },
+        "track-setup": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
+        },
+        "name": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
+        },
+        "value": {
+          "type": "float",
+          "doc_values": true
+        },
+        "unit": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
+        }
+      }
+    }
+  }
+}

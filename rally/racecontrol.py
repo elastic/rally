@@ -7,10 +7,9 @@
 # tournament: checking two revisions against each other
 import logging
 
+import rally.config
 import rally.mechanic.mechanic
 import rally.driver
-import rally.reporter
-import rally.reporter2
 import rally.summary_reporter
 import rally.utils.process
 import rally.utils.paths
@@ -71,7 +70,8 @@ class RacingTeam:
 
   def do(self, track):
     selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
-    rally.utils.process.kill_running_es_instances()
+    # we should not kill ES instances anymore as ES is also our metrics store
+    #rally.utils.process.kill_running_es_instances()
     self._marshal.setup(track)
     invocation_root = self._config.opts("system", "invocation.root.dir")
     track_root = rally.utils.paths.track_root_dir(invocation_root, track.name)
@@ -101,20 +101,13 @@ class RacingTeam:
 
 class Press:
   def __init__(self, report_only):
-    self._reporter = None
-    self._reporter2 = None
     self._summary_reporter = None
     self.report_only = report_only
 
   def prepare(self, tracks, config):
-    self._reporter = rally.reporter.Reporter(config)
-    self._reporter2 = rally.reporter2.Reporter(config)
     self._summary_reporter = rally.summary_reporter.SummaryReporter(config)
 
   def do(self, track):
-    # always write the HTML reports
-    #self._reporter.report(track)
-    self._reporter2.report(track)
     # Producing a summary report only makes sense if we have current metrics
     if not self.report_only:
       self._summary_reporter.report(track)

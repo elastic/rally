@@ -27,8 +27,8 @@ class SummaryReporter:
         if len(selected_setups) > 1:
           self.print_header("*** Track setup %s ***\n" % track_setup.name)
 
-        store = rally.metrics.MetricsStore(self._config, invocation, track, track_setup.name)
-        store.open_for_read()
+        store = rally.metrics.EsMetricsStore(self._config)
+        store.open(invocation, track, track_setup.name)
 
         self.report_index_throughput(store)
         self.report_search_latency(store)
@@ -52,7 +52,7 @@ class SummaryReporter:
 
   def report_index_throughput(self, store):
     self.print_header("Indexing Results (Throughput):")
-    print("  %d docs/sec" % store.get_one("indexing_throughput", value_converter=int))
+    print("  %d docs/sec" % store.get_one("indexing_throughput"))
 
   def report_search_latency(self, store):
     # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
@@ -60,15 +60,15 @@ class SummaryReporter:
 
   def report_total_times(self, store):
     self.print_header("Total times:")
-    print('  Indexing time      : %.1f min' % convert.ms_to_minutes(store.get_one("indexing_total_time", value_converter=float)))
-    print('  Merge time         : %.1f min' % convert.ms_to_minutes(store.get_one("merges_total_time", value_converter=float)))
-    print('  Refresh time       : %.1f min' % convert.ms_to_minutes(store.get_one("refresh_total_time", value_converter=float)))
-    print('  Flush time         : %.1f min' % convert.ms_to_minutes(store.get_one("flush_total_time", value_converter=float)))
-    print('  Merge throttle time: %.1f min' % convert.ms_to_minutes(store.get_one("merges_total_throttled_time", value_converter=float)))
+    print('  Indexing time      : %.1f min' % convert.ms_to_minutes(store.get_one("indexing_total_time")))
+    print('  Merge time         : %.1f min' % convert.ms_to_minutes(store.get_one("merges_total_time")))
+    print('  Refresh time       : %.1f min' % convert.ms_to_minutes(store.get_one("refresh_total_time")))
+    print('  Flush time         : %.1f min' % convert.ms_to_minutes(store.get_one("flush_total_time")))
+    print('  Merge throttle time: %.1f min' % convert.ms_to_minutes(store.get_one("merges_total_throttled_time")))
     print("")
 
   def report_cpu_usage(self, store):
-    percentages = store.get("cpu_utilization_1s", value_converter=float)
+    percentages = store.get("cpu_utilization_1s")
     if percentages:
       #TODO dm: Output percentiles, not the median...
       formatted_median = '%.1f' % statistics.median(percentages)
@@ -77,14 +77,14 @@ class SummaryReporter:
       print("Could not determine CPU usage from metrics store")
 
   def report_gc_times(self, store):
-    young_gc_time = store.get_one("node_total_young_gen_gc_time", value_converter=float)
-    old_gc_time = store.get_one("node_total_old_gen_gc_time", value_converter=float)
+    young_gc_time = store.get_one("node_total_young_gen_gc_time")
+    old_gc_time = store.get_one("node_total_old_gen_gc_time")
     print("  Total time spent in young gen GC: %.5fs" % convert.ms_to_seconds(young_gc_time))
     print("  Total time spent in old gen GC: %.5fs" % convert.ms_to_seconds(old_gc_time))
 
   def report_disk_usage(self, store):
-    index_size = store.get_one("final_index_size_bytes", value_converter=int)
-    bytes_written = store.get_one("disk_io_write_bytes", value_converter=int)
+    index_size = store.get_one("final_index_size_bytes")
+    bytes_written = store.get_one("disk_io_write_bytes")
     print("  Final index size: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(index_size), convert.bytes_to_mb(index_size)))
     print("  Totally written: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(bytes_written), convert.bytes_to_mb(bytes_written)))
 
@@ -96,13 +96,13 @@ class SummaryReporter:
     print('  Total heap used for stored fields: %.2fMB' % self._mb(store, "segments_stored_fields_memory_in_bytes"))
 
   def _mb(self, store, key):
-    return convert.bytes_to_mb(store.get_one(key, value_converter=int))
+    return convert.bytes_to_mb(store.get_one(key))
 
   def report_segment_counts(self, store):
     print("  Index segment count: %s" % store.get_one("segments_count"))
 
   def report_stats_times(self, store):
     self.print_header("Stats request latency:")
-    print("  Indices stats: %.2fms" % store.get_one("indices_stats_latency", value_converter=float))
-    print("  Nodes stats: %.2fms" % store.get_one("node_stats_latency", value_converter=float))
+    print("  Indices stats: %.2fms" % store.get_one("indices_stats_latency"))
+    print("  Nodes stats: %.2fms" % store.get_one("node_stats_latency"))
     print("")
