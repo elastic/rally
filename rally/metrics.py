@@ -21,8 +21,7 @@ class EsMetricsStore:
     self._invocation = invocation
     self._track = track.name
     self._track_setup = track_setup_name
-    invocation_ts = '%04d-%02d-%02d-%02d-%02d-%02d' % \
-                    (invocation.year, invocation.month, invocation.day, invocation.hour, invocation.minute, invocation.second)
+    invocation_ts = '%04d' % invocation.year
     self._index = "rally-%s" % invocation_ts
     if create:
       script_dir = self._config.opts("system", "rally.root")
@@ -74,6 +73,11 @@ class EsMetricsStore:
       "query": {
         "bool": {
           "filter": [
+            {
+              "term": {
+                "trial-timestamp": self._millis(self._invocation.timestamp())
+              }
+            },
             {
               "term": {
                 "environment": self._environment_name

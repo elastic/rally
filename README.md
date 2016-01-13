@@ -28,7 +28,11 @@ this cluster.
 targeting the metrics store with the benchmark.
 
 Optional but recommended is to install also [Kibana](https://www.elastic.co/downloads/kibana). Kibana will not be auto-configured but a sample
-dashboard is delivered with Rally in `rally/resources/kibana.json` which can be imported to Kibana. 
+dashboard is delivered with Rally in `rally/resources/kibana.json` which can be imported to Kibana:
+
+1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
+2. Create an index pattern "rally-*" and use "trial-timestamp" as time-field name (you might need to import some data first)
+3. Go to Settings > Objects and import `rally/resources/kibana.json`
 
 #### Installing Rally
 

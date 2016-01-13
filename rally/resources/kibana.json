@@ -1,18 +1,18 @@
 [
   {
-    "_id": "Time-Series",
+    "_id": "Nightly-Benchmark-Overview",
     "_type": "dashboard",
     "_source": {
-      "title": "Time Series",
+      "title": "Nightly Benchmark Overview",
       "hits": 0,
       "description": "",
-      "panelsJSON": "[{\"col\":1,\"id\":\"Indexing-Performance\",\"panelIndex\":1,\"row\":1,\"size_x\":12,\"size_y\":7,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Median-Query-Latency\",\"panelIndex\":2,\"row\":31,\"size_x\":12,\"size_y\":6,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Indexing-CPU-utilization-(defaults)\",\"panelIndex\":3,\"row\":43,\"size_x\":7,\"size_y\":6,\"type\":\"visualization\"},{\"col\":8,\"id\":\"GC-Times\",\"panelIndex\":4,\"row\":43,\"size_x\":5,\"size_y\":6,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Stats-request-time\",\"panelIndex\":5,\"row\":37,\"size_x\":12,\"size_y\":6,\"type\":\"visualization\"},{\"id\":\"Indexing-disk-usage\",\"type\":\"visualization\",\"panelIndex\":6,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":20},{\"id\":\"Total-times\",\"type\":\"visualization\",\"panelIndex\":7,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":8},{\"id\":\"Segment-total-heap-used\",\"type\":\"visualization\",\"panelIndex\":8,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":14},{\"id\":\"Index-segment-counts\",\"type\":\"visualization\",\"panelIndex\":9,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":26}]",
+      "panelsJSON": "[{\"id\":\"Indexing-Performance\",\"type\":\"visualization\",\"panelIndex\":1,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":1},{\"id\":\"Total-times\",\"type\":\"visualization\",\"panelIndex\":2,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":6},{\"id\":\"Segment-total-heap-used\",\"type\":\"visualization\",\"panelIndex\":3,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":11},{\"id\":\"Indexing-CPU-utilization\",\"type\":\"visualization\",\"panelIndex\":4,\"size_x\":12,\"size_y\":4,\"col\":1,\"row\":16},{\"id\":\"Index-disk-usage\",\"type\":\"visualization\",\"panelIndex\":5,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":20},{\"id\":\"Index-segment-counts\",\"type\":\"visualization\",\"panelIndex\":6,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":25},{\"id\":\"Median-Query-Latency\",\"type\":\"visualization\",\"panelIndex\":7,\"size_x\":12,\"size_y\":4,\"col\":1,\"row\":30},{\"id\":\"Stats-request-time\",\"type\":\"visualization\",\"panelIndex\":8,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":34},{\"id\":\"GC-Times\",\"type\":\"visualization\",\"panelIndex\":9,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":40}]",
       "optionsJSON": "{\"darkTheme\":false}",
-      "uiStateJSON": "{\"P-3\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}}}",
+      "uiStateJSON": "{\"P-1\":{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}},\"P-4\":{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}}}",
       "version": 1,
       "timeRestore": false,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"*\"}}}]}"
+        "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}}}]}"
       }
     }
   },
@@ -21,35 +21,21 @@
     "_type": "visualization",
     "_source": {
       "title": "Indexing Performance",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"max\",\"schema\":\"metric\",\"params\":{\"field\":\"value\"}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:ec2 track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"EC2 i2.2xlarge Defaults 4G\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"name\":\"request\",\"fill\":false}}}",
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"name:indexing_throughput\"}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"name:indexing_throughput\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
   {
-    "_id": "Median-Query-Latency",
+    "_id": "Segment-total-heap-used",
     "_type": "visualization",
     "_source": {
-      "title": "Median Query Latency",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"3\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"orderAgg\":{\"id\":\"3-orderAgg\",\"type\":\"count\",\"schema\":\"orderAgg\",\"params\":{}},\"order\":\"asc\",\"orderBy\":\"custom\"}},{\"id\":\"2\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_default\",\"analyze_wildcard\":true}}},\"label\":\"Default\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_term\",\"analyze_wildcard\":true}}},\"label\":\"Term\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
-    "_id": "GC-Times",
-    "_type": "visualization",
-    "_source": {
-      "title": "GC Times",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_old_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Old Gen GC\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_young_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Young Gen GC\"}]}}],\"listeners\":{}}",
+      "title": "Segment total heap used",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Total Heap used\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_doc_values_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Doc Values\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_terms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Terms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_norms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Norms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_stored_fields_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Stored Fields\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
@@ -59,11 +45,11 @@
     }
   },
   {
-    "_id": "Stats-request-time",
+    "_id": "Median-Query-Latency",
     "_type": "visualization",
     "_source": {
-      "title": "Stats request time",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Node Stats\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indices_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Indices Stats\"}]}}],\"listeners\":{}}",
+      "title": "Median Query Latency",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Default\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_term\",\"analyze_wildcard\":true}}},\"label\":\"Term\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_hourly\",\"analyze_wildcard\":true}}},\"label\":\"Hourly Aggregation\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_phrase\",\"analyze_wildcard\":true}}},\"label\":\"Phrase\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_scroll\",\"analyze_wildcard\":true}}},\"label\":\"Scroll\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
@@ -77,7 +63,7 @@
     "_type": "visualization",
     "_source": {
       "title": "Total times",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indexing_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Indexing Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:refresh_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Refresh Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:flush_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Flush Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:merges_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Merge Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:merges_total_throttled_time\",\"analyze_wildcard\":true}}},\"label\":\"Merge throttle time\"}]}}],\"listeners\":{}}",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indexing_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Indexing Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:merges_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Merge Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:refresh_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Refresh Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:flush_total_time\",\"analyze_wildcard\":true}}},\"label\":\"Flush Time\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:merges_total_throttled_time\",\"analyze_wildcard\":true}}},\"label\":\"Merge throttle time\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
@@ -87,12 +73,12 @@
     }
   },
   {
-    "_id": "Indexing-CPU-utilization-(defaults)",
+    "_id": "Indexing-CPU-utilization",
     "_type": "visualization",
     "_source": {
-      "title": "Indexing CPU utilization (defaults)",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"percentiles\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50,95,99,100]}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
+      "title": "Indexing CPU utilization",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"name\":\"request\",\"fill\":false}}}",
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
@@ -101,25 +87,11 @@
     }
   },
   {
-    "_id": "Segment-total-heap-used",
-    "_type": "visualization",
-    "_source": {
-      "title": "Segment total heap used",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"max\",\"schema\":\"metric\",\"params\":{\"field\":\"value\"}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Total Heap used\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_doc_values_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Doc Values\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_stored_fields_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Stored Fields\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_terms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Terms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_norms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Norms\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
     "_id": "Index-segment-counts",
     "_type": "visualization",
     "_source": {
       "title": "Index segment counts",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"max\",\"schema\":\"metric\",\"params\":{\"field\":\"value\"}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
@@ -129,11 +101,39 @@
     }
   },
   {
-    "_id": "Indexing-disk-usage",
+    "_id": "Index-disk-usage",
     "_type": "visualization",
     "_source": {
-      "title": "Indexing disk usage",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"max\",\"schema\":\"metric\",\"params\":{\"field\":\"value\"}},{\"id\":\"2\",\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"size\":5,\"order\":\"asc\",\"orderBy\":\"_term\"}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:final_index_size_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Index Size\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:disk_io_write_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Total bytes written\"}]}}],\"listeners\":{}}",
+      "title": "Index disk usage",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:final_index_size_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Final Index Size [Bytes]\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:disk_io_write_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Total bytes written\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Stats-request-time",
+    "_type": "visualization",
+    "_source": {
+      "title": "Stats request time",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Node Stats\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indices_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Indices Stats\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "GC-Times",
+    "_type": "visualization",
+    "_source": {
+      "title": "GC Times",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_young_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Young Gen GC\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_old_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Old Gen GC\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
