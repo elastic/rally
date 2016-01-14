@@ -51,7 +51,7 @@ class Config:
 
   def opts(self, section, key, default_value=None, mandatory=True):
     """
-    Resolves a configuratin property.
+    Resolves a configuration property.
 
     :param section: The configuration section.
     :param key: The configuration key.
@@ -115,6 +115,10 @@ class Config:
   def migrate_config(self):
     # do migration one at a time, starting at the current one...
     current_version = self._stored_config_version()
+    # Something is really fishy. We don't want to downgrade the configuration.
+    if current_version >= self.CURRENT_CONFIG_VERSION:
+      raise ConfigError("The existing config file is available in a later version already. Expected version <= [%s] but found [%s]"
+                        % (self.CURRENT_CONFIG_VERSION, current_version))
     logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, self.CURRENT_CONFIG_VERSION))
     # but first a backup...
     config_file = self._config_file()
