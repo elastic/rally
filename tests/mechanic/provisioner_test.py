@@ -32,12 +32,14 @@ class ProvisionerTests(TestCase):
     config = rally.config.Config()
     config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
     config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.globalScope, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.cleanup()
 
     mock_path_exists.assert_called_once_with('/rally-root/track/track-setup/es-bin')
-    mock_rm.assert_called_once_with('/rally-root/track/track-setup/es-bin')
+    expected_rm = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/track-setup/es-bin")]
+    mock_rm.mock_calls = expected_rm
 
   @mock.patch('builtins.open')
   @mock.patch('glob.glob', lambda p: ['/install/elasticsearch-3.0.0-SNAPSHOT'])
