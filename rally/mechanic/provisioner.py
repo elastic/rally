@@ -29,7 +29,8 @@ class Provisioner:
     data_paths = self._config.opts("provisioning", "datapaths", mandatory=False)
     if data_paths is not None:
       for path in data_paths:
-        shutil.rmtree(path)
+        if os.path.exists(path):
+          shutil.rmtree(path)
 
   def _install_binary(self):
     binary = self._config.opts("builder", "candidate.bin.path")
