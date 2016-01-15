@@ -105,6 +105,7 @@ class Config:
       "benchmarks::metrics.log.dir": "telemetry",
       # No more specific configuration per benchmark - if needed this has to be put into the track specification
       "benchmarks::index.client.threads": "8",
+      "provisioning::node.name.prefix": "rally-node"
     }
 
   def _fill_from_config_file(self, config):

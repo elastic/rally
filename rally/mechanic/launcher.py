@@ -89,7 +89,8 @@ class Launcher:
     return process
 
   def _node_name(self, node):
-    return "node%d" % node
+    prefix = self._config.opts("provisioning", "node.name.prefix")
+    return "%s%d" % (prefix, node)
 
   def _read_output(self, node_name, server, startup_event):
     """

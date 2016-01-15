@@ -70,8 +70,9 @@ class RacingTeam:
 
   def do(self, track):
     selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
-    # we should not kill ES instances anymore as ES is also our metrics store
-    #rally.utils.process.kill_running_es_instances()
+    # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
+    node_prefix = self._config.opts("provisioning", "node.name.prefix")
+    rally.utils.process.kill_running_es_instances(node_prefix)
     self._marshal.setup(track)
     invocation_root = self._config.opts("system", "invocation.root.dir")
     track_root = rally.utils.paths.track_root_dir(invocation_root, track.name)

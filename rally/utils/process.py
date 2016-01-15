@@ -45,13 +45,14 @@ def run_subprocess_with_logging(command_line, header=None):
   return True
 
 
-def kill_running_es_instances():
+def kill_running_es_instances(node_prefix):
   """
   Kills all instances of Elasticsearch that are currently running on the local machine by sending SIGKILL.
+
+  :param node_prefix a prefix of the node names that should be killed.
   """
-  # even better than using ps would be jps (for this we need a properly set up JDK on the path)
   for line in subprocess.Popen(['ps', '-A'], stdout=subprocess.PIPE).communicate()[0].splitlines():
     line = line.decode('utf-8')
-    if 'java' in line and 'elasticsearch' in line:
+    if 'java' in line and 'elasticsearch' in line and node_prefix in line:
       pid = int(line.split(None, 1)[0])
       os.kill(pid, signal.SIGKILL)
