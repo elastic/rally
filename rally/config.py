@@ -1,6 +1,6 @@
 import os.path
 import shutil
-import socket
+import re
 import logging
 import configparser
 from enum import Enum
@@ -29,6 +29,8 @@ class Scope(Enum):
 
 class Config:
   CURRENT_CONFIG_VERSION = 2
+
+  ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
 
   """
   Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -234,9 +236,10 @@ class Config:
     return data_store_host, data_store_port
 
   def _ask_env_name(self):
-    return self._ask_property("Enter a descriptive name for this benchmark environment", default_value=socket.gethostname())
+    return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
+                              check_pattern=Config.ENV_NAME_PATTERN)
 
-  def _ask_property(self, prompt, mandatory=True, check_path_exists=False, default_value=None):
+  def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, default_value=None):
     while True:
       if default_value:
         value = input("%s [default: %s]: " % (prompt, default_value))
@@ -254,6 +257,9 @@ class Config:
 
       if check_path_exists and not os.path.exists(value):
         print("'%s' does not exist. Please check and retry." % value)
+        continue
+      if check_pattern is not None and not check_pattern.match(value):
+        print(  "Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
         continue
       # user entered a valid value
       return value
