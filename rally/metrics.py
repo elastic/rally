@@ -26,7 +26,7 @@ class EsMetricsStore:
     if create:
       script_dir = self._config.opts("system", "rally.root")
       mapping_template = "%s/resources/rally-mapping.json" % script_dir
-      self._client.put_template("rally", open(mapping_template).read())
+      self._client.indices.put_template("rally", open(mapping_template).read())
       # ignore 400 cause by IndexAlreadyExistsException when creating an index
       self._client.indices.create(index=self._index, ignore=400)
     # ensure we can search immediately after opening
