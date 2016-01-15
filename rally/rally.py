@@ -8,6 +8,7 @@ import rally.telemetry
 
 import rally.config
 import rally.utils.io
+import rally.utils.paths
 
 
 # we want to use some basic logging even before the output to log file is configured
@@ -155,8 +156,7 @@ def csv_to_list(csv):
 def invocation_root_dir(cfg):
   root = cfg.opts("system", "root.dir")
   start = cfg.opts("meta", "time.start")
-  ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
-  return "%s/races/%s" % (root, ts)
+  return rally.utils.paths.invocation_root_dir(root, start)
 
 
 def main():
@@ -197,7 +197,7 @@ def main():
 
   # TODO dm [Refactoring]: I am not too happy with dispatching commands on such a high-level. Can we push this down?
   if subcommand == "list-telemetry":
-    telemetry = rally.telemetry.Telemetry(cfg)
+    telemetry = rally.telemetry.Telemetry(cfg, None)
     telemetry.list()
     exit(0)
   else:

@@ -6,7 +6,7 @@ import rally.track.track
 
 
 class TelemetryTests(TestCase):
-  def test_install(self):
+  def test_instrument_candidate_env(self):
     config = rally.config.Config()
     config.add(rally.config.Scope.globalScope, "telemetry", "devices", "jfr")
     config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "track-setup-root")
@@ -15,6 +15,6 @@ class TelemetryTests(TestCase):
     t = rally.telemetry.Telemetry(config)
 
     track_setup = rally.track.track.TrackSetup(name="test-track", description="Test Track")
-    opts = t.install(track_setup)
+    opts = t.instrument_candidate_env(track_setup)
 
     self.assertTrue(opts)

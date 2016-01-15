@@ -7,11 +7,12 @@
 # tournament: checking two revisions against each other
 import logging
 
+import rally.config
 import rally.mechanic.mechanic
 import rally.driver
-import rally.reporter
 import rally.summary_reporter
 import rally.utils.process
+import rally.utils.paths
 import rally.exceptions
 import rally.track.track
 
@@ -69,19 +70,21 @@ class RacingTeam:
 
   def do(self, track):
     selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
-    rally.utils.process.kill_running_es_instances()
+    # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
+    node_prefix = self._config.opts("provisioning", "node.name.prefix")
+    rally.utils.process.kill_running_es_instances(node_prefix)
     self._marshal.setup(track)
-    root = self._config.opts("system", "invocation.root.dir")
-    track_root = "%s/%s" % (root, track.name.lower())
+    invocation_root = self._config.opts("system", "invocation.root.dir")
+    track_root = rally.utils.paths.track_root_dir(invocation_root, track.name)
     self._config.add(rally.config.Scope.benchmarkScope, "system", "track.root.dir", track_root)
 
     for track_setup in track.track_setups:
       if track_setup.name in selected_setups:
-        track_setup_root = "%s/%s" % (track_root, track_setup.name)
+        track_setup_root = rally.utils.paths.track_setup_root_dir(track_root, track_setup.name)
         self._config.add(rally.config.Scope.trackSetupScope, "system", "track.setup.root.dir", track_setup_root)
         print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
         logger.info("Racing on track [%s] with setup [%s]" % (track.name, track_setup.name))
-        cluster = self._mechanic.start_engine(track_setup)
+        cluster = self._mechanic.start_engine(track, track_setup)
         self._driver.setup(cluster, track, track_setup)
         self._driver.go(cluster, track, track_setup)
         self._mechanic.stop_engine(cluster)
@@ -99,17 +102,13 @@ class RacingTeam:
 
 class Press:
   def __init__(self, report_only):
-    self._reporter = None
     self._summary_reporter = None
     self.report_only = report_only
 
   def prepare(self, tracks, config):
-    self._reporter = rally.reporter.Reporter(config)
     self._summary_reporter = rally.summary_reporter.SummaryReporter(config)
 
   def do(self, track):
-    # always write the HTML reports
-    self._reporter.report(track)
     # Producing a summary report only makes sense if we have current metrics
     if not self.report_only:
       self._summary_reporter.report(track)

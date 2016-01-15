@@ -470,12 +470,12 @@ class Reporter:
     root_dir = self._config.opts("system", "root.dir")
     metrics_log_dir = self._config.opts("benchmarks", "metrics.log.dir")
 
-    reLogFile = re.compile(r'^%s/races/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)' % root_dir)
+    reLogFile = re.compile(r'^%s/races/(\d\d\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)-(\d\d)/tracks' % root_dir)
     l = []
     try:
       # l = os.listdir(rootDir)
       # TODO dm: We're reimplementing the directory structure here, not good...
-      l = glob.glob("%s/races/*/%s/%s/%s/telemetry.txt" % (root_dir, track_name, track_setup_name, metrics_log_dir))
+      l = glob.glob("%s/races/*/tracks/%s/%s/%s/telemetry.txt" % (root_dir, track_name, track_setup_name, metrics_log_dir))
     except FileNotFoundError:
       logger.warn("%s does not exist. Skipping..." % track_setup_name)
       return results

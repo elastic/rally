@@ -1,28 +1,60 @@
 import logging
+import threading
+import psutil
 
 import rally.utils.io
+import rally.utils.process
+import rally.metrics
 
 logger = logging.getLogger("rally.telemetry")
 
+
 class Telemetry:
-  def __init__(self, config):
+  def __init__(self, config, metrics_store):
     self._config = config
-    self._devices = [FlightRecorder(config)]
+    self._devices = [
+      FlightRecorder(config, metrics_store),
+      Ps(config, metrics_store)
+    ]
+    self._enabled_devices = self._config.opts("telemetry", "devices")
 
   def list(self):
     print("Available telemetry devices:")
     for device in self._devices:
-      print("\t%s (%s): %s" % (device.command, device.human_name, device.help))
+      print("\t%s (%s): %s (Always enabled: %s)" % (device.command, device.human_name, device.help, device.mandatory))
     print("\nKeep in mind that each telemetry devices may incur a runtime overhead which can skew results.")
 
-  def install(self, setup):
-    enabled_devices = self._config.opts("telemetry", "devices")
+  def instrument_candidate_env(self, setup):
     opts = {}
     for device in self._devices:
-      if device.command in enabled_devices:
+      if self._enabled(device):
         # TODO dm: The maps need to be properly merged, otherwise the overwrite each other when we really have multiple devices...
-        opts.update(device.install(setup))
+        opts.update(device.instrument_env(setup))
     return opts
+
+  def attach_to_process(self, process):
+    for device in self._devices:
+      if self._enabled(device):
+        device.attach_to_process(process)
+
+  def detach_from_process(self, process):
+    for device in self._devices:
+      if self._enabled(device):
+        device.detach_from_process(process)
+
+  def on_benchmark_start(self):
+    for device in self._devices:
+      if self._enabled(device):
+        device.on_benchmark_start()
+
+  def on_benchmark_stop(self):
+    for device in self._devices:
+      if self._enabled(device):
+        device.on_benchmark_stop()
+
+  def _enabled(self, device):
+    return device.mandatory or device.command in self._enabled_devices
+
 
 ########################################################################################
 #
@@ -30,9 +62,58 @@ class Telemetry:
 #
 ########################################################################################
 
-class FlightRecorder:
-  def __init__(self, config):
+class TelemetryDevice:
+  def __init__(self, config, metrics_store):
     self._config = config
+    self._metrics_store = metrics_store
+
+  @property
+  def metrics_store(self):
+    return self._metrics_store
+
+  @property
+  def config(self):
+    return self._config
+
+  @property
+  def mandatory(self):
+    raise NotImplementedError("abstract method")
+
+  @property
+  def command(self):
+    raise NotImplementedError("abstract method")
+
+  @property
+  def human_name(self):
+    raise NotImplementedError("abstract method")
+
+  @property
+  def help(self):
+    pass
+
+  def instrument_env(self, setup):
+    return {}
+
+  def attach_to_process(self, process):
+    pass
+
+  def detach_from_process(self, process):
+    pass
+
+  def on_benchmark_start(self):
+    pass
+
+  def on_benchmark_stop(self):
+    pass
+
+
+class FlightRecorder(TelemetryDevice):
+  def __init__(self, config, metrics_store):
+    super().__init__(config, metrics_store)
+
+  @property
+  def mandatory(self):
+    return False
 
   @property
   def command(self):
@@ -46,7 +127,7 @@ class FlightRecorder:
   def help(self):
     return "Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)"
 
-  def install(self, setup):
+  def instrument_env(self, setup):
     log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
     rally.utils.io.ensure_dir(log_root)
     log_file = "%s/%s.jfr" % (log_root, setup.name)
@@ -56,4 +137,72 @@ class FlightRecorder:
     # TODO dm: Consider using also a delay, starting flight recording only after a specific trigger (e.g. warmup is done), etc., etc.
     # TODO dm: We should probably put the file name in quotes or escape it properly somehow (if there are spaces in the path...)
     return {"ES_JAVA_OPTS": "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
-                            "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s"% (log_file)}
+                            "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s" % (log_file)}
+
+
+class Ps(TelemetryDevice):
+  def __init__(self, config, metrics_store):
+    super().__init__(config, metrics_store)
+    self._t = None
+
+  @property
+  def mandatory(self):
+    return True
+
+  @property
+  def command(self):
+    return "ps"
+
+  @property
+  def human_name(self):
+    return "Process Statistics"
+
+  @property
+  def help(self):
+    return "Gathers process statistics like CPU usage or disk I/O."
+
+  def attach_to_process(self, process):
+    disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
+    self._t = GatherProcessStats(process.pid, disk, self._metrics_store)
+
+  def on_benchmark_start(self):
+    self._t.start()
+
+  def on_benchmark_stop(self):
+    self._t.finish()
+
+
+class GatherProcessStats(threading.Thread):
+  def __init__(self, pid, disk_name, metrics_store):
+    threading.Thread.__init__(self)
+    self.stop = False
+    self.process = psutil.Process(pid)
+    self.disk_name = disk_name
+    self.metrics_store = metrics_store
+    self.disk_start = self._disk_io_counters()
+
+  def finish(self):
+    self.stop = True
+    self.join()
+    disk_end = self._disk_io_counters()
+
+    self.metrics_store.put_count("disk_io_write_bytes", disk_end.write_bytes - self.disk_start.write_bytes, "byte")
+    self.metrics_store.put_count("disk_io_write_count", disk_end.write_count - self.disk_start.write_count)
+    self.metrics_store.put_value("disk_io_write_time", disk_end.write_time - self.disk_start.write_time, "ms")
+
+    self.metrics_store.put_count("disk_io_read_bytes", disk_end.read_bytes - self.disk_start.read_bytes, "byte")
+    self.metrics_store.put_count("disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
+    self.metrics_store.put_value("disk_io_read_time", disk_end.read_time - self.disk_start.read_time, "ms")
+
+  def _disk_io_counters(self):
+    if self._use_specific_disk():
+      return psutil.disk_io_counters(perdisk=True)[self.disk_name]
+    else:
+      return psutil.disk_io_counters(perdisk=False)
+
+  def _use_specific_disk(self):
+    return self.disk_name is not None and self.disk_name != ""
+
+  def run(self):
+    while not self.stop:
+      self.metrics_store.put_value("cpu_utilization_1s", self.process.cpu_percent(interval=1.0), "%")
