@@ -6,7 +6,7 @@ incorporated into Rally itself.
 
 ## Bug reports
 
-If you think you have found a bug in Elasticsearch, first make sure that you are testing against 
+If you think you have found a bug in Rally, first make sure that you are testing against 
 the [latest version of Rally](https://github.com/elastic/rally/releases) - your issue may already have been fixed. If not, search our 
 [issues list](https://github.com/elastic/rally/issues) on GitHub in case a similar issue has already been opened.
 
