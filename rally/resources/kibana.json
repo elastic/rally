@@ -17,20 +17,6 @@
     }
   },
   {
-    "_id": "Indexing-Performance",
-    "_type": "visualization",
-    "_source": {
-      "title": "Indexing Performance",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:ec2 track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"EC2 i2.2xlarge Defaults 4G\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{\"spy\":{\"mode\":{\"name\":\"request\",\"fill\":false}}}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"name:indexing_throughput\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
     "_id": "Segment-total-heap-used",
     "_type": "visualization",
     "_source": {
@@ -87,20 +73,6 @@
     }
   },
   {
-    "_id": "Index-segment-counts",
-    "_type": "visualization",
-    "_source": {
-      "title": "Index segment counts",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"name:segments_count\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
     "_id": "Index-disk-usage",
     "_type": "visualization",
     "_source": {
@@ -139,6 +111,34 @@
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Indexing-Performance",
+    "_type": "visualization",
+    "_source": {
+      "title": "Indexing Performance",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:4gheap\",\"analyze_wildcard\":false}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:ec2 AND track-setup:4gheap\",\"analyze_wildcard\":false}}},\"label\":\"EC2 i2.2xlarge Defaults 4G\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"fill\":false,\"name\":\"request\"}}}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"analyze_wildcard\":false,\"query\":\"name:indexing_throughput\"}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Index-segment-counts",
+    "_type": "visualization",
+    "_source": {
+      "title": "Index segment counts",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"name:segments_count\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   }
