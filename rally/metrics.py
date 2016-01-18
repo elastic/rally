@@ -1,6 +1,7 @@
 import logging
 import elasticsearch
 import time
+import certifi
 
 logger = logging.getLogger("rally.metrics")
 
@@ -10,8 +11,19 @@ class EsMetricsStore:
     self._config = config
     host = self._config.opts("reporting", "datastore.host")
     port = self._config.opts("reporting", "datastore.port")
+    # poor man's boolean conversion
+    secure = self._config.opts("reporting", "datastore.secure") == "True"
+    user = self._config.opts("reporting", "datastore.user")
+    password = self._config.opts("reporting", "datastore.password")
     self._environment_name = config.opts("system", "env.name")
-    self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}])
+
+    if user and password:
+      auth = (user, password)
+    else:
+      auth = None
+
+    self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
+                                               use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where())
     self._invocation = None
     self._track = None
     self._track_setup = None

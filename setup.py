@@ -6,7 +6,8 @@ __versionstr__ = '.'.join(map(str, VERSION))
 
 install_requires = [
   "elasticsearch>=2.1.0",
-  "psutil>=3.3.0,<4.0.0"
+  "psutil>=3.3.0,<4.0.0",
+  "certifi"
 ]
 
 tests_require = []

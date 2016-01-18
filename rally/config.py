@@ -32,6 +32,13 @@ class Config:
 
   ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
 
+  PORT_RANGE_PATTERN = re.compile("^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$")
+
+  BOOLEAN_PATTERN = re.compile("^(True|true|yes|t|y|False|false|f|no|n)$")
+
+  def _to_bool(self, value):
+    return value in ["True", "true", "yes", "t", "y"]
+
   """
   Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
   different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are transparently
@@ -144,9 +151,12 @@ class Config:
       config["meta"]["config.version"] = str(current_version)
       # Give the user a hint what's going on
       print("Metrics data are now stored in a dedicated Elasticsearch instance. Please provide details below")
-      data_store_host, data_store_port = self._ask_data_store()
+      data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
       config["reporting"]["datastore.host"] = data_store_host
       config["reporting"]["datastore.port"] = data_store_port
+      config["reporting"]["datastore.secure"] = data_store_secure
+      config["reporting"]["datastore.user"] = data_store_user
+      config["reporting"]["datastore.password"] = data_store_password
       env_name = self._ask_env_name()
       config["system"]["env.name"] = env_name
 
@@ -195,7 +205,7 @@ class Config:
     else:
       stats_disk_device = ""
 
-    data_store_host, data_store_port = self._ask_data_store()
+    data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
 
     config = configparser.ConfigParser()
     config["meta"] = {}
@@ -230,6 +240,9 @@ class Config:
     config["reporting"]["output.html.report.filename"] = "index.html"
     config["reporting"]["datastore.host"] = data_store_host
     config["reporting"]["datastore.port"] = data_store_port
+    config["reporting"]["datastore.secure"] = data_store_secure
+    config["reporting"]["datastore.user"] = data_store_user
+    config["reporting"]["datastore.password"] = data_store_password
 
     self._write_to_config_file(config)
 
@@ -237,8 +250,12 @@ class Config:
 
   def _ask_data_store(self):
     data_store_host = self._ask_property("Enter the host name of the ES data store", default_value="localhost")
-    data_store_port = self._ask_property("Enter the port of the ES data store")
-    return data_store_host, data_store_port
+    data_store_port = self._ask_property("Enter the port of the ES data store", check_pattern=Config.PORT_RANGE_PATTERN)
+    data_store_secure = self._ask_property("Use secure connection (True, False)", default_value=False, check_pattern=Config.BOOLEAN_PATTERN)
+    data_store_user = self._ask_property("Username for basic authentication (empty if not needed)", mandatory=False, default_value="")
+    data_store_password = self._ask_property("Password for basic authentication (empty if not needed)", mandatory=False, default_value="")
+    # do an intermediate conversion to bool in order to normalize input
+    return data_store_host, data_store_port, str(self._to_bool(data_store_secure)), data_store_user, data_store_password
 
   def _ask_env_name(self):
     return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
@@ -246,13 +263,13 @@ class Config:
 
   def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, default_value=None):
     while True:
-      if default_value:
-        value = input("%s [default: %s]: " % (prompt, default_value))
+      if default_value is not None:
+        value = input("%s [default: '%s']: " % (prompt, default_value))
       else:
         value = input("%s: " % prompt)
 
       if not value or value.strip() == "":
-        if mandatory and not default_value:
+        if mandatory and default_value is None:
           print("  Value is required. Please retry.")
           continue
         else:
@@ -263,7 +280,7 @@ class Config:
       if check_path_exists and not os.path.exists(value):
         print("'%s' does not exist. Please check and retry." % value)
         continue
-      if check_pattern is not None and not check_pattern.match(value):
+      if check_pattern is not None and not check_pattern.match(str(value)):
         print(  "Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
         continue
       # user entered a valid value
