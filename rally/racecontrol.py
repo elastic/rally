@@ -109,6 +109,4 @@ class Press:
     self._summary_reporter = rally.summary_reporter.SummaryReporter(config)
 
   def do(self, track):
-    # Producing a summary report only makes sense if we have current metrics
-    if not self.report_only:
-      self._summary_reporter.report(track)
+    self._summary_reporter.report(track)

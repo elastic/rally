@@ -29,10 +29,12 @@
       "properties": {
         "@timestamp": {
           "type": "date",
+          "format": "epoch_millis",
           "doc_values": true
         },
         "trial-timestamp": {
           "type": "date",
+          "format": "basic_date_time_no_millis",
           "doc_values": true
         },
         "environment": {

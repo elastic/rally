@@ -60,7 +60,7 @@ class EsMetricsStore:
     # TODO dm: Check the overhead and just cache and push afterwards to ES if it is too high
     doc = {
       "@timestamp": self._millis(time.time()),
-      "trial-timestamp": self._millis(self._invocation.timestamp()),
+      "trial-timestamp": self._seconds(self._invocation),
       "environment": self._environment_name,
       "track": self._track,
       "track-setup": self._track_setup,
@@ -71,7 +71,10 @@ class EsMetricsStore:
     self._client.create(index=self._index, doc_type="metrics", body=doc)
 
   def _millis(self, t):
-    return int(round(t * 1000))
+    return int(round(t))
+
+  def _seconds(self, t):
+    return '%04d%02d%02dT%02d%02d%02dZ' % (t.year, t.month, t.day, t.hour, t.minute, t.second)
 
   def get_one(self, name):
     v = self.get(name)
@@ -87,7 +90,7 @@ class EsMetricsStore:
           "filter": [
             {
               "term": {
-                "trial-timestamp": self._millis(self._invocation.timestamp())
+                "trial-timestamp": self._seconds(self._invocation)
               }
             },
             {
