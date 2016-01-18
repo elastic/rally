@@ -8,13 +8,13 @@ def all_invocations_root_dir(root):
   return "%s/races" % root
 
 
-def invocation_root_dir(root, start):
+def invocation_root_dir(root, start, env):
   ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
-  return "%s/%s" % (all_invocations_root_dir(root), ts)
+  return "%s/%s/%s" % (all_invocations_root_dir(root), ts, env)
 
 
-def to_timestamp(dir):
-  m = timestamp_pattern.match(dir)
+def to_timestamp(directory):
+  m = timestamp_pattern.match(directory)
   if len(m.groups()) == 6:
     year = int(m.group(1))
     month = int(m.group(2))
@@ -24,7 +24,7 @@ def to_timestamp(dir):
     second = int(m.group(6))
     return datetime.datetime(year=year, month=month, day=day, hour=hour, minute=minute, second=second)
   else:
-    raise RuntimeError("[%s] is an invalid timestamp (expected to match against [%s])" % (invocation_root_dir, timestamp_pattern))
+    raise RuntimeError("[%s] is an invalid timestamp (expected to match against [%s])" % (directory, timestamp_pattern))
 
 
 def all_tracks_root_root_dir(invocation_root):

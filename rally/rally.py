@@ -156,7 +156,8 @@ def csv_to_list(csv):
 def invocation_root_dir(cfg):
   root = cfg.opts("system", "root.dir")
   start = cfg.opts("meta", "time.start")
-  return rally.utils.paths.invocation_root_dir(root, start)
+  env = cfg.opts("system", "env.name")
+  return rally.utils.paths.invocation_root_dir(root, start, env)
 
 
 def main():
