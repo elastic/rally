@@ -9,7 +9,12 @@ import rally.cluster
 import rally.telemetry
 
 
+class LaunchError(Exception):
+  pass
+
+
 class Launcher:
+  PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
   """
   Launcher is responsible for starting and stopping the benchmark candidate.
 
@@ -84,9 +89,14 @@ class Launcher:
     t = threading.Thread(target=self._read_output, args=(node_name, process, startup_event))
     t.setDaemon(True)
     t.start()
-    startup_event.wait()
-    self._logger.info('Started node=%s with pid=%s' % (node_name, process.pid))
-    return process
+    if startup_event.wait(timeout=Launcher.PROCESS_WAIT_TIMEOUT_SECONDS):
+      self._logger.info('Started node=%s with pid=%s' % (node_name, process.pid))
+      return process
+    else:
+      log_dir = self._config.opts("system", "log.dir")
+      msg = "Could not start node '%s' within timeout period of %s seconds." % (node_name, Launcher.PROCESS_WAIT_TIMEOUT_SECONDS)
+      self._logger.error(msg)
+      raise LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
 
   def _node_name(self, node):
     prefix = self._config.opts("provisioning", "node.name.prefix")
