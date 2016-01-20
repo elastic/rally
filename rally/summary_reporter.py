@@ -31,7 +31,8 @@ class SummaryReporter:
         store.open(invocation, track, track_setup.name)
 
         self.report_index_throughput(store)
-        self.report_search_latency(store)
+        print("")
+        self.report_search_latency(store, track)
         self.report_total_times(store)
 
         self.print_header("System Metrics")
@@ -54,9 +55,16 @@ class SummaryReporter:
     self.print_header("Indexing Results (Throughput):")
     print("  %d docs/sec" % store.get_one("indexing_throughput"))
 
-  def report_search_latency(self, store):
-    # TODO dm: (Conceptual) We are measuring a latency here. -> Provide percentiles (later)
-    pass
+  def report_search_latency(self, store, track):
+    self.print_header("Query Latency:")
+    for q in track.queries:
+      query_latency = store.get("query_latency_%s" % q.name)
+      if query_latency:
+        #TODO dm: Output percentiles, not the median...
+        formatted_median = '%.1f' % statistics.median(query_latency)
+        print("  Median query latency [%s]: %sms" % (q.name, formatted_median))
+      else:
+        print("Could not determine CPU usage from metrics store")
 
   def report_total_times(self, store):
     self.print_header("Total times:")
