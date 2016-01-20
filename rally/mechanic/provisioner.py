@@ -69,7 +69,8 @@ class Provisioner:
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
     # TODO dm: Maybe the cluster name should change to something more generic than 'nightlybench'. Also consider multi-node setups
     s += '\ncluster.name: %s\n' % 'nightlybench.%s' % socket.gethostname()
-    s += '\nindex.optimize_auto_generated_id: false\n'
+    # Elasticsearch will refuse to start on unknown settings
+    #s += '\nindex.optimize_auto_generated_id: false\n'
     s += '\npath.data: %s' % ', '.join(data_paths)
     if additional_config:
       s += '\n%s' % additional_config
