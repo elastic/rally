@@ -54,6 +54,14 @@ You can now either add `~/.local/bin` to your path or invoke Rally via `~/.local
 
 Rally has a list of supported command line options. Just run `esrally --help`.
 
+Here are some examples:
+
+* `esrally`: Runs the benchmarks and reports the results on the command line. This is what you typically want to do in development. It assumes lots of defaults; its canonical form is `esrally all --benchmark-mode=single --revision=current --track-setup=defaults`.
+* `esrally --skip-build`: Assumes that an Elasticsearch ZIP file has already been build and just runs the benchmark
+* `esrally --revision ebe3fd2`: Checks out the revision ebe3fd2 from git, builds it and runs benchmarks against it. Note that will only work if the build is based on Gradle (i.e. Elasticsearch 3.0+)
+* `esrally race --skip-build`: Skips the build and runs only the benchmarking stage skipping reporting.
+
+
 #### Telemetry
 
 Rally can add telemetry during the race. Currently, only [Java Flight Recorder](http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html) is supported. 
