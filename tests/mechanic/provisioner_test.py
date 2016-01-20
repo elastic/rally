@@ -16,11 +16,30 @@ class ProvisionerTests(TestCase):
     config = rally.config.Config()
     config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
     config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.globalScope, "provisioning", "install.preserve", False)
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.cleanup()
 
     mock_path_exists.assert_called_once_with('/rally-root/track/track-setup/es-bin')
+    mock_rm.assert_not_called()
+
+  @mock.patch('shutil.rmtree')
+  @mock.patch('os.path.exists')
+  @mock.patch('logging.Logger')
+  def test_cleanup_nothing_on_preserve(self, mock_logger, mock_path_exists, mock_rm):
+    mock_path_exists.return_value = False
+
+    config = rally.config.Config()
+    config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
+    config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.globalScope, "provisioning", "install.preserve", True)
+    config.add(rally.config.Scope.globalScope, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
+
+    p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
+    p.cleanup()
+
+    mock_path_exists.assert_not_called()
     mock_rm.assert_not_called()
 
   @mock.patch('shutil.rmtree')
@@ -32,14 +51,15 @@ class ProvisionerTests(TestCase):
     config = rally.config.Config()
     config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
     config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.globalScope, "provisioning", "install.preserve", False)
     config.add(rally.config.Scope.globalScope, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.cleanup()
 
-    mock_path_exists.assert_called_once_with('/rally-root/track/track-setup/es-bin')
-    expected_rm = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/track-setup/es-bin")]
-    mock_rm.mock_calls = expected_rm
+    expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/track-setup/es-bin")]
+    mock_path_exists.mock_calls = expected_dir_calls
+    mock_rm.mock_calls = expected_dir_calls
 
   @mock.patch('builtins.open')
   @mock.patch('glob.glob', lambda p: ['/install/elasticsearch-3.0.0-SNAPSHOT'])
@@ -61,8 +81,5 @@ class ProvisionerTests(TestCase):
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.prepare(track_setup)
-
-    mock_path_exists.assert_called_once_with('/rally-root/track/track-setup/es-bin')
-    mock_rm.assert_called_once_with('/rally-root/track/track-setup/es-bin')
 
     self.assertEqual(config.opts("provisioning", "local.binary.path"), "/install/elasticsearch-3.0.0-SNAPSHOT")

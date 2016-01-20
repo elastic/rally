@@ -73,6 +73,13 @@ def parse_args():
       default=False,
       action="store_true")
 
+  for p in [parser, all_parser, race_parser]:
+    p.add_argument(
+        '--preserve-install',
+        help='preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk space! (default: false)',
+        default=False,
+        action="store_true")
+
   # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
   # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
   for p in [parser, all_parser, race_parser]:
@@ -192,6 +199,7 @@ def main():
   cfg.add(rally.config.Scope.globalOverrideScope, "telemetry", "devices", csv_to_list(args.telemetry))
   cfg.add(rally.config.Scope.globalOverrideScope, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
   cfg.add(rally.config.Scope.globalOverrideScope, "provisioning", "datapaths", csv_to_list(args.data_paths))
+  cfg.add(rally.config.Scope.globalOverrideScope, "provisioning", "install.preserve", args.preserve_install)
 
   configure_logging(cfg)
 

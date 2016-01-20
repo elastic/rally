@@ -23,21 +23,24 @@ class Provisioner:
     self._configure(setup)
 
   def cleanup(self):
+    preserve = self._config.opts("provisioning", "install.preserve")
     install_dir = self._install_dir()
-    if os.path.exists(install_dir):
-      shutil.rmtree(install_dir)
-    data_paths = self._config.opts("provisioning", "datapaths", mandatory=False)
-    if data_paths is not None:
-      for path in data_paths:
-        if os.path.exists(path):
-          shutil.rmtree(path)
+    if preserve:
+      self._logger.info("Preserving benchmark candidate installation at [%s]." % install_dir)
+    else:
+      self._logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
+      if os.path.exists(install_dir):
+        shutil.rmtree(install_dir)
+      data_paths = self._config.opts("provisioning", "datapaths", mandatory=False)
+      if data_paths is not None:
+        for path in data_paths:
+          if os.path.exists(path):
+            shutil.rmtree(path)
 
   def _install_binary(self):
     binary = self._config.opts("builder", "candidate.bin.path")
     install_dir = self._install_dir()
     self._logger.info("Preparing candidate locally in %s." % install_dir)
-    # Clean any old configs first
-    self.cleanup()
     rally.utils.io.ensure_dir(install_dir)
     self._logger.info("Unzipping %s to %s" % (binary, install_dir))
     rally.utils.io.unzip(binary, install_dir)
@@ -63,7 +66,7 @@ class Provisioner:
   def _configure_cluster(self, setup):
     binary_path = self._config.opts("provisioning", "local.binary.path")
     additional_config = setup.candidate_settings.custom_config_snippet
-    data_paths = self._data_paths()
+    data_paths = self._data_paths(setup)
     self._logger.info('Using data paths: %s' % data_paths)
     self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
@@ -76,7 +79,7 @@ class Provisioner:
       s += '\n%s' % additional_config
     s = open(binary_path + "/config/elasticsearch.yml", 'w').write(s)
 
-  def _data_paths(self):
+  def _data_paths(self, setup):
     binary_path = self._config.opts("provisioning", "local.binary.path")
     data_paths = self._config.opts("provisioning", "datapaths")
     # From the original code
@@ -85,7 +88,8 @@ class Provisioner:
     if data_paths is None:
       return ['%s/data' % binary_path]
     else:
-      return data_paths
+      # we have to add the track name here as we need to preserve data potentially across runs
+      return ["%s/%s" % (path, setup.name) for path in data_paths]
 
   def _install_dir(self):
     root = self._config.opts("system", "track.setup.root.dir")
