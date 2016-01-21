@@ -97,7 +97,7 @@ class EsMetricsStore:
     self._client.refresh(index=self._index)
 
   def _get_template(self):
-    self._index_template_provider.template()
+    return self._index_template_provider.template()
 
   def close(self):
     # no-op here for the time being for compatibility
