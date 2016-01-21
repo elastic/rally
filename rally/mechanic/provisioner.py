@@ -1,4 +1,3 @@
-import socket
 import os
 import glob
 import shutil
@@ -65,15 +64,13 @@ class Provisioner:
 
   def _configure_cluster(self, setup):
     binary_path = self._config.opts("provisioning", "local.binary.path")
+    env_name = self._config.opts("system", "env.name")
     additional_config = setup.candidate_settings.custom_config_snippet
     data_paths = self._data_paths(setup)
     self._logger.info('Using data paths: %s' % data_paths)
     self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
-    # TODO dm: Maybe the cluster name should change to something more generic than 'nightlybench'. Also consider multi-node setups
-    s += '\ncluster.name: %s\n' % 'nightlybench.%s' % socket.gethostname()
-    # Elasticsearch will refuse to start on unknown settings
-    #s += '\nindex.optimize_auto_generated_id: false\n'
+    s += '\ncluster.name: %s\n' % 'benchmark.%s' % env_name
     s += '\npath.data: %s' % ', '.join(data_paths)
     if additional_config:
       s += '\n%s' % additional_config
@@ -82,9 +79,6 @@ class Provisioner:
   def _data_paths(self, setup):
     binary_path = self._config.opts("provisioning", "local.binary.path")
     data_paths = self._config.opts("provisioning", "datapaths")
-    # From the original code
-    # data_paths = ['%s/data/%s' % (install_dir)]
-    # data_paths.extend('/ssd%d' % x for x in range(1, dataPathCount))
     if data_paths is None:
       return ['%s/data' % binary_path]
     else:
