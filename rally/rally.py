@@ -47,9 +47,9 @@ def parse_args():
 
   # TODO dm: Come up with a more descriptive help message
   subparsers = parser.add_subparsers(
-    title='subcommands',
-    dest='subcommand',
-    help='Subcommands define what Rally will do')
+      title='subcommands',
+      dest='subcommand',
+      help='Subcommands define what Rally will do')
 
   all_parser = subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
   race_parser = subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
@@ -61,17 +61,17 @@ def parse_args():
   config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
   for p in [parser, config_parser]:
     p.add_argument(
-      '--advanced-config',
-      help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
-      default=False,
-      action="store_true")
+        '--advanced-config',
+        help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
+        default=False,
+        action="store_true")
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-      '--skip-build',
-      help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
-      default=False,
-      action="store_true")
+        '--skip-build',
+        help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
+        default=False,
+        action="store_true")
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
@@ -84,32 +84,32 @@ def parse_args():
   # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-      '--benchmark-mode',
-      help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across "
-           "a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
-      choices=["single", "range"],  # later also 'tournament'
-      default="single")
+        '--benchmark-mode',
+        help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting across "
+             "a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
+        choices=["single", "range"],  # later also 'tournament'
+        default="single")
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-      '--telemetry',
-      help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
-           'provided as a comma-separated list.',
-      default="")
+        '--telemetry',
+        help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
+             'provided as a comma-separated list.',
+        default="")
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-      '--revision',
-      help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
-           "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
-           "specified as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
-      default="current")  # optimized for local usage, don't fetch sources
+        '--revision',
+        help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the latest "
+             "version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be"
+             "specified as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
+        default="current")  # optimized for local usage, don't fetch sources
 
   for p in [parser, all_parser, race_parser]:
     p.add_argument(
-      '--track-setup',
-      help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated list.",
-      default="defaults")  # optimized for local usage
+        '--track-setup',
+        help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated list.",
+        default="defaults")  # optimized for local usage
 
   # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
   # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
@@ -117,18 +117,17 @@ def parse_args():
   # That's why we add this just as an undocumented option.
   for p in [parser, all_parser, race_parser, report_parser]:
     p.add_argument(
-      '--effective-start-date',
-      help=argparse.SUPPRESS,
-      type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
-      default=datetime.datetime.now())
-
+        '--effective-start-date',
+        help=argparse.SUPPRESS,
+        type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
+        default=datetime.datetime.now())
 
   # This is a highly experimental option and will likely be removed
   for p in [parser, all_parser, race_parser, report_parser]:
     p.add_argument(
-      '--data-paths',
-      help=argparse.SUPPRESS,
-      default=None)
+        '--data-paths',
+        help=argparse.SUPPRESS,
+        default=None)
 
   return parser.parse_args()
 
@@ -159,6 +158,7 @@ def csv_to_list(csv):
     return None
   else:
     return [e.strip() for e in csv.split(",")]
+
 
 def invocation_root_dir(cfg):
   root = cfg.opts("system", "root.dir")
@@ -202,7 +202,6 @@ def main():
   cfg.add(rally.config.Scope.globalOverrideScope, "provisioning", "install.preserve", args.preserve_install)
 
   configure_logging(cfg)
-
 
   # TODO dm [Refactoring]: I am not too happy with dispatching commands on such a high-level. Can we push this down?
   if subcommand == "list-telemetry":
