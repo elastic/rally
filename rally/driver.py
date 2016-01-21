@@ -1,14 +1,12 @@
 import time
 import json
 import random
-import bz2
-import gzip
-import os
 import logging
 
 from elasticsearch.helpers import parallel_bulk
 
 import rally.track.track
+import rally.utils.io
 import rally.utils.process
 import rally.utils.convert as convert
 import rally.utils.progress
@@ -186,25 +184,17 @@ class IndexBenchmark(TimedOperation):
 
     return expand_action
 
-  def _open_file(self, docsFile):
-    if docsFile.endswith('.bz2'):
-      return bz2.open(docsFile, 'rt')
-    elif docsFile.endswith('.gz'):
-      return gzip.open(docsFile, 'rt')
-    else:
-      return open(docsFile, 'rt')
-
   def _read_records(self, documents):
-    with self._open_file(documents) as f:
+    with open(documents, 'rt') as f:
       yield from f
 
-  def index(self, docsFile, expected_doc_count, doFlush=True, doStats=True):
-    numClientThreads = int(self._config.opts("benchmarks", "index.client.threads"))
-    logger.info('Indexing JSON docs file: [%s]' % docsFile)
-    logger.info('Launching %d client bulk indexing threads' % numClientThreads)
+  def index(self, documents, expected_doc_count, flush=True, stats=True):
+    num_client_threads = int(self._config.opts("benchmarks", "index.client.threads"))
+    logger.info('Indexing JSON docs file: [%s]' % documents)
+    logger.info('Launching %d client bulk indexing threads' % num_client_threads)
 
-    indexName = self._track.index_name
-    typeName = self._track.type_name
+    index = self._track.index_name
+    type = self._track.type_name
     es = self._cluster.client
 
     self.start_time = time.time()
@@ -214,10 +204,10 @@ class IndexBenchmark(TimedOperation):
     self._print_progress(processed)
     try:
       for _ in parallel_bulk(es,
-                             self._read_records(docsFile),
-                             thread_count=numClientThreads,
-                             index=indexName,
-                             doc_type=typeName,
+                             self._read_records(documents),
+                             thread_count=num_client_threads,
+                             index=index,
+                             doc_type=type,
                              chunk_size=self._bulk_size,
                              expand_action_callback=self.get_expand_action(),
                              ):
@@ -233,19 +223,19 @@ class IndexBenchmark(TimedOperation):
     docs_per_sec = (processed / (end_time - self.start_time))
     self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
 
-    if doFlush:
-      logger.info("Force flushing index [%s]." % indexName)
-      es.indices.flush(index=indexName, params={'request_timeout': 600})
+    if flush:
+      logger.info("Force flushing index [%s]." % index)
+      es.indices.flush(index=index, params={'request_timeout': 600})
       logger.info("Force flush has finished successfully.")
 
-    if doStats:
+    if stats:
       self._index_stats(expected_doc_count)
       self._node_stats()
 
   def _index_stats(self, expected_doc_count):
-    indexName = self._track.index_name
+    index = self._track.index_name
     logger.info("Gathering indices stats")
-    duration, stats = self.timed(self._cluster.client.indices.stats, index=indexName, metric='_all', level='shards')
+    duration, stats = self.timed(self._cluster.client.indices.stats, index=index, metric='_all', level='shards')
     self._metrics_store.put_value("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
     primaries = stats['_all']['primaries']
     self._metrics_store.put_count("segments_count", primaries['segments']['count'])
@@ -293,16 +283,8 @@ class IndexBenchmark(TimedOperation):
     )
     logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
 
-  def print_index_stats(self, dataDir):
-    # index_size_kb = os.popen('du -s %s' % dataDir).readline().split()[0]
-    index_size_bytes = self.get_size(dataDir)
+  def print_index_stats(self, data_dir):
+    index_size_bytes = rally.utils.io.get_size(data_dir)
     self._metrics_store.put_count("final_index_size_bytes", index_size_bytes, "byte")
-    rally.utils.process.run_subprocess_with_logging("find %s -ls" % dataDir, header="index files:")
+    rally.utils.process.run_subprocess_with_logging("find %s -ls" % data_dir, header="index files:")
 
-  def get_size(self, start_path='.'):
-    total_size = 0
-    for dirpath, dirnames, filenames in os.walk(start_path):
-      for f in filenames:
-        fp = os.path.join(dirpath, f)
-        total_size += os.path.getsize(fp)
-    return total_size

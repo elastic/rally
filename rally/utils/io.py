@@ -34,7 +34,7 @@ def unzip(zip_name, target_directory):
   :param zip_name: The full path name to the file that should be decompressed.
   :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling this function.
   """
-  filename, extension = os.path.splitext(zip_name)
+  filename, extension = splitext(zip_name)
   if extension == ".zip":
     if not rally.utils.process.run_subprocess_with_logging("unzip %s -d %s" % (zip_name, target_directory)):
       raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
@@ -46,6 +46,25 @@ def unzip(zip_name, target_directory):
         extracted.write(data)
   else:
     raise RuntimeError("Unsupported file extension '%s'. Cannot unzip '%s'" % (extension, zip_name))
+
+
+# just in a dedicated method to ease mocking
+def dirname(path):
+  return os.path.dirname(path)
+
+
+# just in a dedicated method to ease mocking
+def splitext(file_name):
+  return os.path.splitext(file_name)
+
+
+def get_size(start_path='.'):
+  total_size = 0
+  for dirpath, dirnames, filenames in os.walk(start_path):
+    for f in filenames:
+      fp = os.path.join(dirpath, f)
+      total_size += os.path.getsize(fp)
+  return total_size
 
 
 def guess_install_location(binary_name, fallback=None):
