@@ -1,9 +1,10 @@
-import time
 import socket
 import elasticsearch
 import logging
 
 from enum import Enum
+
+import rally.time
 
 
 class ClusterStatus(Enum):
@@ -40,10 +41,11 @@ class Cluster:
   Cluster exposes APIs of the running benchmark candidate.
   """
 
-  def __init__(self, servers, metrics_store):
+  def __init__(self, servers, metrics_store, clock=rally.time.Clock):
     self._es = elasticsearch.Elasticsearch()
     self._servers = servers
     self._metrics_store = metrics_store
+    self._clock = clock
 
   @property
   def servers(self):
@@ -61,7 +63,8 @@ class Cluster:
     cluster_status_name = cluster_status.name
     logger.info('\nWait for %s cluster...' % cluster_status_name)
     es = self._es
-    t0 = time.time()
+    stop_watch = self._clock.stop_watch()
+    stop_watch.start()
     while True:
       try:
         result = es.cluster.health(wait_for_status=cluster_status_name, wait_for_relocating_shards=0, timeout='1s')
@@ -75,9 +78,10 @@ class Cluster:
         if result['status'] == cluster_status_name and result['relocating_shards'] == 0:
           break
         else:
-          time.sleep(0.5)
+          rally.time.sleep(0.5)
 
-    logger.info('%s cluster done (%.1f sec)' % (cluster_status_name, time.time() - t0))
+    stop_watch.stop()
+    logger.info('%s cluster done (%.1f sec)' % (cluster_status_name, stop_watch.total_time()))
     logger.info('Cluster health: %s' % str(es.cluster.health()))
     logger.info('SHARDS:\n%s' % es.cat.shards(v=True))
 

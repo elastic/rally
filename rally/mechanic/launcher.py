@@ -1,5 +1,4 @@
 import os
-import time
 import threading
 import subprocess
 import signal
@@ -7,6 +6,7 @@ import signal
 import rally.mechanic.gear
 import rally.cluster
 import rally.telemetry
+import rally.time
 
 
 class LaunchError(Exception):
@@ -21,9 +21,10 @@ class Launcher:
   Currently, only local launching is supported.
   """
 
-  def __init__(self, config, logger):
+  def __init__(self, config, logger, clock=rally.time.Clock):
     self._config = config
     self._logger = logger
+    self._clock = clock
     self._servers = []
 
   def start(self, track, setup, metrics_store):
@@ -124,7 +125,8 @@ class Launcher:
     self._logger.info('Shutting down ES cluster')
 
     # Ask all nodes to shutdown:
-    t0 = time.time()
+    stop_watch = self._clock.stop_watch()
+    stop_watch.start()
     for idx, server in enumerate(cluster.servers):
       process = server.process
       server.telemetry.detach_from_process(process)
@@ -134,7 +136,7 @@ class Launcher:
 
       try:
         process.wait(10.0)
-        self._logger.info('Done shutdown server (%.1f sec)' % (time.time() - t0))
+        self._logger.info('Done shutdown server (%.1f sec)' % stop_watch.split_time())
       except subprocess.TimeoutExpired:
         # kill -9
         self._logger.warn('Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:' % node)
@@ -146,7 +148,7 @@ class Launcher:
 
         try:
           process.wait(120.0)
-          self._logger.info('Done shutdown server (%.1f sec)' % (time.time() - t0))
+          self._logger.info('Done shutdown server (%.1f sec)' % stop_watch.split_time())
           return
         except subprocess.TimeoutExpired:
           pass

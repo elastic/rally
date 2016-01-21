@@ -1,4 +1,3 @@
-import time
 import json
 import random
 import logging
@@ -6,6 +5,8 @@ import logging
 from elasticsearch.helpers import parallel_bulk
 
 import rally.track.track
+import rally.time
+
 import rally.utils.io
 import rally.utils.process
 import rally.utils.convert as convert
@@ -19,8 +20,9 @@ class Driver:
   Driver runs the benchmark.
   """
 
-  def __init__(self, config):
+  def __init__(self, config, clock=rally.time.Clock):
     self._config = config
+    self._clock = clock
     self._metrics = None
     self._index_benchmark = None
 
@@ -37,11 +39,11 @@ class Driver:
 
   def go(self, cluster, track, track_setup):
     cluster.on_benchmark_start()
-    self._index_benchmark = IndexBenchmark(self._config, track, track_setup, cluster, self._metrics)
+    self._index_benchmark = IndexBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
     if track_setup.test_settings.benchmark_indexing:
       self._index_benchmark.run()
     if track_setup.test_settings.benchmark_search:
-      search_benchmark = SearchBenchmark(self._config, track, track_setup, cluster, self._metrics)
+      search_benchmark = SearchBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
       search_benchmark.run()
     cluster.on_benchmark_stop()
 
@@ -53,17 +55,23 @@ class Driver:
 
 
 class TimedOperation:
+  def __init__(self, clock):
+    self._clock = clock
+
   def timed(self, target, repeat=1, *args, **kwargs):
-    start = time.time()
+    stop_watch = self._clock.stop_watch()
+    stop_watch.start()
     for i in range(repeat):
       result = target(*args, **kwargs)
-    stop = time.time()
-    return (stop - start) / repeat, result
+    stop_watch.stop()
+    return stop_watch.total_time() / repeat, result
 
 
 class SearchBenchmark(TimedOperation):
-  def __init__(self, config, track, track_setup, cluster, metrics):
+  def __init__(self, config, clock, track, track_setup, cluster, metrics):
+    TimedOperation.__init__(self, clock)
     self._config = config
+    self._clock = clock
     self._track = track
     self._track_setup = track_setup
     self._cluster = cluster
@@ -105,13 +113,16 @@ class SearchBenchmark(TimedOperation):
 
 
 class IndexBenchmark(TimedOperation):
-  def __init__(self, config, track, track_setup, cluster, metrics):
+  def __init__(self, config, clock, track, track_setup, cluster, metrics):
+    TimedOperation.__init__(self, clock)
     self._config = config
+    self._stop_watch = clock.stop_watch()
     self._track = track
     self._track_setup = track_setup
     self._cluster = cluster
     self._metrics_store = cluster.metrics_store
     self._metrics = metrics
+    self._sent_bytes = 0
     # TODO dm: Just needed for print output - can we simplify this?
     self._nextPrint = 0
     self._numDocsIndexed = 0
@@ -197,10 +208,8 @@ class IndexBenchmark(TimedOperation):
     type = self._track.type_name
     es = self._cluster.client
 
-    self.start_time = time.time()
-    self._sent_bytes = 0
-
     processed = 0
+    self._stop_watch.start()
     self._print_progress(processed)
     try:
       for _ in parallel_bulk(es,
@@ -217,10 +226,9 @@ class IndexBenchmark(TimedOperation):
     except KeyboardInterrupt:
       logger.info('Received SIGINT: IndexBenchmark will be stopped prematurely.')
 
+    self._stop_watch.stop()
     self._print_progress(processed)
-
-    end_time = time.time()
-    docs_per_sec = (processed / (end_time - self.start_time))
+    docs_per_sec = (processed / self._stop_watch.total_time())
     self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
 
     if flush:
@@ -273,7 +281,7 @@ class IndexBenchmark(TimedOperation):
     # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
     # accurate here as this is "just" a progress report for the user
     sent = self._sent_bytes
-    elapsed = time.time() - self.start_time
+    elapsed = self._stop_watch.split_time()
     docs_per_second = docs_processed / elapsed
     mb_per_second = convert.bytes_to_mb(sent) / elapsed
 

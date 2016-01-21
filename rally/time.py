@@ -19,6 +19,9 @@ def to_iso8601(dt):
   return '%04d%02d%02dT%02d%02d%02dZ' % (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
 
+def sleep(seconds):
+  time.sleep(seconds)
+
 class Clock:
   """
   A clock abstracts time measurements. Its main purpose is to ease testing
@@ -30,3 +33,37 @@ class Clock:
     :return: The current time.
     """
     return time.time()
+
+  @staticmethod
+  def stop_watch():
+    return StopWatch()
+
+
+class StopWatch:
+  def __init__(self):
+    self._start = None
+    self._stop = None
+
+  def start(self):
+    self._start = self._now()
+
+  def stop(self):
+    self._stop = self._now()
+
+  def split_time(self):
+    return self._interval(self._start, self._now())
+
+  def total_time(self):
+    return self._interval(self._start, self._stop)
+
+  def _interval(self, t0, t1):
+    if t0 is None:
+      raise RuntimeError("start time is None")
+    if t1 is None:
+      raise RuntimeError("end time is None")
+    return t1 - t0
+
+  def _now(self):
+    return time.perf_counter()
+
+
