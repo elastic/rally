@@ -28,7 +28,7 @@ class SummaryReporter:
           self.print_header("*** Track setup %s ***\n" % track_setup.name)
 
         store = rally.metrics.EsMetricsStore(self._config)
-        store.open(invocation, track, track_setup.name)
+        store.open(invocation, track.name, track_setup.name)
 
         self.report_index_throughput(store)
         print("")
