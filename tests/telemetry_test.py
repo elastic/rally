@@ -12,7 +12,7 @@ class TelemetryTests(TestCase):
     config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "track-setup-root")
     config.add(rally.config.Scope.globalScope, "benchmarks", "metrics.log.dir", "telemetry")
 
-    t = rally.telemetry.Telemetry(config)
+    t = rally.telemetry.Telemetry(config, None)
 
     track_setup = rally.track.track.TrackSetup(name="test-track", description="Test Track")
     opts = t.instrument_candidate_env(track_setup)
