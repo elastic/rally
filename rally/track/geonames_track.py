@@ -87,10 +87,10 @@ geonamesTrackSpec = rally.track.track.Track(
     mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
     index_name="geonames",
     type_name="type",
-    number_of_documents=2000,
+    number_of_documents=8647880,
     compressed_size_in_bytes=197857614,
     uncompressed_size_in_bytes=2790927196,
-    local_file_name="documents-2k.json.bz2",
+    local_file_name="documents.json.bz2",
     local_mapping_name="mappings.json",
     # for defaults alone, it's just around 20 minutes, for all it's about 60
     estimated_benchmark_time_in_minutes=20,
