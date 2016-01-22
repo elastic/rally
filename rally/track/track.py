@@ -237,12 +237,12 @@ class Marshal:
       self._download_benchmark_data(track, data_set_root, data_set_path)
     unzipped_data_set_path = self._unzip(data_set_path)
     # global per benchmark (we never run benchmarks in parallel)
-    self._config.add(cfg.Scope.benchmarkScope, "benchmarks", "dataset.path", unzipped_data_set_path)
+    self._config.add(cfg.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
 
     mapping_path = "%s/%s" % (data_set_root, track.local_mapping_name)
     if not os.path.isfile(mapping_path):
       self._download_mapping_data(track, data_set_root, mapping_path)
-    self._config.add(cfg.Scope.benchmarkScope, "benchmarks", "mapping.path", mapping_path)
+    self._config.add(cfg.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
 
   def _unzip(self, data_set_path):
     # we assume that track data are always compressed and try to unzip them before running the benchmark

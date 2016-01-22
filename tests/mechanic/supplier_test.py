@@ -14,9 +14,9 @@ class SupplierTests(TestCase):
   @mock.patch('rally.utils.process.run_subprocess')
   def test_intial_checkout_latest(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "source", "local.src.dir", "/src")
-    config.add(rally.config.Scope.globalScope, "source", "remote.repo.url", "some-github-url")
-    config.add(rally.config.Scope.globalScope, "source", "revision", "latest")
+    config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
+    config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
+    config.add(rally.config.Scope.application, "source", "revision", "latest")
 
     mock_is_cloned.return_value = False
     mock_head_revision.return_value = "HEAD"
@@ -39,9 +39,9 @@ class SupplierTests(TestCase):
   @mock.patch('rally.utils.process.run_subprocess')
   def test_checkout_current(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "source", "local.src.dir", "/src")
-    config.add(rally.config.Scope.globalScope, "source", "remote.repo.url", "some-github-url")
-    config.add(rally.config.Scope.globalScope, "source", "revision", "current")
+    config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
+    config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
+    config.add(rally.config.Scope.application, "source", "revision", "current")
 
     mock_is_cloned.return_value = True
     mock_head_revision.return_value = "HEAD"
@@ -63,9 +63,9 @@ class SupplierTests(TestCase):
   @mock.patch('rally.utils.process.run_subprocess')
   def test_checkout_ts(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_pull_ts, mock_head_revision):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "source", "local.src.dir", "/src")
-    config.add(rally.config.Scope.globalScope, "source", "remote.repo.url", "some-github-url")
-    config.add(rally.config.Scope.globalScope, "source", "revision", "@2015-01-01-01:00:00")
+    config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
+    config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
+    config.add(rally.config.Scope.application, "source", "revision", "@2015-01-01-01:00:00")
 
     mock_is_cloned.return_value = True
     mock_head_revision.return_value = "HEAD"
@@ -86,9 +86,9 @@ class SupplierTests(TestCase):
   @mock.patch('rally.utils.process.run_subprocess')
   def test_checkout_revision(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_pull_revision, mock_head_revision):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "source", "local.src.dir", "/src")
-    config.add(rally.config.Scope.globalScope, "source", "remote.repo.url", "some-github-url")
-    config.add(rally.config.Scope.globalScope, "source", "revision", "67c2f42")
+    config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
+    config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
+    config.add(rally.config.Scope.application, "source", "revision", "67c2f42")
 
     mock_is_cloned.return_value = True
     mock_head_revision.return_value = "HEAD"

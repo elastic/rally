@@ -12,7 +12,7 @@ import rally.mechanic.mechanic
 import rally.driver
 import rally.summary_reporter
 import rally.utils.process
-import rally.utils.paths
+import rally.paths
 import rally.exceptions
 import rally.track.track
 
@@ -74,14 +74,14 @@ class RacingTeam:
     node_prefix = self._config.opts("provisioning", "node.name.prefix")
     rally.utils.process.kill_running_es_instances(node_prefix)
     self._marshal.setup(track)
-    invocation_root = self._config.opts("system", "invocation.root.dir")
-    track_root = rally.utils.paths.track_root_dir(invocation_root, track.name)
-    self._config.add(rally.config.Scope.benchmarkScope, "system", "track.root.dir", track_root)
+    paths = rally.paths.Paths(self._config)
+    track_root = paths.track_root(track.name)
+    self._config.add(rally.config.Scope.benchmark, "system", "track.root.dir", track_root)
 
     for track_setup in track.track_setups:
       if track_setup.name in selected_setups:
-        track_setup_root = rally.utils.paths.track_setup_root_dir(track_root, track_setup.name)
-        self._config.add(rally.config.Scope.trackSetupScope, "system", "track.setup.root.dir", track_setup_root)
+        self._config.add(rally.config.Scope.trackSetup, "system", "track.setup.root.dir", paths.track_setup_root(track.name, track_setup.name))
+        self._config.add(rally.config.Scope.trackSetup, "system", "track.setup.log.dir", paths.track_setup_logs(track.name, track_setup.name))
         print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
         logger.info("Racing on track [%s] with setup [%s]" % (track.name, track_setup.name))
         cluster = self._mechanic.start_engine(track, track_setup)

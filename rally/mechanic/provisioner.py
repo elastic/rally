@@ -45,7 +45,7 @@ class Provisioner:
     rally.utils.io.unzip(binary, install_dir)
     binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
     # config may be different for each track setup so we have to reinitialize every time, hence track setup scope
-    self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.binary.path", binary_path)
+    self._config.add(cfg.Scope.trackSetup, "provisioning", "local.binary.path", binary_path)
 
   def _configure(self, setup):
     self._configure_logging(setup)
@@ -68,7 +68,7 @@ class Provisioner:
     additional_config = setup.candidate_settings.custom_config_snippet
     data_paths = self._data_paths(setup)
     self._logger.info('Using data paths: %s' % data_paths)
-    self._config.add(cfg.Scope.trackSetupScope, "provisioning", "local.data.paths", data_paths)
+    self._config.add(cfg.Scope.trackSetup, "provisioning", "local.data.paths", data_paths)
     s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
     s += '\ncluster.name: %s\n' % 'benchmark.%s' % env_name
     s += '\npath.data: %s' % ', '.join(data_paths)

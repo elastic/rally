@@ -8,7 +8,7 @@ import rally.telemetry
 
 import rally.config
 import rally.utils.io
-import rally.utils.paths
+import rally.paths
 
 
 # we want to use some basic logging even before the output to log file is configured
@@ -17,21 +17,14 @@ def preconfigure_logging():
 
 
 def configure_logging(cfg):
-  root_dir = cfg.opts("system", "invocation.root.dir")
-  log_root_dir = cfg.opts("system", "log.root.dir")
-
-  log_dir = "%s/%s" % (root_dir, log_root_dir)
+  log_dir = rally.paths.Paths(cfg).log_root()
   rally.utils.io.ensure_dir(log_dir)
-  cfg.add(rally.config.Scope.globalScope, "system", "log.dir", log_dir)
-
+  cfg.add(rally.config.Scope.application, "system", "log.dir", log_dir)
   log_file = "%s/rally_out.log" % log_dir
 
   print("\nWriting additional logs to %s\n" % log_file)
 
-  # console logging
-  # logging.basicConfig(level=logging.INFO)
-
-  # Remove all handlers associated with the root logger object.
+  # Remove all handlers associated with the root logger object so we can start over with an entirely fresh log configuration
   for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 
@@ -160,13 +153,6 @@ def csv_to_list(csv):
     return [e.strip() for e in csv.split(",")]
 
 
-def invocation_root_dir(cfg):
-  root = cfg.opts("system", "root.dir")
-  start = cfg.opts("meta", "time.start")
-  env = cfg.opts("system", "env.name")
-  return rally.utils.paths.invocation_root_dir(root, start, env)
-
-
 def main():
   preconfigure_logging()
   print_banner()
@@ -190,16 +176,16 @@ def main():
       exit(64)
 
   # Add global meta info derived by rally itself
-  cfg.add(rally.config.Scope.globalScope, "meta", "time.start", args.effective_start_date)
-  cfg.add(rally.config.Scope.globalScope, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
-  cfg.add(rally.config.Scope.globalScope, "system", "invocation.root.dir", invocation_root_dir(cfg))
+  cfg.add(rally.config.Scope.application, "meta", "time.start", args.effective_start_date)
+  cfg.add(rally.config.Scope.application, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+  cfg.add(rally.config.Scope.application, "system", "invocation.root.dir", rally.paths.Paths(cfg).invocation_root())
   # Add command line config
-  cfg.add(rally.config.Scope.globalOverrideScope, "source", "revision", args.revision)
-  cfg.add(rally.config.Scope.globalOverrideScope, "build", "skip", args.skip_build)
-  cfg.add(rally.config.Scope.globalOverrideScope, "telemetry", "devices", csv_to_list(args.telemetry))
-  cfg.add(rally.config.Scope.globalOverrideScope, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
-  cfg.add(rally.config.Scope.globalOverrideScope, "provisioning", "datapaths", csv_to_list(args.data_paths))
-  cfg.add(rally.config.Scope.globalOverrideScope, "provisioning", "install.preserve", args.preserve_install)
+  cfg.add(rally.config.Scope.applicationOverride, "source", "revision", args.revision)
+  cfg.add(rally.config.Scope.applicationOverride, "build", "skip", args.skip_build)
+  cfg.add(rally.config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
+  cfg.add(rally.config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
+  cfg.add(rally.config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
+  cfg.add(rally.config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
 
   configure_logging(cfg)
 

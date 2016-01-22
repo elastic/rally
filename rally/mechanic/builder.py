@@ -39,7 +39,7 @@ class Builder:
         binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
     except IndexError:
         raise ImproperlyConfigured("Couldn't find a zip distribution.")
-    self._config.add(rally.config.Scope.invocationScope, "builder", "candidate.bin.path", binary)
+    self._config.add(rally.config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
   def _exec(self, task_key):
     src_dir = self._config.opts("source", "local.src.dir")

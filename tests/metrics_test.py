@@ -36,7 +36,7 @@ class MetricsTests(TestCase):
 
   def setUp(self):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "system", "env.name", "unittest")
+    config.add(rally.config.Scope.application, "system", "env.name", "unittest")
     self.metrics_store = rally.metrics.EsMetricsStore(config,
                                                       client_factory_class=MockClientFactory,
                                                       index_template_provider_class=DummyIndexTemplateProvider,

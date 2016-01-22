@@ -16,15 +16,15 @@ class ConfigError(BaseException):
 
 class Scope(Enum):
   # Valid for all benchmarks, typically read from the configuration file
-  globalScope = 1
+  application = 1
   # Valid for all benchmarks, intended to allow overriding of values in the config file from the command line
-  globalOverrideScope = 2
+  applicationOverride = 2
   # A sole benchmark
-  benchmarkScope = 3
+  benchmark = 3
   # Single benchmark track setup (e.g. default, multinode, ...)
-  trackSetupScope = 4
+  trackSetup = 4
   # property for every invocation, i.e. for backtesting
-  invocationScope = 5
+  invocation = 5
 
 
 class Config:
@@ -118,7 +118,7 @@ class Config:
   def _fill_from_config_file(self, config):
     for section in config.sections():
       for key in config[section]:
-        self.add(Scope.globalScope, section, key, config[section][key])
+        self.add(Scope.application, section, key, config[section][key])
 
   def config_compatible(self):
     return self.CURRENT_CONFIG_VERSION == self._stored_config_version()
@@ -298,10 +298,10 @@ class Config:
     return "%s/rally.ini" % self._config_dir()
 
   # recursively find the most narrow scope for a key
-  def _resolve_scope(self, section, key, start_from=Scope.invocationScope):
+  def _resolve_scope(self, section, key, start_from=Scope.invocation):
     if self._k(start_from, section, key) in self._opts:
       return start_from
-    elif start_from == Scope.globalScope:
+    elif start_from == Scope.application:
       return None
     else:
       # continue search in the enclosing scope
@@ -309,7 +309,7 @@ class Config:
 
   def _k(self, scope, section, key):
     # keep global config keys a bit shorter / nicer for now
-    if scope is None or scope == Scope.globalScope:
+    if scope is None or scope == Scope.application:
       return "%s::%s" % (section, key)
     else:
       return "%s::%s::%s" % (scope.name, section, key)

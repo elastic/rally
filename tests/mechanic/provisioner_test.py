@@ -14,9 +14,9 @@ class ProvisionerTests(TestCase):
     mock_path_exists.return_value = False
 
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
-    config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
-    config.add(rally.config.Scope.globalScope, "provisioning", "install.preserve", False)
+    config.add(rally.config.Scope.application, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
+    config.add(rally.config.Scope.application, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.application, "provisioning", "install.preserve", False)
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.cleanup()
@@ -31,10 +31,10 @@ class ProvisionerTests(TestCase):
     mock_path_exists.return_value = False
 
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
-    config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
-    config.add(rally.config.Scope.globalScope, "provisioning", "install.preserve", True)
-    config.add(rally.config.Scope.globalScope, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
+    config.add(rally.config.Scope.application, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
+    config.add(rally.config.Scope.application, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.application, "provisioning", "install.preserve", True)
+    config.add(rally.config.Scope.application, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.cleanup()
@@ -49,10 +49,10 @@ class ProvisionerTests(TestCase):
     mock_path_exists.return_value = True
 
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
-    config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
-    config.add(rally.config.Scope.globalScope, "provisioning", "install.preserve", False)
-    config.add(rally.config.Scope.globalScope, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
+    config.add(rally.config.Scope.application, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
+    config.add(rally.config.Scope.application, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.application, "provisioning", "install.preserve", False)
+    config.add(rally.config.Scope.application, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
 
     p = rally.mechanic.provisioner.Provisioner(config, mock_logger)
     p.cleanup()
@@ -72,10 +72,10 @@ class ProvisionerTests(TestCase):
     mock_path_exists.return_value = True
 
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
-    config.add(rally.config.Scope.globalScope, "builder", "candidate.bin.path", "/data/builds/distributions/")
-    config.add(rally.config.Scope.globalScope, "provisioning", "local.install.dir", "es-bin")
-    config.add(rally.config.Scope.globalScope, "provisioning", "datapaths", [])
+    config.add(rally.config.Scope.application, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
+    config.add(rally.config.Scope.application, "builder", "candidate.bin.path", "/data/builds/distributions/")
+    config.add(rally.config.Scope.application, "provisioning", "local.install.dir", "es-bin")
+    config.add(rally.config.Scope.application, "provisioning", "datapaths", [])
 
     track_setup = rally.track.track.TrackSetup("test-track", "Description")
 

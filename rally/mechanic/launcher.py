@@ -72,7 +72,7 @@ class Launcher:
         env[k] = v + separator + env[k]
 
   def prepare_cmd(self, setup, node_name):
-    server_log_dir = "%s/%s/server" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("system", "log.root.dir"))
+    server_log_dir = "%s/server" % self._config.opts("system", "track.setup.log.dir")
     processor_count = setup.candidate_settings.processors
 
     cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]

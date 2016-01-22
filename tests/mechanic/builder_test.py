@@ -11,8 +11,8 @@ class BuilderTests(TestCase):
   @mock.patch('glob.glob', lambda p: ['elasticsearch.zip'])
   def test_skip_build(self, mock_run_subprocess, mock_logger):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "build", "skip", True)
-    config.add(rally.config.Scope.globalScope, "source", "local.src.dir", "/src")
+    config.add(rally.config.Scope.application, "build", "skip", True)
+    config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
 
     builder = rally.mechanic.builder.Builder(config, mock_logger)
     builder.build()
@@ -29,13 +29,13 @@ class BuilderTests(TestCase):
   @mock.patch('rally.utils.process.run_subprocess')
   def test_build(self, mock_run_subprocess, mock_logger, mock_rename, mock_ensure_dir):
     config = rally.config.Config()
-    config.add(rally.config.Scope.globalScope, "build", "skip", False)
-    config.add(rally.config.Scope.globalScope, "source", "local.src.dir", "/src")
-    config.add(rally.config.Scope.globalScope, "build", "gradle.bin", "/usr/local/gradle")
-    config.add(rally.config.Scope.globalScope, "build", "gradle.tasks.clean", "clean")
-    config.add(rally.config.Scope.globalScope, "build", "gradle.tasks.package", "assemble")
-    config.add(rally.config.Scope.globalScope, "system", "log.dir", "logs")
-    config.add(rally.config.Scope.globalScope, "build", "log.dir", "build")
+    config.add(rally.config.Scope.application, "build", "skip", False)
+    config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
+    config.add(rally.config.Scope.application, "build", "gradle.bin", "/usr/local/gradle")
+    config.add(rally.config.Scope.application, "build", "gradle.tasks.clean", "clean")
+    config.add(rally.config.Scope.application, "build", "gradle.tasks.package", "assemble")
+    config.add(rally.config.Scope.application, "system", "log.dir", "logs")
+    config.add(rally.config.Scope.application, "build", "log.dir", "build")
 
     builder = rally.mechanic.builder.Builder(config, mock_logger)
     builder.build()
