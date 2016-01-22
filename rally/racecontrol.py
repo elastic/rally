@@ -22,91 +22,93 @@ logger = logging.getLogger("rally.racecontrol")
 
 
 class RaceControl:
-  def __init__(self, config):
-    self._config = config
+    def __init__(self, config):
+        self._config = config
 
-  def start(self, command):
-    participants = self._choose_participants(command)
+    def start(self, command):
+        participants = self._choose_participants(command)
 
-    for p in participants:
-      p.prepare(self._all_tracks(), self._config)
+        for p in participants:
+            p.prepare(self._all_tracks(), self._config)
 
-    for track in self._all_tracks():
-      for p in participants:
-        p.do(track)
+        for track in self._all_tracks():
+            for p in participants:
+                p.do(track)
 
-    print("\nAll tracks done.")
+        print("\nAll tracks done.")
 
-  def _choose_participants(self, command):
-    logger.info("Executing command [%s]" % command)
-    if command == "all":
-      return [RacingTeam(), Press(report_only=False)]
-    elif command == "race":
-      return [RacingTeam()]
-    elif command == "report":
-      return [Press(report_only=True)]
-    else:
-      raise rally.exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
+    def _choose_participants(self, command):
+        logger.info("Executing command [%s]" % command)
+        if command == "all":
+            return [RacingTeam(), Press(report_only=False)]
+        elif command == "race":
+            return [RacingTeam()]
+        elif command == "report":
+            return [Press(report_only=True)]
+        else:
+            raise rally.exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
 
-  def _all_tracks(self):
-    # just one track for now
-    return [rally.track.geonames_track.geonamesTrackSpec]
+    def _all_tracks(self):
+        # just one track for now
+        return [rally.track.geonames_track.geonamesTrackSpec]
 
 
 class RacingTeam:
-  def __init__(self):
-    self._mechanic = None
-    self._driver = None
-    self._marshal = None
-    self._config = None
+    def __init__(self):
+        self._mechanic = None
+        self._driver = None
+        self._marshal = None
+        self._config = None
 
-  def prepare(self, tracks, config):
-    self._config = config
-    self._mechanic = rally.mechanic.mechanic.Mechanic(config)
-    self._driver = rally.driver.Driver(config)
-    self._marshal = rally.track.track.Marshal(config)
-    self._mechanic.prepare_candidate()
-    print("Racing on %d track(s). Overall ETA: %d minutes (depending on your hardware)\n" % (len(tracks), self._eta(tracks)))
+    def prepare(self, tracks, config):
+        self._config = config
+        self._mechanic = rally.mechanic.mechanic.Mechanic(config)
+        self._driver = rally.driver.Driver(config)
+        self._marshal = rally.track.track.Marshal(config)
+        self._mechanic.prepare_candidate()
+        print("Racing on %d track(s). Overall ETA: %d minutes (depending on your hardware)\n" % (len(tracks), self._eta(tracks)))
 
-  def do(self, track):
-    selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
-    # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
-    node_prefix = self._config.opts("provisioning", "node.name.prefix")
-    rally.utils.process.kill_running_es_instances(node_prefix)
-    self._marshal.setup(track)
-    paths = rally.paths.Paths(self._config)
-    track_root = paths.track_root(track.name)
-    self._config.add(rally.config.Scope.benchmark, "system", "track.root.dir", track_root)
+    def do(self, track):
+        selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
+        # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
+        node_prefix = self._config.opts("provisioning", "node.name.prefix")
+        rally.utils.process.kill_running_es_instances(node_prefix)
+        self._marshal.setup(track)
+        paths = rally.paths.Paths(self._config)
+        track_root = paths.track_root(track.name)
+        self._config.add(rally.config.Scope.benchmark, "system", "track.root.dir", track_root)
 
-    for track_setup in track.track_setups:
-      if track_setup.name in selected_setups:
-        self._config.add(rally.config.Scope.trackSetup, "system", "track.setup.root.dir", paths.track_setup_root(track.name, track_setup.name))
-        self._config.add(rally.config.Scope.trackSetup, "system", "track.setup.log.dir", paths.track_setup_logs(track.name, track_setup.name))
-        print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
-        logger.info("Racing on track [%s] with setup [%s]" % (track.name, track_setup.name))
-        cluster = self._mechanic.start_engine(track, track_setup)
-        self._driver.setup(cluster, track, track_setup)
-        self._driver.go(cluster, track, track_setup)
-        self._mechanic.stop_engine(cluster)
-        self._driver.tear_down(track, track_setup)
-        self._mechanic.revise_candidate()
-      else:
-        logger.debug("Skipping track setup [%s] (not selected)." % track_setup.name)
+        for track_setup in track.track_setups:
+            if track_setup.name in selected_setups:
+                self._config.add(rally.config.Scope.trackSetup, "system", "track.setup.root.dir",
+                                 paths.track_setup_root(track.name, track_setup.name))
+                self._config.add(rally.config.Scope.trackSetup, "system", "track.setup.log.dir",
+                                 paths.track_setup_logs(track.name, track_setup.name))
+                print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
+                logger.info("Racing on track [%s] with setup [%s]" % (track.name, track_setup.name))
+                cluster = self._mechanic.start_engine(track, track_setup)
+                self._driver.setup(cluster, track, track_setup)
+                self._driver.go(cluster, track, track_setup)
+                self._mechanic.stop_engine(cluster)
+                self._driver.tear_down(track, track_setup)
+                self._mechanic.revise_candidate()
+            else:
+                logger.debug("Skipping track setup [%s] (not selected)." % track_setup.name)
 
-  def _eta(self, tracks):
-    eta = 0
-    for track in tracks:
-      eta += track.estimated_benchmark_time_in_minutes
-    return eta
+    def _eta(self, tracks):
+        eta = 0
+        for track in tracks:
+            eta += track.estimated_benchmark_time_in_minutes
+        return eta
 
 
 class Press:
-  def __init__(self, report_only):
-    self._summary_reporter = None
-    self.report_only = report_only
+    def __init__(self, report_only):
+        self._summary_reporter = None
+        self.report_only = report_only
 
-  def prepare(self, tracks, config):
-    self._summary_reporter = rally.summary_reporter.SummaryReporter(config)
+    def prepare(self, tracks, config):
+        self._summary_reporter = rally.summary_reporter.SummaryReporter(config)
 
-  def do(self, track):
-    self._summary_reporter.report(track)
+    def do(self, track):
+        self._summary_reporter.report(track)
