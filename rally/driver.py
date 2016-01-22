@@ -170,7 +170,6 @@ class IndexBenchmark(TimedOperation):
                 if ids and self._rand.randint(0, 3) == 3:
                     # pick already returned id in 25%
                     id = self._rand.choice(ids)
-                    # FIXME dm: Shouldn't we put the conflicting id also into this set?
                 else:
                     id = '%10i' % self._rand.randint(0, docs_to_index)
                     ids.append(id)
