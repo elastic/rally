@@ -64,7 +64,7 @@ class SummaryReporter:
                 formatted_median = '%.1f' % statistics.median(query_latency)
                 print("  Median query latency [%s]: %sms" % (q.name, formatted_median))
             else:
-                print("Could not determine CPU usage from metrics store")
+                print("Could not determine query latency for [%s] from metrics store" % q)
 
     def report_total_times(self, store):
         self.print_header("Total times:")

@@ -35,7 +35,7 @@ class Driver:
         cluster.client.indices.put_mapping(index=track.index_name,
                                            doc_type=track.type_name,
                                            body=json.loads(mappings))
-        cluster.wait_for_status(track_setup.required_cluster_status)
+        cluster.wait_for_status_green()
 
     def go(self, cluster, track, track_setup):
         cluster.on_benchmark_start()

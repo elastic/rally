@@ -18,8 +18,6 @@ class Track:
     """
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
-
-    # TODO dm: For now we allow just one index with one type. Change this later
     def __init__(self, name, description, source_url, mapping_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
                  uncompressed_size_in_bytes,
                  local_file_name, local_mapping_name, estimated_benchmark_time_in_minutes, track_setups, queries):
@@ -40,8 +38,19 @@ class Track:
 
 
 class CandidateSettings:
-    def __init__(self, custom_config_snippet=None, nodes=1, processors=1, heap=None, java_opts=None, gc_opts=None):
-        self.custom_config_snippet = custom_config_snippet
+    def __init__(self, config_snippet=None, logging_config=None, nodes=1, processors=1, heap=None, java_opts=None, gc_opts=None):
+        """
+        Creates new settings for a benchmark candidate.
+
+        :param config_snippet: A string snippet that will be appended as is to elasticsearch.yml of the benchmark candidate.
+        :param nodes: The number of nodes to start. Defaults to 1 node. All nodes are started on the same machine.
+        :param processors: The number of processors to use (per node).
+        :param heap: A string defining the maximum amount of Java heap to use. For allows values, see the documentation on -Xmx
+        in `<http://docs.oracle.com/javase/8/docs/technotes/tools/unix/java.html#BABHDABI>`
+        :param java_opts: Additional Java options to pass to each node on startup.
+        :param gc_opts: Additional garbage collector options to pass to each node on startup.
+        """
+        self.custom_config_snippet = config_snippet
         self.nodes = nodes
         self.processors = processors
         self.heap = heap
@@ -80,14 +89,11 @@ class TrackSetup:
                  name,
                  description,
                  candidate_settings=CandidateSettings(),
-                 benchmark_settings=BenchmarkSettings(),
-                 # TODO dm [Refactoring]: Specifying the required cluster status is just a workaround...
-                 required_cluster_status=rally.cluster.ClusterStatus.yellow):
+                 benchmark_settings=BenchmarkSettings()):
         self.name = name
         self.description = description
         self.candidate_settings = candidate_settings
         self.test_settings = benchmark_settings
-        self.required_cluster_status = required_cluster_status
 
 
 class Query:

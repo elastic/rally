@@ -7,10 +7,7 @@ import rally.mechanic.gear
 import rally.cluster
 import rally.telemetry
 import rally.time
-
-
-class LaunchError(Exception):
-    pass
+import rally.exceptions
 
 
 class Launcher:
@@ -97,7 +94,7 @@ class Launcher:
             log_dir = self._config.opts("system", "log.dir")
             msg = "Could not start node '%s' within timeout period of %s seconds." % (node_name, Launcher.PROCESS_WAIT_TIMEOUT_SECONDS)
             self._logger.error(msg)
-            raise LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
+            raise rally.exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
 
     def _node_name(self, node):
         prefix = self._config.opts("provisioning", "node.name.prefix")

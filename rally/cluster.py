@@ -2,15 +2,8 @@ import socket
 import elasticsearch
 import logging
 
-from enum import Enum
-
 import rally.time
-
-
-class ClusterStatus(Enum):
-    red = 1
-    yellow = 2
-    green = 3
+import rally.exceptions
 
 
 logger = logging.getLogger("rally.cluster")
@@ -29,6 +22,7 @@ class Server:
 
 
 class Cluster:
+    EXPECTED_CLUSTER_STATUS = "green"
     """
     Cluster exposes APIs of the running benchmark candidate.
     """
@@ -39,31 +33,37 @@ class Cluster:
         self.metrics_store = metrics_store
         self.clock = clock
 
-    def wait_for_status(self, cluster_status):
-        cluster_status_name = cluster_status.name
-        logger.info('\nWait for %s cluster...' % cluster_status_name)
-        es = self.client
+    def wait_for_status_green(self):
+        logger.info('\nWait for %s cluster...' % Cluster.EXPECTED_CLUSTER_STATUS)
         stop_watch = self.clock.stop_watch()
         stop_watch.start()
-        while True:
+        reached_cluster_status, relocating_shards = self._do_wait(Cluster.EXPECTED_CLUSTER_STATUS)
+        stop_watch.stop()
+        logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, stop_watch.total_time()))
+        logger.info("Cluster health: %s" % str(self.client.cluster.health()))
+        logger.info("SHARDS:\n%s" % self.client.cat.shards(v=True))
+
+    def _do_wait(self, expected_cluster_status):
+        reached_cluster_status = None
+        for attempt in range(10):
             try:
-                result = es.cluster.health(wait_for_status=cluster_status_name, wait_for_relocating_shards=0, timeout='1s')
+                result = self.client.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
             except (socket.timeout, elasticsearch.exceptions.ConnectionError, elasticsearch.exceptions.TransportError):
                 pass
             else:
-                logger.info('GOT: %s' % str(result))
-                logger.info('ALLOC:\n%s' % es.cat.allocation(v=True))
-                logger.info('RECOVERY:\n%s' % es.cat.recovery(v=True))
-                logger.info('SHARDS:\n%s' % es.cat.shards(v=True))
-                if result['status'] == cluster_status_name and result['relocating_shards'] == 0:
-                    break
+                reached_cluster_status = result["status"]
+                relocating_shards = result["relocating_shards"]
+                logger.info("GOT: %s" % str(result))
+                logger.info("ALLOC:\n%s" % self.client.cat.allocation(v=True))
+                logger.info("RECOVERY:\n%s" % self.client.cat.recovery(v=True))
+                logger.info("SHARDS:\n%s" % self.client.cat.shards(v=True))
+                if reached_cluster_status == expected_cluster_status and relocating_shards == 0:
+                    return reached_cluster_status, relocating_shards
                 else:
                     rally.time.sleep(0.5)
-
-        stop_watch.stop()
-        logger.info('%s cluster done (%.1f sec)' % (cluster_status_name, stop_watch.total_time()))
-        logger.info('Cluster health: %s' % str(es.cluster.health()))
-        logger.info('SHARDS:\n%s' % es.cat.shards(v=True))
+        msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
+        logger.error(msg)
+        raise rally.exceptions.LaunchError(msg)
 
     def on_benchmark_start(self):
         for server in self.servers:
