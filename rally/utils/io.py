@@ -3,6 +3,7 @@ import errno
 import glob
 import subprocess
 import bz2
+import zipfile
 
 import rally.utils.process
 
@@ -20,6 +21,25 @@ def ensure_dir(directory):
     except OSError as exception:
         if exception.errno != errno.EEXIST:
             raise
+
+
+def _zipdir(source_directory, archive):
+    for root, dirs, files in os.walk(source_directory):
+        for file in files:
+            archive.write(
+                filename=os.path.join(root, file),
+                arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, '..')))
+
+
+def zip(source_directory, zip_name):
+    """
+    Compress a directory tree.
+
+    :param source_directory: The source directory to compress. Must be readable.
+    :param zip_name: The absolute path including the file name of the ZIP archive. Must have the extension .zip.
+    """
+    archive = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED)
+    _zipdir(source_directory, archive)
 
 
 def unzip(zip_name, target_directory):

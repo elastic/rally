@@ -15,6 +15,7 @@ import rally.utils.process
 import rally.paths
 import rally.exceptions
 import rally.track.track
+import rally.sweeper
 
 import rally.track.geonames_track
 
@@ -22,6 +23,12 @@ logger = logging.getLogger("rally.racecontrol")
 
 
 class RaceControl:
+    COMMANDS = {
+        'all': lambda: [RacingTeam(), Press(report_only=False)],
+        'race': lambda: [RacingTeam()],
+        'report': lambda: [Press(report_only=True)]
+    }
+
     def __init__(self, config):
         self._config = config
 
@@ -36,16 +43,13 @@ class RaceControl:
                 p.do(track)
 
         print("\nAll tracks done.")
+        rally.sweeper.Sweeper(self._config).run()
 
     def _choose_participants(self, command):
         logger.info("Executing command [%s]" % command)
-        if command == "all":
-            return [RacingTeam(), Press(report_only=False)]
-        elif command == "race":
-            return [RacingTeam()]
-        elif command == "report":
-            return [Press(report_only=True)]
-        else:
+        try:
+            return RaceControl.COMMANDS[command]()
+        except KeyError:
             raise rally.exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
 
     def _all_tracks(self):
