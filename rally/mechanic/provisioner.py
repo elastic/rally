@@ -53,35 +53,31 @@ class Provisioner:
         self._configure_cluster(setup)
 
     def _configure_logging(self, setup):
-        # see issue #16
-        # So we see IW infoStream messages:
-        # s = open('config/logging.yml').read()
-        # s = s.replace('es.logger.level: INFO', 'es.logger.level: %s' % logLevel)
-        # if verboseIW:
-        #  s = open('config/logging.yml').read()
-        #  s = s.replace('additivity:', '  index.engine.lucene.iw: TRACE\n\nadditivity:')
-        # open('config/logging.yml', 'w').write(s)
-        pass
+        log_cfg = setup.candidate_settings.custom_logging_config
+        if log_cfg:
+            self._logger.info("Replacing pre-bundled ES log configuration with custom config: [%s]" % log_cfg)
+            binary_path = self._config.opts("provisioning", "local.binary.path")
+            open("%s/config/logging.yml" % binary_path, "w").write(log_cfg)
 
     def _configure_cluster(self, setup):
         binary_path = self._config.opts("provisioning", "local.binary.path")
         env_name = self._config.opts("system", "env.name")
         additional_config = setup.candidate_settings.custom_config_snippet
         data_paths = self._data_paths(setup)
-        self._logger.info('Using data paths: %s' % data_paths)
+        self._logger.info("Using data paths: %s" % data_paths)
         self._config.add(cfg.Scope.trackSetup, "provisioning", "local.data.paths", data_paths)
-        s = open(binary_path + "/config/elasticsearch.yml", 'r').read()
-        s += '\ncluster.name: %s\n' % 'benchmark.%s' % env_name
-        s += '\npath.data: %s' % ', '.join(data_paths)
+        s = open("%s/config/elasticsearch.yml" % binary_path, "r").read()
+        s += "\ncluster.name: %s\n" % "benchmark.%s" % env_name
+        s += "\npath.data: %s" % ", ".join(data_paths)
         if additional_config:
-            s += '\n%s' % additional_config
-        s = open(binary_path + "/config/elasticsearch.yml", 'w').write(s)
+            s += "\n%s" % additional_config
+        open("%s/config/elasticsearch.yml" % binary_path, "w").write(s)
 
     def _data_paths(self, setup):
         binary_path = self._config.opts("provisioning", "local.binary.path")
         data_paths = self._config.opts("provisioning", "datapaths")
         if data_paths is None:
-            return ['%s/data' % binary_path]
+            return ["%s/data" % binary_path]
         else:
             # we have to add the track name here as we need to preserve data potentially across runs
             return ["%s/%s" % (path, setup.name) for path in data_paths]

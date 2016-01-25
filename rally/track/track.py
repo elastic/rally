@@ -43,6 +43,7 @@ class CandidateSettings:
         Creates new settings for a benchmark candidate.
 
         :param config_snippet: A string snippet that will be appended as is to elasticsearch.yml of the benchmark candidate.
+        :param logging_config: A string representing the entire contents of logging.yml. If not set, the factory default will be used.
         :param nodes: The number of nodes to start. Defaults to 1 node. All nodes are started on the same machine.
         :param processors: The number of processors to use (per node).
         :param heap: A string defining the maximum amount of Java heap to use. For allows values, see the documentation on -Xmx
@@ -51,6 +52,7 @@ class CandidateSettings:
         :param gc_opts: Additional garbage collector options to pass to each node on startup.
         """
         self.custom_config_snippet = config_snippet
+        self.custom_logging_config = logging_config
         self.nodes = nodes
         self.processors = processors
         self.heap = heap

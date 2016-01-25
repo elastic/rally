@@ -72,6 +72,7 @@ class ProvisionerTests(TestCase):
         mock_path_exists.return_value = True
 
         config = rally.config.Config()
+        config.add(rally.config.Scope.application, "system", "env.name", "unittest")
         config.add(rally.config.Scope.application, "system", "track.setup.root.dir", "/rally-root/track/track-setup")
         config.add(rally.config.Scope.application, "builder", "candidate.bin.path", "/data/builds/distributions/")
         config.add(rally.config.Scope.application, "provisioning", "local.install.dir", "es-bin")
