@@ -2,8 +2,7 @@ import os
 import glob
 
 import rally.config
-import rally.utils.io as io
-import rally.utils.process
+from rally.utils import io, process
 from rally.exceptions import ImproperlyConfigured
 
 
@@ -56,6 +55,6 @@ class Builder:
         log_file = "%s/build.%s.log" % (log_dir, task_key)
 
         # we capture all output to a dedicated build log file
-        if rally.utils.process.run_subprocess("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
+        if process.run_subprocess("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
             self._logger.warn("Executing '%s %s' failed" % (gradle, task))
         os.rename(("%s.tmp" % log_file), log_file)
