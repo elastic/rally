@@ -23,110 +23,30 @@ class Track:
     def __init__(self, name, description, source_url, mapping_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
                  uncompressed_size_in_bytes,
                  local_file_name, local_mapping_name, estimated_benchmark_time_in_minutes, track_setups, queries):
-        self._name = name
-        self._description = description
-        self._source_url = source_url
-        self._mapping_url = mapping_url
-        self._index_name = index_name
-        self._type_name = type_name
-        self._number_of_documents = number_of_documents
-        self._compressed_size_in_bytes = compressed_size_in_bytes
-        self._uncompressed_size_in_bytes = uncompressed_size_in_bytes
-        self._local_file_name = local_file_name
-        self._local_mapping_name = local_mapping_name
-        self._estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
-        self._track_setups = track_setups
-        self._queries = queries
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def description(self):
-        return self._description
-
-    @property
-    def source_url(self):
-        return self._source_url
-
-    @property
-    def mapping_url(self):
-        return self._mapping_url
-
-    @property
-    def index_name(self):
-        return self._index_name
-
-    @property
-    def type_name(self):
-        return self._type_name
-
-    @property
-    def number_of_documents(self):
-        return self._number_of_documents
-
-    @property
-    def compressed_size_in_bytes(self):
-        return self._compressed_size_in_bytes
-
-    @property
-    def uncompressed_size_in_bytes(self):
-        return self._uncompressed_size_in_bytes
-
-    @property
-    def local_file_name(self):
-        return self._local_file_name
-
-    @property
-    def local_mapping_name(self):
-        return self._local_mapping_name
-
-    @property
-    def estimated_benchmark_time_in_minutes(self):
-        return self._estimated_benchmark_time_in_minutes
-
-    @property
-    def track_setups(self):
-        return self._track_setups
-
-    @property
-    def queries(self):
-        return self._queries
+        self.name = name
+        self.description = description
+        self.source_url = source_url
+        self.mapping_url = mapping_url
+        self.index_name = index_name
+        self.type_name = type_name
+        self.number_of_documents = number_of_documents
+        self.compressed_size_in_bytes = compressed_size_in_bytes
+        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
+        self.local_file_name = local_file_name
+        self.local_mapping_name = local_mapping_name
+        self.estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
+        self.track_setups = track_setups
+        self.queries = queries
 
 
 class CandidateSettings:
     def __init__(self, custom_config_snippet=None, nodes=1, processors=1, heap=None, java_opts=None, gc_opts=None):
-        self._custom_config_snippet = custom_config_snippet
-        self._nodes = nodes
-        self._processors = processors
-        self._heap = heap
-        self._java_opts = java_opts
-        self._gc_opts = gc_opts
-
-    @property
-    def custom_config_snippet(self):
-        return self._custom_config_snippet
-
-    @property
-    def nodes(self):
-        return self._nodes
-
-    @property
-    def processors(self):
-        return self._processors
-
-    @property
-    def heap(self):
-        return self._heap
-
-    @property
-    def java_opts(self):
-        return self._java_opts
-
-    @property
-    def gc_opts(self):
-        return self._gc_opts
+        self.custom_config_snippet = custom_config_snippet
+        self.nodes = nodes
+        self.processors = processors
+        self.heap = heap
+        self.java_opts = java_opts
+        self.gc_opts = gc_opts
 
 
 class IndexIdConflict(Enum):
@@ -146,21 +66,9 @@ class IndexIdConflict(Enum):
 
 class BenchmarkSettings:
     def __init__(self, benchmark_search=False, benchmark_indexing=True, id_conflicts=IndexIdConflict.NoConflicts):
-        self._benchmark_search = benchmark_search
-        self._benchmark_indexing = benchmark_indexing
-        self._id_conflicts = id_conflicts
-
-    @property
-    def benchmark_search(self):
-        return self._benchmark_search
-
-    @property
-    def benchmark_indexing(self):
-        return self._benchmark_indexing
-
-    @property
-    def id_conflicts(self):
-        return self._id_conflicts
+        self.benchmark_search = benchmark_search
+        self.benchmark_indexing = benchmark_indexing
+        self.id_conflicts = id_conflicts
 
 
 class TrackSetup:
@@ -175,51 +83,23 @@ class TrackSetup:
                  benchmark_settings=BenchmarkSettings(),
                  # TODO dm [Refactoring]: Specifying the required cluster status is just a workaround...
                  required_cluster_status=rally.cluster.ClusterStatus.yellow):
-        self._name = name
-        self._description = description
-        self._candidate_settings = candidate_settings
-        self._test_settings = benchmark_settings
-        self._required_cluster_status = required_cluster_status
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def description(self):
-        return self._description
-
-    @property
-    def candidate_settings(self):
-        return self._candidate_settings
-
-    @property
-    def test_settings(self):
-        return self._test_settings
-
-    @property
-    def required_cluster_status(self):
-        return self._required_cluster_status
+        self.name = name
+        self.description = description
+        self.candidate_settings = candidate_settings
+        self.test_settings = benchmark_settings
+        self.required_cluster_status = required_cluster_status
 
 
 class Query:
     def __init__(self, name, normalization_factor=1):
-        self._name = name
-        self._normalization_factor = normalization_factor
+        self.name = name
+        self.normalization_factor = normalization_factor
 
     def run(self, es):
         raise NotImplementedError("abstract method")
 
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def normalization_factor(self):
-        return self._normalization_factor
-
     def __str__(self):
-        return self._name
+        return self.name
 
 
 class Marshal:

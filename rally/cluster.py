@@ -18,22 +18,14 @@ logger = logging.getLogger("rally.cluster")
 
 class Server:
     def __init__(self, process, telemetry):
-        self._process = process
-        self._telemetry = telemetry
-
-    @property
-    def process(self):
-        return self._process
-
-    @property
-    def telemetry(self):
-        return self._telemetry
+        self.process = process
+        self.telemetry = telemetry
 
     def on_benchmark_start(self):
-        self._telemetry.on_benchmark_start()
+        self.telemetry.on_benchmark_start()
 
     def on_benchmark_stop(self):
-        self._telemetry.on_benchmark_stop()
+        self.telemetry.on_benchmark_stop()
 
 
 class Cluster:
@@ -42,28 +34,16 @@ class Cluster:
     """
 
     def __init__(self, servers, metrics_store, clock=rally.time.Clock):
-        self._es = elasticsearch.Elasticsearch()
-        self._servers = servers
-        self._metrics_store = metrics_store
-        self._clock = clock
-
-    @property
-    def servers(self):
-        return self._servers
-
-    @property
-    def client(self):
-        return self._es
-
-    @property
-    def metrics_store(self):
-        return self._metrics_store
+        self.client = elasticsearch.Elasticsearch()
+        self.servers = servers
+        self.metrics_store = metrics_store
+        self.clock = clock
 
     def wait_for_status(self, cluster_status):
         cluster_status_name = cluster_status.name
         logger.info('\nWait for %s cluster...' % cluster_status_name)
-        es = self._es
-        stop_watch = self._clock.stop_watch()
+        es = self.client
+        stop_watch = self.clock.stop_watch()
         stop_watch.start()
         while True:
             try:
@@ -86,9 +66,9 @@ class Cluster:
         logger.info('SHARDS:\n%s' % es.cat.shards(v=True))
 
     def on_benchmark_start(self):
-        for server in self._servers:
+        for server in self.servers:
             server.on_benchmark_start()
 
     def on_benchmark_stop(self):
-        for server in self._servers:
+        for server in self.servers:
             server.on_benchmark_stop()
