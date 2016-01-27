@@ -1,5 +1,6 @@
 import logging
 import elasticsearch
+import elasticsearch.helpers
 import certifi
 
 import rally.time
@@ -27,6 +28,9 @@ class EsClient:
 
     def create_document(self, index, doc_type, body):
         return self._client.create(index=index, doc_type=doc_type, body=body)
+
+    def bulk_index(self, index, doc_type, items):
+        elasticsearch.helpers.bulk(self._client, items, index=index, doc_type=doc_type)
 
     def search(self, index, doc_type, body):
         return self._client.search(index=index, doc_type=doc_type, body=body)
@@ -83,6 +87,7 @@ class EsMetricsStore:
         self._track = None
         self._track_setup = None
         self._index = None
+        self._docs = None
         self._environment_name = config.opts("system", "env.name")
         self._client = client_factory_class(config).create()
         self._index_template_provider = index_template_provider_class(config)
@@ -93,6 +98,7 @@ class EsMetricsStore:
         self._track = track_name
         self._track_setup = track_setup_name
         self._index = "rally-%04d" % invocation.year
+        self._docs = []
         if create:
             self._client.put_template("rally", self._get_template())
             self._client.create_index(index=self._index)
@@ -103,8 +109,9 @@ class EsMetricsStore:
         return self._index_template_provider.template()
 
     def close(self):
-        # no-op here for the time being for compatibility
-        pass
+        self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
+        self._docs = []
+
 
     # should be an int
     def put_count(self, name, count, unit=None):
@@ -115,7 +122,6 @@ class EsMetricsStore:
         self._put(name, value, unit)
 
     def _put(self, name, value, unit):
-        # TODO dm: Check the overhead and just cache and push afterwards to ES if it is too high
         doc = {
             "@timestamp": rally.time.to_unix_timestamp(self._clock.now()),
             "trial-timestamp": self._invocation,
@@ -126,7 +132,7 @@ class EsMetricsStore:
             "value": value,
             "unit": unit
         }
-        self._client.create_document(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=doc)
+        self._docs.append(doc)
 
     def get_one(self, name):
         v = self.get(name)

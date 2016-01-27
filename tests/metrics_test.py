@@ -59,8 +59,9 @@ class MetricsTests(TestCase):
             "value": throughput,
             "unit": "docs/s"
         }
+        self.metrics_store.close()
         self.es_mock.create_index.assert_called_with(index="rally-2016")
-        self.es_mock.create_document.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_doc)
+        self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
 
     def test_get_value(self):
         throughput = 5000
