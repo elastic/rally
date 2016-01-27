@@ -36,8 +36,8 @@ class GitRepository:
     def pull(self, remote="origin", branch="master"):
         # Don't swallow output but silence git at least a bit... (--quiet)
         if rally.utils.process.run_subprocess(
-                "sh -c 'cd {0}; git checkout --quiet {2} && git fetch --quiet {1} && git rebase --quiet {1}/{2}'" %
-                (self._src_dir, remote, branch)):
+            "sh -c 'cd {0}; git checkout --quiet {2} && git fetch --quiet {1} && git rebase --quiet {1}/{2}'"
+                .format(self._src_dir, remote, branch)):
             raise SupplyError("Could not fetch latest source tree")
 
     def pull_ts(self, ts):
