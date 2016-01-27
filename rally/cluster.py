@@ -28,7 +28,7 @@ class Cluster:
     """
 
     def __init__(self, servers, metrics_store, clock=rally.time.Clock):
-        self.client = elasticsearch.Elasticsearch()
+        self.client = elasticsearch.Elasticsearch(timeout=60, request_timeout=60)
         self.servers = servers
         self.metrics_store = metrics_store
         self.clock = clock
