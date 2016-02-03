@@ -1,22 +1,5 @@
 import rally.track.track
 import rally.cluster
-import rally.utils.sysstats
-
-# Ensure cluster status green even for single nodes. Please don't add anything else here except to get the cluster to status
-# 'green' even with a single node.
-geopointGreenNodeSettings = '''
-index.number_of_replicas: 0
-'''
-
-geopointBenchmarkFastSettings = '''
-index.refresh_interval: 30s
-
-index.number_of_shards: 6
-index.number_of_replicas: 0
-
-index.translog.flush_threshold_size: 4g
-index.translog.flush_threshold_ops: 500000
-'''
 
 
 class DefaultQuery(rally.track.track.Query):
@@ -118,43 +101,5 @@ geopointTrackSpec = rally.track.track.Track(
     estimated_benchmark_time_in_minutes=20,
     # Queries to use in the search benchmark
     queries=[PolygonQuery(), BBoxQuery(), DistanceQuery(), DistanceRangeQuery()],
-    # TODO dm: Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
-    track_setups=[
-        rally.track.track.TrackSetup(
-            name="defaults",
-            description="append-only, using all default settings.",
-            candidate_settings=rally.track.track.CandidateSettings(config_snippet=geopointGreenNodeSettings),
-            benchmark_settings=rally.track.track.BenchmarkSettings(benchmark_search=True)
-        ),
-        rally.track.track.TrackSetup(
-            name="4gheap",
-            description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-            candidate_settings=rally.track.track.CandidateSettings(config_snippet=geopointGreenNodeSettings, heap='4g'),
-            benchmark_settings=rally.track.track.BenchmarkSettings()
-        ),
-
-        rally.track.track.TrackSetup(
-            name="fastsettings",
-            description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % geopointBenchmarkFastSettings,
-            candidate_settings=rally.track.track.CandidateSettings(config_snippet=geopointBenchmarkFastSettings, heap='4g'),
-            benchmark_settings=rally.track.track.BenchmarkSettings()
-        ),
-
-        rally.track.track.TrackSetup(
-            name="fastupdates",
-            description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
-                        "already exists in the index.",
-            candidate_settings=rally.track.track.CandidateSettings(config_snippet=geopointBenchmarkFastSettings, heap='4g'),
-            benchmark_settings=rally.track.track.BenchmarkSettings(id_conflicts=rally.track.track.IndexIdConflict.SequentialConflicts)
-        ),
-
-        rally.track.track.TrackSetup(
-            name="two_nodes_defaults",
-            description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
-            # integer divide!
-            candidate_settings=rally.track.track.CandidateSettings(config_snippet=geopointGreenNodeSettings, nodes=2,
-                                                                   processors=rally.utils.sysstats.number_of_cpu_cores() // 2),
-            benchmark_settings=rally.track.track.BenchmarkSettings()
-        ),
-    ]
+    track_setups=rally.track.track.track_setups
 )

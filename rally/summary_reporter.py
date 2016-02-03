@@ -34,6 +34,7 @@ class SummaryReporter:
                 print("")
                 self.report_search_latency(store, track)
                 self.report_total_times(store)
+                self.report_merge_part_times(store)
 
                 self.print_header("System Metrics")
                 self.report_cpu_usage(store)
@@ -61,25 +62,46 @@ class SummaryReporter:
             query_latency = store.get("query_latency_%s" % q.name)
             if query_latency:
                 # TODO dm: Output percentiles, not the median...
-                formatted_median = '%.1f' % statistics.median(query_latency)
+                formatted_median = "%.1f" % statistics.median(query_latency)
                 print("  Median query latency [%s]: %sms" % (q.name, formatted_median))
             else:
                 print("Could not determine query latency for [%s] from metrics store" % q)
 
     def report_total_times(self, store):
+        # note that these times are not(!) wall clock time results but total times summed up over multiple threads
         self.print_header("Total times:")
-        print('  Indexing time      : %.1f min' % convert.ms_to_minutes(store.get_one("indexing_total_time")))
-        print('  Merge time         : %.1f min' % convert.ms_to_minutes(store.get_one("merges_total_time")))
-        print('  Refresh time       : %.1f min' % convert.ms_to_minutes(store.get_one("refresh_total_time")))
-        print('  Flush time         : %.1f min' % convert.ms_to_minutes(store.get_one("flush_total_time")))
-        print('  Merge throttle time: %.1f min' % convert.ms_to_minutes(store.get_one("merges_total_throttled_time")))
+        print("  Indexing time      : %.1f min" % convert.ms_to_minutes(store.get_one("indexing_total_time")))
+        print("  Merge time         : %.1f min" % convert.ms_to_minutes(store.get_one("merges_total_time")))
+        print("  Refresh time       : %.1f min" % convert.ms_to_minutes(store.get_one("refresh_total_time")))
+        print("  Flush time         : %.1f min" % convert.ms_to_minutes(store.get_one("flush_total_time")))
+        print("  Merge throttle time: %.1f min" % convert.ms_to_minutes(store.get_one("merges_total_throttled_time")))
         print("")
+
+    def report_merge_part_times(self, store):
+        # note that these times are not(!) wall clock time results but total times summed up over multiple threads
+        self.print_header("Merge times:")
+        self.print_merge_part_time(store, "Postings", "merge_parts_total_time_postings")
+        self.print_merge_part_time(store, "Stored Fields", "merge_parts_total_time_stored_fields")
+        self.print_merge_part_time(store, "Doc Values", "merge_parts_total_time_doc_values")
+        self.print_merge_part_time(store, "Norms", "merge_parts_total_time_norms")
+        self.print_merge_part_time(store, "Vectors", "merge_parts_total_time_vectors")
+        print("")
+
+    def print_merge_part_time(self, store, human_name, metric_key):
+        metric = store.get_one(metric_key)
+        # determine the spaces to insert based on the longest name...
+        spaces = " " * (len("Stored Fields") - len(human_name) + 1)
+        if metric:
+            print("  %s%s: %.1f min" % (human_name, spaces, convert.ms_to_minutes(metric)))
+        else:
+            print("  %s%s: No metric data" % (human_name, spaces))
+
 
     def report_cpu_usage(self, store):
         percentages = store.get("cpu_utilization_1s")
         if percentages:
             # TODO dm: Output percentiles, not the median...
-            formatted_median = '%.1f' % statistics.median(percentages)
+            formatted_median = "%.1f" % statistics.median(percentages)
             print("  Median indexing CPU utilization: %s%%" % formatted_median)
         else:
             print("Could not determine CPU usage from metrics store")
@@ -98,10 +120,10 @@ class SummaryReporter:
 
     def report_segment_memory(self, store):
         print("  Total heap used for segments     : %.2fMB" % self._mb(store, "segments_memory_in_bytes"))
-        print('  Total heap used for doc values   : %.2fMB' % self._mb(store, "segments_doc_values_memory_in_bytes"))
-        print('  Total heap used for terms        : %.2fMB' % self._mb(store, "segments_terms_memory_in_bytes"))
-        print('  Total heap used for norms        : %.2fMB' % self._mb(store, "segments_norms_memory_in_bytes"))
-        print('  Total heap used for stored fields: %.2fMB' % self._mb(store, "segments_stored_fields_memory_in_bytes"))
+        print("  Total heap used for doc values   : %.2fMB" % self._mb(store, "segments_doc_values_memory_in_bytes"))
+        print("  Total heap used for terms        : %.2fMB" % self._mb(store, "segments_terms_memory_in_bytes"))
+        print("  Total heap used for norms        : %.2fMB" % self._mb(store, "segments_norms_memory_in_bytes"))
+        print("  Total heap used for stored fields: %.2fMB" % self._mb(store, "segments_stored_fields_memory_in_bytes"))
 
     def _mb(self, store, key):
         return convert.bytes_to_mb(store.get_one(key))

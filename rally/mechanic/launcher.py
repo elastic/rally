@@ -4,6 +4,7 @@ import subprocess
 import signal
 
 import rally.mechanic.gear
+import rally.config
 import rally.cluster
 import rally.telemetry
 import rally.time
@@ -70,6 +71,7 @@ class Launcher:
 
     def prepare_cmd(self, setup, node_name):
         server_log_dir = "%s/server" % self._config.opts("system", "track.setup.log.dir")
+        self._config.add(rally.config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
         processor_count = setup.candidate_settings.processors
 
         cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]

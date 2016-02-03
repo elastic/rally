@@ -1,6 +1,8 @@
 import logging
 import threading
 import psutil
+import re
+import os
 
 import rally.utils.io
 import rally.utils.process
@@ -14,7 +16,8 @@ class Telemetry:
         self._config = config
         self._devices = [
             FlightRecorder(config, metrics_store),
-            Ps(config, metrics_store)
+            Ps(config, metrics_store),
+            MergeParts(config, metrics_store)
         ]
         self._enabled_devices = self._config.opts("telemetry", "devices")
 
@@ -138,6 +141,59 @@ class FlightRecorder(TelemetryDevice):
         # TODO dm: We should probably put the file name in quotes or escape it properly somehow (if there are spaces in the path...)
         return {"ES_JAVA_OPTS": "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
                                 "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s" % log_file}
+
+
+class MergeParts(TelemetryDevice):
+    MERGE_TIME_LINE = re.compile(r': (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]')
+
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self._t = None
+
+    @property
+    def mandatory(self):
+        return True
+
+    @property
+    def command(self):
+        return "merge-parts"
+
+    @property
+    def human_name(self):
+        return "Merge Parts Statistics"
+
+    @property
+    def help(self):
+        return "Gathers merge parts time statistics. Note that you need to run a track setup which logs these data."
+
+    def on_benchmark_stop(self):
+        server_log_dir = self._config.opts("launcher", "candidate.log.dir")
+        for log_file in os.listdir(server_log_dir):
+            log_path = "%s/%s" % (server_log_dir, log_file)
+            logger.debug("Analyzing merge parts in [%s]" % log_path)
+            with open(log_path) as f:
+                merge_times = self._extract_merge_times(f)
+                if merge_times:
+                    self._store_merge_times(merge_times)
+
+    def _extract_merge_times(self, file):
+        merge_times = {}
+        for line in file.readlines():
+            match = MergeParts.MERGE_TIME_LINE.search(line)
+            if match is not None:
+                duration_ms, part, num_docs = match.groups()
+                if part not in merge_times:
+                    merge_times[part] = [0, 0]
+                l = merge_times[part]
+                l[0] += int(duration_ms)
+                l[1] += int(num_docs)
+        return merge_times
+
+    def _store_merge_times(self, merge_times):
+        for k, v in merge_times.items():
+            metric_suffix = k.replace(" ", "_")
+            self._metrics_store.put_value("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
+            self._metrics_store.put_count("merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
 class Ps(TelemetryDevice):

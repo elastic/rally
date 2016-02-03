@@ -6,12 +6,84 @@ from enum import Enum
 
 import rally.config as cfg
 import rally.utils.io
+import rally.utils.sysstats
 import rally.utils.convert
 import rally.utils.process
 
 import rally.cluster
 
 logger = logging.getLogger("rally.track")
+
+# Ensure cluster status green even for single nodes. Please don't add anything else here except to get the cluster to status
+# 'green' even with a single node.
+greenNodeSettings = '''
+index.number_of_replicas: 0
+'''
+
+mergePartsSettings = '''
+index.number_of_replicas: 0
+index.merge.scheduler.auto_throttle: false
+'''
+
+benchmarkFastSettings = '''
+index.refresh_interval: 30s
+
+index.number_of_shards: 6
+index.number_of_replicas: 0
+
+index.translog.flush_threshold_size: 4g
+index.translog.flush_threshold_ops: 500000
+'''
+
+mergePartsLogConfig = '''
+es.logger.level: INFO
+rootLogger: ${es.logger.level}, console, file
+logger:
+  action: DEBUG
+  com.amazonaws: WARN
+  com.amazonaws.jmx.SdkMBeanRegistrySupport: ERROR
+  com.amazonaws.metrics.AwsSdkMetrics: ERROR
+  org.apache.http: INFO
+  index.search.slowlog: TRACE, index_search_slow_log_file
+  index.indexing.slowlog: TRACE, index_indexing_slow_log_file
+  index.engine.lucene.iw: TRACE
+
+additivity:
+  index.search.slowlog: false
+  index.indexing.slowlog: false
+  deprecation: false
+
+appender:
+  console:
+    type: console
+    layout:
+      type: consolePattern
+      conversionPattern: "[%d{ISO8601}][%-5p][%-25c] %m%n"
+
+  file:
+    type: dailyRollingFile
+    file: ${path.logs}/${cluster.name}.log
+    datePattern: "'.'yyyy-MM-dd"
+    layout:
+      type: pattern
+      conversionPattern: "[%d{ISO8601}][%-5p][%-25c] %.10000m%n"
+
+  index_search_slow_log_file:
+    type: dailyRollingFile
+    file: ${path.logs}/${cluster.name}_index_search_slowlog.log
+    datePattern: "'.'yyyy-MM-dd"
+    layout:
+      type: pattern
+      conversionPattern: "[%d{ISO8601}][%-5p][%-25c] %m%n"
+
+  index_indexing_slow_log_file:
+    type: dailyRollingFile
+    file: ${path.logs}/${cluster.name}_index_indexing_slowlog.log
+    datePattern: "'.'yyyy-MM-dd"
+    layout:
+      type: pattern
+      conversionPattern: "[%d{ISO8601}][%-5p][%-25c] %m%n"
+'''
 
 
 class Track:
@@ -194,3 +266,53 @@ class Marshal:
             raise
         else:
             os.rename(tmp_data_set_path, data_set_path)
+
+
+# Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
+track_setups = [
+    TrackSetup(
+        name="defaults",
+        description="append-only, using all default settings.",
+        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings),
+        benchmark_settings=BenchmarkSettings(benchmark_search=True)
+    ),
+    TrackSetup(
+        name="4gheap",
+        description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
+        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings,heap='4g'),
+        benchmark_settings=BenchmarkSettings()
+    ),
+
+    TrackSetup(
+        name="fastsettings",
+        description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
+        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap='4g'),
+        benchmark_settings=BenchmarkSettings()
+    ),
+
+    TrackSetup(
+        name="fastupdates",
+        description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
+                    "already exists in the index.",
+        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap='4g'),
+        benchmark_settings=BenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
+    ),
+
+    TrackSetup(
+        name="two_nodes_defaults",
+        description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
+        # integer divide!
+        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings, nodes=2,
+                                                               processors=rally.utils.sysstats.number_of_cpu_cores() // 2),
+        benchmark_settings=BenchmarkSettings()
+    ),
+
+    TrackSetup(
+        name="defaults_verbose_iw",
+        description="Based on defaults but specifically set up to gather merge part times.",
+        # integer divide!
+        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings,
+                                                               logging_config=mergePartsLogConfig),
+        benchmark_settings=BenchmarkSettings()
+    ),
+]
