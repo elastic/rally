@@ -28,11 +28,16 @@ def configure_logging(cfg):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
+    if cfg.opts("system", "quiet.mode"):
+        log_level = logging.ERROR
+    else:
+        log_level = logging.INFO
+
     logging.basicConfig(filename=log_file,
                         filemode='a',
                         format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                         datefmt='%H:%M:%S',
-                        level=logging.INFO)
+                        level=log_level)
 
 
 def parse_args():
@@ -65,41 +70,36 @@ def parse_args():
             help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
             default=False,
             action="store_true")
-
-    for p in [parser, all_parser, race_parser]:
+        p.add_argument(
+            '--quiet',
+            help='Suppresses as much as output as possible. Activate it unless you want to see what\'s happening during the benchmark (default: false)',
+            default=False,
+            action="store_true")
         p.add_argument(
             '--preserve-install',
             help='preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk '
                  'space! (default: false)',
             default=False,
             action="store_true")
-
-    # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
-    # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
-    for p in [parser, all_parser, race_parser]:
+        # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
+        # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
         p.add_argument(
             '--benchmark-mode',
             help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting "
                  "across a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
             choices=["single", "range"],  # later also 'tournament'
             default="single")
-
-    for p in [parser, all_parser, race_parser]:
         p.add_argument(
             '--telemetry',
             help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
                  'provided as a comma-separated list.',
             default="")
-
-    for p in [parser, all_parser, race_parser]:
         p.add_argument(
             '--revision',
             help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the "
                  "latest version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be specified "
                  "as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
-
-    for p in [parser, all_parser, race_parser]:
         p.add_argument(
             '--track-setup',
             help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated list.",
@@ -115,9 +115,7 @@ def parse_args():
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
             default=datetime.datetime.now())
-
-    # This is a highly experimental option and will likely be removed
-    for p in [parser, all_parser, race_parser, report_parser]:
+        # This is a highly experimental option and will likely be removed
         p.add_argument(
             '--data-paths',
             help=argparse.SUPPRESS,
@@ -183,6 +181,7 @@ def main():
     # Add command line config
     cfg.add(rally.config.Scope.applicationOverride, "source", "revision", args.revision)
     cfg.add(rally.config.Scope.applicationOverride, "build", "skip", args.skip_build)
+    cfg.add(rally.config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(rally.config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(rally.config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
     cfg.add(rally.config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))

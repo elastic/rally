@@ -77,6 +77,7 @@ class SearchBenchmark(TimedOperation):
         self._cluster = cluster
         self._metrics_store = cluster.metrics_store
         self._progress = rally.utils.progress.CmdLineProgressReporter()
+        self._quiet_mode = self._config.opts("system", "quiet.mode")
 
     # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
     def run(self):
@@ -94,11 +95,13 @@ class SearchBenchmark(TimedOperation):
 
     def _run_benchmark(self, es, message, repetitions=10):
         times = []
+        quiet = self._quiet_mode
         for i in range(repetitions):
-            self._progress.print(
-                message % ((i + 1), repetitions),
-                "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
-            )
+            if not quiet:
+                self._progress.print(
+                    message % ((i + 1), repetitions),
+                    "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
+                )
             times.append(self._run_one_round(es))
         self._progress.finish()
         return times
@@ -122,11 +125,8 @@ class IndexBenchmark(TimedOperation):
         self._cluster = cluster
         self._metrics_store = cluster.metrics_store
         self._metrics = metrics
+        self._quiet_mode = self._config.opts("system", "quiet.mode")
         self._sent_bytes = 0
-        # TODO dm: Just needed for print output - can we simplify this?
-        self._nextPrint = 0
-        self._numDocsIndexed = 0
-        self._totBytesIndexed = 0
         self._progress = rally.utils.progress.CmdLineProgressReporter()
         self._rand = random.Random(17)
         self._bulk_size = 5000
@@ -219,7 +219,7 @@ class IndexBenchmark(TimedOperation):
                                    chunk_size=self._bulk_size,
                                    expand_action_callback=self.get_expand_action(),
                                    ):
-                if processed % 10000 == 0:
+                if not self._quiet_mode and processed % 10000 == 0:
                     self._print_progress(processed)
                 processed += 1
         except KeyboardInterrupt:
@@ -277,19 +277,18 @@ class IndexBenchmark(TimedOperation):
         self._metrics_store.put_value("node_total_young_gen_gc_time", gc['young']['collection_time_in_millis'], "ms")
 
     def _print_progress(self, docs_processed):
-        # TODO dm: Think about silencing this on "non" dev machines, it introduces another unnecessary pause and I/O
-        # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
-        # accurate here as this is "just" a progress report for the user
-        sent = self._sent_bytes
-        elapsed = self._stop_watch.split_time()
-        docs_per_second = docs_processed / elapsed
-        mb_per_second = convert.bytes_to_mb(sent) / elapsed
-
-        self._progress.print(
-            "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
-            "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
-        )
-        logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
+        if not self._quiet_mode:
+            # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
+            # accurate here as this is "just" a progress report for the user
+            sent = self._sent_bytes
+            elapsed = self._stop_watch.split_time()
+            docs_per_second = docs_processed / elapsed
+            mb_per_second = convert.bytes_to_mb(sent) / elapsed
+            self._progress.print(
+                "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
+                "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
+            )
+            logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
 
     def print_index_stats(self, data_dir):
         index_size_bytes = rally.utils.io.get_size(data_dir)
