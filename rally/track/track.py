@@ -85,6 +85,7 @@ class Track:
     """
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
+
     def __init__(self, name, description, source_url, mapping_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
                  uncompressed_size_in_bytes,
                  local_file_name, local_mapping_name, estimated_benchmark_time_in_minutes, track_setups, queries):
@@ -233,19 +234,19 @@ class Marshal:
             raise RuntimeError("Cannot download mappings. No protocol handler for [%s] available." % url)
 
     def _do_download_via_http(self, url, data_set_path):
-        tmp_data_set_path = data_set_path + '.tmp'
+        tmp_data_set_path = data_set_path + ".tmp"
         try:
-            with urllib.request.urlopen(url) as response, open(tmp_data_set_path, 'wb') as out_file:
+            with urllib.request.urlopen(url) as response, open(tmp_data_set_path, "wb") as out_file:
                 shutil.copyfileobj(response, out_file)
         except:
-            logger.info('Removing temp file %s' % tmp_data_set_path)
+            logger.info("Removing temp file %s" % tmp_data_set_path)
             os.remove(tmp_data_set_path)
             raise
         else:
             os.rename(tmp_data_set_path, data_set_path)
 
     def _do_download_via_s3(self, track, url, data_set_path):
-        tmp_data_set_path = data_set_path + '.tmp'
+        tmp_data_set_path = data_set_path + ".tmp"
         s3cmd = "s3cmd -v get %s %s" % (url, tmp_data_set_path)
         try:
             success = process.run_subprocess_with_logging(s3cmd)
@@ -256,7 +257,7 @@ class Marshal:
                     os.remove(tmp_data_set_path)
                 raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
         except:
-            logger.info('Removing temp file %s' % tmp_data_set_path)
+            logger.info("Removing temp file %s" % tmp_data_set_path)
             os.remove(tmp_data_set_path)
             raise
         else:
@@ -274,14 +275,14 @@ track_setups = [
     TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings,heap='4g'),
+        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings, heap="4g"),
         benchmark_settings=BenchmarkSettings()
     ),
 
     TrackSetup(
         name="fastsettings",
         description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
-        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap='4g'),
+        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap="4g"),
         benchmark_settings=BenchmarkSettings()
     ),
 
@@ -289,7 +290,7 @@ track_setups = [
         name="fastupdates",
         description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
                     "already exists in the index.",
-        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap='4g'),
+        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap="4g"),
         benchmark_settings=BenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
     ),
 
@@ -298,7 +299,7 @@ track_setups = [
         description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
         # integer divide!
         candidate_settings=CandidateSettings(config_snippet=greenNodeSettings, nodes=2,
-                                                               processors=sysstats.number_of_cpu_cores() // 2),
+                                             processors=sysstats.number_of_cpu_cores() // 2),
         benchmark_settings=BenchmarkSettings()
     ),
 
@@ -307,7 +308,7 @@ track_setups = [
         description="Based on defaults but specifically set up to gather merge part times.",
         # integer divide!
         candidate_settings=CandidateSettings(config_snippet=greenNodeSettings,
-                                                               logging_config=mergePartsLogConfig),
+                                             logging_config=mergePartsLogConfig),
         benchmark_settings=BenchmarkSettings()
     ),
 ]

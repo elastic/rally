@@ -7,9 +7,9 @@ from rally.track import track
 
 
 class ProvisionerTests(TestCase):
-    @mock.patch('shutil.rmtree')
-    @mock.patch('os.path.exists')
-    @mock.patch('logging.Logger')
+    @mock.patch("shutil.rmtree")
+    @mock.patch("os.path.exists")
+    @mock.patch("logging.Logger")
     def test_cleanup_nothing(self, mock_logger, mock_path_exists, mock_rm):
         mock_path_exists.return_value = False
 
@@ -21,12 +21,12 @@ class ProvisionerTests(TestCase):
         p = provisioner.Provisioner(cfg, mock_logger)
         p.cleanup()
 
-        mock_path_exists.assert_called_once_with('/rally-root/track/track-setup/es-bin')
+        mock_path_exists.assert_called_once_with("/rally-root/track/track-setup/es-bin")
         mock_rm.assert_not_called()
 
-    @mock.patch('shutil.rmtree')
-    @mock.patch('os.path.exists')
-    @mock.patch('logging.Logger')
+    @mock.patch("shutil.rmtree")
+    @mock.patch("os.path.exists")
+    @mock.patch("logging.Logger")
     def test_cleanup_nothing_on_preserve(self, mock_logger, mock_path_exists, mock_rm):
         mock_path_exists.return_value = False
 
@@ -42,9 +42,9 @@ class ProvisionerTests(TestCase):
         mock_path_exists.assert_not_called()
         mock_rm.assert_not_called()
 
-    @mock.patch('shutil.rmtree')
-    @mock.patch('os.path.exists')
-    @mock.patch('logging.Logger')
+    @mock.patch("shutil.rmtree")
+    @mock.patch("os.path.exists")
+    @mock.patch("logging.Logger")
     def test_cleanup(self, mock_logger, mock_path_exists, mock_rm):
         mock_path_exists.return_value = True
 
@@ -61,13 +61,13 @@ class ProvisionerTests(TestCase):
         mock_path_exists.mock_calls = expected_dir_calls
         mock_rm.mock_calls = expected_dir_calls
 
-    @mock.patch('builtins.open')
-    @mock.patch('glob.glob', lambda p: ['/install/elasticsearch-3.0.0-SNAPSHOT'])
-    @mock.patch('rally.utils.io.unzip')
-    @mock.patch('rally.utils.io.ensure_dir')
-    @mock.patch('shutil.rmtree')
-    @mock.patch('os.path.exists')
-    @mock.patch('logging.Logger')
+    @mock.patch("builtins.open")
+    @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-3.0.0-SNAPSHOT"])
+    @mock.patch("rally.utils.io.unzip")
+    @mock.patch("rally.utils.io.ensure_dir")
+    @mock.patch("shutil.rmtree")
+    @mock.patch("os.path.exists")
+    @mock.patch("logging.Logger")
     def test_prepare(self, mock_logger, mock_path_exists, mock_rm, mock_ensure_dir, mock_unzip, mock_open):
         mock_path_exists.return_value = True
 

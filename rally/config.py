@@ -5,7 +5,7 @@ import logging
 import configparser
 from enum import Enum
 
-from rally.utils import io
+from rally.utils import io, sysstats
 
 logger = logging.getLogger("rally.config")
 
@@ -103,9 +103,7 @@ class Config:
         # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change them either
         self._opts = {
             "build::gradle.tasks.clean": "clean",
-            # #TODO dm: tests.jvm should depend on the number of cores - how to abstract this? we can get the value with sysstats.number_of_cpu_cores()
-            # # We have to encode this probably in builder.py...
-            # "build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=12",
+            #"build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=%s" % sysstats.number_of_cpu_cores(),
             # We just build the ZIP distribution directly for now (instead of the 'check' target)
             "build::gradle.tasks.package": "assemble",
             "build::log.dir": "build",
@@ -199,7 +197,6 @@ class Config:
             "Enter the JDK 8 root directory (e.g. something like /Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home on a Mac)",
             default_value=default_jdk_8,
             check_path_exists=True)
-        # TODO dm: This could also be useful for local testing (can we somehow derive it ourselves?)
         if advanced_config:
             stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")
         else:
@@ -227,7 +224,6 @@ class Config:
         config["provisioning"] = {}
         config["provisioning"]["local.install.dir"] = "install"
 
-        # TODO dm: Add also java7.home (and maybe we need to be more fine-grained, such as "java7update25.home" but we'll see..
         config["runtime"] = {}
         config["runtime"]["java8.home"] = jdk8_home
 
@@ -290,7 +286,7 @@ class Config:
 
     def _write_to_config_file(self, config):
         io.ensure_dir(self._config_dir())
-        with open(self._config_file(), 'w') as configfile:
+        with open(self._config_file(), "w") as configfile:
             config.write(configfile)
 
     def _config_dir(self):

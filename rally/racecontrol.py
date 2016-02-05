@@ -17,9 +17,9 @@ logger = logging.getLogger("rally.racecontrol")
 
 class RaceControl:
     COMMANDS = {
-        'all': lambda: [RacingTeam(), Press(report_only=False)],
-        'race': lambda: [RacingTeam()],
-        'report': lambda: [Press(report_only=True)]
+        "all": lambda: [RacingTeam(), Press(report_only=False)],
+        "race": lambda: [RacingTeam()],
+        "report": lambda: [Press(report_only=True)]
     }
 
     def __init__(self, cfg):

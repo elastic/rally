@@ -135,14 +135,12 @@ class FlightRecorder(TelemetryDevice):
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
         print("%s: writing flight recording to %s" % (self.human_name, log_file))
-        # TODO dm: Consider using also a delay, starting flight recording only after a specific trigger (e.g. warmup is done), etc., etc.
-        # TODO dm: We should probably put the file name in quotes or escape it properly somehow (if there are spaces in the path...)
         return {"ES_JAVA_OPTS": "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
                                 "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s" % log_file}
 
 
 class MergeParts(TelemetryDevice):
-    MERGE_TIME_LINE = re.compile(r': (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]')
+    MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
 
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)

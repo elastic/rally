@@ -46,16 +46,16 @@ class Launcher:
         for k, v in t.instrument_candidate_env(setup).items():
             self._set_env(env, k, v)
 
-        self._set_env(env, 'ES_HEAP_SIZE', setup.candidate_settings.heap)
-        self._set_env(env, 'ES_JAVA_OPTS', setup.candidate_settings.java_opts)
-        self._set_env(env, 'ES_GC_OPTS', setup.candidate_settings.gc_opts)
+        self._set_env(env, "ES_HEAP_SIZE", setup.candidate_settings.heap)
+        self._set_env(env, "ES_JAVA_OPTS", setup.candidate_settings.java_opts)
+        self._set_env(env, "ES_GC_OPTS", setup.candidate_settings.gc_opts)
 
         java_home = gear.Gear(self._config).capability(gear.Capability.java)
         # Unix specific!:
-        self._set_env(env, 'PATH', '%s/bin' % java_home, separator=':')
+        self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
         # Don't merge here!
-        env['JAVA_HOME'] = java_home
-        self._logger.info('ENV: %s' % str(env))
+        env["JAVA_HOME"] = java_home
+        self._logger.info("ENV: %s" % str(env))
         return env
 
     def _set_env(self, env, k, v, separator=' '):
@@ -70,11 +70,11 @@ class Launcher:
         self._config.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
         processor_count = setup.candidate_settings.processors
 
-        cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
+        cmd = ["bin/elasticsearch", "-Des.node.name=%s" % node_name]
         if processor_count is not None and processor_count > 1:
-            cmd.append('-Des.processors=%s' % processor_count)
-        cmd.append('-Dpath.logs=%s' % server_log_dir)
-        self._logger.info('ES launch: %s' % str(cmd))
+            cmd.append("-Des.processors=%s" % processor_count)
+        cmd.append("-Dpath.logs=%s" % server_log_dir)
+        self._logger.info("ES launch: %s" % str(cmd))
         return cmd
 
     def _start_process(self, cmd, env, node_name):
@@ -86,7 +86,7 @@ class Launcher:
         t.setDaemon(True)
         t.start()
         if startup_event.wait(timeout=Launcher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            self._logger.info('Started node=%s with pid=%s' % (node_name, process.pid))
+            self._logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
             return process
         else:
             log_dir = self._config.opts("system", "log.dir")
@@ -103,21 +103,21 @@ class Launcher:
         Reads the output from the ES (node) subprocess.
         """
         while True:
-            l = server.stdout.readline().decode('utf-8')
+            l = server.stdout.readline().decode("utf-8")
             if len(l) == 0:
                 break
             l = l.rstrip()
 
-            if l.find('Initialization Failed') != -1:
+            if l.find("Initialization Failed") != -1:
                 startup_event.set()
 
-            self._logger.info('%s: %s' % (node_name, l.replace('\n', '\n%s (stdout): ' % node_name)))
-            if l.endswith('started') and not startup_event.isSet():
+            self._logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+            if l.endswith("started") and not startup_event.isSet():
                 startup_event.set()
-                self._logger.info('%s: started' % node_name)
+                self._logger.info("%s: started" % node_name)
 
     def stop(self, cluster):
-        self._logger.info('Shutting down ES cluster')
+        self._logger.info("Shutting down ES cluster")
 
         # Ask all nodes to shutdown:
         stop_watch = self._clock.stop_watch()
@@ -131,26 +131,26 @@ class Launcher:
 
             try:
                 process.wait(10.0)
-                self._logger.info('Done shutdown server (%.1f sec)' % stop_watch.split_time())
+                self._logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
             except subprocess.TimeoutExpired:
                 # kill -9
-                self._logger.warn('Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:' % node)
+                self._logger.warn("Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:" % node)
                 try:
                     os.kill(process.pid, signal.SIGQUIT)
                 except OSError:
-                    self._logger.warn('  no such process')
+                    self._logger.warn("  no such process")
                     return
 
                 try:
                     process.wait(120.0)
-                    self._logger.info('Done shutdown server (%.1f sec)' % stop_watch.split_time())
+                    self._logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
                     return
                 except subprocess.TimeoutExpired:
                     pass
 
-                self._logger.info('kill -KILL server')
+                self._logger.info("kill -KILL server")
                 try:
                     process.kill()
                 except ProcessLookupError:
-                    self._logger.warn('No such process')
+                    self._logger.warn("No such process")
         self._servers = []

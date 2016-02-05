@@ -6,7 +6,7 @@ class Paths:
         root = self._config.opts("system", "root.dir")
         start = self._config.opts("meta", "time.start")
         env = self._config.opts("system", "env.name")
-        ts = '%04d-%02d-%02d-%02d-%02d-%02d' % (start.year, start.month, start.day, start.hour, start.minute, start.second)
+        ts = "%04d-%02d-%02d-%02d-%02d-%02d" % (start.year, start.month, start.day, start.hour, start.minute, start.second)
         return "%s/races/%s/%s" % (root, ts, env)
 
     def log_root(self):

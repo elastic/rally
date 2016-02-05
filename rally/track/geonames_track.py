@@ -14,7 +14,7 @@ class TermQuery(track.Query):
         track.Query.__init__(self, "term")
 
     def run(self, es):
-        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, q='country_code:AT')
+        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, q="country_code:AT")
 
 
 class CountryAggQuery(track.Query):
@@ -59,26 +59,25 @@ class ScrollQuery(track.Query):
         # Note that starting with ES 2.0, the initial call to search() returns already the first result page
         # so we have to retrieve one page less
         for i in range(self.PAGES - 1):
-            hit_count = len(r['hits']['hits'])
+            hit_count = len(r["hits"]["hits"])
             if hit_count == 0:
                 # done
                 break
-            r = es.scroll(scroll_id=r['_scroll_id'], scroll='10m')
+            r = es.scroll(scroll_id=r["_scroll_id"], scroll="10m")
 
 
 geonamesTrackSpec = track.Track(
     name="Geonames",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
-    # TODO dm: Change URL schema to: $ROOT/$benchmark-name/$index-name/$type-name/ (see https://github.com/elastic/rally/issues/26)
     source_url="http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2",
     mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
     index_name="geonames",
     type_name="type",
-    number_of_documents=2000,
+    number_of_documents=8647880,
     compressed_size_in_bytes=197857614,
     uncompressed_size_in_bytes=2790927196,
-    local_file_name="documents-2k.json.bz2",
+    local_file_name="documents.json.bz2",
     local_mapping_name="mappings.json",
     # for defaults alone, it's just around 20 minutes, for all it's about 60
     estimated_benchmark_time_in_minutes=20,

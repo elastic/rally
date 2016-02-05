@@ -16,7 +16,7 @@ def to_iso8601(dt):
     :param dt: A datetime instance
     :return: The corresponding ISO-8601 formatted string
     """
-    return '%04d%02d%02dT%02d%02d%02dZ' % (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+    return "%04d%02d%02dT%02d%02d%02dZ" % (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
 
 def sleep(seconds):

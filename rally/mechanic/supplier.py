@@ -80,7 +80,7 @@ class Supplier:
             self._repo.pull()
         elif revision == "current":
             self._logger.info("Skip fetching sources")
-        elif revision.startswith('@'):
+        elif revision.startswith("@"):
             # concert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             self._repo.pull_ts(revision[1:])
         else:  # assume a git commit hash

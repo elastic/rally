@@ -30,75 +30,72 @@ def configure_logging(cfg):
         log_level = logging.INFO
 
     logging.basicConfig(filename=log_file,
-                        filemode='a',
-                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%H:%M:%S',
+                        filemode="a",
+                        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+                        datefmt="%H:%M:%S",
                         level=log_level)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog='esrally', description='Benchmark Elasticsearch')
+    parser = argparse.ArgumentParser(prog="esrally", description="Benchmark Elasticsearch")
 
-    # TODO dm: Come up with a more descriptive help message
     subparsers = parser.add_subparsers(
-        title='subcommands',
-        dest='subcommand',
-        help='Subcommands define what Rally will do')
+        title="subcommands",
+        dest="subcommand",
+        help="")
 
-    all_parser = subparsers.add_parser('all', help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
-    race_parser = subparsers.add_parser('race', help="Run only the benchmarks (without generating reports)")
-    report_parser = subparsers.add_parser('report', help="Generate only reports based on existing data")
-    # TODO dm: Should we define a generic "list" command which allows us to list all sorts of things and have just options, e.g.
-    # "esrally list --telemetry"?
-    subparsers.add_parser('list-telemetry', help='Lists all of the available telemetry devices')
+    all_parser = subparsers.add_parser("all", help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
+    race_parser = subparsers.add_parser("race", help="Run only the benchmarks (without generating reports)")
+    report_parser = subparsers.add_parser("report", help="Generate only reports based on existing data")
+    subparsers.add_parser("list-telemetry", help="Lists all of the available telemetry devices")
 
-    config_parser = subparsers.add_parser('configure', help='Write the configuration file or reconfigure Rally')
+    config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
     for p in [parser, config_parser]:
         p.add_argument(
-            '--advanced-config',
-            help='show additional configuration options when creating the config file (intended for CI runs) (default: false)',
+            "--advanced-config",
+            help="show additional configuration options when creating the config file (intended for CI runs) (default: false)",
             default=False,
             action="store_true")
 
     for p in [parser, all_parser, race_parser]:
         p.add_argument(
-            '--skip-build',
-            help='assumes an Elasticsearch zip file is already built and skips the build phase (default: false)',
+            "--skip-build",
+            help="assumes an Elasticsearch zip file is already built and skips the build phase (default: false)",
             default=False,
             action="store_true")
         p.add_argument(
-            '--quiet',
-            help='Suppresses as much as output as possible. Activate it unless you want to see what\'s happening during the '
-                 'benchmark (default: false)',
+            "--quiet",
+            help="Suppresses as much as output as possible. Activate it unless you want to see what's happening during the "
+                 "benchmark (default: false)",
             default=False,
             action="store_true")
         p.add_argument(
-            '--preserve-install',
-            help='preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk '
-                 'space! (default: false)',
+            "--preserve-install",
+            help="preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk "
+                 "space! (default: false)",
             default=False,
             action="store_true")
-        # range: intended for backtesting, can provide two values, lower, upper (each can have the same values as for single)
-        # tournament: provide two revisions to compare (similar to backtesting but only two revisions are checked, not all between them)
+        # tournament: provide two revisions to compare
+        # Does not make sense to expose this argument already if there is only a single supported option
+        #p.add_argument(
+        #    "--benchmark-mode",
+        #    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. Currently only "
+        #         "'single' is supported (default: single).",
+        #    choices=["single"],  # later also 'tournament'
+        #    default="single")
         p.add_argument(
-            '--benchmark-mode',
-            help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. 'range' allows for backtesting "
-                 "across a range of versions (intended for CI). Currently only 'single' is supported (default: single).",
-            choices=["single", "range"],  # later also 'tournament'
-            default="single")
-        p.add_argument(
-            '--telemetry',
-            help='Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be '
-                 'provided as a comma-separated list.',
+            "--telemetry",
+            help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
+                 "provided as a comma-separated list.",
             default="")
         p.add_argument(
-            '--revision',
+            "--revision",
             help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the "
                  "latest version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be specified "
                  "as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
-            '--track-setup',
+            "--track-setup",
             help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated list.",
             default="defaults")  # optimized for local usage
 
@@ -108,13 +105,13 @@ def parse_args():
     # That's why we add this just as an undocumented option.
     for p in [parser, all_parser, race_parser, report_parser]:
         p.add_argument(
-            '--effective-start-date',
+            "--effective-start-date",
             help=argparse.SUPPRESS,
-            type=lambda s: datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S'),
+            type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
             default=datetime.datetime.now())
         # This is a highly experimental option and will likely be removed
         p.add_argument(
-            '--data-paths',
+            "--data-paths",
             help=argparse.SUPPRESS,
             default=None)
 
@@ -196,5 +193,5 @@ def main():
         race_control.start(subcommand)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

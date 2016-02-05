@@ -28,7 +28,7 @@ def _zipdir(source_directory, archive):
         for file in files:
             archive.write(
                 filename=os.path.join(root, file),
-                arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, '..')))
+                arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, "..")))
 
 
 def zip(source_directory, zip_name):
@@ -38,7 +38,7 @@ def zip(source_directory, zip_name):
     :param source_directory: The source directory to compress. Must be readable.
     :param zip_name: The absolute path including the file name of the ZIP archive. Must have the extension .zip.
     """
-    archive = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED)
+    archive = zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED)
     _zipdir(source_directory, archive)
 
 
@@ -61,7 +61,7 @@ def unzip(zip_name, target_directory):
     elif extension == ".bz2":
         # We rather avoid external tools as much as possible to simplify Rally's setup, hence we use the library functions
         target_file = os.path.join(target_directory, filename)
-        with open(target_file, 'wb') as extracted, bz2.BZ2File(zip_name, 'rb') as file:
+        with open(target_file, "wb") as extracted, bz2.BZ2File(zip_name, "rb") as file:
             for data in iter(lambda: file.read(100 * 1024), b''):
                 extracted.write(data)
     else:
@@ -78,7 +78,7 @@ def splitext(file_name):
     return os.path.splitext(file_name)
 
 
-def get_size(start_path='.'):
+def get_size(start_path="."):
     total_size = 0
     for dirpath, dirnames, filenames in os.walk(start_path):
         for f in filenames:
@@ -96,8 +96,8 @@ def guess_install_location(binary_name, fallback=None):
     :return: The full path to the provided binary or the provided fallback.
     """
     try:
-        lines = subprocess.Popen(['which', binary_name], stdout=subprocess.PIPE).communicate()[0].splitlines()
-        return lines[0].decode('utf-8')
+        lines = subprocess.Popen(["which", binary_name], stdout=subprocess.PIPE).communicate()[0].splitlines()
+        return lines[0].decode("utf-8")
     except BaseException:
         # could not determine location
         return fallback
@@ -112,7 +112,7 @@ def guess_java_home(major_version=8, fallback=None):
     :return: The full path to the JDK root directory or the fallback.
     """
     try:
-        return os.environ['JAVA_HOME']
+        return os.environ["JAVA_HOME"]
     except KeyError:
         pass
     # obviously JAVA_HOME is not set, we try a bit harder for our developers on a Mac

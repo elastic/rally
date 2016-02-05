@@ -22,11 +22,11 @@ class CmdLineProgressReporter:
         """
         w = self._width
         if self._first_print:
-            print(' ' * w, end='')
+            print(" " * w, end="")
             self._first_print = False
 
         formatted_progress = progress.rjust(w - len(message))
-        print('\033[{0}D{1}{2}'.format(w, message, formatted_progress), end='')
+        print("\033[{0}D{1}{2}".format(w, message, formatted_progress), end="")
         sys.stdout.flush()
 
     def finish(self):

@@ -6,9 +6,9 @@ from rally.mechanic import builder
 
 
 class BuilderTests(TestCase):
-    @mock.patch('rally.utils.process.run_subprocess')
-    @mock.patch('logging.Logger')
-    @mock.patch('glob.glob', lambda p: ['elasticsearch.zip'])
+    @mock.patch("rally.utils.process.run_subprocess")
+    @mock.patch("logging.Logger")
+    @mock.patch("glob.glob", lambda p: ["elasticsearch.zip"])
     def test_skip_build(self, mock_run_subprocess, mock_logger):
         cfg = config.Config()
         cfg.add(config.Scope.application, "build", "skip", True)
@@ -22,11 +22,11 @@ class BuilderTests(TestCase):
         # but should still setup the binary path
         self.assertEqual(cfg.opts("builder", "candidate.bin.path"), "elasticsearch.zip")
 
-    @mock.patch('glob.glob', lambda p: ['elasticsearch.zip'])
-    @mock.patch('rally.utils.io.ensure_dir')
-    @mock.patch('os.rename')
-    @mock.patch('logging.Logger')
-    @mock.patch('rally.utils.process.run_subprocess')
+    @mock.patch("glob.glob", lambda p: ["elasticsearch.zip"])
+    @mock.patch("rally.utils.io.ensure_dir")
+    @mock.patch("os.rename")
+    @mock.patch("logging.Logger")
+    @mock.patch("rally.utils.process.run_subprocess")
     def test_build(self, mock_run_subprocess, mock_logger, mock_rename, mock_ensure_dir):
         cfg = config.Config()
         cfg.add(config.Scope.application, "build", "skip", False)

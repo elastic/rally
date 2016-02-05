@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
-VERSION = (0, 1, 0, 'dev0')
+VERSION = (0, 1, 0, "dev0")
 __version__ = VERSION
-__versionstr__ = '.'.join(map(str, VERSION))
+__versionstr__ = ".".join(map(str, VERSION))
 
 install_requires = [
     "elasticsearch>=2.1.0",
@@ -20,11 +20,11 @@ setup(name="esrally",
       url="https://github.com/elastic/rally",
       license="Apache License, Version 2.0",
       packages=find_packages(
-          where='.',
-          exclude=('tests*',)
+          where=".",
+          exclude=("tests*",)
       ),
       install_requires=install_requires,
-      test_suite='tests',
+      test_suite="tests",
       tests_require=tests_require,
       entry_points={
           "console_scripts": ["esrally=rally.rally:main"],

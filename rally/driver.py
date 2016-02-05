@@ -25,7 +25,7 @@ class Driver:
     def setup(self, cluster, track, track_setup):
         mapping_path = self._config.opts("benchmarks", "mapping.path")
         mappings = open(mapping_path).read()
-        logger.debug('create index w/ mappings')
+        logger.debug("create index w/ mappings")
         logger.debug(mappings)
         cluster.client.indices.create(index=track.index_name)
         cluster.client.indices.put_mapping(index=track.index_name,
@@ -126,7 +126,7 @@ class IndexBenchmark(TimedOperation):
         self._progress = progress.CmdLineProgressReporter()
         self._rand = random.Random(17)
         self._bulk_size = 5000
-        logger.info('Use %d docs per bulk request' % self._bulk_size)
+        logger.info("Use %d docs per bulk request" % self._bulk_size)
 
     def run(self):
         docs_to_index = self._track.number_of_documents
@@ -145,15 +145,15 @@ class IndexBenchmark(TimedOperation):
             finished = True
         finally:
             self._progress.finish()
-            logger.info('IndexBenchmark finished successfully: %s' % finished)
+            logger.info("IndexBenchmark finished successfully: %s" % finished)
 
     def generate_ids(self, conflicts):
         docs_to_index = self._track.number_of_documents
-        logger.info('build ids with id conflicts of type %s' % conflicts)
+        logger.info("build ids with id conflicts of type %s" % conflicts)
 
         if conflicts == track.IndexIdConflict.SequentialConflicts:
             yield from (
-                '%10d' % (
+                "%10d" % (
                     self._rand.randint(0, i)
                     # pick already returned id in 25% of cases
                     if i > 0 and self._rand.randint(0, 3) == 3
@@ -167,11 +167,11 @@ class IndexBenchmark(TimedOperation):
                     # pick already returned id in 25%
                     id = self._rand.choice(ids)
                 else:
-                    id = '%10i' % self._rand.randint(0, docs_to_index)
+                    id = "%10i" % self._rand.randint(0, docs_to_index)
                     ids.append(id)
             yield id
         else:
-            raise RuntimeError('Unknown id conflict type %s' % conflicts)
+            raise RuntimeError("Unknown id conflict type %s" % conflicts)
 
     def get_expand_action(self):
         conflicts = self._track_setup.test_settings.id_conflicts
@@ -191,13 +191,13 @@ class IndexBenchmark(TimedOperation):
         return expand_action
 
     def _read_records(self, documents):
-        with open(documents, 'rt') as f:
+        with open(documents, "rt") as f:
             yield from f
 
     def index(self, documents, expected_doc_count, flush=True, stats=True):
         num_client_threads = int(self._config.opts("benchmarks", "index.client.threads"))
-        logger.info('Indexing JSON docs file: [%s]' % documents)
-        logger.info('Launching %d client bulk indexing threads' % num_client_threads)
+        logger.info("Indexing JSON docs file: [%s]" % documents)
+        logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
         index = self._track.index_name
         type = self._track.type_name
@@ -219,7 +219,7 @@ class IndexBenchmark(TimedOperation):
                     self._print_progress(processed)
                 processed += 1
         except KeyboardInterrupt:
-            logger.info('Received SIGINT: IndexBenchmark will be stopped prematurely.')
+            logger.info("Received SIGINT: IndexBenchmark will be stopped prematurely.")
 
         self._stop_watch.stop()
         self._print_progress(processed)
@@ -228,7 +228,7 @@ class IndexBenchmark(TimedOperation):
 
         if flush:
             logger.info("Force flushing index [%s]." % index)
-            es.indices.flush(index=index, params={'request_timeout': 600})
+            es.indices.flush(index=index, params={"request_timeout": 600})
             logger.info("Force flush has finished successfully.")
 
         if stats:
@@ -238,23 +238,23 @@ class IndexBenchmark(TimedOperation):
     def _index_stats(self, expected_doc_count):
         index = self._track.index_name
         logger.info("Gathering indices stats")
-        duration, stats = self.timed(self._cluster.client.indices.stats, index=index, metric='_all', level='shards')
+        duration, stats = self.timed(self._cluster.client.indices.stats, index=index, metric="_all", level="shards")
         self._metrics_store.put_value("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
-        primaries = stats['_all']['primaries']
-        self._metrics_store.put_count("segments_count", primaries['segments']['count'])
-        self._metrics_store.put_count("segments_memory_in_bytes", primaries['segments']['memory_in_bytes'], "byte")
-        self._metrics_store.put_count("segments_doc_values_memory_in_bytes", primaries['segments']['doc_values_memory_in_bytes'], "byte")
-        self._metrics_store.put_count("segments_stored_fields_memory_in_bytes", primaries['segments']['stored_fields_memory_in_bytes'],
+        primaries = stats["_all"]["primaries"]
+        self._metrics_store.put_count("segments_count", primaries["segments"]["count"])
+        self._metrics_store.put_count("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
+        self._metrics_store.put_count("segments_doc_values_memory_in_bytes", primaries["segments"]["doc_values_memory_in_bytes"], "byte")
+        self._metrics_store.put_count("segments_stored_fields_memory_in_bytes", primaries["segments"]["stored_fields_memory_in_bytes"],
                                       "byte")
-        self._metrics_store.put_count("segments_terms_memory_in_bytes", primaries['segments']['terms_memory_in_bytes'], "byte")
-        self._metrics_store.put_count("segments_norms_memory_in_bytes", primaries['segments']['norms_memory_in_bytes'], "byte")
-        self._metrics_store.put_value("merges_total_time", primaries['merges']['total_time_in_millis'], "ms")
-        self._metrics_store.put_value("merges_total_throttled_time", primaries['merges']['total_throttled_time_in_millis'], "ms")
-        self._metrics_store.put_value("indexing_total_time", primaries['indexing']['index_time_in_millis'], "ms")
-        self._metrics_store.put_value("refresh_total_time", primaries['refresh']['total_time_in_millis'], "ms")
-        self._metrics_store.put_value("flush_total_time", primaries['flush']['total_time_in_millis'], "ms")
+        self._metrics_store.put_count("segments_terms_memory_in_bytes", primaries["segments"]["terms_memory_in_bytes"], "byte")
+        self._metrics_store.put_count("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"], "byte")
+        self._metrics_store.put_value("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
+        self._metrics_store.put_value("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"], "ms")
+        self._metrics_store.put_value("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
+        self._metrics_store.put_value("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
+        self._metrics_store.put_value("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")
 
-        actual_doc_count = primaries['docs']['count']
+        actual_doc_count = primaries["docs"]["count"]
         if expected_doc_count is not None and expected_doc_count != actual_doc_count:
             msg = "wrong number of documents indexed: expected %s but got %s" % (expected_doc_count, actual_doc_count)
             logger.error(msg)
@@ -262,15 +262,15 @@ class IndexBenchmark(TimedOperation):
 
     def _node_stats(self):
         logger.info("Gathering nodes stats")
-        duration, stats = self.timed(self._cluster.client.nodes.stats, metric='_all', level='shards')
+        duration, stats = self.timed(self._cluster.client.nodes.stats, metric="_all", level="shards")
         self._metrics_store.put_value("node_stats_latency", convert.seconds_to_ms(duration), "ms")
         # for now we only put data for one node in here but we should really put all of them into the metrics store
-        nodes = stats['nodes']
+        nodes = stats["nodes"]
         node = list(nodes.keys())[0]
         node = nodes[node]
-        gc = node['jvm']['gc']['collectors']
-        self._metrics_store.put_value("node_total_old_gen_gc_time", gc['old']['collection_time_in_millis'], "ms")
-        self._metrics_store.put_value("node_total_young_gen_gc_time", gc['young']['collection_time_in_millis'], "ms")
+        gc = node["jvm"]["gc"]["collectors"]
+        self._metrics_store.put_value("node_total_old_gen_gc_time", gc["old"]["collection_time_in_millis"], "ms")
+        self._metrics_store.put_value("node_total_young_gen_gc_time", gc["young"]["collection_time_in_millis"], "ms")
 
     def _print_progress(self, docs_processed):
         if not self._quiet_mode:
@@ -284,7 +284,7 @@ class IndexBenchmark(TimedOperation):
                 "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
                 "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
             )
-            logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
+            logger.info("Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]" % (docs_processed, elapsed, docs_per_second, mb_per_second))
 
     def print_index_stats(self, data_dir):
         index_size_bytes = io.get_size(data_dir)

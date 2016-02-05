@@ -33,7 +33,7 @@ class Cluster:
         self.clock = clock
 
     def wait_for_status_green(self):
-        logger.info('\nWait for %s cluster...' % Cluster.EXPECTED_CLUSTER_STATUS)
+        logger.info("\nWait for %s cluster..." % Cluster.EXPECTED_CLUSTER_STATUS)
         stop_watch = self.clock.stop_watch()
         stop_watch.start()
         reached_cluster_status, relocating_shards = self._do_wait(Cluster.EXPECTED_CLUSTER_STATUS)
