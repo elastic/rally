@@ -2,14 +2,12 @@ import datetime
 from unittest import TestCase
 import unittest.mock as mock
 
-import rally.metrics
-import rally.config
-import rally.track.track
+from rally import config, metrics
 
 
 class MockClientFactory:
     def __init__(self, config):
-        self._es = mock.create_autospec(rally.metrics.EsClient)
+        self._es = mock.create_autospec(metrics.EsClient)
 
     def create(self):
         return self._es
@@ -35,12 +33,12 @@ class MetricsTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
 
     def setUp(self):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "system", "env.name", "unittest")
-        self.metrics_store = rally.metrics.EsMetricsStore(config,
-                                                          client_factory_class=MockClientFactory,
-                                                          index_template_provider_class=DummyIndexTemplateProvider,
-                                                          clock=StaticClock)
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.metrics_store = metrics.EsMetricsStore(cfg,
+                                                    client_factory_class=MockClientFactory,
+                                                    index_template_provider_class=DummyIndexTemplateProvider,
+                                                    clock=StaticClock)
         # get hold of the mocked client...
         self.es_mock = self.metrics_store._client
 

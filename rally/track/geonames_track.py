@@ -1,26 +1,25 @@
-import rally.track.track
-import rally.cluster
+from rally.track import track
 
 
-class DefaultQuery(rally.track.track.Query):
+class DefaultQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "default")
+        track.Query.__init__(self, "default")
 
     def run(self, es):
         return es.search(index=geonamesTrackSpec.index_name)
 
 
-class TermQuery(rally.track.track.Query):
+class TermQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "term")
+        track.Query.__init__(self, "term")
 
     def run(self, es):
         return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, q='country_code:AT')
 
 
-class CountryAggQuery(rally.track.track.Query):
+class CountryAggQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "country_agg")
+        track.Query.__init__(self, "country_agg")
 
     def run(self, es):
         return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, body='''
@@ -43,12 +42,12 @@ class CountryAggQuery(rally.track.track.Query):
     }''')
 
 
-class ScrollQuery(rally.track.track.Query):
+class ScrollQuery(track.Query):
     PAGES = 25
     ITEMS_PER_PAGE = 1000
 
     def __init__(self):
-        rally.track.track.Query.__init__(self, "scroll", normalization_factor=self.PAGES)
+        track.Query.__init__(self, "scroll", normalization_factor=self.PAGES)
 
     def run(self, es):
         r = es.search(
@@ -67,7 +66,7 @@ class ScrollQuery(rally.track.track.Query):
             r = es.scroll(scroll_id=r['_scroll_id'], scroll='10m')
 
 
-geonamesTrackSpec = rally.track.track.Track(
+geonamesTrackSpec = track.Track(
     name="Geonames",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
@@ -76,14 +75,14 @@ geonamesTrackSpec = rally.track.track.Track(
     mapping_url="http://benchmarks.elastic.co/corpora/geonames/mappings.json",
     index_name="geonames",
     type_name="type",
-    number_of_documents=8647880,
+    number_of_documents=2000,
     compressed_size_in_bytes=197857614,
     uncompressed_size_in_bytes=2790927196,
-    local_file_name="documents.json.bz2",
+    local_file_name="documents-2k.json.bz2",
     local_mapping_name="mappings.json",
     # for defaults alone, it's just around 20 minutes, for all it's about 60
     estimated_benchmark_time_in_minutes=20,
     # Queries to use in the search benchmark
     queries=[DefaultQuery(), TermQuery(), CountryAggQuery(), ScrollQuery()],
-    track_setups=rally.track.track.track_setups
+    track_setups=track.track_setups
 )

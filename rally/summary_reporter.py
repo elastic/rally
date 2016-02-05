@@ -1,8 +1,8 @@
 import logging
 import statistics
 
-import rally.metrics
-import rally.utils.convert as convert
+from rally import metrics
+from rally.utils import convert
 
 logger = logging.getLogger("rally.reporting")
 
@@ -27,7 +27,7 @@ class SummaryReporter:
                 if len(selected_setups) > 1:
                     self.print_header("*** Track setup %s ***\n" % track_setup.name)
 
-                store = rally.metrics.EsMetricsStore(self._config)
+                store = metrics.EsMetricsStore(self._config)
                 store.open(invocation, track.name, track_setup.name)
 
                 self.report_index_throughput(store)

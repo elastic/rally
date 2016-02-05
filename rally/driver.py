@@ -4,13 +4,9 @@ import logging
 
 from elasticsearch.helpers import parallel_bulk
 
-import rally.track.track
-import rally.time
-
-import rally.utils.io
-import rally.utils.process
-import rally.utils.convert as convert
-import rally.utils.progress
+from rally import time
+from rally.track import track
+from rally.utils import io, convert, process, progress
 
 logger = logging.getLogger("rally.driver")
 
@@ -20,7 +16,7 @@ class Driver:
     Driver runs the benchmark.
     """
 
-    def __init__(self, config, clock=rally.time.Clock):
+    def __init__(self, config, clock=time.Clock):
         self._config = config
         self._clock = clock
         self._metrics = None
@@ -76,7 +72,7 @@ class SearchBenchmark(TimedOperation):
         self._track_setup = track_setup
         self._cluster = cluster
         self._metrics_store = cluster.metrics_store
-        self._progress = rally.utils.progress.CmdLineProgressReporter()
+        self._progress = progress.CmdLineProgressReporter()
         self._quiet_mode = self._config.opts("system", "quiet.mode")
 
     # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
@@ -127,7 +123,7 @@ class IndexBenchmark(TimedOperation):
         self._metrics = metrics
         self._quiet_mode = self._config.opts("system", "quiet.mode")
         self._sent_bytes = 0
-        self._progress = rally.utils.progress.CmdLineProgressReporter()
+        self._progress = progress.CmdLineProgressReporter()
         self._rand = random.Random(17)
         self._bulk_size = 5000
         logger.info('Use %d docs per bulk request' % self._bulk_size)
@@ -137,7 +133,7 @@ class IndexBenchmark(TimedOperation):
         data_set_path = self._config.opts("benchmarks", "dataset.path")
 
         # We cannot know how many docs have been updated if we produce id conflicts
-        if self._track_setup.test_settings.id_conflicts == rally.track.track.IndexIdConflict.NoConflicts:
+        if self._track_setup.test_settings.id_conflicts == track.IndexIdConflict.NoConflicts:
             expected_doc_count = docs_to_index
         else:
             expected_doc_count = None
@@ -155,7 +151,7 @@ class IndexBenchmark(TimedOperation):
         docs_to_index = self._track.number_of_documents
         logger.info('build ids with id conflicts of type %s' % conflicts)
 
-        if conflicts == rally.track.track.IndexIdConflict.SequentialConflicts:
+        if conflicts == track.IndexIdConflict.SequentialConflicts:
             yield from (
                 '%10d' % (
                     self._rand.randint(0, i)
@@ -164,7 +160,7 @@ class IndexBenchmark(TimedOperation):
                     else i
                 ) for i in range(docs_to_index)
             )
-        elif conflicts == rally.track.track.IndexIdConflict.RandomConflicts:
+        elif conflicts == track.IndexIdConflict.RandomConflicts:
             ids = []
             for _ in range(docs_to_index):
                 if ids and self._rand.randint(0, 3) == 3:
@@ -179,7 +175,7 @@ class IndexBenchmark(TimedOperation):
 
     def get_expand_action(self):
         conflicts = self._track_setup.test_settings.id_conflicts
-        if conflicts is not rally.track.track.IndexIdConflict.NoConflicts:
+        if conflicts is not track.IndexIdConflict.NoConflicts:
             id_generator = self.generate_ids(conflicts)
         else:
             id_generator = None
@@ -291,6 +287,6 @@ class IndexBenchmark(TimedOperation):
             logger.info('Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]' % (docs_processed, elapsed, docs_per_second, mb_per_second))
 
     def print_index_stats(self, data_dir):
-        index_size_bytes = rally.utils.io.get_size(data_dir)
+        index_size_bytes = io.get_size(data_dir)
         self._metrics_store.put_count("final_index_size_bytes", index_size_bytes, "byte")
-        rally.utils.process.run_subprocess_with_logging("find %s -ls" % data_dir, header="index files:")
+        process.run_subprocess_with_logging("find %s -ls" % data_dir, header="index files:")

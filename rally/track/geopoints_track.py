@@ -1,18 +1,17 @@
-import rally.track.track
-import rally.cluster
+from rally.track import track
 
 
-class DefaultQuery(rally.track.track.Query):
+class DefaultQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "default")
+        track.Query.__init__(self, "default")
 
     def run(self, es):
         return es.search(index=geopointTrackSpec.index_name)
 
 
-class BBoxQuery(rally.track.track.Query):
+class BBoxQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "bbox")
+        track.Query.__init__(self, "bbox")
 
     def run(self, es):
         return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
@@ -28,9 +27,9 @@ class BBoxQuery(rally.track.track.Query):
     }''')
 
 
-class DistanceQuery(rally.track.track.Query):
+class DistanceQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "distance")
+        track.Query.__init__(self, "distance")
 
     def run(self, es):
         return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
@@ -44,9 +43,9 @@ class DistanceQuery(rally.track.track.Query):
     }''')
 
 
-class DistanceRangeQuery(rally.track.track.Query):
+class DistanceRangeQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "distanceRange")
+        track.Query.__init__(self, "distanceRange")
 
     def run(self, es):
         return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
@@ -61,9 +60,9 @@ class DistanceRangeQuery(rally.track.track.Query):
     }''')
 
 
-class PolygonQuery(rally.track.track.Query):
+class PolygonQuery(track.Query):
     def __init__(self):
-        rally.track.track.Query.__init__(self, "polygon")
+        track.Query.__init__(self, "polygon")
 
     def run(self, es):
         return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
@@ -83,7 +82,7 @@ class PolygonQuery(rally.track.track.Query):
     }''')
 
 
-geopointTrackSpec = rally.track.track.Track(
+geopointTrackSpec = track.Track(
     name="Geopoint",
     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
@@ -101,5 +100,5 @@ geopointTrackSpec = rally.track.track.Track(
     estimated_benchmark_time_in_minutes=20,
     # Queries to use in the search benchmark
     queries=[PolygonQuery(), BBoxQuery(), DistanceQuery(), DistanceRangeQuery()],
-    track_setups=rally.track.track.track_setups
+    track_setups=track.track_setups
 )

@@ -3,12 +3,8 @@ import os
 import logging
 import argparse
 
-import rally.racecontrol
-import rally.telemetry
-
-import rally.config
-import rally.utils.io
-import rally.paths
+from rally import config, paths, racecontrol, telemetry
+from rally.utils import io
 
 
 # we want to use some basic logging even before the output to log file is configured
@@ -17,9 +13,9 @@ def preconfigure_logging():
 
 
 def configure_logging(cfg):
-    log_dir = rally.paths.Paths(cfg).log_root()
-    rally.utils.io.ensure_dir(log_dir)
-    cfg.add(rally.config.Scope.application, "system", "log.dir", log_dir)
+    log_dir = paths.Paths(cfg).log_root()
+    io.ensure_dir(log_dir)
+    cfg.add(config.Scope.application, "system", "log.dir", log_dir)
     log_file = "%s/rally_out.log" % log_dir
 
     print("\nWriting additional logs to %s\n" % log_file)
@@ -72,7 +68,8 @@ def parse_args():
             action="store_true")
         p.add_argument(
             '--quiet',
-            help='Suppresses as much as output as possible. Activate it unless you want to see what\'s happening during the benchmark (default: false)',
+            help='Suppresses as much as output as possible. Activate it unless you want to see what\'s happening during the '
+                 'benchmark (default: false)',
             default=False,
             action="store_true")
         p.add_argument(
@@ -156,7 +153,7 @@ def main():
     preconfigure_logging()
     print_banner()
     args = parse_args()
-    cfg = rally.config.Config()
+    cfg = config.Config()
     subcommand = derive_subcommand(args, cfg)
 
     if subcommand == "configure":
@@ -175,27 +172,27 @@ def main():
             exit(64)
 
     # Add global meta info derived by rally itself
-    cfg.add(rally.config.Scope.application, "meta", "time.start", args.effective_start_date)
-    cfg.add(rally.config.Scope.application, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
-    cfg.add(rally.config.Scope.application, "system", "invocation.root.dir", rally.paths.Paths(cfg).invocation_root())
+    cfg.add(config.Scope.application, "meta", "time.start", args.effective_start_date)
+    cfg.add(config.Scope.application, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+    cfg.add(config.Scope.application, "system", "invocation.root.dir", paths.Paths(cfg).invocation_root())
     # Add command line config
-    cfg.add(rally.config.Scope.applicationOverride, "source", "revision", args.revision)
-    cfg.add(rally.config.Scope.applicationOverride, "build", "skip", args.skip_build)
-    cfg.add(rally.config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
-    cfg.add(rally.config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
-    cfg.add(rally.config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
-    cfg.add(rally.config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
-    cfg.add(rally.config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
+    cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
+    cfg.add(config.Scope.applicationOverride, "build", "skip", args.skip_build)
+    cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
+    cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
+    cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
+    cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
 
     configure_logging(cfg)
 
     # TODO dm [Refactoring]: I am not too happy with dispatching commands on such a high-level. Can we push this down?
     if subcommand == "list-telemetry":
-        telemetry = rally.telemetry.Telemetry(cfg, None)
-        telemetry.list()
+        t = telemetry.Telemetry(cfg, None)
+        t.list()
         exit(0)
     else:
-        race_control = rally.racecontrol.RaceControl(cfg)
+        race_control = racecontrol.RaceControl(cfg)
         race_control.start(subcommand)
 
 

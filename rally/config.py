@@ -5,7 +5,7 @@ import logging
 import configparser
 from enum import Enum
 
-import rally.utils.io
+from rally.utils import io
 
 logger = logging.getLogger("rally.config")
 
@@ -185,16 +185,16 @@ class Config:
         source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)")
         # Ask, because not everybody might have SSH access
         repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
-        default_gradle_location = rally.utils.io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
+        default_gradle_location = io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
         gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value=default_gradle_location,
                                         check_path_exists=True)
         if advanced_config:
-            default_mvn_location = rally.utils.io.guess_install_location("mvn", fallback="/usr/local/bin/mvn")
+            default_mvn_location = io.guess_install_location("mvn", fallback="/usr/local/bin/mvn")
             maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value=default_mvn_location,
                                            check_path_exists=True)
         else:
             maven_bin = ""
-        default_jdk_8 = rally.utils.io.guess_java_home(major_version=8, fallback="")
+        default_jdk_8 = io.guess_java_home(major_version=8, fallback="")
         jdk8_home = self._ask_property(
             "Enter the JDK 8 root directory (e.g. something like /Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home on a Mac)",
             default_value=default_jdk_8,
@@ -289,7 +289,7 @@ class Config:
             return value
 
     def _write_to_config_file(self, config):
-        rally.utils.io.ensure_dir(self._config_dir())
+        io.ensure_dir(self._config_dir())
         with open(self._config_file(), 'w') as configfile:
             config.write(configfile)
 

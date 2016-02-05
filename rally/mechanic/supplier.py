@@ -1,7 +1,6 @@
 import os
 
-import rally.utils.io as io
-import rally.utils.process
+from rally.utils import io, process
 
 
 class SupplyError(BaseException):
@@ -9,9 +8,9 @@ class SupplyError(BaseException):
 
 
 class GitRepository:
-    def __init__(self, config):
-        self._remote_url = config.opts("source", "remote.repo.url")
-        self._src_dir = config.opts("source", "local.src.dir")
+    def __init__(self, cfg):
+        self._remote_url = cfg.opts("source", "remote.repo.url")
+        self._src_dir = cfg.opts("source", "local.src.dir")
 
     @property
     def src_dir(self):
@@ -30,24 +29,24 @@ class GitRepository:
         io.ensure_dir(src)
         print("Downloading sources from %s to %s." % (remote, src))
         # Don't swallow subprocess output, user might need to enter credentials...
-        if rally.utils.process.run_subprocess("git clone %s %s" % (remote, src)):
+        if process.run_subprocess("git clone %s %s" % (remote, src)):
             raise SupplyError("Could not clone from %s to %s" % (remote, src))
 
     def pull(self, remote="origin", branch="master"):
         # Don't swallow output but silence git at least a bit... (--quiet)
-        if rally.utils.process.run_subprocess(
+        if process.run_subprocess(
             "sh -c 'cd {0}; git checkout --quiet {2} && git fetch --quiet {1} && git rebase --quiet {1}/{2}'"
                 .format(self._src_dir, remote, branch)):
             raise SupplyError("Could not fetch latest source tree")
 
     def pull_ts(self, ts):
-        if rally.utils.process.run_subprocess(
+        if process.run_subprocess(
                 "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" master`'" %
                 (self._src_dir, ts)):
             raise SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
 
     def pull_revision(self, revision):
-        if rally.utils.process.run_subprocess(
+        if process.run_subprocess(
                 "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet %s'" % (self._src_dir, revision)):
             raise SupplyError("Could not fetch source tree for revision %s" % revision)
 
@@ -60,8 +59,8 @@ class Supplier:
     Supplier fetches the benchmark candidate source tree from the remote repository. In the current implementation, only git is supported.
     """
 
-    def __init__(self, config, logger, repo):
-        self._config = config
+    def __init__(self, cfg, logger, repo):
+        self._config = cfg
         self._logger = logger
         self._repo = repo
 

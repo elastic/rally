@@ -5,7 +5,7 @@ import subprocess
 import bz2
 import zipfile
 
-import rally.utils.process
+from rally.utils import process
 
 
 def ensure_dir(directory):
@@ -56,7 +56,7 @@ def unzip(zip_name, target_directory):
     """
     filename, extension = splitext(zip_name)
     if extension == ".zip":
-        if not rally.utils.process.run_subprocess_with_logging("unzip %s -d %s" % (zip_name, target_directory)):
+        if not process.run_subprocess_with_logging("unzip %s -d %s" % (zip_name, target_directory)):
             raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
     elif extension == ".bz2":
         # We rather avoid external tools as much as possible to simplify Rally's setup, hence we use the library functions

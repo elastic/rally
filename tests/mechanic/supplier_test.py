@@ -1,8 +1,8 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-import rally.config
-import rally.mechanic.supplier
+from rally import config
+from rally.mechanic import supplier
 
 
 class SupplierTests(TestCase):
@@ -13,18 +13,18 @@ class SupplierTests(TestCase):
     @mock.patch('logging.Logger')
     @mock.patch('rally.utils.process.run_subprocess')
     def test_intial_checkout_latest(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
-        config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
-        config.add(rally.config.Scope.application, "source", "revision", "latest")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
+        cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
+        cfg.add(config.Scope.application, "source", "revision", "latest")
 
         mock_is_cloned.return_value = False
         mock_head_revision.return_value = "HEAD"
 
-        git = rally.mechanic.supplier.GitRepository(config)
+        git = supplier.GitRepository(cfg)
 
-        supplier = rally.mechanic.supplier.Supplier(config, mock_logger, git)
-        supplier.fetch()
+        s = supplier.Supplier(cfg, mock_logger, git)
+        s.fetch()
 
         mock_is_cloned.assert_called_with(git)
         mock_clone.assert_called_with(git)
@@ -38,18 +38,18 @@ class SupplierTests(TestCase):
     @mock.patch('logging.Logger')
     @mock.patch('rally.utils.process.run_subprocess')
     def test_checkout_current(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
-        config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
-        config.add(rally.config.Scope.application, "source", "revision", "current")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
+        cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
+        cfg.add(config.Scope.application, "source", "revision", "current")
 
         mock_is_cloned.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        git = rally.mechanic.supplier.GitRepository(config)
+        git = supplier.GitRepository(cfg)
 
-        supplier = rally.mechanic.supplier.Supplier(config, mock_logger, git)
-        supplier.fetch()
+        s = supplier.Supplier(cfg, mock_logger, git)
+        s.fetch()
 
         mock_is_cloned.assert_called_with(git)
         mock_clone.assert_not_called()
@@ -62,18 +62,18 @@ class SupplierTests(TestCase):
     @mock.patch('logging.Logger')
     @mock.patch('rally.utils.process.run_subprocess')
     def test_checkout_ts(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_pull_ts, mock_head_revision):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
-        config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
-        config.add(rally.config.Scope.application, "source", "revision", "@2015-01-01-01:00:00")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
+        cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
+        cfg.add(config.Scope.application, "source", "revision", "@2015-01-01-01:00:00")
 
         mock_is_cloned.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        git = rally.mechanic.supplier.GitRepository(config)
+        git = supplier.GitRepository(cfg)
 
-        supplier = rally.mechanic.supplier.Supplier(config, mock_logger, git)
-        supplier.fetch()
+        s = supplier.Supplier(cfg, mock_logger, git)
+        s.fetch()
 
         mock_is_cloned.assert_called_with(git)
         mock_pull_ts.assert_called_with(git, "2015-01-01-01:00:00")
@@ -85,18 +85,18 @@ class SupplierTests(TestCase):
     @mock.patch('logging.Logger')
     @mock.patch('rally.utils.process.run_subprocess')
     def test_checkout_revision(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_pull_revision, mock_head_revision):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "source", "local.src.dir", "/src")
-        config.add(rally.config.Scope.application, "source", "remote.repo.url", "some-github-url")
-        config.add(rally.config.Scope.application, "source", "revision", "67c2f42")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
+        cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
+        cfg.add(config.Scope.application, "source", "revision", "67c2f42")
 
         mock_is_cloned.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        git = rally.mechanic.supplier.GitRepository(config)
+        git = supplier.GitRepository(cfg)
 
-        supplier = rally.mechanic.supplier.Supplier(config, mock_logger, git)
-        supplier.fetch()
+        s = supplier.Supplier(cfg, mock_logger, git)
+        s.fetch()
 
         mock_is_cloned.assert_called_with(git)
         mock_pull_revision.assert_called_with(git, "67c2f42")

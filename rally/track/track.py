@@ -4,13 +4,8 @@ import urllib.request
 import shutil
 from enum import Enum
 
-import rally.config as cfg
-import rally.utils.io
-import rally.utils.sysstats
-import rally.utils.convert
-import rally.utils.process
-
-import rally.cluster
+from rally import config
+from rally.utils import io, sysstats, convert, process
 
 logger = logging.getLogger("rally.track")
 
@@ -197,26 +192,26 @@ class Marshal:
             self._download_benchmark_data(track, data_set_root, data_set_path)
         unzipped_data_set_path = self._unzip(data_set_path)
         # global per benchmark (we never run benchmarks in parallel)
-        self._config.add(cfg.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
+        self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
 
         mapping_path = "%s/%s" % (data_set_root, track.local_mapping_name)
         if not os.path.isfile(mapping_path):
             self._download_mapping_data(track, data_set_root, mapping_path)
-        self._config.add(cfg.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
+        self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
 
     def _unzip(self, data_set_path):
         # we assume that track data are always compressed and try to unzip them before running the benchmark
-        basename, extension = rally.utils.io.splitext(data_set_path)
+        basename, extension = io.splitext(data_set_path)
         if not os.path.isfile(basename):
             logger.info("Unzipping track data from [%s] to [%s]." % (data_set_path, basename))
-            rally.utils.io.unzip(data_set_path, rally.utils.io.dirname(data_set_path))
+            io.unzip(data_set_path, io.dirname(data_set_path))
         return basename
 
     def _download_benchmark_data(self, track, data_set_root, data_set_path):
-        rally.utils.io.ensure_dir(data_set_root)
+        io.ensure_dir(data_set_root)
         logger.info("Benchmark data for %s not available in '%s'" % (track.name, data_set_path))
         url = track.source_url
-        size = round(rally.utils.convert.bytes_to_mb(track.compressed_size_in_bytes))
+        size = round(convert.bytes_to_mb(track.compressed_size_in_bytes))
         # ensure output appears immediately
         print("Downloading benchmark data from %s (%s MB) ... " % (url, size), end='', flush=True)
         if url.startswith("http"):
@@ -228,7 +223,7 @@ class Marshal:
         print("done")
 
     def _download_mapping_data(self, track, data_set_root, mapping_path):
-        rally.utils.io.ensure_dir(data_set_root)
+        io.ensure_dir(data_set_root)
         logger.info("Mappings for %s not available in '%s'" % (track.name, mapping_path))
         url = track.mapping_url
         # for now, we just allow HTTP downloads for mappings (S3 support is probably remove anyway...)
@@ -253,7 +248,7 @@ class Marshal:
         tmp_data_set_path = data_set_path + '.tmp'
         s3cmd = "s3cmd -v get %s %s" % (url, tmp_data_set_path)
         try:
-            success = rally.utils.process.run_subprocess_with_logging(s3cmd)
+            success = process.run_subprocess_with_logging(s3cmd)
             # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
             if not success or os.path.getsize(tmp_data_set_path) != track.compressed_size_in_bytes:
                 # cleanup probably corrupt data file...
@@ -303,7 +298,7 @@ track_setups = [
         description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
         # integer divide!
         candidate_settings=CandidateSettings(config_snippet=greenNodeSettings, nodes=2,
-                                                               processors=rally.utils.sysstats.number_of_cpu_cores() // 2),
+                                                               processors=sysstats.number_of_cpu_cores() // 2),
         benchmark_settings=BenchmarkSettings()
     ),
 

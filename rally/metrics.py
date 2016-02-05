@@ -3,7 +3,7 @@ import elasticsearch
 import elasticsearch.helpers
 import certifi
 
-import rally.time
+from rally import time
 
 logger = logging.getLogger("rally.metrics")
 
@@ -81,7 +81,7 @@ class EsMetricsStore:
                  config,
                  client_factory_class=EsClientFactory,
                  index_template_provider_class=IndexTemplateProvider,
-                 clock=rally.time.Clock):
+                 clock=time.Clock):
         self._config = config
         self._invocation = None
         self._track = None
@@ -94,7 +94,7 @@ class EsMetricsStore:
         self._clock = clock
 
     def open(self, invocation, track_name, track_setup_name, create=False):
-        self._invocation = rally.time.to_iso8601(invocation)
+        self._invocation = time.to_iso8601(invocation)
         self._track = track_name
         self._track_setup = track_setup_name
         self._index = "rally-%04d" % invocation.year
@@ -123,7 +123,7 @@ class EsMetricsStore:
 
     def _put(self, name, value, unit):
         doc = {
-            "@timestamp": rally.time.to_unix_timestamp(self._clock.now()),
+            "@timestamp": time.to_unix_timestamp(self._clock.now()),
             "trial-timestamp": self._invocation,
             "environment": self._environment_name,
             "track": self._track,

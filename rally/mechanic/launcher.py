@@ -3,12 +3,8 @@ import threading
 import subprocess
 import signal
 
-import rally.mechanic.gear
-import rally.config
-import rally.cluster
-import rally.telemetry
-import rally.time
-import rally.exceptions
+from rally.mechanic import gear
+from rally import config, cluster, telemetry, time, exceptions
 
 
 class Launcher:
@@ -19,8 +15,8 @@ class Launcher:
     Currently, only local launching is supported.
     """
 
-    def __init__(self, config, logger, clock=rally.time.Clock):
-        self._config = config
+    def __init__(self, cfg, logger, clock=time.Clock):
+        self._config = cfg
         self._logger = logger
         self._clock = clock
         self._servers = []
@@ -29,32 +25,32 @@ class Launcher:
         if self._servers:
             self._logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
         num_nodes = setup.candidate_settings.nodes
-        return rally.cluster.Cluster([self._start_node(node, setup, metrics_store) for node in range(num_nodes)], metrics_store)
+        return cluster.Cluster([self._start_node(node, setup, metrics_store) for node in range(num_nodes)], metrics_store)
 
     def _start_node(self, node, setup, metrics_store):
         node_name = self._node_name(node)
 
-        telemetry = rally.telemetry.Telemetry(self._config, metrics_store)
+        t = telemetry.Telemetry(self._config, metrics_store)
 
-        env = self._prepare_env(setup, telemetry)
+        env = self._prepare_env(setup, t)
         cmd = self.prepare_cmd(setup, node_name)
         process = self._start_process(cmd, env, node_name)
-        telemetry.attach_to_process(process)
+        t.attach_to_process(process)
 
-        return rally.cluster.Server(process, telemetry)
+        return cluster.Server(process, t)
 
-    def _prepare_env(self, setup, telemetry):
+    def _prepare_env(self, setup, t):
         env = {}
         env.update(os.environ)
         # we just blindly trust telemetry here...
-        for k, v in telemetry.instrument_candidate_env(setup).items():
+        for k, v in t.instrument_candidate_env(setup).items():
             self._set_env(env, k, v)
 
         self._set_env(env, 'ES_HEAP_SIZE', setup.candidate_settings.heap)
         self._set_env(env, 'ES_JAVA_OPTS', setup.candidate_settings.java_opts)
         self._set_env(env, 'ES_GC_OPTS', setup.candidate_settings.gc_opts)
 
-        java_home = rally.mechanic.gear.Gear(self._config).capability(rally.mechanic.gear.Capability.java)
+        java_home = gear.Gear(self._config).capability(gear.Capability.java)
         # Unix specific!:
         self._set_env(env, 'PATH', '%s/bin' % java_home, separator=':')
         # Don't merge here!
@@ -71,7 +67,7 @@ class Launcher:
 
     def prepare_cmd(self, setup, node_name):
         server_log_dir = "%s/server" % self._config.opts("system", "track.setup.log.dir")
-        self._config.add(rally.config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
+        self._config.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
         processor_count = setup.candidate_settings.processors
 
         cmd = ['bin/elasticsearch', '-Des.node.name=%s' % node_name]
@@ -96,7 +92,7 @@ class Launcher:
             log_dir = self._config.opts("system", "log.dir")
             msg = "Could not start node '%s' within timeout period of %s seconds." % (node_name, Launcher.PROCESS_WAIT_TIMEOUT_SECONDS)
             self._logger.error(msg)
-            raise rally.exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
+            raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
 
     def _node_name(self, node):
         prefix = self._config.opts("provisioning", "node.name.prefix")

@@ -1,22 +1,20 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-import rally.telemetry
-import rally.metrics
-import rally.config
-import rally.track.track
+from rally import config, metrics, telemetry
+from rally.track import track
 
 
 class TelemetryTests(TestCase):
     def test_instrument_candidate_env(self):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "telemetry", "devices", "jfr")
-        config.add(rally.config.Scope.application, "system", "track.setup.root.dir", "track-setup-root")
-        config.add(rally.config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "telemetry", "devices", "jfr")
+        cfg.add(config.Scope.application, "system", "track.setup.root.dir", "track-setup-root")
+        cfg.add(config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
 
-        t = rally.telemetry.Telemetry(config, None)
+        t = telemetry.Telemetry(cfg, None)
 
-        track_setup = rally.track.track.TrackSetup(name="test-track", description="Test Track")
+        track_setup = track.TrackSetup(name="test-track", description="Test Track")
         opts = t.instrument_candidate_env(track_setup)
 
         self.assertTrue(opts)
@@ -32,9 +30,9 @@ class MergePartsDeviceTests(TestCase):
         open_mock.side_effect = [
             mock.mock_open(read_data="no data to parse").return_value
         ]
-        config = self.create_config()
-        metrics_store = rally.metrics.EsMetricsStore(config)
-        merge_parts_device = rally.telemetry.MergeParts(config, metrics_store)
+        cfg = self.create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        merge_parts_device = telemetry.MergeParts(cfg, metrics_store)
         merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_not_called()
@@ -57,20 +55,20 @@ class MergePartsDeviceTests(TestCase):
             mock.mock_open(read_data=log_file).return_value
         ]
         config = self.create_config()
-        metrics_store = rally.metrics.EsMetricsStore(config)
-        merge_parts_device = rally.telemetry.MergeParts(config, metrics_store)
+        metrics_store = metrics.EsMetricsStore(config)
+        merge_parts_device = telemetry.MergeParts(config, metrics_store)
         merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_called_with("merge_parts_total_time_doc_values", 350, "ms")
         metrics_store_put_count.assert_called_with("merge_parts_total_docs_doc_values", 1850)
 
     def create_config(self):
-        config = rally.config.Config()
-        config.add(rally.config.Scope.application, "launcher", "candidate.log.dir", "/unittests/var/log/elasticsearch")
-        config.add(rally.config.Scope.application, "system", "env.name", "unittest")
-        config.add(rally.config.Scope.application, "reporting", "datastore.host", "localhost")
-        config.add(rally.config.Scope.application, "reporting", "datastore.port", "0")
-        config.add(rally.config.Scope.application, "reporting", "datastore.secure", False)
-        config.add(rally.config.Scope.application, "reporting", "datastore.user", "")
-        config.add(rally.config.Scope.application, "reporting", "datastore.password", "")
-        return config
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "launcher", "candidate.log.dir", "/unittests/var/log/elasticsearch")
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
+        cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
+        cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
+        cfg.add(config.Scope.application, "reporting", "datastore.user", "")
+        cfg.add(config.Scope.application, "reporting", "datastore.password", "")
+        return cfg

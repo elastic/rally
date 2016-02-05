@@ -1,10 +1,7 @@
 import logging
 
-import rally.mechanic.supplier as supplier
-import rally.mechanic.builder as builder
-import rally.mechanic.provisioner as provisioner
-import rally.mechanic.launcher as launcher
-import rally.metrics
+from rally import metrics
+from rally.mechanic import builder, supplier, provisioner, launcher
 
 
 class Mechanic:
@@ -13,13 +10,13 @@ class Mechanic:
     running the benchmark).
     """
 
-    def __init__(self, config):
-        self._config = config
+    def __init__(self, cfg):
+        self._config = cfg
         logger = logging.getLogger("rally.mechanic")
-        self._supplier = supplier.Supplier(config, logger, supplier.GitRepository(config))
-        self._builder = builder.Builder(config, logger)
-        self._provisioner = provisioner.Provisioner(config, logger)
-        self._launcher = launcher.Launcher(config, logger)
+        self._supplier = supplier.Supplier(cfg, logger, supplier.GitRepository(cfg))
+        self._builder = builder.Builder(cfg, logger)
+        self._provisioner = provisioner.Provisioner(cfg, logger)
+        self._launcher = launcher.Launcher(cfg, logger)
         self._metrics_store = None
 
     # This is the one-time setup the mechanic performs (once for all benchmarks run)
@@ -31,7 +28,7 @@ class Mechanic:
     def start_engine(self, track, setup):
         self._provisioner.prepare(setup)
         invocation = self._config.opts("meta", "time.start")
-        self._metrics_store = rally.metrics.EsMetricsStore(self._config)
+        self._metrics_store = metrics.EsMetricsStore(self._config)
         self._metrics_store.open(invocation, track.name, setup.name, create=True)
         return self._launcher.start(track, setup, self._metrics_store)
 

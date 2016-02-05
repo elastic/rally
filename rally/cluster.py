@@ -2,8 +2,7 @@ import socket
 import elasticsearch
 import logging
 
-import rally.time
-import rally.exceptions
+from rally import exceptions, time
 
 
 logger = logging.getLogger("rally.cluster")
@@ -27,7 +26,7 @@ class Cluster:
     Cluster exposes APIs of the running benchmark candidate.
     """
 
-    def __init__(self, servers, metrics_store, clock=rally.time.Clock):
+    def __init__(self, servers, metrics_store, clock=time.Clock):
         self.client = elasticsearch.Elasticsearch(timeout=60, request_timeout=60)
         self.servers = servers
         self.metrics_store = metrics_store
@@ -60,10 +59,10 @@ class Cluster:
                 if reached_cluster_status == expected_cluster_status and relocating_shards == 0:
                     return reached_cluster_status, relocating_shards
                 else:
-                    rally.time.sleep(0.5)
+                    time.sleep(0.5)
         msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
         logger.error(msg)
-        raise rally.exceptions.LaunchError(msg)
+        raise exceptions.LaunchError(msg)
 
     def on_benchmark_start(self):
         for server in self.servers:

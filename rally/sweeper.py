@@ -1,7 +1,7 @@
 import shutil
 
-import rally.paths
-import rally.utils.io
+from rally import paths
+from rally.utils import io
 
 
 class Sweeper:
@@ -9,8 +9,8 @@ class Sweeper:
         self._config = config
 
     def run(self):
-        invocation_root = rally.paths.Paths(self._config).invocation_root()
-        log_root = rally.paths.Paths(self._config).log_root()
-        rally.utils.io.zip(log_root, "%s/logs.zip" % invocation_root)
+        invocation_root = paths.Paths(self._config).invocation_root()
+        log_root = paths.Paths(self._config).log_root()
+        io.zip(log_root, "%s/logs.zip" % invocation_root)
         shutil.rmtree(log_root)
 

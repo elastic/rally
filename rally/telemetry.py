@@ -4,9 +4,7 @@ import psutil
 import re
 import os
 
-import rally.utils.io
-import rally.utils.process
-import rally.metrics
+from rally.utils import io
 
 logger = logging.getLogger("rally.telemetry")
 
@@ -132,7 +130,7 @@ class FlightRecorder(TelemetryDevice):
 
     def instrument_env(self, setup):
         log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
-        rally.utils.io.ensure_dir(log_root)
+        io.ensure_dir(log_root)
         log_file = "%s/%s.jfr" % (log_root, setup.name)
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
