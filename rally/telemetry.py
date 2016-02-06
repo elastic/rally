@@ -10,13 +10,17 @@ logger = logging.getLogger("rally.telemetry")
 
 
 class Telemetry:
-    def __init__(self, config, metrics_store):
+    def __init__(self, config, metrics_store, devices=None):
         self._config = config
-        self._devices = [
-            FlightRecorder(config, metrics_store),
-            Ps(config, metrics_store),
-            MergeParts(config, metrics_store)
-        ]
+        if devices is None:
+            self._devices = [
+                FlightRecorder(config, metrics_store),
+                JitCompiler(config, metrics_store),
+                Ps(config, metrics_store),
+                MergeParts(config, metrics_store)
+            ]
+        else:
+            self._devices = devices
         self._enabled_devices = self._config.opts("telemetry", "devices")
 
     def list(self):
@@ -29,8 +33,13 @@ class Telemetry:
         opts = {}
         for device in self._devices:
             if self._enabled(device):
-                # TODO dm: The maps need to be properly merged, otherwise the overwrite each other when we really have multiple devices...
-                opts.update(device.instrument_env(setup))
+                additional_opts = device.instrument_env(setup)
+                # properly merge values with the same key
+                for k, v in additional_opts.items():
+                    if k in opts:
+                        opts[k] = "%s %s" % (opts[k], v)
+                    else:
+                        opts[k] = v
         return opts
 
     def attach_to_process(self, process):
@@ -134,9 +143,40 @@ class FlightRecorder(TelemetryDevice):
         log_file = "%s/%s.jfr" % (log_root, setup.name)
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
-        print("%s: writing flight recording to %s" % (self.human_name, log_file))
+        print("%s: Writing flight recording to %s" % (self.human_name, log_file))
         return {"ES_JAVA_OPTS": "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
                                 "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s" % log_file}
+
+
+class JitCompiler(TelemetryDevice):
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+
+    @property
+    def mandatory(self):
+        return False
+
+    @property
+    def command(self):
+        return "jit"
+
+    @property
+    def human_name(self):
+        return "JIT Compiler Profiler"
+
+    @property
+    def help(self):
+        return "Enables JIT compiler logs."
+
+    def instrument_env(self, setup):
+        log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        io.ensure_dir(log_root)
+        log_file = "%s/%s.jit.log" % (log_root, setup.name)
+
+        logger.info("%s: Writing JIT compiler logs to [%s]." % (self.human_name, log_file))
+        print("%s: Writing JIT compiler log to %s" % (self.human_name, log_file))
+        return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
+                                "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
 
 
 class MergeParts(TelemetryDevice):
