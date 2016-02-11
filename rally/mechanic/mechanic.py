@@ -26,6 +26,8 @@ class Mechanic:
         self._builder.build()
 
     def start_engine(self, track, setup):
+        # It's not the best place but it ensures for now that we add the binary path for the provisioner even when the build step is skipped
+        self._builder.add_binary_to_config()
         self._provisioner.prepare(setup)
         invocation = self._config.opts("meta", "time.start")
         self._metrics_store = metrics.EsMetricsStore(self._config)

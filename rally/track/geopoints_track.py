@@ -82,8 +82,8 @@ class PolygonQuery(track.Query):
     }''')
 
 
-geopointTrackSpec = track.Track(
-    name="Geopoint",
+track.Track(
+    name="geopoint",
     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
     source_url="file:///data/benchmarks/geopoint/documents.json.bz2",

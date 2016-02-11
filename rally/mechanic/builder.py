@@ -19,12 +19,16 @@ class Builder:
 
     def build(self):
         # just Gradle is supported for now
-        if not self._config.opts("build", "skip"):
-            self._clean()
-            self._package()
-        else:
-            self._logger.info("Skipping build")
-        self._add_binary_to_config()
+        self._clean()
+        self._package()
+
+    def add_binary_to_config(self):
+        src_dir = self._config.opts("source", "local.src.dir")
+        try:
+            binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
+        except IndexError:
+            raise ImproperlyConfigured("Couldn't find a zip distribution.")
+        self._config.add(config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
     def _clean(self):
         self._exec("gradle.tasks.clean")
@@ -32,14 +36,6 @@ class Builder:
     def _package(self):
         print("  Building from sources ...")
         self._exec("gradle.tasks.package")
-
-    def _add_binary_to_config(self):
-        src_dir = self._config.opts("source", "local.src.dir")
-        try:
-            binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
-        except IndexError:
-            raise ImproperlyConfigured("Couldn't find a zip distribution.")
-        self._config.add(config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
     def _exec(self, task_key):
         src_dir = self._config.opts("source", "local.src.dir")

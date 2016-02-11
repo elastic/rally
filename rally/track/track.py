@@ -80,6 +80,11 @@ appender:
       conversionPattern: "[%d{ISO8601}][%-5p][%-25c] %m%n"
 '''
 
+# Specific tracks add themselves to this dictionary.
+#
+# key = Track name, value = Track instance
+tracks = {}
+
 
 class Track:
     """
@@ -103,6 +108,8 @@ class Track:
         self.estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
         self.track_setups = track_setups
         self.queries = queries
+        # self-register
+        tracks[name] = self
 
 
 class CandidateSettings:

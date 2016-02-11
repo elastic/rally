@@ -57,17 +57,27 @@ Rally has a list of supported command line options. Just run `esrally --help`.
 Here are some examples:
 
 * `esrally`: Runs the benchmarks and reports the results on the command line. This is what you typically want to do in development. It assumes lots of defaults; its canonical form is `esrally all --benchmark-mode=single --revision=current --track-setup=defaults`.
-* `esrally --skip-build`: Assumes that an Elasticsearch ZIP file has already been build and just runs the benchmark
+* `esrally --pipeline from-sources-skip-build`: Assumes that an Elasticsearch ZIP file has already been build and just runs the benchmark.
 * `esrally --revision ebe3fd2`: Checks out the revision ebe3fd2 from git, builds it and runs benchmarks against it. Note that will only work if the build is based on Gradle (i.e. Elasticsearch 3.0+)
-* `esrally race --skip-build`: Skips the build and runs only the benchmarking stage skipping reporting.
 
 
 #### Telemetry
 
-Rally can add telemetry during the race. Currently, only [Java Flight Recorder](http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html) is supported. 
+Rally can add telemetry during the race. For example, Rally supports [Java Flight Recorder](http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html) to
+write flight recording files during a benchmark. 
 
-To see the list of available telemetry devices, use `esrally list-telemetry`. To enable telemetry devices, run Rally with the `--telemetry` option, e.g.: `esrally --telemetry=jfr` enables the Java Flight Recorder based profiler.
+To see the list of available telemetry devices, use `esrally list telemetry`. To enable telemetry devices, run Rally with the `--telemetry` option, e.g.: `esrally --telemetry=jfr` enables the Java Flight Recorder based profiler.
 
+#### Pipelines
+
+Pipelines allow Rally to execute different steps in preparation of a benchmark. For now only to pipelines are supported:
+
+* `from-sources-complete`: This is the default pipeline that is run when nothing is specified. It checks out the Elasticsearch sources
+ from git, builds a ZIP file and runs the benchmark.
+* `from-sources-skip-build`: This pipeline assumes that a ZIP file has already been built. It just takes it and runs the benchmark.
+
+Over time we will add more pipelines to Rally, for example to download an official Elasticsearch distribution instead of building 
+it from sources. Rally lists the available pipelines with `esrally list pipelines`.
 
 ### Key Components of Rally
 
@@ -80,8 +90,9 @@ Note: This is just important if you want to hack on Rally and to some extent if 
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
-When implementing a new benchmark, create a new file in `track` and create a new `Track` and one or more `TrackSetup` instances. See `track/countries_track.py` for an example.
-Currently, race control does not pick up the new benchmark automatically but adding support for that is coming soon.
+When implementing a new benchmark, create a new file in `track` and create a new `Track` and one or more `TrackSetup` instances. See `track/countries_track.py` for an example. The new
+track will be picked up automatically. You can run Rally with your track by issuing `esrally --track=your-track-name`. All available tracks can be listed with
+`esrally list tracks`.
  
 ### How to Contribute
  

@@ -10,7 +10,7 @@ logger = logging.getLogger("rally.telemetry")
 
 
 class Telemetry:
-    def __init__(self, config, metrics_store, devices=None):
+    def __init__(self, config, metrics_store=None, devices=None):
         self._config = config
         if devices is None:
             self._devices = [
@@ -24,9 +24,9 @@ class Telemetry:
         self._enabled_devices = self._config.opts("telemetry", "devices")
 
     def list(self):
-        print("Available telemetry devices:")
+        print("Available telemetry devices:\n")
         for device in self._devices:
-            print("\t%s (%s): %s (Always enabled: %s)" % (device.command, device.human_name, device.help, device.mandatory))
+            print("* %s (%s): %s (Always enabled: %s)" % (device.command, device.human_name, device.help, device.mandatory))
         print("\nKeep in mind that each telemetry devices may incur a runtime overhead which can skew results.")
 
     def instrument_candidate_env(self, setup):

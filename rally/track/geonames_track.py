@@ -66,8 +66,8 @@ class ScrollQuery(track.Query):
             r = es.scroll(scroll_id=r["_scroll_id"], scroll="10m")
 
 
-geonamesTrackSpec = track.Track(
-    name="Geonames",
+track.Track(
+    name="geonames",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
     source_url="http://benchmarks.elastic.co/corpora/geonames/documents.json.bz2",

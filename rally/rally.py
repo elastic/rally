@@ -3,7 +3,7 @@ import os
 import logging
 import argparse
 
-from rally import config, paths, racecontrol, telemetry
+from rally import config, paths, racecontrol
 from rally.utils import io
 
 
@@ -44,25 +44,27 @@ def parse_args():
         dest="subcommand",
         help="")
 
-    all_parser = subparsers.add_parser("all", help="Run the whole benchmarking pipeline. This subcommand should typically be used.")
-    race_parser = subparsers.add_parser("race", help="Run only the benchmarks (without generating reports)")
-    report_parser = subparsers.add_parser("report", help="Generate only reports based on existing data")
-    subparsers.add_parser("list-telemetry", help="Lists all of the available telemetry devices")
+    race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This subcommand should typically be used.")
+    # change in favor of "list telemetry", "list tracks", "list pipelines"
+    list_parser = subparsers.add_parser("list", help="List configuration options")
+    list_parser.add_argument(
+        "configuration",
+        metavar="configuration",
+        help="The configuration for which Rally should show the available options. Possible values are: telemetry, tracks, pipelines",
+        choices=["telemetry", "tracks", "pipelines"])
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
-    for p in [parser, config_parser]:
-        p.add_argument(
+    config_parser.add_argument(
             "--advanced-config",
             help="show additional configuration options when creating the config file (intended for CI runs) (default: false)",
             default=False,
             action="store_true")
 
-    for p in [parser, all_parser, race_parser]:
+    for p in [parser, race_parser]:
         p.add_argument(
-            "--skip-build",
-            help="assumes an Elasticsearch zip file is already built and skips the build phase (default: false)",
-            default=False,
-            action="store_true")
+            "--pipeline",
+            help="Selects a specific pipeline to run. A pipeline defines the steps that are executed (default: from-sources-complete).",
+            default="from-sources-complete")
         p.add_argument(
             "--quiet",
             help="Suppresses as much as output as possible. Activate it unless you want to see what's happening during the "
@@ -77,7 +79,7 @@ def parse_args():
             action="store_true")
         # tournament: provide two revisions to compare
         # Does not make sense to expose this argument already if there is only a single supported option
-        #p.add_argument(
+        # p.add_argument(
         #    "--benchmark-mode",
         #    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. Currently only "
         #         "'single' is supported (default: single).",
@@ -88,22 +90,32 @@ def parse_args():
             help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
                  "provided as a comma-separated list.",
             default="")
+        # TODO dm: We could rename this to version. This could be used in case we just download an ES ZIP file (later)
         p.add_argument(
             "--revision",
-            help="defines which sources to use for 'single' benchmark mode. 'current' uses the source tree as is, 'latest' fetches the "
-                 "latest version on master. It is also possible to specify a commit id or a timestamp. The timestamp must be specified "
-                 "as: \"@ts\" where ts is any valid timestamp understood by git, e.g. \"@2013-07-27 10:37\" (default: current).",
+            help="defines which sources to use when building the benchmark candidate. 'current' uses the source tree as is,"
+                 " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+                 " The timestamp must be specified as: \"@ts\" where ts is any valid timestamp understood by git, "
+                 "e.g. \"@2013-07-27 10:37\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
+            "--track",
+            help="defines which track should be run. Only one is allowed at a time (default: geonames)",
+            default="geonames")
+        p.add_argument(
             "--track-setup",
-            help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated list.",
+            help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated "
+                 "list (default: defaults).",
             default="defaults")  # optimized for local usage
 
-    # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
-    # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
+    ###############################################################################
     #
-    # That's why we add this just as an undocumented option.
-    for p in [parser, all_parser, race_parser, report_parser]:
+    # The options below are undocumented and can be removed or changed at any time.
+    #
+    ###############################################################################
+    for p in [parser, race_parser]:
+        # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
+        # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
         p.add_argument(
             "--effective-start-date",
             help=argparse.SUPPRESS,
@@ -134,7 +146,7 @@ def derive_subcommand(args, cfg):
         return subcommand
     # we apply some smarts in case the user did not specify a subcommand
     if cfg.config_present():
-        return "all"
+        return "race"
     else:
         return "configure"
 
@@ -174,24 +186,20 @@ def main():
     cfg.add(config.Scope.application, "system", "invocation.root.dir", paths.Paths(cfg).invocation_root())
     # Add command line config
     cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
-    cfg.add(config.Scope.applicationOverride, "build", "skip", args.skip_build)
+    cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
+    cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
+    if subcommand == "list":
+        cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
 
     configure_logging(cfg)
 
-    # TODO dm [Refactoring]: I am not too happy with dispatching commands on such a high-level. Can we push this down?
-    if subcommand == "list-telemetry":
-        t = telemetry.Telemetry(cfg, None)
-        t.list()
-        exit(0)
-    else:
-        race_control = racecontrol.RaceControl(cfg)
-        race_control.start(subcommand)
-
+    race_control = racecontrol.RaceControl(cfg)
+    race_control.start(subcommand)
 
 if __name__ == "__main__":
     main()
