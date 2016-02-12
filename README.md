@@ -70,7 +70,7 @@ To see the list of available telemetry devices, use `esrally list telemetry`. To
 
 #### Pipelines
 
-Pipelines allow Rally to execute different steps in preparation of a benchmark. For now only to pipelines are supported:
+Pipelines allow Rally to execute different steps in preparation of a benchmark. For now only two pipelines are supported:
 
 * `from-sources-complete`: This is the default pipeline that is run when nothing is specified. It checks out the Elasticsearch sources
  from git, builds a ZIP file and runs the benchmark.
