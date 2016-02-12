@@ -2,10 +2,12 @@ import datetime
 import os
 import logging
 import argparse
+import pkg_resources
 
 from rally import config, paths, racecontrol
 from rally.utils import io
 
+__version__ = pkg_resources.require("esrally")[0].version
 
 # we want to use some basic logging even before the output to log file is configured
 def preconfigure_logging():
@@ -38,6 +40,7 @@ def configure_logging(cfg):
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="esrally", description="Benchmark Elasticsearch")
+    parser.add_argument('--version', action='version', version="%(prog)s " + __version__)
 
     subparsers = parser.add_subparsers(
         title="subcommands",
@@ -90,7 +93,6 @@ def parse_args():
             help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
                  "provided as a comma-separated list.",
             default="")
-        # TODO dm: We could rename this to version. This could be used in case we just download an ES ZIP file (later)
         p.add_argument(
             "--revision",
             help="defines which sources to use when building the benchmark candidate. 'current' uses the source tree as is,"
@@ -160,7 +162,6 @@ def csv_to_list(csv):
 
 def main():
     preconfigure_logging()
-    print_banner()
     args = parse_args()
     cfg = config.Config()
     subcommand = derive_subcommand(args, cfg)
@@ -197,6 +198,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
 
     configure_logging(cfg)
+    print_banner()
 
     race_control = racecontrol.RaceControl(cfg)
     race_control.start(subcommand)
