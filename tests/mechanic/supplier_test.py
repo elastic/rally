@@ -10,9 +10,8 @@ class SupplierTests(TestCase):
     @mock.patch("rally.mechanic.supplier.GitRepository.pull", autospec=True)
     @mock.patch("rally.mechanic.supplier.GitRepository.clone", autospec=True)
     @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("logging.Logger")
     @mock.patch("rally.utils.process.run_subprocess")
-    def test_intial_checkout_latest(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
+    def test_intial_checkout_latest(self, mock_run_subprocess, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
         cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
@@ -23,7 +22,7 @@ class SupplierTests(TestCase):
 
         git = supplier.GitRepository(cfg)
 
-        s = supplier.Supplier(cfg, mock_logger, git)
+        s = supplier.Supplier(cfg, git)
         s.fetch()
 
         mock_is_cloned.assert_called_with(git)
@@ -35,9 +34,8 @@ class SupplierTests(TestCase):
     @mock.patch("rally.mechanic.supplier.GitRepository.pull")
     @mock.patch("rally.mechanic.supplier.GitRepository.clone")
     @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("logging.Logger")
     @mock.patch("rally.utils.process.run_subprocess")
-    def test_checkout_current(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
+    def test_checkout_current(self, mock_run_subprocess, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
         cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
@@ -48,7 +46,7 @@ class SupplierTests(TestCase):
 
         git = supplier.GitRepository(cfg)
 
-        s = supplier.Supplier(cfg, mock_logger, git)
+        s = supplier.Supplier(cfg, git)
         s.fetch()
 
         mock_is_cloned.assert_called_with(git)
@@ -59,9 +57,8 @@ class SupplierTests(TestCase):
     @mock.patch("rally.mechanic.supplier.GitRepository.head_revision", autospec=True)
     @mock.patch("rally.mechanic.supplier.GitRepository.pull_ts", autospec=True)
     @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("logging.Logger")
     @mock.patch("rally.utils.process.run_subprocess")
-    def test_checkout_ts(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_pull_ts, mock_head_revision):
+    def test_checkout_ts(self, mock_run_subprocess, mock_is_cloned, mock_pull_ts, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
         cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
@@ -72,7 +69,7 @@ class SupplierTests(TestCase):
 
         git = supplier.GitRepository(cfg)
 
-        s = supplier.Supplier(cfg, mock_logger, git)
+        s = supplier.Supplier(cfg, git)
         s.fetch()
 
         mock_is_cloned.assert_called_with(git)
@@ -82,9 +79,8 @@ class SupplierTests(TestCase):
     @mock.patch("rally.mechanic.supplier.GitRepository.head_revision", autospec=True)
     @mock.patch("rally.mechanic.supplier.GitRepository.pull_revision", autospec=True)
     @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("logging.Logger")
     @mock.patch("rally.utils.process.run_subprocess")
-    def test_checkout_revision(self, mock_run_subprocess, mock_logger, mock_is_cloned, mock_pull_revision, mock_head_revision):
+    def test_checkout_revision(self, mock_run_subprocess, mock_is_cloned, mock_pull_revision, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
         cfg.add(config.Scope.application, "source", "remote.repo.url", "some-github-url")
@@ -95,7 +91,7 @@ class SupplierTests(TestCase):
 
         git = supplier.GitRepository(cfg)
 
-        s = supplier.Supplier(cfg, mock_logger, git)
+        s = supplier.Supplier(cfg, git)
         s.fetch()
 
         mock_is_cloned.assert_called_with(git)

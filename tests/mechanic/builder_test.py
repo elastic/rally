@@ -9,9 +9,8 @@ class BuilderTests(TestCase):
 
     @mock.patch("rally.utils.io.ensure_dir")
     @mock.patch("os.rename")
-    @mock.patch("logging.Logger")
     @mock.patch("rally.utils.process.run_subprocess")
-    def test_build(self, mock_run_subprocess, mock_logger, mock_rename, mock_ensure_dir):
+    def test_build(self, mock_run_subprocess, mock_rename, mock_ensure_dir):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/usr/local/gradle")
@@ -20,7 +19,7 @@ class BuilderTests(TestCase):
         cfg.add(config.Scope.application, "system", "log.dir", "logs")
         cfg.add(config.Scope.application, "build", "log.dir", "build")
 
-        b = builder.Builder(cfg, mock_logger)
+        b = builder.Builder(cfg)
         b.build()
 
         calls = [
@@ -35,11 +34,10 @@ class BuilderTests(TestCase):
         mock_run_subprocess.assert_has_calls(calls)
 
     @mock.patch("glob.glob", lambda p: ["elasticsearch.zip"])
-    @mock.patch("logging.Logger")
-    def test_add_binary_to_config(self, mock_logger):
+    def test_add_binary_to_config(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
-        b = builder.Builder(cfg, mock_logger)
+        b = builder.Builder(cfg)
         b.add_binary_to_config()
         self.assertEqual(cfg.opts("builder", "candidate.bin.path"), "elasticsearch.zip")
 

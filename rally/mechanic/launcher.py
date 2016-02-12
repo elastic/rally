@@ -2,9 +2,12 @@ import os
 import threading
 import subprocess
 import signal
+import logging
 
 from rally.mechanic import gear
 from rally import config, cluster, telemetry, time, exceptions
+
+logger = logging.getLogger("rally.launcher")
 
 
 class Launcher:
@@ -15,15 +18,14 @@ class Launcher:
     Currently, only local launching is supported.
     """
 
-    def __init__(self, cfg, logger, clock=time.Clock):
+    def __init__(self, cfg, clock=time.Clock):
         self._config = cfg
-        self._logger = logger
         self._clock = clock
         self._servers = []
 
     def start(self, track, setup, metrics_store):
         if self._servers:
-            self._logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
+            logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
         num_nodes = setup.candidate_settings.nodes
         return cluster.Cluster([self._start_node(node, setup, metrics_store) for node in range(num_nodes)], metrics_store)
 
@@ -55,7 +57,7 @@ class Launcher:
         self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
         # Don't merge here!
         env["JAVA_HOME"] = java_home
-        self._logger.info("ENV: %s" % str(env))
+        logger.info("ENV: %s" % str(env))
         return env
 
     def _set_env(self, env, k, v, separator=' '):
@@ -74,7 +76,7 @@ class Launcher:
         if processor_count is not None and processor_count > 1:
             cmd.append("-Des.processors=%s" % processor_count)
         cmd.append("-Dpath.logs=%s" % server_log_dir)
-        self._logger.info("ES launch: %s" % str(cmd))
+        logger.info("ES launch: %s" % str(cmd))
         return cmd
 
     def _start_process(self, cmd, env, node_name):
@@ -86,12 +88,12 @@ class Launcher:
         t.setDaemon(True)
         t.start()
         if startup_event.wait(timeout=Launcher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            self._logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
+            logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
             return process
         else:
             log_dir = self._config.opts("system", "log.dir")
             msg = "Could not start node '%s' within timeout period of %s seconds." % (node_name, Launcher.PROCESS_WAIT_TIMEOUT_SECONDS)
-            self._logger.error(msg)
+            logger.error(msg)
             raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
 
     def _node_name(self, node):
@@ -111,13 +113,13 @@ class Launcher:
             if l.find("Initialization Failed") != -1:
                 startup_event.set()
 
-            self._logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+            logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
             if l.endswith("started") and not startup_event.isSet():
                 startup_event.set()
-                self._logger.info("%s: started" % node_name)
+                logger.info("%s: started" % node_name)
 
     def stop(self, cluster):
-        self._logger.info("Shutting down ES cluster")
+        logger.info("Shutting down ES cluster")
 
         # Ask all nodes to shutdown:
         stop_watch = self._clock.stop_watch()
@@ -131,26 +133,26 @@ class Launcher:
 
             try:
                 process.wait(10.0)
-                self._logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
+                logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
             except subprocess.TimeoutExpired:
                 # kill -9
-                self._logger.warn("Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:" % node)
+                logger.warn("Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:" % node)
                 try:
                     os.kill(process.pid, signal.SIGQUIT)
                 except OSError:
-                    self._logger.warn("  no such process")
+                    logger.warn("  no such process")
                     return
 
                 try:
                     process.wait(120.0)
-                    self._logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
+                    logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
                     return
                 except subprocess.TimeoutExpired:
                     pass
 
-                self._logger.info("kill -KILL server")
+                logger.info("kill -KILL server")
                 try:
                     process.kill()
                 except ProcessLookupError:
-                    self._logger.warn("No such process")
+                    logger.warn("No such process")
         self._servers = []

@@ -1,6 +1,9 @@
 import os
+import logging
 
 from rally.utils import io, process
+
+logger = logging.getLogger("rally.supplier")
 
 
 class SupplyError(BaseException):
@@ -59,9 +62,8 @@ class Supplier:
     Supplier fetches the benchmark candidate source tree from the remote repository. In the current implementation, only git is supported.
     """
 
-    def __init__(self, cfg, logger, repo):
+    def __init__(self, cfg, repo):
         self._config = cfg
-        self._logger = logger
         self._repo = repo
 
     def fetch(self):
@@ -76,10 +78,10 @@ class Supplier:
     def _update(self):
         revision = self._config.opts("source", "revision")
         if revision == "latest":
-            self._logger.info("Fetching latest sources from %s." % self._repo.remote_url)
+            logger.info("Fetching latest sources from %s." % self._repo.remote_url)
             self._repo.pull()
         elif revision == "current":
-            self._logger.info("Skip fetching sources")
+            logger.info("Skip fetching sources")
         elif revision.startswith("@"):
             # concert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             self._repo.pull_ts(revision[1:])
@@ -87,4 +89,4 @@ class Supplier:
             self._repo.pull_revision(revision)
 
         git_revision = self._repo.head_revision()
-        self._logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))
+        logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))

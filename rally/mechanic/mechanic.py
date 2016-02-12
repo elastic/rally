@@ -1,5 +1,3 @@
-import logging
-
 from rally import metrics
 from rally.mechanic import builder, supplier, provisioner, launcher
 
@@ -12,11 +10,10 @@ class Mechanic:
 
     def __init__(self, cfg):
         self._config = cfg
-        logger = logging.getLogger("rally.mechanic")
-        self._supplier = supplier.Supplier(cfg, logger, supplier.GitRepository(cfg))
-        self._builder = builder.Builder(cfg, logger)
-        self._provisioner = provisioner.Provisioner(cfg, logger)
-        self._launcher = launcher.Launcher(cfg, logger)
+        self._supplier = supplier.Supplier(cfg, supplier.GitRepository(cfg))
+        self._builder = builder.Builder(cfg)
+        self._provisioner = provisioner.Provisioner(cfg)
+        self._launcher = launcher.Launcher(cfg)
         self._metrics_store = None
 
     # This is the one-time setup the mechanic performs (once for all benchmarks run)

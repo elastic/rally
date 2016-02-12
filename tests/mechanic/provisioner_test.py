@@ -9,8 +9,7 @@ from rally.track import track
 class ProvisionerTests(TestCase):
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
-    @mock.patch("logging.Logger")
-    def test_cleanup_nothing(self, mock_logger, mock_path_exists, mock_rm):
+    def test_cleanup_nothing(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = False
 
         cfg = config.Config()
@@ -18,7 +17,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
         cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
 
-        p = provisioner.Provisioner(cfg, mock_logger)
+        p = provisioner.Provisioner(cfg)
         p.cleanup()
 
         mock_path_exists.assert_called_once_with("/rally-root/track/track-setup/es-bin")
@@ -26,8 +25,7 @@ class ProvisionerTests(TestCase):
 
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
-    @mock.patch("logging.Logger")
-    def test_cleanup_nothing_on_preserve(self, mock_logger, mock_path_exists, mock_rm):
+    def test_cleanup_nothing_on_preserve(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = False
 
         cfg = config.Config()
@@ -36,7 +34,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "provisioning", "install.preserve", True)
         cfg.add(config.Scope.application, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg, mock_logger)
+        p = provisioner.Provisioner(cfg)
         p.cleanup()
 
         mock_path_exists.assert_not_called()
@@ -44,8 +42,7 @@ class ProvisionerTests(TestCase):
 
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
-    @mock.patch("logging.Logger")
-    def test_cleanup(self, mock_logger, mock_path_exists, mock_rm):
+    def test_cleanup(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = True
 
         cfg = config.Config()
@@ -54,7 +51,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
         cfg.add(config.Scope.application, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg, mock_logger)
+        p = provisioner.Provisioner(cfg)
         p.cleanup()
 
         expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/track-setup/es-bin")]
@@ -67,8 +64,7 @@ class ProvisionerTests(TestCase):
     @mock.patch("rally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
-    @mock.patch("logging.Logger")
-    def test_prepare(self, mock_logger, mock_path_exists, mock_rm, mock_ensure_dir, mock_unzip, mock_open):
+    def test_prepare(self, mock_path_exists, mock_rm, mock_ensure_dir, mock_unzip, mock_open):
         mock_path_exists.return_value = True
 
         cfg = config.Config()
@@ -80,7 +76,7 @@ class ProvisionerTests(TestCase):
 
         track_setup = track.TrackSetup("test-track", "Description")
 
-        p = provisioner.Provisioner(cfg, mock_logger)
+        p = provisioner.Provisioner(cfg)
         p.prepare(track_setup)
 
         self.assertEqual(cfg.opts("provisioning", "local.binary.path"), "/install/elasticsearch-3.0.0-SNAPSHOT")
