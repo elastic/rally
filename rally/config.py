@@ -136,7 +136,7 @@ class Config:
         config = self._load_config_file(interpolation=None)
 
         if current_version == 0:
-            logger.debug("Migrating config from version [0] to [1]")
+            logger.info("Migrating config from version [0] to [1]")
             current_version = 1
             config["meta"] = {}
             config["meta"]["config.version"] = str(current_version)
@@ -145,6 +145,7 @@ class Config:
             config["provisioning"]["local.install.dir"] = "install"
             config["reporting"]["report.base.dir"] = "reports"
         if current_version == 1:
+            logger.info("Migrating config from version [1] to [2]")
             current_version = 2
             config["meta"]["config.version"] = str(current_version)
             # Give the user a hint what's going on
