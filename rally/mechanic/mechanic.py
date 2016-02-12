@@ -1,4 +1,4 @@
-from rally import metrics
+from rally import metrics, cluster
 from rally.mechanic import builder, supplier, provisioner, launcher
 
 
@@ -22,18 +22,26 @@ class Mechanic:
         self._supplier.fetch()
         self._builder.build()
 
+    def start_metrics(self, track, setup):
+        invocation = self._config.opts("meta", "time.start")
+        self._metrics_store = metrics.EsMetricsStore(self._config)
+        self._metrics_store.open(invocation, track.name, setup.name, create=True)
+
     def start_engine(self, track, setup):
         # It's not the best place but it ensures for now that we add the binary path for the provisioner even when the build step is skipped
         self._builder.add_binary_to_config()
         self._provisioner.prepare(setup)
-        invocation = self._config.opts("meta", "time.start")
-        self._metrics_store = metrics.EsMetricsStore(self._config)
-        self._metrics_store.open(invocation, track.name, setup.name, create=True)
         return self._launcher.start(track, setup, self._metrics_store)
+
+    def start_engine_external(self, track, setup):
+        return cluster.Cluster([], self._metrics_store)
 
     def stop_engine(self, cluster):
         self._launcher.stop(cluster)
 
+    def stop_metrics(self):
+        self._metrics_store.close()
+
     def revise_candidate(self):
         self._provisioner.cleanup()
-        self._metrics_store.close()
+

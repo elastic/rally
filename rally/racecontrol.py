@@ -103,12 +103,44 @@ def prepare_track(ctx, track):
 
 # benchmark when we provision ourselves
 def benchmark_internal(ctx, track, track_setup):
+    ctx.mechanic.start_metrics(track, track_setup)
     cluster = ctx.mechanic.start_engine(track, track_setup)
     ctx.driver.setup(cluster, track, track_setup)
     ctx.driver.go(cluster, track, track_setup)
     ctx.mechanic.stop_engine(cluster)
     ctx.driver.tear_down(track, track_setup)
     ctx.mechanic.revise_candidate()
+    ctx.mechanic.stop_metrics()
+
+
+# benchmark assuming Elasticsearch is already running externally
+def benchmark_external(ctx, track, track_setup):
+    ctx.mechanic.start_metrics(track, track_setup)
+    cluster = ctx.mechanic.start_engine_external(track, track_setup)
+    ctx.driver.setup(cluster, track, track_setup)
+    ctx.driver.go(cluster, track, track_setup)
+    ctx.driver.tear_down(track, track_setup)
+    ctx.mechanic.stop_metrics()
+
+# benchmarks with external candidates are really scary and we should warn users.
+bogus_results_warning = """
+************************************************************************
+************** WARNING: A dark dungeon lies ahead of you  **************
+************************************************************************
+
+Rally dos not have control over the configuration of the benchmarked
+Elasticsearch cluster.
+
+Be aware that results may be misleading due to problems with the setup.
+Rally is also not able to gather lots of metrics at all (like CPU usage
+of the benchmarked cluster) or may even produce misleading metrics (like
+the index size).
+
+************************************************************************
+****** Use this pipeline only if you are aware of the tradeoffs.  ******
+*************************** Watch your step! ***************************
+************************************************************************
+"""
 
 pipelines = {
     "from-sources-complete":
@@ -133,15 +165,17 @@ pipelines = {
                          ]
 
                          ),
-    # Note: We have one *very* specific assumption here. Namely, that this is a search only benchmark as we do not set up any data here!
-    # We cannot support this for now. Rally has too much built-in assumptions that we provision the cluster ourselves...
-    #lambda ctx: Pipeline("benchmark-only", [
-    #    [
-    #        TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
-    #        PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run()),
-    #        PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
-    #    ]
-    #])
+    "benchmark-only":
+        lambda ctx: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
+                             [
+                                 PipelineStep("warn-bogus", ctx, lambda ctx, track: print(bogus_results_warning)),
+                                 PipelineStep("prepare-track", ctx, prepare_track),
+                                 TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_external)]),
+                                 PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run()),
+                                 PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
+                             ]
+                             ),
+
 }
 
 

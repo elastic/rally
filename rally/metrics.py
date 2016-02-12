@@ -139,7 +139,7 @@ class EsMetricsStore:
         if v:
             return v[0]
         else:
-            return v
+            return None
 
     def get(self, name):
         query = {

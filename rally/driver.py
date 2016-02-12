@@ -23,20 +23,22 @@ class Driver:
         self._index_benchmark = None
 
     def setup(self, cluster, track, track_setup):
-        mapping_path = self._config.opts("benchmarks", "mapping.path")
-        mappings = open(mapping_path).read()
-        logger.debug("create index w/ mappings")
-        logger.debug(mappings)
-        cluster.client.indices.create(index=track.index_name)
-        cluster.client.indices.put_mapping(index=track.index_name,
-                                           doc_type=track.type_name,
-                                           body=json.loads(mappings))
+        # does not make sense to add any mappings if we don't benchmark indexing
+        if track_setup.test_settings.benchmark_indexing:
+            mapping_path = self._config.opts("benchmarks", "mapping.path")
+            mappings = open(mapping_path).read()
+            logger.debug("create index w/ mappings")
+            logger.debug(mappings)
+            cluster.client.indices.create(index=track.index_name)
+            cluster.client.indices.put_mapping(index=track.index_name,
+                                               doc_type=track.type_name,
+                                               body=json.loads(mappings))
         cluster.wait_for_status_green()
 
     def go(self, cluster, track, track_setup):
         cluster.on_benchmark_start()
-        self._index_benchmark = IndexBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
         if track_setup.test_settings.benchmark_indexing:
+            self._index_benchmark = IndexBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
             self._index_benchmark.run()
         if track_setup.test_settings.benchmark_search:
             search_benchmark = SearchBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
@@ -44,10 +46,11 @@ class Driver:
         cluster.on_benchmark_stop()
 
     def tear_down(self, track, track_setup):
-        # This is also just a hack for now (should be in track for first step and metrics for second one)
-        data_paths = self._config.opts("provisioning", "local.data.paths")
         if track_setup.test_settings.benchmark_indexing:
-            self._index_benchmark.print_index_stats(data_paths[0])
+            # This is also just a hack for now (should be in track for first step and metrics for second one)
+            data_paths = self._config.opts("provisioning", "local.data.paths", mandatory=False)
+            if data_paths is not None:
+                self._index_benchmark.print_index_stats(data_paths[0])
 
 
 class TimedOperation:

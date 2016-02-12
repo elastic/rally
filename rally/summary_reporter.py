@@ -65,7 +65,7 @@ class SummaryReporter:
                 formatted_median = "%.1f" % statistics.median(query_latency)
                 print("  Median query latency [%s]: %sms" % (q.name, formatted_median))
             else:
-                print("Could not determine query latency for [%s] from metrics store" % q)
+                print("Could not determine query latency for [%s]" % q)
 
     def report_total_times(self, store):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
@@ -104,7 +104,7 @@ class SummaryReporter:
             formatted_median = "%.1f" % statistics.median(percentages)
             print("  Median indexing CPU utilization: %s%%" % formatted_median)
         else:
-            print("Could not determine CPU usage from metrics store")
+            print("Could not determine CPU usage")
 
     def report_gc_times(self, store):
         young_gc_time = store.get_one("node_total_young_gen_gc_time")
@@ -115,8 +115,11 @@ class SummaryReporter:
     def report_disk_usage(self, store):
         index_size = store.get_one("final_index_size_bytes")
         bytes_written = store.get_one("disk_io_write_bytes")
-        print("  Final index size: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(index_size), convert.bytes_to_mb(index_size)))
-        print("  Totally written: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(bytes_written), convert.bytes_to_mb(bytes_written)))
+        if index_size is not None and bytes_written is not None:
+            print("  Final index size: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(index_size), convert.bytes_to_mb(index_size)))
+            print("  Totally written: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(bytes_written), convert.bytes_to_mb(bytes_written)))
+        else:
+            print("Could not determine disk usage metrics")
 
     def report_segment_memory(self, store):
         print("  Total heap used for segments     : %.2fMB" % self._mb(store, "segments_memory_in_bytes"))
