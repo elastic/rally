@@ -167,9 +167,9 @@ class IndexBenchmark(TimedOperation):
                     # pick already returned id in 25%
                     id = self._rand.choice(ids)
                 else:
-                    id = "%10i" % self._rand.randint(0, docs_to_index)
+                    id = "%10d" % self._rand.randint(0, docs_to_index)
                     ids.append(id)
-            yield id
+                yield id
         else:
             raise RuntimeError("Unknown id conflict type %s" % conflicts)
 
@@ -182,7 +182,7 @@ class IndexBenchmark(TimedOperation):
 
         def expand_action(data):
             if id_generator:
-                action = '{"index": {"_id": %d}}' % next(id_generator)
+                action = '{"index": {"_id": %s}}' % next(id_generator)
             else:
                 action = '{"index": {}}'
             self._sent_bytes += len(data)

@@ -27,7 +27,6 @@ index.number_of_shards: 6
 index.number_of_replicas: 0
 
 index.translog.flush_threshold_size: 4g
-index.translog.flush_threshold_ops: 500000
 '''
 
 mergePartsLogConfig = '''
