@@ -47,6 +47,7 @@ class Config:
 
     def __init__(self):
         self._opts = {}
+        self._clear_config()
 
     def add(self, scope, section, key, value):
         """
