@@ -181,7 +181,9 @@ class Config:
         print("It will consume several GB of free space depending on which benchmarks are executed (expect at least 10 GB).")
         benchmark_root_dir = self._ask_property("Enter the benchmark root directory (will be created automatically)")
         env_name = self._ask_env_name()
-        source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)")
+        default_src_dir = "%s/src" % benchmark_root_dir
+        source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)",
+                                        default_value=default_src_dir)
         # Ask, because not everybody might have SSH access
         repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
         default_gradle_location = io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
@@ -243,7 +245,7 @@ class Config:
 
         self._write_to_config_file(config)
 
-        print("\nConfiguration successfully written to '%s'. Please rerun rally now." % self._config_file())
+        print("\nConfiguration successfully written to '%s'. Please rerun esrally now." % self._config_file())
 
     def _ask_data_store(self):
         data_store_host = self._ask_property("Enter the host name of the ES data store", default_value="localhost")
