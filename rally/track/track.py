@@ -90,20 +90,44 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description, source_url, mapping_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
-                 uncompressed_size_in_bytes,
-                 local_file_name, local_mapping_name, estimated_benchmark_time_in_minutes, track_setups, queries):
+    def __init__(self, name, description, source_root_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
+                 uncompressed_size_in_bytes, document_file_name, mapping_file_name, estimated_benchmark_time_in_minutes,
+                 track_setups, queries):
+        """
+
+        Creates a new track.
+
+        :param name: A short, descriptive name for this track. As per convention, this name should be in lower-case without spaces.
+        :param description: A longer description for this track.
+        :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
+        below this URL, three files should be located: the benchmark document file (see document_file_name), the mapping
+        file (see mapping_file_name) and a readme (goes with the name "README.txt" as per convention).
+        :param index_name: The name of the index to create.
+        :param type_name: The type name for this index.
+        :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting.
+        :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
+         user reporting.
+        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it.
+        :param document_file_name: The file name of benchmark document name on the remote server.
+        :param mapping_file_name: The file name of the mapping file on the remote server.
+        :param estimated_benchmark_time_in_minutes: A ballpark estimation how long the benchmark will run (in minutes). This is just needed
+        to give the user a very rough idea on the duration of the benchmark.
+        :param track_setups: A list of one or more track setups to use. If in doubt, reuse the predefined list "track.track_setups". Rally's
+        default configuration assumes that each track defines at least one track setup with the name "defaults". This is not required but
+        simplifies usage.
+        :param queries: A list of queries to run in case searching should be benchmarked.
+        """
         self.name = name
         self.description = description
-        self.source_url = source_url
-        self.mapping_url = mapping_url
+        self.source_root_url = source_root_url
         self.index_name = index_name
         self.type_name = type_name
         self.number_of_documents = number_of_documents
         self.compressed_size_in_bytes = compressed_size_in_bytes
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
-        self.local_file_name = local_file_name
-        self.local_mapping_name = local_mapping_name
+        self.document_file_name = document_file_name
+        self.mapping_file_name = mapping_file_name
+        self.readme_file_name = "README.txt"
         self.estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
         self.track_setups = track_setups
         self.queries = queries
@@ -117,7 +141,7 @@ class CandidateSettings:
         Creates new settings for a benchmark candidate.
 
         :param config_snippet: A string snippet that will be appended as is to elasticsearch.yml of the benchmark candidate.
-        :param logging_config: A string representing the entire contents of logging.yml. If not set, the factory default will be used.
+        :param logging_config: A string representing the entire contents of logging.yml. If not set, the factory defaults will be used.
         :param nodes: The number of nodes to start. Defaults to 1 node. All nodes are started on the same machine.
         :param processors: The number of processors to use (per node).
         :param heap: A string defining the maximum amount of Java heap to use. For allows values, see the documentation on -Xmx
@@ -185,26 +209,31 @@ class Query:
 
 
 class Marshal:
-    def __init__(self, config):
-        self._config = config
+    def __init__(self, cfg):
+        self._config = cfg
 
     """
-    A marshal set up the track for the race
+    A marshal sets up the track for the race
     """
 
     def setup(self, track):
         data_set_root = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), track.name.lower())
-        data_set_path = "%s/%s" % (data_set_root, track.local_file_name)
+        data_set_path = "%s/%s" % (data_set_root, track.document_file_name)
         if not os.path.isfile(data_set_path):
             self._download_benchmark_data(track, data_set_root, data_set_path)
         unzipped_data_set_path = self._unzip(data_set_path)
         # global per benchmark (we never run benchmarks in parallel)
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
 
-        mapping_path = "%s/%s" % (data_set_root, track.local_mapping_name)
+        mapping_path = "%s/%s" % (data_set_root, track.mapping_file_name)
         if not os.path.isfile(mapping_path):
             self._download_mapping_data(track, data_set_root, mapping_path)
         self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
+
+        readme_path = "%s/%s" % (data_set_root, track.readme_file_name)
+        if not os.path.isfile(readme_path):
+            self._download_readme(track, data_set_root, readme_path)
+
 
     def _unzip(self, data_set_path):
         # we assume that track data are always compressed and try to unzip them before running the benchmark
@@ -217,7 +246,7 @@ class Marshal:
     def _download_benchmark_data(self, track, data_set_root, data_set_path):
         io.ensure_dir(data_set_root)
         logger.info("Benchmark data for %s not available in '%s'" % (track.name, data_set_path))
-        url = track.source_url
+        url = "%s/%s" % (track.source_root_url, track.document_file_name)
         size = round(convert.bytes_to_mb(track.compressed_size_in_bytes))
         # ensure output appears immediately
         print("Downloading benchmark data from %s (%s MB) ... " % (url, size), end='', flush=True)
@@ -232,12 +261,21 @@ class Marshal:
     def _download_mapping_data(self, track, data_set_root, mapping_path):
         io.ensure_dir(data_set_root)
         logger.info("Mappings for %s not available in '%s'" % (track.name, mapping_path))
-        url = track.mapping_url
+        url = "%s/%s" % (track.source_root_url, track.mapping_file_name)
         # for now, we just allow HTTP downloads for mappings (S3 support is probably remove anyway...)
         if url.startswith("http"):
             self._do_download_via_http(url, mapping_path)
         else:
             raise RuntimeError("Cannot download mappings. No protocol handler for [%s] available." % url)
+
+    def _download_readme(self, track, data_set_root, readme_path):
+        io.ensure_dir(data_set_root)
+        logger.info("Readme for %s not available in '%s'" % (track.name, readme_path))
+        url = "%s/%s" % (track.source_root_url, track.readme_file_name)
+        if url.startswith("http"):
+            self._do_download_via_http(url, readme_path)
+        else:
+            raise RuntimeError("Cannot download Readme. No protocol handler for [%s] available." % url)
 
     def _do_download_via_http(self, url, data_set_path):
         tmp_data_set_path = data_set_path + ".tmp"

@@ -86,15 +86,14 @@ geopointTrackSpec = track.Track(
     name="geopoint",
     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
-    source_url="file:///data/benchmarks/geopoint/documents.json.bz2",
-    mapping_url="file:///data/benchmarks/geopoint/mappings.json",
+    source_root_url="file:///data/benchmarks/geopoint",
     index_name="osmgeopoints",
     type_name="type",
     number_of_documents=60844404,
     compressed_size_in_bytes=711754140,
     uncompressed_size_in_bytes=3769692039,
-    local_file_name="documents.json",
-    local_mapping_name="mappings.json",
+    document_file_name="documents.json.bz2",
+    mapping_file_name="mappings.json",
     # for defaults alone, it's just around 20 minutes, for all it's about 60
     estimated_benchmark_time_in_minutes=20,
     # Queries to use in the search benchmark
