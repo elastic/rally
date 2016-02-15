@@ -55,4 +55,5 @@ def kill_running_es_instances(node_prefix):
         line = line.decode("utf-8")
         if "java" in line and "elasticsearch" in line and node_prefix in line:
             pid = int(line.split(None, 1)[0])
+            logger.info("Killing lingering ES benchmark instance with PID [%s]." % pid)
             os.kill(pid, signal.SIGKILL)
