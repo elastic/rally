@@ -19,7 +19,7 @@ If you find yourself wishing for a feature that doesn't exist in Rally, you are 
 with similar needs. Open an issue on our [issues list](https://github.com/elastic/rally/issues) on GitHub which describes the feature you 
 would like to see, why you need it, and how it should work.
 
-## Contributing code and documentation changes
+## Contributing code, benchmarks and documentation changes
 
 If you have a bugfix or new feature that you would like to contribute to Rally, please find or open an issue about it first. Talk about 
 what you would like to do. It may be that somebody is already working on it, or that there are particular issues that you should know about
