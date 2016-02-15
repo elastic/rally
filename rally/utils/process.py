@@ -51,7 +51,7 @@ def kill_running_es_instances(node_prefix):
 
     :param node_prefix a prefix of the node names that should be killed.
     """
-    for line in subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE).communicate()[0].splitlines():
+    for line in subprocess.Popen(["ps", "-ax"], stdout=subprocess.PIPE).communicate()[0].splitlines():
         line = line.decode("utf-8")
         if "java" in line and "elasticsearch" in line and node_prefix in line:
             pid = int(line.split(None, 1)[0])
