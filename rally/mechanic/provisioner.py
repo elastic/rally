@@ -60,14 +60,18 @@ class Provisioner:
 
     def _configure_cluster(self, setup):
         binary_path = self._config.opts("provisioning", "local.binary.path")
+        first_http_port = self._config.opts("provisioning", "node.http.port")
+        logger.info("Using port [%d]" % first_http_port)
         env_name = self._config.opts("system", "env.name")
         additional_config = setup.candidate_settings.custom_config_snippet
         data_paths = self._data_paths(setup)
-        logger.info("Using data paths: %s" % data_paths)
+        logger.info("Using data paths [%s]" % data_paths)
         self._config.add(config.Scope.trackSetup, "provisioning", "local.data.paths", data_paths)
         s = open("%s/config/elasticsearch.yml" % binary_path, "r").read()
         s += "\ncluster.name: %s\n" % "benchmark.%s" % env_name
         s += "\npath.data: %s" % ", ".join(data_paths)
+        s += "\nhttp.port: %d-%d" % (first_http_port, first_http_port + 100)
+        s += "\ntransport.tcp.port: %d-%d" % (first_http_port + 100, first_http_port + 200)
         if additional_config:
             s += "\n%s" % additional_config
         open("%s/config/elasticsearch.yml" % binary_path, "w").write(s)

@@ -27,7 +27,13 @@ class Launcher:
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
         num_nodes = setup.candidate_settings.nodes
-        return cluster.Cluster([self._start_node(node, setup, metrics_store) for node in range(num_nodes)], metrics_store)
+        first_http_port = self._config.opts("provisioning", "node.http.port")
+
+        return cluster.Cluster(
+            [{"host": "localhost", "port": first_http_port}],
+            [self._start_node(node, setup, metrics_store) for node in range(num_nodes)],
+            metrics_store
+        )
 
     def _start_node(self, node, setup, metrics_store):
         node_name = self._node_name(node)

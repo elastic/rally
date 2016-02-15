@@ -26,8 +26,8 @@ class Cluster:
     Cluster exposes APIs of the running benchmark candidate.
     """
 
-    def __init__(self, servers, metrics_store, clock=time.Clock):
-        self.client = elasticsearch.Elasticsearch(timeout=60, request_timeout=60)
+    def __init__(self, hosts, servers, metrics_store, clock=time.Clock):
+        self.client = elasticsearch.Elasticsearch(hosts=hosts,timeout=60, request_timeout=60)
         self.servers = servers
         self.metrics_store = metrics_store
         self.clock = clock
