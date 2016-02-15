@@ -57,11 +57,12 @@ def parse_args():
         choices=["telemetry", "tracks", "pipelines"])
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
-    config_parser.add_argument(
-            "--advanced-config",
-            help="show additional configuration options when creating the config file (intended for CI runs) (default: false)",
-            default=False,
-            action="store_true")
+    for p in [parser, config_parser]:
+        p.add_argument(
+                "--advanced-config",
+                help="show additional configuration options when creating the config file (intended for CI runs) (default: false)",
+                default=False,
+                action="store_true")
 
     for p in [parser, race_parser]:
         p.add_argument(
