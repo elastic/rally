@@ -20,12 +20,12 @@ Rally is only tested on Mac OS X and Linux.
 
 #### Preparation
 
-First [install Elasticsearch](https://www.elastic.co/downloads/elasticsearch) 2.1 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to
-store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of 
-this cluster.
+First [install Elasticsearch](https://www.elastic.co/downloads/elasticsearch) 2.2 or higher. A simple out-of-the-box installation with a 
+single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration #
+procedure of Rally will you ask for host and port of this cluster.
 
-**Note**: It is recommended to choose a non-standard port for the metrics store if it is located on the same machine to avoid accidentally 
-targeting the metrics store with the benchmark.
+**Note**: Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure 
+that this port range is not used by the metrics store.
 
 Optional but recommended is to install also [Kibana](https://www.elastic.co/downloads/kibana). Kibana will not be auto-configured but a sample
 dashboard is delivered with Rally in `rally/resources/kibana.json` which can be imported to Kibana:
@@ -90,9 +90,9 @@ Note: This is just important if you want to hack on Rally and to some extent if 
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
-When implementing a new benchmark, create a new file in `track` and create a new `Track` and one or more `TrackSetup` instances. See `track/countries_track.py` for an example. The new
-track will be picked up automatically. You can run Rally with your track by issuing `esrally --track=your-track-name`. All available tracks can be listed with
-`esrally list tracks`.
+When implementing a new benchmark, create a new file in `track` and create a new `Track` and one or more `TrackSetup` instances. 
+See `track/geonames_track.py` for an example. The new track will be picked up automatically. You can run Rally with your track 
+by issuing `esrally --track=your-track-name`. All available tracks can be listed with `esrally list tracks`.
  
 ### How to Contribute
  

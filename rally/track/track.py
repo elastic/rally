@@ -9,18 +9,25 @@ from rally.utils import io, sysstats, convert, process
 
 logger = logging.getLogger("rally.track")
 
+# These settings should be included in all track setups. They will start the benchmark cluster on a non-standard port by intention to avoid
+# accidental conflicts with already running Elasticsearch clusters.
+networkSettings = '''
+http.port: 39200-39300
+transport.tcp.port: 39300-39400
+'''
+
 # Ensure cluster status green even for single nodes. Please don't add anything else here except to get the cluster to status
 # 'green' even with a single node.
-greenNodeSettings = '''
+greenNodeSettings = networkSettings + '''
 index.number_of_replicas: 0
 '''
 
-mergePartsSettings = '''
+mergePartsSettings = networkSettings + '''
 index.number_of_replicas: 0
 index.merge.scheduler.auto_throttle: false
 '''
 
-benchmarkFastSettings = '''
+benchmarkFastSettings = networkSettings + '''
 index.refresh_interval: 30s
 
 index.number_of_shards: 6
