@@ -274,13 +274,16 @@ class IndexBenchmark(TimedOperation):
         logger.info("Gathering nodes stats")
         duration, stats = self.timed(self._cluster.client.nodes.stats, metric="_all", level="shards")
         self._metrics_store.put_value("node_stats_latency", convert.seconds_to_ms(duration), "ms")
-        # for now we only put data for one node in here but we should really put all of them into the metrics store
+        old_gen_collection_time = 0
+        young_gen_collection_time = 0
         nodes = stats["nodes"]
-        node = list(nodes.keys())[0]
-        node = nodes[node]
-        gc = node["jvm"]["gc"]["collectors"]
-        self._metrics_store.put_value("node_total_old_gen_gc_time", gc["old"]["collection_time_in_millis"], "ms")
-        self._metrics_store.put_value("node_total_young_gen_gc_time", gc["young"]["collection_time_in_millis"], "ms")
+        for node_name, node in nodes.items():
+            gc = node["jvm"]["gc"]["collectors"]
+            old_gen_collection_time += gc["old"]["collection_time_in_millis"]
+            young_gen_collection_time += gc["young"]["collection_time_in_millis"]
+
+        self._metrics_store.put_value("node_total_old_gen_gc_time", old_gen_collection_time, "ms")
+        self._metrics_store.put_value("node_total_young_gen_gc_time", young_gen_collection_time, "ms")
 
     def _print_progress(self, docs_processed):
         if not self._quiet_mode:
