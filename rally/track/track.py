@@ -174,10 +174,11 @@ class IndexIdConflict(Enum):
 
 
 class BenchmarkSettings:
-    def __init__(self, benchmark_search=False, benchmark_indexing=True, id_conflicts=IndexIdConflict.NoConflicts):
+    def __init__(self, benchmark_search=False, benchmark_indexing=True, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
         self.benchmark_search = benchmark_search
         self.benchmark_indexing = benchmark_indexing
         self.id_conflicts = id_conflicts
+        self.force_merge = force_merge
 
 
 class TrackSetup:
@@ -193,7 +194,7 @@ class TrackSetup:
         self.name = name
         self.description = description
         self.candidate_settings = candidate_settings
-        self.test_settings = benchmark_settings
+        self.benchmark_settings = benchmark_settings
 
 
 class Query:

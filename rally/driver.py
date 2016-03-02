@@ -24,7 +24,7 @@ class Driver:
 
     def setup(self, cluster, track, track_setup):
         # does not make sense to add any mappings if we don't benchmark indexing
-        if track_setup.test_settings.benchmark_indexing:
+        if track_setup.benchmark_settings.benchmark_indexing:
             mapping_path = self._config.opts("benchmarks", "mapping.path")
             mappings = open(mapping_path).read()
             logger.debug("create index w/ mappings")
@@ -37,16 +37,16 @@ class Driver:
 
     def go(self, cluster, track, track_setup):
         cluster.on_benchmark_start()
-        if track_setup.test_settings.benchmark_indexing:
+        if track_setup.benchmark_settings.benchmark_indexing:
             self._index_benchmark = IndexBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
             self._index_benchmark.run()
-        if track_setup.test_settings.benchmark_search:
+        if track_setup.benchmark_settings.benchmark_search:
             search_benchmark = SearchBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
             search_benchmark.run()
         cluster.on_benchmark_stop()
 
     def tear_down(self, track, track_setup):
-        if track_setup.test_settings.benchmark_indexing:
+        if track_setup.benchmark_settings.benchmark_indexing:
             # This is also just a hack for now (should be in track for first step and metrics for second one)
             data_paths = self._config.opts("provisioning", "local.data.paths", mandatory=False)
             if data_paths is not None:
@@ -136,15 +136,17 @@ class IndexBenchmark(TimedOperation):
         data_set_path = self._config.opts("benchmarks", "dataset.path")
 
         # We cannot know how many docs have been updated if we produce id conflicts
-        if self._track_setup.test_settings.id_conflicts == track.IndexIdConflict.NoConflicts:
+        if self._track_setup.benchmark_settings.id_conflicts == track.IndexIdConflict.NoConflicts:
             expected_doc_count = docs_to_index
         else:
             expected_doc_count = None
 
+        force_merge = self._track_setup.benchmark_settings.force_merge
+
         finished = False
 
         try:
-            self.index(data_set_path, expected_doc_count)
+            self.index(data_set_path, expected_doc_count, force_merge=force_merge)
             finished = True
         finally:
             self._progress.finish()
@@ -177,7 +179,7 @@ class IndexBenchmark(TimedOperation):
             raise RuntimeError("Unknown id conflict type %s" % conflicts)
 
     def get_expand_action(self):
-        conflicts = self._track_setup.test_settings.id_conflicts
+        conflicts = self._track_setup.benchmark_settings.id_conflicts
         if conflicts is not track.IndexIdConflict.NoConflicts:
             id_generator = self.generate_ids(conflicts)
         else:
@@ -197,7 +199,7 @@ class IndexBenchmark(TimedOperation):
         with open(documents, "rt") as f:
             yield from f
 
-    def index(self, documents, expected_doc_count, flush=True, stats=True):
+    def index(self, documents, expected_doc_count, flush=True, stats=True, force_merge=False):
         num_client_threads = int(self._config.opts("benchmarks", "index.client.threads"))
         logger.info("Indexing JSON docs file: [%s]" % documents)
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
@@ -233,6 +235,10 @@ class IndexBenchmark(TimedOperation):
             logger.info("Force flushing index [%s]." % index)
             es.indices.flush(index=index, params={"request_timeout": 600})
             logger.info("Force flush has finished successfully.")
+
+        if force_merge:
+            logger.info("Force merging index [%s]." % index)
+            es.indices.forcemerge(index=index)
 
         if stats:
             self._index_stats(expected_doc_count)
