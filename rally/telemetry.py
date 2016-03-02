@@ -144,8 +144,8 @@ class FlightRecorder(TelemetryDevice):
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
         print("%s: Writing flight recording to %s" % (self.human_name, log_file))
-        return {"ES_JAVA_OPTS": "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
-                                "-XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=%s" % log_file}
+        return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints -XX:+FlightRecorder "
+                                "-XX:FlightRecorderOptions=defaultrecording=true,disk=true,dumponexit=true,dumponexitpath=%s" % log_file}
 
 
 class JitCompiler(TelemetryDevice):
