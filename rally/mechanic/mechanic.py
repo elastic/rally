@@ -34,7 +34,8 @@ class Mechanic:
         return self._launcher.start(track, setup, self._metrics_store)
 
     def start_engine_external(self, track, setup):
-        return cluster.Cluster([], self._metrics_store)
+        # for now we just support a hardcoded default
+        return cluster.Cluster([{"host": "localhost", "port": "9200"}], [], self._metrics_store)
 
     def stop_engine(self, cluster):
         self._launcher.stop(cluster)
