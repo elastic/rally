@@ -78,13 +78,14 @@ class SearchBenchmark(TimedOperation):
         self._progress = progress.CmdLineProgressReporter()
         self._quiet_mode = self._config.opts("system", "quiet.mode")
 
-    # TODO dm: Ensure we properly warmup before running metrics (what about ES internal caches? Ensure we don't do bogus benchmarks!)
     def run(self):
         es = self._cluster.client
-        logger.info("Running search benchmark")
+        logger.info("Running search benchmark (warmup)")
         # Run a few (untimed) warmup iterations before the actual benchmark
-        self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)")
+        self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)", repetitions=20)
+        logger.info("Running search benchmark")
         times = self._run_benchmark(es, "  Benchmarking search (iteration %d/%d)")
+        logger.info("Search benchmark has finished")
 
         for q in self._track.queries:
             l = [x[q.name] for x in times]
