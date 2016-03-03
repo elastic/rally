@@ -23,6 +23,9 @@ class EsClient:
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
         return self._client.indices.create(index=index, ignore=400)
 
+    def exists(self, index):
+        return self._client.indices.exists(index=index)
+
     def refresh(self, index):
         return self._client.indices.refresh(index=index)
 
@@ -99,7 +102,8 @@ class EsMetricsStore:
         self._track_setup = track_setup_name
         self._index = "rally-%04d" % invocation.year
         self._docs = []
-        if create:
+        # reduce a bit of noise in the metrics cluster log
+        if create and not self._client.exists(index=self._index):
             self._client.put_template("rally", self._get_template())
             self._client.create_index(index=self._index)
         # ensure we can search immediately after opening
