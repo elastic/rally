@@ -1,3 +1,7 @@
+### 0.1.1
+
+[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.1.1+is%3Aclosed)
+
 ### 0.1.0
 
 Major changes:
