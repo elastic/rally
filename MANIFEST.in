@@ -1,8 +1,13 @@
-include MANIFEST.in
-include README.md
+include CHANGELOG.md
+include CONTRIBUTING.md
 include LICENSE
+include MANIFEST.in
+include README.rst
 include setup.py
+recursive-include docs *
 
 recursive-include rally/resources/ *
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
+
+prune docs/_build

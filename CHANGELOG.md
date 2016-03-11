@@ -22,7 +22,7 @@ Major changes:
 
 * Migrated the metrics data store from file-based to a dedicated Elasticsearch instance. Graphical reports can be created with 
   Kibana (optional but recommended). It is necessary to setup an Elasticsearch cluster to store metrics data (a single node 
-  is sufficient). The cluster will be configured automatically by Rally. For details please see the [README](README.md).
+  is sufficient). The cluster will be configured automatically by Rally. For details please see the [README](README.rst).
   
   Related issues: #8, #21, #46, 
   
