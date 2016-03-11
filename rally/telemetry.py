@@ -27,7 +27,7 @@ class Telemetry:
         print("Available telemetry devices:\n")
         for device in self._devices:
             print("* %s (%s): %s (Always enabled: %s)" % (device.command, device.human_name, device.help, device.mandatory))
-        print("\nKeep in mind that each telemetry devices may incur a runtime overhead which can skew results.")
+        print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
     def instrument_candidate_env(self, setup):
         opts = {}
