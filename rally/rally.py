@@ -123,7 +123,7 @@ def parse_args():
             "--effective-start-date",
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
-            default=datetime.datetime.now())
+            default=datetime.datetime.utcnow())
         # This is a highly experimental option and will likely be removed
         p.add_argument(
             "--data-paths",
