@@ -41,6 +41,7 @@ class MetricsTests(TestCase):
                                                     clock=StaticClock)
         # get hold of the mocked client...
         self.es_mock = self.metrics_store._client
+        self.es_mock.exists.return_value = False
 
     def test_put_value(self):
         throughput = 5000
@@ -58,6 +59,7 @@ class MetricsTests(TestCase):
             "unit": "docs/s"
         }
         self.metrics_store.close()
+        self.es_mock.exists.assert_called_with(index="rally-2016")
         self.es_mock.create_index.assert_called_with(index="rally-2016")
         self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
 
