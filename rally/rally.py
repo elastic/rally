@@ -98,8 +98,8 @@ def parse_args():
             "--revision",
             help="defines which sources to use when building the benchmark candidate. 'current' uses the source tree as is,"
                  " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
-                 " The timestamp must be specified as: \"@ts\" where ts is any valid timestamp understood by git, "
-                 "e.g. \"@2013-07-27 10:37\" (default: current).",
+                 " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
+                 "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
             "--track",
