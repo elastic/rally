@@ -78,10 +78,10 @@ class Launcher:
         self._config.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
         processor_count = setup.candidate_settings.processors
 
-        cmd = ["bin/elasticsearch", "-Des.node.name=%s" % node_name]
+        cmd = ["bin/elasticsearch", "-Ees.node.name=%s" % node_name]
         if processor_count is not None and processor_count > 1:
-            cmd.append("-Des.processors=%s" % processor_count)
-        cmd.append("-Dpath.logs=%s" % server_log_dir)
+            cmd.append("-Ees.processors=%s" % processor_count)
+        cmd.append("-Ees.path.logs=%s" % server_log_dir)
         logger.info("ES launch: %s" % str(cmd))
         return cmd
 
