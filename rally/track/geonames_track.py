@@ -18,11 +18,13 @@ class TermQuery(track.Query):
 
 
 class CountryAggQuery(track.Query):
-    def __init__(self):
-        track.Query.__init__(self, "country_agg")
+    def __init__(self, suffix="", use_request_cache=True):
+        track.Query.__init__(self, "country_agg" + suffix)
+        self.use_request_cache = use_request_cache
 
     def run(self, es):
-        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, body='''
+        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name,
+                         request_cache=self.use_request_cache, body='''
     {
       "size": 0,
       "aggs": {
@@ -81,6 +83,12 @@ geonamesTrackSpec = track.Track(
     # for defaults alone, it's just around 20 minutes, for all it's about 60
     estimated_benchmark_time_in_minutes=20,
     # Queries to use in the search benchmark
-    queries=[DefaultQuery(), TermQuery(), CountryAggQuery(), ScrollQuery()],
+    queries=[
+        DefaultQuery(),
+        TermQuery(),
+        CountryAggQuery(use_request_cache=False),
+        CountryAggQuery(suffix="_cached", use_request_cache=True),
+        ScrollQuery()
+    ],
     track_setups=track.track_setups
 )
