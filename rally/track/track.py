@@ -1,6 +1,7 @@
 import os
 import logging
 import urllib.request
+import urllib.error
 import shutil
 from enum import Enum
 
@@ -227,8 +228,17 @@ class Marshal:
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
 
         mapping_path = "%s/%s" % (data_set_root, track.mapping_file_name)
-        if not os.path.isfile(mapping_path):
+        #if not os.path.isfile(mapping_path):
+        # Try to always download the mapping file, there might be an updated version
+        try:
             self._download_mapping_data(track, data_set_root, mapping_path)
+        except urllib.error.URLError:
+            # Just retry with the old version if there is one
+            if os.path.isfile(mapping_path):
+                logger.info("Could not download mapping file (probably offline). Skipping...")
+            else:
+                raise
+
         self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
 
         readme_path = "%s/%s" % (data_set_root, track.readme_file_name)
@@ -285,7 +295,8 @@ class Marshal:
                 shutil.copyfileobj(response, out_file)
         except:
             logger.info("Removing temp file %s" % tmp_data_set_path)
-            os.remove(tmp_data_set_path)
+            if os.path.isfile(tmp_data_set_path):
+                os.remove(tmp_data_set_path)
             raise
         else:
             os.rename(tmp_data_set_path, data_set_path)
