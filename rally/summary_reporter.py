@@ -61,11 +61,11 @@ class SummaryReporter:
     def report_search_latency(self, store, track):
         self.print_header("Query Latency:")
         for q in track.queries:
-            query_latency = store.get("query_latency_%s" % q.name)
+            query_latency = store.get_percentiles("query_latency_%s" % q.name)
             if query_latency:
-                # TODO dm: Output percentiles, not the median...
-                formatted_median = "%.1f" % statistics.median(query_latency)
-                print("  Median query latency [%s]: %sms" % (q.name, formatted_median))
+                print("  Query latency [%s]:" % q.name)
+                for percentile, value in query_latency.items():
+                    print("    %s Percentile: %.2f ms" % (percentile, value))
             else:
                 print("Could not determine query latency for [%s]" % q)
 

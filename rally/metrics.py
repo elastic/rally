@@ -1,4 +1,5 @@
 import logging
+import collections
 import elasticsearch
 import elasticsearch.helpers
 import certifi
@@ -177,7 +178,8 @@ class EsMetricsStore:
             }
         }
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
-        return result["aggregations"]["percentile_stats"]["values"]
+        raw = result["aggregations"]["percentile_stats"]["values"]
+        return collections.OrderedDict(sorted(raw.items(), key=lambda t: float(t[0])))
 
     def _query_by_name(self, name):
         return {
