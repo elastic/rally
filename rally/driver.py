@@ -221,7 +221,10 @@ class IndexBenchmark(TimedOperation):
                                    chunk_size=self._bulk_size,
                                    expand_action_callback=self.get_expand_action(),
                                    ):
-                if not self._quiet_mode and processed % 10000 == 0:
+                if processed % 10000 == 0 and processed > 0:
+                    elapsed = self._stop_watch.split_time()
+                    docs_per_sec = (processed / elapsed)
+                    self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
                     self._print_progress(processed)
                 processed += 1
         except KeyboardInterrupt:
@@ -294,7 +297,7 @@ class IndexBenchmark(TimedOperation):
             docs_per_second = docs_processed / elapsed
             mb_per_second = convert.bytes_to_mb(sent) / elapsed
             self._progress.print(
-                "  Benchmarking indexing at %.1f docs/s, %.1f MB/sec" % (docs_per_second, mb_per_second),
+                "  Benchmarking indexing at %.1f docs/s, %.1f MB/s" % (docs_per_second, mb_per_second),
                 "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
             )
             logger.info("Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]" % (docs_processed, elapsed, docs_per_second, mb_per_second))

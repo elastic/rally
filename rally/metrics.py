@@ -116,7 +116,6 @@ class EsMetricsStore:
         self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
         self._docs = []
 
-
     # should be an int
     def put_count(self, name, count, unit=None):
         self._put(name, count, unit)
@@ -147,37 +146,68 @@ class EsMetricsStore:
 
     def get(self, name):
         query = {
-            "query": {
-                "bool": {
-                    "filter": [
-                        {
-                            "term": {
-                                "trial-timestamp": self._invocation
-                            }
-                        },
-                        {
-                            "term": {
-                                "environment": self._environment_name
-                            }
-                        },
-                        {
-                            "term": {
-                                "track": self._track
-                            }
-                        },
-                        {
-                            "term": {
-                                "track-setup": self._track_setup
-                            }
-                        },
-                        {
-                            "term": {
-                                "name": name
-                            }
-                        }
-                    ]
+            "query": self._query_by_name(name)
+        }
+        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        return [v["_source"]["value"] for v in result["hits"]["hits"]]
+
+    def get_stats(self, name):
+        query = {
+            "query": self._query_by_name(name),
+            "aggs": {
+                "metric_stats": {
+                    "stats": {
+                        "field": "value"
+                    }
                 }
             }
         }
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
-        return [v["_source"]["value"] for v in result["hits"]["hits"]]
+        return result["aggregations"]["metric_stats"]
+
+    def get_percentiles(self, name):
+        query = {
+            "query": self._query_by_name(name),
+            "aggs": {
+                "percentile_stats": {
+                    "percentiles": {
+                        "field": "value"
+                    }
+                }
+            }
+        }
+        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        return result["aggregations"]["percentile_stats"]["values"]
+
+    def _query_by_name(self, name):
+        return {
+            "bool": {
+                "filter": [
+                    {
+                        "term": {
+                            "trial-timestamp": self._invocation
+                        }
+                    },
+                    {
+                        "term": {
+                            "environment": self._environment_name
+                        }
+                    },
+                    {
+                        "term": {
+                            "track": self._track
+                        }
+                    },
+                    {
+                        "term": {
+                            "track-setup": self._track_setup
+                        }
+                    },
+                    {
+                        "term": {
+                            "name": name
+                        }
+                    }
+                ]
+            }
+        }
