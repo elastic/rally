@@ -36,7 +36,7 @@ dashboard is delivered with Rally in `rally/resources/kibana.json` which can be 
 
 1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
 2. Create an index pattern "rally-*" and use "trial-timestamp" as time-field name (you might need to import some data first)
-3. Go to Settings > Objects and import `rally/resources/kibana.json`
+3. Go to Settings > Objects and import `rally/resources/kibana.json`. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it with your environment name before uploading.
 
 Installing Rally
 ~~~~~~~~~~~~~~~~
