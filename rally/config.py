@@ -178,6 +178,9 @@ class Config:
         """
         if self.config_present():
             print("\nWARNING: Will overwrite existing config file at [%s]\n" % self._config_file())
+        else:
+            print("Rally has not detected any configuration file at %s. It will ask a few questions about the environment.\n\n" %
+                  self._config_file())
 
         print("The benchmark root directory contains benchmark data, logs, etc.")
         print("It will consume several GB of free space depending on which benchmarks are executed (expect at least 10 GB).")
@@ -186,8 +189,8 @@ class Config:
         default_src_dir = "%s/src" % benchmark_root_dir
         source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)",
                                         default_value=default_src_dir)
-        # Ask, because not everybody might have SSH access
-        repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="git@github.com:elastic/elasticsearch.git")
+        # Ask, because not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
+        repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="https://github.com/elastic/elasticsearch.git")
         default_gradle_location = io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
         gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value=default_gradle_location,
                                         check_path_exists=True)
@@ -250,8 +253,8 @@ class Config:
         print("\nConfiguration successfully written to '%s'. Please rerun esrally now." % self._config_file())
 
     def _ask_data_store(self):
-        data_store_host = self._ask_property("Enter the host name of the ES data store", default_value="localhost")
-        data_store_port = self._ask_property("Enter the port of the ES data store", check_pattern=Config.PORT_RANGE_PATTERN)
+        data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")
+        data_store_port = self._ask_property("Enter the port of the ES metrics store", check_pattern=Config.PORT_RANGE_PATTERN)
         data_store_secure = self._ask_property("Use secure connection (True, False)", default_value=False,
                                                check_pattern=Config.BOOLEAN_PATTERN)
         data_store_user = self._ask_property("Username for basic authentication (empty if not needed)", mandatory=False, default_value="")
