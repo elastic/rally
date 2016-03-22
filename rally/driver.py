@@ -29,7 +29,7 @@ class Driver:
             mappings = open(mapping_path).read()
             logger.debug("create index w/ mappings")
             logger.debug(mappings)
-            cluster.client.indices.create(index=track.index_name)
+            cluster.client.indices.create(index=track.index_name, body=track_setup.candidate_settings.index_settings)
             cluster.client.indices.put_mapping(index=track.index_name,
                                                doc_type=track.type_name,
                                                body=json.loads(mappings))

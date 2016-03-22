@@ -12,23 +12,21 @@ logger = logging.getLogger("rally.track")
 
 # Ensure cluster status green even for single nodes. Please don't add anything else here except to get the cluster to status
 # 'green' even with a single node.
-greenNodeSettings = '''
-index.number_of_replicas: 0
-'''
+greenNodeSettings = {
+    "index.number_of_replicas": 0
+}
 
-mergePartsSettings = '''
-index.number_of_replicas: 0
-index.merge.scheduler.auto_throttle: false
-'''
+mergePartsSettings = {
+    "index.number_of_replicas": 0,
+    "index.merge.scheduler.auto_throttle": False
+}
 
-benchmarkFastSettings = '''
-index.refresh_interval: 30s
-
-index.number_of_shards: 6
-index.number_of_replicas: 0
-
-index.translog.flush_threshold_size: 4g
-'''
+benchmarkFastSettings = {
+    "index.refresh_interval": "30s",
+    "index.number_of_shards": 6,
+    "index.number_of_replicas": 0,
+    "index.translog.flush_threshold_size": "4g"
+}
 
 mergePartsLogConfig = '''
 es.logger.level: INFO
@@ -137,12 +135,14 @@ class Track:
 
 
 class CandidateSettings:
-    def __init__(self, config_snippet=None, logging_config=None, nodes=1, processors=1, heap=None, java_opts=None, gc_opts=None):
+    def __init__(self, config_snippet=None, logging_config=None, index_settings=None, nodes=1, processors=1, heap=None,
+                 java_opts=None, gc_opts=None):
         """
         Creates new settings for a benchmark candidate.
 
         :param config_snippet: A string snippet that will be appended as is to elasticsearch.yml of the benchmark candidate.
         :param logging_config: A string representing the entire contents of logging.yml. If not set, the factory defaults will be used.
+        :param index_settings: A hash of index-level settings that will be set when the index is created.
         :param nodes: The number of nodes to start. Defaults to 1 node. All nodes are started on the same machine.
         :param processors: The number of processors to use (per node).
         :param heap: A string defining the maximum amount of Java heap to use. For allows values, see the documentation on -Xmx
@@ -150,8 +150,11 @@ class CandidateSettings:
         :param java_opts: Additional Java options to pass to each node on startup.
         :param gc_opts: Additional garbage collector options to pass to each node on startup.
         """
+        if index_settings is None:
+            index_settings = {}
         self.custom_config_snippet = config_snippet
         self.custom_logging_config = logging_config
+        self.index_settings = index_settings
         self.nodes = nodes
         self.processors = processors
         self.heap = heap
@@ -325,20 +328,20 @@ track_setups = [
     TrackSetup(
         name="defaults",
         description="append-only, using all default settings.",
-        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings),
+        candidate_settings=CandidateSettings(index_settings=greenNodeSettings),
         benchmark_settings=BenchmarkSettings(benchmark_search=True)
     ),
     TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings, heap="4g"),
+        candidate_settings=CandidateSettings(index_settings=greenNodeSettings, heap="4g"),
         benchmark_settings=BenchmarkSettings()
     ),
 
     TrackSetup(
         name="fastsettings",
         description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
-        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap="4g"),
+        candidate_settings=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
         benchmark_settings=BenchmarkSettings()
     ),
 
@@ -346,7 +349,7 @@ track_setups = [
         name="fastupdates",
         description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
                     "already exists in the index.",
-        candidate_settings=CandidateSettings(config_snippet=benchmarkFastSettings, heap="4g"),
+        candidate_settings=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
         benchmark_settings=BenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
     ),
 
@@ -354,7 +357,7 @@ track_setups = [
         name="two_nodes_defaults",
         description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
         # integer divide!
-        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings, nodes=2,
+        candidate_settings=CandidateSettings(index_settings=greenNodeSettings, nodes=2,
                                              processors=sysstats.number_of_cpu_cores() // 2),
         benchmark_settings=BenchmarkSettings()
     ),
@@ -363,7 +366,7 @@ track_setups = [
         name="defaults_verbose_iw",
         description="Based on defaults but specifically set up to gather merge part times.",
         # integer divide!
-        candidate_settings=CandidateSettings(config_snippet=greenNodeSettings,
+        candidate_settings=CandidateSettings(index_settings=greenNodeSettings,
                                              logging_config=mergePartsLogConfig),
         benchmark_settings=BenchmarkSettings()
     ),
