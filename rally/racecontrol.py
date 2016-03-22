@@ -190,7 +190,11 @@ class RaceControl:
         elif command == "race":
             pipeline = self._choose(pipelines, "pipeline")(ctx)
             t = self._choose(track.tracks, "track")
-            pipeline.run(t)
+            try:
+                pipeline.run(t)
+            except exceptions.SystemSetupError as e:
+                logging.exception("Cannot run benchmark")
+                print("\nERROR: Cannot run benchmark. Reason: %s" % e)
         else:
             raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
 

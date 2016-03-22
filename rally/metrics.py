@@ -4,7 +4,7 @@ import elasticsearch
 import elasticsearch.helpers
 import certifi
 
-from rally import time
+from rally import time, exceptions
 
 logger = logging.getLogger("rally.metrics")
 
@@ -18,26 +18,33 @@ class EsClient:
         self._client = client
 
     def put_template(self, name, template):
-        return self._client.indices.put_template(name, template)
+        return self.guarded(self._client.indices.put_template, name, template)
 
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
-        return self._client.indices.create(index=index, ignore=400)
+        return self.guarded(self._client.indices.create, index=index, ignore=400)
 
     def exists(self, index):
-        return self._client.indices.exists(index=index)
+        return self.guarded(self._client.indices.exists, index=index)
 
     def refresh(self, index):
-        return self._client.indices.refresh(index=index)
+        return self.guarded(self._client.indices.refresh, index=index)
 
     def create_document(self, index, doc_type, body):
-        return self._client.create(index=index, doc_type=doc_type, body=body)
+        return self.guarded(self._client.create, index=index, doc_type=doc_type, body=body)
 
     def bulk_index(self, index, doc_type, items):
-        elasticsearch.helpers.bulk(self._client, items, index=index, doc_type=doc_type)
+        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
     def search(self, index, doc_type, body):
-        return self._client.search(index=index, doc_type=doc_type, body=body)
+        return self.guarded(self._client.search, index=index, doc_type=doc_type, body=body)
+
+    def guarded(self, target, *args, **kwargs):
+        try:
+            return target(*args, **kwargs)
+        except elasticsearch.exceptions.ConnectionError:
+            msg = "Could not connect to metrics store %s. Please check that it is running and retry." % self._client.transport.hosts
+            raise exceptions.SystemSetupError(msg)
 
 
 class EsClientFactory:
