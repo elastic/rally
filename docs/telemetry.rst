@@ -28,11 +28,11 @@ Some of the devices are used internally and are always enabled. But some of the 
 jfr
 ---
 
-The `jfr` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>` 
+The `jfr` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_
 on the benchmark candidate. Java Flight Recorder ships only with the Oracle JDK, so Rally assumes that an Oracle JDK is used for benchmarking. 
 
 To enable `jfr`, invoke Rally with `esrally --telemetry jfr`. `jfr` will then write a flight recording file which can be opened in 
-`Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`.
+`Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_.
  
 .. image:: jfr-es.png
    :alt: Sample Java Flight Recording
@@ -42,6 +42,6 @@ jit
 
 The `jit` telemetry device enables JIT compiler logs for the benchmark candidate. If the HotSpot disassembler library is available, the logs
 will also contain the disassembled JIT compiler output which can be used for low-level analysis. We recommend to use
-`JITWatch <https://github.com/AdoptOpenJDK/jitwatch>` for analysis.
+`JITWatch <https://github.com/AdoptOpenJDK/jitwatch>`_ for analysis.
 
-The JITWatch wiki contains `build instructions for hsdis <https://github.com/AdoptOpenJDK/jitwatch/wiki/Building-hsdis>`.
+The JITWatch wiki contains `build instructions for hsdis <https://github.com/AdoptOpenJDK/jitwatch/wiki/Building-hsdis>`_.

@@ -13,8 +13,8 @@ Prerequisites
 * git
 * unzip (install via `apt-get install unzip` on  Debian based distributions or check your distribution's documentation)
 * Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can 
-  also use `Elastic Cloud <https://www.elastic.co/cloud>`.
-* Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`).
+  also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
+* Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
 
 Rally is only tested on Mac OS X and Linux.
 
@@ -24,14 +24,14 @@ Getting Started
 Preparation
 ~~~~~~~~~~~
 
-First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>` 2.2 or higher. A simple out-of-the-box installation with a
+First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 2.3 or higher. A simple out-of-the-box installation with a
 single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration #
 procedure of Rally will you ask for host and port of this cluster.
 
 **Note**: Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure 
 that this port range is not used by the metrics store.
 
-Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`. Kibana will not be auto-configured but a sample
+Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. Kibana will not be auto-configured but a sample
 dashboard is delivered with Rally in `rally/resources/kibana.json` which can be imported to Kibana:
 
 1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
@@ -56,7 +56,7 @@ If you don't want to use `sudo` when installing Rally, installation is still pos
  
 1. Specify the `--user` option when installing Rally (step 2 above), so the command to be issued is: `python3 setup.py develop --user`
 2. Check the output of the install script or lookup the
-`Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>` to find out where the
+`Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the
 script is located. On Linux, this is typically `~/.local/bin`.
 
 You can now either add `~/.local/bin` to your path or invoke Rally via `~/.local/bin/esrally` instead of just `esrally`.
@@ -79,7 +79,7 @@ Telemetry
 ~~~~~~~~~
 
 Rally can add telemetry during the race. For example, Rally supports 
-`Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html` to write flight recording files during
+`Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html`_ to write flight recording files during
 a benchmark. 
 
 To see the list of available telemetry devices, use `esrally list telemetry`. To enable telemetry devices, run Rally with 
@@ -100,7 +100,7 @@ it from sources. Rally lists the available pipelines with `esrally list pipeline
 How to Contribute
 -----------------
  
-See all details in the `contributor guidelines <CONTRIBUTING.md>`.
+See all details in the `contributor guidelines <CONTRIBUTING.md>`_.
  
 License
 -------

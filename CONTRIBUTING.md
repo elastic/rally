@@ -63,4 +63,4 @@ Then sit back and wait. There will probably be discussion about the pull request
 
 **Repository:** [https://github.com/elastic/rally](https://github.com/elastic/rally)
 
-Please follow the guidelines in the [README](README.md) on the required software and the setup for development.
+Please follow the guidelines in the [README](README.rst) on the required software and the setup for development.
