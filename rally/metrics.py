@@ -185,8 +185,11 @@ class EsMetricsStore:
             }
         }
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
-        raw = result["aggregations"]["percentile_stats"]["values"]
-        return collections.OrderedDict(sorted(raw.items(), key=lambda t: float(t[0])))
+        if result["hits"]["total"] > 0:
+            raw = result["aggregations"]["percentile_stats"]["values"]
+            return collections.OrderedDict(sorted(raw.items(), key=lambda t: float(t[0])))
+        else:
+            return None
 
     def _query_by_name(self, name):
         return {
