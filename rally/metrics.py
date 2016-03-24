@@ -173,13 +173,16 @@ class EsMetricsStore:
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         return result["aggregations"]["metric_stats"]
 
-    def get_percentiles(self, name):
+    def get_percentiles(self, name, percentiles=None):
+        if percentiles is None:
+            percentiles = [50, 95, 99, 99.9]
         query = {
             "query": self._query_by_name(name),
             "aggs": {
                 "percentile_stats": {
                     "percentiles": {
-                        "field": "value"
+                        "field": "value",
+                        "percents": percentiles
                     }
                 }
             }
