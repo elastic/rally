@@ -1,12 +1,10 @@
 import os
 import logging
-import urllib.request
 import urllib.error
-import shutil
 from enum import Enum
 
 from rally import config
-from rally.utils import io, sysstats, convert, process
+from rally.utils import io, sysstats, convert, process, net
 
 logger = logging.getLogger("rally.track")
 
@@ -231,7 +229,6 @@ class Marshal:
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
 
         mapping_path = "%s/%s" % (data_set_root, track.mapping_file_name)
-        #if not os.path.isfile(mapping_path):
         # Try to always download the mapping file, there might be an updated version
         try:
             self._download_mapping_data(track, data_set_root, mapping_path)
@@ -265,7 +262,7 @@ class Marshal:
         # ensure output appears immediately
         print("Downloading benchmark data from %s (%s MB) ... " % (url, size), end='', flush=True)
         if url.startswith("http"):
-            self._do_download_via_http(url, data_set_path)
+            net.download(url, data_set_path)
         elif url.startswith("s3"):
             self._do_download_via_s3(track, url, data_set_path)
         else:
@@ -278,7 +275,7 @@ class Marshal:
         url = "%s/%s" % (track.source_root_url, track.mapping_file_name)
         # for now, we just allow HTTP downloads for mappings (S3 support is probably remove anyway...)
         if url.startswith("http"):
-            self._do_download_via_http(url, mapping_path)
+            net.download(url, mapping_path)
         else:
             raise RuntimeError("Cannot download mappings. No protocol handler for [%s] available." % url)
 
@@ -287,22 +284,9 @@ class Marshal:
         logger.info("Readme for %s not available in '%s'" % (track.name, readme_path))
         url = "%s/%s" % (track.source_root_url, track.readme_file_name)
         if url.startswith("http"):
-            self._do_download_via_http(url, readme_path)
+            net.download(url, readme_path)
         else:
             raise RuntimeError("Cannot download Readme. No protocol handler for [%s] available." % url)
-
-    def _do_download_via_http(self, url, data_set_path):
-        tmp_data_set_path = data_set_path + ".tmp"
-        try:
-            with urllib.request.urlopen(url) as response, open(tmp_data_set_path, "wb") as out_file:
-                shutil.copyfileobj(response, out_file)
-        except:
-            logger.info("Removing temp file %s" % tmp_data_set_path)
-            if os.path.isfile(tmp_data_set_path):
-                os.remove(tmp_data_set_path)
-            raise
-        else:
-            os.rename(tmp_data_set_path, data_set_path)
 
     def _do_download_via_s3(self, track, url, data_set_path):
         tmp_data_set_path = data_set_path + ".tmp"

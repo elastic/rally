@@ -1,5 +1,6 @@
 import datetime
 import os
+import sys
 import logging
 import argparse
 import pkg_resources
@@ -8,6 +9,7 @@ from rally import config, paths, racecontrol
 from rally.utils import io
 
 __version__ = pkg_resources.require("esrally")[0].version
+
 
 # we want to use some basic logging even before the output to log file is configured
 def preconfigure_logging():
@@ -102,6 +104,11 @@ def parse_args():
                  "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
+            "--distribution-version",
+            help="defines the version of the Elasticsearch distribution to download. Check https://www.elastic.co/downloads/elasticsearch "
+                 "for released versions.",
+            default="")
+        p.add_argument(
             "--track",
             help="defines which track should be run. Only one is allowed at a time (default: geonames)",
             default="geonames")
@@ -188,6 +195,7 @@ def main():
     cfg.add(config.Scope.application, "system", "invocation.root.dir", paths.Paths(cfg).invocation_root())
     # Add command line config
     cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
+    cfg.add(config.Scope.applicationOverride, "source", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
@@ -202,7 +210,9 @@ def main():
     print_banner()
 
     race_control = racecontrol.RaceControl(cfg)
-    race_control.start(subcommand)
+    success = race_control.start(subcommand)
+    if not success:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

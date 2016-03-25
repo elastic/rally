@@ -6,15 +6,20 @@ Rally is the macrobenchmarking framework for Elasticsearch
 Prerequisites
 -------------
 
+Rally allows you benchmark either `official binary Elasticsearch distributions <https://www.elastic.co/downloads/elasticsearch>`_ (starting with version 5.0) or development versions built from sources.
+
 * Python 3.4+ available as `python3` on the path (verify with: `python3 --version` which should print `Python 3.4.0` (or higher))
 * `pip3` available on the path (verify with `pip3 --version`)
 * JDK 8+
-* Gradle 2.8+
-* git
 * unzip (install via `apt-get install unzip` on  Debian based distributions or check your distribution's documentation)
 * Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can 
   also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
 * Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
+
+If you want to benchmark Elasticsearch development versions you will also need:
+
+* Gradle 2.8+
+* git
 
 Rally is only tested on Mac OS X and Linux.
 
@@ -93,9 +98,9 @@ Pipelines allow Rally to execute different steps in preparation of a benchmark. 
 * `from-sources-complete`: This is the default pipeline that is run when nothing is specified. It checks out the Elasticsearch sources
  from git, builds a ZIP file and runs the benchmark.
 * `from-sources-skip-build`: This pipeline assumes that a ZIP file has already been built. It just takes it and runs the benchmark.
+* `from-distribution`: This pipeline downloads an official Elasticsearch ZIP distribution (starting with 5.0) and benchmarks it.
 
-Over time we will add more pipelines to Rally, for example to download an official Elasticsearch distribution instead of building 
-it from sources. Rally lists the available pipelines with `esrally list pipelines`.
+Rally lists the available pipelines with `esrally list pipelines`.
 
 How to Contribute
 -----------------

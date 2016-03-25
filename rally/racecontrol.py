@@ -1,8 +1,10 @@
 import logging
+import os
+import urllib.error
 
 from rally import config, driver, exceptions, paths, telemetry, sweeper, summary_reporter
 from rally.mechanic import mechanic
-from rally.utils import process
+from rally.utils import process, net, io
 # This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
 from rally.track import *
 
@@ -88,6 +90,15 @@ class Pipeline:
 #################################################
 
 
+def check_can_handle_source_distribution(ctx, track):
+    try:
+        ctx.config.opts("source", "local.src.dir")
+    except config.ConfigError:
+        logging.exception("Rally is not configured to build from sources")
+        raise exceptions.SystemSetupError("Rally is not setup to build from sources. You can either benchmark a binary distribution or "
+                                          "install the required software and reconfigure Rally with esrally --configure.")
+
+
 def kill(ctx, track):
     # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
     node_prefix = ctx.config.opts("provisioning", "node.name.prefix")
@@ -122,6 +133,34 @@ def benchmark_external(ctx, track, track_setup):
     ctx.driver.tear_down(track, track_setup)
     ctx.mechanic.stop_metrics()
 
+
+def download_benchmark_candidate(ctx, track):
+    version = ctx.config.opts("source", "distribution.version")
+    if version.strip() == "":
+        raise exceptions.SystemSetupError("Could not determine version. Please specify the command line the Elasticsearch "
+                                          "distribution to download with the command line parameter --distribution-version. "
+                                          "E.g. --distribution-version=5.0.0")
+
+    distributions_root = "%s/%s" % (ctx.config.opts("system", "root.dir"), ctx.config.opts("source", "distribution.dir"))
+    io.ensure_dir(distributions_root)
+    distribution_path = "%s/elasticsearch-%s.zip" % (distributions_root, version)
+
+    download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/zip/elasticsearch/%s/" \
+                   "elasticsearch-%s.zip" % (version, version)
+    if not os.path.isfile(distribution_path):
+        try:
+            print("Downloading Elasticsearch %s ..." % version)
+            net.download(download_url, distribution_path)
+        except urllib.error.HTTPError:
+            logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (version, download_url))
+            raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
+                                              "version [%s] is correct." % (download_url, version))
+    else:
+        logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (version, distribution_path))
+
+    ctx.config.add(config.Scope.invocation, "builder", "candidate.bin.path", distribution_path)
+
+
 # benchmarks with external candidates are really scary and we should warn users.
 bogus_results_warning = """
 ************************************************************************
@@ -144,27 +183,44 @@ the index size).
 
 pipelines = {
     "from-sources-complete":
-        lambda ctx: Pipeline("from-sources-complete", "Builds and provisions Elasticsearch, runs a benchmark and reports results",
+        lambda ctx: Pipeline("from-sources-complete", "Builds and provisions Elasticsearch, runs a benchmark and reports results.",
                          [
+                             PipelineStep("check-can-handle-sources", ctx, check_can_handle_source_distribution),
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
                              PipelineStep("build", ctx, lambda ctx, track: ctx.mechanic.prepare_candidate()),
+                             PipelineStep("find-candidate", ctx, lambda ctx, track: ctx.mechanic.find_candidate()),
                              TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
                              PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run()),
                              PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
                          ]
                          ),
     "from-sources-skip-build":
-        lambda ctx: Pipeline("from-sources-skip-build", "Provisions Elasticsearch (skips the build), runs a benchmark and reports results",
+        lambda ctx: Pipeline("from-sources-skip-build", "Provisions Elasticsearch (skips the build), runs a benchmark and reports results.",
                          [
+                             PipelineStep("check-can-handle-sources", ctx, check_can_handle_source_distribution),
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
+                             PipelineStep("find-candidate", ctx, lambda ctx, track: ctx.mechanic.find_candidate()),
                              TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
                              PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run()),
                              PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
                          ]
 
                          ),
+    "from-distribution":
+        lambda ctx: Pipeline("from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports "
+                                                  "results.",
+                             [
+                                 PipelineStep("kill-es", ctx, kill),
+                                 PipelineStep("download-candidate", ctx, download_benchmark_candidate),
+                                 PipelineStep("prepare-track", ctx, prepare_track),
+                                 TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
+                                 PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run()),
+                                 PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
+                             ]
+
+                             ),
     "benchmark-only":
         lambda ctx: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
                              [
@@ -184,6 +240,12 @@ class RaceControl:
         self._config = cfg
 
     def start(self, command):
+        """
+        Starts the provided command.
+
+        :param command: A command name.
+        :return: True on success, False otherwise
+        """
         ctx = RacingContext(self._config)
         if command == "list":
             self._list(ctx)
@@ -192,9 +254,11 @@ class RaceControl:
             t = self._choose(track.tracks, "track")
             try:
                 pipeline.run(t)
+                return True
             except exceptions.SystemSetupError as e:
                 logging.exception("Cannot run benchmark")
-                print("\nERROR: Cannot run benchmark. Reason: %s" % e)
+                print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
+                return False
         else:
             raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
 

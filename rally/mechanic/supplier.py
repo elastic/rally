@@ -12,23 +12,22 @@ class SupplyError(BaseException):
 
 class GitRepository:
     def __init__(self, cfg):
-        self._remote_url = cfg.opts("source", "remote.repo.url")
-        self._src_dir = cfg.opts("source", "local.src.dir")
+        self.cfg = cfg
 
     @property
     def src_dir(self):
-        return self._src_dir
+        return self.cfg.opts("source", "local.src.dir")
 
     @property
     def remote_url(self):
-        return self._remote_url
+        return self.cfg.opts("source", "remote.repo.url")
 
     def is_cloned(self):
-        return os.path.isdir("%s/.git" % self._src_dir)
+        return os.path.isdir("%s/.git" % self.src_dir)
 
     def clone(self):
-        src = self._src_dir
-        remote = self._remote_url
+        src = self.src_dir
+        remote = self.remote_url
         io.ensure_dir(src)
         print("Downloading sources from %s to %s." % (remote, src))
         # Don't swallow subprocess output, user might need to enter credentials...
@@ -39,23 +38,23 @@ class GitRepository:
         # Don't swallow output but silence git at least a bit... (--quiet)
         if process.run_subprocess(
             "sh -c 'cd {0}; git checkout --quiet {2} && git fetch --quiet {1} && git rebase --quiet {1}/{2}'"
-                .format(self._src_dir, remote, branch)):
+                .format(self.src_dir, remote, branch)):
             raise SupplyError("Could not fetch latest source tree")
 
     def pull_ts(self, ts):
         if process.run_subprocess(
                 "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" "
                 "--date=iso8601-strict origin/master`'" %
-                (self._src_dir, ts)):
+                (self.src_dir, ts)):
             raise SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
 
     def pull_revision(self, revision):
         if process.run_subprocess(
-                "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet %s'" % (self._src_dir, revision)):
+                "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet %s'" % (self.src_dir, revision)):
             raise SupplyError("Could not fetch source tree for revision %s" % revision)
 
     def head_revision(self):
-        return os.popen("sh -c 'cd %s; git rev-parse --short HEAD'" % self._src_dir).readline().split()[0]
+        return os.popen("sh -c 'cd %s; git rev-parse --short HEAD'" % self.src_dir).readline().split()[0]
 
 
 class Supplier:

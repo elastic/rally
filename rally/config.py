@@ -5,7 +5,7 @@ import logging
 import configparser
 from enum import Enum
 
-from rally.utils import io, sysstats
+from rally.utils import io
 
 logger = logging.getLogger("rally.config")
 
@@ -27,6 +27,43 @@ class Scope(Enum):
     invocation = 5
 
 
+class ConfigFile:
+    def __init__(self, config_name):
+        self.config_name = config_name
+
+    def present(self):
+        """
+        :return: true iff a config file already exists.
+        """
+        return os.path.isfile(self.location)
+
+    def load(self, interpolation=configparser.ExtendedInterpolation()):
+        config = configparser.ConfigParser(interpolation=interpolation)
+        config.read(self.location)
+        return config
+
+    def store(self, config):
+        io.ensure_dir(self._config_dir())
+        with open(self.location, "w") as configfile:
+            config.write(configfile)
+
+    def backup(self):
+        config_file = self.location
+        logger.info("Creating a backup of the current config file at [%s]." % config_file)
+        shutil.copyfile(config_file, "%s.bak" % config_file)
+
+    def _config_dir(self):
+        return "%s/.rally" % os.getenv("HOME")
+
+    @property
+    def location(self):
+        if self.config_name:
+            config_name_suffix = "-%s" % self.config_name
+        else:
+            config_name_suffix = ""
+        return "%s/rally%s.ini" % (self._config_dir(), config_name_suffix)
+
+
 class Config:
     CURRENT_CONFIG_VERSION = 2
 
@@ -34,18 +71,19 @@ class Config:
 
     PORT_RANGE_PATTERN = re.compile("^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$")
 
-    BOOLEAN_PATTERN = re.compile("^(True|true|yes|t|y|False|false|f|no|n)$")
+    BOOLEAN_PATTERN = re.compile("^(True|true|Yes|yes|t|y|False|false|f|No|no|n)$")
 
     def _to_bool(self, value):
-        return value in ["True", "true", "yes", "t", "y"]
+        return value in ["True", "true", "Yes", "yes", "t", "y"]
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
-    different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are transparently
-    resolved when a property is retrieved and the value on the most specific level is returned.
+    different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are
+    transparently resolved when a property is retrieved and the value on the most specific level is returned.
     """
 
-    def __init__(self):
+    def __init__(self, config_name=None):
+        self._config_file = ConfigFile(config_name)
         self._opts = {}
         self._clear_config()
 
@@ -84,28 +122,23 @@ class Config:
         """
         :return: true iff a config file already exists.
         """
-        return os.path.isfile(self._config_file())
+        return self._config_file.present()
 
     def load_config(self):
         """
         Loads an existing config file.
         """
-        config = self._load_config_file()
+        config = self._config_file.load()
         # It's possible that we just reload the configuration
         self._clear_config()
         self._fill_from_config_file(config)
 
-    def _load_config_file(self, interpolation=configparser.ExtendedInterpolation()):
-        config = configparser.ConfigParser(interpolation=interpolation)
-        config.read(self._config_file())
-        return config
-
     def _clear_config(self):
-        # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change them either
+        # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change
+        # them either
         self._opts = {
+            "source::distribution.dir": "distributions",
             "build::gradle.tasks.clean": "clean",
-            #"build::gradle.tasks.package": "check -Dtests.seed=0 -Dtests.jvms=%s" % sysstats.number_of_cpu_cores(),
-            # We just build the ZIP distribution directly for now (instead of the 'check' target)
             "build::gradle.tasks.package": "assemble",
             "build::log.dir": "build",
             "benchmarks::metrics.log.dir": "telemetry",
@@ -132,10 +165,8 @@ class Config:
                               % (self.CURRENT_CONFIG_VERSION, current_version))
         logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, self.CURRENT_CONFIG_VERSION))
         # but first a backup...
-        config_file = self._config_file()
-        logger.info("Creating a backup of the current config file at [%s]." % config_file)
-        shutil.copyfile(config_file, "%s.bak" % config_file)
-        config = self._load_config_file(interpolation=None)
+        self._config_file.backup()
+        config = self._config_file.load(interpolation=None)
 
         if current_version == 0:
             logger.info("Migrating config from version [0] to [1]")
@@ -162,7 +193,7 @@ class Config:
             config["system"]["env.name"] = env_name
 
             # all migrations done
-        self._write_to_config_file(config)
+        self._config_file.store(config)
         logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
 
     def _stored_config_version(self):
@@ -174,32 +205,40 @@ class Config:
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
 
-        :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a developer machine). Default: False.
+        :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         """
         if self.config_present():
-            print("\nWARNING: Will overwrite existing config file at [%s]\n" % self._config_file())
+            print("\nWARNING: Will overwrite existing config file at [%s]\n" % self._config_file.location)
         else:
             print("Rally has not detected any configuration file at %s. It will ask a few questions about the environment.\n\n" %
-                  self._config_file())
+                  self._config_file.location)
 
-        print("The benchmark root directory contains benchmark data, logs, etc.")
-        print("It will consume several GB of free space depending on which benchmarks are executed (expect at least 10 GB).")
+        print("The benchmark root directory contains benchmark data, logs, etc. . It will consume several GB of free space depending on "
+              "which benchmarks are executed (expect at least 10 GB).")
         benchmark_root_dir = self._ask_property("Enter the benchmark root directory (will be created automatically)")
         env_name = self._ask_env_name()
-        default_src_dir = "%s/src" % benchmark_root_dir
-        source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)",
-                                        default_value=default_src_dir)
-        # Ask, because not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
-        repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="https://github.com/elastic/elasticsearch.git")
-        default_gradle_location = io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
-        gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value=default_gradle_location,
-                                        check_path_exists=True)
-        if advanced_config:
-            default_mvn_location = io.guess_install_location("mvn", fallback="/usr/local/bin/mvn")
-            maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value=default_mvn_location,
-                                           check_path_exists=True)
-        else:
-            maven_bin = ""
+
+        only_binary = self._ask_property("Do you want to benchmark only official binary distributions of Elasticsearch? Note: If you "
+                                         "answer with 'Yes' you will not need certain software (like Gradle or git) but you will not "
+                                         "be able to benchmark the latest development versions from Elasticsearch unless you reconfigure "
+                                         "Rally with esrally --configure again.",
+                                         check_pattern=Config.BOOLEAN_PATTERN, default_value="No")
+
+        if not (self._to_bool(only_binary)):
+            default_src_dir = "%s/src" % benchmark_root_dir
+            source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)",
+                                            default_value=default_src_dir)
+            # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
+            repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="https://github.com/elastic/elasticsearch.git")
+            default_gradle_location = io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
+            gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value=default_gradle_location,
+                                            check_path_exists=True)
+            if advanced_config:
+                default_mvn_location = io.guess_install_location("mvn", fallback="/usr/local/bin/mvn")
+                maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value=default_mvn_location,
+                                               check_path_exists=True)
+            else:
+                maven_bin = ""
         default_jdk_8 = io.guess_java_home(major_version=8, fallback="")
         jdk8_home = self._ask_property(
             "Enter the JDK 8 root directory (e.g. something like /Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home on a Mac)",
@@ -221,13 +260,14 @@ class Config:
         config["system"]["log.root.dir"] = "logs"
         config["system"]["env.name"] = env_name
 
-        config["source"] = {}
-        config["source"]["local.src.dir"] = source_dir
-        config["source"]["remote.repo.url"] = repo_url
+        if not only_binary:
+            config["source"] = {}
+            config["source"]["local.src.dir"] = source_dir
+            config["source"]["remote.repo.url"] = repo_url
 
-        config["build"] = {}
-        config["build"]["gradle.bin"] = gradle_bin
-        config["build"]["maven.bin"] = maven_bin
+            config["build"] = {}
+            config["build"]["gradle.bin"] = gradle_bin
+            config["build"]["maven.bin"] = maven_bin
 
         config["provisioning"] = {}
         config["provisioning"]["local.install.dir"] = "install"
@@ -248,9 +288,9 @@ class Config:
         config["reporting"]["datastore.user"] = data_store_user
         config["reporting"]["datastore.password"] = data_store_password
 
-        self._write_to_config_file(config)
+        self._config_file.store(config)
 
-        print("\nConfiguration successfully written to '%s'. Please rerun esrally now." % self._config_file())
+        print("\nConfiguration successfully written to '%s'. Please rerun esrally now." % self._config_file.location)
 
     def _ask_data_store(self):
         data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")
@@ -289,19 +329,9 @@ class Config:
             if check_pattern is not None and not check_pattern.match(str(value)):
                 print("Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
                 continue
+            print("")
             # user entered a valid value
             return value
-
-    def _write_to_config_file(self, config):
-        io.ensure_dir(self._config_dir())
-        with open(self._config_file(), "w") as configfile:
-            config.write(configfile)
-
-    def _config_dir(self):
-        return "%s/.rally" % os.getenv("HOME")
-
-    def _config_file(self):
-        return "%s/rally.ini" % self._config_dir()
 
     # recursively find the most narrow scope for a key
     def _resolve_scope(self, section, key, start_from=Scope.invocation):
