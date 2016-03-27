@@ -137,6 +137,13 @@ def parse_args():
             help=argparse.SUPPRESS,
             default=None)
 
+    for p in [parser, config_parser, race_parser]:
+        # This option is needed to support a separate configuration for the integration tests on the same machine
+        p.add_argument(
+            "--configuration-name",
+            help=argparse.SUPPRESS,
+            default=None)
+
     return parser.parse_args()
 
 
@@ -171,7 +178,7 @@ def csv_to_list(csv):
 def main():
     preconfigure_logging()
     args = parse_args()
-    cfg = config.Config()
+    cfg = config.Config(config_name=args.configuration_name)
     subcommand = derive_subcommand(args, cfg)
 
     if subcommand == "configure":
