@@ -40,18 +40,18 @@ class Launcher:
 
         t = telemetry.Telemetry(self._config, metrics_store)
 
-        env = self._prepare_env(setup, t)
+        env = self._prepare_env(setup, node_name, t)
         cmd = self.prepare_cmd(setup, node_name)
         process = self._start_process(cmd, env, node_name)
         t.attach_to_process(process)
 
         return cluster.Server(process, t)
 
-    def _prepare_env(self, setup, t):
+    def _prepare_env(self, setup, node_name, t):
         env = {}
         env.update(os.environ)
         # we just blindly trust telemetry here...
-        for k, v in t.instrument_candidate_env(setup).items():
+        for k, v in t.instrument_candidate_env(setup, node_name).items():
             self._set_env(env, k, v)
 
         self._set_env(env, "ES_HEAP_SIZE", setup.candidate_settings.heap)

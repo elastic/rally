@@ -19,7 +19,7 @@ class MockTelemetryDevice(telemetry.TelemetryDevice):
     def command(self):
         return "mock"
 
-    def instrument_env(self, setup):
+    def instrument_env(self, setup, candidate_id):
         return self.mock_env
 
 
@@ -42,7 +42,7 @@ class TelemetryTests(TestCase):
         t = telemetry.Telemetry(cfg, metrics_store, devices)
 
         track_setup = track.TrackSetup(name="test-track", description="Test Track")
-        opts = t.instrument_candidate_env(track_setup)
+        opts = t.instrument_candidate_env(track_setup, "default-node")
 
         self.assertTrue(opts)
         self.assertEqual(len(opts), 2)

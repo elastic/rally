@@ -29,11 +29,11 @@ class Telemetry:
             print("* %s (%s): %s (Always enabled: %s)" % (device.command, device.human_name, device.help, device.mandatory))
         print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
-    def instrument_candidate_env(self, setup):
+    def instrument_candidate_env(self, setup, candidate_id):
         opts = {}
         for device in self._devices:
             if self._enabled(device):
-                additional_opts = device.instrument_env(setup)
+                additional_opts = device.instrument_env(setup, candidate_id)
                 # properly merge values with the same key
                 for k, v in additional_opts.items():
                     if k in opts:
@@ -101,7 +101,7 @@ class TelemetryDevice:
     def help(self):
         return ""
 
-    def instrument_env(self, setup):
+    def instrument_env(self, setup, candidate_id):
         return {}
 
     def attach_to_process(self, process):
@@ -137,10 +137,10 @@ class FlightRecorder(TelemetryDevice):
     def help(self):
         return "Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)"
 
-    def instrument_env(self, setup):
+    def instrument_env(self, setup, candidate_id):
         log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
-        log_file = "%s/%s.jfr" % (log_root, setup.name)
+        log_file = "%s/%s-%s.jfr" % (log_root, setup.name, candidate_id)
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
         print("%s: Writing flight recording to %s" % (self.human_name, log_file))
@@ -168,10 +168,10 @@ class JitCompiler(TelemetryDevice):
     def help(self):
         return "Enables JIT compiler logs."
 
-    def instrument_env(self, setup):
+    def instrument_env(self, setup, candidate_id):
         log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
-        log_file = "%s/%s.jit.log" % (log_root, setup.name)
+        log_file = "%s/%s-%s.jit.log" % (log_root, setup.name, candidate_id)
 
         logger.info("%s: Writing JIT compiler logs to [%s]." % (self.human_name, log_file))
         print("%s: Writing JIT compiler log to %s" % (self.human_name, log_file))
@@ -280,10 +280,12 @@ class GatherProcessStats(threading.Thread):
 
         self.metrics_store.put_count("disk_io_write_bytes", disk_end.write_bytes - self.disk_start.write_bytes, "byte")
         self.metrics_store.put_count("disk_io_write_count", disk_end.write_count - self.disk_start.write_count)
+        # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
         self.metrics_store.put_value("disk_io_write_time", disk_end.write_time - self.disk_start.write_time, "ms")
 
         self.metrics_store.put_count("disk_io_read_bytes", disk_end.read_bytes - self.disk_start.read_bytes, "byte")
         self.metrics_store.put_count("disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
+        # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
         self.metrics_store.put_value("disk_io_read_time", disk_end.read_time - self.disk_start.read_time, "ms")
 
     def _disk_io_counters(self):
