@@ -1,5 +1,4 @@
 import logging
-import statistics
 
 from rally import metrics
 from rally.utils import convert
@@ -8,6 +7,8 @@ logger = logging.getLogger("rally.reporting")
 
 
 class SummaryReporter:
+    MEDIAN = "50.0"
+
     def __init__(self, config):
         self._config = config
 
@@ -56,7 +57,8 @@ class SummaryReporter:
         self.print_header("Indexing Results (Throughput):")
         throughput_pct = store.get_percentiles("indexing_throughput")
         throughput_stats = store.get_stats("indexing_throughput")
-        print("  median %d docs/s (min: %d, max: %d)" % (round(throughput_pct["50.0"]), throughput_stats["min"], throughput_stats["max"]))
+        print("  median %d docs/s (min: %d, max: %d)" %
+              (round(throughput_pct[SummaryReporter.MEDIAN]), throughput_stats["min"], throughput_stats["max"]))
 
     def report_search_latency(self, store, track):
         self.print_header("Query Latency:")
@@ -98,12 +100,10 @@ class SummaryReporter:
         else:
             print("  %s%s: No metric data" % (human_name, spaces))
 
-
     def report_cpu_usage(self, store):
-        percentages = store.get("cpu_utilization_1s")
+        percentages = store.get_percentiles("cpu_utilization_1s")
         if percentages:
-            # TODO dm: Output percentiles, not the median...
-            formatted_median = "%.1f" % statistics.median(percentages)
+            formatted_median = "%.1f" % percentages[SummaryReporter.MEDIAN]
             print("  Median indexing CPU utilization: %s%%" % formatted_median)
         else:
             print("Could not determine CPU usage")
