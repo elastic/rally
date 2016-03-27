@@ -65,7 +65,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 2
+    CURRENT_CONFIG_VERSION = 3
 
     ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
 
@@ -191,6 +191,14 @@ class Config:
             config["reporting"]["datastore.password"] = data_store_password
             env_name = self._ask_env_name()
             config["system"]["env.name"] = env_name
+        if current_version == 2:
+            logger.info("Migrating config from version [2] to [3]")
+            current_version = 3
+            config["meta"]["config.version"] = str(current_version)
+            # Remove obsolete settings
+            config["reporting"].pop("report.base.dir")
+            config["reporting"].pop("output.html.report.filename")
+
 
             # all migrations done
         self._config_file.store(config)
@@ -280,8 +288,6 @@ class Config:
         config["benchmarks"]["metrics.stats.disk.device"] = stats_disk_device
 
         config["reporting"] = {}
-        config["reporting"]["report.base.dir"] = "reports"
-        config["reporting"]["output.html.report.filename"] = "index.html"
         config["reporting"]["datastore.host"] = data_store_host
         config["reporting"]["datastore.port"] = data_store_port
         config["reporting"]["datastore.secure"] = data_store_secure
