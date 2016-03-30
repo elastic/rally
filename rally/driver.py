@@ -82,9 +82,9 @@ class SearchBenchmark(TimedOperation):
         es = self._cluster.client
         logger.info("Running search benchmark (warmup)")
         # Run a few (untimed) warmup iterations before the actual benchmark
-        self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)", repetitions=20)
+        self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)", repetitions=1000)
         logger.info("Running search benchmark")
-        times = self._run_benchmark(es, "  Benchmarking search (iteration %d/%d)")
+        times = self._run_benchmark(es, "  Benchmarking search (iteration %d/%d)", repetitions=1000)
         logger.info("Search benchmark has finished")
 
         for q in self._track.queries:
@@ -96,11 +96,11 @@ class SearchBenchmark(TimedOperation):
     def _run_benchmark(self, es, message, repetitions=10):
         times = []
         quiet = self._quiet_mode
-        for i in range(repetitions):
-            if not quiet:
+        for iteration in range(1, repetitions + 1):
+            if not quiet and iteration % 50 == 0:
                 self._progress.print(
-                    message % ((i + 1), repetitions),
-                    "[%3d%% done]" % (round(100 * (i + 1) / repetitions))
+                    message % (iteration, repetitions),
+                    "[%3d%% done]" % (round(100 * iteration / repetitions))
                 )
             times.append(self._run_one_round(es))
         self._progress.finish()
@@ -109,9 +109,9 @@ class SearchBenchmark(TimedOperation):
     def _run_one_round(self, es):
         d = {}
         for query in self._track.queries:
-            # repeat multiple times within one run to guard against timer resolution problems
-            duration, result = self.timed(query.run, 10, es)
+            duration, result = self.timed(query.run, 1, es)
             d[query.name] = duration / query.normalization_factor
+            query.close(es)
         return d
 
 

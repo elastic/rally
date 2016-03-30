@@ -205,7 +205,20 @@ class Query:
         self.normalization_factor = normalization_factor
 
     def run(self, es):
+        """
+        Runs a query.
+
+        :param es: Elasticsearch client object
+        """
         raise NotImplementedError("abstract method")
+
+    def close(self, es):
+        """
+        Subclasses can override this method for any custom cleanup logic
+
+        :param es: Elasticsearch client object
+        """
+        pass
 
     def __str__(self):
         return self.name

@@ -65,14 +65,16 @@ class ScrollQuery(track.Query):
 
     def __init__(self):
         track.Query.__init__(self, "scroll", normalization_factor=self.PAGES)
+        self.scroll_id = None
 
     def run(self, es):
         r = es.search(
             index=tinyTrackSpec.index_name,
             doc_type=tinyTrackSpec.type_name,
-            sort='_doc',
-            scroll='10m',
+            sort="_doc",
+            scroll="10s",
             size=self.ITEMS_PER_PAGE)
+        self.scroll_id = r["_scroll_id"]
         # Note that starting with ES 2.0, the initial call to search() returns already the first result page
         # so we have to retrieve one page less
         for i in range(self.PAGES - 1):
@@ -80,7 +82,12 @@ class ScrollQuery(track.Query):
             if hit_count == 0:
                 # done
                 break
-            r = es.scroll(scroll_id=r["_scroll_id"], scroll="10m")
+            r = es.scroll(scroll_id=self.scroll_id, scroll="10s")
+
+    def close(self, es):
+        if self.scroll_id:
+            es.clear_scroll(scroll_id=self.scroll_id)
+            self.scroll_id = None
 
 
 tinyTrackSpec = track.Track(
