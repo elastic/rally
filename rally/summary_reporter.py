@@ -55,7 +55,7 @@ class SummaryReporter:
 
     def report_index_throughput(self, store):
         self.print_header("Indexing Results (Throughput):")
-        throughput_pct = store.get_percentiles("indexing_throughput")
+        throughput_pct = store.get_percentiles("indexing_throughput", percentiles=[SummaryReporter.MEDIAN])
         throughput_stats = store.get_stats("indexing_throughput")
         print("  median %d docs/s (min: %d, max: %d)" %
               (round(throughput_pct[SummaryReporter.MEDIAN]), throughput_stats["min"], throughput_stats["max"]))
@@ -101,7 +101,7 @@ class SummaryReporter:
             print("  %s%s: No metric data" % (human_name, spaces))
 
     def report_cpu_usage(self, store):
-        percentages = store.get_percentiles("cpu_utilization_1s")
+        percentages = store.get_percentiles("cpu_utilization_1s", percentiles=[SummaryReporter.MEDIAN])
         if percentages:
             formatted_median = "%.1f" % percentages[SummaryReporter.MEDIAN]
             print("  Median indexing CPU utilization: %s%%" % formatted_median)

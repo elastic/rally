@@ -175,7 +175,7 @@ class EsMetricsStore:
 
     def get_percentiles(self, name, percentiles=None):
         if percentiles is None:
-            percentiles = [50, 95, 99, 99.9]
+            percentiles = [99, 99.9, 100]
         query = {
             "query": self._query_by_name(name),
             "aggs": {
