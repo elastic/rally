@@ -17,6 +17,21 @@ class TermQuery(track.Query):
         return es.search(index=tinyTrackSpec.index_name, doc_type=tinyTrackSpec.type_name, q="country_code:AT")
 
 
+class PhraseQuery(track.Query):
+    def __init__(self):
+        track.Query.__init__(self, "phrase")
+
+    def run(self, es):
+        return es.search(index=tinyTrackSpec.index_name, doc_type=tinyTrackSpec.type_name, body='''
+{
+    "query": {
+        "match_phrase": {
+            "name": "Sankt Georgen"
+        }
+    }
+}''')
+
+
 class CountryAggQuery(track.Query):
     def __init__(self, suffix="", use_request_cache=True):
         track.Query.__init__(self, "country_agg" + suffix)
@@ -85,6 +100,7 @@ tinyTrackSpec = track.Track(
     queries=[
         DefaultQuery(),
         TermQuery(),
+        PhraseQuery(),
         CountryAggQuery(use_request_cache=False),
         CountryAggQuery(suffix="_cached", use_request_cache=True),
         ScrollQuery()
