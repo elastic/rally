@@ -46,7 +46,7 @@ dashboard is delivered with Rally in ``rally/resources/kibana.json`` which can b
 Installing Rally
 ~~~~~~~~~~~~~~~~
 
-1. Clone this repo: ``git clone git@github.com:elastic/rally.git``
+1. Clone this repo: ``git clone git@github.com:elastic/rally.git``.
 2. Install Rally and its dependencies: ``python3 setup.py develop``. Depending on your local setup and file system permission it might be
 necessary to use ``sudo`` in this step. ``sudo``ing is required as this script will install a few Python libraries which Rally needs to run.
 Additionally, the setup procedure will set symlinks to the script ``esrally`` so it can be invoked easily. If you don't want do that, see
@@ -59,7 +59,7 @@ Non-sudo Install
 
 If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
  
-1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``
+1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
 2. Check the output of the install script or lookup the
 `Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the
 script is located. On Linux, this is typically ``~/.local/bin``.
@@ -73,8 +73,7 @@ Rally has a list of supported command line options. Just run `esrally --help`.
 
 Here are some examples:
 
-* ``esrally``: Runs the benchmarks and reports the results on the command line. This is what you typically want to do in development. It
-assumes lots of defaults; its canonical form is ``esrally race --pipeline=from-sources-complete --revision=current --track=geonames --track-setup=defaults``.
+* ``esrally``: Runs the benchmarks and reports the results on the command line. This is what you typically want to do in development. It assumes lots of defaults; its canonical form is ``esrally race --pipeline=from-sources-complete --revision=current --track=geonames --track-setup=defaults``.
 * ``esrally --pipeline from-sources-skip-build``: Assumes that an Elasticsearch ZIP file has already been build and just runs the benchmark.
 * ``esrally --revision ebe3fd2``: Checks out the revision ``ebe3fd2`` from git, builds it and runs benchmarks against it. Note that will only
 work if the build is based on Gradle (i.e. Elasticsearch 3.0+)
