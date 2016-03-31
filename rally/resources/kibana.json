@@ -6,13 +6,41 @@
       "title": "Nightly Benchmark Overview",
       "hits": 0,
       "description": "",
-      "panelsJSON": "[{\"id\":\"Indexing-Performance\",\"type\":\"visualization\",\"panelIndex\":1,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":1},{\"id\":\"Total-times\",\"type\":\"visualization\",\"panelIndex\":2,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":6},{\"id\":\"Segment-total-heap-used\",\"type\":\"visualization\",\"panelIndex\":3,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":11},{\"id\":\"Indexing-CPU-utilization\",\"type\":\"visualization\",\"panelIndex\":4,\"size_x\":12,\"size_y\":4,\"col\":1,\"row\":16},{\"id\":\"Index-disk-usage\",\"type\":\"visualization\",\"panelIndex\":5,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":20},{\"id\":\"Index-segment-counts\",\"type\":\"visualization\",\"panelIndex\":6,\"size_x\":12,\"size_y\":5,\"col\":1,\"row\":25},{\"id\":\"Median-Query-Latency\",\"type\":\"visualization\",\"panelIndex\":7,\"size_x\":12,\"size_y\":4,\"col\":1,\"row\":30},{\"id\":\"Stats-request-time\",\"type\":\"visualization\",\"panelIndex\":8,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":34},{\"id\":\"GC-Times\",\"type\":\"visualization\",\"panelIndex\":9,\"size_x\":12,\"size_y\":6,\"col\":1,\"row\":40}]",
+      "panelsJSON": "[{\"col\":1,\"id\":\"Indexing-Performance\",\"panelIndex\":1,\"row\":6,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Total-times\",\"panelIndex\":2,\"row\":11,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Segment-total-heap-used\",\"panelIndex\":3,\"row\":16,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Indexing-CPU-utilization\",\"panelIndex\":4,\"row\":21,\"size_x\":12,\"size_y\":4,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Index-disk-usage\",\"panelIndex\":5,\"row\":25,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Index-segment-counts\",\"panelIndex\":6,\"row\":30,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Median-Query-Latency\",\"panelIndex\":7,\"row\":35,\"size_x\":12,\"size_y\":4,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Stats-request-time\",\"panelIndex\":8,\"row\":39,\"size_x\":12,\"size_y\":6,\"type\":\"visualization\"},{\"col\":1,\"id\":\"GC-Times\",\"panelIndex\":9,\"row\":45,\"size_x\":12,\"size_y\":6,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Geonames-Benchmark-Description\",\"panelIndex\":10,\"row\":1,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"}]",
       "optionsJSON": "{\"darkTheme\":false}",
-      "uiStateJSON": "{\"P-1\":{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}},\"P-4\":{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}}}",
+      "uiStateJSON": "{\"P-1\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}},\"P-4\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}}}",
       "version": 1,
       "timeRestore": false,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}}}]}"
+        "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"*\"}}}]}"
+      }
+    }
+  },
+  {
+    "_id": "Geonames-Benchmark-Description",
+    "_type": "visualization",
+    "_source": {
+      "title": "Geonames Benchmark Description",
+      "visState": "{\"type\":\"markdown\",\"params\":{\"markdown\":\"### Benchmark Scenarios\\n\\nBelow are the results of the Elasticsearch nightly benchmarks based on the master branch as of that point in time. The Apache Software Foundation also provides a similar page for the [Lucene nightly benchmarks](https://people.apache.org/~mikemccand/lucenebench/).\\n\\nThe benchmark indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against a single or two nodes running on a dual Xeon X2699 (36 real cores, 72 with hyperthreading), 256 GB RAM and Intel 750 PCIe/NVMe SSD.\\n\\nThere are multiple setups:\\n\\n* \\\"Defaults\\\" is append-only, using all default settings.\\n* \\\"Defaults, 2 nodes\\\" is append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).\\n* \\\"Defaults (4G heap)\\\" is the same as \\\"Defaults\\\" except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.\\n* \\\"Fast\\\" is append-only, using 4 GB heap, and the settings below\\n* \\\"FastUpdate\\\" is the same as \\\"Fast\\\", except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID already exists in the index.\\n\\nThe settings for \\\"Fast\\\" and \\\"FastUpdate\\\" are:\\n\\n```\\nindex.refresh_interval: 30s\\n\\nindex.number_of_shards: 6\\nindex.number_of_replicas: 0\\n\\nindex.translog.flush_threshold_size: 4g\\n```\"},\"aggs\":[],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Indexing-Performance",
+    "_type": "visualization",
+    "_source": {
+      "title": "Indexing Performance",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:4gheap\",\"analyze_wildcard\":false}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:ec2 AND track-setup:4gheap\",\"analyze_wildcard\":false}}},\"label\":\"EC2 i2.2xlarge Defaults 4G\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"fill\":false,\"name\":\"request\"}}}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND name:indexing_throughput\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
@@ -26,21 +54,7 @@
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
-    "_id": "Median-Query-Latency",
-    "_type": "visualization",
-    "_source": {
-      "title": "Median Query Latency",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_defaults OR name:query_latency_default\",\"analyze_wildcard\":true}}},\"label\":\"Default\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_term\",\"analyze_wildcard\":true}}},\"label\":\"Term\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_hourly\",\"analyze_wildcard\":true}}},\"label\":\"Hourly Aggregation\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_phrase\",\"analyze_wildcard\":true}}},\"label\":\"Phrase\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_scroll\",\"analyze_wildcard\":true}}},\"label\":\"Scroll\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Uncached)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg_cached\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Cached)\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
@@ -54,7 +68,7 @@
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
@@ -68,7 +82,7 @@
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"name:cpu_utilization_1s\",\"analyze_wildcard\":true}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND name:cpu_utilization_1s\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
@@ -82,7 +96,35 @@
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Index-segment-counts",
+    "_type": "visualization",
+    "_source": {
+      "title": "Index segment counts",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND name:segments_count\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Median-Query-Latency",
+    "_type": "visualization",
+    "_source": {
+      "title": "Median Query Latency",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_defaults OR name:query_latency_default\",\"analyze_wildcard\":true}}},\"label\":\"Default\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_term\",\"analyze_wildcard\":true}}},\"label\":\"Term\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_hourly\",\"analyze_wildcard\":true}}},\"label\":\"Hourly Aggregation\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_phrase\",\"analyze_wildcard\":true}}},\"label\":\"Phrase\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_scroll\",\"analyze_wildcard\":true}}},\"label\":\"Scroll\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Uncached)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg_cached\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Cached)\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
@@ -96,7 +138,7 @@
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   },
@@ -110,35 +152,7 @@
       "description": "",
       "version": 1,
       "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
-    "_id": "Indexing-Performance",
-    "_type": "visualization",
-    "_source": {
-      "title": "Indexing Performance",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:4gheap\",\"analyze_wildcard\":false}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:ec2 AND track-setup:4gheap\",\"analyze_wildcard\":false}}},\"label\":\"EC2 i2.2xlarge Defaults 4G\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:two_nodes_defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (2 nodes)\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{\"spy\":{\"mode\":{\"fill\":false,\"name\":\"request\"}}}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"analyze_wildcard\":false,\"query\":\"name:indexing_throughput\"}},\"filter\":[]}"
-      }
-    }
-  },
-  {
-    "_id": "Index-segment-counts",
-    "_type": "visualization",
-    "_source": {
-      "title": "Index segment counts",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:defaults\",\"analyze_wildcard\":true}}},\"label\":\"Defaults\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"environment:nightly AND track-setup:4gheap\",\"analyze_wildcard\":true}}},\"label\":\"Defaults (4gheap)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastsettings\",\"analyze_wildcard\":true}}},\"label\":\"Fast\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"track-setup:fastupdates\",\"analyze_wildcard\":true}}},\"label\":\"Fastupdates\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"name:segments_count\",\"analyze_wildcard\":true}},\"filter\":[]}"
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
   }
