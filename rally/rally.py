@@ -78,6 +78,11 @@ def parse_args():
             default=False,
             action="store_true")
         p.add_argument(
+            "--offline",
+            help="Assume that Rally has no connection to the Internet(default: false)",
+            default=False,
+            action="store_true")
+        p.add_argument(
             "--preserve-install",
             help="preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk "
                  "space! (default: false)",
@@ -206,6 +211,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
+    cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
