@@ -236,7 +236,7 @@ class Marshal:
         offline = self._config.opts("system", "offline.mode")
         data_set_root = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), track.name.lower())
         data_set_path = "%s/%s" % (data_set_root, track.document_file_name)
-        if not os.path.isfile(data_set_path):
+        if not offline and not os.path.isfile(data_set_path):
             self._download_benchmark_data(track, data_set_root, data_set_path)
         unzipped_data_set_path = self._unzip(data_set_path)
         # global per benchmark (we never run benchmarks in parallel)
