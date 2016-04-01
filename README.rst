@@ -29,9 +29,7 @@ Getting Started
 Preparation
 ~~~~~~~~~~~
 
-First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 2.3 or higher. A simple out-of-the-box installation with a
-single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration #
-procedure of Rally will you ask for host and port of this cluster.
+First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 2.3 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of this cluster.
 
 **Note**: Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure 
 that this port range is not used by the metrics store.
