@@ -44,7 +44,7 @@ class GitRepository:
     def pull_ts(self, ts):
         if process.run_subprocess(
                 "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" "
-                "--date=iso8601-strict origin/master`'" %
+                "--date=iso8601 origin/master`'" %
                 (self.src_dir, ts)):
             raise SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
 
