@@ -79,7 +79,7 @@ def parse_args():
             action="store_true")
         p.add_argument(
             "--offline",
-            help="Assume that Rally has no connection to the Internet(default: false)",
+            help="Assume that Rally has no connection to the Internet (default: false)",
             default=False,
             action="store_true")
         p.add_argument(

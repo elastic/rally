@@ -34,7 +34,7 @@ interesting for new benchmarks and we also have a
 
 `Geonames <http://www.geonames.org/>`_ provides geo data under a `creative commons license <http://creativecommons.org/licenses/by/3.0/>`_. We
 will download `allCountries.zip <http://download.geonames.org/export/dump/allCountries.zip>`_ (around 300MB), extract it and
-inspect `allCountries.txt`.
+inspect ``allCountries.txt``.
 
 You will note that the file is tab-delimited but we need JSON to bulk-index data with Elasticsearch. So we can use a small script to do the
 conversion for us::
@@ -80,19 +80,16 @@ conversion for us::
     
        print(json.dumps(d))
 
-We can invoke the script with `python3 toJSON.py > documents.json`. Next we need to compress the JSON file with `
-bzip2 -9 -c documents.json > documents.json.bz2.
+We can invoke the script with ``python3 toJSON.py > documents.json``. Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``.
 
 Next we need a mapping file for these documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at the `example mapping file <http://benchmarks.elastic.co/corpora/geonames/mappings.json>`_.
 
 Ensure to create a file called "README.txt" which can contain more information about a benchmark and must contain license information.
 
-Upload all three files to a place where it is publicly available. We choose `http://benchmarks.elastic.co/corpora/geonames` for this example.
+Upload all three files to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example. For initial local testing you can also place all files in the data directory, which is located below the root directory you specified when initially configuring Rally. Let's say you specified ``/Users/daniel/benchmarks`` as root directory. Then you have to place the data for a track with the name "geonames" in ``/Users/daniel/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
 
 Finally, add a new Python source file in Rally's project directory. By convention, the file should be called "$BENCHMARK_NAME_track.py", so
-for our example the file is called "geonames_track.py". It is placed in "rally/track/".
-
-::
+for our example the file is called "geonames_track.py". It is placed in "rally/track/". ::
 
     from rally.track import track
     
@@ -126,10 +123,10 @@ A few things to note:
 
 * You can either use the standard track setups provided with Rally or add your own. Note that Rally assumes that the track setup that should be run by default is called "defaults". It is possible to not use this name but it is more convenient for users.
 * You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
-* `estimated_benchmark_time_in_minutes` is really just a ballpark estimate to give users a very rough idea how the long the benchmark will run.
+* ``estimated_benchmark_time_in_minutes`` is really just a ballpark estimate to give users a very rough idea how the long the benchmark will run.
 * The numbers are needed to verify integrity and provide progress reports.
 
-When you invoke `esrally list tracks`, the new track should now appear::
+When you invoke ``esrally list tracks``, the new track should now appear::
 
 
     dm@io:~ $ esrally list tracks
@@ -152,7 +149,7 @@ When you invoke `esrally list tracks`, the new track should now appear::
         * two_nodes_defaults
         * defaults_verbose_iw
 
-Congratulations, you have created your first track! You can test it with `esrally --track=geonames` (or whatever the name of your track is) and run specific track setups with `esrally --track=geonames --track-setup=fastupdates`.
+Congratulations, you have created your first track! You can test it with ``esrally --track=geonames`` (or whatever the name of your track is) and run specific track setups with ``esrally --track=geonames --track-setup=fastupdates``.
  
 If you want to share it with the community, please read on.
 

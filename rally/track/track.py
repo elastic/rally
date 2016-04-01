@@ -3,7 +3,7 @@ import logging
 import urllib.error
 from enum import Enum
 
-from rally import config
+from rally import config, exceptions
 from rally.utils import io, sysstats, convert, process, net
 
 logger = logging.getLogger("rally.track")
@@ -233,33 +233,58 @@ class Marshal:
     """
 
     def setup(self, track):
-        offline = self._config.opts("system", "offline.mode")
         data_set_root = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), track.name.lower())
         data_set_path = "%s/%s" % (data_set_root, track.document_file_name)
-        if not offline and not os.path.isfile(data_set_path):
-            self._download_benchmark_data(track, data_set_root, data_set_path)
+        data_url = "%s/%s" % (track.source_root_url, track.document_file_name)
+        self._download(data_url, data_set_path, size_in_bytes=track.compressed_size_in_bytes)
         unzipped_data_set_path = self._unzip(data_set_path)
         # global per benchmark (we never run benchmarks in parallel)
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
 
         mapping_path = "%s/%s" % (data_set_root, track.mapping_file_name)
+        mapping_url = "%s/%s" % (track.source_root_url, track.mapping_file_name)
         # Try to always download the mapping file, there might be an updated version
-        if not offline:
-            try:
-                self._download_mapping_data(track, data_set_root, mapping_path)
-            except urllib.error.URLError:
-                # Just retry with the old version if there is one
-                if os.path.isfile(mapping_path):
-                    logger.info("Could not download mapping file (probably offline). Skipping...")
-                else:
-                    raise
-
+        self._download(mapping_url, mapping_path, force_download=True)
         self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
 
         readme_path = "%s/%s" % (data_set_root, track.readme_file_name)
-        if not offline and not os.path.isfile(readme_path):
-            self._download_readme(track, data_set_root, readme_path)
+        readme_url = "%s/%s" % (track.source_root_url, track.readme_file_name)
+        self._download(readme_url, readme_path)
 
+    def _download(self, url, local_path, size_in_bytes=None, force_download=False):
+        offline = self._config.opts("system", "offline.mode")
+        file_exists = os.path.isfile(local_path)
+
+        if file_exists and not force_download:
+            logger.info("[%s] already exists locally. Skipping download." % local_path)
+            return
+
+        if not offline:
+            logger.info("Downloading from [%s] to [%s]." % (url, local_path))
+            try:
+                io.ensure_dir(os.path.dirname(local_path))
+                if size_in_bytes:
+                    size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
+                    # ensure output appears immediately
+                    print("Downloading data from %s (%s MB) ... " % (url, size_in_mb), end='', flush=True)
+                if url.startswith("http"):
+                    net.download(url, local_path)
+                elif url.startswith("s3"):
+                    self._do_download_via_s3(url, local_path, size_in_bytes)
+                else:
+                    raise exceptions.SystemSetupError("Cannot download benchmark data from [%s]. Only http(s) and s3 are supported." % url)
+                if size_in_bytes:
+                    print("Done")
+            except urllib.error.URLError:
+                logger.exception("Could not download [%s] to [%s]." % (url, local_path))
+
+        # file must exist at this point -> verify
+        if not os.path.isfile(local_path):
+            if offline:
+                raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % local_path)
+            else:
+                raise exceptions.SystemSetupError("Could not download from %s to %s. Please verify that data are available at %s and "
+                                                  "check your internet connection." % (url, local_path, url))
 
     def _unzip(self, data_set_path):
         # we assume that track data are always compressed and try to unzip them before running the benchmark
@@ -269,47 +294,13 @@ class Marshal:
             io.unzip(data_set_path, io.dirname(data_set_path))
         return basename
 
-    def _download_benchmark_data(self, track, data_set_root, data_set_path):
-        io.ensure_dir(data_set_root)
-        logger.info("Benchmark data for %s not available in '%s'" % (track.name, data_set_path))
-        url = "%s/%s" % (track.source_root_url, track.document_file_name)
-        size = round(convert.bytes_to_mb(track.compressed_size_in_bytes))
-        # ensure output appears immediately
-        print("Downloading benchmark data from %s (%s MB) ... " % (url, size), end='', flush=True)
-        if url.startswith("http"):
-            net.download(url, data_set_path)
-        elif url.startswith("s3"):
-            self._do_download_via_s3(track, url, data_set_path)
-        else:
-            raise RuntimeError("Cannot download benchmark data. No protocol handler for [%s] available." % url)
-        print("done")
-
-    def _download_mapping_data(self, track, data_set_root, mapping_path):
-        io.ensure_dir(data_set_root)
-        logger.info("Mappings for %s not available in '%s'" % (track.name, mapping_path))
-        url = "%s/%s" % (track.source_root_url, track.mapping_file_name)
-        # for now, we just allow HTTP downloads for mappings (S3 support is probably remove anyway...)
-        if url.startswith("http"):
-            net.download(url, mapping_path)
-        else:
-            raise RuntimeError("Cannot download mappings. No protocol handler for [%s] available." % url)
-
-    def _download_readme(self, track, data_set_root, readme_path):
-        io.ensure_dir(data_set_root)
-        logger.info("Readme for %s not available in '%s'" % (track.name, readme_path))
-        url = "%s/%s" % (track.source_root_url, track.readme_file_name)
-        if url.startswith("http"):
-            net.download(url, readme_path)
-        else:
-            raise RuntimeError("Cannot download Readme. No protocol handler for [%s] available." % url)
-
-    def _do_download_via_s3(self, track, url, data_set_path):
+    def _do_download_via_s3(self, url, data_set_path, size_in_bytes):
         tmp_data_set_path = data_set_path + ".tmp"
         s3cmd = "s3cmd -v get %s %s" % (url, tmp_data_set_path)
         try:
             success = process.run_subprocess_with_logging(s3cmd)
             # Exit code for s3cmd does not seem to be reliable so we also check the file size although this is rather fragile...
-            if not success or os.path.getsize(tmp_data_set_path) != track.compressed_size_in_bytes:
+            if not success or (size_in_bytes is not None and os.path.getsize(tmp_data_set_path) != size_in_bytes):
                 # cleanup probably corrupt data file...
                 if os.path.isfile(tmp_data_set_path):
                     os.remove(tmp_data_set_path)
