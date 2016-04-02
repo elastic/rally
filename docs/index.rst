@@ -6,8 +6,7 @@ What is Rally?
 
 So you want to benchmark Elasticsearch? Then Rally is for you. Rally started as an effort to help developers in the Elasticsearch development team to run benchmarks on their machines. As our users are very creative and use Elasticsearch for all kinds of things, we have to cover a broad range of different performance characteristics. Rally is build around a few assumptions:
 
-* Everything is run on the same machine
-* Elasticsearch is built from sources. But don't worry, you can specify which version of Elasticsearch should be built.
+* Everything is run on the same machine (but `we are about to change that <https://github.com/elastic/rally/issues/71`_)
 * You want to add a specific data set to an Elasticsearch index and then run benchmarking queries on it
 
 These are some of the core assumptions and we are continuously working to remove those restrictions. In contrast to other home-grown benchmarking scripts, we have put considerable effort in Rally to ensure the benchmarking data are reproducible.
@@ -15,9 +14,9 @@ These are some of the core assumptions and we are continuously working to remove
 Compatibility
 -------------
 
-Rally can only be used to benchmark Elasticsearch 5.0 and above. The reason is that Rally can build Elasticsearch from sources and between 2.x and 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
+Rally can build Elasticsearch either from sources or use an official binary release. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
 
-Also note that Rally does not support Windows, it may or may not work but we actively test it only on Mac OS X and Linux.
+Also note that Rally does not support Windows. It may or may not work but we actively test it only on Mac OS X and Linux.
 
 Installing Rally
 ----------------

@@ -12,8 +12,7 @@ Rally allows you benchmark either `official binary Elasticsearch distributions <
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8+
 * unzip (install via ``apt-get install unzip`` on  Debian based distributions or check your distribution's documentation)
-* Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can 
-  also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
+* Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
 * Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
 
 If you want to benchmark Elasticsearch development versions you will also need:
@@ -45,10 +44,7 @@ Installing Rally
 ~~~~~~~~~~~~~~~~
 
 1. Clone this repo: ``git clone git@github.com:elastic/rally.git``.
-2. Install Rally and its dependencies: ``python3 setup.py develop``. Depending on your local setup and file system permission it might be
-necessary to use ``sudo`` in this step. ``sudo``ing is required as this script will install a few Python libraries which Rally needs to run.
-Additionally, the setup procedure will set symlinks to the script ``esrally`` so it can be invoked easily. If you don't want do that, see
-the section below for an alternative. Note: this step will change once Rally is available in the official Python package repos.
+2. Install Rally and its dependencies: ``python3 setup.py develop``. Depending on your local setup and file system permission it might be necessary to use ``sudo`` in this step. ``sudo``ing is required as this script will install a few Python libraries which Rally needs to run. Additionally, the setup procedure will set symlinks to the script ``esrally`` so it can be invoked easily. If you don't want do that, see the section below for an alternative. Note: this step will change once Rally is available in the official Python package repos.
 3. Configure Rally: ``esrally configure``. It will prompt you for some values and write them to the config file ``~/.rally/rally.ini``.
 4. Run Rally: ``esrally``. It is now properly set up and will run the benchmarks.
 
@@ -58,9 +54,7 @@ Non-sudo Install
 If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
  
 1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
-2. Check the output of the install script or lookup the
-`Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the
-script is located. On Linux, this is typically ``~/.local/bin``.
+2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
 
 You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
 
@@ -73,8 +67,7 @@ Here are some examples:
 
 * ``esrally``: Runs the benchmarks and reports the results on the command line. This is what you typically want to do in development. It assumes lots of defaults; its canonical form is ``esrally race --pipeline=from-sources-complete --revision=current --track=geonames --track-setup=defaults``.
 * ``esrally --pipeline from-sources-skip-build``: Assumes that an Elasticsearch ZIP file has already been build and just runs the benchmark.
-* ``esrally --revision ebe3fd2``: Checks out the revision ``ebe3fd2`` from git, builds it and runs benchmarks against it. Note that will only
-work if the build is based on Gradle (i.e. Elasticsearch 3.0+)
+* ``esrally --revision ebe3fd2``: Checks out the revision ``ebe3fd2`` from git, builds it and runs benchmarks against it. Note that will only work if the build is based on Gradle (i.e. Elasticsearch 5.0+)
 
 
 Telemetry
