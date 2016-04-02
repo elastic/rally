@@ -313,11 +313,11 @@ class Marshal:
                     unzipped_data_set_path = self._unzip(data_set_path)
                     data_set_paths[type] = unzipped_data_set_path
 
-            mapping_path = "%s/%s" % (data_set_root, type.mapping_file_name)
-            mapping_url = "%s/%s" % (track.source_root_url, type.mapping_file_name)
-            # Try to always download the mapping file, there might be an updated version
-            self._download(mapping_url, mapping_path, force_download=True)
-            mapping_paths[type] = mapping_path
+                mapping_path = "%s/%s" % (data_set_root, type.mapping_file_name)
+                mapping_url = "%s/%s" % (track.source_root_url, type.mapping_file_name)
+                # Try to always download the mapping file, there might be an updated version
+                self._download(mapping_url, mapping_path, force_download=True)
+                mapping_paths[type] = mapping_path
 
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", data_set_paths)
         self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_paths)
