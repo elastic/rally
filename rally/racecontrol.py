@@ -37,8 +37,10 @@ class TrackSetupIterator:
 
     def run(self, track):
         selected_setups = self.ctx.config.opts("benchmarks", "tracksetups.selected")
+        any_selected = False
         for track_setup in track.track_setups:
             if track_setup.name in selected_setups:
+                any_selected = True
                 race_paths = paths.Paths(self.ctx.config)
                 self.ctx.config.add(config.Scope.trackSetup, "system", "track.setup.root.dir",
                                     race_paths.track_setup_root(track.name, track_setup.name))
@@ -49,6 +51,10 @@ class TrackSetupIterator:
                     step.run(track, track_setup)
             else:
                 logger.debug("Skipping track setup [%s] (not selected)." % track_setup.name)
+
+        if not any_selected:
+            raise exceptions.ImproperlyConfigured("Unknown track setup(s) %s for track [%s]. You can list the available tracks and their "
+                                                  "track setups with esrally list tracks." % (selected_setups, track.name))
 
 
 class Pipeline:
@@ -250,24 +256,28 @@ class RaceControl:
         if command == "list":
             self._list(ctx)
         elif command == "race":
-            pipeline = self._choose(pipelines, "pipeline")(ctx)
-            t = self._choose(track.tracks, "track")
             try:
+                pipeline = self._choose(pipelines, "pipeline", "You can list the available pipelines with esrally list pipelines.")(ctx)
+                t = self._choose(track.tracks, "track", "You can list the available tracks with esrally list tracks.")
                 pipeline.run(t)
                 return True
             except exceptions.SystemSetupError as e:
                 logging.exception("Cannot run benchmark")
                 print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
                 return False
+            except exceptions.ImproperlyConfigured as e:
+                logging.exception("Cannot run benchmark due to configuration error.")
+                print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
+                return False
         else:
             raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
 
-    def _choose(self, source, what):
+    def _choose(self, source, what, help):
         try:
             name = self._config.opts("system", what)
             return source[name]
         except KeyError:
-            raise exceptions.ImproperlyConfigured("Unknown %s [%s]" % (what, name))
+            raise exceptions.ImproperlyConfigured("Unknown %s [%s]. %s" % (what, name, help))
 
     def _list(self, ctx):
         what = ctx.config.opts("system", "list.config.option")
