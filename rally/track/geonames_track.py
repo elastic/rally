@@ -1,12 +1,15 @@
 from rally.track import track
 
+GEO_NAMES_INDEX_NAME = "geonames"
+GEO_NAMES_TYPE_NAME = "type"
+
 
 class DefaultQuery(track.Query):
     def __init__(self):
         track.Query.__init__(self, "default")
 
     def run(self, es):
-        return es.search(index=geonamesTrackSpec.index_name)
+        return es.search(index=GEO_NAMES_INDEX_NAME)
 
 
 class TermQuery(track.Query):
@@ -14,7 +17,7 @@ class TermQuery(track.Query):
         track.Query.__init__(self, "term")
 
     def run(self, es):
-        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, q="country_code:AT")
+        return es.search(index=GEO_NAMES_INDEX_NAME, doc_type=GEO_NAMES_TYPE_NAME, q="country_code:AT")
 
 
 class PhraseQuery(track.Query):
@@ -22,7 +25,7 @@ class PhraseQuery(track.Query):
         track.Query.__init__(self, "phrase")
 
     def run(self, es):
-        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name, body='''
+        return es.search(index=GEO_NAMES_INDEX_NAME, doc_type=GEO_NAMES_TYPE_NAME, body='''
 {
     "query": {
         "match_phrase": {
@@ -38,7 +41,7 @@ class CountryAggQuery(track.Query):
         self.use_request_cache = use_request_cache
 
     def run(self, es):
-        return es.search(index=geonamesTrackSpec.index_name, doc_type=geonamesTrackSpec.type_name,
+        return es.search(index=GEO_NAMES_INDEX_NAME, doc_type=GEO_NAMES_TYPE_NAME,
                          request_cache=self.use_request_cache, body='''
     {
       "size": 0,
@@ -69,8 +72,8 @@ class ScrollQuery(track.Query):
 
     def run(self, es):
         r = es.search(
-            index=geonamesTrackSpec.index_name,
-            doc_type=geonamesTrackSpec.type_name,
+            index=GEO_NAMES_INDEX_NAME,
+            doc_type=GEO_NAMES_TYPE_NAME,
             sort="_doc",
             scroll="10s",
             size=self.ITEMS_PER_PAGE)
@@ -95,8 +98,8 @@ geonamesTrackSpec = track.Track(
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
     source_root_url="http://benchmarks.elastic.co/corpora/geonames",
-    index_name="geonames",
-    type_name="type",
+    index_name=GEO_NAMES_INDEX_NAME,
+    type_name=GEO_NAMES_TYPE_NAME,
     number_of_documents=8647880,
     compressed_size_in_bytes=197857614,
     uncompressed_size_in_bytes=2790927196,

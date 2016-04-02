@@ -1,12 +1,15 @@
 from rally.track import track
 
+GEO_POINT_INDEX_NAME = "osmgeopoints"
+GEO_POINT_TYPE_NAME = "type"
+
 
 class DefaultQuery(track.Query):
     def __init__(self):
         track.Query.__init__(self, "default")
 
     def run(self, es):
-        return es.search(index=geopointTrackSpec.index_name)
+        return es.search(index=GEO_POINT_INDEX_NAME)
 
 
 class BBoxQuery(track.Query):
@@ -14,7 +17,7 @@ class BBoxQuery(track.Query):
         track.Query.__init__(self, "bbox")
 
     def run(self, es):
-        return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
+        return es.search(index=GEO_POINT_INDEX_NAME, doc_type=GEO_POINT_TYPE_NAME, body='''
     {
       "query" : {
         "geo_bounding_box" : {
@@ -32,7 +35,7 @@ class DistanceQuery(track.Query):
         track.Query.__init__(self, "distance")
 
     def run(self, es):
-        return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
+        return es.search(index=GEO_POINT_INDEX_NAME, doc_type=GEO_POINT_TYPE_NAME, body='''
     {
       "query" : {
         "geo_distance" : {
@@ -48,7 +51,7 @@ class DistanceRangeQuery(track.Query):
         track.Query.__init__(self, "distanceRange")
 
     def run(self, es):
-        return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
+        return es.search(index=GEO_POINT_INDEX_NAME, doc_type=GEO_POINT_TYPE_NAME, body='''
     {
       "query" : {
         "geo_distance_range" : {
@@ -65,7 +68,7 @@ class PolygonQuery(track.Query):
         track.Query.__init__(self, "polygon")
 
     def run(self, es):
-        return es.search(index=geopointTrackSpec.index_name, doc_type=geopointTrackSpec.type_name, body='''
+        return es.search(index=GEO_POINT_INDEX_NAME, doc_type=GEO_POINT_TYPE_NAME, body='''
     {
       "query" : {
         "geo_polygon" : {
@@ -87,8 +90,8 @@ geopointTrackSpec = track.Track(
     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
     source_root_url="file:///data/benchmarks/geopoint",
-    index_name="osmgeopoints",
-    type_name="type",
+    index_name=GEO_POINT_INDEX_NAME,
+    type_name=GEO_POINT_TYPE_NAME,
     number_of_documents=60844404,
     compressed_size_in_bytes=711754140,
     uncompressed_size_in_bytes=3769692039,

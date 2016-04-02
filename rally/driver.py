@@ -26,13 +26,16 @@ class Driver:
         # does not make sense to add any mappings if we don't benchmark indexing
         if track_setup.benchmark_settings.benchmark_indexing:
             mapping_path = self._config.opts("benchmarks", "mapping.path")
-            mappings = open(mapping_path).read()
-            logger.debug("create index w/ mappings")
-            logger.debug(mappings)
-            cluster.client.indices.create(index=track.index_name, body=track_setup.candidate_settings.index_settings)
-            cluster.client.indices.put_mapping(index=track.index_name,
-                                               doc_type=track.type_name,
-                                               body=json.loads(mappings))
+            for index in track.indices:
+                logger.debug("Creating index [%s]" % index.name)
+                cluster.client.indices.create(index=index.name, body=track_setup.candidate_settings.index_settings)
+                for type in index.types:
+                    mappings = open(mapping_path[type]).read()
+                    logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
+                    logger.debug(mappings)
+                    cluster.client.indices.put_mapping(index=index.name,
+                                                       doc_type=type.name,
+                                                       body=json.loads(mappings))
         cluster.wait_for_status_green()
 
     def go(self, cluster, track, track_setup):
@@ -133,21 +136,9 @@ class IndexBenchmark(TimedOperation):
         logger.info("Use %d docs per bulk request" % self._bulk_size)
 
     def run(self):
-        docs_to_index = self._track.number_of_documents
-        data_set_path = self._config.opts("benchmarks", "dataset.path")
-
-        # We cannot know how many docs have been updated if we produce id conflicts
-        if self._track_setup.benchmark_settings.id_conflicts == track.IndexIdConflict.NoConflicts:
-            expected_doc_count = docs_to_index
-        else:
-            expected_doc_count = None
-
-        force_merge = self._track_setup.benchmark_settings.force_merge
-
         finished = False
-
         try:
-            self.index(data_set_path, expected_doc_count, force_merge=force_merge)
+            self.index()
             finished = True
         finally:
             self._progress.finish()
@@ -200,58 +191,66 @@ class IndexBenchmark(TimedOperation):
         with open(documents, "rt") as f:
             yield from f
 
-    def index(self, documents, expected_doc_count, flush=True, stats=True, force_merge=False):
+    def index(self):
+        force_merge = self._track_setup.benchmark_settings.force_merge
+        docs_to_index = self._track.number_of_documents
+        documents = self._config.opts("benchmarks", "dataset.path")
+
+        # We cannot know how many docs have been updated if we produce id conflicts
+        if self._track_setup.benchmark_settings.id_conflicts == track.IndexIdConflict.NoConflicts:
+            expected_doc_count = docs_to_index
+        else:
+            expected_doc_count = None
         num_client_threads = int(self._config.opts("benchmarks", "index.client.threads"))
         logger.info("Indexing JSON docs file: [%s]" % documents)
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
-        index = self._track.index_name
-        type = self._track.type_name
         es = self._cluster.client
-
         processed = 0
+        total = self._track.number_of_documents
         self._stop_watch.start()
-        self._print_progress(processed)
-        try:
-            for _ in parallel_bulk(es,
-                                   self._read_records(documents),
-                                   thread_count=num_client_threads,
-                                   index=index,
-                                   doc_type=type,
-                                   chunk_size=self._bulk_size,
-                                   expand_action_callback=self.get_expand_action(),
-                                   ):
-                if processed % 10000 == 0 and processed > 0:
-                    elapsed = self._stop_watch.split_time()
-                    docs_per_sec = (processed / elapsed)
-                    self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
-                    self._print_progress(processed)
-                processed += 1
-        except KeyboardInterrupt:
-            logger.info("Received SIGINT: IndexBenchmark will be stopped prematurely.")
+        self._print_progress(processed, total)
+
+        for index in self._track.indices:
+            for type in index.types:
+                if type.document_file_name:
+                    try:
+                        for _ in parallel_bulk(es,
+                                               self._read_records(documents[type]),
+                                               thread_count=num_client_threads,
+                                               index=index.name,
+                                               doc_type=type.name,
+                                               chunk_size=self._bulk_size,
+                                               expand_action_callback=self.get_expand_action(),
+                                               ):
+                            if processed % 10000 == 0 and processed > 0:
+                                elapsed = self._stop_watch.split_time()
+                                docs_per_sec = (processed / elapsed)
+                                self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
+                                self._print_progress(processed, total)
+                            processed += 1
+                    except KeyboardInterrupt:
+                        logger.info("Received SIGINT: IndexBenchmark will be stopped prematurely.")
 
         self._stop_watch.stop()
-        self._print_progress(processed)
+        self._print_progress(processed, total)
         docs_per_sec = (processed / self._stop_watch.total_time())
         self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
 
-        if flush:
-            logger.info("Force flushing index [%s]." % index)
-            es.indices.flush(index=index, params={"request_timeout": 600})
-            logger.info("Force flush has finished successfully.")
+        logger.info("Force flushing all indices.")
+        es.indices.flush(params={"request_timeout": 600})
+        logger.info("Force flush has finished successfully.")
 
         if force_merge:
-            logger.info("Force merging index [%s]." % index)
-            es.indices.forcemerge(index=index)
+            logger.info("Force merging all indices.")
+            es.indices.forcemerge()
 
-        if stats:
-            self._index_stats(expected_doc_count)
-            self._node_stats()
+        self._index_stats(expected_doc_count)
+        self._node_stats()
 
     def _index_stats(self, expected_doc_count):
-        index = self._track.index_name
         logger.info("Gathering indices stats")
-        duration, stats = self.timed(self._cluster.client.indices.stats, index=index, metric="_all", level="shards")
+        duration, stats = self.timed(self._cluster.client.indices.stats, metric="_all", level="shards")
         self._metrics_store.put_value("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
         primaries = stats["_all"]["primaries"]
         self._metrics_store.put_count("segments_count", primaries["segments"]["count"])
@@ -288,7 +287,7 @@ class IndexBenchmark(TimedOperation):
         self._metrics_store.put_value("node_total_old_gen_gc_time", old_gen_collection_time, "ms")
         self._metrics_store.put_value("node_total_young_gen_gc_time", young_gen_collection_time, "ms")
 
-    def _print_progress(self, docs_processed):
+    def _print_progress(self, docs_processed, docs_total):
         if not self._quiet_mode:
             # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
             # accurate here as this is "just" a progress report for the user
@@ -298,7 +297,7 @@ class IndexBenchmark(TimedOperation):
             mb_per_second = convert.bytes_to_mb(sent) / elapsed
             self._progress.print(
                 "  Benchmarking indexing at %.1f docs/s, %.1f MB/s" % (docs_per_second, mb_per_second),
-                "[%3d%% done]" % round(100 * docs_processed / self._track.number_of_documents)
+                "[%3d%% done]" % round(100 * docs_processed / docs_total)
             )
             logger.info("Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]" % (docs_processed, elapsed, docs_per_second, mb_per_second))
 

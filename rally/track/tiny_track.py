@@ -1,12 +1,15 @@
 from rally.track import track
 
+TINY_INDEX_NAME = "tiny"
+TINY_TYPE_NAME = "type"
+
 
 class DefaultQuery(track.Query):
     def __init__(self):
         track.Query.__init__(self, "default")
 
     def run(self, es):
-        return es.search(index=tinyTrackSpec.index_name)
+        return es.search(index=TINY_INDEX_NAME)
 
 
 class TermQuery(track.Query):
@@ -14,7 +17,7 @@ class TermQuery(track.Query):
         track.Query.__init__(self, "term")
 
     def run(self, es):
-        return es.search(index=tinyTrackSpec.index_name, doc_type=tinyTrackSpec.type_name, q="country_code:AT")
+        return es.search(index=TINY_INDEX_NAME, doc_type=TINY_TYPE_NAME, q="country_code:AT")
 
 
 class PhraseQuery(track.Query):
@@ -22,7 +25,7 @@ class PhraseQuery(track.Query):
         track.Query.__init__(self, "phrase")
 
     def run(self, es):
-        return es.search(index=tinyTrackSpec.index_name, doc_type=tinyTrackSpec.type_name, body='''
+        return es.search(index=TINY_INDEX_NAME, doc_type=TINY_TYPE_NAME, body='''
 {
     "query": {
         "match_phrase": {
@@ -38,7 +41,7 @@ class CountryAggQuery(track.Query):
         self.use_request_cache = use_request_cache
 
     def run(self, es):
-        return es.search(index=tinyTrackSpec.index_name, doc_type=tinyTrackSpec.type_name,
+        return es.search(index=TINY_INDEX_NAME, doc_type=TINY_TYPE_NAME,
                          request_cache=self.use_request_cache, body='''
     {
       "size": 0,
@@ -69,8 +72,8 @@ class ScrollQuery(track.Query):
 
     def run(self, es):
         r = es.search(
-            index=tinyTrackSpec.index_name,
-            doc_type=tinyTrackSpec.type_name,
+            index=TINY_INDEX_NAME,
+            doc_type=TINY_TYPE_NAME,
             sort="_doc",
             scroll="10s",
             size=self.ITEMS_PER_PAGE)
@@ -92,16 +95,20 @@ class ScrollQuery(track.Query):
 
 tinyTrackSpec = track.Track(
     name="tiny",
-    description="This track is based on the geonames track and is just intended for quick integration test during development. This is NOT "
-                "a serious benchmark.",
+    description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
+                "request against Elasticsearch",
     source_root_url="http://benchmarks.elastic.co/corpora/tiny",
-    index_name="tiny",
-    type_name="type",
-    number_of_documents=2000,
-    compressed_size_in_bytes=28333,
-    uncompressed_size_in_bytes=564930,
-    document_file_name="documents.json.bz2",
-    mapping_file_name="mappings.json",
+    indices=[
+        track.Index(name=TINY_INDEX_NAME, types=[
+            track.Type(
+                name=TINY_TYPE_NAME,
+                mapping_file_name="mappings.json",
+                document_file_name="documents.json.bz2",
+                number_of_documents=2000,
+                compressed_size_in_bytes=28333,
+                uncompressed_size_in_bytes=564930)
+        ])
+    ],
     estimated_benchmark_time_in_minutes=1,
     # Queries to use in the search benchmark
     queries=[
@@ -112,5 +119,5 @@ tinyTrackSpec = track.Track(
         CountryAggQuery(suffix="_cached", use_request_cache=True),
         ScrollQuery()
     ],
-    track_setups=track.track_setups
-)
+    track_setups=track.track_setups)
+

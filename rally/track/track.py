@@ -82,23 +82,86 @@ appender:
 tracks = {}
 
 
+class Index:
+    """
+    Defines an index in Elasticsearch.
+    """
+    def __init__(self, name, types):
+        """
+
+        Creates a new index.
+
+        :param name: The index name. Mandatory.
+        :param types: A list of types. Should contain at least one type.
+        """
+        self.name = name
+        self.types = types
+
+    @property
+    def number_of_documents(self):
+        num_docs = 0
+        for t in self.types:
+            num_docs += t.number_of_documents
+        return num_docs
+
+
+class Type:
+    """
+    Defines a type in Elasticsearch.
+    """
+    def __init__(self, name, mapping_file_name, document_file_name=None, number_of_documents=0, compressed_size_in_bytes=0,
+                 uncompressed_size_in_bytes=0):
+        """
+
+        Creates a new type. Mappings are mandatory but the document_file_name (and associated properties) are optional.
+
+        :param name: The name of this type. Mandatory.
+        :param mapping_file_name: The file name of the mapping file on the remote server. Mandatory.
+        :param document_file_name: The file name of benchmark document name on the remote server. Optional (e.g. for percolation we
+        just need a mapping but no documents)
+        :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
+         a document_file_name is given.
+        :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
+         user reporting. Only needed if a document_file_name is given.
+        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only needed if a
+        document_file_name is given.
+        """
+        self.name = name
+        self.mapping_file_name = mapping_file_name
+        self.document_file_name = document_file_name
+        self.number_of_documents = number_of_documents
+        self.compressed_size_in_bytes = compressed_size_in_bytes
+        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
+
+
 class Track:
     """
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description, source_root_url, index_name, type_name, number_of_documents, compressed_size_in_bytes,
-                 uncompressed_size_in_bytes, document_file_name, mapping_file_name, estimated_benchmark_time_in_minutes,
-                 track_setups, queries):
+    def __init__(self, name, description, source_root_url, estimated_benchmark_time_in_minutes, track_setups, queries, index_name=None,
+                 type_name=None, number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None,
+                 mapping_file_name=None, indices=None):
         """
 
         Creates a new track.
+
+        Tracks that use only a single index and type can specify all relevant values directly using the parameters index_name, type_name,
+        number_of_documents, compressed_size_in_bytes, uncompressed_size_in_bytes, document_file_name and mapping_file_name.
+
+        Tracks that need multiple indices or types have to create Index instances themselves and pass all indices in an indices list.
 
         :param name: A short, descriptive name for this track. As per convention, this name should be in lower-case without spaces.
         :param description: A longer description for this track.
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL, three files should be located: the benchmark document file (see document_file_name), the mapping
         file (see mapping_file_name) and a readme (goes with the name "README.txt" as per convention).
+        :param estimated_benchmark_time_in_minutes: A ballpark estimation how long the benchmark will run (in minutes). This is just needed
+        to give the user a very rough idea on the duration of the benchmark.
+        :param track_setups: A list of one or more track setups to use. If in doubt, reuse the predefined list "track.track_setups". Rally's
+        default configuration assumes that each track defines at least one track setup with the name "defaults". This is not required but
+        simplifies usage.
+        :param queries: A list of queries to run in case searching should be benchmarked.
         :param index_name: The name of the index to create.
         :param type_name: The type name for this index.
         :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting.
@@ -107,29 +170,34 @@ class Track:
         :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it.
         :param document_file_name: The file name of benchmark document name on the remote server.
         :param mapping_file_name: The file name of the mapping file on the remote server.
-        :param estimated_benchmark_time_in_minutes: A ballpark estimation how long the benchmark will run (in minutes). This is just needed
-        to give the user a very rough idea on the duration of the benchmark.
-        :param track_setups: A list of one or more track setups to use. If in doubt, reuse the predefined list "track.track_setups". Rally's
-        default configuration assumes that each track defines at least one track setup with the name "defaults". This is not required but
-        simplifies usage.
-        :param queries: A list of queries to run in case searching should be benchmarked.
+        :param indices: A list of indices for this track. Set this parameter when using multiple indices or types.
         """
         self.name = name
         self.description = description
         self.source_root_url = source_root_url
-        self.index_name = index_name
-        self.type_name = type_name
-        self.number_of_documents = number_of_documents
-        self.compressed_size_in_bytes = compressed_size_in_bytes
-        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
-        self.document_file_name = document_file_name
-        self.mapping_file_name = mapping_file_name
-        self.readme_file_name = "README.txt"
         self.estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
         self.track_setups = track_setups
         self.queries = queries
+        self.readme_file_name = "README.txt"
+        # multiple indices
+        if index_name is None:
+            if not indices:
+                raise RuntimeError("You have to pass either indices or an index_name")
+            self.indices = indices
+        else:
+            self.indices = [Index(index_name, [
+                Type(type_name, mapping_file_name, document_file_name, number_of_documents, compressed_size_in_bytes,
+                     uncompressed_size_in_bytes)
+            ])]
         # self-register
         tracks[name] = self
+
+    @property
+    def number_of_documents(self):
+        num_docs = 0
+        for index in self.indices:
+            num_docs += index.number_of_documents
+        return num_docs
 
 
 class CandidateSettings:
@@ -234,18 +302,25 @@ class Marshal:
 
     def setup(self, track):
         data_set_root = "%s/%s" % (self._config.opts("benchmarks", "local.dataset.cache"), track.name.lower())
-        data_set_path = "%s/%s" % (data_set_root, track.document_file_name)
-        data_url = "%s/%s" % (track.source_root_url, track.document_file_name)
-        self._download(data_url, data_set_path, size_in_bytes=track.compressed_size_in_bytes)
-        unzipped_data_set_path = self._unzip(data_set_path)
-        # global per benchmark (we never run benchmarks in parallel)
-        self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", unzipped_data_set_path)
+        data_set_paths = {}
+        mapping_paths = {}
+        for index in track.indices:
+            for type in index.types:
+                if type.document_file_name:
+                    data_set_path = "%s/%s" % (data_set_root, type.document_file_name)
+                    data_url = "%s/%s" % (track.source_root_url, type.document_file_name)
+                    self._download(data_url, data_set_path, size_in_bytes=type.compressed_size_in_bytes)
+                    unzipped_data_set_path = self._unzip(data_set_path)
+                    data_set_paths[type] = unzipped_data_set_path
 
-        mapping_path = "%s/%s" % (data_set_root, track.mapping_file_name)
-        mapping_url = "%s/%s" % (track.source_root_url, track.mapping_file_name)
-        # Try to always download the mapping file, there might be an updated version
-        self._download(mapping_url, mapping_path, force_download=True)
-        self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_path)
+            mapping_path = "%s/%s" % (data_set_root, type.mapping_file_name)
+            mapping_url = "%s/%s" % (track.source_root_url, type.mapping_file_name)
+            # Try to always download the mapping file, there might be an updated version
+            self._download(mapping_url, mapping_path, force_download=True)
+            mapping_paths[type] = mapping_path
+
+        self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", data_set_paths)
+        self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_paths)
 
         readme_path = "%s/%s" % (data_set_root, track.readme_file_name)
         readme_url = "%s/%s" % (track.source_root_url, track.readme_file_name)

@@ -16,7 +16,7 @@ First of all we need to clarify what a benchmark is. Rally has a few assumptions
 
 A benchmark is called a "track" in Rally. The most important attributes of a track are:
 
-* One index name with one type in it
+* One or more indices, each with one or more types
 * The queries to issue
 * Source URL of the benchmark data
 * A list of track setups
@@ -92,21 +92,22 @@ Finally, add a new Python source file in Rally's project directory. By conventio
 for our example the file is called "geonames_track.py". It is placed in "rally/track/". ::
 
     from rally.track import track
-    
+
+    GEONAMES_INDEX_NAME = "geonames"
     
     class SampleQuery(track.Query):
         def __init__(self):
             track.Query.__init__(self, "sample")
     
         def run(self, es):
-            return es.search(index=geonamesTrackSpec.index_name)
+            return es.search(index=GEONAMES_INDEX_NAME)
     
     geonamesTrackSpec = track.Track(
         name="geonames",
         description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                     "request against Elasticsearch",
         source_root_url="http://benchmarks.elastic.co/corpora/geonames",
-        index_name="geonames",
+        index_name=GEONAMES_INDEX_NAME,
         type_name="type",
         number_of_documents=8647880,
         compressed_size_in_bytes=197857614,
@@ -118,6 +119,41 @@ for our example the file is called "geonames_track.py". It is placed in "rally/t
         queries=[SampleQuery()],
         track_setups=track.track_setups
 
+
+In case you want to add multiple indices this is possible too. The same track needs to specified as follows then: ::
+
+
+    from rally.track import track
+
+    GEONAMES_INDEX_NAME = "geonames"
+
+    class SampleQuery(track.Query):
+        def __init__(self):
+            track.Query.__init__(self, "sample")
+
+        def run(self, es):
+            return es.search(index=GEONAMES_INDEX_NAME)
+
+    geonamesTrackSpec = track.Track(
+        name="geonames",
+        description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
+                    "request against Elasticsearch",
+        source_root_url="http://benchmarks.elastic.co/corpora/geonames",
+        indices=[
+            track.Index(name=GEONAMES_INDEX_NAME, types=[
+            track.Type(
+                name="type",
+                mapping_file_name="mappings.json",
+                document_file_name="documents.json.bz2",
+                number_of_documents=8647880,
+                compressed_size_in_bytes=197857614,
+                uncompressed_size_in_bytes=2790927196)
+                ])
+        ],
+        estimated_benchmark_time_in_minutes=20,
+        # Queries to use in the search benchmark
+        queries=[SampleQuery()],
+        track_setups=track.track_setups)
 
 A few things to note:
 
