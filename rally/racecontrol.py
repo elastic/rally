@@ -278,7 +278,7 @@ class RaceControl:
             for t in track.tracks.values():
                 print("* %s: %s" % (t.name, t.description))
                 print("\tTrack setups for this track:")
-                for track_setup in track.track_setups:
+                for track_setup in t.track_setups:
                     print("\t* %s" % track_setup.name)
                 print("")
         elif what == "pipelines":
