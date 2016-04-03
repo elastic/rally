@@ -1,79 +1,33 @@
 from rally.track import track
 
-class PercolatorQuery1(track.Query):
-    def __init__(self):
-        track.Query.__init__(self, "percolator query 1")
+PERCOLATOR_INDEX_NAME = "queries"
+PERCOLATOR_TYPE_NAME = ".percolator"
+
+class PercolatorQuery(track.Query):
+    def __init__(self, content):
+        track.Query.__init__(self, "percolator query with content: %s" % content)
+        self.content = content
 
     def run(self, es):
-        return es.search(index=percolatorTrackSpec.index_name, doc_type=percolatorTrackSpec.type_name, body='''
+        return es.search(index=PERCOLATOR_INDEX_NAME, doc_type=PERCOLATOR_TYPE_NAME, body='''
     {
       "query" : {
         "percolator" : {
           "document_type" : "content",
           "document" : {
-            "body" : "president bush"
+            "body" : "%s"
           }
         }
       }
-    }''')
+    }''' % (self.content))
 
-class PercolatorQuery2(track.Query):
-    def __init__(self):
-        track.Query.__init__(self, "percolator query 2")
-
-    def run(self, es):
-        return es.search(index=percolatorTrackSpec.index_name, doc_type=percolatorTrackSpec.type_name, body='''
-    {
-      "query" : {
-        "percolator" : {
-          "document_type" : "content",
-          "document" : {
-            "body" : "saddam hussein"
-          }
-        }
-      }
-    }''')
-
-class PercolatorQuery3(track.Query):
-    def __init__(self):
-        track.Query.__init__(self, "percolator query 3")
+class PercolatorQueryNoScoring(track.Query):
+    def __init__(self, content):
+        track.Query.__init__(self, "non scoring percolator query with content: %s" % content)
+        self.content = content
 
     def run(self, es):
-        return es.search(index=percolatorTrackSpec.index_name, doc_type=percolatorTrackSpec.type_name, body='''
-    {
-      "query" : {
-        "percolator" : {
-          "document_type" : "content",
-          "document" : {
-            "body" : "hurricane katrina"
-          }
-        }
-      }
-    }''')
-
-class PercolatorQuery4(track.Query):
-    def __init__(self):
-        track.Query.__init__(self, "percolator query 4")
-
-    def run(self, es):
-        return es.search(index=percolatorTrackSpec.index_name, doc_type=percolatorTrackSpec.type_name, body='''
-    {
-      "query" : {
-        "percolator" : {
-          "document_type" : "content",
-          "document" : {
-            "body" : "google"
-          }
-        }
-      }
-    }''')
-
-class PercolatorQuery4AsConstantScoreQuery(track.Query):
-    def __init__(self):
-        track.Query.__init__(self, "percolator query 4 wrapped in constant_score query")
-
-    def run(self, es):
-        return es.search(index=percolatorTrackSpec.index_name, doc_type=percolatorTrackSpec.type_name, body='''
+        return es.search(index=PERCOLATOR_INDEX_NAME, doc_type=PERCOLATOR_TYPE_NAME, body='''
     {
       "query" : {
         "constant_score": {
@@ -81,20 +35,20 @@ class PercolatorQuery4AsConstantScoreQuery(track.Query):
                 "percolator" : {
                     "document_type" : "content",
                     "document" : {
-                        "body" : "google"
+                        "body" : "%s"
                     }
                 }
             }
         }   
       }
-    }''')
+    }''' % (self.content))
 
 class PercolatorQueryWithHighlighting(track.Query):
     def __init__(self):
         track.Query.__init__(self, "percolator query with highlighting")
 
     def run(self, es):
-        return es.search(index=percolatorTrackSpec.index_name, doc_type=percolatorTrackSpec.type_name, body='''
+        return es.search(index=PERCOLATOR_INDEX_NAME, doc_type=PERCOLATOR_TYPE_NAME, body='''
     {
       "query": {
         "percolator" : {
@@ -135,7 +89,16 @@ percolatorTrackSpec = track.Track(
     ],
     estimated_benchmark_time_in_minutes=5,
     # Queries to use in the search benchmark
-    queries=[PercolatorQuery1(), PercolatorQuery2(), PercolatorQuery3(), PercolatorQuery4(), PercolatorQuery4AsConstantScoreQuery(), PercolatorQueryWithHighlighting()],
+    queries=[
+        PercolatorQuery(content="president bush"), 
+        PercolatorQuery(content="saddam hussein"), 
+        PercolatorQuery(content="hurricane katrina"), 
+        PercolatorQuery(content="google"), 
+        PercolatorQueryNoScoring(content="google"), 
+        PercolatorQueryWithHighlighting(),
+        PercolatorQuery(content="ignore me"),
+        PercolatorQueryNoScoring(content="ignore me")
+    ],
     track_setups=[track.TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
