@@ -120,7 +120,7 @@ percolatorTrackSpec = track.Track(
             # The type for the percolator queries:
             track.Type(
                 name=".percolator",
-                mapping_file_name="queries-mappings.json",
+                mapping_file_name="queries-mapping.json",
                 document_file_name="queries.json.bz2",
                 number_of_documents=2000000,
                 compressed_size_in_bytes=123502,
@@ -129,7 +129,7 @@ percolatorTrackSpec = track.Track(
             # The used for documents being percolated:
             track.Type(
                 name="content",
-                mapping_file_name="percolator-mappings.json"
+                mapping_file_name="document-mapping.json"
             )
         ])
     ],
