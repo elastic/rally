@@ -1,5 +1,12 @@
 ### 0.1.1
 
+Major changes:
+
+* Rally can now [benchmark a binary Elasticsearch distribution](rally/issues#63) (starting with Elasticsearch 5.0.0-alpha1).
+* Reporting improvements for [query latency](elastic/rally#10) and [indexing throughput](elastic/rally#59) on the command line.
+* We store [benchmark environment data](elastic/rally#54) alongside metrics.
+* A new percolator track](elastic/rally#74) contributed by [Martijn van Groningen](https://github.com/martijnvg). Thanks!
+
 [All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.1.1+is%3Aclosed)
 
 ### 0.1.0
