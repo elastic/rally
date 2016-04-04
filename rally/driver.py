@@ -100,7 +100,7 @@ class SearchBenchmark(TimedOperation):
         times = []
         quiet = self._quiet_mode
         for iteration in range(1, repetitions + 1):
-            if not quiet and iteration % 50 == 0:
+            if not quiet and (iteration % 50 == 0 or iteration == 1):
                 self._progress.print(
                     message % (iteration, repetitions),
                     "[%3d%% done]" % (round(100 * iteration / repetitions))
