@@ -423,7 +423,7 @@ track_setups = [
         description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
         # integer divide!
         candidate_settings=CandidateSettings(index_settings=greenNodeSettings, nodes=2,
-                                             processors=sysstats.number_of_cpu_cores() // 2),
+                                             processors=sysstats.logical_cpu_cores() // 2),
         benchmark_settings=BenchmarkSettings()
     ),
 

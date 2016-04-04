@@ -1,6 +1,7 @@
 import os
 import threading
 import subprocess
+import socket
 import signal
 import logging
 
@@ -11,12 +12,12 @@ logger = logging.getLogger("rally.launcher")
 
 
 class Launcher:
-    PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
 
     Currently, only local launching is supported.
     """
+    PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
 
     def __init__(self, cfg, clock=time.Clock):
         self._config = cfg
@@ -29,23 +30,28 @@ class Launcher:
         num_nodes = setup.candidate_settings.nodes
         first_http_port = self._config.opts("provisioning", "node.http.port")
 
-        return cluster.Cluster(
+        t = telemetry.Telemetry(self._config, metrics_store)
+        c = cluster.Cluster(
             [{"host": "localhost", "port": first_http_port}],
             [self._start_node(node, setup, metrics_store) for node in range(num_nodes)],
             metrics_store
         )
+        t.attach_to_cluster(c)
+
+        return c
 
     def _start_node(self, node, setup, metrics_store):
         node_name = self._node_name(node)
-
+        host_name = socket.gethostname()
         t = telemetry.Telemetry(self._config, metrics_store)
 
         env = self._prepare_env(setup, node_name, t)
         cmd = self.prepare_cmd(setup, node_name)
         process = self._start_process(cmd, env, node_name)
-        t.attach_to_process(process)
+        node = cluster.Node(process, host_name, node_name, t)
+        t.attach_to_node(node)
 
-        return cluster.Server(process, t)
+        return node
 
     def _prepare_env(self, setup, node_name, t):
         env = {}
@@ -130,19 +136,18 @@ class Launcher:
         # Ask all nodes to shutdown:
         stop_watch = self._clock.stop_watch()
         stop_watch.start()
-        for idx, server in enumerate(cluster.servers):
-            process = server.process
-            server.telemetry.detach_from_process(process)
-            node = self._node_name(idx)
+        for node in cluster.nodes:
+            process = node.process
+            node.telemetry.detach_from_node(node)
 
             os.kill(process.pid, signal.SIGINT)
 
             try:
                 process.wait(10.0)
-                logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
+                logger.info("Done shutdown node (%.1f sec)" % stop_watch.split_time())
             except subprocess.TimeoutExpired:
                 # kill -9
-                logger.warn("Server %s did not shut down itself after 10 seconds; now kill -QUIT server, to see threads:" % node)
+                logger.warn("Server %s did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node.node_name)
                 try:
                     os.kill(process.pid, signal.SIGQUIT)
                 except OSError:
@@ -151,12 +156,12 @@ class Launcher:
 
                 try:
                     process.wait(120.0)
-                    logger.info("Done shutdown server (%.1f sec)" % stop_watch.split_time())
+                    logger.info("Done shutdown node (%.1f sec)" % stop_watch.split_time())
                     return
                 except subprocess.TimeoutExpired:
                     pass
 
-                logger.info("kill -KILL server")
+                logger.info("kill -KILL node")
                 try:
                     process.kill()
                 except ProcessLookupError:

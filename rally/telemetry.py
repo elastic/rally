@@ -1,10 +1,10 @@
 import logging
 import threading
-import psutil
 import re
 import os
 
-from rally.utils import io
+from rally.utils import io, sysstats
+from rally import metrics
 
 logger = logging.getLogger("rally.telemetry")
 
@@ -17,7 +17,8 @@ class Telemetry:
                 FlightRecorder(config, metrics_store),
                 JitCompiler(config, metrics_store),
                 Ps(config, metrics_store),
-                MergeParts(config, metrics_store)
+                MergeParts(config, metrics_store),
+                EnvironmentInfo(config, metrics_store)
             ]
         else:
             self._devices = devices
@@ -42,15 +43,20 @@ class Telemetry:
                         opts[k] = v
         return opts
 
-    def attach_to_process(self, process):
+    def attach_to_cluster(self, cluster):
         for device in self._devices:
             if self._enabled(device):
-                device.attach_to_process(process)
+                device.attach_to_cluster(cluster)
 
-    def detach_from_process(self, process):
+    def attach_to_node(self, node):
         for device in self._devices:
             if self._enabled(device):
-                device.detach_from_process(process)
+                device.attach_to_node(node)
+
+    def detach_from_node(self, node):
+        for device in self._devices:
+            if self._enabled(device):
+                device.detach_from_node(node)
 
     def on_benchmark_start(self):
         for device in self._devices:
@@ -104,10 +110,13 @@ class TelemetryDevice:
     def instrument_env(self, setup, candidate_id):
         return {}
 
-    def attach_to_process(self, process):
+    def attach_to_cluster(self, cluster):
         pass
 
-    def detach_from_process(self, process):
+    def attach_to_node(self, node):
+        pass
+
+    def detach_from_node(self, node):
         pass
 
     def on_benchmark_start(self):
@@ -228,8 +237,8 @@ class MergeParts(TelemetryDevice):
     def _store_merge_times(self, merge_times):
         for k, v in merge_times.items():
             metric_suffix = k.replace(" ", "_")
-            self._metrics_store.put_value("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
-            self._metrics_store.put_count("merge_parts_total_docs_%s" % metric_suffix, v[1])
+            self._metrics_store.put_value_cluster_level("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
+            self._metrics_store.put_count_cluster_level("merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
 class Ps(TelemetryDevice):
@@ -253,9 +262,9 @@ class Ps(TelemetryDevice):
     def help(self):
         return "Gathers process statistics like CPU usage or disk I/O."
 
-    def attach_to_process(self, process):
+    def attach_to_node(self, node):
         disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
-        self._t = GatherProcessStats(process.pid, disk, self._metrics_store)
+        self._t = GatherProcessStats(node, disk, self._metrics_store)
 
     def on_benchmark_start(self):
         self._t.start()
@@ -265,38 +274,73 @@ class Ps(TelemetryDevice):
 
 
 class GatherProcessStats(threading.Thread):
-    def __init__(self, pid, disk_name, metrics_store):
+    def __init__(self, node, disk_name, metrics_store):
         threading.Thread.__init__(self)
         self.stop = False
-        self.process = psutil.Process(pid)
+        self.node = node
+        self.process = sysstats.setup_process_stats(node.process.pid)
         self.disk_name = disk_name
         self.metrics_store = metrics_store
-        self.disk_start = self._disk_io_counters()
+        self.disk_start = sysstats.disk_io_counters(self.disk_name)
 
     def finish(self):
         self.stop = True
         self.join()
-        disk_end = self._disk_io_counters()
+        disk_end = sysstats.disk_io_counters(self.disk_name)
 
-        self.metrics_store.put_count("disk_io_write_bytes", disk_end.write_bytes - self.disk_start.write_bytes, "byte")
-        self.metrics_store.put_count("disk_io_write_count", disk_end.write_count - self.disk_start.write_count)
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes",
+                                                disk_end.write_bytes - self.disk_start.write_bytes, "byte")
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_count",
+                                                disk_end.write_count - self.disk_start.write_count)
         # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
-        self.metrics_store.put_value("disk_io_write_time", disk_end.write_time - self.disk_start.write_time, "ms")
+        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_write_time",
+                                                disk_end.write_time - self.disk_start.write_time, "ms")
 
-        self.metrics_store.put_count("disk_io_read_bytes", disk_end.read_bytes - self.disk_start.read_bytes, "byte")
-        self.metrics_store.put_count("disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
+                                                disk_end.read_bytes - self.disk_start.read_bytes, "byte")
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
         # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
-        self.metrics_store.put_value("disk_io_read_time", disk_end.read_time - self.disk_start.read_time, "ms")
-
-    def _disk_io_counters(self):
-        if self._use_specific_disk():
-            return psutil.disk_io_counters(perdisk=True)[self.disk_name]
-        else:
-            return psutil.disk_io_counters(perdisk=False)
-
-    def _use_specific_disk(self):
-        return self.disk_name is not None and self.disk_name != ""
+        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_read_time",
+                                                disk_end.read_time - self.disk_start.read_time, "ms")
 
     def run(self):
         while not self.stop:
-            self.metrics_store.put_value("cpu_utilization_1s", self.process.cpu_percent(interval=1.0), "%")
+            self.metrics_store.put_value_node_level(self.node.node_name, "cpu_utilization_1s", sysstats.cpu_utilization(self.process), "%")
+
+
+class EnvironmentInfo(TelemetryDevice):
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self._t = None
+
+    @property
+    def mandatory(self):
+        return True
+
+    @property
+    def command(self):
+        return "env"
+
+    @property
+    def human_name(self):
+        return "Environment Info"
+
+    @property
+    def help(self):
+        return "Gathers static environment information like OS or CPU details."
+
+    def attach_to_cluster(self, cluster):
+        revision = cluster.info()["version"]["build_hash"]
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+
+    def attach_to_node(self, node):
+        # we gather also host level metrics here although they will just be overridden for multiple nodes on the same node (which is no
+        # problem as the values are identical anyway).
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_version", sysstats.os_version())
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_physical_cores", sysstats.physical_cpu_cores())
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_model", sysstats.cpu_model())
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "node_name", node.node_name)
+        # This is actually the only node level metric, but it is easier to implement this way
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "host_name", node.host_name)

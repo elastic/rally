@@ -94,7 +94,7 @@ class SearchBenchmark(TimedOperation):
             l = [x[q.name] for x in times]
             l.sort()
             for latency in l:
-                self._metrics_store.put_value("query_latency_%s" % q.name, convert.seconds_to_ms(latency), "ms")
+                self._metrics_store.put_value_cluster_level("query_latency_%s" % q.name, convert.seconds_to_ms(latency), "ms")
 
     def _run_benchmark(self, es, message, repetitions=10):
         times = []
@@ -226,7 +226,7 @@ class IndexBenchmark(TimedOperation):
                             if processed % 10000 == 0 and processed > 0:
                                 elapsed = self._stop_watch.split_time()
                                 docs_per_sec = (processed / elapsed)
-                                self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
+                                self._metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
                                 self._print_progress(processed, total)
                             processed += 1
                     except KeyboardInterrupt:
@@ -235,7 +235,7 @@ class IndexBenchmark(TimedOperation):
         self._stop_watch.stop()
         self._print_progress(processed, total)
         docs_per_sec = (processed / self._stop_watch.total_time())
-        self._metrics_store.put_value("indexing_throughput", round(docs_per_sec), "docs/s")
+        self._metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
 
         logger.info("Force flushing all indices.")
         es.indices.flush(params={"request_timeout": 600})
@@ -251,20 +251,20 @@ class IndexBenchmark(TimedOperation):
     def _index_stats(self, expected_doc_count):
         logger.info("Gathering indices stats")
         duration, stats = self.timed(self._cluster.client.indices.stats, metric="_all", level="shards")
-        self._metrics_store.put_value("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
+        self._metrics_store.put_value_cluster_level("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
         primaries = stats["_all"]["primaries"]
-        self._metrics_store.put_count("segments_count", primaries["segments"]["count"])
-        self._metrics_store.put_count("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
-        self._metrics_store.put_count("segments_doc_values_memory_in_bytes", primaries["segments"]["doc_values_memory_in_bytes"], "byte")
-        self._metrics_store.put_count("segments_stored_fields_memory_in_bytes", primaries["segments"]["stored_fields_memory_in_bytes"],
+        self._metrics_store.put_count_cluster_level("segments_count", primaries["segments"]["count"])
+        self._metrics_store.put_count_cluster_level("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
+        self._metrics_store.put_count_cluster_level("segments_doc_values_memory_in_bytes", primaries["segments"]["doc_values_memory_in_bytes"], "byte")
+        self._metrics_store.put_count_cluster_level("segments_stored_fields_memory_in_bytes", primaries["segments"]["stored_fields_memory_in_bytes"],
                                       "byte")
-        self._metrics_store.put_count("segments_terms_memory_in_bytes", primaries["segments"]["terms_memory_in_bytes"], "byte")
-        self._metrics_store.put_count("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"], "byte")
-        self._metrics_store.put_value("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
-        self._metrics_store.put_value("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"], "ms")
-        self._metrics_store.put_value("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
-        self._metrics_store.put_value("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
-        self._metrics_store.put_value("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")
+        self._metrics_store.put_count_cluster_level("segments_terms_memory_in_bytes", primaries["segments"]["terms_memory_in_bytes"], "byte")
+        self._metrics_store.put_count_cluster_level("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"], "byte")
+        self._metrics_store.put_value_cluster_level("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
+        self._metrics_store.put_value_cluster_level("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"], "ms")
+        self._metrics_store.put_value_cluster_level("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
+        self._metrics_store.put_value_cluster_level("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
+        self._metrics_store.put_value_cluster_level("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")
 
         actual_doc_count = primaries["docs"]["count"]
         if expected_doc_count is not None and expected_doc_count != actual_doc_count:
@@ -275,17 +275,22 @@ class IndexBenchmark(TimedOperation):
     def _node_stats(self):
         logger.info("Gathering nodes stats")
         duration, stats = self.timed(self._cluster.client.nodes.stats, metric="_all", level="shards")
-        self._metrics_store.put_value("node_stats_latency", convert.seconds_to_ms(duration), "ms")
-        old_gen_collection_time = 0
-        young_gen_collection_time = 0
+        self._metrics_store.put_value_cluster_level("node_stats_latency", convert.seconds_to_ms(duration), "ms")
+        total_old_gen_collection_time = 0
+        total_young_gen_collection_time = 0
         nodes = stats["nodes"]
-        for node_name, node in nodes.items():
+        for node in nodes.values():
+            node_name = node["name"]
             gc = node["jvm"]["gc"]["collectors"]
-            old_gen_collection_time += gc["old"]["collection_time_in_millis"]
-            young_gen_collection_time += gc["young"]["collection_time_in_millis"]
+            old_gen_collection_time = gc["old"]["collection_time_in_millis"]
+            young_gen_collection_time = gc["young"]["collection_time_in_millis"]
+            self._metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gen_collection_time, "ms")
+            self._metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gen_collection_time, "ms")
+            total_old_gen_collection_time += old_gen_collection_time
+            total_young_gen_collection_time += young_gen_collection_time
 
-        self._metrics_store.put_value("node_total_old_gen_gc_time", old_gen_collection_time, "ms")
-        self._metrics_store.put_value("node_total_young_gen_gc_time", young_gen_collection_time, "ms")
+        self._metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
+        self._metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
 
     def _print_progress(self, docs_processed, docs_total):
         if not self._quiet_mode:
@@ -303,5 +308,5 @@ class IndexBenchmark(TimedOperation):
 
     def print_index_stats(self, data_dir):
         index_size_bytes = io.get_size(data_dir)
-        self._metrics_store.put_count("final_index_size_bytes", index_size_bytes, "byte")
+        self._metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
         process.run_subprocess_with_logging("find %s -ls" % data_dir, header="index files:")

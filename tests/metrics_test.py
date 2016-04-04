@@ -43,11 +43,11 @@ class MetricsTests(TestCase):
         self.es_mock = self.metrics_store._client
         self.es_mock.exists.return_value = False
 
-    def test_put_value(self):
+    def test_put_value_without_meta_info(self):
         throughput = 5000
         self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "defaults", create=True)
 
-        self.metrics_store.put_count("indexing_throughput", throughput, "docs/s")
+        self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW,
             "trial-timestamp": "20160131T000000Z",
@@ -56,7 +56,41 @@ class MetricsTests(TestCase):
             "track-setup": "defaults",
             "name": "indexing_throughput",
             "value": throughput,
-            "unit": "docs/s"
+            "unit": "docs/s",
+            "meta": {}
+        }
+        self.metrics_store.close()
+        self.es_mock.exists.assert_called_with(index="rally-2016")
+        self.es_mock.create_index.assert_called_with(index="rally-2016")
+        self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
+
+    def test_put_value_with_meta_info(self):
+        throughput = 5000
+        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "defaults", create=True)
+
+        # Ensure we also merge in cluster level meta info
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_name", "Darwin")
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_version", "15.4.0")
+        # Ensure we separate node level info by node
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_name", "Linux")
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_version", "4.2.0-18-generic")
+
+        self.metrics_store.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
+        expected_doc = {
+            "@timestamp": StaticClock.NOW,
+            "trial-timestamp": "20160131T000000Z",
+            "environment": "unittest",
+            "track": "test",
+            "track-setup": "defaults",
+            "name": "indexing_throughput",
+            "value": throughput,
+            "unit": "docs/s",
+            "meta": {
+                "source_revision": "abc123",
+                "os_name": "Darwin",
+                "os_version": "15.4.0"
+            }
         }
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-2016")

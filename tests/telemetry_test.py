@@ -1,8 +1,16 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-from rally import config, metrics, telemetry
+from rally import config, metrics, telemetry, cluster
 from rally.track import track
+
+
+class MockClientFactory:
+    def __init__(self, hosts):
+        pass
+
+    def create(self):
+        return None
 
 
 class MockTelemetryDevice(telemetry.TelemetryDevice):
@@ -51,8 +59,8 @@ class TelemetryTests(TestCase):
 
 
 class MergePartsDeviceTests(TestCase):
-    @mock.patch("rally.metrics.EsMetricsStore.put_count")
-    @mock.patch("rally.metrics.EsMetricsStore.put_value")
+    @mock.patch("rally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("rally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("builtins.open")
     @mock.patch("os.listdir")
     def test_store_nothing_if_no_metrics_present(self, listdir_mock, open_mock, metrics_store_put_value, metrics_store_put_count):
@@ -68,8 +76,8 @@ class MergePartsDeviceTests(TestCase):
         metrics_store_put_value.assert_not_called()
         metrics_store_put_count.assert_not_called()
 
-    @mock.patch("rally.metrics.EsMetricsStore.put_count")
-    @mock.patch("rally.metrics.EsMetricsStore.put_value")
+    @mock.patch("rally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("rally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("builtins.open")
     @mock.patch("os.listdir")
     def test_store_calculated_metrics(self, listdir_mock, open_mock, metrics_store_put_value, metrics_store_put_count):
@@ -95,6 +103,66 @@ class MergePartsDeviceTests(TestCase):
     def create_config(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "launcher", "candidate.log.dir", "/unittests/var/log/elasticsearch")
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
+        cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
+        cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
+        cfg.add(config.Scope.application, "reporting", "datastore.user", "")
+        cfg.add(config.Scope.application, "reporting", "datastore.password", "")
+        return cfg
+
+
+class EnvironmentInfoTests(TestCase):
+    @mock.patch("rally.metrics.EsMetricsStore.add_meta_info")
+    @mock.patch("rally.cluster.Cluster.info")
+    def test_stores_cluster_level_metrics_on_attach(self, cluster_info, metrics_store_add_meta_info):
+        cluster_info.return_value = {
+            "version":
+                {
+                    "build_hash": "abc123"
+                }
+        }
+        cfg = self.create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.EnvironmentInfo(cfg, metrics_store)
+        env_device.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, client_factory_class=MockClientFactory))
+
+        metrics_store_add_meta_info.assert_called_with(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
+
+    @mock.patch("rally.metrics.EsMetricsStore.add_meta_info")
+    @mock.patch("rally.utils.sysstats.os_name")
+    @mock.patch("rally.utils.sysstats.os_version")
+    @mock.patch("rally.utils.sysstats.logical_cpu_cores")
+    @mock.patch("rally.utils.sysstats.physical_cpu_cores")
+    @mock.patch("rally.utils.sysstats.cpu_model")
+    def test_stores_node_level_metrics_on_attach(self, cpu_model, physical_cpu_cores, logical_cpu_cores, os_version, os_name,
+                                                 metrics_store_add_meta_info):
+        cpu_model.return_value = "Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz"
+        physical_cpu_cores.return_value = 4
+        logical_cpu_cores.return_value = 8
+        os_version.return_value = "4.2.0-18-generic"
+        os_name.return_value = "Linux"
+
+        cfg = self.create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        node = cluster.Node(None, "io", "rally0", None)
+        env_device = telemetry.EnvironmentInfo(cfg, metrics_store)
+        env_device.attach_to_node(node)
+
+        calls = [
+            mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Linux"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "os_version", "4.2.0-18-generic"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_logical_cores", 8),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_physical_cores", 4),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_model", "Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "io"),
+        ]
+
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
+    def create_config(self):
+        cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
         cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
         cfg.add(config.Scope.application, "reporting", "datastore.port", "0")

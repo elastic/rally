@@ -1,5 +1,7 @@
 import logging
 import collections
+from enum import Enum
+
 import elasticsearch
 import elasticsearch.helpers
 import certifi
@@ -48,6 +50,9 @@ class EsClient:
 
 
 class EsClientFactory:
+    """
+    Abstracts how the Elasticsearch client is created. Intended for testing.
+    """
     def __init__(self, config):
         self._config = config
         host = self._config.opts("reporting", "datastore.host")
@@ -70,7 +75,7 @@ class EsClientFactory:
 
 class IndexTemplateProvider:
     """
-    Abstracts how the Rally index template is retrieved.
+    Abstracts how the Rally index template is retrieved. Intended for testing.
     """
 
     def __init__(self, config):
@@ -82,17 +87,44 @@ class IndexTemplateProvider:
         return open(mapping_template).read()
 
 
+class MetaInfoScope(Enum):
+    """
+    Defines the scope of a meta-information. Meta-information provides more context for a metric, for example the concrete version
+    of Elasticsearch that has been benchmarked or environment information like CPU model or OS.
+    """
+    cluster = 1
+    """
+    Cluster level meta-information is valid for all nodes in the cluster (e.g. the benchmarked Elasticsearch version)
+    """
+    # host = 2
+    """
+    Host level meta-information is valid for all nodes on the same host (e.g. the OS name and version)
+    """
+    node = 3
+    """
+    Node level meta-information is valid for a single node (e.g. GC times)
+    """
+
+
 class EsMetricsStore:
-    METRICS_DOC_TYPE = "metrics"
     """
     A metrics store backed by Elasticsearch.
     """
+    METRICS_DOC_TYPE = "metrics"
 
     def __init__(self,
                  config,
                  client_factory_class=EsClientFactory,
                  index_template_provider_class=IndexTemplateProvider,
                  clock=time.Clock):
+        """
+        Creates a new metrics store.
+
+        :param config: The config object. Mandatory.
+        :param client_factory_class: This parameter is optional and needed for testing.
+        :param index_template_provider_class: This parameter is optional and needed for testing.
+        :param clock: This parameter is optional and needed for testing.
+        """
         self._config = config
         self._invocation = None
         self._track = None
@@ -100,11 +132,24 @@ class EsMetricsStore:
         self._index = None
         self._docs = None
         self._environment_name = config.opts("system", "env.name")
+        self._meta_info = {
+            MetaInfoScope.cluster: {},
+            MetaInfoScope.node: {}
+        }
         self._client = client_factory_class(config).create()
         self._index_template_provider = index_template_provider_class(config)
         self._clock = clock
 
     def open(self, invocation, track_name, track_setup_name, create=False):
+        """
+        Opens a metrics store for a specific invocation, track and track setup.
+
+        :param invocation: The invocation (timestamp).
+        :param track_name: Track name.
+        :param track_setup_name: Track setup name.
+        :param create: True if an index should be created (if necessary). This is typically True, when attempting to write metrics and
+        False when it is just opened for reading (as we can assume all necessary indices exist at this point).
+        """
         self._invocation = time.to_iso8601(invocation)
         self._track = track_name
         self._track_setup = track_setup_name
@@ -121,18 +166,85 @@ class EsMetricsStore:
         return self._index_template_provider.template()
 
     def close(self):
+        """
+        Closes the metric store. Note that it is mandatory to close the metrics store when it is no longer needed as it only persists
+        metrics on close (in order to avoid additional latency during the benchmark).
+        """
         self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
         self._docs = []
 
-    # should be an int
-    def put_count(self, name, count, unit=None):
-        self._put(name, count, unit)
+    def add_meta_info(self, scope, scope_key, key, value):
+        """
+        Adds new meta information to the metrics store. All metrics entries that are created after calling this method are guaranteed to
+        contain the added meta info (provided is on the same level or a level below, e.g. a cluster level metric will not contain node
+        level meta information but all cluster level meta information will be contained in a node level metrics record).
+
+        :param scope: The scope of the meta information. See MetaInfoScope.
+        :param scope_key: The key within the scope. For cluster level metrics None is expected, for node level metrics the node name.
+        :param key: The key of the meta information.
+        :param value: The value of the meta information.
+        """
+        if scope == MetaInfoScope.cluster:
+            self._meta_info[MetaInfoScope.cluster][key] = value
+        elif scope == MetaInfoScope.node:
+            if scope_key not in self._meta_info[MetaInfoScope.node]:
+                self._meta_info[MetaInfoScope.node][scope_key] = {}
+            self._meta_info[MetaInfoScope.node][scope_key][key] = value
+        else:
+            raise exceptions.ImproperlyConfigured("Unknown meta info scope [%s]" % scope)
+
+    def put_count_cluster_level(self, name, count, unit=None):
+        """
+        Adds a new cluster level counter metric.
+
+        :param name: The name of the metric.
+        :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
+        :param unit: A count may or may not have unit.
+        """
+        self._put(MetaInfoScope.cluster, None, name, count, unit)
+
+    def put_count_node_level(self, node_name, name, count, unit=None):
+        """
+        Adds a new node level counter metric.
+
+        :param name: The name of the metric.
+        :param node_name: The name of the cluster node for which this metric has been determined.
+        :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
+        :param unit: A count may or may not have unit.
+        """
+        self._put(MetaInfoScope.node, node_name, name, count, unit)
 
     # should be a float
-    def put_value(self, name, value, unit):
-        self._put(name, value, unit)
+    def put_value_cluster_level(self, name, value, unit):
+        """
+        Adds a new cluster level value metric.
 
-    def _put(self, name, value, unit):
+        :param name: The name of the metric.
+        :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
+        :param unit: The unit of this metric value (e.g. ms, docs/s).
+        """
+        self._put(MetaInfoScope.cluster, None, name, value, unit)
+
+    def put_value_node_level(self, node_name, name, value, unit):
+        """
+        Adds a new node level value metric.
+
+        :param name: The name of the metric.
+        :param node_name: The name of the cluster node for which this metric has been determined.
+        :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
+        :param unit: The unit of this metric value (e.g. ms, docs/s)
+        """
+        self._put(MetaInfoScope.node, node_name, name, value, unit)
+
+    def _put(self, level, level_key, name, value, unit):
+        if level == MetaInfoScope.cluster:
+            meta = self._meta_info[MetaInfoScope.cluster]
+        elif level == MetaInfoScope.node:
+            meta = self._meta_info[MetaInfoScope.cluster].copy()
+            meta.update(self._meta_info[MetaInfoScope.node][level_key])
+        else:
+            raise exceptions.ImproperlyConfigured("Unknown meta info level [%s] for metric [%s]" % (level, name))
+
         doc = {
             "@timestamp": time.to_unix_timestamp(self._clock.now()),
             "trial-timestamp": self._invocation,
@@ -141,11 +253,18 @@ class EsMetricsStore:
             "track-setup": self._track_setup,
             "name": name,
             "value": value,
-            "unit": unit
+            "unit": unit,
+            "meta": meta
         }
         self._docs.append(doc)
 
     def get_one(self, name):
+        """
+        Gets one value for the given metric name (even if there should be more than one).
+
+        :param name: The metric name to query.
+        :return: The corresponding value for the given metric name or None if there is no value.
+        """
         v = self.get(name)
         if v:
             return v[0]
@@ -153,6 +272,12 @@ class EsMetricsStore:
             return None
 
     def get(self, name):
+        """
+        Gets all raw values for the given metric name.
+
+        :param name: The metric name to query.
+        :return: A list of all values for the given metric.
+        """
         query = {
             "query": self._query_by_name(name)
         }
@@ -160,6 +285,13 @@ class EsMetricsStore:
         return [v["_source"]["value"] for v in result["hits"]["hits"]]
 
     def get_stats(self, name):
+        """
+        Gets standard statistics for the given metric name.
+
+        :param name: The metric name to query.
+        :return: A metric_stats structure. For details please refer to
+        https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
+        """
         query = {
             "query": self._query_by_name(name),
             "aggs": {
@@ -174,6 +306,16 @@ class EsMetricsStore:
         return result["aggregations"]["metric_stats"]
 
     def get_percentiles(self, name, percentiles=None):
+        """
+        Retrieves percentile metrics for the given metric name.
+
+        :param name: The metric name to query.
+        :param percentiles: An optional list of percentiles to show. If None is provided, by default the 99th, 99.9th and 100th percentile
+        are determined. Ensure that there are enough data points in the metrics store (e.g. it makes no sense to retrieve a 99.9999
+        percentile when there are only 10 values).
+        :return: An ordered dictionary of the determined percentile values in ascending order. Key is the percentile, value is the
+        determined value at this percentile. If no percentiles could be determined None is returned.
+        """
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {

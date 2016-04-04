@@ -8,31 +8,73 @@ from rally import exceptions, time
 logger = logging.getLogger("rally.cluster")
 
 
-class Server:
-    def __init__(self, process, telemetry):
+class Node:
+    """
+    Represents an Elasticsearch cluster node.
+    """
+    def __init__(self, process, host_name, node_name, telemetry):
+        """
+        Creates a new node.
+
+        :param process: Process handle for this node.
+        :param host_name: The name of the host where this node is running.
+        :param node_name: The name of this node.
+        :param telemetry: The attached telemetry.
+        """
         self.process = process
+        self.host_name = host_name
+        self.node_name = node_name
         self.telemetry = telemetry
 
     def on_benchmark_start(self):
+        """
+        Callback method when a benchmark is about to start.
+        """
         self.telemetry.on_benchmark_start()
 
     def on_benchmark_stop(self):
+        """
+        Callback method when a benchmark is about to stop.
+        """
         self.telemetry.on_benchmark_stop()
 
 
+class EsClientFactory:
+    """
+    Abstracts how the Elasticsearch client is created. Intended for testing.
+    """
+    def __init__(self, hosts):
+        self.client = elasticsearch.Elasticsearch(hosts=hosts, timeout=60, request_timeout=60)
+
+    def create(self):
+        return self.client
+
+
 class Cluster:
-    EXPECTED_CLUSTER_STATUS = "green"
     """
     Cluster exposes APIs of the running benchmark candidate.
     """
+    EXPECTED_CLUSTER_STATUS = "green"
 
-    def __init__(self, hosts, servers, metrics_store, clock=time.Clock):
-        self.client = elasticsearch.Elasticsearch(hosts=hosts,timeout=60, request_timeout=60)
-        self.servers = servers
+    def __init__(self, hosts, nodes, metrics_store, client_factory_class=EsClientFactory, clock=time.Clock):
+        """
+        Creates a new Elasticsearch cluster.
+
+        :param hosts: The hosts to which we can connect to (this must not necessarily be each host in the cluster). Mandatory.
+        :param nodes: The nodes of which this cluster consists of. Mandatory.
+        :param metrics_store: The corresponding metrics store. Mandatory.
+        :param client_factory_class: This parameter is just intended for testing. Optional.
+        :param clock: This parameter is just intended for testing. Optional.
+        """
+        self.client = client_factory_class(hosts).create()
+        self.nodes = nodes
         self.metrics_store = metrics_store
         self.clock = clock
 
     def wait_for_status_green(self):
+        """
+        Synchronously waits until the cluster reaches status green. Upon timeout a LaunchError is thrown.
+        """
         logger.info("\nWait for %s cluster..." % Cluster.EXPECTED_CLUSTER_STATUS)
         stop_watch = self.clock.stop_watch()
         stop_watch.start()
@@ -64,10 +106,22 @@ class Cluster:
         logger.error(msg)
         raise exceptions.LaunchError(msg)
 
+    def info(self):
+        """
+        :return: cluster info. See http://elasticsearch-py.readthedocs.org/en/master/api.html#elasticsearch.Elasticsearch.info
+        """
+        return self.client.info()
+
     def on_benchmark_start(self):
-        for server in self.servers:
-            server.on_benchmark_start()
+        """
+        Callback method when a benchmark is about to start.
+        """
+        for node in self.nodes:
+            node.on_benchmark_start()
 
     def on_benchmark_stop(self):
-        for server in self.servers:
-            server.on_benchmark_stop()
+        """
+        Callback method when a benchmark is about to stop.
+        """
+        for node in self.nodes:
+            node.on_benchmark_stop()
