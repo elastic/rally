@@ -246,7 +246,7 @@ class EsMetricsStore:
             raise exceptions.ImproperlyConfigured("Unknown meta info level [%s] for metric [%s]" % (level, name))
 
         doc = {
-            "@timestamp": time.to_unix_timestamp(self._clock.now()),
+            "@timestamp": time.to_epoch_millis(self._clock.now()),
             "trial-timestamp": self._invocation,
             "environment": self._environment_name,
             "track": self._track,

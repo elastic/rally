@@ -49,7 +49,7 @@ class MetricsTests(TestCase):
 
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
-            "@timestamp": StaticClock.NOW,
+            "@timestamp": StaticClock.NOW * 1000,
             "trial-timestamp": "20160131T000000Z",
             "environment": "unittest",
             "track": "test",
@@ -78,7 +78,7 @@ class MetricsTests(TestCase):
 
         self.metrics_store.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
         expected_doc = {
-            "@timestamp": StaticClock.NOW,
+            "@timestamp": StaticClock.NOW * 1000,
             "trial-timestamp": "20160131T000000Z",
             "environment": "unittest",
             "track": "test",

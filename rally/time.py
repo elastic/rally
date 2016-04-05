@@ -1,13 +1,13 @@
 import time
 
 
-def to_unix_timestamp(t):
+def to_epoch_millis(t):
     """
-    Convert a time instance retrieved via time.time() to a unix timestamp.
+    Convert a time instance retrieved via time.time() to a timestamp in milliseconds since epoch.
     :param t: a time instance
-    :return: the corresponding unix timestamp (as int)
+    :return: the corresponding value of milliseconds since epoch.
     """
-    return int(round(t))
+    return int(round(t * 1000))
 
 
 def to_iso8601(dt):

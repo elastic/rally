@@ -34,3 +34,17 @@ class TimeTests(TestCase):
         # depending on scheduling accuracy we should end up somewhere in that range
         self.assertGreaterEqual(interval, wait_period_seconds - acceptable_delta_seconds)
         self.assertLessEqual(interval, wait_period_seconds + acceptable_delta_seconds)
+
+    def test_millis_conversion_roughly_in_expected_range(self):
+        wait_period_millis = 50
+        acceptable_delta_millis = 10
+
+        start = rally.time.to_epoch_millis(rally.time.Clock.now())
+        time.sleep(wait_period_millis / 1000.0)
+        end = rally.time.to_epoch_millis(rally.time.Clock.now())
+
+        interval_millis = end - start
+
+        # depending on scheduling accuracy we should end up somewhere in that range
+        self.assertGreaterEqual(interval_millis, wait_period_millis - acceptable_delta_millis)
+        self.assertLessEqual(interval_millis, wait_period_millis + acceptable_delta_millis)
