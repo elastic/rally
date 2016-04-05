@@ -55,4 +55,4 @@ def cpu_utilization(handle, interval=1.0):
     :param interval: The measurement interval in seconds. Optional. Defaults to 1 second.
     :return: The CPU usage in percent.
     """
-    return handle.cpu_percent(interval=1.0)
+    return handle.cpu_percent(interval=interval)

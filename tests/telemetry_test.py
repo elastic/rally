@@ -71,7 +71,7 @@ class MergePartsDeviceTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         merge_parts_device = telemetry.MergeParts(cfg, metrics_store)
-        merge_parts_device.on_benchmark_stop()
+        merge_parts_device.on_benchmark_stop(phase=None)
 
         metrics_store_put_value.assert_not_called()
         metrics_store_put_count.assert_not_called()
@@ -95,7 +95,7 @@ class MergePartsDeviceTests(TestCase):
         config = self.create_config()
         metrics_store = metrics.EsMetricsStore(config)
         merge_parts_device = telemetry.MergeParts(config, metrics_store)
-        merge_parts_device.on_benchmark_stop()
+        merge_parts_device.on_benchmark_stop(phase=None)
 
         metrics_store_put_value.assert_called_with("merge_parts_total_time_doc_values", 350, "ms")
         metrics_store_put_count.assert_called_with("merge_parts_total_docs_doc_values", 1850)

@@ -4,6 +4,7 @@ import re
 import os
 
 from rally.utils import io, sysstats
+from rally.track import track
 from rally import metrics
 
 logger = logging.getLogger("rally.telemetry")
@@ -58,15 +59,15 @@ class Telemetry:
             if self._enabled(device):
                 device.detach_from_node(node)
 
-    def on_benchmark_start(self):
+    def on_benchmark_start(self, phase):
         for device in self._devices:
             if self._enabled(device):
-                device.on_benchmark_start()
+                device.on_benchmark_start(phase)
 
-    def on_benchmark_stop(self):
+    def on_benchmark_stop(self, phase):
         for device in self._devices:
             if self._enabled(device):
-                device.on_benchmark_stop()
+                device.on_benchmark_stop(phase)
 
     def _enabled(self, device):
         return device.mandatory or device.command in self._enabled_devices
@@ -119,10 +120,10 @@ class TelemetryDevice:
     def detach_from_node(self, node):
         pass
 
-    def on_benchmark_start(self):
+    def on_benchmark_start(self, phase):
         pass
 
-    def on_benchmark_stop(self):
+    def on_benchmark_stop(self, phase):
         pass
 
 
@@ -211,15 +212,17 @@ class MergeParts(TelemetryDevice):
     def help(self):
         return "Gathers merge parts time statistics. Note that you need to run a track setup which logs these data."
 
-    def on_benchmark_stop(self):
-        server_log_dir = self._config.opts("launcher", "candidate.log.dir")
-        for log_file in os.listdir(server_log_dir):
-            log_path = "%s/%s" % (server_log_dir, log_file)
-            logger.debug("Analyzing merge parts in [%s]" % log_path)
-            with open(log_path) as f:
-                merge_times = self._extract_merge_times(f)
-                if merge_times:
-                    self._store_merge_times(merge_times)
+    def on_benchmark_stop(self, phase):
+        # only gather metrics when the whole benchmark is done
+        if phase is None:
+            server_log_dir = self._config.opts("launcher", "candidate.log.dir")
+            for log_file in os.listdir(server_log_dir):
+                log_path = "%s/%s" % (server_log_dir, log_file)
+                logger.debug("Analyzing merge parts in [%s]" % log_path)
+                with open(log_path) as f:
+                    merge_times = self._extract_merge_times(f)
+                    if merge_times:
+                        self._store_merge_times(merge_times)
 
     def _extract_merge_times(self, file):
         merge_times = {}
@@ -264,23 +267,28 @@ class Ps(TelemetryDevice):
 
     def attach_to_node(self, node):
         disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
-        self._t = GatherProcessStats(node, disk, self._metrics_store)
+        self._t = {}
+        for phase in track.BenchmarkPhase:
+            self._t[phase] = GatherProcessStats(node, disk, self._metrics_store, phase)
 
-    def on_benchmark_start(self):
-        self._t.start()
+    def on_benchmark_start(self, phase):
+        if phase:
+            self._t[phase].start()
 
-    def on_benchmark_stop(self):
-        self._t.finish()
+    def on_benchmark_stop(self, phase):
+        if phase:
+            self._t[phase].finish()
 
 
 class GatherProcessStats(threading.Thread):
-    def __init__(self, node, disk_name, metrics_store):
+    def __init__(self, node, disk_name, metrics_store, phase):
         threading.Thread.__init__(self)
         self.stop = False
         self.node = node
         self.process = sysstats.setup_process_stats(node.process.pid)
         self.disk_name = disk_name
         self.metrics_store = metrics_store
+        self.phase = phase
         self.disk_start = sysstats.disk_io_counters(self.disk_name)
 
     def finish(self):
@@ -288,24 +296,26 @@ class GatherProcessStats(threading.Thread):
         self.join()
         disk_end = sysstats.disk_io_counters(self.disk_name)
 
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes",
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes_%s" % self.phase.name,
                                                 disk_end.write_bytes - self.disk_start.write_bytes, "byte")
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_count",
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_count_%s" % self.phase.name,
                                                 disk_end.write_count - self.disk_start.write_count)
         # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
-        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_write_time",
+        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_write_time_%s" % self.phase.name,
                                                 disk_end.write_time - self.disk_start.write_time, "ms")
 
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes_%s" % self.phase.name,
                                                 disk_end.read_bytes - self.disk_start.read_bytes, "byte")
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_count", disk_end.read_count - self.disk_start.read_count)
+        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_count_%s" % self.phase.name,
+                                                disk_end.read_count - self.disk_start.read_count)
         # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
-        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_read_time",
+        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_read_time_%s" % self.phase.name,
                                                 disk_end.read_time - self.disk_start.read_time, "ms")
 
     def run(self):
         while not self.stop:
-            self.metrics_store.put_value_node_level(self.node.node_name, "cpu_utilization_1s", sysstats.cpu_utilization(self.process), "%")
+            self.metrics_store.put_value_node_level(self.node.node_name, "cpu_utilization_1s_%s" % self.phase.name,
+                                                    sysstats.cpu_utilization(self.process), "%")
 
 
 class EnvironmentInfo(TelemetryDevice):

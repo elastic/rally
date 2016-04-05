@@ -38,14 +38,18 @@ class Driver:
                                                        body=json.loads(mappings))
         cluster.wait_for_status_green()
 
-    def go(self, cluster, track, track_setup):
+    def go(self, cluster, current_track, track_setup):
         cluster.on_benchmark_start()
         if track_setup.benchmark_settings.benchmark_indexing:
-            self._index_benchmark = IndexBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
+            cluster.on_benchmark_start(track.BenchmarkPhase.index)
+            self._index_benchmark = IndexBenchmark(self._config, self._clock, current_track, track_setup, cluster, self._metrics)
             self._index_benchmark.run()
+            cluster.on_benchmark_stop(track.BenchmarkPhase.index)
         if track_setup.benchmark_settings.benchmark_search:
-            search_benchmark = SearchBenchmark(self._config, self._clock, track, track_setup, cluster, self._metrics)
+            cluster.on_benchmark_start(track.BenchmarkPhase.search)
+            search_benchmark = SearchBenchmark(self._config, self._clock, current_track, track_setup, cluster, self._metrics)
             search_benchmark.run()
+            cluster.on_benchmark_stop(track.BenchmarkPhase.search)
         cluster.on_benchmark_stop()
 
     def tear_down(self, track, track_setup):

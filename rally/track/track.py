@@ -243,6 +243,11 @@ class IndexIdConflict(Enum):
     RandomConflicts = 2
 
 
+class BenchmarkPhase(Enum):
+    index = 0,
+    search = 1
+
+
 class BenchmarkSettings:
     def __init__(self, benchmark_search=False, benchmark_indexing=True, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
         self.benchmark_search = benchmark_search

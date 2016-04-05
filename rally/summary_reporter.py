@@ -1,6 +1,7 @@
 import logging
 
 from rally import metrics
+from rally.track import track
 from rally.utils import convert
 
 logger = logging.getLogger("rally.reporting")
@@ -101,12 +102,13 @@ class SummaryReporter:
             print("  %s%s: No metric data" % (human_name, spaces))
 
     def report_cpu_usage(self, store):
-        percentages = store.get_percentiles("cpu_utilization_1s", percentiles=[SummaryReporter.MEDIAN])
-        if percentages:
-            formatted_median = "%.1f" % percentages[SummaryReporter.MEDIAN]
-            print("  Median indexing CPU utilization: %s%%" % formatted_median)
-        else:
-            print("Could not determine CPU usage")
+        for phase in track.BenchmarkPhase:
+            percentages = store.get_percentiles("cpu_utilization_1s_%s" % phase.name, percentiles=[SummaryReporter.MEDIAN])
+            if percentages:
+                formatted_median = "%.1f" % percentages[SummaryReporter.MEDIAN]
+                print("  Median indexing CPU utilization (%s): %s%%" % (phase.name, formatted_median))
+            else:
+                print("Could not determine CPU usage (%s)" % phase.name)
 
     def report_gc_times(self, store):
         young_gc_time = store.get_one("node_total_young_gen_gc_time")
@@ -116,12 +118,12 @@ class SummaryReporter:
 
     def report_disk_usage(self, store):
         index_size = store.get_one("final_index_size_bytes")
-        bytes_written = store.get_one("disk_io_write_bytes")
+        bytes_written = store.get_one("disk_io_write_bytes_%s" % track.BenchmarkPhase.index.name)
         if index_size is not None and bytes_written is not None:
             print("  Final index size: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(index_size), convert.bytes_to_mb(index_size)))
             print("  Totally written: %.1fGB (%.1fMB)" % (convert.bytes_to_gb(bytes_written), convert.bytes_to_mb(bytes_written)))
         else:
-            print("Could not determine disk usage metrics")
+            print("  Could not determine disk usage metrics")
 
     def report_segment_memory(self, store):
         print("  Total heap used for segments     : %.2fMB" % self._mb(store, "segments_memory_in_bytes"))

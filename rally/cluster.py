@@ -26,17 +26,17 @@ class Node:
         self.node_name = node_name
         self.telemetry = telemetry
 
-    def on_benchmark_start(self):
+    def on_benchmark_start(self, phase):
         """
         Callback method when a benchmark is about to start.
         """
-        self.telemetry.on_benchmark_start()
+        self.telemetry.on_benchmark_start(phase)
 
-    def on_benchmark_stop(self):
+    def on_benchmark_stop(self, phase):
         """
         Callback method when a benchmark is about to stop.
         """
-        self.telemetry.on_benchmark_stop()
+        self.telemetry.on_benchmark_stop(phase)
 
 
 class EsClientFactory:
@@ -112,16 +112,16 @@ class Cluster:
         """
         return self.client.info()
 
-    def on_benchmark_start(self):
+    def on_benchmark_start(self, phase=None):
         """
         Callback method when a benchmark is about to start.
         """
         for node in self.nodes:
-            node.on_benchmark_start()
+            node.on_benchmark_start(phase)
 
-    def on_benchmark_stop(self):
+    def on_benchmark_stop(self, phase=None):
         """
         Callback method when a benchmark is about to stop.
         """
         for node in self.nodes:
-            node.on_benchmark_stop()
+            node.on_benchmark_stop(phase)
