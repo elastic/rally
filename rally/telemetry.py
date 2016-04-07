@@ -154,8 +154,13 @@ class FlightRecorder(TelemetryDevice):
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
         print("%s: Writing flight recording to %s" % (self.human_name, log_file))
+        # this is more robust in case we want to use custom settings
+        # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
+        #
+        # in that case change to: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints -XX:+FlightRecorder "
-                                "-XX:FlightRecorderOptions=defaultrecording=true,disk=true,dumponexit=true,dumponexitpath=%s" % log_file}
+                                "-XX:FlightRecorderOptions=disk=true,dumponexit=true,dumponexitpath=%s "
+                                "-XX:StartFlightRecording=defaultrecording=true" % log_file}
 
 
 class JitCompiler(TelemetryDevice):
