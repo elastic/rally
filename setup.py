@@ -1,8 +1,13 @@
+from os.path import join, dirname
 from setuptools import setup, find_packages
 
 VERSION = (0, 1, 1, "dev0")
 __version__ = VERSION
 __versionstr__ = ".".join(map(str, VERSION))
+
+f = open(join(dirname(__file__), 'README.rst'))
+long_description = f.read().strip()
+f.close()
 
 install_requires = [
     "elasticsearch>=2.2.0",
@@ -18,6 +23,7 @@ tests_require = []
 setup(name="esrally",
       version=__versionstr__,
       description="Macrobenchmarking framework for Elasticsearch",
+      long_description=long_description,
       url="https://github.com/elastic/rally",
       license="Apache License, Version 2.0",
       packages=find_packages(
