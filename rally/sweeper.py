@@ -8,9 +8,9 @@ class Sweeper:
     def __init__(self, config):
         self._config = config
 
-    def run(self):
+    def run(self, track):
         invocation_root = paths.Paths(self._config).invocation_root()
         log_root = paths.Paths(self._config).log_root()
-        io.zip(log_root, "%s/logs.zip" % invocation_root)
+        io.zip(log_root, "%s/logs-%s.zip" % (invocation_root, track.name))
         shutil.rmtree(log_root)
 
