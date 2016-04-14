@@ -42,7 +42,7 @@ Once your changes and tests are ready to submit for review:
 
 1. Test your changes
 
-    Run the test suite to make sure that nothing is broken.
+    Run the test suite to make sure that nothing is broken: `python3 setup.py test`.
 
 2. Sign the Contributor License Agreement
 

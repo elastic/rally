@@ -2,11 +2,9 @@ Telemetry Devices
 =================
 
 You probably want to gain additional insights from a benchmarking trial. Therefore, we have added telemetry devices to Rally. If you invoke
-`esrally list telemetry` it will show which telemetry devices are available::
+`esrally list telemetry`, it will show which telemetry devices are available::
 
     dm@io:~ $ esrally list telemetry
-    
-    Writing additional logs to /Users/dm/Downloads/scratch/nightly/races/2016-03-07-13-38-12/daniel/logs/rally_out.log
     
         ____        ____
        / __ \____ _/ / /_  __
@@ -20,6 +18,7 @@ You probably want to gain additional insights from a benchmarking trial. Therefo
     * jit (JIT Compiler Profiler): Enables JIT compiler logs. (Always enabled: False)
     * ps (Process Statistics): Gathers process statistics like CPU usage or disk I/O. (Always enabled: True)
     * merge-parts (Merge Parts Statistics): Gathers merge parts time statistics. Note that you need to run a track setup which logs these data. (Always enabled: True)
+    * env (Environment Info): Gathers static environment information like OS or CPU details. (Always enabled: True)
     
     Keep in mind that each telemetry devices may incur a runtime overhead which can skew results.
 
@@ -32,7 +31,7 @@ The `jfr` telemetry device enables the `Java Flight Recorder <http://docs.oracle
 on the benchmark candidate. Java Flight Recorder ships only with the Oracle JDK, so Rally assumes that an Oracle JDK is used for benchmarking. 
 
 To enable `jfr`, invoke Rally with `esrally --telemetry jfr`. `jfr` will then write a flight recording file which can be opened in 
-`Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_.
+`Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_. Rally prints the location of the flight recording file on the command line.
  
 .. image:: jfr-es.png
    :alt: Sample Java Flight Recording
