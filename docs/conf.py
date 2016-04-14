@@ -15,6 +15,7 @@
 
 import sys
 import os
+import pkg_resources
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -55,7 +56,7 @@ author = 'Daniel Mitterdorfer'
 # built documents.
 #
 # The short X.Y version.
-version = '0.1.1'
+version = pkg_resources.require("esrally")[0].version
 # The full version, including alpha/beta/rc tags.
 release = version
 
