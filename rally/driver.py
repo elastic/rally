@@ -41,15 +41,19 @@ class Driver:
     def go(self, cluster, current_track, track_setup):
         cluster.on_benchmark_start()
         if track_setup.benchmark_settings.benchmark_indexing:
+            logger.info("Starting index benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
             cluster.on_benchmark_start(track.BenchmarkPhase.index)
             self._index_benchmark = IndexBenchmark(self._config, self._clock, current_track, track_setup, cluster, self._metrics)
             self._index_benchmark.run()
             cluster.on_benchmark_stop(track.BenchmarkPhase.index)
+            logger.info("Stopped index benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
         if track_setup.benchmark_settings.benchmark_search:
+            logger.info("Starting search benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
             cluster.on_benchmark_start(track.BenchmarkPhase.search)
             search_benchmark = SearchBenchmark(self._config, self._clock, current_track, track_setup, cluster, self._metrics)
             search_benchmark.run()
             cluster.on_benchmark_stop(track.BenchmarkPhase.search)
+            logger.info("Stopped search benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
         cluster.on_benchmark_stop()
 
     def tear_down(self, track, track_setup):
