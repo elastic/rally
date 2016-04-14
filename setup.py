@@ -11,7 +11,7 @@ f.close()
 
 install_requires = [
     "elasticsearch>=2.2.0",
-    "psutil>=3.3.0,<4.0.0",
+    "psutil==4.1.0",
     "py-cpuinfo==0.2.3",
     # always use the latest version, these are certificate files...
     "certifi"
