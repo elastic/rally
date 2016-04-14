@@ -272,6 +272,7 @@ class Ps(TelemetryDevice):
 
     def attach_to_node(self, node):
         disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
+        logger.info("Gathering disk device statistics for disk [%s]" % disk)
         self._t = {}
         for phase in track.BenchmarkPhase:
             self._t[phase] = GatherProcessStats(node, disk, self._metrics_store, phase)
@@ -294,7 +295,7 @@ class GatherProcessStats(threading.Thread):
         self.disk_name = disk_name
         self.metrics_store = metrics_store
         self.phase = phase
-        self.disk_start = sysstats.disk_io_counters(self.disk_name)
+        self.disk_start = None
 
     def finish(self):
         self.stop = True
@@ -318,6 +319,7 @@ class GatherProcessStats(threading.Thread):
                                                 disk_end.read_time - self.disk_start.read_time, "ms")
 
     def run(self):
+        self.disk_start = sysstats.disk_io_counters(self.disk_name)
         while not self.stop:
             self.metrics_store.put_value_node_level(self.node.node_name, "cpu_utilization_1s_%s" % self.phase.name,
                                                     sysstats.cpu_utilization(self.process), "%")
