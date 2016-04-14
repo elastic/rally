@@ -192,6 +192,7 @@ class IndexBenchmark(TimedOperation):
         return expand_action
 
     def _read_records(self, documents):
+        logger.info("Indexing JSON docs file: [%s]" % documents)
         with open(documents, "rt") as f:
             yield from f
 
@@ -206,7 +207,6 @@ class IndexBenchmark(TimedOperation):
         else:
             expected_doc_count = None
         num_client_threads = int(self._config.opts("benchmarks", "index.client.threads"))
-        logger.info("Indexing JSON docs file: [%s]" % documents)
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
         es = self._cluster.client
