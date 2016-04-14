@@ -303,12 +303,11 @@ class IndexBenchmark(TimedOperation):
             sent = self._sent_bytes
             elapsed = self._stop_watch.split_time()
             docs_per_second = docs_processed / elapsed
-            mb_per_second = convert.bytes_to_mb(sent) / elapsed
             self._progress.print(
-                "  Benchmarking indexing at %.1f docs/s, %.1f MB/s" % (docs_per_second, mb_per_second),
+                "  Benchmarking indexing at %.1f docs/s" % docs_per_second,
                 "[%3d%% done]" % round(100 * docs_processed / docs_total)
             )
-            logger.info("Indexer: %d docs: %.2f sec [%.1f dps, %.1f MB/sec]" % (docs_processed, elapsed, docs_per_second, mb_per_second))
+            logger.info("Indexer: %d docs: %.2f sec [%.1f docs/s]" % (docs_processed, elapsed, docs_per_second))
 
     def print_index_stats(self, data_dir):
         index_size_bytes = io.get_size(data_dir)
