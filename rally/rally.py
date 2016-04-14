@@ -1,4 +1,5 @@
 import datetime
+import time
 import os
 import sys
 import logging
@@ -33,12 +34,12 @@ def configure_logging(cfg):
     else:
         log_level = logging.INFO
 
-    logging.basicConfig(filename=log_file,
-                        filemode="a",
-                        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S",
-                        level=log_level)
-
+    ch = logging.FileHandler(filename=log_file, mode="a")
+    ch.setLevel(log_level)
+    formatter = logging.Formatter("%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter.converter = time.gmtime
+    ch.setFormatter(formatter)
+    logging.root.addHandler(ch)
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="esrally", description="Benchmark Elasticsearch")
