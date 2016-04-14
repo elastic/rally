@@ -227,11 +227,13 @@ class IndexBenchmark(TimedOperation):
                                                chunk_size=self._bulk_size,
                                                expand_action_callback=self.get_expand_action(),
                                                ):
-                            if processed % 10000 == 0 and processed > 0:
-                                elapsed = self._stop_watch.split_time()
-                                docs_per_sec = (processed / elapsed)
-                                self._metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
+                            if processed % 10000 == 0:
                                 self._print_progress(processed, total)
+                                # use 10% of all documents for warmup before gathering metrics
+                                if processed > total / 10:
+                                    elapsed = self._stop_watch.split_time()
+                                    docs_per_sec = (processed / elapsed)
+                                    self._metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
                             processed += 1
                     except KeyboardInterrupt:
                         logger.info("Received SIGINT: IndexBenchmark will be stopped prematurely.")
