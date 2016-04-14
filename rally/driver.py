@@ -71,6 +71,7 @@ class TimedOperation:
     def timed(self, target, repeat=1, *args, **kwargs):
         stop_watch = self._clock.stop_watch()
         stop_watch.start()
+        result = None
         for i in range(repeat):
             result = target(*args, **kwargs)
         stop_watch.stop()
@@ -260,8 +261,11 @@ class IndexBenchmark(TimedOperation):
 
     def _index_stats(self, expected_doc_count):
         logger.info("Gathering indices stats")
-        duration, stats = self.timed(self._cluster.client.indices.stats, metric="_all", level="shards")
-        self._metrics_store.put_value_cluster_level("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
+        # warmup
+        self.repeat(self._cluster.client.indices.stats, metric="_all", level="shards")
+        durations, stats = self.repeat(self._cluster.client.indices.stats, metric="_all", level="shards")
+        for duration in durations:
+            self._metrics_store.put_value_cluster_level("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
         primaries = stats["_all"]["primaries"]
         self._metrics_store.put_count_cluster_level("segments_count", primaries["segments"]["count"])
         self._metrics_store.put_count_cluster_level("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
@@ -284,8 +288,11 @@ class IndexBenchmark(TimedOperation):
 
     def _node_stats(self):
         logger.info("Gathering nodes stats")
-        duration, stats = self.timed(self._cluster.client.nodes.stats, metric="_all", level="shards")
-        self._metrics_store.put_value_cluster_level("node_stats_latency", convert.seconds_to_ms(duration), "ms")
+        # warmup
+        self.repeat(self._cluster.client.nodes.stats, metric="_all", level="shards")
+        durations, stats = self.repeat(self._cluster.client.nodes.stats, metric="_all", level="shards")
+        for duration in durations:
+            self._metrics_store.put_value_cluster_level("node_stats_latency", convert.seconds_to_ms(duration), "ms")
         total_old_gen_collection_time = 0
         total_young_gen_collection_time = 0
         nodes = stats["nodes"]
@@ -301,6 +308,16 @@ class IndexBenchmark(TimedOperation):
 
         self._metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
         self._metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+
+    # we don't want to gather to many samples as we're actually in the middle of the index benchmark and would skew other metrics like
+    # CPU usage too much (TODO #27: split this step from actual indexing and report proper percentiles not just median.)
+    def repeat(self, api_call, repetitions=10, *args, **kwargs):
+        times = []
+        result = None
+        for iteration in range(0, repetitions):
+            duration, result = self.timed(api_call, 1, *args, **kwargs)
+            times.append(duration)
+        return times, result
 
     def _print_progress(self, docs_processed, docs_total):
         if not self._quiet_mode:

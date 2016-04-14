@@ -103,10 +103,9 @@ class SummaryReporter:
 
     def report_cpu_usage(self, store):
         for phase in track.BenchmarkPhase:
-            percentages = store.get_percentiles("cpu_utilization_1s_%s" % phase.name, percentiles=[SummaryReporter.MEDIAN])
-            if percentages:
-                formatted_median = "%.1f" % percentages[SummaryReporter.MEDIAN]
-                print("  Median indexing CPU utilization (%s): %s%%" % (phase.name, formatted_median))
+            m = self.median(store, "cpu_utilization_1s_%s" % phase.name)
+            if m:
+                print("  Median indexing CPU utilization (%s): %.1f%%" % (phase.name, m))
             else:
                 print("Could not determine CPU usage (%s)" % phase.name)
 
@@ -140,6 +139,13 @@ class SummaryReporter:
 
     def report_stats_times(self, store):
         self.print_header("Stats request latency:")
-        print("  Indices stats: %.2fms" % store.get_one("indices_stats_latency"))
-        print("  Nodes stats: %.2fms" % store.get_one("node_stats_latency"))
+        print("  Indices stats: %.2fms" % self.median(store, "indices_stats_latency"))
+        print("  Nodes stats: %.2fms" % self.median(store, "node_stats_latency"))
         print("")
+
+    def median(self, store, metric_name):
+        percentiles = store.get_percentiles(metric_name, percentiles=[SummaryReporter.MEDIAN])
+        if percentiles:
+            return percentiles[SummaryReporter.MEDIAN]
+        else:
+            return None
