@@ -60,8 +60,13 @@ class Launcher:
         for k, v in t.instrument_candidate_env(setup, node_name).items():
             self._set_env(env, k, v)
 
-        self._set_env(env, "ES_HEAP_SIZE", setup.candidate_settings.heap)
-        self._set_env(env, "ES_JAVA_OPTS", setup.candidate_settings.java_opts)
+        java_opts = ""
+        if setup.candidate_settings.heap:
+            java_opts += "-Xms%s -Xmx%s " % (setup.candidate_settings.heap, setup.candidate_settings.heap)
+        if setup.candidate_settings.java_opts:
+            java_opts += setup.candidate_settings.java_opts
+        if len(java_opts) > 0:
+            self._set_env(env, "ES_JAVA_OPTS", java_opts)
         self._set_env(env, "ES_GC_OPTS", setup.candidate_settings.gc_opts)
 
         java_home = gear.Gear(self._config).capability(gear.Capability.java)
