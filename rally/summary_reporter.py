@@ -107,7 +107,7 @@ class SummaryReporter:
             if m:
                 print("  Median indexing CPU utilization (%s): %.1f%%" % (phase.name, m))
             else:
-                print("Could not determine CPU usage (%s)" % phase.name)
+                print("  Could not determine CPU usage (%s)" % phase.name)
 
     def report_gc_times(self, store):
         young_gc_time = store.get_one("node_total_young_gen_gc_time")
