@@ -5,8 +5,9 @@ PERCOLATOR_TYPE_NAME = ".percolator"
 
 percolatorIndexSettings = {
     "index.number_of_replicas": 0,
-    "index.queries.cache.type" : "none"
+    "index.queries.cache.enabled": False
 }
+
 
 class PercolatorQuery(track.Query):
     def __init__(self, content):
@@ -25,6 +26,7 @@ class PercolatorQuery(track.Query):
         }
       }
     }''' % (self.content))
+
 
 class PercolatorQueryNoScoring(track.Query):
     def __init__(self, content):
@@ -48,6 +50,7 @@ class PercolatorQueryNoScoring(track.Query):
       }
     }''' % (self.content))
 
+
 class PercolatorQueryWithHighlighting(track.Query):
     def __init__(self):
         track.Query.__init__(self, "percolator query with highlighting")
@@ -68,7 +71,8 @@ class PercolatorQueryWithHighlighting(track.Query):
           "body": {}
         }
       }
-    }''') 
+    }''')
+
 
 percolatorTrackSpec = track.Track(
     name="percolator",
@@ -95,11 +99,11 @@ percolatorTrackSpec = track.Track(
     estimated_benchmark_time_in_minutes=5,
     # Queries to use in the search benchmark
     queries=[
-        PercolatorQuery(content="president bush"), 
-        PercolatorQuery(content="saddam hussein"), 
-        PercolatorQuery(content="hurricane katrina"), 
-        PercolatorQuery(content="google"), 
-        PercolatorQueryNoScoring(content="google"), 
+        PercolatorQuery(content="president bush"),
+        PercolatorQuery(content="saddam hussein"),
+        PercolatorQuery(content="hurricane katrina"),
+        PercolatorQuery(content="google"),
+        PercolatorQueryNoScoring(content="google"),
         PercolatorQueryWithHighlighting(),
         PercolatorQuery(content="ignore me"),
         PercolatorQueryNoScoring(content="ignore me")
