@@ -1,5 +1,5 @@
-from rally import metrics, cluster
-from rally.mechanic import builder, supplier, provisioner, launcher
+from esrally import metrics, cluster
+from esrally.mechanic import builder, supplier, provisioner, launcher
 
 
 class Mechanic:

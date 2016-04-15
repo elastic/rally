@@ -6,7 +6,7 @@ import elasticsearch
 import elasticsearch.helpers
 import certifi
 
-from rally import time, exceptions
+from esrally import time, exceptions
 
 logger = logging.getLogger("rally.metrics")
 

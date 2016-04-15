@@ -3,8 +3,8 @@ import logging
 import urllib.error
 from enum import Enum
 
-from rally import config, exceptions
-from rally.utils import io, sysstats, convert, process, net
+from esrally import config, exceptions
+from esrally.utils import io, sysstats, convert, process, net
 
 logger = logging.getLogger("rally.track")
 

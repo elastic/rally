@@ -2,11 +2,11 @@ import logging
 import os
 import urllib.error
 
-from rally import config, driver, exceptions, paths, telemetry, sweeper, summary_reporter
-from rally.mechanic import mechanic
-from rally.utils import process, net, io
+from esrally import config, driver, exceptions, paths, telemetry, sweeper, summary_reporter
+from esrally.mechanic import mechanic
+from esrally.utils import process, net, io
 # This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
-from rally.track import *
+from esrally.track import *
 
 logger = logging.getLogger("rally.racecontrol")
 

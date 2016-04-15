@@ -1,16 +1,16 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-from rally import config
-from rally.mechanic import supplier
+from esrally import config
+from esrally.mechanic import supplier
 
 
 class SupplierTests(TestCase):
-    @mock.patch("rally.mechanic.supplier.GitRepository.head_revision", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.pull", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.clone", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("rally.utils.process.run_subprocess")
+    @mock.patch("esrally.mechanic.supplier.GitRepository.head_revision", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.pull", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.clone", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
+    @mock.patch("esrally.utils.process.run_subprocess")
     def test_intial_checkout_latest(self, mock_run_subprocess, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
@@ -30,11 +30,11 @@ class SupplierTests(TestCase):
         mock_pull.assert_called_with(git)
         mock_head_revision.assert_called_with(git)
 
-    @mock.patch("rally.mechanic.supplier.GitRepository.head_revision", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.pull")
-    @mock.patch("rally.mechanic.supplier.GitRepository.clone")
-    @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("rally.utils.process.run_subprocess")
+    @mock.patch("esrally.mechanic.supplier.GitRepository.head_revision", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.pull")
+    @mock.patch("esrally.mechanic.supplier.GitRepository.clone")
+    @mock.patch("esrally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
+    @mock.patch("esrally.utils.process.run_subprocess")
     def test_checkout_current(self, mock_run_subprocess, mock_is_cloned, mock_clone, mock_pull, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
@@ -54,10 +54,10 @@ class SupplierTests(TestCase):
         mock_pull.assert_not_called()
         mock_head_revision.assert_called_with(git)
 
-    @mock.patch("rally.mechanic.supplier.GitRepository.head_revision", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.pull_ts", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("rally.utils.process.run_subprocess")
+    @mock.patch("esrally.mechanic.supplier.GitRepository.head_revision", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.pull_ts", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
+    @mock.patch("esrally.utils.process.run_subprocess")
     def test_checkout_ts(self, mock_run_subprocess, mock_is_cloned, mock_pull_ts, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
@@ -76,10 +76,10 @@ class SupplierTests(TestCase):
         mock_pull_ts.assert_called_with(git, "2015-01-01-01:00:00")
         mock_head_revision.assert_called_with(git)
 
-    @mock.patch("rally.mechanic.supplier.GitRepository.head_revision", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.pull_revision", autospec=True)
-    @mock.patch("rally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
-    @mock.patch("rally.utils.process.run_subprocess")
+    @mock.patch("esrally.mechanic.supplier.GitRepository.head_revision", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.pull_revision", autospec=True)
+    @mock.patch("esrally.mechanic.supplier.GitRepository.is_cloned", autospec=True)
+    @mock.patch("esrally.utils.process.run_subprocess")
     def test_checkout_revision(self, mock_run_subprocess, mock_is_cloned, mock_pull_revision, mock_head_revision):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")

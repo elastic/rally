@@ -3,9 +3,9 @@ import threading
 import re
 import os
 
-from rally.utils import io, sysstats
-from rally.track import track
-from rally import metrics
+from esrally.utils import io, sysstats
+from esrally.track import track
+from esrally import metrics
 
 logger = logging.getLogger("rally.telemetry")
 

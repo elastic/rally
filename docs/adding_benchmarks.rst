@@ -89,9 +89,9 @@ Ensure to create a file called "README.txt" which can contain more information a
 Upload all three files to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example. For initial local testing you can also place all files in the data directory, which is located below the root directory you specified when initially configuring Rally. Let's say you specified ``/Users/daniel/benchmarks`` as root directory. Then you have to place the data for a track with the name "geonames" in ``/Users/daniel/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
 
 Finally, add a new Python source file in Rally's project directory. By convention, the file should be called "$BENCHMARK_NAME_track.py", so
-for our example the file is called "geonames_track.py". It is placed in "rally/track/". ::
+for our example the file is called "geonames_track.py". It is placed in "esrally/track/". ::
 
-    from rally.track import track
+    from esrally.track import track
 
     GEONAMES_INDEX_NAME = "geonames"
     
@@ -123,7 +123,7 @@ for our example the file is called "geonames_track.py". It is placed in "rally/t
 In case you want to add multiple indices this is possible too. The same track needs to specified as follows then: ::
 
 
-    from rally.track import track
+    from esrally.track import track
 
     GEONAMES_INDEX_NAME = "geonames"
 

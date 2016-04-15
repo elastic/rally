@@ -1,4 +1,4 @@
-from rally.track import track
+from esrally.track import track
 
 PERCOLATOR_INDEX_NAME = "queries"
 PERCOLATOR_TYPE_NAME = ".percolator"

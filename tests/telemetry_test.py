@@ -1,8 +1,8 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-from rally import config, metrics, telemetry, cluster
-from rally.track import track
+from esrally import config, metrics, telemetry, cluster
+from esrally.track import track
 
 
 class MockClientFactory:
@@ -59,8 +59,8 @@ class TelemetryTests(TestCase):
 
 
 class MergePartsDeviceTests(TestCase):
-    @mock.patch("rally.metrics.EsMetricsStore.put_count_cluster_level")
-    @mock.patch("rally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("builtins.open")
     @mock.patch("os.listdir")
     def test_store_nothing_if_no_metrics_present(self, listdir_mock, open_mock, metrics_store_put_value, metrics_store_put_count):
@@ -76,8 +76,8 @@ class MergePartsDeviceTests(TestCase):
         metrics_store_put_value.assert_not_called()
         metrics_store_put_count.assert_not_called()
 
-    @mock.patch("rally.metrics.EsMetricsStore.put_count_cluster_level")
-    @mock.patch("rally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("builtins.open")
     @mock.patch("os.listdir")
     def test_store_calculated_metrics(self, listdir_mock, open_mock, metrics_store_put_value, metrics_store_put_count):
@@ -113,8 +113,8 @@ class MergePartsDeviceTests(TestCase):
 
 
 class EnvironmentInfoTests(TestCase):
-    @mock.patch("rally.metrics.EsMetricsStore.add_meta_info")
-    @mock.patch("rally.cluster.Cluster.info")
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    @mock.patch("esrally.cluster.Cluster.info")
     def test_stores_cluster_level_metrics_on_attach(self, cluster_info, metrics_store_add_meta_info):
         cluster_info.return_value = {
             "version":
@@ -129,12 +129,12 @@ class EnvironmentInfoTests(TestCase):
 
         metrics_store_add_meta_info.assert_called_with(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
 
-    @mock.patch("rally.metrics.EsMetricsStore.add_meta_info")
-    @mock.patch("rally.utils.sysstats.os_name")
-    @mock.patch("rally.utils.sysstats.os_version")
-    @mock.patch("rally.utils.sysstats.logical_cpu_cores")
-    @mock.patch("rally.utils.sysstats.physical_cpu_cores")
-    @mock.patch("rally.utils.sysstats.cpu_model")
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    @mock.patch("esrally.utils.sysstats.os_name")
+    @mock.patch("esrally.utils.sysstats.os_version")
+    @mock.patch("esrally.utils.sysstats.logical_cpu_cores")
+    @mock.patch("esrally.utils.sysstats.physical_cpu_cores")
+    @mock.patch("esrally.utils.sysstats.cpu_model")
     def test_stores_node_level_metrics_on_attach(self, cpu_model, physical_cpu_cores, logical_cpu_cores, os_version, os_name,
                                                  metrics_store_add_meta_info):
         cpu_model.return_value = "Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz"

@@ -2,14 +2,14 @@ from unittest import TestCase
 
 import time
 
-import rally.time
+import esrally.time
 
 
 class TimeTests(TestCase):
     def test_split_time_increases(self):
         wait_period_seconds = 0.05
 
-        stop_watch = rally.time.Clock.stop_watch()
+        stop_watch = esrally.time.Clock.stop_watch()
         stop_watch.start()
         prev_split_time = 0
         for i in range(3):
@@ -25,7 +25,7 @@ class TimeTests(TestCase):
         wait_period_seconds = 0.05
         acceptable_delta_seconds = 0.01
 
-        stop_watch = rally.time.Clock.stop_watch()
+        stop_watch = esrally.time.Clock.stop_watch()
         stop_watch.start()
         time.sleep(wait_period_seconds)
         stop_watch.stop()
@@ -39,9 +39,9 @@ class TimeTests(TestCase):
         wait_period_millis = 50
         acceptable_delta_millis = 10
 
-        start = rally.time.to_epoch_millis(rally.time.Clock.now())
+        start = esrally.time.to_epoch_millis(esrally.time.Clock.now())
         time.sleep(wait_period_millis / 1000.0)
-        end = rally.time.to_epoch_millis(rally.time.Clock.now())
+        end = esrally.time.to_epoch_millis(esrally.time.Clock.now())
 
         interval_millis = end - start
 

@@ -6,8 +6,8 @@ import logging
 import argparse
 import pkg_resources
 
-from rally import config, paths, racecontrol
-from rally.utils import io
+from esrally import config, paths, racecontrol
+from esrally.utils import io
 
 __version__ = pkg_resources.require("esrally")[0].version
 

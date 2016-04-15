@@ -1,4 +1,4 @@
-from rally.track import track
+from esrally.track import track
 
 GEO_NAMES_INDEX_NAME = "geonames"
 GEO_NAMES_TYPE_NAME = "type"

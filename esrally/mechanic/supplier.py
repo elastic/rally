@@ -1,7 +1,7 @@
 import os
 import logging
 
-from rally.utils import io, process
+from esrally.utils import io, process
 
 logger = logging.getLogger("rally.supplier")
 

@@ -3,8 +3,8 @@ import glob
 import shutil
 import logging
 
-from rally import config
-from rally.utils import io
+from esrally import config
+from esrally.utils import io
 
 logger = logging.getLogger("rally.provisioner")
 

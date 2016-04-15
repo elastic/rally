@@ -5,7 +5,7 @@ import logging
 import configparser
 from enum import Enum
 
-from rally.utils import io
+from esrally.utils import io
 
 logger = logging.getLogger("rally.config")
 

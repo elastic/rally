@@ -1,15 +1,15 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-from rally import config
-from rally.mechanic import builder
+from esrally import config
+from esrally.mechanic import builder
 
 
 class BuilderTests(TestCase):
 
-    @mock.patch("rally.utils.io.ensure_dir")
+    @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.rename")
-    @mock.patch("rally.utils.process.run_subprocess")
+    @mock.patch("esrally.utils.process.run_subprocess")
     def test_build(self, mock_run_subprocess, mock_rename, mock_ensure_dir):
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")

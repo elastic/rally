@@ -5,8 +5,8 @@ import socket
 import signal
 import logging
 
-from rally.mechanic import gear
-from rally import config, cluster, telemetry, time, exceptions
+from esrally.mechanic import gear
+from esrally import config, cluster, telemetry, time, exceptions
 
 logger = logging.getLogger("rally.launcher")
 

@@ -2,7 +2,7 @@ import socket
 import elasticsearch
 import logging
 
-from rally import exceptions, time
+from esrally import exceptions, time
 
 
 logger = logging.getLogger("rally.cluster")

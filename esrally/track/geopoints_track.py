@@ -1,4 +1,4 @@
-from rally.track import track
+from esrally.track import track
 
 GEO_POINT_INDEX_NAME = "osmgeopoints"
 GEO_POINT_TYPE_NAME = "type"

@@ -1,9 +1,9 @@
 from unittest import TestCase
 import unittest.mock as mock
 
-from rally import config
-from rally.mechanic import provisioner
-from rally.track import track
+from esrally import config
+from esrally.mechanic import provisioner
+from esrally.track import track
 
 
 class ProvisionerTests(TestCase):
@@ -60,8 +60,8 @@ class ProvisionerTests(TestCase):
 
     @mock.patch("builtins.open")
     @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-3.0.0-SNAPSHOT"])
-    @mock.patch("rally.utils.io.unzip")
-    @mock.patch("rally.utils.io.ensure_dir")
+    @mock.patch("esrally.utils.io.unzip")
+    @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
     def test_prepare(self, mock_path_exists, mock_rm, mock_ensure_dir, mock_unzip, mock_open):

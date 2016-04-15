@@ -45,11 +45,11 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
    Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure that this port range is not used by the metrics store.
 
 Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. Kibana will not be auto-configured but a sample
-dashboard is delivered with Rally in ``$PACKAGE_ROOT/rally/resources/kibana.json`` which can be imported to Kibana:
+dashboard is delivered with Rally in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` which can be imported to Kibana:
 
 1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
 2. Create an index pattern "rally-*" and use "trial-timestamp" as time-field name (you might need to import some data first)
-3. Go to Settings > Objects and import ``$PACKAGE_ROOT/rally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it with your environment name before uploading.
+3. Go to Settings > Objects and import ``$PACKAGE_ROOT/esrally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it with your environment name before uploading.
 
 Installing Rally
 ~~~~~~~~~~~~~~~~

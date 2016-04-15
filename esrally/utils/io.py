@@ -5,7 +5,7 @@ import subprocess
 import bz2
 import zipfile
 
-from rally.utils import process
+from esrally.utils import process
 
 
 def ensure_dir(directory):

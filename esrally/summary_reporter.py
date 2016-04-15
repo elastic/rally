@@ -1,8 +1,8 @@
 import logging
 
-from rally import metrics
-from rally.track import track
-from rally.utils import convert
+from esrally import metrics
+from esrally.track import track
+from esrally.utils import convert
 
 logger = logging.getLogger("rally.reporting")
 

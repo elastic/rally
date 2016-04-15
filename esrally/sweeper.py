@@ -1,7 +1,7 @@
 import shutil
 
-from rally import paths
-from rally.utils import io
+from esrally import paths
+from esrally.utils import io
 
 
 class Sweeper:

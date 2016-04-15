@@ -2,9 +2,9 @@ import os
 import glob
 import logging
 
-from rally import config
-from rally.utils import io, process
-from rally.exceptions import ImproperlyConfigured
+from esrally import config
+from esrally.utils import io, process
+from esrally.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger("rally.builder")
 

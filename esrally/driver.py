@@ -4,9 +4,9 @@ import logging
 
 from elasticsearch.helpers import parallel_bulk
 
-from rally import time
-from rally.track import track
-from rally.utils import io, convert, process, progress
+from esrally import time
+from esrally.track import track
+from esrally.utils import io, convert, process, progress
 
 logger = logging.getLogger("rally.driver")
 

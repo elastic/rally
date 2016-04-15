@@ -1,4 +1,4 @@
-from rally.track import track
+from esrally.track import track
 
 TINY_INDEX_NAME = "tiny"
 TINY_TYPE_NAME = "type"

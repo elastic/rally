@@ -2,7 +2,7 @@ import datetime
 from unittest import TestCase
 import unittest.mock as mock
 
-from rally import config, metrics
+from esrally import config, metrics
 
 
 class MockClientFactory:
