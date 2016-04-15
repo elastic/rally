@@ -268,7 +268,7 @@ class Config:
         config["system"]["log.root.dir"] = "logs"
         config["system"]["env.name"] = env_name
 
-        if not only_binary:
+        if not (self._to_bool(only_binary)):
             config["source"] = {}
             config["source"]["local.src.dir"] = source_dir
             config["source"]["remote.repo.url"] = repo_url
