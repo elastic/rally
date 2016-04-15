@@ -6,7 +6,7 @@
       "title": "Nightly Benchmark Overview",
       "hits": 0,
       "description": "",
-      "panelsJSON": "[{\"col\":1,\"id\":\"Indexing-Performance\",\"panelIndex\":1,\"row\":6,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Total-times\",\"panelIndex\":2,\"row\":11,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Segment-total-heap-used\",\"panelIndex\":3,\"row\":16,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Indexing-CPU-utilization\",\"panelIndex\":4,\"row\":21,\"size_x\":12,\"size_y\":4,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Index-disk-usage\",\"panelIndex\":5,\"row\":25,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Index-segment-counts\",\"panelIndex\":6,\"row\":30,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Median-Query-Latency\",\"panelIndex\":7,\"row\":35,\"size_x\":12,\"size_y\":4,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Stats-request-time\",\"panelIndex\":8,\"row\":39,\"size_x\":12,\"size_y\":6,\"type\":\"visualization\"},{\"col\":1,\"id\":\"GC-Times\",\"panelIndex\":9,\"row\":45,\"size_x\":12,\"size_y\":6,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Geonames-Benchmark-Description\",\"panelIndex\":10,\"row\":1,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"}]",
+      "panelsJSON": "[{\"col\":1,\"id\":\"Indexing-Performance\",\"panelIndex\":1,\"row\":6,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Total-times\",\"panelIndex\":2,\"row\":11,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Segment-total-heap-used\",\"panelIndex\":3,\"row\":16,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Indexing-CPU-utilization\",\"panelIndex\":4,\"row\":21,\"size_x\":12,\"size_y\":4,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Index-disk-usage\",\"panelIndex\":5,\"row\":25,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Index-segment-counts\",\"panelIndex\":6,\"row\":30,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"col\":7,\"id\":\"Stats-request-time\",\"panelIndex\":8,\"row\":46,\"size_x\":6,\"size_y\":5,\"type\":\"visualization\"},{\"col\":1,\"id\":\"GC-Times\",\"panelIndex\":9,\"row\":51,\"size_x\":12,\"size_y\":4,\"type\":\"visualization\"},{\"col\":1,\"id\":\"Geonames-Benchmark-Description\",\"panelIndex\":10,\"row\":1,\"size_x\":12,\"size_y\":5,\"type\":\"visualization\"},{\"id\":\"Query-Latency-Distribution-(match_all-query)\",\"type\":\"visualization\",\"panelIndex\":11,\"size_x\":6,\"size_y\":6,\"col\":1,\"row\":35},{\"id\":\"Query-Latency-Distribution-(term-query)\",\"type\":\"visualization\",\"panelIndex\":12,\"size_x\":6,\"size_y\":6,\"col\":7,\"row\":35},{\"id\":\"Query-Latency-Distribution-(phrase-query)\",\"type\":\"visualization\",\"panelIndex\":13,\"size_x\":6,\"size_y\":5,\"col\":1,\"row\":46},{\"id\":\"Query-Latency-Distribution-(country-aggregation-uncached)\",\"type\":\"visualization\",\"panelIndex\":14,\"size_x\":6,\"size_y\":5,\"col\":1,\"row\":41},{\"id\":\"Query-Latency-Distribution-(country-aggregation-cached)\",\"type\":\"visualization\",\"panelIndex\":15,\"size_x\":6,\"size_y\":5,\"col\":7,\"row\":41}]",
       "optionsJSON": "{\"darkTheme\":false}",
       "uiStateJSON": "{\"P-1\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}},\"P-4\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}}}",
       "version": 1,
@@ -73,6 +73,20 @@
     }
   },
   {
+    "_id": "Median-Query-Latency",
+    "_type": "visualization",
+    "_source": {
+      "title": "Median Query Latency",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_defaults OR name:query_latency_default\",\"analyze_wildcard\":true}}},\"label\":\"Default\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_term\",\"analyze_wildcard\":true}}},\"label\":\"Term\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_hourly\",\"analyze_wildcard\":true}}},\"label\":\"Hourly Aggregation\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_phrase\",\"analyze_wildcard\":true}}},\"label\":\"Phrase\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_scroll\",\"analyze_wildcard\":true}}},\"label\":\"Scroll\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Uncached)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg_cached\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Cached)\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
     "_id": "Indexing-CPU-utilization",
     "_type": "visualization",
     "_source": {
@@ -115,25 +129,11 @@
     }
   },
   {
-    "_id": "Median-Query-Latency",
+    "_id": "GC-Times",
     "_type": "visualization",
     "_source": {
-      "title": "Median Query Latency",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{},\"spyPerPage\":10},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_defaults OR name:query_latency_default\",\"analyze_wildcard\":true}}},\"label\":\"Default\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_term\",\"analyze_wildcard\":true}}},\"label\":\"Term\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_hourly\",\"analyze_wildcard\":true}}},\"label\":\"Hourly Aggregation\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_phrase\",\"analyze_wildcard\":true}}},\"label\":\"Phrase\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_scroll\",\"analyze_wildcard\":true}}},\"label\":\"Scroll\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Uncached)\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:query_latency_country_agg_cached\",\"analyze_wildcard\":true}}},\"label\":\"Country Aggregation (Cached)\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{\"spy\":{\"mode\":{\"name\":null,\"fill\":false}}}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
-    "_id": "Stats-request-time",
-    "_type": "visualization",
-    "_source": {
-      "title": "Stats request time",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Node Stats\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indices_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Indices Stats\"}]}}],\"listeners\":{}}",
+      "title": "GC Times",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_young_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Young Gen GC\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_old_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Old Gen GC\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
@@ -143,11 +143,81 @@
     }
   },
   {
-    "_id": "GC-Times",
+    "_id": "Query-Latency-Distribution-(match_all-query)",
     "_type": "visualization",
     "_source": {
-      "title": "GC Times",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_young_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Young Gen GC\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_total_old_gen_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Old Gen GC\"}]}}],\"listeners\":{}}",
+      "title": "Query Latency Distribution (match_all query)",
+      "visState": "{\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\"defaultYExtents\":false,\"mode\":\"stacked\",\"scale\":\"linear\",\"setYExtents\":false,\"shareYAxis\":true,\"times\":[],\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"percentiles\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50,90,99,100]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:\\\"defaults\\\" AND (name:query_latency_defaults OR name:query_latency_default)\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Query-Latency-Distribution-(term-query)",
+    "_type": "visualization",
+    "_source": {
+      "title": "Query Latency Distribution (term query)",
+      "visState": "{\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\"defaultYExtents\":false,\"mode\":\"stacked\",\"scale\":\"linear\",\"setYExtents\":false,\"shareYAxis\":true,\"times\":[],\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"percentiles\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50,90,99,100]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:\\\"defaults\\\" AND name:query_latency_term\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Query-Latency-Distribution-(phrase-query)",
+    "_type": "visualization",
+    "_source": {
+      "title": "Query Latency Distribution (phrase query)",
+      "visState": "{\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\"defaultYExtents\":false,\"mode\":\"stacked\",\"scale\":\"linear\",\"setYExtents\":false,\"shareYAxis\":true,\"times\":[],\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"percentiles\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50,90,99,100]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:\\\"defaults\\\" AND name:query_latency_phrase\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Query-Latency-Distribution-(country-aggregation-uncached)",
+    "_type": "visualization",
+    "_source": {
+      "title": "Query Latency Distribution (country aggregation uncached)",
+      "visState": "{\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\"defaultYExtents\":false,\"mode\":\"stacked\",\"scale\":\"linear\",\"setYExtents\":false,\"shareYAxis\":true,\"times\":[],\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"percentiles\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50,90,99,100]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:\\\"defaults\\\" AND name:query_latency_country_agg\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Query-Latency-Distribution-(country-aggregation-cached)",
+    "_type": "visualization",
+    "_source": {
+      "title": "Query Latency Distribution (country aggregation cached)",
+      "visState": "{\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\"defaultYExtents\":false,\"mode\":\"stacked\",\"scale\":\"linear\",\"setYExtents\":false,\"shareYAxis\":true,\"times\":[],\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"percentiles\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50,90,99,100]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:\\\"defaults\\\" AND name:query_latency_country_agg_cached\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Stats-request-time",
+    "_type": "visualization",
+    "_source": {
+      "title": "Stats request time",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"max\",\"schema\":\"metric\",\"params\":{\"field\":\"value\"}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Node Stats\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indices_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Indices Stats\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
