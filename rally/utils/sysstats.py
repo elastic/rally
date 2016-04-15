@@ -39,6 +39,17 @@ def disk_io_counters(disk_name=None):
         return psutil.disk_io_counters(perdisk=False)
 
 
+def process_io_counters(handle):
+    """
+    :param handle: handle retrieved by calling setup_process_stats(pid).
+    :return: Either the current value of the associated process' disk I/O counters or None if process I/O counters are unsupported.
+    """
+    try:
+        return handle.io_counters()
+    except AttributeError:
+        return None
+
+
 def setup_process_stats(pid):
     """
     Sets up process stats measurements for the provided process id.

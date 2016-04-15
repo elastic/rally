@@ -296,30 +296,41 @@ class GatherProcessStats(threading.Thread):
         self.metrics_store = metrics_store
         self.phase = phase
         self.disk_start = None
+        self.process_start = None
 
     def finish(self):
         self.stop = True
         self.join()
+        # Be aware the semantics of write counts etc. are different for disk and process statistics.
+        # Thus we're conservative and only report I/O bytes now.
         disk_end = sysstats.disk_io_counters(self.disk_name)
+        process_end = sysstats.process_io_counters(self.process)
 
         self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes_%s" % self.phase.name,
-                                                disk_end.write_bytes - self.disk_start.write_bytes, "byte")
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_count_%s" % self.phase.name,
-                                                disk_end.write_count - self.disk_start.write_count)
-        # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
-        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_write_time_%s" % self.phase.name,
-                                                disk_end.write_time - self.disk_start.write_time, "ms")
-
+                                                self.write_bytes(process_end, disk_end), "byte")
         self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes_%s" % self.phase.name,
-                                                disk_end.read_bytes - self.disk_start.read_bytes, "byte")
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_count_%s" % self.phase.name,
-                                                disk_end.read_count - self.disk_start.read_count)
-        # may be wrong on OS X: https://github.com/giampaolo/psutil/issues/700
-        self.metrics_store.put_value_node_level(self.node.node_name, "disk_io_read_time_%s" % self.phase.name,
-                                                disk_end.read_time - self.disk_start.read_time, "ms")
+                                                self.read_bytes(process_end, disk_end), "byte")
+
+    def read_bytes(self, process_end, disk_end):
+        if self.process_start and process_end:
+            return process_end.read_bytes - self.process_start.read_bytes
+        else:
+            return disk_end.read_bytes - self.disk_start.read_bytes
+
+    def write_bytes(self, process_end, disk_end):
+        if self.process_start and process_end:
+            return process_end.write_bytes - self.process_start.write_bytes
+        else:
+            return disk_end.write_bytes - self.disk_start.write_bytes
 
     def run(self):
         self.disk_start = sysstats.disk_io_counters(self.disk_name)
+        self.process_start = sysstats.process_io_counters(self.process)
+        if self.process_start:
+            logger.info("Using more accurate process-based I/O counters.")
+        else:
+            logger.warn("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+
         while not self.stop:
             self.metrics_store.put_value_node_level(self.node.node_name, "cpu_utilization_1s_%s" % self.phase.name,
                                                     sysstats.cpu_utilization(self.process), "%")
