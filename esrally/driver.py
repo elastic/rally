@@ -46,7 +46,7 @@ class Driver:
         if track_setup.benchmark.benchmark_indexing:
             logger.info("Starting index benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
             cluster.on_benchmark_start(track.BenchmarkPhase.index)
-            self.index_benchmark = IndexBenchmark(self.cfg, self.clock, current_track, track_setup, cluster)
+            self.index_benchmark = ThreadedIndexBenchmark(self.cfg, self.clock, current_track, track_setup, cluster)
             self.index_benchmark.run()
             cluster.on_benchmark_stop(track.BenchmarkPhase.index)
             logger.info("Stopped index benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
@@ -166,18 +166,7 @@ class IndexBenchmark(TimedOperation):
             expected_doc_count = None
             ids = self.build_conflicting_ids(conflicts)
 
-        self.stop_watch.start()
-        self._print_progress(self.processed)
-
-        for index in self.track.indices:
-            for type in index.types:
-                if type.document_file_name:
-                    self.index_documents(index, type, ids)
-
-        self.stop_watch.stop()
-        self._print_progress(self.processed)
-        docs_per_sec = (self.processed / self.stop_watch.total_time())
-        self.metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
+        self.index_documents(ids)
 
         logger.info("Force flushing all indices.")
         es = self.cluster.client
@@ -288,49 +277,68 @@ class IndexBenchmark(TimedOperation):
         self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
         process.run_subprocess_with_logging("find %s -ls" % data_dir, header="index files:")
 
-    def index_documents(self, index, type, ids):
-        num_client_threads = int(self.cfg.opts("benchmarks", "index.client.threads"))
+    def index_documents(self, ids):
+        raise NotImplementedError("abstract method")
+
+
+class ThreadedIndexBenchmark(IndexBenchmark):
+    def __init__(self, config, clock, track, track_setup, cluster):
+        super().__init__(config, clock, track, track_setup, cluster)
+
+    def index_documents(self, ids):
+        num_client_threads = int(self.cfg.opts("benchmarks", "index.clients"))
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
-        documents = self.cfg.opts("benchmarks", "dataset.path")
-        docs_file = documents[type]
-        logger.info("Indexing JSON docs file: [%s]" % docs_file)
+        self.stop_watch.start()
+        self._print_progress(self.processed)
 
-        start_signal = CountDownLatch(1)
-        stop_event = threading.Event()
-        failed_event = threading.Event()
-        docs_to_index = self.track.number_of_documents
+        for index in self.track.indices:
+            for type in index.types:
+                if type.document_file_name:
+                    documents = self.cfg.opts("benchmarks", "dataset.path")
+                    docs_file = documents[type]
+                    logger.info("Indexing JSON docs file: [%s]" % docs_file)
 
-        bulk_docs = BulkDocs(index.name, type.name, docs_file, ids, docs_to_index, self.bulk_size)
+                    start_signal = CountDownLatch(1)
+                    stop_event = threading.Event()
+                    failed_event = threading.Event()
+                    docs_to_index = self.track.number_of_documents
 
-        threads = []
-        try:
-            for i in range(num_client_threads):
-                t = threading.Thread(target=self.bulk_index, args=(start_signal, bulk_docs, failed_event, stop_event))
-                t.setDaemon(True)
-                t.start()
-                threads.append(t)
+                    iterator = BulkIterator(index.name, type.name, docs_file, ids, docs_to_index, self.bulk_size)
 
-            start_signal.count_down()
-            for t in threads:
-                t.join()
+                    threads = []
+                    try:
+                        for i in range(num_client_threads):
+                            t = threading.Thread(target=self.bulk_index, args=(start_signal, iterator, failed_event, stop_event))
+                            t.setDaemon(True)
+                            t.start()
+                            threads.append(t)
 
-        except KeyboardInterrupt:
-            stop_event.set()
-            for t in threads:
-                t.join()
+                        start_signal.count_down()
+                        for t in threads:
+                            t.join()
 
-        if failed_event.isSet():
-            raise RuntimeError("some indexing threads failed")
+                    except KeyboardInterrupt:
+                        stop_event.set()
+                        for t in threads:
+                            t.join()
 
-    def bulk_index(self, start_signal, bulk_docs, failed_event, stop_event):
+                    if failed_event.isSet():
+                        raise RuntimeError("some indexing threads failed")
+
+        self.stop_watch.stop()
+        self._print_progress(self.processed)
+        docs_per_sec = (self.processed / self.stop_watch.total_time())
+        self.metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
+
+    def bulk_index(self, start_signal, bulk_iterator, failed_event, stop_event):
         """
         Runs one (client) bulk index thread.
         """
         start_signal.await()
 
         while not stop_event.isSet():
-            buffer, document_count = bulk_docs.next_bulk()
+            buffer, document_count = bulk_iterator.next_bulk()
             if document_count == 0:
                 break
             data = "\n".join(buffer)
@@ -375,11 +383,7 @@ class CountDownLatch:
                 self.lock.wait()
 
 
-class BulkDocs:
-    """
-    Pulls docs out of a one-json-line-per-doc file and makes bulk requests.
-    """
-
+class BulkIterator:
     def __init__(self, index_name, type_name, documents, ids, docs_to_index, bulk_size):
         self.f = open(documents, 'rt')
         self.index_name = index_name
