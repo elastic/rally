@@ -2,7 +2,7 @@ import logging
 import os
 import urllib.error
 
-from esrally import config, driver, exceptions, paths, telemetry, sweeper, summary_reporter
+from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io
 # This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
@@ -306,5 +306,5 @@ class RacingContext:
         self.mechanic = mechanic.Mechanic(cfg)
         self.driver = driver.Driver(cfg)
         self.marshal = track.Marshal(cfg)
-        self.reporter = summary_reporter.SummaryReporter(cfg)
+        self.reporter = reporter.SummaryReporter(cfg)
         self.sweeper = sweeper.Sweeper(cfg)
