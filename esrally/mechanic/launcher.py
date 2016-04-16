@@ -27,7 +27,7 @@ class Launcher:
     def start(self, track, setup, metrics_store):
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
-        num_nodes = setup.candidate_settings.nodes
+        num_nodes = setup.candidate.nodes
         first_http_port = self._config.opts("provisioning", "node.http.port")
 
         t = telemetry.Telemetry(self._config, metrics_store)
@@ -61,13 +61,13 @@ class Launcher:
             self._set_env(env, k, v)
 
         java_opts = ""
-        if setup.candidate_settings.heap:
-            java_opts += "-Xms%s -Xmx%s " % (setup.candidate_settings.heap, setup.candidate_settings.heap)
-        if setup.candidate_settings.java_opts:
-            java_opts += setup.candidate_settings.java_opts
+        if setup.candidate.heap:
+            java_opts += "-Xms%s -Xmx%s " % (setup.candidate.heap, setup.candidate.heap)
+        if setup.candidate.java_opts:
+            java_opts += setup.candidate.java_opts
         if len(java_opts) > 0:
             self._set_env(env, "ES_JAVA_OPTS", java_opts)
-        self._set_env(env, "ES_GC_OPTS", setup.candidate_settings.gc_opts)
+        self._set_env(env, "ES_GC_OPTS", setup.candidate.gc_opts)
 
         java_home = gear.Gear(self._config).capability(gear.Capability.java)
         # Unix specific!:
@@ -87,7 +87,7 @@ class Launcher:
     def prepare_cmd(self, setup, node_name):
         server_log_dir = "%s/server" % self._config.opts("system", "track.setup.log.dir")
         self._config.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
-        processor_count = setup.candidate_settings.processors
+        processor_count = setup.candidate.processors
 
         cmd = ["bin/elasticsearch", "-Ees.node.name=%s" % node_name]
         if processor_count is not None and processor_count > 1:

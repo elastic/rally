@@ -111,7 +111,7 @@ percolatorTrackSpec = track.Track(
     track_setups=[track.TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate_settings=track.CandidateSettings(index_settings=percolatorIndexSettings, heap="4g"),
-        benchmark_settings=track.BenchmarkSettings(benchmark_search=True)
+        candidate=track.CandidateSettings(index_settings=percolatorIndexSettings, heap="4g"),
+        benchmark=track.BenchmarkSettings(benchmark_search=True)
     )]
 )

@@ -264,12 +264,12 @@ class TrackSetup:
     def __init__(self,
                  name,
                  description,
-                 candidate_settings=CandidateSettings(),
-                 benchmark_settings=BenchmarkSettings()):
+                 candidate=CandidateSettings(),
+                 benchmark=BenchmarkSettings()):
         self.name = name
         self.description = description
-        self.candidate_settings = candidate_settings
-        self.benchmark_settings = benchmark_settings
+        self.candidate = candidate
+        self.benchmark = benchmark
 
 
 class Query:
@@ -398,46 +398,46 @@ track_setups = [
     TrackSetup(
         name="defaults",
         description="append-only, using all default settings.",
-        candidate_settings=CandidateSettings(index_settings=greenNodeSettings),
-        benchmark_settings=BenchmarkSettings(benchmark_search=True)
+        candidate=CandidateSettings(index_settings=greenNodeSettings),
+        benchmark=BenchmarkSettings(benchmark_search=True)
     ),
     TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate_settings=CandidateSettings(index_settings=greenNodeSettings, heap="4g"),
-        benchmark_settings=BenchmarkSettings()
+        candidate=CandidateSettings(index_settings=greenNodeSettings, heap="4g"),
+        benchmark=BenchmarkSettings()
     ),
 
     TrackSetup(
         name="fastsettings",
         description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
-        candidate_settings=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
-        benchmark_settings=BenchmarkSettings()
+        candidate=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
+        benchmark=BenchmarkSettings()
     ),
 
     TrackSetup(
         name="fastupdates",
         description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
                     "already exists in the index.",
-        candidate_settings=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
-        benchmark_settings=BenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
+        candidate=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
+        benchmark=BenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
     ),
 
     TrackSetup(
         name="two_nodes_defaults",
         description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
         # integer divide!
-        candidate_settings=CandidateSettings(index_settings=greenNodeSettings, nodes=2,
-                                             processors=sysstats.logical_cpu_cores() // 2),
-        benchmark_settings=BenchmarkSettings()
+        candidate=CandidateSettings(index_settings=greenNodeSettings, nodes=2,
+                                    processors=sysstats.logical_cpu_cores() // 2),
+        benchmark=BenchmarkSettings()
     ),
 
     TrackSetup(
         name="defaults_verbose_iw",
         description="Based on defaults but specifically set up to gather merge part times.",
         # integer divide!
-        candidate_settings=CandidateSettings(index_settings=greenNodeSettings,
-                                             logging_config=mergePartsLogConfig),
-        benchmark_settings=BenchmarkSettings()
+        candidate=CandidateSettings(index_settings=greenNodeSettings,
+                                    logging_config=mergePartsLogConfig),
+        benchmark=BenchmarkSettings()
     ),
 ]

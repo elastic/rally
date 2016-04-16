@@ -52,7 +52,7 @@ class Provisioner:
         self._configure_cluster(setup)
 
     def _configure_logging(self, setup):
-        log_cfg = setup.candidate_settings.custom_logging_config
+        log_cfg = setup.candidate.custom_logging_config
         if log_cfg:
             logger.info("Replacing pre-bundled ES log configuration with custom config: [%s]" % log_cfg)
             binary_path = self._config.opts("provisioning", "local.binary.path")
@@ -63,7 +63,7 @@ class Provisioner:
         first_http_port = self._config.opts("provisioning", "node.http.port")
         logger.info("Using port [%d]" % first_http_port)
         env_name = self._config.opts("system", "env.name")
-        additional_config = setup.candidate_settings.custom_config_snippet
+        additional_config = setup.candidate.custom_config_snippet
         data_paths = self._data_paths(setup)
         logger.info("Using data paths [%s]" % data_paths)
         self._config.add(config.Scope.trackSetup, "provisioning", "local.data.paths", data_paths)
