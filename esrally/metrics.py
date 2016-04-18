@@ -139,6 +139,7 @@ class EsMetricsStore:
         self._client = client_factory_class(config).create()
         self._index_template_provider = index_template_provider_class(config)
         self._clock = clock
+        self._stop_watch = self._clock.stop_watch()
 
     def open(self, invocation, track_name, track_setup_name, create=False):
         """
@@ -161,6 +162,7 @@ class EsMetricsStore:
             self._client.create_index(index=self._index)
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
+        self._stop_watch.start()
 
     def _get_template(self):
         return self._index_template_provider.template()
@@ -247,6 +249,7 @@ class EsMetricsStore:
 
         doc = {
             "@timestamp": time.to_epoch_millis(self._clock.now()),
+            "relative-time": int(self._stop_watch.split_time() * 1000 * 1000),
             "trial-timestamp": self._invocation,
             "environment": self._environment_name,
             "track": self._track,
