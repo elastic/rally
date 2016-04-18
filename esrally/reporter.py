@@ -70,7 +70,7 @@ class SummaryReporter:
                 for percentile, value in query_latency.items():
                     print("    %s Percentile: %.2f ms" % (percentile, value))
             else:
-                print("Could not determine query latency for [%s]" % q)
+                print("  Could not determine query latency for [%s]" % q)
 
     def report_total_times(self, store):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
@@ -125,14 +125,19 @@ class SummaryReporter:
             print("  Could not determine disk usage metrics")
 
     def report_segment_memory(self, store):
-        print("  Total heap used for segments     : %.2fMB" % self._mb(store, "segments_memory_in_bytes"))
-        print("  Total heap used for doc values   : %.2fMB" % self._mb(store, "segments_doc_values_memory_in_bytes"))
-        print("  Total heap used for terms        : %.2fMB" % self._mb(store, "segments_terms_memory_in_bytes"))
-        print("  Total heap used for norms        : %.2fMB" % self._mb(store, "segments_norms_memory_in_bytes"))
-        print("  Total heap used for stored fields: %.2fMB" % self._mb(store, "segments_stored_fields_memory_in_bytes"))
+        print("  Total heap used for segments     : %s" % self._mb(store, "segments_memory_in_bytes"))
+        print("  Total heap used for doc values   : %s" % self._mb(store, "segments_doc_values_memory_in_bytes"))
+        print("  Total heap used for terms        : %s" % self._mb(store, "segments_terms_memory_in_bytes"))
+        print("  Total heap used for norms        : %s" % self._mb(store, "segments_norms_memory_in_bytes"))
+        print("  Total heap used for points       : %s" % self._mb(store, "segments_points_memory_in_bytes"))
+        print("  Total heap used for stored fields: %s" % self._mb(store, "segments_stored_fields_memory_in_bytes"))
 
     def _mb(self, store, key):
-        return convert.bytes_to_mb(store.get_one(key))
+        value = store.get_one(key)
+        if value:
+            return "%.2fMB" % convert.bytes_to_mb(value)
+        else:
+            return "N/A"
 
     def report_segment_counts(self, store):
         print("  Index segment count: %s" % store.get_one("segments_count"))

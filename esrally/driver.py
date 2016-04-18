@@ -213,6 +213,9 @@ class IndexBenchmark(TimedOperation):
                                                    "byte")
         self.metrics_store.put_count_cluster_level("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"],
                                                    "byte")
+        if "points_memory_in_bytes" in primaries["segments"]:
+            self.metrics_store.put_count_cluster_level("segments_points_memory_in_bytes", primaries["segments"]["points_memory_in_bytes"],
+                                                       "byte")
         self.metrics_store.put_value_cluster_level("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
         self.metrics_store.put_value_cluster_level("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"],
                                                    "ms")

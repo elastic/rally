@@ -45,20 +45,6 @@
     }
   },
   {
-    "_id": "Segment-total-heap-used",
-    "_type": "visualization",
-    "_source": {
-      "title": "Segment total heap used",
-      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Total Heap used\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_doc_values_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Doc Values\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_terms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Terms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_norms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Norms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_stored_fields_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Stored Fields\"}]}}],\"listeners\":{}}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
-      }
-    }
-  },
-  {
     "_id": "Total-times",
     "_type": "visualization",
     "_source": {
@@ -218,6 +204,20 @@
     "_source": {
       "title": "Stats request time",
       "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"max\",\"schema\":\"metric\",\"params\":{\"field\":\"value\"}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:node_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Node Stats\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:indices_stats_latency\",\"analyze_wildcard\":true}}},\"label\":\"Indices Stats\"}]}}],\"listeners\":{}}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"index\":\"rally-*\",\"query\":{\"query_string\":{\"query\":\"track:geonames AND environment:nightly AND track-setup:defaults\",\"analyze_wildcard\":true}},\"filter\":[]}"
+      }
+    }
+  },
+  {
+    "_id": "Segment-total-heap-used",
+    "_type": "visualization",
+    "_source": {
+      "title": "Segment total heap used",
+      "visState": "{\"type\":\"line\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"showCircles\":true,\"smoothLines\":false,\"interpolate\":\"linear\",\"scale\":\"linear\",\"drawLinesBetweenPoints\":true,\"radiusRatio\":9,\"times\":[],\"addTimeMarker\":false,\"defaultYExtents\":false,\"setYExtents\":false,\"yAxis\":{}},\"aggs\":[{\"id\":\"1\",\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value\",\"percents\":[50]}},{\"id\":\"2\",\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"trial-timestamp\",\"interval\":\"d\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{}}},{\"id\":\"3\",\"type\":\"filters\",\"schema\":\"group\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Total Heap used\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_doc_values_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Doc Values\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_terms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Terms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_norms_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Norms\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_stored_fields_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Stored Fields\"},{\"input\":{\"query\":{\"query_string\":{\"query\":\"name:segments_points_memory_in_bytes\",\"analyze_wildcard\":true}}},\"label\":\"Points\"}]}}],\"listeners\":{}}",
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
