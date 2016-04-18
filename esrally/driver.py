@@ -270,7 +270,7 @@ class IndexBenchmark(TimedOperation):
                 "  Benchmarking indexing at %.1f docs/s" % docs_per_second,
                 "[%3d%% done]" % round(100 * docs_processed / docs_total)
             )
-            logger.info("Indexer: %d docs: %.2f sec [%.1f docs/s]" % (docs_processed, elapsed, docs_per_second))
+            logger.info("Indexer: %d docs: [%.1f docs/s]" % (docs_processed, docs_per_second))
 
     def print_index_stats(self, data_dir):
         index_size_bytes = io.get_size(data_dir)
