@@ -195,17 +195,18 @@ class EsMetricsStore:
         else:
             raise exceptions.ImproperlyConfigured("Unknown meta info scope [%s]" % scope)
 
-    def put_count_cluster_level(self, name, count, unit=None):
+    def put_count_cluster_level(self, name, count, unit=None, sample_type="normal"):
         """
         Adds a new cluster level counter metric.
 
         :param name: The name of the metric.
         :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
         :param unit: A count may or may not have unit.
+        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to "normal".
         """
-        self._put(MetaInfoScope.cluster, None, name, count, unit)
+        self._put(MetaInfoScope.cluster, None, name, count, unit, sample_type)
 
-    def put_count_node_level(self, node_name, name, count, unit=None):
+    def put_count_node_level(self, node_name, name, count, unit=None, sample_type="normal"):
         """
         Adds a new node level counter metric.
 
@@ -213,21 +214,23 @@ class EsMetricsStore:
         :param node_name: The name of the cluster node for which this metric has been determined.
         :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
         :param unit: A count may or may not have unit.
+        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to "normal".
         """
-        self._put(MetaInfoScope.node, node_name, name, count, unit)
+        self._put(MetaInfoScope.node, node_name, name, count, unit, sample_type)
 
     # should be a float
-    def put_value_cluster_level(self, name, value, unit):
+    def put_value_cluster_level(self, name, value, unit, sample_type="normal"):
         """
         Adds a new cluster level value metric.
 
         :param name: The name of the metric.
         :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
         :param unit: The unit of this metric value (e.g. ms, docs/s).
+        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to "normal".
         """
-        self._put(MetaInfoScope.cluster, None, name, value, unit)
+        self._put(MetaInfoScope.cluster, None, name, value, unit, sample_type)
 
-    def put_value_node_level(self, node_name, name, value, unit):
+    def put_value_node_level(self, node_name, name, value, unit, sample_type="normal"):
         """
         Adds a new node level value metric.
 
@@ -235,10 +238,11 @@ class EsMetricsStore:
         :param node_name: The name of the cluster node for which this metric has been determined.
         :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
         :param unit: The unit of this metric value (e.g. ms, docs/s)
+        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to "normal".
         """
-        self._put(MetaInfoScope.node, node_name, name, value, unit)
+        self._put(MetaInfoScope.node, node_name, name, value, unit, sample_type)
 
-    def _put(self, level, level_key, name, value, unit):
+    def _put(self, level, level_key, name, value, unit, sample_type):
         if level == MetaInfoScope.cluster:
             meta = self._meta_info[MetaInfoScope.cluster]
         elif level == MetaInfoScope.node:
@@ -257,6 +261,7 @@ class EsMetricsStore:
             "name": name,
             "value": value,
             "unit": unit,
+            "sample-type": sample_type,
             "meta": meta
         }
         self._docs.append(doc)

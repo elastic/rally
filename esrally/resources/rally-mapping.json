@@ -69,6 +69,11 @@
           "type": "string",
           "doc_values": true,
           "index": "not_analyzed"
+        },
+        "sample-type": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
         }
       }
     }

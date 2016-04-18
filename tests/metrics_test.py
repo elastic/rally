@@ -28,6 +28,24 @@ class StaticClock:
     def now():
         return StaticClock.NOW
 
+    @staticmethod
+    def stop_watch():
+        return StaticStopWatch()
+
+
+class StaticStopWatch:
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def split_time(self):
+        return 0
+
+    def total_time(self):
+        return 0
+
 
 class MetricsTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
@@ -51,7 +69,9 @@ class MetricsTests(TestCase):
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
             "trial-timestamp": "20160131T000000Z",
+            "relative-time": 0,
             "environment": "unittest",
+            "sample-type": "normal",
             "track": "test",
             "track-setup": "defaults",
             "name": "indexing_throughput",
@@ -80,7 +100,9 @@ class MetricsTests(TestCase):
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
             "trial-timestamp": "20160131T000000Z",
+            "relative-time": 0,
             "environment": "unittest",
+            "sample-type": "normal",
             "track": "test",
             "track-setup": "defaults",
             "name": "indexing_throughput",
