@@ -52,7 +52,7 @@ Installing Rally
 Command Line Options
 --------------------
 
-Rally has a list of supported command line options. Just run `esrally --help`.
+Rally has a list of supported command line options. Just run ``esrally --help``.
 
 Here are some examples:
 
