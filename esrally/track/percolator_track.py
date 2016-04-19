@@ -3,9 +3,16 @@ from esrally.track import track
 PERCOLATOR_INDEX_NAME = "queries"
 PERCOLATOR_TYPE_NAME = ".percolator"
 
+# Workaround to support multiple versions (this is not how this will be handled in the future..)
 percolatorIndexSettings = {
-    "index.number_of_replicas": 0,
-    "index.queries.cache.enabled": False
+    "master": {
+        "index.number_of_replicas": 0,
+        "index.queries.cache.enabled": False
+    },
+    "5.0.0-alpha1": {
+        "index.number_of_replicas": 0,
+        "index.queries.cache.type": "none"
+    }
 }
 
 

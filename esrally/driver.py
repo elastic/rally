@@ -3,7 +3,7 @@ import random
 import logging
 import threading
 
-from esrally import time
+from esrally import time, exceptions
 from esrally.track import track
 from esrally.utils import io, convert, process, progress
 
@@ -26,7 +26,22 @@ class Driver:
             mapping_path = self.cfg.opts("benchmarks", "mapping.path")
             for index in track.indices:
                 logger.debug("Creating index [%s]" % index.name)
-                cluster.client.indices.create(index=index.name, body=track_setup.candidate.index_settings)
+                settings = track_setup.candidate.index_settings
+                # Workaround to support multiple versions (this is not how this will be handled in the future..)
+                if "master" in settings:
+                    # check whether we do a binary benchmark
+                    distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+                    if distribution_version and len(distribution_version.strip()) > 0:
+                        if distribution_version in settings:
+                            index_settings = settings[distribution_version]
+                        else:
+                            raise exceptions.SystemSetupError("Could not find index settings for Elasticsearch version [%s]" %
+                                                              distribution_version)
+                    else:
+                        index_settings = settings["master"]
+                else:
+                    index_settings = settings
+                cluster.client.indices.create(index=index.name, body=index_settings)
                 for type in index.types:
                     mappings = open(mapping_path[type]).read()
                     logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
