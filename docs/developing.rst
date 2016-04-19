@@ -10,10 +10,21 @@ If you want to hack on Rally or :doc:`add new benchmarks </adding_benchmarks>`, 
     # Clone the repo
     git clone https://github.com/elastic/rally.git
     cd rally
-    # Install Rally in development mode, may require sudo. For detailed instructions, please see the README
+    # Install Rally in development mode, may require sudo. For detailed instructions, please see below
     python3 setup.py develop
 
-For more detailed instructions, please refer to the `README <https://github.com/elastic/rally/blob/master/README.rst>`_.
+Please also ensure that all prerequisites are installed. For detailed instructions, see the :doc:`getting started guide </index>`
+
+Non-sudo Install
+~~~~~~~~~~~~~~~~
+
+If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
+
+1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
+2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
+
+You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
+
 
 Key Components of Rally
 -----------------------
