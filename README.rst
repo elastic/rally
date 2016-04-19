@@ -47,7 +47,30 @@ Installing Rally
 
 1. Install Rally with pip: ``pip3 install esrally`` (note: depending on your system setup you need prepend this command with ``sudo``).
 2. Configure Rally: ``esrally configure``. It will prompt you for some values and write them to the config file ``~/.rally/rally.ini``.
-3. Run Rally: ``esrally``. It is now properly set up and will run the benchmarks.
+
+Benchmarking an Elasticsearch binary distribution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Rally can run different command sequences, which we call "pipelines". To benchmark a binary distribution, you need to choose the pipeline `from-distribution` and also choose a version.
+
+So to benchmark the Elasticsearch version 5.0.0-alpha1, you need to run:::
+
+    esrally --pipeline=from-distribution --distribution-version=5.0.0-alpha1
+
+
+This will run Rally with the "geonames" benchmark. See `Rally's user guide <https://esrally.readthedocs.org/>`_ for more options or run ``esrally --help``.
+
+Benchmarking an Elasticsearch source distribution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note: We assume that you have set up the development tools (git + Gradle).
+
+For benchmarking a source distribution, we assume a lot of defaults. In the simplest case, you just need to type ``esrally``. If you want to spell out all implicitly assumed settings, type:::
+
+    esrally race --pipeline=from-sources-complete --revision=current --track=geonames --track-setup=defaults
+
+
+See `Rally's user guide <https://esrally.readthedocs.org/>`_ for more options or run ``esrally --help``.
 
 Command Line Options
 --------------------
