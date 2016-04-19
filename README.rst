@@ -45,6 +45,8 @@ dashboard is delivered with Rally in ``esrally/resources/kibana.json`` which can
 Installing Rally
 ~~~~~~~~~~~~~~~~
 
+**Note**: If you actively develop on Elasticsearch, we recommend that you `install Rally in development mode <http://esrally.readthedocs.org/en/latest/developing.html#installation-instructions-for-development>`_ instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest master version.
+
 1. Install Rally with pip: ``pip3 install esrally`` (note: depending on your system setup you need prepend this command with ``sudo``).
 2. Configure Rally: ``esrally configure``. It will prompt you for some values and write them to the config file ``~/.rally/rally.ini``.
 
