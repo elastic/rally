@@ -311,18 +311,31 @@ class Marshal:
         mapping_paths = {}
         for index in track.indices:
             for type in index.types:
+                mapping_file_name = self.mapping_file_name(type)
+                mapping_path = "%s/%s" % (data_set_root, mapping_file_name)
+                mapping_url = "%s/%s" % (track.source_root_url, mapping_file_name)
+                # Try to always download the mapping file, there might be an updated version
+                try:
+                    self._download(mapping_url, mapping_path, force_download=True, raise_url_error=True)
+                except urllib.error.URLError:
+                    distribution_version = self._config.opts("source", "distribution.version", mandatory=False)
+                    if distribution_version and len(distribution_version.strip()) > 0:
+                        msg = "Could not download mapping file [%s] for Elasticsearch distribution [%s] from [%s]. Please note that only " \
+                              "versions starting from 5.0.0-alpha1 are supported." % (mapping_file_name, distribution_version, mapping_url)
+                    else:
+                        msg = "Could not download mapping file [%s] from [%s]. Please check that the data are available." % \
+                              (mapping_file_name, mapping_url)
+                    logger.error(msg)
+                    raise exceptions.SystemSetupError(msg)
+
+                mapping_paths[type] = mapping_path
+
                 if type.document_file_name:
                     data_set_path = "%s/%s" % (data_set_root, type.document_file_name)
                     data_url = "%s/%s" % (track.source_root_url, type.document_file_name)
                     self._download(data_url, data_set_path, size_in_bytes=type.compressed_size_in_bytes)
                     unzipped_data_set_path = self._unzip(data_set_path)
                     data_set_paths[type] = unzipped_data_set_path
-
-                mapping_path = "%s/%s" % (data_set_root, type.mapping_file_name)
-                mapping_url = "%s/%s" % (track.source_root_url, type.mapping_file_name)
-                # Try to always download the mapping file, there might be an updated version
-                self._download(mapping_url, mapping_path, force_download=True)
-                mapping_paths[type] = mapping_path
 
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", data_set_paths)
         self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_paths)
@@ -331,7 +344,15 @@ class Marshal:
         readme_url = "%s/%s" % (track.source_root_url, track.readme_file_name)
         self._download(readme_url, readme_path)
 
-    def _download(self, url, local_path, size_in_bytes=None, force_download=False):
+    def mapping_file_name(self, type):
+        distribution_version = self._config.opts("source", "distribution.version", mandatory=False)
+        if distribution_version and len(distribution_version.strip()) > 0:
+            path, extension = io.splitext(type.mapping_file_name)
+            return "%s-%s%s" % (path, distribution_version, extension)
+        else:
+            return type.mapping_file_name
+
+    def _download(self, url, local_path, size_in_bytes=None, force_download=False, raise_url_error=False):
         offline = self._config.opts("system", "offline.mode")
         file_exists = os.path.isfile(local_path)
 
@@ -357,6 +378,8 @@ class Marshal:
                     print("Done")
             except urllib.error.URLError:
                 logger.exception("Could not download [%s] to [%s]." % (url, local_path))
+                if raise_url_error:
+                    raise
 
         # file must exist at this point -> verify
         if not os.path.isfile(local_path):
