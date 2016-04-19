@@ -1,3 +1,7 @@
+### 0.2.1
+
+[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.1+is%3Aclosed)
+
 ### 0.2.0
 
 Major changes:
@@ -7,7 +11,7 @@ Major changes:
 * We store [benchmark environment data](elastic/rally#54) alongside metrics.
 * A new percolator track](elastic/rally#74) contributed by [Martijn van Groningen](https://github.com/martijnvg). Thanks!
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.1.1+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.0+is%3Aclosed)
 
 ### 0.1.0
 
