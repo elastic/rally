@@ -85,21 +85,22 @@ class PolygonQuery(track.Query):
     }''')
 
 
-geopointTrackSpec = track.Track(
-    name="geopoint",
-    description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
-                "request against Elasticsearch",
-    source_root_url="file:///data/benchmarks/geopoint",
-    index_name=GEO_POINT_INDEX_NAME,
-    type_name=GEO_POINT_TYPE_NAME,
-    number_of_documents=60844404,
-    compressed_size_in_bytes=711754140,
-    uncompressed_size_in_bytes=3769692039,
-    document_file_name="documents.json.bz2",
-    mapping_file_name="mappings.json",
-    # for defaults alone, it's just around 20 minutes, for all it's about 60
-    estimated_benchmark_time_in_minutes=20,
-    # Queries to use in the search benchmark
-    queries=[PolygonQuery(), BBoxQuery(), DistanceQuery(), DistanceRangeQuery()],
-    track_setups=track.track_setups
-)
+# Deactivated for now as long as data are missing
+# geopointTrackSpec = track.Track(
+#     name="geopoint",
+#     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
+#                 "request against Elasticsearch",
+#     source_root_url="file:///data/benchmarks/geopoint",
+#     index_name=GEO_POINT_INDEX_NAME,
+#     type_name=GEO_POINT_TYPE_NAME,
+#     number_of_documents=60844404,
+#     compressed_size_in_bytes=711754140,
+#     uncompressed_size_in_bytes=3769692039,
+#     document_file_name="documents.json.bz2",
+#     mapping_file_name="mappings.json",
+#     # for defaults alone, it's just around 20 minutes, for all it's about 60
+#     estimated_benchmark_time_in_minutes=20,
+#     # Queries to use in the search benchmark
+#     queries=[PolygonQuery(), BBoxQuery(), DistanceQuery(), DistanceRangeQuery()],
+#     track_setups=track.track_setups
+# )
