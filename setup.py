@@ -1,7 +1,7 @@
 from os.path import join, dirname
 from setuptools import setup, find_packages
 
-VERSION = (0, 1, 1, "dev0")
+VERSION = (0, 2, 0)
 __version__ = VERSION
 __versionstr__ = ".".join(map(str, VERSION))
 
@@ -10,7 +10,7 @@ long_description = f.read().strip()
 f.close()
 
 install_requires = [
-    "elasticsearch>=2.2.0",
+    "elasticsearch==2.3.0",
     "psutil==4.1.0",
     "py-cpuinfo==0.2.3",
     # always use the latest version, these are certificate files...
@@ -21,6 +21,8 @@ tests_require = []
 
 # we call the tool rally, but it will be published as esrally on pypi
 setup(name="esrally",
+      maintainer="Daniel Mitterdorfer",
+      maintainer_email="daniel.mitterdorfer@gmail.com",
       version=__versionstr__,
       description="Macrobenchmarking framework for Elasticsearch",
       long_description=long_description,
