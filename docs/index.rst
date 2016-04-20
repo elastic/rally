@@ -159,6 +159,7 @@ Contents
    :maxdepth: 2
 
    telemetry
+   pipelines
    adding_benchmarks
    developing
 

@@ -240,9 +240,10 @@ class IndexBenchmark(TimedOperation):
 
         actual_doc_count = primaries["docs"]["count"]
         if expected_doc_count is not None and expected_doc_count != actual_doc_count:
-            msg = "wrong number of documents indexed: expected %s but got %s" % (expected_doc_count, actual_doc_count)
+            msg = "Wrong number of documents indexed: expected %s but got %s. If you benchmark against an external cluster be sure to " \
+                  "start with all indices empty." % (expected_doc_count, actual_doc_count)
             logger.error(msg)
-            raise RuntimeError(msg)
+            raise AssertionError(msg)
 
     def _node_stats(self):
         logger.info("Gathering nodes stats")

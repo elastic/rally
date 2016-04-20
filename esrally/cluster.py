@@ -67,6 +67,7 @@ class Cluster:
         :param clock: This parameter is just intended for testing. Optional.
         """
         self.client = client_factory_class(hosts).create()
+        self.hosts = hosts
         self.nodes = nodes
         self.metrics_store = metrics_store
         self.clock = clock

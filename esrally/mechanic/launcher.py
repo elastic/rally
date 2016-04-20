@@ -11,7 +11,31 @@ from esrally import config, cluster, telemetry, time, exceptions
 logger = logging.getLogger("rally.launcher")
 
 
-class Launcher:
+class ExternalLauncher:
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+    def start(self, track, setup, metrics_store):
+        configured_host_list = self.cfg.opts("launcher", "external.target.hosts")
+        hosts = []
+        try:
+            for authority in configured_host_list:
+                host, port = authority.split(":")
+                hosts.append({"host": host, "port": port})
+        except ValueError:
+            msg = "Could not initialize external cluster. Invalid format for %s. Expected a comma-separated list of host:port pairs, " \
+                  "e.g. host1:9200,host2:9200." % configured_host_list
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
+
+        return cluster.Cluster(hosts, [], metrics_store)
+
+    def attach_telemetry(self, c):
+        t = telemetry.Telemetry(self.cfg, c.metrics_store, devices=[telemetry.ExternalEnvironmentInfo(self.cfg, c.metrics_store)])
+        t.attach_to_cluster(c)
+
+
+class InProcessLauncher:
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
 
@@ -104,12 +128,13 @@ class Launcher:
         t = threading.Thread(target=self._read_output, args=(node_name, process, startup_event))
         t.setDaemon(True)
         t.start()
-        if startup_event.wait(timeout=Launcher.PROCESS_WAIT_TIMEOUT_SECONDS):
+        if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
             logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
             return process
         else:
             log_dir = self._config.opts("system", "log.dir")
-            msg = "Could not start node '%s' within timeout period of %s seconds." % (node_name, Launcher.PROCESS_WAIT_TIMEOUT_SECONDS)
+            msg = "Could not start node '%s' within timeout period of %s seconds." % (
+            node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
             raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
 

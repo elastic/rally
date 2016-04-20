@@ -20,6 +20,7 @@ class Telemetry:
                 Ps(config, metrics_store),
                 MergeParts(config, metrics_store),
                 EnvironmentInfo(config, metrics_store)
+                # We do not include the ExternalEnvironmentInfo here by intention as it should only be used for externally launched clusters
             ]
         else:
             self._devices = devices
@@ -351,7 +352,7 @@ class EnvironmentInfo(TelemetryDevice):
 
     @property
     def human_name(self):
-        return "Environment Info"
+        return "Environment info for Rally-provisioned clusters"
 
     @property
     def help(self):
@@ -372,3 +373,37 @@ class EnvironmentInfo(TelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "node_name", node.node_name)
         # This is actually the only node level metric, but it is easier to implement this way
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "host_name", node.host_name)
+
+
+class ExternalEnvironmentInfo(TelemetryDevice):
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self._t = None
+
+    @property
+    def mandatory(self):
+        return True
+
+    @property
+    def command(self):
+        return "env"
+
+    @property
+    def human_name(self):
+        return "Environment info for externally provisioned clusters"
+
+    @property
+    def help(self):
+        return "Gathers static environment information."
+
+    def attach_to_cluster(self, cluster):
+        revision = cluster.info()["version"]["build_hash"]
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+
+        stats = cluster.client.nodes.stats(metric="_all", level="shards")
+        nodes = stats["nodes"]
+        for node in nodes.values():
+            node_name = node["name"]
+            # Don't store metrics that we don't know like OS or CPU
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", node["host"])

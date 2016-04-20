@@ -123,6 +123,12 @@ def parse_args():
             help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated "
                  "list (default: defaults).",
             default="defaults")  # optimized for local usage
+        p.add_argument(
+            "--target-hosts",
+            help="defines a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
+                 "(default: localhost:9200).",
+            default="localhost:9200")
+
 
     ###############################################################################
     #
@@ -217,6 +223,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
+    cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
     if subcommand == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
 

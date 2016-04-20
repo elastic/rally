@@ -1,4 +1,4 @@
-from esrally import metrics, cluster
+from esrally import metrics
 from esrally.mechanic import builder, supplier, provisioner, launcher
 
 
@@ -13,7 +13,7 @@ class Mechanic:
         self._supplier = supplier.Supplier(cfg, supplier.GitRepository(cfg))
         self._builder = builder.Builder(cfg)
         self._provisioner = provisioner.Provisioner(cfg)
-        self._launcher = launcher.Launcher(cfg)
+        self._launcher = launcher.InProcessLauncher(cfg)
         self._metrics_store = None
 
     # This is the one-time setup the mechanic performs (once for all benchmarks run)
@@ -35,8 +35,10 @@ class Mechanic:
         return self._launcher.start(track, setup, self._metrics_store)
 
     def start_engine_external(self, track, setup):
-        # for now we just support a hardcoded default
-        return cluster.Cluster([{"host": "localhost", "port": "9200"}], [], self._metrics_store)
+        external_launcher = launcher.ExternalLauncher(self._config)
+        c = external_launcher.start(track, setup, self._metrics_store)
+        external_launcher.attach_telemetry(c)
+        return c
 
     def stop_engine(self, cluster):
         self._launcher.stop(cluster)
