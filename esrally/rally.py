@@ -128,6 +128,11 @@ def parse_args():
             help="defines a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
                  "(default: localhost:9200).",
             default="localhost:9200")
+        p.add_argument(
+            "--user-tag",
+            help="defines a user-specific key-value pair that is separated by a ':' and added to each metric record as meta info. "
+                 "Example: intention:baseline-ticket-12345",
+            default="")
 
 
     ###############################################################################
@@ -219,6 +224,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
+    cfg.add(config.Scope.applicationOverride, "system", "user.tag", args.user_tag)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))

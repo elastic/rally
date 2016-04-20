@@ -1,6 +1,7 @@
 ### 0.2.1
 
 * [External benchmarks can now specify target hosts and ports](https://github.com/elastic/rally/issues/83)
+* Ability to [add a user-defined tag as metric meta-data](https://github.com/elastic/rally/issues/84)
 
 [All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.1+is%3Aclosed)
 

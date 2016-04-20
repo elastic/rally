@@ -51,9 +51,9 @@ class MetricsTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
 
     def setUp(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        self.metrics_store = metrics.EsMetricsStore(cfg,
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.metrics_store = metrics.EsMetricsStore(self.cfg,
                                                     client_factory_class=MockClientFactory,
                                                     index_template_provider_class=DummyIndexTemplateProvider,
                                                     clock=StaticClock)
@@ -86,6 +86,8 @@ class MetricsTests(TestCase):
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
+        # add a user-defined tag
+        self.cfg.add(config.Scope.application, "system", "user.tag", "intention:testing")
         self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
@@ -109,6 +111,7 @@ class MetricsTests(TestCase):
             "value": throughput,
             "unit": "docs/s",
             "meta": {
+                "tag_intention": "testing",
                 "source_revision": "abc123",
                 "os_name": "Darwin",
                 "os_version": "15.4.0"

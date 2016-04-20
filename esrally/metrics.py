@@ -162,6 +162,16 @@ class EsMetricsStore:
             self._client.create_index(index=self._index)
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
+        user_tag = self._config.opts("system", "user.tag", mandatory=False)
+        if user_tag and user_tag.strip() != "":
+            try:
+                user_tag_key, user_tag_value = user_tag.split(":")
+                # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
+                self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % user_tag_key, user_tag_value)
+            except ValueError:
+                msg = "User tag key and value have to separated by a ':'. Invalid value [%s]" % user_tag
+                logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
         self._stop_watch.start()
 
     def _get_template(self):
