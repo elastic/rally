@@ -1,7 +1,7 @@
 Metrics Records
 ===============
 
-At the end of a benchmark, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster. Some metrics are gathered
+At the end of a benchmark, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster.
 
 Here is a typical metrics record::
 
