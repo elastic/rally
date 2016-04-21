@@ -160,6 +160,7 @@ Contents
 
    telemetry
    pipelines
+   metrics
    adding_benchmarks
    developing
 
