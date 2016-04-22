@@ -36,9 +36,7 @@ class Mechanic:
 
     def start_engine_external(self, track, setup):
         external_launcher = launcher.ExternalLauncher(self._config)
-        c = external_launcher.start(track, setup, self._metrics_store)
-        external_launcher.attach_telemetry(c)
-        return c
+        return external_launcher.start(track, setup, self._metrics_store)
 
     def stop_engine(self, cluster):
         self._launcher.stop(cluster)

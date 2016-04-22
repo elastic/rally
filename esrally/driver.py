@@ -101,7 +101,6 @@ class SearchBenchmark(TimedOperation):
     def __init__(self, cfg, clock, track, track_setup, cluster):
         TimedOperation.__init__(self, clock)
         self.cfg = cfg
-        self.clock = clock
         self.track = track
         self.track_setup = track_setup
         self.cluster = cluster
@@ -210,34 +209,13 @@ class IndexBenchmark(TimedOperation):
         return all_ids
 
     def _index_stats(self, expected_doc_count):
-        logger.info("Gathering indices stats")
         # warmup
         self.repeat(self.cluster.client.indices.stats, metric="_all", level="shards")
         durations, stats = self.repeat(self.cluster.client.indices.stats, metric="_all", level="shards")
         for duration in durations:
             self.metrics_store.put_value_cluster_level("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
         primaries = stats["_all"]["primaries"]
-        self.metrics_store.put_count_cluster_level("segments_count", primaries["segments"]["count"])
-        self.metrics_store.put_count_cluster_level("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
-        self.metrics_store.put_count_cluster_level("segments_doc_values_memory_in_bytes",
-                                                   primaries["segments"]["doc_values_memory_in_bytes"], "byte")
-        self.metrics_store.put_count_cluster_level("segments_stored_fields_memory_in_bytes",
-                                                   primaries["segments"]["stored_fields_memory_in_bytes"],
-                                                   "byte")
-        self.metrics_store.put_count_cluster_level("segments_terms_memory_in_bytes", primaries["segments"]["terms_memory_in_bytes"],
-                                                   "byte")
-        self.metrics_store.put_count_cluster_level("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"],
-                                                   "byte")
-        if "points_memory_in_bytes" in primaries["segments"]:
-            self.metrics_store.put_count_cluster_level("segments_points_memory_in_bytes", primaries["segments"]["points_memory_in_bytes"],
-                                                       "byte")
-        self.metrics_store.put_value_cluster_level("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
-        self.metrics_store.put_value_cluster_level("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"],
-                                                   "ms")
-        self.metrics_store.put_value_cluster_level("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
-        self.metrics_store.put_value_cluster_level("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
-        self.metrics_store.put_value_cluster_level("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")
-
+        # TODO: Consider introducing "probes" for verifications
         actual_doc_count = primaries["docs"]["count"]
         if expected_doc_count is not None and expected_doc_count != actual_doc_count:
             msg = "Wrong number of documents indexed: expected %s but got %s. If you benchmark against an external cluster be sure to " \
@@ -246,27 +224,11 @@ class IndexBenchmark(TimedOperation):
             raise AssertionError(msg)
 
     def _node_stats(self):
-        logger.info("Gathering nodes stats")
         # warmup
         self.repeat(self.cluster.client.nodes.stats, metric="_all", level="shards")
         durations, stats = self.repeat(self.cluster.client.nodes.stats, metric="_all", level="shards")
         for duration in durations:
             self.metrics_store.put_value_cluster_level("node_stats_latency", convert.seconds_to_ms(duration), "ms")
-        total_old_gen_collection_time = 0
-        total_young_gen_collection_time = 0
-        nodes = stats["nodes"]
-        for node in nodes.values():
-            node_name = node["name"]
-            gc = node["jvm"]["gc"]["collectors"]
-            old_gen_collection_time = gc["old"]["collection_time_in_millis"]
-            young_gen_collection_time = gc["young"]["collection_time_in_millis"]
-            self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gen_collection_time, "ms")
-            self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gen_collection_time, "ms")
-            total_old_gen_collection_time += old_gen_collection_time
-            total_young_gen_collection_time += young_gen_collection_time
-
-        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
-        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
 
     # we don't want to gather to many samples as we're actually in the middle of the index benchmark and would skew other metrics like
     # CPU usage too much (TODO #27: split this step from actual indexing and report proper percentiles not just median.)

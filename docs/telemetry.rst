@@ -16,13 +16,9 @@ You probably want to gain additional insights from a benchmarking trial. Therefo
     
     * jfr (Flight Recorder): Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK) (Always enabled: False)
     * jit (JIT Compiler Profiler): Enables JIT compiler logs. (Always enabled: False)
-    * ps (Process Statistics): Gathers process statistics like CPU usage or disk I/O. (Always enabled: True)
-    * merge-parts (Merge Parts Statistics): Gathers merge parts time statistics. Note that you need to run a track setup which logs these data. (Always enabled: True)
-    * env (Environment Info): Gathers static environment information like OS or CPU details. (Always enabled: True)
-    
+
     Keep in mind that each telemetry devices may incur a runtime overhead which can skew results.
 
-Some of the devices are used internally and are always enabled. But some of the devices, like the "jfr" device can be enabled on the command line.
 
 jfr
 ---

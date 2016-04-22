@@ -11,9 +11,15 @@ from esrally import config, cluster, telemetry, time, exceptions
 logger = logging.getLogger("rally.launcher")
 
 
+class ClusterFactory:
+    def create(self, hosts, nodes, metrics_store, telemetry):
+        return cluster.Cluster(hosts, nodes, metrics_store, telemetry)
+
+
 class ExternalLauncher:
-    def __init__(self, cfg):
+    def __init__(self, cfg, cluster_factory_class=ClusterFactory):
         self.cfg = cfg
+        self.cluster_factory = cluster_factory_class()
 
     def start(self, track, setup, metrics_store):
         configured_host_list = self.cfg.opts("launcher", "external.target.hosts")
@@ -28,11 +34,14 @@ class ExternalLauncher:
             logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
-        return cluster.Cluster(hosts, [], metrics_store)
-
-    def attach_telemetry(self, c):
-        t = telemetry.Telemetry(self.cfg, c.metrics_store, devices=[telemetry.ExternalEnvironmentInfo(self.cfg, c.metrics_store)])
+        t = telemetry.Telemetry(self.cfg, metrics_store, devices=[
+            telemetry.ExternalEnvironmentInfo(self.cfg, metrics_store),
+            telemetry.NodeStats(self.cfg, metrics_store),
+            telemetry.IndexStats(self.cfg, metrics_store)
+        ])
+        c = self.cluster_factory.create(hosts, [], metrics_store, t)
         t.attach_to_cluster(c)
+        return c
 
 
 class InProcessLauncher:
@@ -43,10 +52,11 @@ class InProcessLauncher:
     """
     PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
 
-    def __init__(self, cfg, clock=time.Clock):
+    def __init__(self, cfg, clock=time.Clock, cluster_factory_class=ClusterFactory):
         self._config = cfg
         self._clock = clock
         self._servers = []
+        self._cluster_factory = cluster_factory_class()
 
     def start(self, track, setup, metrics_store):
         if self._servers:
@@ -55,10 +65,10 @@ class InProcessLauncher:
         first_http_port = self._config.opts("provisioning", "node.http.port")
 
         t = telemetry.Telemetry(self._config, metrics_store)
-        c = cluster.Cluster(
+        c = self._cluster_factory.create(
             [{"host": "localhost", "port": first_http_port}],
             [self._start_node(node, setup, metrics_store) for node in range(num_nodes)],
-            metrics_store
+            metrics_store, t
         )
         t.attach_to_cluster(c)
 

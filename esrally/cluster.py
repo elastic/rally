@@ -56,13 +56,14 @@ class Cluster:
     """
     EXPECTED_CLUSTER_STATUS = "green"
 
-    def __init__(self, hosts, nodes, metrics_store, client_factory_class=EsClientFactory, clock=time.Clock):
+    def __init__(self, hosts, nodes, metrics_store, telemetry, client_factory_class=EsClientFactory, clock=time.Clock):
         """
         Creates a new Elasticsearch cluster.
 
         :param hosts: The hosts to which we can connect to (this must not necessarily be each host in the cluster). Mandatory.
         :param nodes: The nodes of which this cluster consists of. Mandatory.
         :param metrics_store: The corresponding metrics store. Mandatory.
+        :param telemetry Telemetry attached to this cluster. Mandatory.
         :param client_factory_class: This parameter is just intended for testing. Optional.
         :param clock: This parameter is just intended for testing. Optional.
         """
@@ -70,6 +71,7 @@ class Cluster:
         self.hosts = hosts
         self.nodes = nodes
         self.metrics_store = metrics_store
+        self.telemetry = telemetry
         self.clock = clock
 
     def wait_for_status_green(self):
@@ -113,16 +115,34 @@ class Cluster:
         """
         return self.client.info()
 
+    def nodes_stats(self, *args, **kwargs):
+        """
+        :return: Nodes stats. See http://elasticsearch-py.readthedocs.org/en/master/api.html#elasticsearch.client.NodesClient.stats
+        """
+        return self.client.nodes.stats(*args, **kwargs)
+
+    def indices_stats(self, *args, **kwargs):
+        """
+        :return: Indices stats. http://elasticsearch-py.readthedocs.org/en/master/api.html#elasticsearch.client.IndicesClient.stats
+        """
+        return self.client.indices.stats(*args, **kwargs)
+
     def on_benchmark_start(self, phase=None):
         """
         Callback method when a benchmark is about to start.
+
+        :arg phase Current benchmark phase. None indicates that this is the very start of the benchmark (before any phase has started).
         """
+        self.telemetry.on_benchmark_start(phase)
         for node in self.nodes:
             node.on_benchmark_start(phase)
 
     def on_benchmark_stop(self, phase=None):
         """
         Callback method when a benchmark is about to stop.
+
+        :arg phase Current benchmark phase. None indicates that this is the very end of the benchmark (after any phase has ended).
         """
+        self.telemetry.on_benchmark_stop(phase)
         for node in self.nodes:
             node.on_benchmark_stop(phase)

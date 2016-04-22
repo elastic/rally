@@ -19,7 +19,9 @@ class Telemetry:
                 JitCompiler(config, metrics_store),
                 Ps(config, metrics_store),
                 MergeParts(config, metrics_store),
-                EnvironmentInfo(config, metrics_store)
+                EnvironmentInfo(config, metrics_store),
+                NodeStats(config, metrics_store),
+                IndexStats(config, metrics_store)
                 # We do not include the ExternalEnvironmentInfo here by intention as it should only be used for externally launched clusters
             ]
         else:
@@ -29,7 +31,8 @@ class Telemetry:
     def list(self):
         print("Available telemetry devices:\n")
         for device in self._devices:
-            print("* %s (%s): %s (Always enabled: %s)" % (device.command, device.human_name, device.help, device.mandatory))
+            if not device.internal:
+                print("* %s (%s): %s" % (device.command, device.human_name, device.help))
         print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
     def instrument_candidate_env(self, setup, candidate_id):
@@ -71,7 +74,7 @@ class Telemetry:
                 device.on_benchmark_stop(phase)
 
     def _enabled(self, device):
-        return device.mandatory or device.command in self._enabled_devices
+        return device.internal or device.command in self._enabled_devices
 
 
 ########################################################################################
@@ -94,7 +97,7 @@ class TelemetryDevice:
         return self._config
 
     @property
-    def mandatory(self):
+    def internal(self):
         raise NotImplementedError("abstract method")
 
     @property
@@ -107,7 +110,7 @@ class TelemetryDevice:
 
     @property
     def help(self):
-        return ""
+        raise NotImplementedError("abstract method")
 
     def instrument_env(self, setup, candidate_id):
         return {}
@@ -128,12 +131,33 @@ class TelemetryDevice:
         pass
 
 
+class InternalTelemetryDevice(TelemetryDevice):
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+
+    @property
+    def internal(self):
+        return True
+
+    @property
+    def command(self):
+        return "internal"
+
+    @property
+    def human_name(self):
+        return ""
+
+    @property
+    def help(self):
+        return ""
+
+
 class FlightRecorder(TelemetryDevice):
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
 
     @property
-    def mandatory(self):
+    def internal(self):
         return False
 
     @property
@@ -169,7 +193,7 @@ class JitCompiler(TelemetryDevice):
         super().__init__(config, metrics_store)
 
     @property
-    def mandatory(self):
+    def internal(self):
         return False
 
     @property
@@ -195,30 +219,20 @@ class JitCompiler(TelemetryDevice):
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
 
 
-class MergeParts(TelemetryDevice):
+class MergeParts(InternalTelemetryDevice):
+    """
+    Gathers merge parts time statistics. Note that you need to run a track setup which logs these data.
+    """
     MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
 
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
         self._t = None
 
-    @property
-    def mandatory(self):
-        return True
-
-    @property
-    def command(self):
-        return "merge-parts"
-
-    @property
-    def human_name(self):
-        return "Merge Parts Statistics"
-
-    @property
-    def help(self):
-        return "Gathers merge parts time statistics. Note that you need to run a track setup which logs these data."
-
     def on_benchmark_stop(self, phase):
+        # TODO: This works currently only by coincidence (as this method is called once per node instead of once per cluster.
+        # But as we only use it in a single node benchmark, it has the same effect. As we need to rethink this API anyway, let's leave
+        # it for now but we need to change this later).
         # only gather metrics when the whole benchmark is done
         if phase is None:
             server_log_dir = self._config.opts("launcher", "candidate.log.dir")
@@ -250,26 +264,13 @@ class MergeParts(TelemetryDevice):
             self._metrics_store.put_count_cluster_level("merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
-class Ps(TelemetryDevice):
+class Ps(InternalTelemetryDevice):
+    """
+    Gathers process statistics like CPU usage or disk I/O.
+    """
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
         self._t = None
-
-    @property
-    def mandatory(self):
-        return True
-
-    @property
-    def command(self):
-        return "ps"
-
-    @property
-    def human_name(self):
-        return "Process Statistics"
-
-    @property
-    def help(self):
-        return "Gathers process statistics like CPU usage or disk I/O."
 
     def attach_to_node(self, node):
         disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
@@ -279,11 +280,11 @@ class Ps(TelemetryDevice):
             self._t[phase] = GatherProcessStats(node, disk, self._metrics_store, phase)
 
     def on_benchmark_start(self, phase):
-        if phase:
+        if self._t and phase:
             self._t[phase].start()
 
     def on_benchmark_stop(self, phase):
-        if phase:
+        if self._t and phase:
             self._t[phase].finish()
 
 
@@ -337,26 +338,13 @@ class GatherProcessStats(threading.Thread):
                                                     sysstats.cpu_utilization(self.process), "%")
 
 
-class EnvironmentInfo(TelemetryDevice):
+class EnvironmentInfo(InternalTelemetryDevice):
+    """
+    Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
+    """
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
         self._t = None
-
-    @property
-    def mandatory(self):
-        return True
-
-    @property
-    def command(self):
-        return "env"
-
-    @property
-    def human_name(self):
-        return "Environment info for Rally-provisioned clusters"
-
-    @property
-    def help(self):
-        return "Gathers static environment information like OS or CPU details."
 
     def attach_to_cluster(self, cluster):
         revision = cluster.info()["version"]["build_hash"]
@@ -375,35 +363,93 @@ class EnvironmentInfo(TelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "host_name", node.host_name)
 
 
-class ExternalEnvironmentInfo(TelemetryDevice):
+class ExternalEnvironmentInfo(InternalTelemetryDevice):
+    """
+    Gathers static environment information for externally provisioned clusters.
+    """
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
         self._t = None
-
-    @property
-    def mandatory(self):
-        return True
-
-    @property
-    def command(self):
-        return "env"
-
-    @property
-    def human_name(self):
-        return "Environment info for externally provisioned clusters"
-
-    @property
-    def help(self):
-        return "Gathers static environment information."
 
     def attach_to_cluster(self, cluster):
         revision = cluster.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
 
-        stats = cluster.client.nodes.stats(metric="_all", level="shards")
+        stats = cluster.nodes_stats(metric="_all", level="shards")
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
             # Don't store metrics that we don't know like OS or CPU
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", node["host"])
+
+
+class NodeStats(InternalTelemetryDevice):
+    """
+    Gathers statistics via the Elasticsearch nodes stats API
+    """
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self.cluster = None
+
+    def attach_to_cluster(self, cluster):
+        self.cluster = cluster
+
+    def on_benchmark_stop(self, phase):
+        # only gather metrics when the whole benchmark is done
+        if self.cluster and phase is None:
+            logger.info("Gathering nodes stats")
+            stats = self.cluster.nodes_stats(metric="_all", level="shards")
+            total_old_gen_collection_time = 0
+            total_young_gen_collection_time = 0
+            nodes = stats["nodes"]
+            for node in nodes.values():
+                node_name = node["name"]
+                gc = node["jvm"]["gc"]["collectors"]
+                old_gen_collection_time = gc["old"]["collection_time_in_millis"]
+                young_gen_collection_time = gc["young"]["collection_time_in_millis"]
+                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gen_collection_time, "ms")
+                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gen_collection_time, "ms")
+                total_old_gen_collection_time += old_gen_collection_time
+                total_young_gen_collection_time += young_gen_collection_time
+
+            self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
+            self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+
+
+class IndexStats(InternalTelemetryDevice):
+    """
+    Gathers statistics via the Elasticsearch index stats API
+    """
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self.cluster = None
+
+    def attach_to_cluster(self, cluster):
+        self.cluster = cluster
+
+    def on_benchmark_stop(self, phase):
+        if self.cluster and phase is track.BenchmarkPhase.index:
+            logger.info("Gathering indices stats")
+            stats = self.cluster.indices_stats(metric="_all", level="shards")
+            primaries = stats["_all"]["primaries"]
+            self.metrics_store.put_count_cluster_level("segments_count", primaries["segments"]["count"])
+            self.metrics_store.put_count_cluster_level("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
+            self.metrics_store.put_count_cluster_level("segments_doc_values_memory_in_bytes",
+                                                       primaries["segments"]["doc_values_memory_in_bytes"], "byte")
+            self.metrics_store.put_count_cluster_level("segments_stored_fields_memory_in_bytes",
+                                                       primaries["segments"]["stored_fields_memory_in_bytes"],
+                                                       "byte")
+            self.metrics_store.put_count_cluster_level("segments_terms_memory_in_bytes", primaries["segments"]["terms_memory_in_bytes"],
+                                                       "byte")
+            self.metrics_store.put_count_cluster_level("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"],
+                                                       "byte")
+            if "points_memory_in_bytes" in primaries["segments"]:
+                self.metrics_store.put_count_cluster_level("segments_points_memory_in_bytes", primaries["segments"]["points_memory_in_bytes"],
+                                                           "byte")
+            self.metrics_store.put_value_cluster_level("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
+            self.metrics_store.put_value_cluster_level("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"],
+                                                       "ms")
+            self.metrics_store.put_value_cluster_level("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
+            self.metrics_store.put_value_cluster_level("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
+            self.metrics_store.put_value_cluster_level("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")

@@ -13,19 +13,10 @@ class MockClientFactory:
         return None
 
 
-class MockTelemetryDevice(telemetry.TelemetryDevice):
+class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
     def __init__(self, cfg, metrics_store, mock_env):
         super().__init__(cfg, metrics_store)
         self.mock_env = mock_env
-
-    def mandatory(self):
-        return True
-
-    def human_name(self):
-        return "mock"
-
-    def command(self):
-        return "mock"
 
     def instrument_env(self, setup, candidate_id):
         return self.mock_env
@@ -125,7 +116,8 @@ class EnvironmentInfoTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.EnvironmentInfo(cfg, metrics_store)
-        env_device.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, client_factory_class=MockClientFactory))
+        t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
+        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, t, client_factory_class=MockClientFactory))
 
         metrics_store_add_meta_info.assert_called_with(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
 
@@ -169,4 +161,6 @@ class EnvironmentInfoTests(TestCase):
         cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
         cfg.add(config.Scope.application, "reporting", "datastore.user", "")
         cfg.add(config.Scope.application, "reporting", "datastore.password", "")
+        # only internal devices are active
+        cfg.add(config.Scope.application, "telemetry", "devices", [])
         return cfg
