@@ -32,11 +32,14 @@ class SummaryReporter:
                 store = metrics.EsMetricsStore(self._config)
                 store.open(invocation, track.name, track_setup.name)
 
-                self.report_index_throughput(store)
-                print("")
-                self.report_search_latency(store, track)
-                self.report_total_times(store)
-                self.report_merge_part_times(store)
+                if track_setup.benchmark.benchmark_indexing:
+                    self.report_index_throughput(store)
+                    print("")
+                    self.report_total_times(store)
+                    self.report_merge_part_times(store)
+
+                if track_setup.benchmark.benchmark_search:
+                    self.report_search_latency(store, track)
 
                 self.print_header("System Metrics")
                 self.report_cpu_usage(store)
