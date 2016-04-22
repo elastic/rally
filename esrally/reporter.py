@@ -58,8 +58,11 @@ class SummaryReporter:
         self.print_header("Indexing Results (Throughput):")
         throughput_pct = store.get_percentiles("indexing_throughput", percentiles=[SummaryReporter.MEDIAN])
         throughput_stats = store.get_stats("indexing_throughput")
-        print("  median %d docs/s (min: %d, max: %d)" %
-              (round(throughput_pct[SummaryReporter.MEDIAN]), throughput_stats["min"], throughput_stats["max"]))
+        if throughput_pct and throughput_stats:
+            print("  median %d docs/s (min: %d, max: %d)" %
+                  (round(throughput_pct[SummaryReporter.MEDIAN]), throughput_stats["min"], throughput_stats["max"]))
+        else:
+            print("  Could not determine indexing throughput")
 
     def report_search_latency(self, store, track):
         self.print_header("Query Latency:")
