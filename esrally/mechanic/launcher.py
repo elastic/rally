@@ -4,6 +4,7 @@ import subprocess
 import socket
 import signal
 import logging
+import json
 
 from esrally.mechanic import gear
 from esrally import config, cluster, telemetry, time, exceptions
@@ -16,10 +17,45 @@ class ClusterFactory:
         return cluster.Cluster(hosts, nodes, metrics_store, telemetry)
 
 
-class ExternalLauncher:
+class Launcher:
     def __init__(self, cfg, cluster_factory_class=ClusterFactory):
         self.cfg = cfg
         self.cluster_factory = cluster_factory_class()
+
+    def setup_index(self, cluster, track, track_setup):
+        if track_setup.benchmark.benchmark_indexing:
+            mapping_path = self.cfg.opts("benchmarks", "mapping.path")
+            for index in track.indices:
+                logger.debug("Creating index [%s]" % index.name)
+                settings = track_setup.candidate.index_settings
+                # Workaround to support multiple versions (this is not how this will be handled in the future..)
+                if "master" in settings:
+                    # check whether we do a binary benchmark
+                    distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+                    if distribution_version and len(distribution_version.strip()) > 0:
+                        if distribution_version in settings:
+                            index_settings = settings[distribution_version]
+                        else:
+                            raise exceptions.SystemSetupError("Could not find index settings for Elasticsearch version [%s]" %
+                                                              distribution_version)
+                    else:
+                        index_settings = settings["master"]
+                else:
+                    index_settings = settings
+                cluster.client.indices.create(index=index.name, body=index_settings)
+                for type in index.types:
+                    mappings = open(mapping_path[type]).read()
+                    logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
+                    logger.debug(mappings)
+                    cluster.client.indices.put_mapping(index=index.name,
+                                                       doc_type=type.name,
+                                                       body=json.loads(mappings))
+        cluster.wait_for_status_green()
+
+
+class ExternalLauncher(Launcher):
+    def __init__(self, cfg, cluster_factory_class=ClusterFactory):
+        super().__init__(cfg, cluster_factory_class)
 
     def start(self, track, setup, metrics_store):
         configured_host_list = self.cfg.opts("launcher", "external.target.hosts")
@@ -41,10 +77,11 @@ class ExternalLauncher:
         ])
         c = self.cluster_factory.create(hosts, [], metrics_store, t)
         t.attach_to_cluster(c)
+        self.setup_index(c, track, setup)
         return c
 
 
-class InProcessLauncher:
+class InProcessLauncher(Launcher):
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
 
@@ -53,31 +90,30 @@ class InProcessLauncher:
     PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
 
     def __init__(self, cfg, clock=time.Clock, cluster_factory_class=ClusterFactory):
-        self._config = cfg
+        super().__init__(cfg, cluster_factory_class)
         self._clock = clock
         self._servers = []
-        self._cluster_factory = cluster_factory_class()
 
     def start(self, track, setup, metrics_store):
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
         num_nodes = setup.candidate.nodes
-        first_http_port = self._config.opts("provisioning", "node.http.port")
+        first_http_port = self.cfg.opts("provisioning", "node.http.port")
 
-        t = telemetry.Telemetry(self._config, metrics_store)
-        c = self._cluster_factory.create(
+        t = telemetry.Telemetry(self.cfg, metrics_store)
+        c = self.cluster_factory.create(
             [{"host": "localhost", "port": first_http_port}],
             [self._start_node(node, setup, metrics_store) for node in range(num_nodes)],
             metrics_store, t
         )
         t.attach_to_cluster(c)
-
+        self.setup_index(c, track, setup)
         return c
 
     def _start_node(self, node, setup, metrics_store):
         node_name = self._node_name(node)
         host_name = socket.gethostname()
-        t = telemetry.Telemetry(self._config, metrics_store)
+        t = telemetry.Telemetry(self.cfg, metrics_store)
 
         env = self._prepare_env(setup, node_name, t)
         cmd = self.prepare_cmd(setup, node_name)
@@ -103,7 +139,7 @@ class InProcessLauncher:
             self._set_env(env, "ES_JAVA_OPTS", java_opts)
         self._set_env(env, "ES_GC_OPTS", setup.candidate.gc_opts)
 
-        java_home = gear.Gear(self._config).capability(gear.Capability.java)
+        java_home = gear.Gear(self.cfg).capability(gear.Capability.java)
         # Unix specific!:
         self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
         # Don't merge here!
@@ -119,8 +155,8 @@ class InProcessLauncher:
                 env[k] = v + separator + env[k]
 
     def prepare_cmd(self, setup, node_name):
-        server_log_dir = "%s/server" % self._config.opts("system", "track.setup.log.dir")
-        self._config.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
+        server_log_dir = "%s/server" % self.cfg.opts("system", "track.setup.log.dir")
+        self.cfg.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
         processor_count = setup.candidate.processors
 
         cmd = ["bin/elasticsearch", "-Ees.node.name=%s" % node_name]
@@ -131,7 +167,7 @@ class InProcessLauncher:
         return cmd
 
     def _start_process(self, cmd, env, node_name):
-        install_dir = self._config.opts("provisioning", "local.binary.path")
+        install_dir = self.cfg.opts("provisioning", "local.binary.path")
         os.chdir(install_dir)
         startup_event = threading.Event()
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
@@ -142,14 +178,14 @@ class InProcessLauncher:
             logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
             return process
         else:
-            log_dir = self._config.opts("system", "log.dir")
+            log_dir = self.cfg.opts("system", "log.dir")
             msg = "Could not start node '%s' within timeout period of %s seconds." % (
-            node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
+                node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
             raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
 
     def _node_name(self, node):
-        prefix = self._config.opts("provisioning", "node.name.prefix")
+        prefix = self.cfg.opts("provisioning", "node.name.prefix")
         return "%s%d" % (prefix, node)
 
     def _read_output(self, node_name, server, startup_event):
@@ -206,4 +242,5 @@ class InProcessLauncher:
                     process.kill()
                 except ProcessLookupError:
                     logger.warn("No such process")
+        cluster.telemetry.detach_from_cluster(cluster)
         self._servers = []

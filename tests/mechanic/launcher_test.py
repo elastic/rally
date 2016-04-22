@@ -2,6 +2,7 @@ from unittest import TestCase
 
 from esrally import config, exceptions
 from esrally.mechanic import launcher
+from esrally.track import track
 
 
 class MockMetricsStore:
@@ -35,10 +36,18 @@ class MockCluster:
             }
         }
 
+    def wait_for_status_green(self):
+        pass
+
 
 class MockClusterFactory:
     def create(self, hosts, nodes, metrics_store, telemetry):
         return MockCluster(hosts, nodes, metrics_store, telemetry)
+
+
+class MockTrackSetup:
+    def __init__(self):
+        self.benchmark = track.BenchmarkSettings(benchmark_indexing=False)
 
 
 class ExternalLauncherTests(TestCase):
@@ -48,7 +57,7 @@ class ExternalLauncherTests(TestCase):
         cfg.add(config.Scope.application, "launcher", "external.target.hosts", ["localhost:9200"])
 
         m = launcher.ExternalLauncher(cfg, cluster_factory_class=MockClusterFactory)
-        cluster = m.start(None, None, MockMetricsStore())
+        cluster = m.start(None, MockTrackSetup(), MockMetricsStore())
 
         self.assertEqual(cluster.hosts, [{"host": "localhost", "port": "9200"}])
 
@@ -59,7 +68,7 @@ class ExternalLauncherTests(TestCase):
                 ["search.host-a.internal:9200", "search.host-b.internal:9200"])
 
         m = launcher.ExternalLauncher(cfg, cluster_factory_class=MockClusterFactory)
-        cluster = m.start(None, None, MockMetricsStore())
+        cluster = m.start(None, MockTrackSetup(), MockMetricsStore())
 
         self.assertEqual(cluster.hosts,
                          [{"host": "search.host-a.internal", "port": "9200"}, {"host": "search.host-b.internal", "port": "9200"}])
@@ -72,7 +81,7 @@ class ExternalLauncherTests(TestCase):
 
         m = launcher.ExternalLauncher(cfg, cluster_factory_class=MockClusterFactory)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            m.start(None, None, MockMetricsStore())
+            m.start(None, MockTrackSetup(), MockMetricsStore())
             self.assertTrue("Could not initialize external cluster. Invalid format for [search.host-a.internal, "
                             "search.host-b.internal:9200]. Expected a comma-separated list of host:port pairs, "
                             "e.g. host1:9200,host2:9200." in ctx.exception)

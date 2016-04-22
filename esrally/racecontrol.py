@@ -122,10 +122,8 @@ def prepare_track(ctx, track):
 def benchmark_internal(ctx, track, track_setup):
     ctx.mechanic.start_metrics(track, track_setup)
     cluster = ctx.mechanic.start_engine(track, track_setup)
-    ctx.driver.setup(cluster, track, track_setup)
-    ctx.driver.go(cluster, track, track_setup)
+    driver.Driver(ctx.config, cluster, track, track_setup).go()
     ctx.mechanic.stop_engine(cluster)
-    ctx.driver.tear_down(track, track_setup)
     ctx.mechanic.revise_candidate()
     ctx.mechanic.stop_metrics()
 
@@ -134,9 +132,7 @@ def benchmark_internal(ctx, track, track_setup):
 def benchmark_external(ctx, track, track_setup):
     ctx.mechanic.start_metrics(track, track_setup)
     cluster = ctx.mechanic.start_engine_external(track, track_setup)
-    ctx.driver.setup(cluster, track, track_setup)
-    ctx.driver.go(cluster, track, track_setup)
-    ctx.driver.tear_down(track, track_setup)
+    driver.Driver(ctx.config, cluster, track, track_setup).go()
     ctx.mechanic.stop_metrics()
 
 
@@ -304,7 +300,6 @@ class RacingContext:
     def __init__(self, cfg):
         self.config = cfg
         self.mechanic = mechanic.Mechanic(cfg)
-        self.driver = driver.Driver(cfg)
         self.marshal = track.Marshal(cfg)
         self.reporter = reporter.SummaryReporter(cfg)
         self.sweeper = sweeper.Sweeper(cfg)

@@ -3,7 +3,7 @@ import threading
 import re
 import os
 
-from esrally.utils import io, sysstats
+from esrally.utils import io, sysstats, process
 from esrally.track import track
 from esrally import metrics
 
@@ -21,7 +21,8 @@ class Telemetry:
                 MergeParts(config, metrics_store),
                 EnvironmentInfo(config, metrics_store),
                 NodeStats(config, metrics_store),
-                IndexStats(config, metrics_store)
+                IndexStats(config, metrics_store),
+                IndexSize(config, metrics_store)
                 # We do not include the ExternalEnvironmentInfo here by intention as it should only be used for externally launched clusters
             ]
         else:
@@ -73,6 +74,11 @@ class Telemetry:
             if self._enabled(device):
                 device.on_benchmark_stop(phase)
 
+    def detach_from_cluster(self, cluster):
+        for device in self._devices:
+            if self._enabled(device):
+                device.detach_from_cluster(cluster)
+
     def _enabled(self, device):
         return device.internal or device.command in self._enabled_devices
 
@@ -122,6 +128,9 @@ class TelemetryDevice:
         pass
 
     def detach_from_node(self, node):
+        pass
+
+    def detach_from_cluster(self, cluster):
         pass
 
     def on_benchmark_start(self, phase):
@@ -453,3 +462,19 @@ class IndexStats(InternalTelemetryDevice):
             self.metrics_store.put_value_cluster_level("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
             self.metrics_store.put_value_cluster_level("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
             self.metrics_store.put_value_cluster_level("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")
+
+
+class IndexSize(InternalTelemetryDevice):
+    """
+    Measures the final size of the index
+    """
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+
+    def detach_from_cluster(self, cluster):
+        data_paths = self.config.opts("provisioning", "local.data.paths", mandatory=False)
+        if data_paths is not None:
+            data_path = data_paths[0]
+            index_size_bytes = io.get_size(data_path)
+            self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
+            process.run_subprocess_with_logging("find %s -ls" % data_path, header="index files:")

@@ -1,11 +1,10 @@
-import json
 import random
 import logging
 import threading
 
-from esrally import time, exceptions
+from esrally import time
 from esrally.track import track
-from esrally.utils import io, convert, process, progress
+from esrally.utils import convert, progress
 
 logger = logging.getLogger("rally.driver")
 
@@ -15,72 +14,27 @@ class Driver:
     Driver runs the benchmark.
     """
 
-    def __init__(self, config, clock=time.Clock):
+    def __init__(self, config, cluster, track, track_setup, clock=time.Clock):
         self.cfg = config
+        self.cluster = cluster
+        self.track = track
+        self.track_setup = track_setup
         self.clock = clock
-        self.index_benchmark = None
 
-    def setup(self, cluster, track, track_setup):
-        # does not make sense to add any mappings if we don't benchmark indexing
-        if track_setup.benchmark.benchmark_indexing:
-            mapping_path = self.cfg.opts("benchmarks", "mapping.path")
-            for index in track.indices:
-                logger.debug("Creating index [%s]" % index.name)
-                settings = track_setup.candidate.index_settings
-                # Workaround to support multiple versions (this is not how this will be handled in the future..)
-                if "master" in settings:
-                    # check whether we do a binary benchmark
-                    distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
-                    if distribution_version and len(distribution_version.strip()) > 0:
-                        if distribution_version in settings:
-                            index_settings = settings[distribution_version]
-                        else:
-                            raise exceptions.SystemSetupError("Could not find index settings for Elasticsearch version [%s]" %
-                                                              distribution_version)
-                    else:
-                        index_settings = settings["master"]
-                else:
-                    index_settings = settings
-                cluster.client.indices.create(index=index.name, body=index_settings)
-                for type in index.types:
-                    mappings = open(mapping_path[type]).read()
-                    logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
-                    logger.debug(mappings)
-                    cluster.client.indices.put_mapping(index=index.name,
-                                                       doc_type=type.name,
-                                                       body=json.loads(mappings))
-        cluster.wait_for_status_green()
+    def go(self):
+        self.cluster.on_benchmark_start()
+        if self.track_setup.benchmark.benchmark_indexing:
+            self._run(ThreadedIndexBenchmark, track.BenchmarkPhase.index)
+        if self.track_setup.benchmark.benchmark_search:
+            self._run(SearchBenchmark, track.BenchmarkPhase.search)
+        self.cluster.on_benchmark_stop()
 
-    def go(self, cluster, current_track, track_setup):
-        cluster.on_benchmark_start()
-        self.index(cluster, current_track, track_setup)
-        self.search(cluster, current_track, track_setup)
-        cluster.on_benchmark_stop()
-
-    def index(self, cluster, current_track, track_setup):
-        if track_setup.benchmark.benchmark_indexing:
-            logger.info("Starting index benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
-            cluster.on_benchmark_start(track.BenchmarkPhase.index)
-            self.index_benchmark = ThreadedIndexBenchmark(self.cfg, self.clock, current_track, track_setup, cluster)
-            self.index_benchmark.run()
-            cluster.on_benchmark_stop(track.BenchmarkPhase.index)
-            logger.info("Stopped index benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
-
-    def search(self, cluster, current_track, track_setup):
-        if track_setup.benchmark.benchmark_search:
-            logger.info("Starting search benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
-            cluster.on_benchmark_start(track.BenchmarkPhase.search)
-            search_benchmark = SearchBenchmark(self.cfg, self.clock, current_track, track_setup, cluster)
-            search_benchmark.run()
-            cluster.on_benchmark_stop(track.BenchmarkPhase.search)
-            logger.info("Stopped search benchmark for track [%s] and track setup [%s]" % (current_track.name, track_setup.name))
-
-    def tear_down(self, track, track_setup):
-        if track_setup.benchmark.benchmark_indexing:
-            # This is also just a hack for now (should be in track for first step and metrics for second one)
-            data_paths = self.cfg.opts("provisioning", "local.data.paths", mandatory=False)
-            if data_paths is not None:
-                self.index_benchmark.print_index_stats(data_paths[0])
+    def _run(self, benchmark_class, phase):
+        logger.info("Starting %s benchmark for track [%s] and track setup [%s]" % (phase.name, self.track.name, self.track_setup.name))
+        self.cluster.on_benchmark_start(phase)
+        benchmark_class(self.cfg, self.clock, self.track, self.track_setup, self.cluster).run()
+        self.cluster.on_benchmark_stop(phase)
+        logger.info("Stopped %s benchmark for track [%s] and track setup [%s]" % (phase.name, self.track.name, self.track_setup.name))
 
 
 class TimedOperation:
@@ -208,6 +162,7 @@ class IndexBenchmark(TimedOperation):
                 raise RuntimeError('Unknown id conflict type %s' % conflicts)
         return all_ids
 
+    # TODO: Extract as separate benchmark
     def _index_stats(self, expected_doc_count):
         # warmup
         self.repeat(self.cluster.client.indices.stats, metric="_all", level="shards")
@@ -252,11 +207,6 @@ class IndexBenchmark(TimedOperation):
                 "[%3d%% done]" % round(100 * docs_processed / docs_total)
             )
             logger.info("Indexer: %d docs: [%.1f docs/s]" % (docs_processed, docs_per_second))
-
-    def print_index_stats(self, data_dir):
-        index_size_bytes = io.get_size(data_dir)
-        self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
-        process.run_subprocess_with_logging("find %s -ls" % data_dir, header="index files:")
 
     def index_documents(self, ids):
         raise NotImplementedError("abstract method")
