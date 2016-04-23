@@ -98,8 +98,6 @@ class PolygonQuery(track.Query):
 #     uncompressed_size_in_bytes=3769692039,
 #     document_file_name="documents.json.bz2",
 #     mapping_file_name="mappings.json",
-#     # for defaults alone, it's just around 20 minutes, for all it's about 60
-#     estimated_benchmark_time_in_minutes=20,
 #     # Queries to use in the search benchmark
 #     queries=[PolygonQuery(), BBoxQuery(), DistanceQuery(), DistanceRangeQuery()],
 #     track_setups=track.track_setups

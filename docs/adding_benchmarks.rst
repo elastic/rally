@@ -114,7 +114,6 @@ for our example the file is called "geonames_track.py". It is placed in "esrally
         uncompressed_size_in_bytes=2790927196,
         document_file_name="documents.json.bz2",
         mapping_file_name="mappings.json",
-        estimated_benchmark_time_in_minutes=20,
         # Queries to use in the search benchmark
         queries=[SampleQuery()],
         track_setups=track.track_setups
@@ -150,7 +149,6 @@ In case you want to add multiple indices this is possible too. The same track ne
                 uncompressed_size_in_bytes=2790927196)
                 ])
         ],
-        estimated_benchmark_time_in_minutes=20,
         # Queries to use in the search benchmark
         queries=[SampleQuery()],
         track_setups=track.track_setups)
@@ -159,7 +157,6 @@ A few things to note:
 
 * You can either use the standard track setups provided with Rally or add your own. Note that Rally assumes that the track setup that should be run by default is called "defaults". It is possible to not use this name but it is more convenient for users.
 * You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
-* ``estimated_benchmark_time_in_minutes`` is really just a ballpark estimate to give users a very rough idea how the long the benchmark will run.
 * The numbers are needed to verify integrity and provide progress reports.
 
 When you invoke ``esrally list tracks``, the new track should now appear::

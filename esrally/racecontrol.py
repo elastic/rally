@@ -82,7 +82,6 @@ class Pipeline:
         self.steps = steps
 
     def run(self, track):
-        print("Overall ETA: %d minutes (depending on your hardware)\n" % track.estimated_benchmark_time_in_minutes)
         for step in self.steps:
             step.run(track)
 

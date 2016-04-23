@@ -109,7 +109,6 @@ tinyTrackSpec = track.Track(
                 uncompressed_size_in_bytes=564930)
         ])
     ],
-    estimated_benchmark_time_in_minutes=1,
     # Queries to use in the search benchmark
     queries=[
         DefaultQuery(),

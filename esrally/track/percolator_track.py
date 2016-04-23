@@ -96,14 +96,13 @@ percolatorTrackSpec = track.Track(
                 compressed_size_in_bytes=123502,
                 uncompressed_size_in_bytes=148039748
             ),
-            # The used for documents being percolated:
+            # The type used for documents being percolated:
             track.Type(
                 name="content",
                 mapping_file_name="document-mapping.json"
             )
         ])
     ],
-    estimated_benchmark_time_in_minutes=5,
     # Queries to use in the search benchmark
     queries=[
         PercolatorQuery(content="president bush"),

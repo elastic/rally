@@ -139,9 +139,8 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description, source_root_url, estimated_benchmark_time_in_minutes, track_setups, queries, index_name=None,
-                 type_name=None, number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None,
-                 mapping_file_name=None, indices=None):
+    def __init__(self, name, description, source_root_url, track_setups, queries, index_name=None, type_name=None, number_of_documents=0,
+                 compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None, mapping_file_name=None, indices=None):
         """
 
         Creates a new track.
@@ -156,8 +155,6 @@ class Track:
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL, three files should be located: the benchmark document file (see document_file_name), the mapping
         file (see mapping_file_name) and a readme (goes with the name "README.txt" as per convention).
-        :param estimated_benchmark_time_in_minutes: A ballpark estimation how long the benchmark will run (in minutes). This is just needed
-        to give the user a very rough idea on the duration of the benchmark.
         :param track_setups: A list of one or more track setups to use. If in doubt, reuse the predefined list "track.track_setups". Rally's
         default configuration assumes that each track defines at least one track setup with the name "defaults". This is not required but
         simplifies usage.
@@ -175,7 +172,6 @@ class Track:
         self.name = name
         self.description = description
         self.source_root_url = source_root_url
-        self.estimated_benchmark_time_in_minutes = estimated_benchmark_time_in_minutes
         self.track_setups = track_setups
         self.queries = queries
         self.readme_file_name = "README.txt"
@@ -422,7 +418,6 @@ class Marshal:
             os.rename(tmp_data_set_path, data_set_path)
 
 
-# Be very wary of the order here!!! reporter.py assumes this order - see similar comment there
 track_setups = [
     TrackSetup(
         name="defaults",
@@ -476,7 +471,6 @@ track_setups = [
     TrackSetup(
         name="defaults_verbose_iw",
         description="Based on defaults but specifically set up to gather merge part times.",
-        # integer divide!
         candidate=CandidateSettings(index_settings=greenNodeSettings,
                                     logging_config=mergePartsLogConfig),
         benchmark={
