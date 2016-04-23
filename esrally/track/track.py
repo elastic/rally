@@ -245,7 +245,8 @@ class IndexIdConflict(Enum):
 
 class BenchmarkPhase(Enum):
     index = 0,
-    search = 1
+    search = 1,
+    stats = 2
 
 
 class BenchmarkSettings:

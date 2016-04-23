@@ -70,13 +70,16 @@ class SummaryReporter:
     def report_search_latency(self, store, track):
         self.print_header("Query Latency:")
         for q in track.queries:
-            query_latency = store.get_percentiles("query_latency_%s" % q.name)
-            if query_latency:
-                print("  Query latency [%s]:" % q.name)
-                for percentile, value in query_latency.items():
-                    print("    %s Percentile: %.2f ms" % (percentile, value))
-            else:
-                print("  Could not determine query latency for [%s]" % q)
+            self.report_single_latency(store, q)
+
+    def report_single_latency(self, store, q):
+        query_latency = store.get_percentiles("query_latency_%s" % q)
+        if query_latency:
+            print("  Latency [%s]:" % q)
+            for percentile, value in query_latency.items():
+                print("    %s Percentile: %.2f ms" % (percentile, value))
+        else:
+            print("  Could not determine latency for [%s]" % q)
 
     def report_total_times(self, store):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
@@ -150,8 +153,8 @@ class SummaryReporter:
 
     def report_stats_times(self, store):
         self.print_header("Stats request latency:")
-        print("  Indices stats: %.2fms" % self.median(store, "indices_stats_latency"))
-        print("  Nodes stats: %.2fms" % self.median(store, "node_stats_latency"))
+        self.report_single_latency(store, "indices_stats")
+        self.report_single_latency(store, "node_stats")
         print("")
 
     def median(self, store, metric_name):

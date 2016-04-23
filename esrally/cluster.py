@@ -127,6 +127,14 @@ class Cluster:
         """
         return self.client.indices.stats(*args, **kwargs)
 
+    def force_flush(self):
+        logger.info("Force flushing all indices.")
+        self.client.indices.flush(params={"request_timeout": 600})
+
+    def force_merge(self):
+        logger.info("Force merging all indices.")
+        self.client.indices.forcemerge()
+
     def on_benchmark_start(self, phase=None):
         """
         Callback method when a benchmark is about to start.

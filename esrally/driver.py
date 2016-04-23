@@ -24,95 +24,137 @@ class Driver:
     def go(self):
         self.cluster.on_benchmark_start()
         if self.track_setup.benchmark.benchmark_indexing:
-            self._run(ThreadedIndexBenchmark, track.BenchmarkPhase.index)
+            self._run(ThreadedIndexBenchmark)
+        self._run(StatsBenchmark)
         if self.track_setup.benchmark.benchmark_search:
-            self._run(SearchBenchmark, track.BenchmarkPhase.search)
+            self._run(SearchBenchmark)
         self.cluster.on_benchmark_stop()
 
-    def _run(self, benchmark_class, phase):
+    def _run(self, benchmark_class):
+        benchmark = benchmark_class(self.cfg, self.clock, self.track, self.track_setup, self.cluster)
+        phase = benchmark.phase
         logger.info("Starting %s benchmark for track [%s] and track setup [%s]" % (phase.name, self.track.name, self.track_setup.name))
         self.cluster.on_benchmark_start(phase)
-        benchmark_class(self.cfg, self.clock, self.track, self.track_setup, self.cluster).run()
+        benchmark.run()
         self.cluster.on_benchmark_stop(phase)
         logger.info("Stopped %s benchmark for track [%s] and track setup [%s]" % (phase.name, self.track.name, self.track_setup.name))
 
 
-class TimedOperation:
-    def __init__(self, clock):
-        self.clock = clock
-
-    def timed(self, target, repeat=1, *args, **kwargs):
-        stop_watch = self.clock.stop_watch()
-        stop_watch.start()
-        result = None
-        for i in range(repeat):
-            result = target(*args, **kwargs)
-        stop_watch.stop()
-        return stop_watch.total_time() / repeat, result
-
-
-class SearchBenchmark(TimedOperation):
-    def __init__(self, cfg, clock, track, track_setup, cluster):
-        TimedOperation.__init__(self, clock)
+class Benchmark:
+    def __init__(self, cfg, clock, track, track_setup, cluster, phase):
         self.cfg = cfg
+        self.clock = clock
         self.track = track
         self.track_setup = track_setup
         self.cluster = cluster
+        self.phase = phase
         self.metrics_store = cluster.metrics_store
         self.progress = progress.CmdLineProgressReporter()
         self.quiet_mode = self.cfg.opts("system", "quiet.mode")
 
-    def run(self):
-        es = self.cluster.client
-        logger.info("Running search benchmark (warmup)")
-        self._run_benchmark(es, "  Benchmarking search (warmup iteration %d/%d)", repetitions=1000)
-        logger.info("Running search benchmark")
-        times = self._run_benchmark(es, "  Benchmarking search (iteration %d/%d)", repetitions=1000)
-        logger.info("Search benchmark has finished")
 
-        for q in self.track.queries:
+class LatencyBenchmark(Benchmark):
+    def __init__(self, cfg, clock, track, track_setup, cluster, phase, queries, repetitions=1000):
+        Benchmark.__init__(self, cfg, clock, track, track_setup, cluster, phase)
+        self.queries = queries
+        self.repetitions = repetitions
+        self.stop_watch = self.clock.stop_watch()
+
+    def run(self):
+        logger.info("Running warmup iterations")
+        self._run_benchmark("  Benchmarking %s (warmup iteration %d/%d)")
+        logger.info("Running measurement iterations")
+        times = self._run_benchmark("  Benchmarking %s (iteration %d/%d)")
+
+        for q in self.queries:
             latencies = [t[q.name] for t in times]
             for latency in latencies:
                 self.metrics_store.put_value_cluster_level("query_latency_%s" % q.name, convert.seconds_to_ms(latency), "ms")
 
-    def _run_benchmark(self, es, message, repetitions=10):
+    def _run_benchmark(self, message):
         times = []
         quiet = self.quiet_mode
-        for iteration in range(1, repetitions + 1):
-            if not quiet and (iteration % 50 == 0 or iteration == 1):
-                self.progress.print(
-                    message % (iteration, repetitions),
-                    "[%3d%% done]" % (round(100 * iteration / repetitions))
-                )
-            times.append(self._run_one_round(es))
+        if not quiet:
+            self._print_progress(message, 0)
+        for iteration in range(1, self.repetitions + 1):
+            if not quiet:
+                self._print_progress(message, iteration)
+            times.append(self._run_one_round())
         self.progress.finish()
         return times
 
-    def _run_one_round(self, es):
+    def _print_progress(self, message, iteration):
+        if iteration % int(self.repetitions / 20) == 0:
+            progress_percent = round(100 * iteration / self.repetitions)
+            self.progress.print(message % (self.phase.name, iteration, self.repetitions), "[%3d%% done]" % progress_percent)
+
+    def _run_one_round(self):
         d = {}
-        for query in self.track.queries:
-            duration, result = self.timed(query.run, 1, es)
-            d[query.name] = duration / query.normalization_factor
+        es = self.cluster.client
+        for query in self.queries:
+            self.stop_watch.start()
+            query.run(es)
+            self.stop_watch.stop()
+            d[query.name] = self.stop_watch.total_time() / query.normalization_factor
             query.close(es)
         return d
 
 
-class IndexBenchmark(TimedOperation):
-    def __init__(self, config, clock, track, track_setup, cluster):
-        TimedOperation.__init__(self, clock)
-        self.cfg = config
-        self.stop_watch = clock.stop_watch()
-        self.track = track
-        self.track_setup = track_setup
+class SearchBenchmark(LatencyBenchmark):
+    def __init__(self, cfg, clock, t, track_setup, cluster):
+        super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.search, t.queries)
+
+
+class StatsQueryAdapter:
+    def __init__(self, name, op, *args, **kwargs):
+        self.name = name
+        self.op = op
+        self.args = args
+        self.kwargs = kwargs
+        self.normalization_factor = 1
+
+    def run(self, client):
+        self.op(*self.args, **self.kwargs)
+
+    def close(self, client):
+        pass
+
+    def __str__(self):
+        return self.name
+
+
+class StatsBenchmark(LatencyBenchmark):
+    def __init__(self, cfg, clock, t, track_setup, cluster):
+        super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.stats, [
+            StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
+            StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
+        ])
+
+
+class IndexedDocumentCountProbe:
+    def __init__(self, cluster, expected_doc_count):
         self.cluster = cluster
-        self.metrics_store = cluster.metrics_store
-        self.quiet_mode = self.cfg.opts("system", "quiet.mode")
-        self.progress = progress.CmdLineProgressReporter()
+        self.expected_doc_count = expected_doc_count
+
+    def assert_doc_count(self):
+        stats = self.cluster.indices_stats(metric="_all", level="shards")
+        actual_doc_count = stats["_all"]["primaries"]["docs"]["count"]
+        if self.expected_doc_count is not None and self.expected_doc_count != actual_doc_count:
+            msg = "Wrong number of documents indexed: expected %s but got %s. If you benchmark against an external cluster be sure to " \
+                  "start with all indices empty." % (self.expected_doc_count, actual_doc_count)
+            logger.error(msg)
+            raise AssertionError(msg)
+
+
+class IndexBenchmark(Benchmark):
+    def __init__(self, cfg, clock, t, track_setup, cluster):
+        Benchmark.__init__(self, cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.index)
+        self.stop_watch = clock.stop_watch()
         self.bulk_size = 5000
         self.processed = 0
-        logger.info("Use %d docs per bulk request" % self.bulk_size)
 
     def run(self):
+        logger.info("Use %d docs per bulk request" % self.bulk_size)
         finished = False
         try:
             self.index()
@@ -125,28 +167,22 @@ class IndexBenchmark(TimedOperation):
         force_merge = self.track_setup.benchmark.force_merge
         docs_to_index = self.track.number_of_documents
 
-        # We cannot know how many docs have been updated if we produce id conflicts
         conflicts = self.track_setup.benchmark.id_conflicts
         if conflicts == track.IndexIdConflict.NoConflicts:
-            expected_doc_count = docs_to_index
+            doc_count_probe = IndexedDocumentCountProbe(self.cluster, docs_to_index)
             ids = None
         else:
-            expected_doc_count = None
+            # We cannot know how many docs have been updated if we produce id conflicts
+            doc_count_probe = IndexedDocumentCountProbe(self.cluster, None)
             ids = self.build_conflicting_ids(conflicts)
 
         self.index_documents(ids)
 
-        logger.info("Force flushing all indices.")
-        es = self.cluster.client
-        es.indices.flush(params={"request_timeout": 600})
-        logger.info("Force flush has finished successfully.")
-
+        self.cluster.force_flush()
         if force_merge:
-            logger.info("Force merging all indices.")
-            es.indices.forcemerge()
+            self.cluster.force_merge()
 
-        self._index_stats(expected_doc_count)
-        self._node_stats()
+        doc_count_probe.assert_doc_count()
 
     def build_conflicting_ids(self, conflicts):
         docs_to_index = self.track.number_of_documents
@@ -161,39 +197,6 @@ class IndexBenchmark(TimedOperation):
             else:
                 raise RuntimeError('Unknown id conflict type %s' % conflicts)
         return all_ids
-
-    # TODO: Extract as separate benchmark
-    def _index_stats(self, expected_doc_count):
-        # warmup
-        self.repeat(self.cluster.client.indices.stats, metric="_all", level="shards")
-        durations, stats = self.repeat(self.cluster.client.indices.stats, metric="_all", level="shards")
-        for duration in durations:
-            self.metrics_store.put_value_cluster_level("indices_stats_latency", convert.seconds_to_ms(duration), "ms")
-        primaries = stats["_all"]["primaries"]
-        # TODO: Consider introducing "probes" for verifications
-        actual_doc_count = primaries["docs"]["count"]
-        if expected_doc_count is not None and expected_doc_count != actual_doc_count:
-            msg = "Wrong number of documents indexed: expected %s but got %s. If you benchmark against an external cluster be sure to " \
-                  "start with all indices empty." % (expected_doc_count, actual_doc_count)
-            logger.error(msg)
-            raise AssertionError(msg)
-
-    def _node_stats(self):
-        # warmup
-        self.repeat(self.cluster.client.nodes.stats, metric="_all", level="shards")
-        durations, stats = self.repeat(self.cluster.client.nodes.stats, metric="_all", level="shards")
-        for duration in durations:
-            self.metrics_store.put_value_cluster_level("node_stats_latency", convert.seconds_to_ms(duration), "ms")
-
-    # we don't want to gather to many samples as we're actually in the middle of the index benchmark and would skew other metrics like
-    # CPU usage too much (TODO #27: split this step from actual indexing and report proper percentiles not just median.)
-    def repeat(self, api_call, repetitions=10, *args, **kwargs):
-        times = []
-        result = None
-        for iteration in range(0, repetitions):
-            duration, result = self.timed(api_call, 1, *args, **kwargs)
-            times.append(duration)
-        return times, result
 
     def _print_progress(self, docs_processed):
         if not self.quiet_mode:
