@@ -245,14 +245,17 @@ class IndexIdConflict(Enum):
 
 class BenchmarkPhase(Enum):
     index = 0,
-    search = 1,
-    stats = 2
+    stats = 1
+    search = 2,
 
 
-class BenchmarkSettings:
-    def __init__(self, benchmark_search=False, benchmark_indexing=True, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
-        self.benchmark_search = benchmark_search
-        self.benchmark_indexing = benchmark_indexing
+class LatencyBenchmarkSettings:
+    def __init__(self, iteration_count=1000):
+        self.iteration_count = iteration_count
+
+
+class IndexBenchmarkSettings:
+    def __init__(self, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
         self.id_conflicts = id_conflicts
         self.force_merge = force_merge
 
@@ -266,7 +269,9 @@ class TrackSetup:
                  name,
                  description,
                  candidate=CandidateSettings(),
-                 benchmark=BenchmarkSettings()):
+                 benchmark=None):
+        if benchmark is None:
+            benchmark = {}
         self.name = name
         self.description = description
         self.candidate = candidate
@@ -423,20 +428,28 @@ track_setups = [
         name="defaults",
         description="append-only, using all default settings.",
         candidate=CandidateSettings(index_settings=greenNodeSettings),
-        benchmark=BenchmarkSettings(benchmark_search=True)
+        benchmark={
+            BenchmarkPhase.index: IndexBenchmarkSettings(),
+            BenchmarkPhase.stats: LatencyBenchmarkSettings(iteration_count=100),
+            BenchmarkPhase.search: LatencyBenchmarkSettings(iteration_count=1000)
+        }
     ),
     TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
         candidate=CandidateSettings(index_settings=greenNodeSettings, heap="4g"),
-        benchmark=BenchmarkSettings()
+        benchmark={
+            BenchmarkPhase.index: IndexBenchmarkSettings()
+        }
     ),
 
     TrackSetup(
         name="fastsettings",
         description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
         candidate=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
-        benchmark=BenchmarkSettings()
+        benchmark={
+            BenchmarkPhase.index: IndexBenchmarkSettings()
+        }
     ),
 
     TrackSetup(
@@ -444,7 +457,9 @@ track_setups = [
         description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
                     "already exists in the index.",
         candidate=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
-        benchmark=BenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
+        benchmark={
+            BenchmarkPhase.index: IndexBenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
+        }
     ),
 
     TrackSetup(
@@ -453,7 +468,9 @@ track_setups = [
         # integer divide!
         candidate=CandidateSettings(index_settings=greenNodeSettings, nodes=2,
                                     processors=sysstats.logical_cpu_cores() // 2),
-        benchmark=BenchmarkSettings()
+        benchmark={
+            BenchmarkPhase.index: IndexBenchmarkSettings()
+        }
     ),
 
     TrackSetup(
@@ -462,6 +479,8 @@ track_setups = [
         # integer divide!
         candidate=CandidateSettings(index_settings=greenNodeSettings,
                                     logging_config=mergePartsLogConfig),
-        benchmark=BenchmarkSettings()
+        benchmark={
+            BenchmarkPhase.index: IndexBenchmarkSettings()
+        }
     ),
 ]

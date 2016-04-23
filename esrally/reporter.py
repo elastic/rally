@@ -13,7 +13,7 @@ class SummaryReporter:
     def __init__(self, config):
         self._config = config
 
-    def report(self, track):
+    def report(self, t):
         self.print_header("------------------------------------------------------")
         self.print_header("    _______             __   _____                    ")
         self.print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
@@ -24,22 +24,22 @@ class SummaryReporter:
 
         selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
         invocation = self._config.opts("meta", "time.start")
-        for track_setup in track.track_setups:
+        for track_setup in t.track_setups:
             if track_setup.name in selected_setups:
                 if len(selected_setups) > 1:
                     self.print_header("*** Track setup %s ***\n" % track_setup.name)
 
                 store = metrics.EsMetricsStore(self._config)
-                store.open(invocation, track.name, track_setup.name)
+                store.open(invocation, t.name, track_setup.name)
 
-                if track_setup.benchmark.benchmark_indexing:
+                if track.BenchmarkPhase.index in track_setup.benchmark:
                     self.report_index_throughput(store)
                     print("")
                     self.report_total_times(store)
                     self.report_merge_part_times(store)
 
-                if track_setup.benchmark.benchmark_search:
-                    self.report_search_latency(store, track)
+                if track.BenchmarkPhase.search in track_setup.benchmark:
+                    self.report_search_latency(store, t, track_setup.benchmark[track.BenchmarkPhase.search].iteration_count)
 
                 self.print_header("System Metrics")
                 self.report_cpu_usage(store)
@@ -52,7 +52,8 @@ class SummaryReporter:
                 self.report_segment_counts(store)
                 print("")
 
-                self.report_stats_times(store)
+                if track.BenchmarkPhase.stats in track_setup.benchmark:
+                    self.report_stats_times(store, track_setup.benchmark[track.BenchmarkPhase.stats].iteration_count)
 
     def print_header(self, message):
         print("\033[1m%s\033[0m" % message)
@@ -67,13 +68,13 @@ class SummaryReporter:
         else:
             print("  Could not determine indexing throughput")
 
-    def report_search_latency(self, store, track):
+    def report_search_latency(self, store, track, sample_size):
         self.print_header("Query Latency:")
         for q in track.queries:
-            self.report_single_latency(store, q)
+            self.report_single_latency(store, q, sample_size)
 
-    def report_single_latency(self, store, q):
-        query_latency = store.get_percentiles("query_latency_%s" % q)
+    def report_single_latency(self, store, q, sample_size):
+        query_latency = store.get_percentiles("query_latency_%s" % q, percentiles=self.percentiles_for_sample_size(sample_size))
         if query_latency:
             print("  Latency [%s]:" % q)
             for percentile, value in query_latency.items():
@@ -151,10 +152,10 @@ class SummaryReporter:
     def report_segment_counts(self, store):
         print("  Index segment count: %s" % store.get_one("segments_count"))
 
-    def report_stats_times(self, store):
+    def report_stats_times(self, store, sample_size):
         self.print_header("Stats request latency:")
-        self.report_single_latency(store, "indices_stats")
-        self.report_single_latency(store, "node_stats")
+        self.report_single_latency(store, "indices_stats", sample_size)
+        self.report_single_latency(store, "node_stats", sample_size)
         print("")
 
     def median(self, store, metric_name):
@@ -163,3 +164,18 @@ class SummaryReporter:
             return percentiles[SummaryReporter.MEDIAN]
         else:
             return None
+
+    def percentiles_for_sample_size(self, sample_size):
+        # if needed we can come up with something smarter but it'll do for now
+        if sample_size <= 1:
+            raise AssertionError("Percentiles require at least one sample")
+        elif sample_size == 1:
+            return [100]
+        elif 1 < sample_size < 10:
+            return [50.0, 100]
+        elif 10 <= sample_size < 100:
+            return [50.0, 90.0, 100]
+        elif 100 <= sample_size < 1000:
+            return [50.0, 90.0, 99.0, 100]
+        else:
+            return [50.0, 90.0, 99.0, 99.9, 100]

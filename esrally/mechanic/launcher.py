@@ -8,6 +8,7 @@ import json
 
 from esrally.mechanic import gear
 from esrally import config, cluster, telemetry, time, exceptions
+from esrally.track import track
 
 logger = logging.getLogger("rally.launcher")
 
@@ -22,10 +23,10 @@ class Launcher:
         self.cfg = cfg
         self.cluster_factory = cluster_factory_class()
 
-    def setup_index(self, cluster, track, track_setup):
-        if track_setup.benchmark.benchmark_indexing:
+    def setup_index(self, cluster, t, track_setup):
+        if track.BenchmarkPhase.index in track_setup.benchmark:
             mapping_path = self.cfg.opts("benchmarks", "mapping.path")
-            for index in track.indices:
+            for index in t.indices:
                 logger.debug("Creating index [%s]" % index.name)
                 settings = track_setup.candidate.index_settings
                 # Workaround to support multiple versions (this is not how this will be handled in the future..)

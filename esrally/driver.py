@@ -10,6 +10,12 @@ logger = logging.getLogger("rally.driver")
 
 
 class Driver:
+    BENCHMARKS = {
+        track.BenchmarkPhase.search: lambda: SearchBenchmark,
+        track.BenchmarkPhase.stats: lambda: StatsBenchmark,
+        track.BenchmarkPhase.index: lambda: ThreadedIndexBenchmark
+    }
+
     """
     Driver runs the benchmark.
     """
@@ -23,11 +29,10 @@ class Driver:
 
     def go(self):
         self.cluster.on_benchmark_start()
-        if self.track_setup.benchmark.benchmark_indexing:
-            self._run(ThreadedIndexBenchmark)
-        self._run(StatsBenchmark)
-        if self.track_setup.benchmark.benchmark_search:
-            self._run(SearchBenchmark)
+        # We need to run phases in order - i.e. indexing has to be done before a search can be started
+        for phase in track.BenchmarkPhase:
+            if phase in self.track_setup.benchmark:
+                self._run(Driver.BENCHMARKS[phase]())
         self.cluster.on_benchmark_stop()
 
     def _run(self, benchmark_class):
@@ -84,7 +89,7 @@ class LatencyBenchmark(Benchmark):
         return times
 
     def _print_progress(self, message, iteration):
-        if iteration % int(self.repetitions / 20) == 0:
+        if iteration % (self.repetitions // 20) == 0:
             progress_percent = round(100 * iteration / self.repetitions)
             self.progress.print(message % (self.phase.name, iteration, self.repetitions), "[%3d%% done]" % progress_percent)
 
@@ -102,7 +107,8 @@ class LatencyBenchmark(Benchmark):
 
 class SearchBenchmark(LatencyBenchmark):
     def __init__(self, cfg, clock, t, track_setup, cluster):
-        super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.search, t.queries)
+        super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.search, t.queries,
+                         track_setup.benchmark[track.BenchmarkPhase.search].iteration_count)
 
 
 class StatsQueryAdapter:
@@ -128,7 +134,7 @@ class StatsBenchmark(LatencyBenchmark):
         super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.stats, [
             StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
             StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
-        ])
+        ], track_setup.benchmark[track.BenchmarkPhase.stats].iteration_count)
 
 
 class IndexedDocumentCountProbe:
@@ -164,10 +170,10 @@ class IndexBenchmark(Benchmark):
             logger.info("IndexBenchmark finished successfully: %s" % finished)
 
     def index(self):
-        force_merge = self.track_setup.benchmark.force_merge
+        force_merge = self.track_setup.benchmark[self.phase].force_merge
         docs_to_index = self.track.number_of_documents
 
-        conflicts = self.track_setup.benchmark.id_conflicts
+        conflicts = self.track_setup.benchmark[self.phase].id_conflicts
         if conflicts == track.IndexIdConflict.NoConflicts:
             doc_count_probe = IndexedDocumentCountProbe(self.cluster, docs_to_index)
             ids = None

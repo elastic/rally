@@ -32,7 +32,7 @@ class PercolatorQuery(track.Query):
           }
         }
       }
-    }''' % (self.content))
+    }''' % self.content)
 
 
 class PercolatorQueryNoScoring(track.Query):
@@ -55,7 +55,7 @@ class PercolatorQueryNoScoring(track.Query):
             }
         }   
       }
-    }''' % (self.content))
+    }''' % self.content)
 
 
 class PercolatorQueryWithHighlighting(track.Query):
@@ -119,6 +119,10 @@ percolatorTrackSpec = track.Track(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
         candidate=track.CandidateSettings(index_settings=percolatorIndexSettings, heap="4g"),
-        benchmark=track.BenchmarkSettings(benchmark_search=True)
+        benchmark={
+            track.BenchmarkPhase.index: track.IndexBenchmarkSettings(),
+            track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(iteration_count=100),
+            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(iteration_count=100)
+        }
     )]
 )

@@ -47,7 +47,7 @@ class MockClusterFactory:
 
 class MockTrackSetup:
     def __init__(self):
-        self.benchmark = track.BenchmarkSettings(benchmark_indexing=False)
+        self.benchmark = {}
 
 
 class ExternalLauncherTests(TestCase):
