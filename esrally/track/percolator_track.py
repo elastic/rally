@@ -83,6 +83,7 @@ class PercolatorQueryWithHighlighting(track.Query):
 
 percolatorTrackSpec = track.Track(
     name="percolator",
+    short_description="Percolator benchmark based on 2M AOL queries",
     description="This test indexes 2M AOL queries and use the percolator query to match",
     source_root_url="http://benchmarks.elastic.co/corpora/percolator",
     indices=[

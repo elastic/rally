@@ -56,8 +56,13 @@ def parse_args():
     list_parser.add_argument(
         "configuration",
         metavar="configuration",
-        help="The configuration for which Rally should show the available options. Possible values are: telemetry, tracks, pipelines",
-        choices=["telemetry", "tracks", "pipelines"])
+        help="The configuration for which Rally should show the available options. Possible values are: telemetry, tracks, pipelines, races",
+        choices=["telemetry", "tracks", "pipelines", "races"])
+    list_parser.add_argument(
+        "--limit",
+        help="Limit the number of search results for recent races (default: 10).",
+        default=10,
+    )
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
     for p in [parser, config_parser]:
@@ -89,14 +94,6 @@ def parse_args():
                  "space! (default: false)",
             default=False,
             action="store_true")
-        # tournament: provide two revisions to compare
-        # Does not make sense to expose this argument already if there is only a single supported option
-        # p.add_argument(
-        #    "--benchmark-mode",
-        #    help="defines how to run benchmarks. 'single' runs the single revision given by '--revision'. Currently only "
-        #         "'single' is supported (default: single).",
-        #    choices=["single"],  # later also 'tournament'
-        #    default="single")
         p.add_argument(
             "--telemetry",
             help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
@@ -232,6 +229,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
     if subcommand == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
+        cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
 
     configure_logging(cfg)
     print_banner()

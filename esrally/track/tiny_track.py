@@ -95,6 +95,7 @@ class ScrollQuery(track.Query):
 
 tinyTrackSpec = track.Track(
     name="tiny",
+    short_description="First 2k documents of the geonames track for local tests",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
     source_root_url="http://benchmarks.elastic.co/corpora/tiny",

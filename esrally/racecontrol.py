@@ -2,7 +2,9 @@ import logging
 import os
 import urllib.error
 
-from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter
+import tabulate
+
+from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io
 # This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
@@ -254,6 +256,7 @@ class RaceControl:
             try:
                 pipeline = self._choose(pipelines, "pipeline", "You can list the available pipelines with esrally list pipelines.")(ctx)
                 t = self._choose(track.tracks, "track", "You can list the available tracks with esrally list tracks.")
+                metrics.RaceStore(self._config).store_race()
                 pipeline.run(t)
                 return True
             except exceptions.SystemSetupError as e:
@@ -277,23 +280,27 @@ class RaceControl:
     def _list(self, ctx):
         what = ctx.config.opts("system", "list.config.option")
         if what == "telemetry":
-            telemetry.Telemetry(ctx.config).list()
+            print("Available telemetry devices:\n")
+            print(tabulate.tabulate(telemetry.Telemetry(ctx.config).list(), ["Command", "Name", "Description"]))
+            print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
         elif what == "tracks":
             print("Available tracks:\n")
-            for t in track.tracks.values():
-                print("* %s: %s" % (t.name, t.description))
-                print("\tTrack setups for this track:")
-                for track_setup in t.track_setups:
-                    print("\t* %s" % track_setup.name)
-                print("")
+            print(tabulate.tabulate([[t.name, t.short_description, ",".join(map(str, t.track_setups))] for t in track.tracks.values()],
+                                    headers=["Name", "Description", "Track setups"]))
+
         elif what == "pipelines":
             print("Available pipelines:\n")
-            for p in pipelines.values():
-                pipeline = p(ctx)
-                print("* %s: %s" % (pipeline.name, pipeline.description))
+            print(tabulate.tabulate([[pipeline(ctx).name, pipeline(ctx).description] for pipeline in pipelines.values()],
+                                    headers=["Name", "Description"]))
+        elif what == "races":
+            print("Recent races:\n")
+            races = []
+            for race in metrics.RaceStore(ctx.config).list():
+                races.append([race["trial-timestamp"], race["track"], ",".join(race["track-setups"]), race["user-tag"]])
+
+            print(tabulate.tabulate(races, headers=["Trial Timestamp", "Track", "Track setups", "User Tag"]))
         else:
             raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
-
 
 class RacingContext:
     def __init__(self, cfg):

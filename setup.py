@@ -13,6 +13,7 @@ install_requires = [
     "elasticsearch==2.3.0",
     "psutil==4.1.0",
     "py-cpuinfo==0.2.3",
+    "tabulate==0.7.5",
     # always use the latest version, these are certificate files...
     "certifi"
 ]

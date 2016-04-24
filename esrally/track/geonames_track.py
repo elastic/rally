@@ -95,6 +95,7 @@ class ScrollQuery(track.Query):
 
 geonamesTrackSpec = track.Track(
     name="geonames",
+    short_description="Standard benchmark in Rally (8.6M POIs from Geonames)",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
     source_root_url="http://benchmarks.elastic.co/corpora/geonames",

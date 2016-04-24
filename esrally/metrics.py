@@ -38,6 +38,9 @@ class EsClient:
     def bulk_index(self, index, doc_type, items):
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
+    def index(self, index, doc_type, item):
+        self.guarded(self._client.create, index=index, doc_type=doc_type, body=item)
+
     def search(self, index, doc_type, body):
         return self.guarded(self._client.search, index=index, doc_type=doc_type, body=body)
 
@@ -106,6 +109,10 @@ class MetaInfoScope(Enum):
     """
 
 
+def index_name(ts):
+    return "rally-%04d" % ts.year
+
+
 class EsMetricsStore:
     """
     A metrics store backed by Elasticsearch.
@@ -154,7 +161,7 @@ class EsMetricsStore:
         self._invocation = time.to_iso8601(invocation)
         self._track = track_name
         self._track_setup = track_setup_name
-        self._index = "rally-%04d" % invocation.year
+        self._index = index_name(invocation)
         self._docs = []
         # reduce a bit of noise in the metrics cluster log
         if create and not self._client.exists(index=self._index):
@@ -386,3 +393,63 @@ class EsMetricsStore:
                 ]
             }
         }
+
+
+class RaceStore:
+    RACE_DOC_TYPE = "races"
+
+    def __init__(self,
+                 config,
+                 client_factory_class=EsClientFactory):
+        """
+        Creates a new metrics store.
+
+        :param config: The config object. Mandatory.
+        :param client_factory_class: This parameter is optional and needed for testing.
+        """
+        self.config = config
+        self.environment_name = config.opts("system", "env.name")
+        self.client = client_factory_class(config).create()
+
+    def store_race(self):
+        trial_timestamp = self.config.opts("meta", "time.start")
+        doc = {
+            "environment": self.environment_name,
+            "trial-timestamp": time.to_iso8601(trial_timestamp),
+            "pipeline": self.config.opts("system", "pipeline"),
+            "revision": self.config.opts("source", "revision"),
+            "distribution-version": self.config.opts("source", "distribution.version"),
+            "track": self.config.opts("system", "track"),
+            "track-setups": self.config.opts("benchmarks", "tracksetups.selected"),
+            "target-hosts": self.config.opts("launcher", "external.target.hosts"),
+            "user-tag": self.config.opts("system", "user.tag")
+        }
+        self.client.index(index_name(trial_timestamp), RaceStore.RACE_DOC_TYPE, doc)
+
+    def list(self):
+        filters = [{
+            "term": {
+                "environment": self.environment_name
+            }
+        }]
+
+        query = {
+            "query": {
+                "bool": {
+                    "filter": filters
+                }
+            },
+            "size": int(self.config.opts("system", "list.races.max_results")),
+            "sort": [
+                {
+                    "trial-timestamp": {
+                        "order": "desc"
+                    }
+                }
+            ]
+        }
+        result = self.client.search(index="rally-*", doc_type=RaceStore.RACE_DOC_TYPE, body=query)
+        if result["hits"]["total"] > 0:
+            return [v["_source"] for v in result["hits"]["hits"]]
+        else:
+            return None

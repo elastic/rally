@@ -1,5 +1,6 @@
 import os
 import logging
+import collections
 import urllib.error
 from enum import Enum
 
@@ -79,7 +80,7 @@ appender:
 # Specific tracks add themselves to this dictionary.
 #
 # key = Track name, value = Track instance
-tracks = {}
+tracks = collections.OrderedDict()
 
 
 class Index:
@@ -139,8 +140,9 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description, source_root_url, track_setups, queries, index_name=None, type_name=None, number_of_documents=0,
-                 compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None, mapping_file_name=None, indices=None):
+    def __init__(self, name, short_description, description, source_root_url, track_setups, queries, index_name=None, type_name=None,
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None,
+                 mapping_file_name=None, indices=None):
         """
 
         Creates a new track.
@@ -151,6 +153,7 @@ class Track:
         Tracks that need multiple indices or types have to create Index instances themselves and pass all indices in an indices list.
 
         :param name: A short, descriptive name for this track. As per convention, this name should be in lower-case without spaces.
+        :param short_description: A short description for this track (should be less than 80 characters).
         :param description: A longer description for this track.
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL, three files should be located: the benchmark document file (see document_file_name), the mapping
@@ -170,6 +173,7 @@ class Track:
         :param indices: A list of indices for this track. Set this parameter when using multiple indices or types.
         """
         self.name = name
+        self.short_description = short_description
         self.description = description
         self.source_root_url = source_root_url
         self.track_setups = track_setups
@@ -272,6 +276,9 @@ class TrackSetup:
         self.description = description
         self.candidate = candidate
         self.benchmark = benchmark
+
+    def __str__(self):
+        return self.name
 
 
 class Query:

@@ -19,7 +19,7 @@ class Telemetry:
             self._devices = [
                 FlightRecorder(config, metrics_store),
                 JitCompiler(config, metrics_store),
-                #PerfStat(config, metrics_store),
+                PerfStat(config, metrics_store),
                 Ps(config, metrics_store),
                 MergeParts(config, metrics_store),
                 EnvironmentInfo(config, metrics_store),
@@ -33,11 +33,11 @@ class Telemetry:
         self._enabled_devices = self._config.opts("telemetry", "devices")
 
     def list(self):
-        print("Available telemetry devices:\n")
+        external_devices = []
         for device in self._devices:
             if not device.internal:
-                print("* %s (%s): %s" % (device.command, device.human_name, device.help))
-        print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
+                external_devices.append([device.command, device.human_name, device.help])
+        return external_devices
 
     def instrument_candidate_env(self, setup, candidate_id):
         opts = {}

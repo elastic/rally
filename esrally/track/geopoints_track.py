@@ -88,6 +88,7 @@ class PolygonQuery(track.Query):
 # Deactivated for now as long as data are missing
 # geopointTrackSpec = track.Track(
 #     name="geopoint",
+#     short_description="60.8M POIs from PlanetOSM",
 #     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 3.5 GB json) using 8 client threads and 5000 docs per bulk "
 #                 "request against Elasticsearch",
 #     source_root_url="file:///data/benchmarks/geopoint",

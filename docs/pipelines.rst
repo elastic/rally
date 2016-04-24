@@ -5,10 +5,12 @@ Rally supports a concept we call "pipelines". A pipeline is just a series of ste
 
     Available pipelines:
 
-    * benchmark-only: Assumes an already running Elasticsearch instance, runs a benchmark and reports results
-    * from-distribution: Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
-    * from-sources-complete: Builds and provisions Elasticsearch, runs a benchmark and reports results.
-    * from-sources-skip-build: Provisions Elasticsearch (skips the build), runs a benchmark and reports results.
+    Name                     Description
+    -----------------------  ---------------------------------------------------------------------------------------------
+    from-distribution        Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
+    from-sources-complete    Builds and provisions Elasticsearch, runs a benchmark and reports results.
+    benchmark-only           Assumes an already running Elasticsearch instance, runs a benchmark and reports results
+    from-sources-skip-build  Provisions Elasticsearch (skips the build), runs a benchmark and reports results.
 
 benchmark-only
 ~~~~~~~~~~~~~~

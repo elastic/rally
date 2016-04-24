@@ -13,12 +13,13 @@ You probably want to gain additional insights from a benchmarking trial. Therefo
     /_/ |_|\__,_/_/_/\__, /
                     /____/
     Available telemetry devices:
-    
-    * jfr (Flight Recorder): Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK) (Always enabled: False)
-    * jit (JIT Compiler Profiler): Enables JIT compiler logs. (Always enabled: False)
 
-    Keep in mind that each telemetry devices may incur a runtime overhead which can skew results.
+    Command    Name                   Description
+    ---------  ---------------------  --------------------------------------------------------------------------------------
+    jfr        Flight Recorder        Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)
+    jit        JIT Compiler Profiler  Enables JIT compiler logs.
 
+    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
 jfr
 ---

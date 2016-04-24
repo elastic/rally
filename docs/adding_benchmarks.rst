@@ -104,6 +104,7 @@ for our example the file is called "geonames_track.py". It is placed in "esrally
     
     geonamesTrackSpec = track.Track(
         name="geonames",
+        short_description="Demo benchmark",
         description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                     "request against Elasticsearch",
         source_root_url="http://benchmarks.elastic.co/corpora/geonames",
@@ -135,6 +136,7 @@ In case you want to add multiple indices this is possible too. The same track ne
 
     geonamesTrackSpec = track.Track(
         name="geonames",
+        short_description="Demo benchmark",
         description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                     "request against Elasticsearch",
         source_root_url="http://benchmarks.elastic.co/corpora/geonames",
@@ -161,7 +163,6 @@ A few things to note:
 
 When you invoke ``esrally list tracks``, the new track should now appear::
 
-
     dm@io:~ $ esrally list tracks
     
         ____        ____
@@ -172,18 +173,12 @@ When you invoke ``esrally list tracks``, the new track should now appear::
                     /____/
     Available tracks:
     
-    * geonames: This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk 
-    request against Elasticsearch
-        Track setups for this track:
-        * defaults
-        * 4gheap
-        * fastsettings
-        * fastupdates
-        * two_nodes_defaults
-        * defaults_verbose_iw
+    Name        Description     Track setups
+    ----------  --------------- -------------------------------------------------------------------------------
+    geonames    Demo benchmark  defaults,4gheap,fastsettings,fastupdates,two_nodes_defaults,defaults_verbose_iw
 
 Congratulations, you have created your first track! You can test it with ``esrally --track=geonames`` (or whatever the name of your track is) and run specific track setups with ``esrally --track=geonames --track-setup=fastupdates``.
- 
+
 If you want to share it with the community, please read on.
 
 How to contribute a benchmark
