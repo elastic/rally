@@ -2,6 +2,8 @@ import logging
 import threading
 import re
 import os
+import subprocess
+import signal
 
 from esrally.utils import io, sysstats, process
 from esrally.track import track
@@ -17,6 +19,7 @@ class Telemetry:
             self._devices = [
                 FlightRecorder(config, metrics_store),
                 JitCompiler(config, metrics_store),
+                #PerfStat(config, metrics_store),
                 Ps(config, metrics_store),
                 MergeParts(config, metrics_store),
                 EnvironmentInfo(config, metrics_store),
@@ -226,6 +229,53 @@ class JitCompiler(TelemetryDevice):
         print("%s: Writing JIT compiler log to %s" % (self.human_name, log_file))
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
+
+
+class PerfStat(TelemetryDevice):
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self.process = None
+        self.node = None
+
+    @property
+    def internal(self):
+        return False
+
+    @property
+    def command(self):
+        return "perf"
+
+    @property
+    def human_name(self):
+        return "perf stat"
+
+    @property
+    def help(self):
+        return "Reads CPU PMU counters (beta, only on Linux, requires perf)"
+
+    def attach_to_node(self, node):
+        self.process = subprocess.Popen("perf stat -p %s" % node.process.pid,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        self.node = node
+        t = threading.Thread(target=self.read_data)
+        t.setDaemon(True)
+        t.start()
+
+    def read_data(self):
+        while True:
+            line = self.process.stdout.readline().decode("utf-8")
+            if len(line) == 0:
+                break
+            logger.info("%s: %s" % (self.node.name, line.rstrip()))
+
+
+def detach_from_node(self, node):
+        logger.info("Dumping PMU counters for node [%s]" % node.node_name)
+        os.kill(self.process.pid, signal.SIGINT)
+        try:
+            self.process.wait(10.0)
+        except subprocess.TimeoutExpired:
+            logger.warn("perf stat did not terminate")
 
 
 class MergeParts(InternalTelemetryDevice):
