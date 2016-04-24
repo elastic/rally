@@ -268,8 +268,7 @@ class PerfStat(TelemetryDevice):
                 break
             logger.info("%s: %s" % (self.node.name, line.rstrip()))
 
-
-def detach_from_node(self, node):
+    def detach_from_node(self, node):
         logger.info("Dumping PMU counters for node [%s]" % node.node_name)
         os.kill(self.process.pid, signal.SIGINT)
         try:
