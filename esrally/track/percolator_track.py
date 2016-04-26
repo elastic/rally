@@ -1,7 +1,7 @@
 from esrally.track import track
 
 PERCOLATOR_INDEX_NAME = "queries"
-PERCOLATOR_TYPE_NAME = ".percolator"
+PERCOLATOR_TYPE_NAME = "percolator"
 
 # Workaround to support multiple versions (this is not how this will be handled in the future..)
 percolatorIndexSettings = {
@@ -25,7 +25,8 @@ class PercolatorQuery(track.Query):
         return es.search(index=PERCOLATOR_INDEX_NAME, doc_type=PERCOLATOR_TYPE_NAME, body='''
     {
       "query" : {
-        "percolator" : {
+        "percolate" : {
+          "field" : "query",
           "document_type" : "content",
           "document" : {
             "body" : "%s"
@@ -46,7 +47,8 @@ class PercolatorQueryNoScoring(track.Query):
       "query" : {
         "constant_score": {
             "query": {
-                "percolator" : {
+                "percolate" : {
+                    "field" : "query",
                     "document_type" : "content",
                     "document" : {
                         "body" : "%s"
@@ -66,7 +68,8 @@ class PercolatorQueryWithHighlighting(track.Query):
         return es.search(index=PERCOLATOR_INDEX_NAME, doc_type=PERCOLATOR_TYPE_NAME, body='''
     {
       "query": {
-        "percolator" : {
+        "percolate" : {
+          "field" : "query",
           "document_type" : "content",
           "document" : {
             "body" : "Israeli prime minister Ariel Sharon suffers a massive stroke; he is replaced by acting prime minister Ehud Olmert"
@@ -84,13 +87,13 @@ class PercolatorQueryWithHighlighting(track.Query):
 percolatorTrackSpec = track.Track(
     name="percolator",
     short_description="Percolator benchmark based on 2M AOL queries",
-    description="This test indexes 2M AOL queries and use the percolator query to match",
+    description="This benchmark indexes 2M AOL queries and use the percolate query to match",
     source_root_url="http://benchmarks.elastic.co/corpora/percolator",
     indices=[
         track.Index(name="queries", types=[
             # The type for the percolator queries:
             track.Type(
-                name=".percolator",
+                name="percolator",
                 mapping_file_name="queries-mapping.json",
                 document_file_name="queries.json.bz2",
                 number_of_documents=2000000,
