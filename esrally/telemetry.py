@@ -254,7 +254,7 @@ class PerfStat(TelemetryDevice):
         return "Reads CPU PMU counters (beta, only on Linux, requires perf)"
 
     def attach_to_node(self, node):
-        self.process = subprocess.Popen("perf stat -p %s" % node.process.pid,
+        self.process = subprocess.Popen(["perf", "stat", "-p %s" % node.process.pid],
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
         self.node = node
         t = threading.Thread(target=self.read_data)
@@ -266,7 +266,7 @@ class PerfStat(TelemetryDevice):
             line = self.process.stdout.readline().decode("utf-8")
             if len(line) == 0:
                 break
-            logger.info("%s: %s" % (self.node.name, line.rstrip()))
+            logger.info("%s: %s" % (self.node.node_name, line.rstrip()))
 
     def detach_from_node(self, node):
         logger.info("Dumping PMU counters for node [%s]" % node.node_name)
