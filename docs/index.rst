@@ -33,7 +33,7 @@ If you want to build Elasticsearch from sources you will also need:
 * Gradle 2.8+
 * git
 
-Rally does not support Windows. It may or may not work but we actively test it only on Mac OS X and Linux.
+Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 
 Preparation
 ~~~~~~~~~~~
