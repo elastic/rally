@@ -236,6 +236,7 @@ class PerfStat(TelemetryDevice):
         super().__init__(config, metrics_store)
         self.process = None
         self.node = None
+        self.log = None
 
     @property
     def internal(self):
@@ -254,19 +255,18 @@ class PerfStat(TelemetryDevice):
         return "Reads CPU PMU counters (beta, only on Linux, requires perf)"
 
     def attach_to_node(self, node):
-        self.process = subprocess.Popen(["perf", "stat", "-p %s" % node.process.pid],
-                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        self.node = node
-        t = threading.Thread(target=self.read_data)
-        t.setDaemon(True)
-        t.start()
+        log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        io.ensure_dir(log_root)
+        log_file = "%s/%s.perf.log" % (log_root, node.node_name)
 
-    def read_data(self):
-        while True:
-            line = self.process.stdout.readline().decode("utf-8")
-            if len(line) == 0:
-                break
-            logger.info("%s: %s" % (self.node.node_name, line.rstrip()))
+        logger.info("%s: Writing perf logs to [%s]." % (self.human_name, log_file))
+        print("%s: Writing perf logs to %s" % (self.human_name, log_file))
+
+        self.log = open(log_file, "wb")
+
+        self.process = subprocess.Popen(["perf", "stat", "-p %s" % node.process.pid],
+                                        stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        self.node = node
 
     def detach_from_node(self, node):
         logger.info("Dumping PMU counters for node [%s]" % node.node_name)
@@ -275,6 +275,7 @@ class PerfStat(TelemetryDevice):
             self.process.wait(10.0)
         except subprocess.TimeoutExpired:
             logger.warn("perf stat did not terminate")
+        self.log.close()
 
 
 class MergeParts(InternalTelemetryDevice):

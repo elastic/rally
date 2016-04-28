@@ -18,6 +18,7 @@ You probably want to gain additional insights from a benchmarking trial. Therefo
     ---------  ---------------------  --------------------------------------------------------------------------------------
     jfr        Flight Recorder        Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)
     jit        JIT Compiler Profiler  Enables JIT compiler logs.
+    perf       perf stat              Reads CPU PMU counters (beta, only on Linux, requires perf)
 
     Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -41,3 +42,8 @@ will also contain the disassembled JIT compiler output which can be used for low
 `JITWatch <https://github.com/AdoptOpenJDK/jitwatch>`_ for analysis.
 
 The JITWatch wiki contains `build instructions for hsdis <https://github.com/AdoptOpenJDK/jitwatch/wiki/Building-hsdis>`_.
+
+perf
+----
+
+The `perf` telemetry devices runs `perf stat` on each benchmarked node and writes the output to a log file. It can be used to capture low-level CPU statistics. Note that the perf tool, which is only available on Linux, must be installed before using this telemetry device.
