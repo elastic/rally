@@ -3,7 +3,9 @@ import errno
 import glob
 import subprocess
 import bz2
+import gzip
 import zipfile
+import tarfile
 
 from esrally.utils import process
 
@@ -48,20 +50,54 @@ def unzip(zip_name, target_directory):
 
     * zip: Relies that the 'unzip' tool is available on the path
     * bz2: Can be uncompressed using standard library facilities, so no external tool is required.
+    * gz: Can be uncompressed using standard library facilities, so no external tool is required.
+    * tar: Can be uncompressed using standard library facilities, so no external tool is required.
+    * tar.gz Can be uncompressed using standard library facilities, so no external tool is required.
+    * tgz Can be uncompressed using standard library facilities, so no external tool is required.
+    * tar.bz2 Can be uncompressed using standard library facilities, so no external tool is required.
+
+    Did not implement LZMA because LZMAFile is not thread-safe.
 
     The decompression method is chosen based on the file extension.
 
     :param zip_name: The full path name to the file that should be decompressed.
-    :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling this function.
+    :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling
+    this function.
     """
     filename, extension = splitext(zip_name)
     if extension == ".zip":
         if not process.run_subprocess_with_logging("unzip %s -d %s" % (zip_name, target_directory)):
             raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
     elif extension == ".bz2":
-        # We rather avoid external tools as much as possible to simplify Rally's setup, hence we use the library functions
+        # We rather avoid external tools as much as possible to simplify Rally's setup, hence we use the library
+        # functions
         target_file = os.path.join(target_directory, filename)
         with open(target_file, "wb") as extracted, bz2.BZ2File(zip_name, "rb") as file:
+            for data in iter(lambda: file.read(100 * 1024), b''):
+                extracted.write(data)
+    elif extension == ".gz":
+        target_file = os.path.join(target_directory, filename)
+        with open(target_file, "wb") as extracted, gzip.GzipFile(zip_name, "rb") as file:
+            for data in iter(lambda: file.read(100 * 1024), b''):
+                extracted.write(data)
+    elif extension == ".tar":
+        target_file = os.path.join(target_directory, filename)
+        with open(target_file, "wb") as extracted, tarfile.TarFile(zip_name, "rb") as file:
+            for data in iter(lambda: file.read(100 * 1024), b''):
+                extracted.write(data)
+    elif extension == ".tar.gz":
+        target_file = os.path.join(target_directory, filename)
+        with open(target_file, "wb") as extracted, tarfile.TarFile(zip_name, "r:gz") as file:
+            for data in iter(lambda: file.read(100 * 1024), b''):
+                extracted.write(data)
+    elif extension == ".tgz":
+        target_file = os.path.join(target_directory, filename)
+        with open(target_file, "wb") as extracted, tarfile.TarFile(zip_name, "r:gz") as file:
+            for data in iter(lambda: file.read(100 * 1024), b''):
+                extracted.write(data)
+    elif extension == ".tar.bz2":
+        target_file = os.path.join(target_directory, filename)
+        with open(target_file, "wb") as extracted, tarfile.TarFile(zip_name, "r:bz2") as file:
             for data in iter(lambda: file.read(100 * 1024), b''):
                 extracted.write(data)
     else:
