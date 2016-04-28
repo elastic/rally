@@ -3,7 +3,9 @@ import errno
 import glob
 import subprocess
 import bz2
+import gzip
 import zipfile
+import tarfile
 
 from esrally.utils import process
 
@@ -48,25 +50,49 @@ def unzip(zip_name, target_directory):
 
     * zip: Relies that the 'unzip' tool is available on the path
     * bz2: Can be uncompressed using standard library facilities, so no external tool is required.
+    * gz: Can be uncompressed using standard library facilities, so no external tool is required.
+    * tar: Can be uncompressed using standard library facilities, so no external tool is required.
+    * tar.gz Can be uncompressed using standard library facilities, so no external tool is required.
+    * tgz Can be uncompressed using standard library facilities, so no external tool is required.
+    * tar.bz2 Can be uncompressed using standard library facilities, so no external tool is required.
+
+    Did not implement LZMA because LZMAFile is not thread-safe.
 
     The decompression method is chosen based on the file extension.
 
     :param zip_name: The full path name to the file that should be decompressed.
-    :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling this function.
+    :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling
+    this function.
     """
     filename, extension = splitext(zip_name)
     if extension == ".zip":
         if not process.run_subprocess_with_logging("unzip %s -d %s" % (zip_name, target_directory)):
             raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
     elif extension == ".bz2":
-        # We rather avoid external tools as much as possible to simplify Rally's setup, hence we use the library functions
-        target_file = os.path.join(target_directory, filename)
-        with open(target_file, "wb") as extracted, bz2.BZ2File(zip_name, "rb") as file:
-            for data in iter(lambda: file.read(100 * 1024), b''):
-                extracted.write(data)
+        _do_unzip(target_directory, filename, bz2.BZ2File(zip_name, "rb"))
+    elif extension == ".gz":
+        _do_unzip(target_directory, filename, gzip.GzipFile(zip_name, "rb"))
+    elif extension == ".tar":
+        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "rb"))
+    elif extension == ".tar.gz":
+        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "r:gz"))
+    elif extension == ".tgz":
+        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "r:gz"))
+    elif extension == ".tar.bz2":
+        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "r:bz2"))
+
     else:
         raise RuntimeError("Unsupported file extension '%s'. Cannot unzip '%s'" % (extension, zip_name))
 
+
+def _do_unzip(target_directory, target_filename, compressed_file):
+    target_file = os.path.join(target_directory, target_filename)
+    try:
+        with open(target_file, "wb") as extracted:
+            for data in iter(lambda: compressed_file.read(100 * 1024), b''):
+                extracted.write(data)
+    except BaseException:
+        raise RuntimeError("Could not uncompress provided archive. Cannot unzip '%s'" % target_filename)
 
 # just in a dedicated method to ease mocking
 def dirname(path):
