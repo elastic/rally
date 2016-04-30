@@ -45,7 +45,7 @@ dashboard is delivered with Rally in ``esrally/resources/kibana.json`` which can
 Installing Rally
 ~~~~~~~~~~~~~~~~
 
-**Note**: If you actively develop on Elasticsearch, we recommend that you `install Rally in development mode <http://esrally.readthedocs.org/en/latest/developing.html#installation-instructions-for-development>`_ instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest master version.
+**Note**: If you actively develop on Elasticsearch, we recommend that you `install Rally in development mode <http://esrally.readthedocs.io/en/latest/developing.html#installation-instructions-for-development>`_ instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest master version.
 
 1. Install Rally with pip: ``pip3 install esrally`` (note: depending on your system setup you need prepend this command with ``sudo``).
 2. Configure Rally: ``esrally configure``. It will prompt you for some values and write them to the config file ``~/.rally/rally.ini``.
@@ -60,7 +60,7 @@ So to benchmark the Elasticsearch version 5.0.0-alpha1, you need to run:::
     esrally --pipeline=from-distribution --distribution-version=5.0.0-alpha1
 
 
-This will run Rally with the "geonames" benchmark. See `Rally's user guide <https://esrally.readthedocs.org/>`_ for more options or run ``esrally --help``.
+This will run Rally with the "geonames" benchmark. See `Rally's user guide <https://esrally.readthedocs.io/>`_ for more options or run ``esrally --help``.
 
 Benchmarking an Elasticsearch source distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,7 +72,7 @@ For benchmarking a source distribution, we assume a lot of defaults. In the simp
     esrally race --pipeline=from-sources-complete --revision=current --track=geonames --track-setup=defaults
 
 
-See `Rally's user guide <https://esrally.readthedocs.org/>`_ for more options or run ``esrally --help``.
+See `Rally's user guide <https://esrally.readthedocs.io/>`_ for more options or run ``esrally --help``.
 
 Command Line Options
 --------------------
@@ -85,7 +85,7 @@ Here are some examples:
 * ``esrally --pipeline from-sources-skip-build``: Assumes that an Elasticsearch ZIP file has already been build and just runs the benchmark.
 * ``esrally --revision ebe3fd2``: Checks out the revision ``ebe3fd2`` from git, builds it and runs benchmarks against it. Note that will only work if the build is based on Gradle (i.e. Elasticsearch 5.0+)
 
-For more details, please refer to `Rally's user guide <https://esrally.readthedocs.org/>`_.
+For more details, please refer to `Rally's user guide <https://esrally.readthedocs.io/>`_.
 
 How to Contribute
 -----------------
