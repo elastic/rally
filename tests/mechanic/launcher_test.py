@@ -2,7 +2,6 @@ from unittest import TestCase
 
 from esrally import config, exceptions
 from esrally.mechanic import launcher
-from esrally.track import track
 
 
 class MockMetricsStore:
@@ -33,6 +32,25 @@ class MockCluster:
                     "name": "Nefarius",
                     "host": "127.0.0.1"
                     }
+            }
+        }
+
+    def nodes_info(self, *args, **kwargs):
+        return {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "Nefarius",
+                    "host": "127.0.0.1",
+                    "os": {
+                        "name": "Mac OS X",
+                        "version": "10.11.4",
+                        "available_processors": 8
+                    },
+                    "jvm": {
+                        "version": "1.8.0_74",
+                        "vm_vendor": "Oracle Corporation"
+                    }
+                }
             }
         }
 

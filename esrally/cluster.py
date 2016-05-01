@@ -111,19 +111,25 @@ class Cluster:
 
     def info(self):
         """
-        :return: cluster info. See http://elasticsearch-py.readthedocs.org/en/master/api.html#elasticsearch.Elasticsearch.info
+        :return: cluster info. See http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.Elasticsearch.info
         """
         return self.client.info()
 
     def nodes_stats(self, *args, **kwargs):
         """
-        :return: Nodes stats. See http://elasticsearch-py.readthedocs.org/en/master/api.html#elasticsearch.client.NodesClient.stats
+        :return: Nodes stats. See http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.NodesClient.stats
         """
         return self.client.nodes.stats(*args, **kwargs)
 
+    def nodes_info(self, *args, **kwargs):
+        """
+        :return: Nodes info. See http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.NodesClient.info
+        """
+        return self.client.nodes.info(*args, **kwargs)
+
     def indices_stats(self, *args, **kwargs):
         """
-        :return: Indices stats. http://elasticsearch-py.readthedocs.org/en/master/api.html#elasticsearch.client.IndicesClient.stats
+        :return: Indices stats. http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.stats
         """
         return self.client.indices.stats(*args, **kwargs)
 

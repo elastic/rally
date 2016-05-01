@@ -106,7 +106,25 @@ class MergePartsDeviceTests(TestCase):
 class EnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     @mock.patch("esrally.cluster.Cluster.info")
-    def test_stores_cluster_level_metrics_on_attach(self, cluster_info, metrics_store_add_meta_info):
+    @mock.patch("esrally.cluster.Cluster.nodes_info")
+    def test_stores_cluster_level_metrics_on_attach(self, nodes_info, cluster_info, metrics_store_add_meta_info):
+        nodes_info.return_value = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "os": {
+                        "name": "Mac OS X",
+                        "version": "10.11.4",
+                        "available_processors": 8
+                    },
+                    "jvm": {
+                        "version": "1.8.0_74",
+                        "vm_vendor": "Oracle Corporation"
+                    }
+                }
+            }
+        }
         cluster_info.return_value = {
             "version":
                 {
@@ -119,7 +137,12 @@ class EnvironmentInfoTests(TestCase):
         t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, t, client_factory_class=MockClientFactory))
 
-        metrics_store_add_meta_info.assert_called_with(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74")
+        ]
+        metrics_store_add_meta_info.assert_has_calls(calls)
 
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     @mock.patch("esrally.utils.sysstats.os_name")
@@ -151,6 +174,75 @@ class EnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "io"),
         ]
 
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
+    def create_config(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
+        cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
+        cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
+        cfg.add(config.Scope.application, "reporting", "datastore.user", "")
+        cfg.add(config.Scope.application, "reporting", "datastore.password", "")
+        # only internal devices are active
+        cfg.add(config.Scope.application, "telemetry", "devices", [])
+        return cfg
+
+
+class ExternalEnvironmentInfoTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    @mock.patch("esrally.cluster.Cluster.info")
+    @mock.patch("esrally.cluster.Cluster.nodes_info")
+    @mock.patch("esrally.cluster.Cluster.nodes_stats")
+    def test_stores_cluster_level_metrics_on_attach(self, nodes_stats, nodes_info, cluster_info, metrics_store_add_meta_info):
+        nodes_stats.return_value = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1"
+                }
+            }
+        }
+
+        nodes_info.return_value = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "os": {
+                        "name": "Mac OS X",
+                        "version": "10.11.4",
+                        "available_processors": 8
+                    },
+                    "jvm": {
+                        "version": "1.8.0_74",
+                        "vm_vendor": "Oracle Corporation"
+                    }
+                }
+            }
+        }
+        cluster_info.return_value = {
+            "version":
+                {
+                    "build_hash": "abc123"
+                }
+        }
+        cfg = self.create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ExternalEnvironmentInfo(cfg, metrics_store)
+        t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
+        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, t, client_factory_class=MockClientFactory))
+
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "127.0.0.1"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Mac OS X"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "os_version", "10.11.4"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_logical_cores", 8),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74")
+        ]
         metrics_store_add_meta_info.assert_has_calls(calls)
 
     def create_config(self):

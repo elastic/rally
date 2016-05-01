@@ -408,6 +408,13 @@ class EnvironmentInfo(InternalTelemetryDevice):
     def attach_to_cluster(self, cluster):
         revision = cluster.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+        info = cluster.nodes_info()
+        for node in info["nodes"].values():
+            node_name = node["name"]
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
+
+
 
     def attach_to_node(self, node):
         # we gather also host level metrics here although they will just be overridden for multiple nodes on the same node (which is no
@@ -438,9 +445,18 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
-            # Don't store metrics that we don't know like OS or CPU
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", node["host"])
+
+        info = cluster.nodes_info()
+        for node in info["nodes"].values():
+            node_name = node["name"]
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_name", node["os"]["name"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_version", node["os"]["version"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_logical_cores", node["os"]["available_processors"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
+
 
 
 class NodeStats(InternalTelemetryDevice):
