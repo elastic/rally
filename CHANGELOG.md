@@ -4,6 +4,7 @@
 * Ability to [add a user-defined tag as metric meta-data](https://github.com/elastic/rally/issues/84)
 * [Support .gzipped benchmark data](https://github.com/elastic/rally/issues/87) contributed by @monk-ee. Thanks!
 * [Support for perf profiler](https://github.com/elastic/rally/issues/28)
+* [Add a fulltext benchmark](https://github.com/elastic/rally/issues/38)
 
 [All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.1+is%3Aclosed)
 

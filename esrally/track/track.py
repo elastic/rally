@@ -255,7 +255,8 @@ class LatencyBenchmarkSettings:
 
 
 class IndexBenchmarkSettings:
-    def __init__(self, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
+    def __init__(self, bulk_size=5000, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
+        self.bulk_size = bulk_size
         self.id_conflicts = id_conflicts
         self.force_merge = force_merge
 

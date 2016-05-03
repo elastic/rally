@@ -156,7 +156,7 @@ class IndexBenchmark(Benchmark):
     def __init__(self, cfg, clock, t, track_setup, cluster):
         Benchmark.__init__(self, cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.index)
         self.stop_watch = clock.stop_watch()
-        self.bulk_size = 5000
+        self.bulk_size = track_setup.benchmark[track.BenchmarkPhase.index].bulk_size
         self.processed = 0
 
     def run(self):
