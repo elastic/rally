@@ -74,6 +74,9 @@
           "type": "string",
           "doc_values": true,
           "index": "not_analyzed"
+        },
+        "selected-track-setups": {
+          "type": "nested"
         }
       }
     }

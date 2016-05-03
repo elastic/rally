@@ -82,66 +82,54 @@ When the benchmark is done, a summary report is written to the command line:::
     / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
    /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
    ------------------------------------------------------
-   Indexing Results (Throughput):
-     median 12481 docs/s (min: 3952, max: 13399)
-
-   Query Latency:
-     Query latency [default]:
-       99.0 Percentile: 7.23 ms
-       99.9 Percentile: 11.91 ms
-       100.0 Percentile: 13.02 ms
-     Query latency [term]:
-       99.0 Percentile: 4.25 ms
-       99.9 Percentile: 5.18 ms
-       100.0 Percentile: 5.94 ms
-     Query latency [phrase]:
-       99.0 Percentile: 3.89 ms
-       99.9 Percentile: 5.06 ms
-       100.0 Percentile: 5.13 ms
-     Query latency [country_agg]:
-       99.0 Percentile: 149.51 ms
-       99.9 Percentile: 174.36 ms
-       100.0 Percentile: 177.42 ms
-     Query latency [country_agg_cached]:
-       99.0 Percentile: 2.19 ms
-       99.9 Percentile: 2.92 ms
-       100.0 Percentile: 3.19 ms
-     Query latency [scroll]:
-       99.0 Percentile: 19.37 ms
-       99.9 Percentile: 21.03 ms
-       100.0 Percentile: 21.06 ms
-   Total times:
-     Indexing time      : 88.5 min
-     Merge time         : 61.9 min
-     Refresh time       : 8.5 min
-     Flush time         : 0.1 min
-     Merge throttle time: 1.6 min
-
-   Merge times:
-     Postings      : No metric data
-     Stored Fields : No metric data
-     Doc Values    : No metric data
-     Norms         : No metric data
-     Vectors       : No metric data
-
-   System Metrics
-     Median indexing CPU utilization (index): 658.1%
-     Median indexing CPU utilization (search): 217.8%
-     Total time spent in young gen GC: 81.60500s
-     Total time spent in old gen GC: 10.89100s
-
-   Index Metrics
-   Could not determine disk usage metrics
-     Total heap used for segments     : 35.17MB
-     Total heap used for doc values   : 0.18MB
-     Total heap used for terms        : 33.69MB
-     Total heap used for norms        : 0.11MB
-     Total heap used for stored fields: 0.68MB
-     Index segment count: 148
-
-   Stats request latency:
-     Indices stats: 24.10ms
-     Nodes stats: 23.15ms
+                                                     Metric      Value
+   --------------------------------------------------------  ---------
+                           Min Indexing Throughput [docs/s]      19501
+                        Median Indexing Throughput [docs/s]      20232
+                           Max Indexing Throughput [docs/s]      21172
+                                        Indexing time [min]    55.7989
+                                           Merge time [min]    12.9766
+                                         Refresh time [min]    5.20067
+                                           Flush time [min]  0.0648667
+                                  Merge throttle time [min]   0.796417
+               Query latency default (50.0 percentile) [ms]    5.89058
+               Query latency default (90.0 percentile) [ms]    6.71282
+              Query latency default (100.0 percentile) [ms]    7.65307
+    Query latency country_agg_cached (50.0 percentile) [ms]    1.70223
+    Query latency country_agg_cached (90.0 percentile) [ms]    2.34819
+   Query latency country_agg_cached (100.0 percentile) [ms]    3.42547
+                Query latency scroll (50.0 percentile) [ms]    16.1226
+                Query latency scroll (90.0 percentile) [ms]    17.2383
+               Query latency scroll (100.0 percentile) [ms]    18.8419
+                  Query latency term (50.0 percentile) [ms]    2.10049
+                  Query latency term (90.0 percentile) [ms]    2.77537
+                 Query latency term (100.0 percentile) [ms]    4.52081
+                Query latency phrase (50.0 percentile) [ms]    1.82687
+                Query latency phrase (90.0 percentile) [ms]    2.63714
+               Query latency phrase (100.0 percentile) [ms]    5.39892
+           Query latency country_agg (50.0 percentile) [ms]    112.049
+           Query latency country_agg (90.0 percentile) [ms]    128.426
+          Query latency country_agg (100.0 percentile) [ms]    155.989
+                               Median CPU usage (index) [%]    668.025
+                               Median CPU usage (stats) [%]     143.75
+                              Median CPU usage (search) [%]      223.1
+                                     Total Young Gen GC [s]     39.447
+                                       Total Old Gen GC [s]      7.108
+                                            Index size [GB]    3.25475
+                                       Totally written [GB]    17.8434
+                                Heap used for segments [MB]    21.7504
+                              Heap used for doc values [MB]    0.16436
+                                   Heap used for terms [MB]    20.0293
+                                   Heap used for norms [MB]   0.105469
+                                  Heap used for points [MB]   0.773487
+                                  Heap used for points [MB]   0.677795
+                                              Segment count        136
+                        Indices Stats(90.0 percentile) [ms]    3.16053
+                        Indices Stats(99.0 percentile) [ms]    5.29526
+                       Indices Stats(100.0 percentile) [ms]    5.64971
+                          Nodes Stats(90.0 percentile) [ms]    3.19611
+                          Nodes Stats(99.0 percentile) [ms]    4.44111
+                         Nodes Stats(100.0 percentile) [ms]    5.22527
 
 Before relying too much on the numbers, please double-check that you did not introduce any bottlenecks and that your hardware is sufficient (e.g. spinning disks are not a good idea, better use SSDs). For additional insights and metrics you can activate different :doc:`telemetry devices </telemetry>` in Rally.
 
@@ -158,6 +146,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   tournament
    telemetry
    pipelines
    metrics

@@ -64,6 +64,24 @@ def parse_args():
         default=10,
     )
 
+    compare_parser = subparsers.add_parser("compare", help="Compare two races")
+    compare_parser.add_argument(
+        "--baseline",
+        help="defines the race timestamp of the baseline for the comparison (see output esrally list races)",
+        default="")
+    compare_parser.add_argument(
+        "--baseline-track-setup",
+        help="defines the track setup to select for the baseline in case there are multiple track-setups.",
+        default="")
+    compare_parser.add_argument(
+        "--contender",
+        help="defines the race timestamp of the contender for the comparison (see output esrally list races)",
+        default="")
+    compare_parser.add_argument(
+        "--contender-track-setup",
+        help="defines the track setup to select for the contender in case there are multiple track-setups.",
+        default="")
+
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
     for p in [parser, config_parser]:
         p.add_argument(
@@ -94,6 +112,12 @@ def parse_args():
                  "space! (default: false)",
             default=False,
             action="store_true")
+        # Add this as a hidden parameter for now, we'll enable support in #92
+        p.add_argument(
+            "--rounds",
+            #help="Number of times each benchmark is run (default: 3)",
+            default=1,
+        )
         p.add_argument(
             "--telemetry",
             help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
@@ -224,12 +248,18 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "user.tag", args.user_tag)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "rounds", args.rounds)
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
     if subcommand == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+    if subcommand == "compare":
+        cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
+        cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.tracksetup", args.baseline_track_setup)
+        cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
+        cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.tracksetup", args.contender_track_setup)
 
     configure_logging(cfg)
     print_banner()

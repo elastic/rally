@@ -1,5 +1,6 @@
 ### 0.2.1
 
+* Add a [tournament mode](https://github.com/elastic/rally/issues/57). More information in the [user docs](https://esrally.readthedocs.io/en/latest/tournament.html)
 * [External benchmarks can now specify target hosts and ports](https://github.com/elastic/rally/issues/83)
 * Ability to [add a user-defined tag as metric meta-data](https://github.com/elastic/rally/issues/84)
 * [Support .gzipped benchmark data](https://github.com/elastic/rally/issues/87) contributed by @monk-ee. Thanks!

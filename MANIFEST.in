@@ -5,8 +5,7 @@ include MANIFEST.in
 include README.rst
 include setup.py
 recursive-include docs *
-
-recursive-include esrally/resources/ *
+recursive-include esrally/resources/*
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 

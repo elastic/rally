@@ -1,5 +1,6 @@
 import logging
 import collections
+import datetime
 from enum import Enum
 
 import elasticsearch
@@ -7,6 +8,7 @@ import elasticsearch.helpers
 import certifi
 
 from esrally import time, exceptions
+from esrally.track import track
 
 logger = logging.getLogger("rally.metrics")
 
@@ -56,6 +58,7 @@ class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
+
     def __init__(self, config):
         self._config = config
         host = self._config.opts("reporting", "datastore.host")
@@ -164,9 +167,11 @@ class EsMetricsStore:
         self._index = index_name(invocation)
         self._docs = []
         # reduce a bit of noise in the metrics cluster log
-        if create and not self._client.exists(index=self._index):
+        if create:
+            # always update the mapping to the latest version
             self._client.put_template("rally", self._get_template())
-            self._client.create_index(index=self._index)
+            if not self._client.exists(index=self._index):
+                self._client.create_index(index=self._index)
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
         user_tag = self._config.opts("system", "user.tag", mandatory=False)
@@ -400,7 +405,8 @@ class RaceStore:
 
     def __init__(self,
                  config,
-                 client_factory_class=EsClientFactory):
+                 client_factory_class=EsClientFactory,
+                 index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new metrics store.
 
@@ -410,17 +416,41 @@ class RaceStore:
         self.config = config
         self.environment_name = config.opts("system", "env.name")
         self.client = client_factory_class(config).create()
+        self.index_template_provider = index_template_provider_class(config)
 
-    def store_race(self):
+    def store_race(self, t):
+        # always update the mapping to the latest version
+        self.client.put_template("rally", self.index_template_provider.template())
+
         trial_timestamp = self.config.opts("meta", "time.start")
+
+        selected_track_setups = []
+        for setup in t.track_setups:
+            if setup.name in self.config.opts("benchmarks", "tracksetups.selected"):
+                selected_track_setup = {}
+                selected_track_setup["name"] = setup.name
+                if track.BenchmarkPhase.index in setup.benchmark:
+                    selected_track_setup["benchmark-phase-index"] = True
+                if track.BenchmarkPhase.stats in setup.benchmark:
+                    selected_track_setup["benchmark-phase-stats"] = {
+                        "sample-size": setup.benchmark[track.BenchmarkPhase.stats].iteration_count
+                    }
+                if track.BenchmarkPhase.search in setup.benchmark:
+                    selected_track_setup["benchmark-phase-search"] = {
+                        "queries": [q.name for q in t.queries],
+                        "sample-size": setup.benchmark[track.BenchmarkPhase.search].iteration_count
+                    }
+                selected_track_setups.append(selected_track_setup)
+
         doc = {
             "environment": self.environment_name,
             "trial-timestamp": time.to_iso8601(trial_timestamp),
             "pipeline": self.config.opts("system", "pipeline"),
             "revision": self.config.opts("source", "revision"),
             "distribution-version": self.config.opts("source", "distribution.version"),
-            "track": self.config.opts("system", "track"),
-            "track-setups": self.config.opts("benchmarks", "tracksetups.selected"),
+            "track": t.name,
+            "rounds": self.config.opts("benchmarks", "rounds"),
+            "selected-track-setups": selected_track_setups,
             "target-hosts": self.config.opts("launcher", "external.target.hosts"),
             "user-tag": self.config.opts("system", "user.tag")
         }
@@ -450,6 +480,69 @@ class RaceStore:
         }
         result = self.client.search(index="rally-*", doc_type=RaceStore.RACE_DOC_TYPE, body=query)
         if result["hits"]["total"] > 0:
-            return [v["_source"] for v in result["hits"]["hits"]]
+            return [Race(v["_source"]) for v in result["hits"]["hits"]]
         else:
             return None
+
+    def find_by_timestamp(self, timestamp):
+        filters = [{
+            "term": {
+                "environment": self.environment_name
+            }
+        },
+            {
+                "term": {
+                    "trial-timestamp": timestamp
+                }
+            }]
+
+        query = {
+            "query": {
+                "bool": {
+                    "filter": filters
+                }
+            }
+        }
+        result = self.client.search(index="rally-*", doc_type=RaceStore.RACE_DOC_TYPE, body=query)
+        if result["hits"]["total"] == 1:
+            return Race(result["hits"]["hits"][0]["_source"])
+        else:
+            return None
+
+
+class Race:
+    def __init__(self, source):
+        self.environment = source["environment"]
+        self.trial_timestamp = datetime.datetime.strptime(source["trial-timestamp"], "%Y%m%dT%H%M%SZ")
+        self.pipeline = source["pipeline"]
+        self.revision = source["revision"]
+        self.distribution_version = source["distribution-version"]
+        self.track = source["track"]
+        self.rounds = source["rounds"]
+        self.track_setups = []
+        for track_setup in source["selected-track-setups"]:
+            self.track_setups.append(SelectedTrackSetup(track_setup))
+        self.target_hosts = source["target-hosts"]
+        self.user_tag = source["user-tag"]
+
+
+class SelectedTrackSetup:
+    def __init__(self, source):
+        self.name = source["name"]
+        self.benchmark_indexing = source["benchmark-phase-index"]
+        self.benchmark_stats = "benchmark-phase-stats" in source
+        if self.benchmark_stats:
+            self.stats_sample_size = int(source["benchmark-phase-stats"]["sample-size"])
+        else:
+            self.stats_sample_size = 0
+        self.benchmark_search = "benchmark-phase-search" in source
+        if self.benchmark_search:
+            self.queries = source["benchmark-phase-search"]["queries"]
+            self.search_sample_size = int(source["benchmark-phase-search"]["sample-size"])
+        else:
+            self.queries = []
+            self.search_sample_size = 0
+
+    def __str__(self):
+        return self.name
+

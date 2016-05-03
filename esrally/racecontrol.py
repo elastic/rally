@@ -4,7 +4,7 @@ import urllib.error
 
 import tabulate
 
-from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics
+from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io
 # This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
@@ -250,25 +250,40 @@ class RaceControl:
         :return: True on success, False otherwise
         """
         ctx = RacingContext(self._config)
-        if command == "list":
-            self._list(ctx)
-        elif command == "race":
-            try:
+        try:
+            if command == "list":
+                self._list(ctx)
+            elif command == "race":
                 pipeline = self._choose(pipelines, "pipeline", "You can list the available pipelines with esrally list pipelines.")(ctx)
                 t = self._choose(track.tracks, "track", "You can list the available tracks with esrally list tracks.")
-                metrics.RaceStore(self._config).store_race()
+                metrics.RaceStore(self._config).store_race(t)
                 pipeline.run(t)
                 return True
-            except exceptions.SystemSetupError as e:
-                logging.exception("Cannot run benchmark")
-                print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
-                return False
-            except exceptions.ImproperlyConfigured as e:
-                logging.exception("Cannot run benchmark due to configuration error.")
-                print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
-                return False
-        else:
-            raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
+            elif command == "compare":
+                baseline_ts = self._config.opts("report", "comparison.baseline.timestamp")
+                baseline_track_setup = self._config.opts("report", "comparison.baseline.tracksetup")
+                contender_ts = self._config.opts("report", "comparison.contender.timestamp")
+                contender_track_setup = self._config.opts("report", "comparison.contender.tracksetup")
+
+                if not baseline_ts or not contender_ts:
+                    raise exceptions.ImproperlyConfigured("compare needs baseline and a contender")
+                race_store = metrics.RaceStore(self._config)
+                reporter.ComparisonReporter(self._config).report(
+                    race_store.find_by_timestamp(baseline_ts),
+                    baseline_track_setup,
+                    race_store.find_by_timestamp(contender_ts),
+                    contender_track_setup
+                )
+            else:
+                raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
+        except exceptions.SystemSetupError as e:
+            logging.exception("Cannot run benchmark")
+            print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
+            return False
+        except exceptions.ImproperlyConfigured as e:
+            logging.exception("Cannot run benchmark due to configuration error.")
+            print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
+            return False
 
     def _choose(self, source, what, help):
         try:
@@ -296,11 +311,12 @@ class RaceControl:
             print("Recent races:\n")
             races = []
             for race in metrics.RaceStore(ctx.config).list():
-                races.append([race["trial-timestamp"], race["track"], ",".join(race["track-setups"]), race["user-tag"]])
+                races.append([time.to_iso8601(race.trial_timestamp), race.track, ",".join(map(str, race.track_setups)), race.user_tag])
 
-            print(tabulate.tabulate(races, headers=["Trial Timestamp", "Track", "Track setups", "User Tag"]))
+            print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track setups", "User Tag"]))
         else:
             raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
+
 
 class RacingContext:
     def __init__(self, cfg):
