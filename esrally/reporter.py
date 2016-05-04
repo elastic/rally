@@ -142,12 +142,11 @@ class SummaryReporter:
 
         selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
         invocation = self._config.opts("meta", "time.start")
-        logger.info("Generating report for invocation=[%s], track=[%s], track setups=%s" % (invocation, t, selected_setups))
+        logger.info("Generating summary report for invocation=[%s], track=[%s], track setups=%s" % (invocation, t.name, selected_setups))
         for track_setup in t.track_setups:
             if track_setup.name in selected_setups:
                 if len(selected_setups) > 1:
                     print_header("*** Track setup %s ***\n" % track_setup.name)
-                logger.info("About to open metrics store for reading")
                 store = metrics.EsMetricsStore(self._config)
                 store.open(invocation, t.name, track_setup.name)
 
@@ -281,9 +280,15 @@ class ComparisonReporter:
         self._config = config
 
     def report(self, r1, r1_track_setup, r2, r2_track_setup):
+        selected_baseline_track_setup = self.track_setup(r1, "baseline", r1_track_setup)
+        selected_contender_track_setup = self.track_setup(r2, "contender", r2_track_setup)
+
+        logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], track setup=[%s]) and "
+                    "contender (invocation=[%s], track=[%s], track setup=[%s])" %
+                    (r1.trial_timestamp, r1.track, selected_baseline_track_setup,
+                     r2.trial_timestamp, r2.track, selected_contender_track_setup))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
         baseline_store = metrics.EsMetricsStore(self._config)
-        selected_baseline_track_setup = self.track_setup(r1, "baseline", r1_track_setup)
         baseline_store.open(r1.trial_timestamp, r1.track, selected_baseline_track_setup.name)
         baseline_stats = Stats(baseline_store,
                                stats_sample_size=selected_baseline_track_setup.stats_sample_size,
@@ -291,7 +296,6 @@ class ComparisonReporter:
                                search_sample_size=selected_baseline_track_setup.search_sample_size)
 
         contender_store = metrics.EsMetricsStore(self._config)
-        selected_contender_track_setup = self.track_setup(r2, "contender", r2_track_setup)
         contender_store.open(r2.trial_timestamp, r2.track, selected_contender_track_setup.name)
         contender_stats = Stats(contender_store,
                                 stats_sample_size=selected_contender_track_setup.stats_sample_size,
@@ -375,7 +379,7 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
             self.line("Merge throttle time [min]", baseline_stats.merge_throttle_time, contender_stats.merge_throttle_time,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
-            ]
+        ]
 
     def report_search_latency(self, baseline_stats, contender_stats):
         lines = []

@@ -316,9 +316,9 @@ class EsMetricsStore:
         query = {
             "query": self._query_by_name(name)
         }
-        logger.info("Issuing metrics query index=[%s], doc_type=[%s], query=[%s]" % (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s]" % (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
-        logger.info("Metrics query produced %s results." % result["hits"]["total"])
+        logger.debug("Metrics query produced %s results." % result["hits"]["total"])
         return [v["_source"]["value"] for v in result["hits"]["hits"]]
 
     def get_stats(self, name):
@@ -339,6 +339,8 @@ class EsMetricsStore:
                 }
             }
         }
+        logger.debug("Issuing get_stats against index=[%s], doc_type=[%s], query=[%s]" %
+                     (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         return result["aggregations"]["metric_stats"]
 
@@ -366,8 +368,12 @@ class EsMetricsStore:
                 }
             }
         }
+        logger.debug("Issuing get_percentiles against index=[%s], doc_type=[%s], query=[%s]" %
+                     (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
-        if result["hits"]["total"] > 0:
+        hits = result["hits"]["total"]
+        logger.debug("get_percentiles produced %d hits" % hits)
+        if hits > 0:
             raw = result["aggregations"]["percentile_stats"]["values"]
             return collections.OrderedDict(sorted(raw.items(), key=lambda t: float(t[0])))
         else:
