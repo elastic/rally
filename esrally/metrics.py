@@ -72,6 +72,7 @@ class EsClientFactory:
             auth = (user, password)
         else:
             auth = None
+        logger.info("Creating connection to metrics store at %s:%s" % (host, port))
         self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
                                                    use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where())
 
@@ -166,6 +167,8 @@ class EsMetricsStore:
         self._track_setup = track_setup_name
         self._index = index_name(invocation)
         self._docs = []
+        logger.info("Opening metrics store for invocation = [%s], track = [%s], track setup = [%s]" %
+                    (self._invocation, track_name, track_setup_name))
         # reduce a bit of noise in the metrics cluster log
         if create:
             # always update the mapping to the latest version
@@ -195,6 +198,8 @@ class EsMetricsStore:
         metrics on close (in order to avoid additional latency during the benchmark).
         """
         self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
+        logger.info("Successfully added %d metrics documents for invocation = [%s], track = [%s], track setup = [%s]." %
+                    (len(self._docs), self._invocation, self._track, self._track_setup))
         self._docs = []
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -311,7 +316,9 @@ class EsMetricsStore:
         query = {
             "query": self._query_by_name(name)
         }
+        logger.info("Issuing metrics query index=[%s], doc_type=[%s], query=[%s]" % (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        logger.info("Metrics query produced %s results." % result["hits"]["total"])
         return [v["_source"]["value"] for v in result["hits"]["hits"]]
 
     def get_stats(self, name):

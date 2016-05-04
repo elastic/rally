@@ -142,11 +142,12 @@ class SummaryReporter:
 
         selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
         invocation = self._config.opts("meta", "time.start")
+        logger.info("Generating report for invocation=[%s], track=[%s], track setups=%s" % (invocation, t, selected_setups))
         for track_setup in t.track_setups:
             if track_setup.name in selected_setups:
                 if len(selected_setups) > 1:
                     print_header("*** Track setup %s ***\n" % track_setup.name)
-
+                logger.info("About to open metrics store for reading")
                 store = metrics.EsMetricsStore(self._config)
                 store.open(invocation, t.name, track_setup.name)
 

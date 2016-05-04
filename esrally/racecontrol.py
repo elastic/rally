@@ -194,8 +194,8 @@ pipelines = {
                              PipelineStep("build", ctx, lambda ctx, track: ctx.mechanic.prepare_candidate()),
                              PipelineStep("find-candidate", ctx, lambda ctx, track: ctx.mechanic.find_candidate()),
                              TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
-                             PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track)),
                              PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
+                             PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                          ]
                          ),
     "from-sources-skip-build":
@@ -206,8 +206,8 @@ pipelines = {
                              PipelineStep("prepare-track", ctx, prepare_track),
                              PipelineStep("find-candidate", ctx, lambda ctx, track: ctx.mechanic.find_candidate()),
                              TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
-                             PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track)),
                              PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
+                             PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                          ]
 
                          ),
@@ -219,8 +219,8 @@ pipelines = {
                                  PipelineStep("download-candidate", ctx, download_benchmark_candidate),
                                  PipelineStep("prepare-track", ctx, prepare_track),
                                  TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
-                                 PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track)),
                                  PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
+                                 PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                              ]
 
                              ),
@@ -230,8 +230,8 @@ pipelines = {
                                  PipelineStep("warn-bogus", ctx, lambda ctx, track: print(bogus_results_warning)),
                                  PipelineStep("prepare-track", ctx, prepare_track),
                                  TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_external)]),
-                                 PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track)),
                                  PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
+                                 PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                              ]
                              ),
 
@@ -284,6 +284,9 @@ class RaceControl:
             logging.exception("Cannot run benchmark due to configuration error.")
             print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
             return False
+        except BaseException as e:
+            logging.exception("A fatal error occurred while the running benchmark.")
+            raise e
 
     def _choose(self, source, what, help):
         try:

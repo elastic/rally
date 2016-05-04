@@ -1,5 +1,9 @@
+import logging
+
 from esrally import metrics
 from esrally.mechanic import builder, supplier, provisioner, launcher
+
+logger = logging.getLogger("rally.mechanic")
 
 
 class Mechanic:
@@ -27,6 +31,7 @@ class Mechanic:
 
     def start_metrics(self, track, setup):
         invocation = self._config.opts("meta", "time.start")
+        logger.info("About to open metrics store for writing")
         self._metrics_store = metrics.EsMetricsStore(self._config)
         self._metrics_store.open(invocation, track.name, setup.name, create=True)
 
