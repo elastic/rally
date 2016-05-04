@@ -9,6 +9,10 @@ percolatorIndexSettings = {
         "index.number_of_replicas": 0,
         "index.queries.cache.enabled": False
     },
+    "5.0.0-alpha2": {
+        "index.number_of_replicas": 0,
+        "index.queries.cache.enabled": False
+    },
     "5.0.0-alpha1": {
         "index.number_of_replicas": 0,
         "index.queries.cache.type": "none"
