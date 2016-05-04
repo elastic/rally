@@ -33,6 +33,8 @@ setup(name="esrally",
           where=".",
           exclude=("tests*",)
       ),
+      include_package_data=True,
+      package_data={"": ["*.json"]},
       install_requires=install_requires,
       test_suite="tests",
       tests_require=tests_require,
