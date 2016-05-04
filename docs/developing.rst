@@ -1,11 +1,26 @@
 Developing Rally
 ================
 
+Prerequisites
+-------------
+
+Please ensure that the following packages are installed before installing Rally in development mode:
+
+* Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
+* ``pip3`` available on the path (verify with ``pip3 --version``)
+* JDK 8+
+* Gradle 2.8+
+* git
+* unzip (install via ``apt-get install unzip`` on  Debian based distributions or check your distribution's documentation)
+* Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
+* Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
+
+Rally does not support Windows and is only actively tested on Mac OS X and Linux.
+
 Installation Instructions for Development
 -----------------------------------------
 
-If you want to hack on Rally or :doc:`add new benchmarks </adding_benchmarks>`, you have to install Rally in development mode::
-
+::
 
     # Clone the repo
     git clone https://github.com/elastic/rally.git
