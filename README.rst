@@ -50,6 +50,8 @@ Installing Rally
 1. Install Rally with pip: ``pip3 install esrally`` (note: depending on your system setup you need prepend this command with ``sudo``).
 2. Configure Rally: ``esrally configure``. It will prompt you for some values and write them to the config file ``~/.rally/rally.ini``.
 
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>` in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+
 Benchmarking an Elasticsearch binary distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
