@@ -60,6 +60,8 @@ Simply install Rally with pip: ``pip3 install esrally``
 
    Depending on your system setup you may need to prepend this command with ``sudo``.
 
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the [installation instructions of psutil](https://github.com/giampaolo/psutil/blob/master/INSTALL.rst) in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+
 Configuring Rally
 -----------------
 
