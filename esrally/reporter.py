@@ -10,8 +10,13 @@ logger = logging.getLogger("rally.reporting")
 MEDIAN = "50.0"
 
 
+def print_internal(message):
+    print(message)
+    logger.info(message)
+
+
 def print_header(message):
-    print("\033[1m%s\033[0m" % message)
+    print_internal("\033[1m%s\033[0m" % message)
 
 
 def red(message):
@@ -174,7 +179,7 @@ class SummaryReporter:
                 if track.BenchmarkPhase.stats in track_setup.benchmark:
                     metrics_table += self.report_stats_latency(stats)
 
-                print(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], numalign="right", stralign="right"))
+                print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], numalign="right", stralign="right"))
 
     def sample_size(self, track_setup, benchmark_phase):
         if track.BenchmarkPhase.stats in track_setup.benchmark:
@@ -302,15 +307,15 @@ class ComparisonReporter:
                                 queries=selected_contender_track_setup.queries,
                                 search_sample_size=selected_contender_track_setup.search_sample_size)
 
-        print("")
-        print("Comparing baseline")
-        print("  Race timestamp: %s" % r1.trial_timestamp)
-        print("  Track setup: %s" % selected_baseline_track_setup.name)
-        print("")
-        print("with contender")
-        print("  Race timestamp: %s" % r2.trial_timestamp)
-        print("  Track setup: %s" % selected_contender_track_setup.name)
-        print("")
+        print_internal("")
+        print_internal("Comparing baseline")
+        print_internal("  Race timestamp: %s" % r1.trial_timestamp)
+        print_internal("  Track setup: %s" % selected_baseline_track_setup.name)
+        print_internal("")
+        print_internal("with contender")
+        print_internal("  Race timestamp: %s" % r2.trial_timestamp)
+        print_internal("  Track setup: %s" % selected_contender_track_setup.name)
+        print_internal("")
         print_header("------------------------------------------------------")
         print_header("    _______             __   _____                    ")
         print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
@@ -332,7 +337,7 @@ class ComparisonReporter:
         metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
         metrics_table += self.report_stats_latency(baseline_stats, contender_stats)
 
-        print(tabulate.tabulate(metrics_table, headers=["Metric", "Baseline", "Contender", "Diff"], numalign="right", stralign="right"))
+        print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Baseline", "Contender", "Diff"], numalign="right", stralign="right"))
 
     def report_index_throughput(self, baseline_stats, contender_stats):
         if baseline_stats.indexing_throughput and contender_stats.indexing_throughput:
