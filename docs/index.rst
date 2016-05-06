@@ -4,7 +4,9 @@ Getting Started
 What is Rally?
 --------------
 
-So you want to benchmark Elasticsearch? Then Rally is for you. Rally started as an effort to help developers in the Elasticsearch development team to run benchmarks on their machines. As our users are very creative and use Elasticsearch for all kinds of things, we have to cover a broad range of different performance characteristics. Rally is build around a few assumptions:
+So you want to benchmark Elasticsearch? Then Rally is for you. Rally started as an effort to help developers in the Elasticsearch development team to run benchmarks on their machines. As our users are very creative and use Elasticsearch for all kinds of things, we have to cover a broad range of different performance characteristics and to find out how Elasticsearch performs under various conditions we run different benchmarks.
+
+Rally itself is build around a few assumptions:
 
 * Everything is run on the same machine (but `we are about to change that <https://github.com/elastic/rally/issues/71>`_)
 * You want to add a specific data set to an Elasticsearch index and then run benchmarking queries on it
@@ -45,11 +47,11 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
    Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure that this port range is not used by the metrics store.
 
 Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. Kibana will not be auto-configured but a sample
-dashboard is delivered with Rally in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` which can be imported to Kibana:
+dashboard is delivered with Rally in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` which can be imported as follows to Kibana:
 
 1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
-2. Create an index pattern "rally-*" and use "trial-timestamp" as time-field name (you might need to import some data first)
-3. Go to Settings > Objects and import ``$PACKAGE_ROOT/esrally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it with your environment name before uploading.
+2. Create an index pattern ``rally-*`` and use ``trial-timestamp`` as time-field name (you might need to import some data first)
+3. Go to Settings > Objects and import ``$PACKAGE_ROOT/esrally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` with your environment name before uploading it to Kibana.
 
 Installing Rally
 ~~~~~~~~~~~~~~~~
@@ -60,27 +62,27 @@ Simply install Rally with pip: ``pip3 install esrally``
 
    Depending on your system setup you may need to prepend this command with ``sudo``.
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the [installation instructions of psutil](https://github.com/giampaolo/psutil/blob/master/INSTALL.rst) in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
 
 Configuring Rally
 -----------------
 
-Before we can run our first benchmark, we have to configure Rally. Just invoke `esrally configure` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
+Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
 
 Running the first benchmark
 ---------------------------
 
-Now we are ready to run the first benchmark with Rally. First, be sure to start the Elasticsearch metrics store instance and then just invoke `esrally`. This will start Rally with sensible defaults. It will download the necessary benchmark data, checkout the latest version of Elasticsearch, build it and finally run the benchmark.
+Now we are ready to run the first benchmark with Rally. First, be sure to start the Elasticsearch metrics store instance and then just invoke ``esrally``. This will start Rally with sensible defaults. It will download the necessary benchmark data, checkout the latest version of Elasticsearch, build it and finally run the benchmark.
 
 .. note::
-   If you want to benchmark a binary distribution instead of a source distribution then run ``esrally --pipeline=from-distribution --distribution-version=VERSION_NUMBER`` (``VERSION_NUMBER`` is for example ``5.0.0-alpha1``)
+   If you want to benchmark a binary distribution instead of a source distribution then run ``esrally --pipeline=from-distribution --distribution-version=VERSION_NUMBER`` (``VERSION_NUMBER`` is for example ``5.0.0-alpha1`` and is identical to the version number used in the download URL)
 
 When the benchmark is done, a summary report is written to the command line:::
 
    ------------------------------------------------------
        _______             __   _____
       / ____(_)___  ____ _/ /  / ___/_________  ________
-      / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
+     / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
     / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
    /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
    ------------------------------------------------------
@@ -140,7 +142,7 @@ Also be very careful and get a deep understanding of the measurement approaches 
 Other command line flags
 ------------------------
 
-Rally supports more command line flags, just run `esrally --help` to see what's possible.
+Rally supports more command line flags, just run ``esrally --help`` to see what's possible.
 
 Contents
 --------

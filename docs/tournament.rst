@@ -1,7 +1,7 @@
 Tournaments
 ===========
 
-Suppose, we want to analyze out the impact of a performance improvement. First, we always start with a baseline measurement. We can use the command line parameter `--user-tag` to provide a key-value pair to easily recognize what the race was all about. After we've run both races, we'd need to know about the performance impact of a change. With Rally we can analyze differences of two given races easily. First of all, we need to find two races to compare by issuing `esrally list races`::
+Suppose, we want to analyze the impact of a performance improvement. First, we need a baseline measurement. We can use the command line parameter ``--user-tag`` to provide a key-value pair to document the intent of a race. After we've run both races, we want to know about the performance impact of a change. With Rally we can analyze differences of two given races easily. First of all, we need to find two races to compare by issuing ``esrally list races``::
 
     dm@io:~ $ esrally list races
 
@@ -26,11 +26,9 @@ Suppose, we want to analyze out the impact of a performance improvement. First, 
     20160502T185511Z   tiny      defaults
     20160502T185459Z   tiny      defaults
 
-After that we can compare the performance impact by providing the two race timestamps::
+We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race timestamps in the next step::
 
     dm@io:~ $ esrally compare --baseline=20160502T190127Z --contender=20160502T191011Z
-
-    Writing additional logs to /Users/dm/Downloads/scratch/nightly/races/2016-05-02-19-19-34/daniel/logs/rally_out.log
 
         ____        ____
        / __ \____ _/ / /_  __

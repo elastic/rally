@@ -1,7 +1,7 @@
 Metrics Records
 ===============
 
-At the end of a benchmark, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster.
+At the end of a race, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster.
 
 Here is a typical metrics record::
 
@@ -30,7 +30,7 @@ Here is a typical metrics record::
           }
         }
 
-As you can see we do not only store the metrics name and its value but lots of meta-information. This allows you to create lots of different visualizations and reports in Kibana.
+As you can see, we do not only store the metrics name and its value but lots of meta-information. This allows you to create different visualizations and reports in Kibana.
 
 Below we describe each field in more detail.
 

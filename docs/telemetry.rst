@@ -1,8 +1,8 @@
 Telemetry Devices
 =================
 
-You probably want to gain additional insights from a benchmarking trial. Therefore, we have added telemetry devices to Rally. If you invoke
-`esrally list telemetry`, it will show which telemetry devices are available::
+You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally. If you invoke
+``esrally list telemetry``, it will show which telemetry devices are available::
 
     dm@io:~ $ esrally list telemetry
     
@@ -25,11 +25,9 @@ You probably want to gain additional insights from a benchmarking trial. Therefo
 jfr
 ---
 
-The `jfr` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_
-on the benchmark candidate. Java Flight Recorder ships only with the Oracle JDK, so Rally assumes that an Oracle JDK is used for benchmarking. 
+The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Java Flight Recorder ships only with the Oracle JDK, so Rally assumes that an Oracle JDK is used for benchmarking.
 
-To enable `jfr`, invoke Rally with `esrally --telemetry jfr`. `jfr` will then write a flight recording file which can be opened in 
-`Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_. Rally prints the location of the flight recording file on the command line.
+To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will then write a flight recording file which can be opened in `Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_. Rally prints the location of the flight recording file on the command line.
  
 .. image:: jfr-es.png
    :alt: Sample Java Flight Recording
@@ -37,13 +35,11 @@ To enable `jfr`, invoke Rally with `esrally --telemetry jfr`. `jfr` will then wr
 jit
 ---
 
-The `jit` telemetry device enables JIT compiler logs for the benchmark candidate. If the HotSpot disassembler library is available, the logs
-will also contain the disassembled JIT compiler output which can be used for low-level analysis. We recommend to use
-`JITWatch <https://github.com/AdoptOpenJDK/jitwatch>`_ for analysis.
+The ``jit`` telemetry device enables JIT compiler logs for the benchmark candidate. If the HotSpot disassembler library is available, the logs will also contain the disassembled JIT compiler output which can be used for low-level analysis. We recommend to use `JITWatch <https://github.com/AdoptOpenJDK/jitwatch>`_ for analysis.
 
 The JITWatch wiki contains `build instructions for hsdis <https://github.com/AdoptOpenJDK/jitwatch/wiki/Building-hsdis>`_.
 
 perf
 ----
 
-The `perf` telemetry devices runs `perf stat` on each benchmarked node and writes the output to a log file. It can be used to capture low-level CPU statistics. Note that the perf tool, which is only available on Linux, must be installed before using this telemetry device.
+The ``perf`` telemetry devices runs ``perf stat`` on each benchmarked node and writes the output to a log file. It can be used to capture low-level CPU statistics. Note that the perf tool, which is only available on Linux, must be installed before using this telemetry device.
