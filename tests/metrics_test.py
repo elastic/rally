@@ -126,6 +126,7 @@ class MetricsTests(TestCase):
         throughput = 5000
         search_result = {
             "hits": {
+                "total": 1,
                 "hits": [
                     {
                         "_source": {
