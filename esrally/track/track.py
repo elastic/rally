@@ -379,7 +379,7 @@ class Marshal:
                     # ensure output appears immediately
                     print("Downloading data from %s (%s MB) ... " % (url, size_in_mb), end='', flush=True)
                 if url.startswith("http"):
-                    net.download(url, local_path)
+                    net.download(url, local_path, size_in_bytes)
                 elif url.startswith("s3"):
                     self._do_download_via_s3(url, local_path, size_in_bytes)
                 else:

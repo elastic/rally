@@ -276,12 +276,8 @@ class RaceControl:
                 )
             else:
                 raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
-        except exceptions.SystemSetupError as e:
+        except exceptions.RallyError as e:
             logging.exception("Cannot run benchmark")
-            print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
-            return False
-        except exceptions.ImproperlyConfigured as e:
-            logging.exception("Cannot run benchmark due to configuration error.")
             print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
             return False
         except BaseException as e:
