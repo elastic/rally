@@ -91,8 +91,8 @@ class ScrollQuery(track.Query):
 pmc_track_setups = [
     track.TrackSetup(
         name="defaults",
-        description="append-only, using all default settings.",
-        candidate=track.CandidateSettings(index_settings=track.greenNodeSettings),
+        description="append-only, using all default settings except the heap is kept at 1GB..",
+        candidate=track.CandidateSettings(index_settings=track.greenNodeSettings, heap="1g"),
         benchmark={
             track.BenchmarkPhase.index: track.IndexBenchmarkSettings(bulk_size=500),
             track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(iteration_count=100),

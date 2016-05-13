@@ -429,8 +429,8 @@ class Marshal:
 track_setups = [
     TrackSetup(
         name="defaults",
-        description="append-only, using all default settings.",
-        candidate=CandidateSettings(index_settings=greenNodeSettings),
+        description="append-only, using all default settings except the heap is kept at 1GB.",
+        candidate=CandidateSettings(index_settings=greenNodeSettings, heap="1g"),
         benchmark={
             BenchmarkPhase.index: IndexBenchmarkSettings(),
             BenchmarkPhase.stats: LatencyBenchmarkSettings(iteration_count=100),
