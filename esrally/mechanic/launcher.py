@@ -26,23 +26,23 @@ class Launcher:
     def setup_index(self, cluster, t, track_setup):
         if track.BenchmarkPhase.index in track_setup.benchmark:
             mapping_path = self.cfg.opts("benchmarks", "mapping.path")
+            settings = track_setup.benchmark[track.BenchmarkPhase.index].index_settings
+            # Workaround to support multiple versions (this is not how this will be handled in the future..)
+            if "master" in settings:
+                # check whether we do a binary benchmark
+                distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+                if distribution_version and len(distribution_version.strip()) > 0:
+                    if distribution_version in settings:
+                        index_settings = settings[distribution_version]
+                    else:
+                        raise exceptions.SystemSetupError("Could not find index settings for Elasticsearch version [%s]" %
+                                                          distribution_version)
+                else:
+                    index_settings = settings["master"]
+            else:
+                index_settings = settings
             for index in t.indices:
                 logger.debug("Creating index [%s]" % index.name)
-                settings = track_setup.candidate.index_settings
-                # Workaround to support multiple versions (this is not how this will be handled in the future..)
-                if "master" in settings:
-                    # check whether we do a binary benchmark
-                    distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
-                    if distribution_version and len(distribution_version.strip()) > 0:
-                        if distribution_version in settings:
-                            index_settings = settings[distribution_version]
-                        else:
-                            raise exceptions.SystemSetupError("Could not find index settings for Elasticsearch version [%s]" %
-                                                              distribution_version)
-                    else:
-                        index_settings = settings["master"]
-                else:
-                    index_settings = settings
                 cluster.client.indices.create(index=index.name, body=index_settings)
                 for type in index.types:
                     mappings = open(mapping_path[type]).read()

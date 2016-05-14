@@ -201,14 +201,13 @@ class Track:
 
 
 class CandidateSettings:
-    def __init__(self, config_snippet=None, logging_config=None, index_settings=None, nodes=1, processors=1, heap=None,
+    def __init__(self, config_snippet=None, logging_config=None, nodes=1, processors=1, heap=None,
                  java_opts=None, gc_opts=None):
         """
         Creates new settings for a benchmark candidate.
 
         :param config_snippet: A string snippet that will be appended as is to elasticsearch.yml of the benchmark candidate.
         :param logging_config: A string representing the entire contents of logging.yml. If not set, the factory defaults will be used.
-        :param index_settings: A hash of index-level settings that will be set when the index is created.
         :param nodes: The number of nodes to start. Defaults to 1 node. All nodes are started on the same machine.
         :param processors: The number of processors to use (per node).
         :param heap: A string defining the maximum amount of Java heap to use. For allows values, see the documentation on -Xmx
@@ -216,11 +215,8 @@ class CandidateSettings:
         :param java_opts: Additional Java options to pass to each node on startup.
         :param gc_opts: Additional garbage collector options to pass to each node on startup.
         """
-        if index_settings is None:
-            index_settings = {}
         self.custom_config_snippet = config_snippet
         self.custom_logging_config = logging_config
-        self.index_settings = index_settings
         self.nodes = nodes
         self.processors = processors
         self.heap = heap
@@ -255,7 +251,16 @@ class LatencyBenchmarkSettings:
 
 
 class IndexBenchmarkSettings:
-    def __init__(self, bulk_size=5000, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
+    def __init__(self, index_settings=None, bulk_size=5000, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
+        """
+        :param index_settings: A hash of index-level settings that will be set when the index is created.
+        :param bulk_size: The number of documents to submit in a single bulk (Default: 5000).
+        :param id_conflicts: Whether to produce index id conflicts during indexing (Default: NoConflicts).
+        :param force_merge: Whether to do a force merge after the index benchmark (Default: True).
+        """
+        if index_settings is None:
+            index_settings = {}
+        self.index_settings = index_settings
         self.bulk_size = bulk_size
         self.id_conflicts = id_conflicts
         self.force_merge = force_merge
@@ -430,9 +435,9 @@ track_setups = [
     TrackSetup(
         name="defaults",
         description="append-only, using all default settings.",
-        candidate=CandidateSettings(index_settings=greenNodeSettings),
+        candidate=CandidateSettings(),
         benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(),
+            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings),
             BenchmarkPhase.stats: LatencyBenchmarkSettings(iteration_count=100),
             BenchmarkPhase.search: LatencyBenchmarkSettings(iteration_count=1000)
         }
@@ -440,18 +445,18 @@ track_setups = [
     TrackSetup(
         name="4gheap",
         description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate=CandidateSettings(index_settings=greenNodeSettings, heap="4g"),
+        candidate=CandidateSettings(heap="4g"),
         benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings()
+            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings)
         }
     ),
 
     TrackSetup(
         name="fastsettings",
         description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
-        candidate=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
+        candidate=CandidateSettings(heap="4g"),
         benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings()
+            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=benchmarkFastSettings)
         }
     ),
 
@@ -459,9 +464,10 @@ track_setups = [
         name="fastupdates",
         description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
                     "already exists in the index.",
-        candidate=CandidateSettings(index_settings=benchmarkFastSettings, heap="4g"),
+        candidate=CandidateSettings(heap="4g"),
         benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(id_conflicts=IndexIdConflict.SequentialConflicts)
+            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=benchmarkFastSettings,
+                                                         id_conflicts=IndexIdConflict.SequentialConflicts)
         }
     ),
 
@@ -469,20 +475,18 @@ track_setups = [
         name="two_nodes_defaults",
         description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
         # integer divide!
-        candidate=CandidateSettings(index_settings=greenNodeSettings, nodes=2,
-                                    processors=sysstats.logical_cpu_cores() // 2),
+        candidate=CandidateSettings(nodes=2, processors=sysstats.logical_cpu_cores() // 2),
         benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings()
+            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings)
         }
     ),
 
     TrackSetup(
         name="defaults_verbose_iw",
         description="Based on defaults but specifically set up to gather merge part times.",
-        candidate=CandidateSettings(index_settings=greenNodeSettings,
-                                    logging_config=mergePartsLogConfig),
+        candidate=CandidateSettings(logging_config=mergePartsLogConfig),
         benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings()
+            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings)
         }
     ),
 ]
