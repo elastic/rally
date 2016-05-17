@@ -29,11 +29,7 @@ def configure_logging(cfg):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
-    if cfg.opts("system", "quiet.mode"):
-        log_level = logging.ERROR
-    else:
-        log_level = logging.INFO
-
+    log_level = logging.INFO
     ch = logging.FileHandler(filename=log_file, mode="a")
     ch.setLevel(log_level)
     formatter = logging.Formatter("%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
