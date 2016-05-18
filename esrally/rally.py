@@ -11,9 +11,18 @@ from esrally.utils import io
 
 __version__ = pkg_resources.require("esrally")[0].version
 
+BANNER = """
+    ____        ____
+   / __ \____ _/ / /_  __
+  / /_/ / __ `/ / / / / /
+ / _, _/ /_/ / / / /_/ /
+/_/ |_|\__,_/_/_/\__, /
+                /____/
+"""
+
 
 # we want to use some basic logging even before the output to log file is configured
-def preconfigure_logging():
+def pre_configure_logging():
     logging.basicConfig(level=logging.INFO)
 
 
@@ -37,8 +46,12 @@ def configure_logging(cfg):
     ch.setFormatter(formatter)
     logging.root.addHandler(ch)
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(prog="esrally", description="Benchmark Elasticsearch")
+    parser = argparse.ArgumentParser(prog="esrally",
+                                     description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
+                                     epilog="Find out more about Rally at \033[4mhttps://esrally.readthedocs.io\033[0m",
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + __version__)
 
     subparsers = parser.add_subparsers(
@@ -46,7 +59,7 @@ def parse_args():
         dest="subcommand",
         help="")
 
-    race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This subcommand should typically be used.")
+    race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This sub-command should typically be used.")
     # change in favor of "list telemetry", "list tracks", "list pipelines"
     list_parser = subparsers.add_parser("list", help="List configuration options")
     list_parser.add_argument(
@@ -104,6 +117,7 @@ def parse_args():
         p.add_argument(
             "--rounds",
             #help="Number of times each benchmark is run (default: 3)",
+            help=argparse.SUPPRESS,
             default=1,
         )
         p.add_argument(
@@ -148,7 +162,6 @@ def parse_args():
                  "Example: intention:baseline-ticket-12345",
             default="")
 
-
     ###############################################################################
     #
     # The options below are undocumented and can be removed or changed at any time.
@@ -178,21 +191,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def print_banner():
-    print("    ____        ____     ")
-    print("   / __ \____ _/ / /_  __")
-    print("  / /_/ / __ `/ / / / / /")
-    print(" / _, _/ /_/ / / / /_/ / ")
-    print("/_/ |_|\__,_/_/_/\__, /  ")
-    print("                /____/   ")
-
-
-def derive_subcommand(args, cfg):
-    subcommand = args.subcommand
+def derive_sub_command(args, cfg):
+    sub_command = args.subcommand
     # first, trust the user...
-    if subcommand is not None:
-        return subcommand
-    # we apply some smarts in case the user did not specify a subcommand
+    if sub_command is not None:
+        return sub_command
+    # we apply some smarts in case the user did not specify a sub-command
     if cfg.config_present():
         return "race"
     else:
@@ -207,19 +211,18 @@ def csv_to_list(csv):
 
 
 def main():
-    preconfigure_logging()
+    pre_configure_logging()
     args = parse_args()
     cfg = config.Config(config_name=args.configuration_name)
-    subcommand = derive_subcommand(args, cfg)
+    sub_command = derive_sub_command(args, cfg)
 
-    if subcommand == "configure":
+    if sub_command == "configure":
         cfg.create_config(advanced_config=args.advanced_config)
         exit(0)
     else:
         if cfg.config_present():
             cfg.load_config()
             if not cfg.config_compatible():
-                # logger.info("Detected incompatible configuration file. Trying to upgrade.")
                 cfg.migrate_config()
                 # Reload config after upgrading
                 cfg.load_config()
@@ -246,18 +249,18 @@ def main():
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
-    if subcommand == "list":
+    if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-    if subcommand == "compare":
+    if sub_command == "compare":
         cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
         cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
     configure_logging(cfg)
-    print_banner()
+    print(BANNER)
 
     race_control = racecontrol.RaceControl(cfg)
-    success = race_control.start(subcommand)
+    success = race_control.start(sub_command)
     if not success:
         sys.exit(1)
 
