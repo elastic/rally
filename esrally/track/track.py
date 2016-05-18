@@ -282,10 +282,13 @@ class Challenge:
     def __init__(self,
                  name,
                  description,
+                 #TODO dm: This should probably be changeable by step (indexing, querying)
+                 clients=8,
                  benchmark=None):
         if benchmark is None:
             benchmark = {}
         self.name = name
+        self.clients = clients
         self.description = description
         self.benchmark = benchmark
 

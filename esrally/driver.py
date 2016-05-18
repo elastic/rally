@@ -226,7 +226,7 @@ class ThreadedIndexBenchmark(IndexBenchmark):
         super().__init__(config, clock, track, challenge, cluster)
 
     def index_documents(self, ids):
-        num_client_threads = int(self.cfg.opts("benchmarks", "index.clients"))
+        num_client_threads = self.challenge.clients
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
         self.stop_watch.start()

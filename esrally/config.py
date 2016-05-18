@@ -142,8 +142,6 @@ class Config:
             "build::gradle.tasks.package": ":distribution:tar:assemble",
             "build::log.dir": "build",
             "benchmarks::metrics.log.dir": "telemetry",
-            # No more specific configuration per benchmark - if needed this has to be put into the track specification
-            "benchmarks::index.clients": "8",
             "provisioning::node.name.prefix": "rally-node",
             "provisioning::node.http.port": 39200,
         }
