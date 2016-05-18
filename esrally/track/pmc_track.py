@@ -122,7 +122,7 @@ pmcTrackSpec = track.Track(
     short_description="Full text benchmark containing 574.199 papers from PMC",
     description="This test indexes 574.199 papers from PMC (total 23.2 GB json) using 8 client threads and 500 docs per bulk "
                 "request against Elasticsearch",
-    source_root_url="http://benchmarks.elastic.co/corpora/pmc",
+    source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/pmc",
     index_name=PMC_INDEX_NAME,
     type_name=PMC_TYPE_NAME,
     number_of_documents=574199,
