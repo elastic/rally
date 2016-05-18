@@ -159,7 +159,7 @@ loggingTrackSpec = track.Track(
     name="logging",
     short_description="Logging benchmark",
     description="This benchmark indexes HTTP server log data from the 1998 world cup.",
-    source_root_url="http://benchmarks.elastic.co/corpora/logging",
+    source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/logging",
     indices=create_indices(),
     queries=[
         DefaultQuery(),

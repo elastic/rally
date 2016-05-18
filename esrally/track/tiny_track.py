@@ -98,7 +98,7 @@ tinyTrackSpec = track.Track(
     short_description="First 2k documents of the geonames track for local tests",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
-    source_root_url="http://benchmarks.elastic.co/corpora/tiny",
+    source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/tiny",
     indices=[
         track.Index(name=TINY_INDEX_NAME, types=[
             track.Type(

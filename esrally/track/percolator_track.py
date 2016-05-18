@@ -92,7 +92,7 @@ percolatorTrackSpec = track.Track(
     name="percolator",
     short_description="Percolator benchmark based on 2M AOL queries",
     description="This benchmark indexes 2M AOL queries and use the percolate query to match",
-    source_root_url="http://benchmarks.elastic.co/corpora/percolator",
+    source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/percolator",
     indices=[
         track.Index(name="queries", types=[
             # The type for the percolator queries:

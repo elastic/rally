@@ -90,7 +90,7 @@ geopointTrackSpec = track.Track(
     short_description="60.8M POIs from PlanetOSM",
     description="This test indexes 60.8M documents (POIs from PlanetOSM, total 2.3 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
-    source_root_url="http://benchmarks.elastic.co/corpora/geopoint",
+    source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geopoint",
     index_name=GEO_POINT_INDEX_NAME,
     type_name=GEO_POINT_TYPE_NAME,
     number_of_documents=60844404,

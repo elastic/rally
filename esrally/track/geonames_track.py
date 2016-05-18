@@ -98,7 +98,7 @@ geonamesTrackSpec = track.Track(
     short_description="Standard benchmark in Rally (8.6M POIs from Geonames)",
     description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
                 "request against Elasticsearch",
-    source_root_url="http://benchmarks.elastic.co/corpora/geonames",
+    source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
     index_name=GEO_NAMES_INDEX_NAME,
     type_name=GEO_NAMES_TYPE_NAME,
     number_of_documents=8647880,
