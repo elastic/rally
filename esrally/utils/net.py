@@ -15,8 +15,9 @@ def download(url, local_path, expected_size_in_bytes=None):
     """
     tmp_data_set_path = local_path + ".tmp"
     try:
-        with urllib.request.urlopen(url) as response, open(tmp_data_set_path, "wb") as out_file:
-            shutil.copyfileobj(response, out_file)
+        urllib.request.urlretrieve(url, tmp_data_set_path)
+        # with urllib.request.urlopen(url) as response, open(tmp_data_set_path, "wb") as out_file:
+        #     shutil.copyfileobj(response, out_file)
     except:
         if os.path.isfile(tmp_data_set_path):
             os.remove(tmp_data_set_path)
