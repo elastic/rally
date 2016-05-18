@@ -23,10 +23,10 @@ class Launcher:
         self.cfg = cfg
         self.cluster_factory = cluster_factory_class()
 
-    def setup_index(self, cluster, t, track_setup):
-        if track.BenchmarkPhase.index in track_setup.benchmark:
+    def setup_index(self, cluster, t, challenge):
+        if track.BenchmarkPhase.index in challenge.benchmark:
             mapping_path = self.cfg.opts("benchmarks", "mapping.path")
-            settings = track_setup.benchmark[track.BenchmarkPhase.index].index_settings
+            settings = challenge.benchmark[track.BenchmarkPhase.index].index_settings
             # Workaround to support multiple versions (this is not how this will be handled in the future..)
             if "master" in settings:
                 # check whether we do a binary benchmark
@@ -58,7 +58,7 @@ class ExternalLauncher(Launcher):
     def __init__(self, cfg, cluster_factory_class=ClusterFactory):
         super().__init__(cfg, cluster_factory_class)
 
-    def start(self, track, setup, metrics_store):
+    def start(self, track, challenge, metrics_store):
         configured_host_list = self.cfg.opts("launcher", "external.target.hosts")
         hosts = []
         try:
@@ -78,7 +78,7 @@ class ExternalLauncher(Launcher):
         ])
         c = self.cluster_factory.create(hosts, [], metrics_store, t)
         t.attach_to_cluster(c)
-        self.setup_index(c, track, setup)
+        self.setup_index(c, track, challenge)
         return c
 
 
@@ -95,50 +95,49 @@ class InProcessLauncher(Launcher):
         self._clock = clock
         self._servers = []
 
-    def start(self, track, setup, metrics_store):
+    def start(self, track, challenge, car, metrics_store):
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
-        num_nodes = setup.candidate.nodes
         first_http_port = self.cfg.opts("provisioning", "node.http.port")
 
         t = telemetry.Telemetry(self.cfg, metrics_store)
         c = self.cluster_factory.create(
             [{"host": "localhost", "port": first_http_port}],
-            [self._start_node(node, setup, metrics_store) for node in range(num_nodes)],
+            [self._start_node(node, car, metrics_store) for node in range(car.nodes)],
             metrics_store, t
         )
         t.attach_to_cluster(c)
-        self.setup_index(c, track, setup)
+        self.setup_index(c, track, challenge)
         return c
 
-    def _start_node(self, node, setup, metrics_store):
+    def _start_node(self, node, car, metrics_store):
         node_name = self._node_name(node)
         host_name = socket.gethostname()
         t = telemetry.Telemetry(self.cfg, metrics_store)
 
-        env = self._prepare_env(setup, node_name, t)
-        cmd = self.prepare_cmd(setup, node_name)
+        env = self._prepare_env(car, node_name, t)
+        cmd = self.prepare_cmd(car, node_name)
         process = self._start_process(cmd, env, node_name)
         node = cluster.Node(process, host_name, node_name, t)
         t.attach_to_node(node)
 
         return node
 
-    def _prepare_env(self, setup, node_name, t):
+    def _prepare_env(self, car, node_name, t):
         env = {}
         env.update(os.environ)
         # we just blindly trust telemetry here...
-        for k, v in t.instrument_candidate_env(setup, node_name).items():
+        for k, v in t.instrument_candidate_env(car, node_name).items():
             self._set_env(env, k, v)
 
         java_opts = ""
-        if setup.candidate.heap:
-            java_opts += "-Xms%s -Xmx%s " % (setup.candidate.heap, setup.candidate.heap)
-        if setup.candidate.java_opts:
-            java_opts += setup.candidate.java_opts
+        if car.heap:
+            java_opts += "-Xms%s -Xmx%s " % (car.heap, car.heap)
+        if car.java_opts:
+            java_opts += car.java_opts
         if len(java_opts) > 0:
             self._set_env(env, "ES_JAVA_OPTS", java_opts)
-        self._set_env(env, "ES_GC_OPTS", setup.candidate.gc_opts)
+        self._set_env(env, "ES_GC_OPTS", car.gc_opts)
 
         java_home = gear.Gear(self.cfg).capability(gear.Capability.java)
         # Unix specific!:
@@ -155,10 +154,10 @@ class InProcessLauncher(Launcher):
             else:  # merge
                 env[k] = v + separator + env[k]
 
-    def prepare_cmd(self, setup, node_name):
-        server_log_dir = "%s/server" % self.cfg.opts("system", "track.setup.log.dir")
+    def prepare_cmd(self, car, node_name):
+        server_log_dir = "%s/server" % self.cfg.opts("system", "challenge.log.dir")
         self.cfg.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
-        processor_count = setup.candidate.processors
+        processor_count = car.processors
 
         cmd = ["bin/elasticsearch", "-Ees.node.name=%s" % node_name]
         if processor_count is not None and processor_count > 1:

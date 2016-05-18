@@ -9,7 +9,8 @@ Here is a typical metrics record::
     {
           "environment": "nightly",
           "track": "geonames",
-          "track-setup": "defaults",
+          "challenge": "append-no-conflicts",
+          "car": "defaults",
           "sample-type": "normal",
           "trial-timestamp": "20160421T042749Z",
           "@timestamp": 1461213093093,
@@ -39,10 +40,10 @@ environment
 
 The environment describes the origin of a metric record. You define this value in the initial configuration of Rally. The intention is to clearly separate different benchmarking environments but still allow to store them in the same index.
 
-track, track-setup
-~~~~~~~~~~~~~~~~~~
+track, challenge, car
+~~~~~~~~~~~~~~~~~~~~~
 
-This is the track and track setup for which the metrics record has been produced.
+This is the track, challenge and car for which the metrics record has been produced.
 
 sample-type
 ~~~~~~~~~~~

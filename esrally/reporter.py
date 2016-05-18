@@ -1,7 +1,7 @@
 import logging
 import tabulate
 
-from esrally import metrics, exceptions
+from esrally import metrics
 from esrally.track import track
 from esrally.utils import convert
 
@@ -145,28 +145,28 @@ class SummaryReporter:
         print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
         print_header("------------------------------------------------------")
 
-        selected_setups = self._config.opts("benchmarks", "tracksetups.selected")
+        selected_challenge = self._config.opts("benchmarks", "challenge")
+        selected_car = self._config.opts("benchmarks", "car")
         invocation = self._config.opts("meta", "time.start")
-        logger.info("Generating summary report for invocation=[%s], track=[%s], track setups=%s" % (invocation, t.name, selected_setups))
-        for track_setup in t.track_setups:
-            if track_setup.name in selected_setups:
-                if len(selected_setups) > 1:
-                    print_header("*** Track setup %s ***\n" % track_setup.name)
+        logger.info("Generating summary report for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
+                    (invocation, t.name, selected_challenge, selected_car))
+        for challenge in t.challenges:
+            if challenge.name == selected_challenge:
                 store = metrics.EsMetricsStore(self._config)
-                store.open(invocation, t.name, track_setup.name)
+                store.open(invocation, t.name, challenge.name, selected_car)
 
                 stats = Stats(store,
-                              self.sample_size(track_setup, track.BenchmarkPhase.stats),
+                              self.sample_size(challenge, track.BenchmarkPhase.stats),
                               t.queries,
-                              self.sample_size(track_setup, track.BenchmarkPhase.search))
+                              self.sample_size(challenge, track.BenchmarkPhase.search))
 
                 metrics_table = []
-                if track.BenchmarkPhase.index in track_setup.benchmark:
+                if track.BenchmarkPhase.index in challenge.benchmark:
                     metrics_table += self.report_index_throughput(stats)
                     metrics_table += self.report_total_times(stats)
                     metrics_table += self.report_merge_part_times(stats)
 
-                if track.BenchmarkPhase.search in track_setup.benchmark:
+                if track.BenchmarkPhase.search in challenge.benchmark:
                     metrics_table += self.report_search_latency(stats)
 
                 metrics_table += self.report_cpu_usage(stats)
@@ -176,14 +176,14 @@ class SummaryReporter:
                 metrics_table += self.report_segment_memory(stats)
                 metrics_table += self.report_segment_counts(stats)
 
-                if track.BenchmarkPhase.stats in track_setup.benchmark:
+                if track.BenchmarkPhase.stats in challenge.benchmark:
                     metrics_table += self.report_stats_latency(stats)
 
                 print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], numalign="right", stralign="right"))
 
-    def sample_size(self, track_setup, benchmark_phase):
-        if track.BenchmarkPhase.stats in track_setup.benchmark:
-            return track_setup.benchmark[benchmark_phase].iteration_count
+    def sample_size(self, challenge, benchmark_phase):
+        if track.BenchmarkPhase.stats in challenge.benchmark:
+            return challenge.benchmark[benchmark_phase].iteration_count
         else:
             return None
 
@@ -284,37 +284,36 @@ class ComparisonReporter:
     def __init__(self, config):
         self._config = config
 
-    def report(self, r1, r1_track_setup, r2, r2_track_setup):
-        selected_baseline_track_setup = self.track_setup(r1, "baseline", r1_track_setup)
-        selected_contender_track_setup = self.track_setup(r2, "contender", r2_track_setup)
-
-        logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], track setup=[%s]) and "
-                    "contender (invocation=[%s], track=[%s], track setup=[%s])" %
-                    (r1.trial_timestamp, r1.track, selected_baseline_track_setup,
-                     r2.trial_timestamp, r2.track, selected_contender_track_setup))
+    def report(self, r1, r2):
+        logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], challenge=[%s], car=[%s]) and "
+                    "contender (invocation=[%s], track=[%s], challenge=[%s], car=[%s])" %
+                    (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
+                     r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
         baseline_store = metrics.EsMetricsStore(self._config)
-        baseline_store.open(r1.trial_timestamp, r1.track, selected_baseline_track_setup.name)
+        baseline_store.open(r1.trial_timestamp, r1.track, r1.challenge.name, r1.car)
         baseline_stats = Stats(baseline_store,
-                               stats_sample_size=selected_baseline_track_setup.stats_sample_size,
-                               queries=selected_baseline_track_setup.queries,
-                               search_sample_size=selected_baseline_track_setup.search_sample_size)
+                               stats_sample_size=r1.challenge.stats_sample_size,
+                               queries=r1.challenge.queries,
+                               search_sample_size=r1.challenge.search_sample_size)
 
         contender_store = metrics.EsMetricsStore(self._config)
-        contender_store.open(r2.trial_timestamp, r2.track, selected_contender_track_setup.name)
+        contender_store.open(r2.trial_timestamp, r2.track, r2.challenge.name, r2.car)
         contender_stats = Stats(contender_store,
-                                stats_sample_size=selected_contender_track_setup.stats_sample_size,
-                                queries=selected_contender_track_setup.queries,
-                                search_sample_size=selected_contender_track_setup.search_sample_size)
+                                stats_sample_size=r2.challenge.stats_sample_size,
+                                queries=r2.challenge.queries,
+                                search_sample_size=r2.challenge.search_sample_size)
 
         print_internal("")
         print_internal("Comparing baseline")
         print_internal("  Race timestamp: %s" % r1.trial_timestamp)
-        print_internal("  Track setup: %s" % selected_baseline_track_setup.name)
+        print_internal("  Challenge: %s" % r1.challenge.name)
+        print_internal("  Car: %s" % r1.car)
         print_internal("")
         print_internal("with contender")
         print_internal("  Race timestamp: %s" % r2.trial_timestamp)
-        print_internal("  Track setup: %s" % selected_contender_track_setup.name)
+        print_internal("  Challenge: %s" % r2.challenge.name)
+        print_internal("  Car: %s" % r2.car)
         print_internal("")
         print_header("------------------------------------------------------")
         print_header("    _______             __   _____                    ")
@@ -468,21 +467,6 @@ class ComparisonReporter:
                     lines.append(self.line("Nodes Stats(%s percentile) [ms]" % percentile, baseline_value, contender_value,
                                            treat_increase_as_improvement=False))
         return lines
-
-    def track_setup(self, race, comparison_type, user_defined_track_setup):
-        if user_defined_track_setup:
-            for track_setup in race.track_setups:
-                if user_defined_track_setup == track_setup.name:
-                    return track_setup
-            raise exceptions.ImproperlyConfigured("Specified track setup [%s] for %s is not among the available track setups %s."
-                                                  % (user_defined_track_setup, comparison_type, race.track_setups))
-        else:
-            if len(race.track_setups) == 1:
-                return race.track_setups[0]
-            else:
-                raise exceptions.ImproperlyConfigured("Cannot autodetect correct track setup for %s. Please specify one on the command "
-                                                      "line with the parameter %s-track-setup. Possible values are: %s" %
-                                                      (comparison_type, comparison_type, race.track_setups))
 
     def line(self, metric, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
         if baseline is not None and contender is not None:

@@ -13,22 +13,16 @@ Suppose, we want to analyze the impact of a performance improvement. First, we n
                     /____/
     Recent races:
 
-    Race Timestamp     Track     Track setups    User Tag
-    -----------------  --------  --------------  ------------------------------
-    20160502T191011Z   geonames  defaults        intention:reduce_alloc_1234
-    20160502T190127Z   geonames  defaults        intention:baseline_github_1234
-    20160502T185632Z   tiny      defaults
-    20160502T185619Z   tiny      defaults
-    20160502T185604Z   tiny      defaults
-    20160502T185551Z   tiny      defaults
-    20160502T185538Z   tiny      defaults
-    20160502T185525Z   tiny      defaults
-    20160502T185511Z   tiny      defaults
-    20160502T185459Z   tiny      defaults
+    Race Timestamp    Track    Challenge            Car       User Tag
+    ----------------  -------  -------------------  --------  ------------------------------
+    20160518T122341Z  pmc      append-no-conflicts  defaults  intention:reduce_alloc_1234
+    20160518T112057Z  pmc      append-no-conflicts  defaults  intention:baseline_github_1234
+    20160518T101957Z  pmc      append-no-conflicts  defaults
+
 
 We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race timestamps in the next step::
 
-    dm@io:~ $ esrally compare --baseline=20160502T190127Z --contender=20160502T191011Z
+    dm@io:~ $ esrally compare --baseline=20160518T112057Z --contender=20160518T112341Z
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -38,12 +32,14 @@ We can see that the user tag helps us to recognize races. We want to compare the
                     /____/
 
     Comparing baseline
-      Race timestamp: 2016-05-02 19:01:27
-      Track setup: defaults
+      Race timestamp: 2016-05-18 11:20:57
+      Challenge: append-no-conflicts
+      Car: defaults
 
     with contender
-      Race timestamp: 2016-05-02 19:10:11
-      Track setup: defaults
+      Race timestamp: 2016-05-18 12:23:41
+      Challenge: append-no-conflicts
+      Car: defaults
 
     ------------------------------------------------------
         _______             __   _____

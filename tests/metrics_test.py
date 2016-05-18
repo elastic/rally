@@ -63,7 +63,7 @@ class MetricsTests(TestCase):
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
-        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "defaults", create=True)
+        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
 
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
@@ -73,7 +73,8 @@ class MetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
-            "track-setup": "defaults",
+            "challenge": "append-no-conflicts",
+            "car": "defaults",
             "name": "indexing_throughput",
             "value": throughput,
             "unit": "docs/s",
@@ -88,7 +89,7 @@ class MetricsTests(TestCase):
         throughput = 5000
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "system", "user.tag", "intention:testing")
-        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "defaults", create=True)
+        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -106,7 +107,8 @@ class MetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
-            "track-setup": "defaults",
+            "challenge": "append-no-conflicts",
+            "car": "defaults",
             "name": "indexing_throughput",
             "value": throughput,
             "unit": "docs/s",
@@ -138,7 +140,7 @@ class MetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "defaults")
+        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
@@ -161,7 +163,12 @@ class MetricsTests(TestCase):
                         },
                         {
                             "term": {
-                                "track-setup": "defaults"
+                                "challenge": "append-no-conflicts"
+                            }
+                        },
+                        {
+                            "term": {
+                                "car": "defaults"
                             }
                         },
                         {

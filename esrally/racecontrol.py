@@ -22,41 +22,47 @@ class PipelineStep:
         self.ctx = ctx
         self.command = command
 
-    def run(self, track, track_setup=None):
-        if track_setup is None:
+    def run(self, track, challenge=None, car=None):
+        if challenge is None and car is None:
             self.command(self.ctx, track)
         else:
-            self.command(self.ctx, track, track_setup)
+            self.command(self.ctx, track, challenge, car)
 
 
-class TrackSetupIterator:
+class ComponentSelector:
     """
-    A special step in a pipeline which changes the iteration granularity from tracks to track setups.
+    A special step in a pipeline which extracts car and challenge based on the current configuration.
     """
-    def __init__(self, ctx, steps):
+    def __init__(self, ctx, step):
         self.ctx = ctx
-        self.steps = steps
+        self.step = step
 
     def run(self, track):
-        selected_setups = self.ctx.config.opts("benchmarks", "tracksetups.selected")
-        any_selected = False
-        for track_setup in track.track_setups:
-            if track_setup.name in selected_setups:
-                any_selected = True
-                race_paths = paths.Paths(self.ctx.config)
-                self.ctx.config.add(config.Scope.trackSetup, "system", "track.setup.root.dir",
-                                    race_paths.track_setup_root(track.name, track_setup.name))
-                self.ctx.config.add(config.Scope.trackSetup, "system", "track.setup.log.dir",
-                                    race_paths.track_setup_logs(track.name, track_setup.name))
-                print("Racing on track '%s' with setup '%s'" % (track.name, track_setup.name))
-                for step in self.steps:
-                    step.run(track, track_setup)
-            else:
-                logger.debug("Skipping track setup [%s] (not selected)." % track_setup.name)
+        challenge = self.find_challenge(track)
+        car = self.find_car()
+        race_paths = paths.Paths(self.ctx.config)
+        self.ctx.config.add(config.Scope.challenge, "system", "challenge.root.dir",
+                            race_paths.challenge_root(track.name, challenge.name))
+        self.ctx.config.add(config.Scope.challenge, "system", "challenge.log.dir",
+                            race_paths.challenge_logs(track.name, challenge.name))
+        print("Racing on track [%s] and challenge [%s] with car [%s]" % (track.name, challenge.name, car.name))
+        self.step.run(track, challenge, car)
 
-        if not any_selected:
-            raise exceptions.ImproperlyConfigured("Unknown track setup(s) %s for track [%s]. You can list the available tracks and their "
-                                                  "track setups with esrally list tracks." % (selected_setups, track.name))
+    def find_challenge(self, track):
+        selected_challenge = self.ctx.config.opts("benchmarks", "challenge")
+        for challenge in track.challenges:
+            if challenge.name == selected_challenge:
+                return challenge
+
+        raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
+                                              "challenges with esrally list tracks." % (selected_challenge, track.name))
+
+    def find_car(self):
+        selected_car = self.ctx.config.opts("benchmarks", "car")
+        for car in track.cars:
+            if car.name == selected_car:
+                return car
+        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with esrally list cars." % selected_car)
 
 
 class Pipeline:
@@ -120,20 +126,20 @@ def prepare_track(ctx, track):
 
 
 # benchmark when we provision ourselves
-def benchmark_internal(ctx, track, track_setup):
-    ctx.mechanic.start_metrics(track, track_setup)
-    cluster = ctx.mechanic.start_engine(track, track_setup)
-    driver.Driver(ctx.config, cluster, track, track_setup).go()
+def benchmark_internal(ctx, track, challenge, car):
+    ctx.mechanic.start_metrics(track, challenge, car)
+    cluster = ctx.mechanic.start_engine(track, challenge, car)
+    driver.Driver(ctx.config, cluster, track, challenge).go()
     ctx.mechanic.stop_engine(cluster)
     ctx.mechanic.revise_candidate()
     ctx.mechanic.stop_metrics()
 
 
 # benchmark assuming Elasticsearch is already running externally
-def benchmark_external(ctx, track, track_setup):
-    ctx.mechanic.start_metrics(track, track_setup)
-    cluster = ctx.mechanic.start_engine_external(track, track_setup)
-    driver.Driver(ctx.config, cluster, track, track_setup).go()
+def benchmark_external(ctx, track, challenge, car):
+    ctx.mechanic.start_metrics(track, challenge, car)
+    cluster = ctx.mechanic.start_engine_external(track, challenge, car)
+    driver.Driver(ctx.config, cluster, track, challenge).go()
     ctx.mechanic.stop_metrics()
 
 
@@ -193,7 +199,7 @@ pipelines = {
                              PipelineStep("prepare-track", ctx, prepare_track),
                              PipelineStep("build", ctx, lambda ctx, track: ctx.mechanic.prepare_candidate()),
                              PipelineStep("find-candidate", ctx, lambda ctx, track: ctx.mechanic.find_candidate()),
-                             TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
+                             ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_internal)),
                              PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
                              PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                          ]
@@ -205,7 +211,7 @@ pipelines = {
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
                              PipelineStep("find-candidate", ctx, lambda ctx, track: ctx.mechanic.find_candidate()),
-                             TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
+                             ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_internal)),
                              PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
                              PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                          ]
@@ -218,7 +224,7 @@ pipelines = {
                                  PipelineStep("kill-es", ctx, kill),
                                  PipelineStep("download-candidate", ctx, download_benchmark_candidate),
                                  PipelineStep("prepare-track", ctx, prepare_track),
-                                 TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_internal)]),
+                                 ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_internal)),
                                  PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
                                  PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                              ]
@@ -229,7 +235,7 @@ pipelines = {
                              [
                                  PipelineStep("warn-bogus", ctx, lambda ctx, track: print(bogus_results_warning)),
                                  PipelineStep("prepare-track", ctx, prepare_track),
-                                 TrackSetupIterator(ctx, [PipelineStep("benchmark", ctx, benchmark_external)]),
+                                 ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_external)),
                                  PipelineStep("report", ctx, lambda ctx, track: ctx.reporter.report(track)),
                                  PipelineStep("sweep", ctx, lambda ctx, track: ctx.sweeper.run(track))
                              ]
@@ -261,19 +267,14 @@ class RaceControl:
                 return True
             elif command == "compare":
                 baseline_ts = self._config.opts("report", "comparison.baseline.timestamp")
-                baseline_track_setup = self._config.opts("report", "comparison.baseline.tracksetup")
                 contender_ts = self._config.opts("report", "comparison.contender.timestamp")
-                contender_track_setup = self._config.opts("report", "comparison.contender.tracksetup")
 
                 if not baseline_ts or not contender_ts:
                     raise exceptions.ImproperlyConfigured("compare needs baseline and a contender")
                 race_store = metrics.RaceStore(self._config)
                 reporter.ComparisonReporter(self._config).report(
                     race_store.find_by_timestamp(baseline_ts),
-                    baseline_track_setup,
-                    race_store.find_by_timestamp(contender_ts),
-                    contender_track_setup
-                )
+                    race_store.find_by_timestamp(contender_ts))
             else:
                 raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
         except exceptions.RallyError as e:
@@ -299,8 +300,8 @@ class RaceControl:
             print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
         elif what == "tracks":
             print("Available tracks:\n")
-            print(tabulate.tabulate([[t.name, t.short_description, ",".join(map(str, t.track_setups))] for t in track.tracks.values()],
-                                    headers=["Name", "Description", "Track setups"]))
+            print(tabulate.tabulate([[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in track.tracks.values()],
+                                    headers=["Name", "Description", "Challenges"]))
 
         elif what == "pipelines":
             print("Available pipelines:\n")
@@ -310,9 +311,12 @@ class RaceControl:
             print("Recent races:\n")
             races = []
             for race in metrics.RaceStore(ctx.config).list():
-                races.append([time.to_iso8601(race.trial_timestamp), race.track, ",".join(map(str, race.track_setups)), race.user_tag])
+                races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car, race.user_tag])
 
-            print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track setups", "User Tag"]))
+            print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
+        elif what == "cars":
+            #TODO dm: Implement me
+            print("Error: Not yet implemented")
         else:
             raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
 

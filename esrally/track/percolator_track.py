@@ -122,10 +122,9 @@ percolatorTrackSpec = track.Track(
         PercolatorQuery(content="ignore me"),
         PercolatorQueryNoScoring(content="ignore me")
     ],
-    track_setups=[track.TrackSetup(
-        name="4gheap",
-        description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate=track.CandidateSettings(heap="4g"),
+    challenges=[track.Challenge(
+        name="append-no-conflicts",
+        description="Append documents without any ID conflicts",
         benchmark={
             track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=percolatorIndexSettings),
             track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(iteration_count=100),

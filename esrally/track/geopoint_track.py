@@ -100,5 +100,5 @@ geopointTrackSpec = track.Track(
     mapping_file_name="mappings.json",
     # Queries to use in the search benchmark
     queries=[PolygonQuery(), BBoxQuery(), DistanceQuery(), DistanceRangeQuery()],
-    track_setups=track.track_setups
+    challenges=track.challenges
 )

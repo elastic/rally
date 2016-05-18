@@ -1,3 +1,18 @@
+### 0.3.0
+
+#### Breaking changes
+
+We have [separated the previously known "track setup" into two parts](https://github.com/elastic/rally/issues/101):
+
+* Challenges: Which describe what happens during a benchmark (whether to index or search and with which parameters)
+* Cars: Which describe the benchmark candidate settings (e.g. heap size, logging configuration etc.)
+
+This influences the command line interface in a couple of ways:
+
+* To list all known cars, we have added a new command `esrally list cars`. To select a challenge, use now `--challenge` instead of `--track-setup` and also specify a car now with `--car`.
+* Tournaments created by older versions of Rally are incompatible
+* Rally must now be invoked with only one challenge and only one car (previously it was possible to specify multiple track setups)
+
 ### 0.2.1
 
 * Add a [tournament mode](https://github.com/elastic/rally/issues/57). More information in the [user docs](https://esrally.readthedocs.io/en/latest/tournament.html)

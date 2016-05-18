@@ -20,37 +20,37 @@ class Driver:
     Driver runs the benchmark.
     """
 
-    def __init__(self, config, cluster, track, track_setup, clock=time.Clock):
+    def __init__(self, config, cluster, track, challenge, clock=time.Clock):
         self.cfg = config
         self.cluster = cluster
         self.track = track
-        self.track_setup = track_setup
+        self.challenge = challenge
         self.clock = clock
 
     def go(self):
         self.cluster.on_benchmark_start()
         # We need to run phases in order - i.e. indexing has to be done before a search can be started
         for phase in track.BenchmarkPhase:
-            if phase in self.track_setup.benchmark:
+            if phase in self.challenge.benchmark:
                 self._run(Driver.BENCHMARKS[phase]())
         self.cluster.on_benchmark_stop()
 
     def _run(self, benchmark_class):
-        benchmark = benchmark_class(self.cfg, self.clock, self.track, self.track_setup, self.cluster)
+        benchmark = benchmark_class(self.cfg, self.clock, self.track, self.challenge, self.cluster)
         phase = benchmark.phase
-        logger.info("Starting %s benchmark for track [%s] and track setup [%s]" % (phase.name, self.track.name, self.track_setup.name))
+        logger.info("Starting %s benchmark for track [%s] and challenge [%s]" % (phase.name, self.track.name, self.challenge.name))
         self.cluster.on_benchmark_start(phase)
         benchmark.run()
         self.cluster.on_benchmark_stop(phase)
-        logger.info("Stopped %s benchmark for track [%s] and track setup [%s]" % (phase.name, self.track.name, self.track_setup.name))
+        logger.info("Stopped %s benchmark for track [%s] and challenge [%s]" % (phase.name, self.track.name, self.challenge.name))
 
 
 class Benchmark:
-    def __init__(self, cfg, clock, track, track_setup, cluster, phase):
+    def __init__(self, cfg, clock, track, challenge, cluster, phase):
         self.cfg = cfg
         self.clock = clock
         self.track = track
-        self.track_setup = track_setup
+        self.challenge = challenge
         self.cluster = cluster
         self.phase = phase
         self.metrics_store = cluster.metrics_store
@@ -59,8 +59,8 @@ class Benchmark:
 
 
 class LatencyBenchmark(Benchmark):
-    def __init__(self, cfg, clock, track, track_setup, cluster, phase, queries, repetitions=1000):
-        Benchmark.__init__(self, cfg, clock, track, track_setup, cluster, phase)
+    def __init__(self, cfg, clock, track, challenge, cluster, phase, queries, repetitions=1000):
+        Benchmark.__init__(self, cfg, clock, track, challenge, cluster, phase)
         self.queries = queries
         self.repetitions = repetitions
         self.stop_watch = self.clock.stop_watch()
@@ -106,9 +106,9 @@ class LatencyBenchmark(Benchmark):
 
 
 class SearchBenchmark(LatencyBenchmark):
-    def __init__(self, cfg, clock, t, track_setup, cluster):
-        super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.search, t.queries,
-                         track_setup.benchmark[track.BenchmarkPhase.search].iteration_count)
+    def __init__(self, cfg, clock, t, challenge, cluster):
+        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search, t.queries,
+                         challenge.benchmark[track.BenchmarkPhase.search].iteration_count)
 
 
 class StatsQueryAdapter:
@@ -130,11 +130,11 @@ class StatsQueryAdapter:
 
 
 class StatsBenchmark(LatencyBenchmark):
-    def __init__(self, cfg, clock, t, track_setup, cluster):
-        super().__init__(cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.stats, [
+    def __init__(self, cfg, clock, t, challenge, cluster):
+        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.stats, [
             StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
             StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
-        ], track_setup.benchmark[track.BenchmarkPhase.stats].iteration_count)
+        ], challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
 
 
 class IndexedDocumentCountProbe:
@@ -153,10 +153,10 @@ class IndexedDocumentCountProbe:
 
 
 class IndexBenchmark(Benchmark):
-    def __init__(self, cfg, clock, t, track_setup, cluster):
-        Benchmark.__init__(self, cfg, clock, t, track_setup, cluster, track.BenchmarkPhase.index)
+    def __init__(self, cfg, clock, t, challenge, cluster):
+        Benchmark.__init__(self, cfg, clock, t, challenge, cluster, track.BenchmarkPhase.index)
         self.stop_watch = clock.stop_watch()
-        self.bulk_size = track_setup.benchmark[track.BenchmarkPhase.index].bulk_size
+        self.bulk_size = challenge.benchmark[track.BenchmarkPhase.index].bulk_size
         self.processed = 0
 
     def run(self):
@@ -170,10 +170,10 @@ class IndexBenchmark(Benchmark):
             logger.info("IndexBenchmark finished successfully: %s" % finished)
 
     def index(self):
-        force_merge = self.track_setup.benchmark[self.phase].force_merge
+        force_merge = self.challenge.benchmark[self.phase].force_merge
         docs_to_index = self.track.number_of_documents
 
-        conflicts = self.track_setup.benchmark[self.phase].id_conflicts
+        conflicts = self.challenge.benchmark[self.phase].id_conflicts
         if conflicts == track.IndexIdConflict.NoConflicts:
             doc_count_probe = IndexedDocumentCountProbe(self.cluster, docs_to_index)
             ids = None
@@ -222,8 +222,8 @@ class IndexBenchmark(Benchmark):
 
 
 class ThreadedIndexBenchmark(IndexBenchmark):
-    def __init__(self, config, clock, track, track_setup, cluster):
-        super().__init__(config, clock, track, track_setup, cluster)
+    def __init__(self, config, clock, track, challenge, cluster):
+        super().__init__(config, clock, track, challenge, cluster)
 
     def index_documents(self, ids):
         num_client_threads = int(self.cfg.opts("benchmarks", "index.clients"))
@@ -242,6 +242,7 @@ class ThreadedIndexBenchmark(IndexBenchmark):
                     start_signal = CountDownLatch(1)
                     stop_event = threading.Event()
                     failed_event = threading.Event()
+                    # Isn't this wrong for the bulk iterator? (should be on another level, namely type level)
                     docs_to_index = self.track.number_of_documents
 
                     iterator = BulkIterator(index.name, type.name, docs_file, ids, docs_to_index, self.bulk_size)
@@ -285,7 +286,14 @@ class ThreadedIndexBenchmark(IndexBenchmark):
             del buffer[:]
 
             try:
-                self.cluster.client.bulk(body=data, params={'request_timeout': 60000})
+                response = self.cluster.client.bulk(body=data, params={'request_timeout': 60000})
+                if response["errors"]:
+                    for idx, item in enumerate(response["items"]):
+                        if item["index"]["status"] != 201:
+                            print("Error in line [%d]" % (idx + 1))
+                            print("Bulk item: [%s]" % item)
+                            print("Buffer size is [%d]" % idx)
+                            print("Source data: [%s]" % data)
             except BaseException as e:
                 logger.error("Indexing failed: %s" % e)
                 failed_event.set()

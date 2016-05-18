@@ -19,10 +19,10 @@ class Paths:
         # we place tracks in their own sub directory, otherwise track names might clash with Rally internal directories (like "logs")
         return "%s/tracks/%s" % (invocation_root, track_name.lower())
 
-    def track_setup_root(self, track_name, track_setup_name):
-        return "%s/%s" % (self.track_root(track_name), track_setup_name)
+    def challenge_root(self, track_name, challenge_name):
+        return "%s/%s" % (self.track_root(track_name), challenge_name)
 
-    def track_setup_logs(self, track_name, track_setup_name):
+    def challenge_logs(self, track_name, challenge_name):
         invocation_root = self._config.opts("system", "invocation.root.dir")
         log_dir_name = self._config.opts("system", "log.root.dir")
-        return "%s/%s/%s/%s" % (invocation_root, log_dir_name, track_name.lower(), track_setup_name)
+        return "%s/%s/%s/%s" % (invocation_root, log_dir_name, track_name.lower(), challenge_name)

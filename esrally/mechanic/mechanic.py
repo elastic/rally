@@ -25,18 +25,18 @@ class Mechanic:
     def find_candidate(self):
         self._builder.add_binary_to_config()
 
-    def start_metrics(self, track, setup):
+    def start_metrics(self, track, challenge, car):
         invocation = self._config.opts("meta", "time.start")
         self._metrics_store = metrics.EsMetricsStore(self._config)
-        self._metrics_store.open(invocation, track.name, setup.name, create=True)
+        self._metrics_store.open(invocation, track.name, challenge.name, car.name, create=True)
 
-    def start_engine(self, track, setup):
-        self._provisioner.prepare(setup)
-        return self._launcher.start(track, setup, self._metrics_store)
+    def start_engine(self, track, challenge, car):
+        self._provisioner.prepare(car)
+        return self._launcher.start(track, challenge, car, self._metrics_store)
 
-    def start_engine_external(self, track, setup):
+    def start_engine_external(self, track, challenge, car):
         external_launcher = launcher.ExternalLauncher(self._config)
-        return external_launcher.start(track, setup, self._metrics_store)
+        return external_launcher.start(track, challenge, self._metrics_store)
 
     def stop_engine(self, cluster):
         self._launcher.stop(cluster)

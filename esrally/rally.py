@@ -66,16 +66,8 @@ def parse_args():
         help="defines the race timestamp of the baseline for the comparison (see output esrally list races)",
         default="")
     compare_parser.add_argument(
-        "--baseline-track-setup",
-        help="defines the track setup to select for the baseline in case there are multiple track-setups.",
-        default="")
-    compare_parser.add_argument(
         "--contender",
         help="defines the race timestamp of the contender for the comparison (see output esrally list races)",
-        default="")
-    compare_parser.add_argument(
-        "--contender-track-setup",
-        help="defines the track setup to select for the contender in case there are multiple track-setups.",
         default="")
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
@@ -133,13 +125,18 @@ def parse_args():
             default="")
         p.add_argument(
             "--track",
-            help="defines which track should be run. Only one is allowed at a time (default: geonames)",
+            help="defines which track should be run. List possible tracks with `esrally list tracks` (default: geonames).",
             default="geonames")
         p.add_argument(
-            "--track-setup",
-            help="defines which track-setups should be run. Multiple track setups can be specified as a comma-separated "
-                 "list (default: defaults).",
+            "--challenge",
+            help="defines which challenge should be run. List possible challenges for tracks with `esrally list tracks`"
+                 " (default: append-no-conflicts).",
+            default="append-no-conflicts")  # optimized for local usage
+        p.add_argument(
+            "--car",
+            help="defines which car should drive on a track. List possible cars with `esrally list cars` (default: defaults).",
             default="defaults")  # optimized for local usage
+
         p.add_argument(
             "--target-hosts",
             help="defines a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
@@ -243,7 +240,8 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
     cfg.add(config.Scope.applicationOverride, "system", "user.tag", args.user_tag)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "tracksetups.selected", csv_to_list(args.track_setup))
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "rounds", args.rounds)
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
@@ -253,9 +251,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
     if subcommand == "compare":
         cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
-        cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.tracksetup", args.baseline_track_setup)
         cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
-        cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.tracksetup", args.contender_track_setup)
 
     configure_logging(cfg)
     print_banner()

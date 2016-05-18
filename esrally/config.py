@@ -22,7 +22,7 @@ class Scope(Enum):
     # A sole benchmark
     benchmark = 3
     # Single benchmark track setup (e.g. default, multinode, ...)
-    trackSetup = 4
+    challenge = 4
     # property for every invocation, i.e. for backtesting
     invocation = 5
 

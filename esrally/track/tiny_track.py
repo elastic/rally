@@ -119,5 +119,5 @@ tinyTrackSpec = track.Track(
         CountryAggQuery(suffix="_cached", use_request_cache=True),
         ScrollQuery()
     ],
-    track_setups=track.track_setups)
+    challenges=track.challenges)
 

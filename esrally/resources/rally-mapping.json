@@ -51,7 +51,12 @@
           "doc_values": true,
           "index": "not_analyzed"
         },
-        "track-setup": {
+        "challenge": {
+          "type": "string",
+          "doc_values": true,
+          "index": "not_analyzed"
+        },
+        "car": {
           "type": "string",
           "doc_values": true,
           "index": "not_analyzed"
@@ -75,7 +80,7 @@
           "doc_values": true,
           "index": "not_analyzed"
         },
-        "selected-track-setups": {
+        "selected-challenge": {
           "type": "nested"
         }
       }

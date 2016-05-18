@@ -39,11 +39,11 @@ class Telemetry:
                 external_devices.append([device.command, device.human_name, device.help])
         return external_devices
 
-    def instrument_candidate_env(self, setup, candidate_id):
+    def instrument_candidate_env(self, car, candidate_id):
         opts = {}
         for device in self._devices:
             if self._enabled(device):
-                additional_opts = device.instrument_env(setup, candidate_id)
+                additional_opts = device.instrument_env(car, candidate_id)
                 # properly merge values with the same key
                 for k, v in additional_opts.items():
                     if k in opts:
@@ -121,7 +121,7 @@ class TelemetryDevice:
     def help(self):
         raise NotImplementedError("abstract method")
 
-    def instrument_env(self, setup, candidate_id):
+    def instrument_env(self, car, candidate_id):
         return {}
 
     def attach_to_cluster(self, cluster):
@@ -184,10 +184,10 @@ class FlightRecorder(TelemetryDevice):
     def help(self):
         return "Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)"
 
-    def instrument_env(self, setup, candidate_id):
-        log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+    def instrument_env(self, car, candidate_id):
+        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
-        log_file = "%s/%s-%s.jfr" % (log_root, setup.name, candidate_id)
+        log_file = "%s/%s-%s.jfr" % (log_root, car.name, candidate_id)
 
         logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
         print("%s: Writing flight recording to %s" % (self.human_name, log_file))
@@ -220,10 +220,10 @@ class JitCompiler(TelemetryDevice):
     def help(self):
         return "Enables JIT compiler logs."
 
-    def instrument_env(self, setup, candidate_id):
-        log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+    def instrument_env(self, car, candidate_id):
+        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
-        log_file = "%s/%s-%s.jit.log" % (log_root, setup.name, candidate_id)
+        log_file = "%s/%s-%s.jit.log" % (log_root, car.name, candidate_id)
 
         logger.info("%s: Writing JIT compiler logs to [%s]." % (self.human_name, log_file))
         print("%s: Writing JIT compiler log to %s" % (self.human_name, log_file))
@@ -255,7 +255,7 @@ class PerfStat(TelemetryDevice):
         return "Reads CPU PMU counters (beta, only on Linux, requires perf)"
 
     def attach_to_node(self, node):
-        log_root = "%s/%s" % (self._config.opts("system", "track.setup.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
         log_file = "%s/%s.perf.log" % (log_root, node.node_name)
 

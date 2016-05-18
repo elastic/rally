@@ -139,7 +139,8 @@ class EsMetricsStore:
         self._config = config
         self._invocation = None
         self._track = None
-        self._track_setup = None
+        self._challenge = None
+        self._car = None
         self._index = None
         self._docs = None
         self._environment_name = config.opts("system", "env.name")
@@ -152,23 +153,25 @@ class EsMetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
 
-    def open(self, invocation, track_name, track_setup_name, create=False):
+    def open(self, invocation, track_name, challenge_name, car_name, create=False):
         """
-        Opens a metrics store for a specific invocation, track and track setup.
+        Opens a metrics store for a specific invocation, track, challenge and car.
 
         :param invocation: The invocation (timestamp).
         :param track_name: Track name.
-        :param track_setup_name: Track setup name.
+        :param challenge_name: Challenge name.
+        :param car_name: Car name.
         :param create: True if an index should be created (if necessary). This is typically True, when attempting to write metrics and
         False when it is just opened for reading (as we can assume all necessary indices exist at this point).
         """
         self._invocation = time.to_iso8601(invocation)
         self._track = track_name
-        self._track_setup = track_setup_name
+        self._challenge = challenge_name
+        self._car = car_name
         self._index = index_name(invocation)
         self._docs = []
-        logger.info("Opening metrics store for invocation = [%s], track = [%s], track setup = [%s]" %
-                    (self._invocation, track_name, track_setup_name))
+        logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
+                    (self._invocation, track_name, challenge_name, car_name))
         # reduce a bit of noise in the metrics cluster log
         if create:
             # always update the mapping to the latest version
@@ -198,8 +201,8 @@ class EsMetricsStore:
         metrics on close (in order to avoid additional latency during the benchmark).
         """
         self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-        logger.info("Successfully added %d metrics documents for invocation = [%s], track = [%s], track setup = [%s]." %
-                    (len(self._docs), self._invocation, self._track, self._track_setup))
+        logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
+                    (len(self._docs), self._invocation, self._track, self._challenge, self._car))
         self._docs = []
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -284,7 +287,8 @@ class EsMetricsStore:
             "trial-timestamp": self._invocation,
             "environment": self._environment_name,
             "track": self._track,
-            "track-setup": self._track_setup,
+            "challenge": self._challenge,
+            "car": self._car,
             "name": name,
             "value": value,
             "unit": unit,
@@ -400,7 +404,12 @@ class EsMetricsStore:
                     },
                     {
                         "term": {
-                            "track-setup": self._track_setup
+                            "challenge": self._challenge
+                        }
+                    },
+                    {
+                        "term": {
+                            "car": self._car
                         }
                     },
                     {
@@ -437,23 +446,21 @@ class RaceStore:
 
         trial_timestamp = self.config.opts("meta", "time.start")
 
-        selected_track_setups = []
-        for setup in t.track_setups:
-            if setup.name in self.config.opts("benchmarks", "tracksetups.selected"):
-                selected_track_setup = {}
-                selected_track_setup["name"] = setup.name
-                if track.BenchmarkPhase.index in setup.benchmark:
-                    selected_track_setup["benchmark-phase-index"] = True
-                if track.BenchmarkPhase.stats in setup.benchmark:
-                    selected_track_setup["benchmark-phase-stats"] = {
-                        "sample-size": setup.benchmark[track.BenchmarkPhase.stats].iteration_count
+        selected_challenge = {}
+        for challenge in t.challenges:
+            if challenge.name == self.config.opts("benchmarks", "challenge"):
+                selected_challenge["name"] = challenge.name
+                if track.BenchmarkPhase.index in challenge.benchmark:
+                    selected_challenge["benchmark-phase-index"] = True
+                if track.BenchmarkPhase.stats in challenge.benchmark:
+                    selected_challenge["benchmark-phase-stats"] = {
+                        "sample-size": challenge.benchmark[track.BenchmarkPhase.stats].iteration_count
                     }
-                if track.BenchmarkPhase.search in setup.benchmark:
-                    selected_track_setup["benchmark-phase-search"] = {
+                if track.BenchmarkPhase.search in challenge.benchmark:
+                    selected_challenge["benchmark-phase-search"] = {
                         "queries": [q.name for q in t.queries],
-                        "sample-size": setup.benchmark[track.BenchmarkPhase.search].iteration_count
+                        "sample-size": challenge.benchmark[track.BenchmarkPhase.search].iteration_count
                     }
-                selected_track_setups.append(selected_track_setup)
 
         doc = {
             "environment": self.environment_name,
@@ -462,8 +469,9 @@ class RaceStore:
             "revision": self.config.opts("source", "revision"),
             "distribution-version": self.config.opts("source", "distribution.version"),
             "track": t.name,
+            "selected-challenge": selected_challenge,
+            "car": self.config.opts("benchmarks", "car"),
             "rounds": self.config.opts("benchmarks", "rounds"),
-            "selected-track-setups": selected_track_setups,
             "target-hosts": self.config.opts("launcher", "external.target.hosts"),
             "user-tag": self.config.opts("system", "user.tag")
         }
@@ -532,14 +540,13 @@ class Race:
         self.distribution_version = source["distribution-version"]
         self.track = source["track"]
         self.rounds = source["rounds"]
-        self.track_setups = []
-        for track_setup in source["selected-track-setups"]:
-            self.track_setups.append(SelectedTrackSetup(track_setup))
+        self.challenge = SelectedChallenge(source["selected-challenge"])
+        self.car = source["car"]
         self.target_hosts = source["target-hosts"]
         self.user_tag = source["user-tag"]
 
 
-class SelectedTrackSetup:
+class SelectedChallenge:
     def __init__(self, source):
         self.name = source["name"]
         self.benchmark_indexing = source["benchmark-phase-index"]

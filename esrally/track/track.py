@@ -87,6 +87,7 @@ class Index:
     """
     Defines an index in Elasticsearch.
     """
+
     def __init__(self, name, types):
         """
 
@@ -110,6 +111,7 @@ class Type:
     """
     Defines a type in Elasticsearch.
     """
+
     def __init__(self, name, mapping_file_name, document_file_name=None, number_of_documents=0, compressed_size_in_bytes=0,
                  uncompressed_size_in_bytes=0):
         """
@@ -140,7 +142,7 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url, track_setups, queries, index_name=None, type_name=None,
+    def __init__(self, name, short_description, description, source_root_url, challenges, queries, index_name=None, type_name=None,
                  number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None,
                  mapping_file_name=None, indices=None):
         """
@@ -158,9 +160,9 @@ class Track:
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL, three files should be located: the benchmark document file (see document_file_name), the mapping
         file (see mapping_file_name) and a readme (goes with the name "README.txt" as per convention).
-        :param track_setups: A list of one or more track setups to use. If in doubt, reuse the predefined list "track.track_setups". Rally's
-        default configuration assumes that each track defines at least one track setup with the name "defaults". This is not required but
-        simplifies usage.
+        :param challenges: A list of one or more challenges to use. If in doubt, reuse the predefined list "track.challenges". Rally's
+        default configuration assumes that each track defines at least one challenge with the name "append-no-conflicts".
+        This is not required but simplifies usage.
         :param queries: A list of queries to run in case searching should be benchmarked.
         :param index_name: The name of the index to create.
         :param type_name: The type name for this index.
@@ -176,7 +178,7 @@ class Track:
         self.short_description = short_description
         self.description = description
         self.source_root_url = source_root_url
-        self.track_setups = track_setups
+        self.challenges = challenges
         self.queries = queries
         self.readme_file_name = "README.txt"
         # multiple indices
@@ -200,12 +202,14 @@ class Track:
         return num_docs
 
 
-class CandidateSettings:
-    def __init__(self, config_snippet=None, logging_config=None, nodes=1, processors=1, heap=None,
+# This will eventually move out of track
+class Car:
+    def __init__(self, name, config_snippet=None, logging_config=None, nodes=1, processors=1, heap=None,
                  java_opts=None, gc_opts=None):
         """
         Creates new settings for a benchmark candidate.
 
+        :param name: A descriptive name for this car.
         :param config_snippet: A string snippet that will be appended as is to elasticsearch.yml of the benchmark candidate.
         :param logging_config: A string representing the entire contents of logging.yml. If not set, the factory defaults will be used.
         :param nodes: The number of nodes to start. Defaults to 1 node. All nodes are started on the same machine.
@@ -215,6 +219,7 @@ class CandidateSettings:
         :param java_opts: Additional Java options to pass to each node on startup.
         :param gc_opts: Additional garbage collector options to pass to each node on startup.
         """
+        self.name = name
         self.custom_config_snippet = config_snippet
         self.custom_logging_config = logging_config
         self.nodes = nodes
@@ -222,6 +227,9 @@ class CandidateSettings:
         self.heap = heap
         self.java_opts = java_opts
         self.gc_opts = gc_opts
+
+    def __str__(self):
+        return self.name
 
 
 class IndexIdConflict(Enum):
@@ -266,21 +274,19 @@ class IndexBenchmarkSettings:
         self.force_merge = force_merge
 
 
-class TrackSetup:
+class Challenge:
     """
-    A track setup defines the concrete operations that will be done and also influences system configuration
+    A challenge defines the concrete operations that will be done.
     """
 
     def __init__(self,
                  name,
                  description,
-                 candidate=CandidateSettings(),
                  benchmark=None):
         if benchmark is None:
             benchmark = {}
         self.name = name
         self.description = description
-        self.candidate = candidate
         self.benchmark = benchmark
 
     def __str__(self):
@@ -431,62 +437,39 @@ class Marshal:
             os.rename(tmp_data_set_path, data_set_path)
 
 
-track_setups = [
-    TrackSetup(
-        name="defaults",
-        description="append-only, using all default settings.",
-        candidate=CandidateSettings(),
+# This will eventually move out of track
+cars = [
+    Car(name="defaults"),
+    Car(name="4gheap", heap="4g"),
+    Car(name="two_nodes", nodes=2, processors=sysstats.logical_cpu_cores() // 2),
+    Car(name="verbose_iw", logging_config=mergePartsLogConfig)
+]
+
+challenges = [
+    Challenge(
+        name="append-no-conflicts",
+        description="Append documents without any ID conflicts",
         benchmark={
             BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings),
             BenchmarkPhase.stats: LatencyBenchmarkSettings(iteration_count=100),
             BenchmarkPhase.search: LatencyBenchmarkSettings(iteration_count=1000)
         }
     ),
-    TrackSetup(
-        name="4gheap",
-        description="same as Defaults except using a 4 GB heap (ES_HEAP_SIZE), because the ES default (-Xmx1g) sometimes hits OOMEs.",
-        candidate=CandidateSettings(heap="4g"),
-        benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings)
-        }
-    ),
-
-    TrackSetup(
-        name="fastsettings",
+    Challenge(
+        name="append-fast-no-conflicts",
         description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
-        candidate=CandidateSettings(heap="4g"),
         benchmark={
             BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=benchmarkFastSettings)
         }
     ),
 
-    TrackSetup(
-        name="fastupdates",
+    Challenge(
+        name="append-fast-with-conflicts",
         description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
                     "already exists in the index.",
-        candidate=CandidateSettings(heap="4g"),
         benchmark={
             BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=benchmarkFastSettings,
                                                          id_conflicts=IndexIdConflict.SequentialConflicts)
         }
-    ),
-
-    TrackSetup(
-        name="two_nodes_defaults",
-        description="append-only, using all default settings, but runs 2 nodes on 1 box (5 shards, 1 replica).",
-        # integer divide!
-        candidate=CandidateSettings(nodes=2, processors=sysstats.logical_cpu_cores() // 2),
-        benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings)
-        }
-    ),
-
-    TrackSetup(
-        name="defaults_verbose_iw",
-        description="Based on defaults but specifically set up to gather merge part times.",
-        candidate=CandidateSettings(logging_config=mergePartsLogConfig),
-        benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings)
-        }
-    ),
+    )
 ]
