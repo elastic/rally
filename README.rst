@@ -13,7 +13,6 @@ Please ensure that the following packages are installed before installing Rally:
 * Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8+
-* unzip (install via ``apt-get install unzip`` on  Debian based distributions or check your distribution's documentation)
 * Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
 * Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
 

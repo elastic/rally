@@ -60,11 +60,11 @@ class ProvisionerTests(TestCase):
 
     @mock.patch("builtins.open")
     @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-5.0.0-SNAPSHOT"])
-    @mock.patch("esrally.utils.io.unzip")
+    @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
-    def test_prepare(self, mock_path_exists, mock_rm, mock_ensure_dir, mock_unzip, mock_open):
+    def test_prepare(self, mock_path_exists, mock_rm, mock_ensure_dir, mock_decompress, mock_open):
         mock_path_exists.return_value = True
 
         cfg = config.Config()

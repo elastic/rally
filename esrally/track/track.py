@@ -355,8 +355,8 @@ class Marshal:
                     data_set_path = "%s/%s" % (data_set_root, type.document_file_name)
                     data_url = "%s/%s" % (track.source_root_url, type.document_file_name)
                     self._download(data_url, data_set_path, size_in_bytes=type.compressed_size_in_bytes)
-                    unzipped_data_set_path = self._unzip(data_set_path)
-                    data_set_paths[type] = unzipped_data_set_path
+                    decompressed_data_set_path = self._decompress(data_set_path)
+                    data_set_paths[type] = decompressed_data_set_path
 
         self._config.add(config.Scope.benchmark, "benchmarks", "dataset.path", data_set_paths)
         self._config.add(config.Scope.benchmark, "benchmarks", "mapping.path", mapping_paths)
@@ -410,12 +410,12 @@ class Marshal:
                 raise exceptions.SystemSetupError("Could not download from %s to %s. Please verify that data are available at %s and "
                                                   "check your internet connection." % (url, local_path, url))
 
-    def _unzip(self, data_set_path):
-        # we assume that track data are always compressed and try to unzip them before running the benchmark
+    def _decompress(self, data_set_path):
+        # we assume that track data are always compressed and try to decompress them before running the benchmark
         basename, extension = io.splitext(data_set_path)
         if not os.path.isfile(basename):
             logger.info("Unzipping track data from [%s] to [%s]." % (data_set_path, basename))
-            io.unzip(data_set_path, io.dirname(data_set_path))
+            io.decompress(data_set_path, io.dirname(data_set_path))
         return basename
 
     def _do_download_via_s3(self, url, data_set_path, size_in_bytes):

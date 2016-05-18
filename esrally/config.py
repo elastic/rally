@@ -139,7 +139,7 @@ class Config:
         self._opts = {
             "source::distribution.dir": "distributions",
             "build::gradle.tasks.clean": "clean",
-            "build::gradle.tasks.package": ":distribution:zip:assemble",
+            "build::gradle.tasks.package": ":distribution:tar:assemble",
             "build::log.dir": "build",
             "benchmarks::metrics.log.dir": "telemetry",
             # No more specific configuration per benchmark - if needed this has to be put into the track specification

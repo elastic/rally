@@ -3,7 +3,7 @@ Pipelines
 
 A pipeline is a series of steps that are performed to get benchmark results. This is *not* intended to customize the actual benchmark but rather what happens before and after a benchmark.
 
-An example will clarify the concept: If you want to benchmark a binary distribution of Elasticsearch, Rally has to download a ZIP file, unzip it, start Elasticsearch and then run the benchmark. However, if you want to benchmark a source build of Elasticsearch, it first has to build a ZIP with Gradle. So, in both cases, different steps are involved and that's what pipelines are for.
+An example will clarify the concept: If you want to benchmark a binary distribution of Elasticsearch, Rally has to download a distribution archive, decompress it, start Elasticsearch and then run the benchmark. However, if you want to benchmark a source build of Elasticsearch, it first has to build a ZIP with Gradle. So, in both cases, different steps are involved and that's what pipelines are for.
 
 You can get a list of all pipelines with ``esrally list pipelines``::
 

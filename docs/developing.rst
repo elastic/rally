@@ -11,7 +11,6 @@ Please ensure that the following packages are installed before installing Rally 
 * JDK 8+
 * Gradle 2.8+
 * git
-* unzip (install via ``apt-get install unzip`` on  Debian based distributions or check your distribution's documentation)
 * Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
 * Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
 

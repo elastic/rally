@@ -152,10 +152,10 @@ def download_benchmark_candidate(ctx, track):
 
     distributions_root = "%s/%s" % (ctx.config.opts("system", "root.dir"), ctx.config.opts("source", "distribution.dir"))
     io.ensure_dir(distributions_root)
-    distribution_path = "%s/elasticsearch-%s.zip" % (distributions_root, version)
+    distribution_path = "%s/elasticsearch-%s.tar.gz" % (distributions_root, version)
 
-    download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/zip/elasticsearch/%s/" \
-                   "elasticsearch-%s.zip" % (version, version)
+    download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
+                   "elasticsearch-%s.tar.gz" % (version, version)
     if not os.path.isfile(distribution_path):
         try:
             print("Downloading Elasticsearch %s ..." % version)

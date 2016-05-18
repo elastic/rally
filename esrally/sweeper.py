@@ -11,6 +11,6 @@ class Sweeper:
     def run(self, track):
         invocation_root = paths.Paths(self._config).invocation_root()
         log_root = paths.Paths(self._config).log_root()
-        io.zip(log_root, "%s/logs-%s.zip" % (invocation_root, track.name))
+        io.compress(log_root, "%s/logs-%s.zip" % (invocation_root, track.name))
         shutil.rmtree(log_root)
 

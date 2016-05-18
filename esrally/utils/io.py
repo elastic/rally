@@ -7,8 +7,6 @@ import gzip
 import zipfile
 import tarfile
 
-from esrally.utils import process
-
 
 def ensure_dir(directory):
     """
@@ -33,30 +31,28 @@ def _zipdir(source_directory, archive):
                 arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, "..")))
 
 
-def zip(source_directory, zip_name):
+def compress(source_directory, archive_name):
     """
     Compress a directory tree.
 
     :param source_directory: The source directory to compress. Must be readable.
-    :param zip_name: The absolute path including the file name of the ZIP archive. Must have the extension .zip.
+    :param archive_name: The absolute path including the file name of the archive. Must have the extension .zip.
     """
-    archive = zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED)
+    archive = zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED)
     _zipdir(source_directory, archive)
 
 
-def unzip(zip_name, target_directory):
+def decompress(zip_name, target_directory):
     """
     Decompresses the provided archive to the target directory. The following file extensions are supported:
 
-    * zip: Relies that the 'unzip' tool is available on the path
-    * bz2: Can be uncompressed using standard library facilities, so no external tool is required.
-    * gz: Can be uncompressed using standard library facilities, so no external tool is required.
-    * tar: Can be uncompressed using standard library facilities, so no external tool is required.
-    * tar.gz Can be uncompressed using standard library facilities, so no external tool is required.
-    * tgz Can be uncompressed using standard library facilities, so no external tool is required.
-    * tar.bz2 Can be uncompressed using standard library facilities, so no external tool is required.
-
-    Did not implement LZMA because LZMAFile is not thread-safe.
+    * zip
+    * bz2
+    * gz
+    * tar
+    * tar.gz
+    * tgz
+    * tar.bz2
 
     The decompression method is chosen based on the file extension.
 
@@ -66,42 +62,38 @@ def unzip(zip_name, target_directory):
     """
     filename, extension = splitext(zip_name)
     if extension == ".zip":
-        if not process.run_subprocess_with_logging("unzip %s -d %s" % (zip_name, target_directory)):
-            raise RuntimeError("Could not unzip %s to %s" % (zip_name, target_directory))
+        _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
-        _do_unzip(target_directory, filename, bz2.BZ2File(zip_name, "rb"))
+        _do_decompress(target_directory, bz2.open(zip_name))
     elif extension == ".gz":
-        _do_unzip(target_directory, filename, gzip.GzipFile(zip_name, "rb"))
-    elif extension == ".tar":
-        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "rb"))
-    elif extension == ".tar.gz":
-        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "r:gz"))
-    elif extension == ".tgz":
-        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "r:gz"))
-    elif extension == ".tar.bz2":
-        _do_unzip(target_directory, filename, tarfile.TarFile(zip_name, "r:bz2"))
-
+        _do_decompress(target_directory, gzip.open(zip_name))
+    elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
+        _do_decompress(target_directory, tarfile.open(zip_name))
     else:
-        raise RuntimeError("Unsupported file extension '%s'. Cannot unzip '%s'" % (extension, zip_name))
+        raise RuntimeError("Unsupported file extension [%s]. Cannot decompress [%s]" % (extension, zip_name))
 
 
-def _do_unzip(target_directory, target_filename, compressed_file):
-    target_file = os.path.join(target_directory, target_filename)
+def _do_decompress(target_directory, compressed_file):
     try:
-        with open(target_file, "wb") as extracted:
-            for data in iter(lambda: compressed_file.read(100 * 1024), b''):
-                extracted.write(data)
+        compressed_file.extractall(path=target_directory)
     except BaseException:
-        raise RuntimeError("Could not uncompress provided archive. Cannot unzip '%s'" % target_filename)
+        raise RuntimeError("Could not decompress provided archive [%s]" % compressed_file.filename)
+    finally:
+        compressed_file.close()
+
 
 # just in a dedicated method to ease mocking
 def dirname(path):
     return os.path.dirname(path)
 
 
-# just in a dedicated method to ease mocking
 def splitext(file_name):
-    return os.path.splitext(file_name)
+    if file_name.endswith(".tar.gz"):
+        return file_name[0:-7], file_name[-7:]
+    elif file_name.endswith(".tar.bz2"):
+        return file_name[0:-8], file_name[-8:]
+    else:
+        return os.path.splitext(file_name)
 
 
 def get_size(start_path="."):

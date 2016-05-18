@@ -28,9 +28,9 @@ class Builder:
     def add_binary_to_config(self):
         src_dir = self._config.opts("source", "local.src.dir")
         try:
-            binary = glob.glob("%s/distribution/zip/build/distributions/*.zip" % src_dir)[0]
+            binary = glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % src_dir)[0]
         except IndexError:
-            raise ImproperlyConfigured("Couldn't find a zip distribution.")
+            raise ImproperlyConfigured("Couldn't find a tar.gz distribution.")
         self._config.add(config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
     def _exec(self, task_key):

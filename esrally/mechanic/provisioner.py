@@ -43,7 +43,7 @@ class Provisioner:
         logger.info("Preparing candidate locally in %s." % install_dir)
         io.ensure_dir(install_dir)
         logger.info("Unzipping %s to %s" % (binary, install_dir))
-        io.unzip(binary, install_dir)
+        io.decompress(binary, install_dir)
         binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
         self._config.add(config.Scope.benchmark, "provisioning", "local.binary.path", binary_path)
 
