@@ -64,7 +64,9 @@ def decompress(zip_name, target_directory):
     if extension == ".zip":
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
-        _do_decompress(target_directory, bz2.open(zip_name))
+        with open(filename, 'wb') as new_file, bz2.BZ2File(zip_name, 'rb') as file:
+            for data in iter(lambda: file.read(100 * 1024), b''):
+                new_file.write(data)
     elif extension == ".gz":
         _do_decompress(target_directory, gzip.open(zip_name))
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
