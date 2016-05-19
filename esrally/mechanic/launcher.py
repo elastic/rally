@@ -159,10 +159,10 @@ class InProcessLauncher(Launcher):
         self.cfg.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
         processor_count = car.processors
 
-        cmd = ["bin/elasticsearch", "-Ees.node.name=%s" % node_name]
+        cmd = ["bin/elasticsearch", "-Enode.name=%s" % node_name]
         if processor_count is not None and processor_count > 1:
-            cmd.append("-Ees.processors=%s" % processor_count)
-        cmd.append("-Ees.path.logs=%s" % server_log_dir)
+            cmd.append("-Eprocessors=%s" % processor_count)
+        cmd.append("-Epath.logs=%s" % server_log_dir)
         logger.info("ES launch: %s" % str(cmd))
         return cmd
 
