@@ -315,8 +315,9 @@ class RaceControl:
 
             print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
         elif what == "cars":
-            #TODO dm: Implement me
-            print("Error: Not yet implemented")
+            print("Available cars:\n")
+            print(tabulate.tabulate([[car.name] for car in track.cars],
+                                    headers=["Name"]))
         else:
             raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
 

@@ -65,8 +65,9 @@ def parse_args():
     list_parser.add_argument(
         "configuration",
         metavar="configuration",
-        help="The configuration for which Rally should show the available options. Possible values are: telemetry, tracks, pipelines, races",
-        choices=["telemetry", "tracks", "pipelines", "races"])
+        help="The configuration for which Rally should show the available options. "
+             "Possible values are: telemetry, tracks, pipelines, races, cars",
+        choices=["telemetry", "tracks", "pipelines", "races", "cars"])
     list_parser.add_argument(
         "--limit",
         help="Limit the number of search results for recent races (default: 10).",
