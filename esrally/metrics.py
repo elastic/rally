@@ -422,7 +422,7 @@ class EsMetricsStore:
         }
 
 
-class RaceStore:
+class EsRaceStore:
     RACE_DOC_TYPE = "races"
 
     def __init__(self,
@@ -475,7 +475,7 @@ class RaceStore:
             "target-hosts": self.config.opts("launcher", "external.target.hosts"),
             "user-tag": self.config.opts("system", "user.tag")
         }
-        self.client.index(index_name(trial_timestamp), RaceStore.RACE_DOC_TYPE, doc)
+        self.client.index(index_name(trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc)
 
     def list(self):
         filters = [{
@@ -499,7 +499,7 @@ class RaceStore:
                 }
             ]
         }
-        result = self.client.search(index="rally-*", doc_type=RaceStore.RACE_DOC_TYPE, body=query)
+        result = self.client.search(index="rally-*", doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
         if result["hits"]["total"] > 0:
             return [Race(v["_source"]) for v in result["hits"]["hits"]]
         else:
@@ -524,7 +524,7 @@ class RaceStore:
                 }
             }
         }
-        result = self.client.search(index="rally-*", doc_type=RaceStore.RACE_DOC_TYPE, body=query)
+        result = self.client.search(index="rally-*", doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
         if result["hits"]["total"] == 1:
             return Race(result["hits"]["hits"][0]["_source"])
         else:
