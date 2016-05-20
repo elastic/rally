@@ -455,7 +455,7 @@ challenges = [
         benchmark={
             BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings),
             BenchmarkPhase.stats: LatencyBenchmarkSettings(iteration_count=100),
-            BenchmarkPhase.search: LatencyBenchmarkSettings(iteration_count=100)
+            BenchmarkPhase.search: LatencyBenchmarkSettings(iteration_count=1000)
         }
     ),
     Challenge(
