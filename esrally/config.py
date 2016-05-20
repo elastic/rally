@@ -5,7 +5,7 @@ import logging
 import configparser
 from enum import Enum
 
-from esrally.utils import io, format
+from esrally.utils import io, format, convert
 
 logger = logging.getLogger("rally.config")
 
@@ -195,13 +195,14 @@ class Config:
             config["reporting"].pop("report.base.dir")
             config["reporting"].pop("output.html.report.filename")
         if current_version == 3:
+            root_dir = config["system"]["root.dir"]
             print("*****************************************************************************************")
             print("")
             print("You have an old configuration of Rally. Rally has now a much simpler setup")
             print("routine which will autodetect lots of settings for you and it also does not");
             print("require you to setup a metrics store anymore.")
             print("")
-            print("I will now migrate your configuration but if you don't need advanced features")
+            print("Rally will now migrate your configuration but if you don't need advanced features")
             print("like a metrics store, then you should delete the configuration directory:")
             print("")
             print("  rm -rf %s" % self._config_file.config_dir())
@@ -210,10 +211,13 @@ class Config:
             print("")
             print("  esrally configure")
             print("")
-            print("If you still want to configure everything by yourself, then use the advanced configuration:")
+            print("Please also note you have %.1f GB of data in your current benchmark directory at"
+                  % convert.bytes_to_gb(io.get_size(root_dir)))
+            print()
+            print("  %s" % root_dir)
             print("")
-            print("  esrally configure --advanced-config")
-            print("")
+            print("You might want to clean up this directory also.")
+            print()
             print("For more details please see %s" % format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
             print("")
             print("*****************************************************************************************")
