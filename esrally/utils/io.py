@@ -1,6 +1,6 @@
 import os
 import errno
-import glob
+import re
 import subprocess
 import bz2
 import gzip
@@ -107,12 +107,23 @@ def get_size(start_path="."):
     return total_size
 
 
-def _run(args, fallback=None):
+def _run(args, fallback=None, only_first_line=False):
     try:
         lines = subprocess.Popen(args, stdout=subprocess.PIPE).communicate()[0].splitlines()
-        return lines[0].decode("utf-8")
+        result_lines = [line.decode("utf-8") for line in lines]
+        if only_first_line:
+            return result_lines[0]
+        else:
+            return result_lines
     except:
         return fallback
+
+
+def _read_symlink(path):
+    try:
+        return os.readlink(path)
+    except FileNotFoundError:
+        return None
 
 
 def guess_install_location(binary_name, fallback=None):
@@ -123,10 +134,10 @@ def guess_install_location(binary_name, fallback=None):
     :param fallback: A fallback to return if the binary could not be found on the path.
     :return: The full path to the provided binary or the provided fallback.
     """
-    return _run(["which", binary_name])
+    return _run(["which", binary_name], only_first_line=True)
 
 
-def guess_java_home(major_version=8, fallback=None):
+def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_read_symlink):
     """
     Tries to find the JDK root directory for the provided version.
 
@@ -136,29 +147,36 @@ def guess_java_home(major_version=8, fallback=None):
     """
     # Mac OS X
     if major_version < 9:
-        java_home = _run(["/usr/libexec/java_home", "-F", "-v", "1.%d" % major_version])
+        java_home = runner(["/usr/libexec/java_home", "-F", "-v", "1.%d" % major_version])
     else:
-        java_home = _run(["/usr/libexec/java_home", "-F", "-v", str(major_version)])
+        java_home = runner(["/usr/libexec/java_home", "-F", "-v", str(major_version)])
 
     if java_home:
-        return java_home
+        return java_home[0]
     else:
-        return fallback
-        #TODO dm: Add better support for other platforms
-        # try:
-        #     return os.environ["JAVA_HOME"]
-        # except KeyError:
-        #     return fallback
+        # Debian based distributions:
+        #
+        # update-alternatives --list java
+        # /usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java
+        # /usr/lib/jvm/java-7-oracle/jre/bin/java
+        # /usr/lib/jvm/java-8-oracle/jre/bin/java
+        java_home = runner(["update-alternatives", "--list", "java"])
+        if java_home:
+            debian_jdk_pattern = re.compile(r"/.*/(java-%d).*/jre/bin/java" % major_version)
+            for j in java_home:
+                if debian_jdk_pattern.match(j):
+                    return j[:-len("/jre/bin/java")]
+        else:
+            # Red Hat based distributions
+            #
+            # [vagrant@localhost alternatives]$ ls -l /etc/alternatives/jre_1.[789].0
+            # lrwxrwxrwx. 1 root root 62 May 20 07:51 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.91-5.b14.fc23.x86_64/jre
+            #
+            # We could also use the output of "alternatives --display java" on Red Hat but the output is so
+            # verbose that it's easier to use the links.
+            path = read_symlink("/etc/alternatives/java_sdk_1.%d.0" % major_version)
+            if path:
+                return path
+            else:
+                return fallback
 
-# try:
-    #     return os.environ["JAVA_HOME"]
-    # except KeyError:
-    #     pass
-    # obviously JAVA_HOME is not set, we try a bit harder for our developers on a Mac
-    #print("globbing for [/Library/Java/JavaVirtualMachines/jdk1.%s*.jdk]" % major_version)
-    #results = glob.glob("/Library/Java/JavaVirtualMachines/jdk1.%s*.jdk" % major_version)
-    # don't do magic guesses if there are multiple versions and have the user specify one
-    #if results and len(results) == 1:
-    #    return results[0] + "/Contents/Home"
-    #else:
-    #    return fallback

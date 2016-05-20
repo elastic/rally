@@ -332,11 +332,9 @@ class Ps(InternalTelemetryDevice):
         self._t = None
 
     def attach_to_node(self, node):
-        disk = self._config.opts("benchmarks", "metrics.stats.disk.device", mandatory=False)
-        logger.info("Gathering disk device statistics for disk [%s]" % disk)
         self._t = {}
         for phase in track.BenchmarkPhase:
-            self._t[phase] = GatherProcessStats(node, disk, self._metrics_store, phase)
+            self._t[phase] = GatherProcessStats(node, self._metrics_store, phase)
 
     def on_benchmark_start(self, phase):
         if self._t and phase:
@@ -348,12 +346,11 @@ class Ps(InternalTelemetryDevice):
 
 
 class GatherProcessStats(threading.Thread):
-    def __init__(self, node, disk_name, metrics_store, phase):
+    def __init__(self, node, metrics_store, phase):
         threading.Thread.__init__(self)
         self.stop = False
         self.node = node
         self.process = sysstats.setup_process_stats(node.process.pid)
-        self.disk_name = disk_name
         self.metrics_store = metrics_store
         self.phase = phase
         self.disk_start = None
@@ -364,7 +361,7 @@ class GatherProcessStats(threading.Thread):
         self.join()
         # Be aware the semantics of write counts etc. are different for disk and process statistics.
         # Thus we're conservative and only report I/O bytes now.
-        disk_end = sysstats.disk_io_counters(self.disk_name)
+        disk_end = sysstats.disk_io_counters()
         process_end = sysstats.process_io_counters(self.process)
 
         self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes_%s" % self.phase.name,
@@ -385,7 +382,7 @@ class GatherProcessStats(threading.Thread):
             return disk_end.write_bytes - self.disk_start.write_bytes
 
     def run(self):
-        self.disk_start = sysstats.disk_io_counters(self.disk_name)
+        self.disk_start = sysstats.disk_io_counters()
         self.process_start = sysstats.process_io_counters(self.process)
         if self.process_start:
             logger.info("Using more accurate process-based I/O counters.")
@@ -413,8 +410,6 @@ class EnvironmentInfo(InternalTelemetryDevice):
             node_name = node["name"]
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
-
-
 
     def attach_to_node(self, node):
         # we gather also host level metrics here although they will just be overridden for multiple nodes on the same node (which is no
@@ -456,7 +451,6 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_logical_cores", node["os"]["available_processors"])
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
-
 
 
 class NodeStats(InternalTelemetryDevice):

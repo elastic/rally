@@ -226,6 +226,7 @@ class Config:
                 config["reporting"]["datastore.type"] = "in-memory"
             # Remove obsolete settings
             config["build"].pop("maven.bin")
+            config["benchmarks"].pop("metrics.stats.disk.device")
             # all migrations done
         self._config_file.store(config)
         logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
@@ -234,6 +235,7 @@ class Config:
         return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
+        logger.debug("Autodetected %s at [%s]" % (what, result))
         if additional_message:
             message = " (%s)" % additional_message
         else:
@@ -254,8 +256,13 @@ class Config:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         """
         if advanced_config:
+            print("Running advanced configuration. You can get additional help at:")
+            print("")
+            print("  %s" % format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
+            print("")
+
             logger.debug("Running advanced configuration routine.")
-            # TODO dm: Provide a hint to user docs (and also add them) so users can follow along
+            print("")
         else:
             print("Running simple configuration. You can run the advanced configuration with:")
             print("")
@@ -318,13 +325,11 @@ class Config:
 
         if advanced_config:
             env_name = self._ask_env_name()
-            stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")
             data_store_type = "elasticsearch"
             data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
         else:
             # Does not matter too much for an in-memory store
             env_name = "local"
-            stats_disk_device = ""
             data_store_type = "in-memory"
             data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
 
@@ -353,7 +358,6 @@ class Config:
 
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${system:root.dir}/data"
-        config["benchmarks"]["metrics.stats.disk.device"] = stats_disk_device
 
         config["reporting"] = {}
         config["reporting"]["datastore.type"] = data_store_type

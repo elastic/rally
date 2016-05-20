@@ -122,3 +122,15 @@ dashboard is delivered with Rally in ``$PACKAGE_ROOT/esrally/resources/kibana.js
 2. Create an index pattern ``rally-*`` and use ``trial-timestamp`` as time-field name (you might need to import some data first)
 3. Go to Settings > Objects and import ``$PACKAGE_ROOT/esrally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` with your environment name before uploading it to Kibana.
 
+Configuration Options
+~~~~~~~~~~~~~~~~~~~~~
+
+Rally will ask you a few more things in the advanced setup:
+
+* Elasticsearch project directory: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with Gradle in this directory (it runs ``gradle clean`` and ``gradle :distribution:tar:assemble``).
+* JDK 8 root directory: Rally will only ask this if it could not autodetect the JDK 8 home by itself. Just enter the root directory of the JDK you want to use.
+* Name for this benchmark environment: You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different metrics.
+* metrics store settings: Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. There is currently no support for choosing the in-memory metrics store when you run the advanced configuration. If you really need it, please raise an issue on Github.
+
+
+

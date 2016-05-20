@@ -32,11 +32,8 @@ def os_version():
     return platform.uname().release
 
 
-def disk_io_counters(disk_name=None):
-    if disk_name is not None and disk_name != "":
-        return psutil.disk_io_counters(perdisk=True)[disk_name]
-    else:
-        return psutil.disk_io_counters(perdisk=False)
+def disk_io_counters():
+    return psutil.disk_io_counters(perdisk=False)
 
 
 def process_io_counters(handle):
