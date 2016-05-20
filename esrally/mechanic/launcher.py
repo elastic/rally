@@ -90,6 +90,25 @@ class InProcessLauncher(Launcher):
     """
     PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
 
+    # TODO 68: We should externalize this (see #68)
+    ES_CMD_LINE_OPTS_PER_VERSION = {
+        "5.0.0-alpha1": {
+            "processors": "-Ees.processors",
+            "log_path": "-Ees.path.logs",
+            "node_name": "-Ees.node.name"
+        },
+        "5.0.0-alpha2": {
+            "processors": "-Ees.processors",
+            "log_path": "-Ees.path.logs",
+            "node_name": "-Ees.node.name"
+        },
+        "master": {
+            "processors": "-Eprocessors",
+            "log_path": "-Epath.logs",
+            "node_name": "-Enode.name"
+        }
+    }
+
     def __init__(self, cfg, clock=time.Clock, cluster_factory_class=ClusterFactory):
         super().__init__(cfg, cluster_factory_class)
         self._clock = clock
@@ -157,14 +176,25 @@ class InProcessLauncher(Launcher):
     def prepare_cmd(self, car, node_name):
         server_log_dir = "%s/server" % self.cfg.opts("system", "challenge.log.dir")
         self.cfg.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
-        processor_count = car.processors
+        distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
 
-        cmd = ["bin/elasticsearch", "-Enode.name=%s" % node_name]
+        cmd = ["bin/elasticsearch",
+               "%s=%s" % (self.cmd_line_opt(distribution_version, "node_name"), node_name),
+               "%s=%s" % (self.cmd_line_opt(distribution_version, "log_path"), server_log_dir)
+               ]
+        processor_count = car.processors
         if processor_count is not None and processor_count > 1:
-            cmd.append("-Eprocessors=%s" % processor_count)
-        cmd.append("-Epath.logs=%s" % server_log_dir)
+            cmd.append("%s=%s" % (self.cmd_line_opt(distribution_version, "processors"), processor_count))
         logger.info("ES launch: %s" % str(cmd))
         return cmd
+
+    def cmd_line_opt(self, distribution_version, key):
+        if distribution_version and len(distribution_version.strip()) > 0:
+            if distribution_version in InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION:
+                print("using still not master")
+                return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION[distribution_version][key]
+        # assume master, it will fail anyway otherwise and we can add the version then
+        return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION["master"][key]
 
     def _start_process(self, cmd, env, node_name):
         install_dir = self.cfg.opts("provisioning", "local.binary.path")
