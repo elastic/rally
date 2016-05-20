@@ -191,7 +191,6 @@ class InProcessLauncher(Launcher):
     def cmd_line_opt(self, distribution_version, key):
         if distribution_version and len(distribution_version.strip()) > 0:
             if distribution_version in InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION:
-                print("using still not master")
                 return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION[distribution_version][key]
         # assume master, it will fail anyway otherwise and we can add the version then
         return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION["master"][key]
