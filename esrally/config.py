@@ -5,7 +5,7 @@ import logging
 import configparser
 from enum import Enum
 
-from esrally.utils import io
+from esrally.utils import io, format
 
 logger = logging.getLogger("rally.config")
 
@@ -43,7 +43,7 @@ class ConfigFile:
         return config
 
     def store(self, config):
-        io.ensure_dir(self._config_dir())
+        io.ensure_dir(self.config_dir())
         with open(self.location, "w") as configfile:
             config.write(configfile)
 
@@ -52,7 +52,7 @@ class ConfigFile:
         logger.info("Creating a backup of the current config file at [%s]." % config_file)
         shutil.copyfile(config_file, "%s.bak" % config_file)
 
-    def _config_dir(self):
+    def config_dir(self):
         return "%s/.rally" % os.getenv("HOME")
 
     @property
@@ -61,11 +61,11 @@ class ConfigFile:
             config_name_suffix = "-%s" % self.config_name
         else:
             config_name_suffix = ""
-        return "%s/rally%s.ini" % (self._config_dir(), config_name_suffix)
+        return "%s/rally%s.ini" % (self.config_dir(), config_name_suffix)
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 3
+    CURRENT_CONFIG_VERSION = 4
 
     ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
 
@@ -179,16 +179,14 @@ class Config:
             logger.info("Migrating config from version [1] to [2]")
             current_version = 2
             config["meta"]["config.version"] = str(current_version)
-            # Give the user a hint what's going on
-            print("Metrics data are now stored in a dedicated Elasticsearch instance. Please provide details below")
-            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
-            config["reporting"]["datastore.host"] = data_store_host
-            config["reporting"]["datastore.port"] = data_store_port
-            config["reporting"]["datastore.secure"] = data_store_secure
-            config["reporting"]["datastore.user"] = data_store_user
-            config["reporting"]["datastore.password"] = data_store_password
-            env_name = self._ask_env_name()
-            config["system"]["env.name"] = env_name
+            # no need to ask the user now if we are about to upgrade to version 4
+            config["reporting"]["datastore.type"] = "in-memory"
+            config["reporting"]["datastore.host"] = ""
+            config["reporting"]["datastore.port"] = ""
+            config["reporting"]["datastore.secure"] = ""
+            config["reporting"]["datastore.user"] = ""
+            config["reporting"]["datastore.password"] = ""
+            config["system"]["env.name"] = "local"
         if current_version == 2:
             logger.info("Migrating config from version [2] to [3]")
             current_version = 3
@@ -196,8 +194,38 @@ class Config:
             # Remove obsolete settings
             config["reporting"].pop("report.base.dir")
             config["reporting"].pop("output.html.report.filename")
-
-
+        if current_version == 3:
+            print("*****************************************************************************************")
+            print("")
+            print("You have an old configuration of Rally. Rally has now a much simpler setup")
+            print("routine which will autodetect lots of settings for you and it also does not");
+            print("require you to setup a metrics store anymore.")
+            print("")
+            print("I will now migrate your configuration but if you don't need advanced features")
+            print("like a metrics store, then you should delete the configuration directory:")
+            print("")
+            print("  rm -rf %s" % self._config_file.config_dir())
+            print("")
+            print("and then rerun Rally's configuration routine:")
+            print("")
+            print("  esrally configure")
+            print("")
+            print("If you still want to configure everything by yourself, then use the advanced configuration:")
+            print("")
+            print("  esrally configure --advanced-config")
+            print("")
+            print("For more details please see %s" % format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
+            print("")
+            print("*****************************************************************************************")
+            logger.info("Migrating config from version [3] to [4]")
+            current_version = 4
+            config["meta"]["config.version"] = str(current_version)
+            if len(config["reporting"]["datastore.host"]) > 0:
+                config["reporting"]["datastore.type"] = "elasticsearch"
+            else:
+                config["reporting"]["datastore.type"] = "in-memory"
+            # Remove obsolete settings
+            config["build"].pop("maven.bin")
             # all migrations done
         self._config_file.store(config)
         logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
@@ -205,7 +233,19 @@ class Config:
     def _stored_config_version(self):
         return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
-    # full_config -> intended for nightlies
+    def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
+        if additional_message:
+            message = " (%s)" % additional_message
+        else:
+            message = ""
+
+        if result:
+            print("  %s: [%s]" % (what, format.green("✓")))
+        elif warn_if_missing:
+            print("  %s: [%s]%s" % (what, format.yellow("✕"), message))
+        else:
+            print("  %s: [%s]%s" % (what, format.red("✕"), message))
+
     def create_config(self, advanced_config=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
@@ -213,67 +253,97 @@ class Config:
 
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         """
+        if advanced_config:
+            logger.debug("Running advanced configuration routine.")
+            # TODO dm: Provide a hint to user docs (and also add them) so users can follow along
+        else:
+            print("Running simple configuration. You can run the advanced configuration with:")
+            print("")
+            print("  esrally configure --advanced-config")
+            print("")
+            logger.debug("Running simple configuration routine.")
+
         if self.config_present():
             print("\nWARNING: Will overwrite existing config file at [%s]\n" % self._config_file.location)
+            logger.debug("Detected an existing configuration file at [%s]" % self._config_file.location)
         else:
-            print("Rally has not detected any configuration file at %s. It will ask a few questions about the environment.\n\n" %
-                  self._config_file.location)
+            logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine." % self._config_file.location)
 
-        print("The benchmark root directory contains benchmark data, logs, etc. . It will consume several GB of free space depending on "
-              "which benchmarks are executed (expect at least 10 GB).")
-        benchmark_root_dir = self._ask_property("Enter the benchmark root directory (will be created automatically)")
-        env_name = self._ask_env_name()
+        # Autodetect settings
+        print("[✓] Autodetecting available third-party software")
+        git_path = io.guess_install_location("git")
+        gradle_bin = io.guess_install_location("gradle")
+        # default_jdk_7 = io.guess_java_home(major_version=7)
+        default_jdk_8 = io.guess_java_home(major_version=8)
 
-        only_binary = self._ask_property("Do you want to benchmark only official binary distributions of Elasticsearch? Note: If you "
-                                         "answer with 'Yes' you will not need certain software (like Gradle or git) but you will not "
-                                         "be able to benchmark the latest development versions from Elasticsearch unless you reconfigure "
-                                         "Rally with esrally --configure again.",
-                                         check_pattern=Config.BOOLEAN_PATTERN, default_value="No")
+        self.print_detection_result("git    ", git_path)
+        self.print_detection_result("gradle ", gradle_bin)
+        # self.print_detection_result("JDK 7  ", default_jdk_7, warn_if_missing=True, additional_message="Cannot benchmark Elasticsearch 2.x")
+        self.print_detection_result("JDK 8  ", default_jdk_8,
+                                    warn_if_missing=True,
+                                    additional_message="You cannot benchmark Elasticsearch 5.x without a JDK 8 installation")
+        # self.print_detection_result("JDK 9 ", default_jdk_9, warn_if_missing=True)
+        print("")
 
-        if not (self._to_bool(only_binary)):
-            default_src_dir = "%s/src" % benchmark_root_dir
-            source_dir = self._ask_property("Enter the directory where sources are located (your Elasticsearch project directory)",
+        # users that don't have git and gradle cannot benchmark from sources
+        benchmark_from_sources = git_path and gradle_bin
+
+        if not benchmark_from_sources:
+            print("**********************************************************************************")
+            print("You don't have the necessary software to benchmark source builds of Elasticsearch.")
+            print("")
+            print("You can still benchmark binary distributions with e.g.:")
+            print("")
+            print("  esrally --pipeline=from-distribution --distribution-version=5.0.0-alpha2")
+            print("")
+            print("See %s" % format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
+            print("**********************************************************************************")
+            print("")
+
+        root_dir = "%s/benchmarks" % self._config_file.config_dir()
+        print("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
+
+        if benchmark_from_sources:
+            default_src_dir = "%s/src" % root_dir
+            source_dir = self._ask_property("Enter your Elasticsearch project directory:",
                                             default_value=default_src_dir)
             # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
-            repo_url = self._ask_property("Enter the Elasticsearch repo URL", default_value="https://github.com/elastic/elasticsearch.git")
-            default_gradle_location = io.guess_install_location("gradle", fallback="/usr/local/bin/gradle")
-            gradle_bin = self._ask_property("Enter the full path to the Gradle binary", default_value=default_gradle_location,
-                                            check_path_exists=True)
-            if advanced_config:
-                default_mvn_location = io.guess_install_location("mvn", fallback="/usr/local/bin/mvn")
-                maven_bin = self._ask_property("Enter the full path to the Maven 3 binary", default_value=default_mvn_location,
-                                               check_path_exists=True)
-            else:
-                maven_bin = ""
-        default_jdk_8 = io.guess_java_home(major_version=8, fallback="")
-        jdk8_home = self._ask_property(
-            "Enter the JDK 8 root directory (e.g. something like /Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home on a Mac)",
-            default_value=default_jdk_8,
-            check_path_exists=True)
-        if advanced_config:
-            stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")
-        else:
-            stats_disk_device = ""
+            repo_url = "https://github.com/elastic/elasticsearch.git"
 
-        data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
+        if default_jdk_8:
+            jdk8_home = default_jdk_8
+        else:
+            print("")
+            jdk8_home = self._ask_property("Enter the JDK 8 root directory:", check_path_exists=True)
+
+        if advanced_config:
+            env_name = self._ask_env_name()
+            stats_disk_device = self._ask_property("Enter the HDD device name for stats (e.g. /dev/disk1)")
+            data_store_type = "elasticsearch"
+            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
+        else:
+            # Does not matter too much for an in-memory store
+            env_name = "local"
+            stats_disk_device = ""
+            data_store_type = "in-memory"
+            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
 
         config = configparser.ConfigParser()
         config["meta"] = {}
         config["meta"]["config.version"] = str(self.CURRENT_CONFIG_VERSION)
 
         config["system"] = {}
-        config["system"]["root.dir"] = benchmark_root_dir
+        config["system"]["root.dir"] = root_dir
         config["system"]["log.root.dir"] = "logs"
         config["system"]["env.name"] = env_name
 
-        if not (self._to_bool(only_binary)):
+        if benchmark_from_sources:
             config["source"] = {}
             config["source"]["local.src.dir"] = source_dir
             config["source"]["remote.repo.url"] = repo_url
 
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
-            config["build"]["maven.bin"] = maven_bin
 
         config["provisioning"] = {}
         config["provisioning"]["local.install.dir"] = "install"
@@ -286,6 +356,7 @@ class Config:
         config["benchmarks"]["metrics.stats.disk.device"] = stats_disk_device
 
         config["reporting"] = {}
+        config["reporting"]["datastore.type"] = data_store_type
         config["reporting"]["datastore.host"] = data_store_host
         config["reporting"]["datastore.port"] = data_store_port
         config["reporting"]["datastore.secure"] = data_store_secure
@@ -294,7 +365,19 @@ class Config:
 
         self._config_file.store(config)
 
-        print("\nConfiguration successfully written to '%s'. Please rerun esrally now." % self._config_file.location)
+        print("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % self._config_file.location)
+        print("")
+        if benchmark_from_sources:
+            print("To benchmark the latest version of Elasticsearch with the default benchmark run:")
+            print("")
+            print("  esrally --revision=latest")
+        else:
+            print("To benchmark Elasticsearch 5.0.0-alpha2 with the default benchmark run:")
+            print("")
+            print("  esrally --pipeline=from-distribution --distribution-version=5.0.0-alpha2")
+
+        print()
+        print("For more help see the user documentation at %s" % format.link("https://esrally.readthedocs.io"))
 
     def _ask_data_store(self):
         data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")

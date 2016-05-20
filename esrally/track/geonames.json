@@ -1,0 +1,132 @@
+{
+  "meta": {
+    # can be derived from file name -> convention over configuration
+    "name": "geonames",
+    "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+    "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+  },
+  # per phase?!?
+  "clients": {
+    # do we really want to hard-code this in the benchmark?
+    "count": 8,
+    "connections-per-client": 4,
+    "compression": false
+    # authentication? abhängig vom serverseitigen Setup!
+  },
+
+  "indices": [
+    {
+      "name": "geonames",
+      "types": [
+        {
+          #TODO: Allow generators here - how do we run the generator (i.e. arbitrary Python code)?
+          "name": "type",
+          "documents": "documents.json.bz2",
+          "document-count": 8647880,
+          "compressed_size_in_bytes": 197857614,
+          "uncompressed_size_in_bytes": 2790927196,
+          "mapping": "mappings.json"
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "index": {
+        "bulk-size": 5000
+      }
+    },
+    {
+      "stats": {}
+    },
+    {
+      "search": {
+        # 1 operation per second per client per connection
+        "target-throughput": 1,
+        "warmup-iterations": 1000,
+        "iterations": 1000,
+        "queries": [
+          {
+            "default": {
+              "body": {
+                "query": {
+                  "match_all": {}
+                }
+              }
+            }
+          },
+          {
+            "term": {}
+          },
+          {
+            "phrase": {
+              "body": {
+                "query": {
+                  "match_phrase": {
+                    "name": "Sankt Georgen"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "country_agg_uncached": {
+              "cache": false,
+              "body": {
+                "size": 0,
+                "aggs": {
+                  "country_population": {
+                    "terms": {
+                      "field": "country_code"
+                    },
+                    "aggs": {
+                      "sum_population": {
+                        "sum": {
+                          "field": "population"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "country_agg_cached": {
+              "cache": true,
+              "body": {
+                "size": 0,
+                "aggs": {
+                  "country_population": {
+                    "terms": {
+                      "field": "country_code"
+                    },
+                    "aggs": {
+                      "sum_population": {
+                        "sum": {
+                          "field": "population"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "scroll": {
+              "type": "scroll",
+              "size": 1000,
+              "pages": 25
+              # no query here - assume match_all() by default
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+#TODO: Introduce a repository concept and search benchmark data in the given repositories
+# Default repository: http://benchmarks.elastic.co/corpora
+

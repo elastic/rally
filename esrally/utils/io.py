@@ -107,6 +107,14 @@ def get_size(start_path="."):
     return total_size
 
 
+def _run(args, fallback=None):
+    try:
+        lines = subprocess.Popen(args, stdout=subprocess.PIPE).communicate()[0].splitlines()
+        return lines[0].decode("utf-8")
+    except:
+        return fallback
+
+
 def guess_install_location(binary_name, fallback=None):
     """
     Checks whether a given binary is available on the user's path.
@@ -115,12 +123,7 @@ def guess_install_location(binary_name, fallback=None):
     :param fallback: A fallback to return if the binary could not be found on the path.
     :return: The full path to the provided binary or the provided fallback.
     """
-    try:
-        lines = subprocess.Popen(["which", binary_name], stdout=subprocess.PIPE).communicate()[0].splitlines()
-        return lines[0].decode("utf-8")
-    except BaseException:
-        # could not determine location
-        return fallback
+    return _run(["which", binary_name])
 
 
 def guess_java_home(major_version=8, fallback=None):
@@ -131,14 +134,31 @@ def guess_java_home(major_version=8, fallback=None):
     :param fallback: The fallback if the JDK home could not be found.
     :return: The full path to the JDK root directory or the fallback.
     """
-    try:
-        return os.environ["JAVA_HOME"]
-    except KeyError:
-        pass
-    # obviously JAVA_HOME is not set, we try a bit harder for our developers on a Mac
-    results = glob.glob("/Library/Java/JavaVirtualMachines/jdk1.%s*.jdk" % major_version)
-    # don't do magic guesses if there are multiple versions and have the user specify one
-    if results and len(results) == 1:
-        return results[0] + "/Contents/Home"
+    # Mac OS X
+    if major_version < 9:
+        java_home = _run(["/usr/libexec/java_home", "-F", "-v", "1.%d" % major_version])
+    else:
+        java_home = _run(["/usr/libexec/java_home", "-F", "-v", str(major_version)])
+
+    if java_home:
+        return java_home
     else:
         return fallback
+        #TODO dm: Add better support for other platforms
+        # try:
+        #     return os.environ["JAVA_HOME"]
+        # except KeyError:
+        #     return fallback
+
+# try:
+    #     return os.environ["JAVA_HOME"]
+    # except KeyError:
+    #     pass
+    # obviously JAVA_HOME is not set, we try a bit harder for our developers on a Mac
+    #print("globbing for [/Library/Java/JavaVirtualMachines/jdk1.%s*.jdk]" % major_version)
+    #results = glob.glob("/Library/Java/JavaVirtualMachines/jdk1.%s*.jdk" % major_version)
+    # don't do magic guesses if there are multiple versions and have the user specify one
+    #if results and len(results) == 1:
+    #    return results[0] + "/Contents/Home"
+    #else:
+    #    return fallback

@@ -9,10 +9,6 @@ Please ensure that the following packages are installed before installing Rally 
 * Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8+
-* Gradle 2.8+
-* git
-* Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
-* Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 
@@ -28,7 +24,14 @@ Installation Instructions for Development
     python3 setup.py develop
 
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>` in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+
+Configuring Rally
+~~~~~~~~~~~~~~~~~
+
+Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
+
+For more information see :doc:`configuration help page </configuration>`.
 
 Non-sudo Install
 ~~~~~~~~~~~~~~~~

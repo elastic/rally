@@ -6,12 +6,12 @@ What is Rally?
 
 So you want to benchmark Elasticsearch? Then Rally is for you. Rally started as an effort to help developers in the Elasticsearch development team to run benchmarks on their machines. As our users are very creative and use Elasticsearch for all kinds of things, we have to cover a broad range of different performance characteristics and to find out how Elasticsearch performs under various conditions we run different benchmarks.
 
-Rally itself is build around a few assumptions:
+Rally is build around a few assumptions:
 
 * Everything is run on the same machine (but `we are about to change that <https://github.com/elastic/rally/issues/71>`_)
 * You want to add a specific data set to an Elasticsearch index and then run benchmarking queries on it
 
-These are some of the core assumptions and we are continuously working to remove those restrictions. In contrast to other home-grown benchmarking scripts, we have put considerable effort in Rally to ensure the benchmarking data are reproducible.
+We are continuously working to remove these restrictions. In contrast to other home-grown benchmarking scripts, we have put considerable effort in Rally to ensure the benchmarking data are reproducible.
 
 First Time Setup
 ----------------
@@ -19,38 +19,13 @@ First Time Setup
 Prerequisites
 ~~~~~~~~~~~~~
 
-Rally can build Elasticsearch either from sources or use an `official binary distribution <https://www.elastic.co/downloads/elasticsearch>`_. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
-
 Please ensure that the following packages are installed before installing Rally:
 
 * Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8+
-* Elasticsearch: Rally stores its metrics in a dedicated Elasticsearch instance. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
-* Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
-
-If you want to build Elasticsearch from sources you will also need:
-
-* Gradle 2.8+
-* git
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
-
-Preparation
-~~~~~~~~~~~
-
-First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 2.3 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of this cluster.
-
-.. note::
-
-   Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure that this port range is not used by the metrics store.
-
-Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. Kibana will not be auto-configured but a sample
-dashboard is delivered with Rally in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` which can be imported as follows to Kibana:
-
-1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
-2. Create an index pattern ``rally-*`` and use ``trial-timestamp`` as time-field name (you might need to import some data first)
-3. Go to Settings > Objects and import ``$PACKAGE_ROOT/esrally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` with your environment name before uploading it to Kibana.
 
 Installing Rally
 ~~~~~~~~~~~~~~~~
@@ -63,15 +38,27 @@ Simply install Rally with pip: ``pip3 install esrally``
 
 If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
 
+Non-sudo Install
+~~~~~~~~~~~~~~~~
+
+If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
+
+1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
+2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
+
+You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
+
 Configuring Rally
 -----------------
 
 Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
 
+For more information see :doc:`configuration help page </configuration>`.
+
 Running the first benchmark
 ---------------------------
 
-Now we are ready to run the first benchmark with Rally. First, be sure to start the Elasticsearch metrics store instance and then just invoke ``esrally``. This will start Rally with sensible defaults. It will download the necessary benchmark data, checkout the latest version of Elasticsearch, build it and finally run the benchmark.
+Now we are ready to run the first benchmark with Rally: Just invoke ``esrally``. This will start Rally with sensible defaults. It will download the necessary benchmark data, checkout the latest version of Elasticsearch, build it and finally run the benchmark.
 
 .. note::
    If you want to benchmark a binary distribution instead of a source distribution then run ``esrally --pipeline=from-distribution --distribution-version=VERSION_NUMBER`` (``VERSION_NUMBER`` is for example ``5.0.0-alpha1`` and is identical to the version number used in the download URL)
@@ -149,6 +136,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   configuration
    tournament
    telemetry
    pipelines

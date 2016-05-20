@@ -1,6 +1,8 @@
 import logging
 import collections
 import datetime
+import math
+import statistics
 from enum import Enum
 
 import elasticsearch
@@ -113,27 +115,30 @@ class MetaInfoScope(Enum):
     """
 
 
-def index_name(ts):
-    return "rally-%04d" % ts.year
-
-
-class EsMetricsStore:
+def metrics_store(config):
     """
-    A metrics store backed by Elasticsearch.
+    Creates a proper metrics store based on the current configuration.
+    :param config: Config object. Mandatory.
+    :return: A metrics store implementation.
     """
-    METRICS_DOC_TYPE = "metrics"
+    if config.opts("reporting", "datastore.type") == "elasticsearch":
+        logger.info("Creating ES metrics store")
+        return EsMetricsStore(config)
+    else:
+        logger.info("Creating in-memory metrics store")
+        return InMemoryMetricsStore(config)
 
-    def __init__(self,
-                 config,
-                 client_factory_class=EsClientFactory,
-                 index_template_provider_class=IndexTemplateProvider,
-                 clock=time.Clock):
+
+class MetricsStore:
+    """
+    Abstract metrics store
+    """
+
+    def __init__(self, config, clock=time.Clock):
         """
         Creates a new metrics store.
 
         :param config: The config object. Mandatory.
-        :param client_factory_class: This parameter is optional and needed for testing.
-        :param index_template_provider_class: This parameter is optional and needed for testing.
         :param clock: This parameter is optional and needed for testing.
         """
         self._config = config
@@ -141,15 +146,11 @@ class EsMetricsStore:
         self._track = None
         self._challenge = None
         self._car = None
-        self._index = None
-        self._docs = None
         self._environment_name = config.opts("system", "env.name")
         self._meta_info = {
             MetaInfoScope.cluster: {},
             MetaInfoScope.node: {}
         }
-        self._client = client_factory_class(config).create()
-        self._index_template_provider = index_template_provider_class(config)
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
 
@@ -168,18 +169,8 @@ class EsMetricsStore:
         self._track = track_name
         self._challenge = challenge_name
         self._car = car_name
-        self._index = index_name(invocation)
-        self._docs = []
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
                     (self._invocation, track_name, challenge_name, car_name))
-        # reduce a bit of noise in the metrics cluster log
-        if create:
-            # always update the mapping to the latest version
-            self._client.put_template("rally", self._get_template())
-            if not self._client.exists(index=self._index):
-                self._client.create_index(index=self._index)
-        # ensure we can search immediately after opening
-        self._client.refresh(index=self._index)
         user_tag = self._config.opts("system", "user.tag", mandatory=False)
         if user_tag and user_tag.strip() != "":
             try:
@@ -192,18 +183,12 @@ class EsMetricsStore:
                 raise exceptions.SystemSetupError(msg)
         self._stop_watch.start()
 
-    def _get_template(self):
-        return self._index_template_provider.template()
-
     def close(self):
         """
         Closes the metric store. Note that it is mandatory to close the metrics store when it is no longer needed as it only persists
         metrics on close (in order to avoid additional latency during the benchmark).
         """
-        self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-        logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
-                    (len(self._docs), self._invocation, self._track, self._challenge, self._car))
-        self._docs = []
+        raise NotImplementedError("abstract method")
 
     def add_meta_info(self, scope, scope_key, key, value):
         """
@@ -295,7 +280,15 @@ class EsMetricsStore:
             "sample-type": sample_type,
             "meta": meta
         }
-        self._docs.append(doc)
+        self._add(doc)
+
+    def _add(self, doc):
+        """
+        Adds a new document to the metrics store
+
+        :param doc: The new document.
+        """
+        raise NotImplementedError("abstract method")
 
     def get_one(self, name):
         """
@@ -309,6 +302,96 @@ class EsMetricsStore:
             return v[0]
         else:
             return None
+
+    def get(self, name):
+        """
+        Gets all raw values for the given metric name.
+
+        :param name: The metric name to query.
+        :return: A list of all values for the given metric.
+        """
+        raise NotImplementedError("abstract method")
+
+    def get_stats(self, name):
+        """
+        Gets standard statistics for the given metric name.
+
+        :param name: The metric name to query.
+        :return: A metric_stats structure.
+        """
+        raise NotImplementedError("abstract method")
+
+    def get_percentiles(self, name, percentiles=None):
+        """
+        Retrieves percentile metrics for the given metric name.
+
+        :param name: The metric name to query.
+        :param percentiles: An optional list of percentiles to show. If None is provided, by default the 99th, 99.9th and 100th percentile
+        are determined. Ensure that there are enough data points in the metrics store (e.g. it makes no sense to retrieve a 99.9999
+        percentile when there are only 10 values).
+        :return: An ordered dictionary of the determined percentile values in ascending order. Key is the percentile, value is the
+        determined value at this percentile. If no percentiles could be determined None is returned.
+        """
+        raise NotImplementedError("abstract method")
+
+
+def index_name(ts):
+    return "rally-%04d" % ts.year
+
+
+class EsMetricsStore(MetricsStore):
+    """
+    A metrics store backed by Elasticsearch.
+    """
+    METRICS_DOC_TYPE = "metrics"
+
+    def __init__(self,
+                 config,
+                 client_factory_class=EsClientFactory,
+                 index_template_provider_class=IndexTemplateProvider,
+                 clock=time.Clock):
+        """
+        Creates a new metrics store.
+
+        :param config: The config object. Mandatory.
+        :param client_factory_class: This parameter is optional and needed for testing.
+        :param index_template_provider_class: This parameter is optional and needed for testing.
+        :param clock: This parameter is optional and needed for testing.
+        """
+        MetricsStore.__init__(self, config, clock)
+        self._index = None
+        self._client = client_factory_class(config).create()
+        self._index_template_provider = index_template_provider_class(config)
+        self._docs = None
+
+    def open(self, invocation, track_name, challenge_name, car_name, create=False):
+        self._docs = []
+        MetricsStore.open(self, invocation, track_name, challenge_name, car_name, create)
+        self._index = index_name(invocation)
+        # reduce a bit of noise in the metrics cluster log
+        if create:
+            # always update the mapping to the latest version
+            self._client.put_template("rally", self._get_template())
+            if not self._client.exists(index=self._index):
+                self._client.create_index(index=self._index)
+        # ensure we can search immediately after opening
+        self._client.refresh(index=self._index)
+
+    def _get_template(self):
+        return self._index_template_provider.template()
+
+    def close(self):
+        """
+        Closes the metric store. Note that it is mandatory to close the metrics store when it is no longer needed as it only persists
+        metrics on close (in order to avoid additional latency during the benchmark).
+        """
+        self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
+        logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
+                    (len(self._docs), self._invocation, self._track, self._challenge, self._car))
+        self._docs = []
+
+    def _add(self, doc):
+        self._docs.append(doc)
 
     def get(self, name):
         """
@@ -420,6 +503,106 @@ class EsMetricsStore:
                 ]
             }
         }
+
+
+class InMemoryMetricsStore(MetricsStore):
+    # global per process
+    DOCS = []
+
+    def __init__(self, config, clock=time.Clock, clear=False):
+        """
+
+        Creates a new metrics store.
+
+        :param config: The config object. Mandatory.
+        :param clock: This parameter is optional and needed for testing.
+        :param clear: iff True, the internal state will be cleared. This should never be used in production and is only intended for tests.
+        """
+        super().__init__(config, clock)
+        if clear:
+            InMemoryMetricsStore.DOCS = []
+
+    def _add(self, doc):
+        InMemoryMetricsStore.DOCS.append(doc)
+
+    def close(self):
+        pass
+
+    def get_percentiles(self, name, percentiles=None):
+        if percentiles is None:
+            percentiles = [99, 99.9, 100]
+        values = self.get(name)
+        sorted_values = sorted(values)
+        result = collections.OrderedDict()
+        for percentile in percentiles:
+            result[percentile] = self.percentile_value(sorted_values, percentile)
+        return result
+
+    def percentile_value(self, sorted_values, percentile):
+        """
+        Calculates a percentile value for a given list of values and a percentile.
+
+        The implementation is based on http://onlinestatbook.com/2/introduction/percentiles.html
+
+        :param sorted_values: A sorted list of raw values for which a percentile should be calculated.
+        :param percentile: A percentile between [0, 100]
+        :return: the corresponding percentile value.
+        """
+        rank = float(percentile) / 100.0 * (len(sorted_values) - 1)
+        #rank = (percentile / 100.0 * (len(sorted_values))) - 1
+        #rank = percentile / 100.0 * len(sorted_values) - 0.5
+        #print("rank[%f] = %f" % (percentile, rank))
+        if rank == int(rank):
+            return sorted_values[int(rank)]
+        else:
+            lr = math.floor(rank)
+            lr_next = math.ceil(rank)
+            fr = rank - lr
+            lower_score = sorted_values[lr]
+            higher_score = sorted_values[lr_next]
+            return lower_score + (higher_score - lower_score) * fr
+
+    def get_stats(self, name):
+        values = self.get(name)
+        sorted_values = sorted(values)
+        return {
+            "count": len(sorted_values),
+            "min": sorted_values[0],
+            "max": sorted_values[-1],
+            "avg": statistics.mean(sorted_values),
+            "sum": sum(sorted_values)
+        }
+
+    def get(self, name):
+        return [doc["value"] for doc in InMemoryMetricsStore.DOCS if doc["name"] == name]
+
+
+def race_store(config):
+    """
+    Creates a proper race store based on the current configuration.
+    :param config: Config object. Mandatory.
+    :return: A race store implementation.
+    """
+    if config.opts("reporting", "datastore.type") == "elasticsearch":
+        logger.info("Creating ES race store")
+        return EsRaceStore(config)
+    else:
+        logger.info("Creating in-memory race store")
+        return InMemoryRaceStore(config)
+
+
+class InMemoryRaceStore:
+    def __init__(self, config):
+        self.config = config
+
+    def store_race(self, t):
+        pass
+
+    def list(self):
+        return []
+
+    def find_by_timestamp(self, timestamp):
+        return None
 
 
 class EsRaceStore:
@@ -565,4 +748,3 @@ class SelectedChallenge:
 
     def __str__(self):
         return self.name
-

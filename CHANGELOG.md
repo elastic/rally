@@ -1,6 +1,6 @@
 ### 0.3.0
 
-#### Breaking changes
+#### Breaking changes in 0.3
 
 We have [separated the previously known "track setup" into two parts](https://github.com/elastic/rally/issues/101):
 
@@ -12,6 +12,14 @@ This influences the command line interface in a couple of ways:
 * To list all known cars, we have added a new command `esrally list cars`. To select a challenge, use now `--challenge` instead of `--track-setup` and also specify a car now with `--car`.
 * Tournaments created by older versions of Rally are incompatible
 * Rally must now be invoked with only one challenge and only one car (previously it was possible to specify multiple track setups)
+
+#### Simplified configuration in 0.3
+
+We have spent a lot of time to simplify first time setup of Rally. For starters, you are not required to setup your own metrics store if you don't need it. 
+However, you are then just able to run individual benchmarks but you cannot compare results or visualize anything in Kibana. If you don't need this, it is recommended that you
+remove the configuration directory and run `esrally configure`. Rally will notify you on its first start of this change and guide you through the process.
+
+Please raise a ticket in case of problems.
 
 ### 0.2.1
 

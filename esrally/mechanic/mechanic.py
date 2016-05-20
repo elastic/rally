@@ -27,7 +27,7 @@ class Mechanic:
 
     def start_metrics(self, track, challenge, car):
         invocation = self._config.opts("meta", "time.start")
-        self._metrics_store = metrics.EsMetricsStore(self._config)
+        self._metrics_store = metrics.metrics_store(self._config)
         self._metrics_store.open(invocation, track.name, challenge.name, car.name, create=True)
 
     def start_engine(self, track, challenge, car):

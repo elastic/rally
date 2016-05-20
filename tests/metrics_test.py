@@ -47,7 +47,7 @@ class StaticStopWatch:
         return 0
 
 
-class MetricsTests(TestCase):
+class EsMetricsTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
 
     def setUp(self):
@@ -63,7 +63,7 @@ class MetricsTests(TestCase):
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
-        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
 
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
@@ -89,7 +89,7 @@ class MetricsTests(TestCase):
         throughput = 5000
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "system", "user.tag", "intention:testing")
-        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -140,7 +140,7 @@ class MetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(MetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
@@ -186,3 +186,45 @@ class MetricsTests(TestCase):
         self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
 
         self.assertEqual(throughput, actual_throughput)
+
+
+class InMemoryMetricsStoreTests(TestCase):
+    def setUp(self):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock, clear=True)
+
+    def test_get_value(self):
+        throughput = 5000
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
+        self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        self.assertEqual(throughput, self.metrics_store.get_one("indexing_throughput"))
+
+    def test_get_percentile(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        for i in range(1, 1001):
+            self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        self.assert_equal_percentiles("query_latency", [100.0], {100.0: 1000.0})
+        self.assert_equal_percentiles("query_latency", [99.0], {99.0: 990.0})
+        self.assert_equal_percentiles("query_latency", [99.9], {99.9: 999.0})
+        self.assert_equal_percentiles("query_latency", [0.0], {0.0: 1.0})
+
+        self.assert_equal_percentiles("query_latency", [99, 99.9, 100], {99: 990.0, 99.9: 999.0, 100: 1000.0})
+
+    def assert_equal_percentiles(self, name, percentiles, expected_percentiles):
+        actual_percentiles = self.metrics_store.get_percentiles(name, percentiles=percentiles)
+        self.assertEqual(len(expected_percentiles), len(actual_percentiles))
+        for percentile, actual_percentile_value in actual_percentiles.items():
+            self.assertAlmostEqual(expected_percentiles[percentile], actual_percentile_value, places=1,
+                                   msg=str(percentile) + "th percentile differs")
