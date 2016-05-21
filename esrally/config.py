@@ -6,6 +6,7 @@ import configparser
 from enum import Enum
 
 from esrally.utils import io, format, convert
+from esrally import time
 
 logger = logging.getLogger("rally.config")
 
@@ -221,6 +222,9 @@ class Config:
             print("For more details please see %s" % format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
             print("")
             print("*****************************************************************************************")
+            print("")
+            print("Pausing for 10 seconds to let you consider this message.")
+            time.sleep(10)
             logger.info("Migrating config from version [3] to [4]")
             current_version = 4
             config["meta"]["config.version"] = str(current_version)
