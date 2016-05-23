@@ -282,7 +282,7 @@ class Challenge:
     def __init__(self,
                  name,
                  description,
-                 #TODO dm: This should probably be changeable by step (indexing, querying)
+                 # TODO dm: This should probably be changeable by step (indexing, querying)
                  clients=8,
                  benchmark=None):
         if benchmark is None:
@@ -476,3 +476,66 @@ challenges = [
         }
     )
 ]
+
+
+class TrackSyntaxError(Exception):
+    """
+    Raised whenever a syntax problem is encountered when loading the track specification.
+    """
+    pass
+
+
+class TrackReader:
+    def __init__(self):
+        pass
+
+    def read(self, track_specification):
+        return Track(name=self._r(track_specification, ["meta", "name"], expected_type=str),
+                     short_description=self._r(track_specification, ["meta", "short-description"], expected_type=str),
+                     description=self._r(track_specification, ["meta", "description"], expected_type=str),
+                     # TODO dm: Think about this
+                     source_root_url="",
+                     challenges=[],
+                     queries=[],
+                     indices=[self._create_index(index) for index in self._r(track_specification, "indices")]
+                     )
+
+    def _r(self, root, path, expected_type=None):
+        if isinstance(path, str):
+            path = [path]
+
+        structure = root
+        try:
+            for k in path:
+                structure = structure[k]
+            if expected_type:
+                # either we cannot convert the data to this type or it is already the wrong type
+                try:
+                    converted = expected_type(structure)
+                except BaseException:
+                    raise TrackSyntaxError(
+                        "Value '%s' of element '%s' is not of expected type '%s'" % (structure, ".".join(path), expected_type))
+                if converted != structure:
+                    raise TrackSyntaxError(
+                        "Value '%s' of element '%s' is not of expected type '%s'" % (structure, ".".join(path), expected_type))
+            return structure
+        except KeyError:
+            raise TrackSyntaxError("Mandatory element '%s' is missing" % ".".join(path))
+
+    def _create_index(self, index_spec):
+        return Index(name=self._r(index_spec, "name", expected_type=str),
+                     types=[self._create_type(type_spec) for type_spec in self._r(index_spec, "types")]
+                     )
+
+    def _create_type(self, type_spec):
+        return Type(name=self._r(type_spec, "name", expected_type=str),
+                    mapping_file_name=self._r(type_spec, "mapping", expected_type=str),
+                    document_file_name=self._r(type_spec, "documents", expected_type=str),
+                    number_of_documents=self._r(type_spec, "document-count", expected_type=int),
+                    compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", expected_type=int),
+                    uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", expected_type=int)
+                    )
+
+    def _parse_operations(self, track_spec):
+        pass
+
