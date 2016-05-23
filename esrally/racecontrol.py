@@ -262,7 +262,7 @@ class RaceControl:
             elif command == "race":
                 pipeline = self._choose(pipelines, "pipeline", "You can list the available pipelines with esrally list pipelines.")(ctx)
                 t = self._choose(track.tracks, "track", "You can list the available tracks with esrally list tracks.")
-                metrics.EsRaceStore(self._config).store_race(t)
+                metrics.race_store(self._config).store_race(t)
                 pipeline.run(t)
                 return True
             elif command == "compare":
@@ -271,7 +271,7 @@ class RaceControl:
 
                 if not baseline_ts or not contender_ts:
                     raise exceptions.ImproperlyConfigured("compare needs baseline and a contender")
-                race_store = metrics.EsRaceStore(self._config)
+                race_store = metrics.race_store(self._config)
                 reporter.ComparisonReporter(self._config).report(
                     race_store.find_by_timestamp(baseline_ts),
                     race_store.find_by_timestamp(contender_ts))
@@ -310,7 +310,7 @@ class RaceControl:
         elif what == "races":
             print("Recent races:\n")
             races = []
-            for race in metrics.EsRaceStore(ctx.config).list():
+            for race in metrics.race_store(ctx.config).list():
                 races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car, race.user_tag])
 
             print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))

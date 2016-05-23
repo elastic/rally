@@ -7,7 +7,7 @@ import argparse
 import pkg_resources
 
 from esrally import config, paths, racecontrol
-from esrally.utils import io
+from esrally.utils import io, format
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -50,7 +50,7 @@ def configure_logging(cfg):
 def parse_args():
     parser = argparse.ArgumentParser(prog="esrally",
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at \033[4mhttps://esrally.readthedocs.io\033[0m",
+                                     epilog="Find out more about Rally at %s" % format.link("https://esrally.readthedocs.io"),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + __version__)
 
@@ -88,7 +88,7 @@ def parse_args():
     for p in [parser, config_parser]:
         p.add_argument(
                 "--advanced-config",
-                help="show additional configuration options when creating the config file (intended for CI runs) (default: false)",
+                help="show additional configuration options when creating the config file (default: false)",
                 default=False,
                 action="store_true")
 
@@ -214,6 +214,8 @@ def csv_to_list(csv):
 def main():
     pre_configure_logging()
     args = parse_args()
+    print(BANNER)
+
     cfg = config.Config(config_name=args.configuration_name)
     sub_command = derive_sub_command(args, cfg)
 
@@ -258,7 +260,6 @@ def main():
         cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
     configure_logging(cfg)
-    print(BANNER)
 
     race_control = racecontrol.RaceControl(cfg)
     success = race_control.start(sub_command)

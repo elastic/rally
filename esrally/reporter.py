@@ -3,7 +3,7 @@ import tabulate
 
 from esrally import metrics
 from esrally.track import track
-from esrally.utils import convert
+from esrally.utils import convert, format
 
 logger = logging.getLogger("rally.reporting")
 
@@ -17,18 +17,6 @@ def print_internal(message):
 
 def print_header(message):
     print_internal("\033[1m%s\033[0m" % message)
-
-
-def red(message):
-    return "\033[31;1m%s\033[0m" % message
-
-
-def green(message):
-    return "\033[32;1m%s\033[0m" % message
-
-
-def neutral(message):
-    return "\033[39;1m%s\033[0m" % message
 
 
 class Stats:
@@ -152,7 +140,7 @@ class SummaryReporter:
                     (invocation, t.name, selected_challenge, selected_car))
         for challenge in t.challenges:
             if challenge.name == selected_challenge:
-                store = metrics.EsMetricsStore(self._config)
+                store = metrics.metrics_store(self._config)
                 store.open(invocation, t.name, challenge.name, selected_car)
 
                 stats = Stats(store,
@@ -290,14 +278,14 @@ class ComparisonReporter:
                     (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
                      r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_store = metrics.EsMetricsStore(self._config)
+        baseline_store = metrics.metrics_store(self._config)
         baseline_store.open(r1.trial_timestamp, r1.track, r1.challenge.name, r1.car)
         baseline_stats = Stats(baseline_store,
                                stats_sample_size=r1.challenge.stats_sample_size,
                                queries=r1.challenge.queries,
                                search_sample_size=r1.challenge.search_sample_size)
 
-        contender_store = metrics.EsMetricsStore(self._config)
+        contender_store = metrics.metrics_store(self._config)
         contender_store.open(r2.trial_timestamp, r2.track, r2.challenge.name, r2.car)
         contender_stats = Stats(contender_store,
                                 stats_sample_size=r2.challenge.stats_sample_size,
@@ -478,11 +466,11 @@ class ComparisonReporter:
     def diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
         diff = formatter(contender - baseline)
         if treat_increase_as_improvement:
-            color_greater = green
-            color_smaller = red
+            color_greater = format.green
+            color_smaller = format.red
         else:
-            color_greater = red
-            color_smaller = green
+            color_greater = format.red
+            color_smaller = format.green
 
         if diff > 0:
             return color_greater("+%.5f" % diff)
@@ -490,4 +478,4 @@ class ComparisonReporter:
             return color_smaller("%.5f" % diff)
         else:
             # tabulate needs this to align all values correctly
-            return neutral("%.5f" % diff)
+            return format.neutral("%.5f" % diff)
