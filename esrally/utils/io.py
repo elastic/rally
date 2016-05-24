@@ -126,6 +126,14 @@ def _read_symlink(path):
         return None
 
 
+def is_git_working_copy(dir, repo_name):
+    if os.path.exists(dir) and os.path.exists("%s/.git" % dir):
+        repo_url = _run(["git", "-C", dir, "remote", "-v", "get-url", "origin"], fallback="", only_first_line=True)
+        return repo_url.endswith(repo_name)
+    else:
+        return False
+
+
 def guess_install_location(binary_name, fallback=None):
     """
     Checks whether a given binary is available on the user's path.

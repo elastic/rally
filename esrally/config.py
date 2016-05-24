@@ -319,9 +319,17 @@ class Config:
         print("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
 
         if benchmark_from_sources:
-            default_src_dir = "%s/src" % root_dir
-            source_dir = self._ask_property("Enter your Elasticsearch project directory:",
-                                            default_value=default_src_dir)
+            # We try to autodetect an existing ES source directory
+            guess = self._guess_es_src_dir()
+            if guess:
+                source_dir = guess
+                print("[✓] Autodetected Elasticsearch project directory at [%s]." % source_dir)
+                logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
+            else:
+                default_src_dir = "%s/src" % root_dir
+                logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
+                source_dir = self._ask_property("Enter your Elasticsearch project directory:",
+                                                default_value=default_src_dir)
             # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
             repo_url = "https://github.com/elastic/elasticsearch.git"
 
@@ -380,9 +388,9 @@ class Config:
         print("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % self._config_file.location)
         print("")
         if benchmark_from_sources:
-            print("To benchmark the latest version of Elasticsearch with the default benchmark run:")
+            print("To benchmark the currently checked out version of Elasticsearch with the default benchmark run:")
             print("")
-            print("  esrally --revision=latest")
+            print("  esrally --revision=current")
         else:
             print("To benchmark Elasticsearch 5.0.0-alpha2 with the default benchmark run:")
             print("")
@@ -390,6 +398,19 @@ class Config:
 
         print()
         print("For more help see the user documentation at %s" % format.link("https://esrally.readthedocs.io"))
+
+    def _guess_es_src_dir(self):
+        current_dir = os.getcwd()
+        # try sibling elasticsearch directory (assuming that Rally is checked out alongside Elasticsearch)
+        sibling_es_dir = os.path.abspath(os.path.join(current_dir, os.pardir, "elasticsearch"))
+        child_es_dir = os.path.abspath(os.path.join(current_dir, "elasticsearch"))
+
+        for candidate in [current_dir, sibling_es_dir, child_es_dir]:
+            if io.is_git_working_copy(candidate, "elastic/elasticsearch.git"):
+                return candidate
+        return None
+
+
 
     def _ask_data_store(self):
         data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")

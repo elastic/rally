@@ -1,3 +1,4 @@
+import os
 from unittest import TestCase
 
 from esrally.utils import io
@@ -37,3 +38,9 @@ class IoTests(TestCase):
                          io.guess_java_home(major_version=8, runner=lambda args, fallback=None: None, read_symlink=mock_red_hat))
         # simulate not installed version
         self.assertIsNone(io.guess_java_home(major_version=7, runner=lambda args, fallback=None: None, read_symlink=mock_red_hat))
+
+    def test_is_git_working_copy(self):
+        test_dir = os.path.dirname(os.path.dirname(__file__))
+
+        self.assertFalse(io.is_git_working_copy(test_dir, "elastic/rally.git"))
+        self.assertTrue(io.is_git_working_copy(os.path.dirname(test_dir), "elastic/rally.git"))

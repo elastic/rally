@@ -73,7 +73,11 @@ As you can see, Rally tells you that you cannot build Elasticsearch from sources
 
 It's also possible that Rally cannot automatically find your JDK 8 home directory. In that case, it will ask you later in the configuration process.
 
-After the initial detection, setup will go on::
+After the initial detection, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``). If all goes well, then you will see this::
+
+    [✓] Autodetected Elasticsearch project directory at [/Users/dm/elasticsearch].
+
+Otherwise, Rally will choose a default directory and ask you for confirmation::
 
     [✓] Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
     Enter your Elasticsearch project directory: [default: '/Users/dm/.rally/benchmarks/src']:
