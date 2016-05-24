@@ -34,4 +34,10 @@ fi
 popd >/dev/null 2>&1
 
 RALLY_ROOT=$(python3 -c "import site; print(site.USER_BASE)")
-${RALLY_ROOT}/bin/esrally "$@"
+RALLY_BIN=${RALLY_ROOT}/bin/esrally
+if [ -x "$RALLY_BIN" ]
+then
+    ${RALLY_BIN} "$@"
+else
+    echo "Cannot execute Rally in ${RALLY_BIN}."
+fi
