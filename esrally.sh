@@ -26,7 +26,7 @@ then
   # this will fail if the user is offline
   git fetch origin --quiet
   git rebase origin/master --quiet
-  python3 setup.py develop --user
+  python3 setup.py -q develop --user
 # else
   # Uncommitted changes - don't upgrade, just run
 fi
