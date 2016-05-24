@@ -194,13 +194,18 @@ class SummaryReporter:
         return lines
 
     def report_total_times(self, stats):
-        return [
-            ["Indexing time [min]", convert.ms_to_minutes(stats.total_time)],
-            ["Merge time [min]", convert.ms_to_minutes(stats.merge_time)],
-            ["Refresh time [min]", convert.ms_to_minutes(stats.refresh_time)],
-            ["Flush time [min]", convert.ms_to_minutes(stats.flush_time)],
-            ["Merge throttle time [min]", convert.ms_to_minutes(stats.merge_throttle_time)]
-        ]
+        total_times = []
+        self.append_if_present(total_times, "Indexing time [min]", stats.total_time, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Merge time [min]", stats.merge_time, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Refresh time [min]", stats.refresh_time, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Flush time [min]", stats.flush_time, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Merge throttle time [min]", stats.merge_throttle_time, convert.ms_to_minutes)
+
+        return total_times
+
+    def append_if_present(self, l, k, v, converter=lambda x: x):
+        if v:
+            l.append([k, converter(v)])
 
     def report_merge_part_times(self, stats):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads

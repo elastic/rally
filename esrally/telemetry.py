@@ -445,12 +445,22 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
 
         info = cluster.nodes_info()
         for node in info["nodes"].values():
-            node_name = node["name"]
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_name", node["os"]["name"])
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_version", node["os"]["version"])
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_logical_cores", node["os"]["available_processors"])
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
+            self.try_store_node_info(node, "os_name", ["os", "name"])
+            self.try_store_node_info(node, "os_version", ["os", "version"])
+            self.try_store_node_info(node, "cpu_logical_cores", ["os", "available_processors"])
+            self.try_store_node_info(node, "jvm_vendor", ["jvm", "vm_vendor"])
+            self.try_store_node_info(node, "jvm_version", ["jvm", "version"])
+
+    def try_store_node_info(self, node, metric_key, path):
+        node_name = node["name"]
+        value = node
+        try:
+            for k in path:
+                value = value[k]
+        except KeyError:
+            logger.warn("Could not determine metric [%s] for node [%s] at path [%s]." % (metric_key, node_name, ",".join(path)))
+            value = "unknown"
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, metric_key, value)
 
 
 class NodeStats(InternalTelemetryDevice):
@@ -502,26 +512,29 @@ class IndexStats(InternalTelemetryDevice):
             logger.info("Gathering indices stats")
             stats = self.cluster.indices_stats(metric="_all", level="shards")
             primaries = stats["_all"]["primaries"]
-            self.metrics_store.put_count_cluster_level("segments_count", primaries["segments"]["count"])
-            self.metrics_store.put_count_cluster_level("segments_memory_in_bytes", primaries["segments"]["memory_in_bytes"], "byte")
-            self.metrics_store.put_count_cluster_level("segments_doc_values_memory_in_bytes",
-                                                       primaries["segments"]["doc_values_memory_in_bytes"], "byte")
-            self.metrics_store.put_count_cluster_level("segments_stored_fields_memory_in_bytes",
-                                                       primaries["segments"]["stored_fields_memory_in_bytes"],
-                                                       "byte")
-            self.metrics_store.put_count_cluster_level("segments_terms_memory_in_bytes", primaries["segments"]["terms_memory_in_bytes"],
-                                                       "byte")
-            self.metrics_store.put_count_cluster_level("segments_norms_memory_in_bytes", primaries["segments"]["norms_memory_in_bytes"],
-                                                       "byte")
-            if "points_memory_in_bytes" in primaries["segments"]:
-                self.metrics_store.put_count_cluster_level("segments_points_memory_in_bytes", primaries["segments"]["points_memory_in_bytes"],
-                                                           "byte")
-            self.metrics_store.put_value_cluster_level("merges_total_time", primaries["merges"]["total_time_in_millis"], "ms")
-            self.metrics_store.put_value_cluster_level("merges_total_throttled_time", primaries["merges"]["total_throttled_time_in_millis"],
-                                                       "ms")
-            self.metrics_store.put_value_cluster_level("indexing_total_time", primaries["indexing"]["index_time_in_millis"], "ms")
-            self.metrics_store.put_value_cluster_level("refresh_total_time", primaries["refresh"]["total_time_in_millis"], "ms")
-            self.metrics_store.put_value_cluster_level("flush_total_time", primaries["flush"]["total_time_in_millis"], "ms")
+
+            self.try_store_cluster_metrics(primaries, "segments_count", None, ["segments", "count"])
+            self.try_store_cluster_metrics(primaries, "segments_memory_in_bytes", "byte", ["segments", "memory_in_bytes"])
+            self.try_store_cluster_metrics(primaries, "segments_doc_values_memory_in_bytes", "byte", ["segments", "doc_values_memory_in_bytes"])
+            self.try_store_cluster_metrics(primaries, "segments_stored_fields_memory_in_bytes", "byte", ["segments", "stored_fields_memory_in_bytes"])
+            self.try_store_cluster_metrics(primaries, "segments_terms_memory_in_bytes", "byte", ["segments", "terms_memory_in_bytes"])
+            self.try_store_cluster_metrics(primaries, "segments_norms_memory_in_bytes", "byte", ["segments", "norms_memory_in_bytes"])
+            self.try_store_cluster_metrics(primaries, "segments_points_memory_in_bytes", "byte", ["segments", "points_memory_in_bytes"])
+
+            self.try_store_cluster_metrics(primaries, "merges_total_time", "ms", ["merges", "total_time_in_millis"])
+            self.try_store_cluster_metrics(primaries, "merges_total_throttled_time", "ms", ["merges", "total_throttled_time_in_millis"])
+            self.try_store_cluster_metrics(primaries, "indexing_total_time", "ms", ["indexing", "index_time_in_millis"])
+            self.try_store_cluster_metrics(primaries, "refresh_total_time", "ms", ["refresh", "total_time_in_millis"])
+            self.try_store_cluster_metrics(primaries, "flush_total_time", "ms", ["flush", "total_time_in_millis"])
+
+    def try_store_cluster_metrics(self, primaries, metric_key, unit, path):
+        value = primaries
+        try:
+            for k in path:
+                value = value[k]
+            self.metrics_store.put_value_cluster_level(metric_key, value, unit)
+        except KeyError:
+            logger.warn("Could not determine metric [%s] at path [%s]." % (metric_key, ",".join(path)))
 
 
 class IndexSize(InternalTelemetryDevice):
