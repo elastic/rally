@@ -94,8 +94,17 @@ pmc_challenges = [
         description="Append documents without any ID conflicts",
         benchmark={
             track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=track.greenNodeSettings, bulk_size=500),
-            track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(iteration_count=100),
-            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(iteration_count=1000)
+            track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(warmup_iteration_count=100, iteration_count=100),
+            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(warmup_iteration_count=1000, iteration_count=1000,
+                                                                        queries=[
+                                                                            DefaultQuery(),
+                                                                            TermQuery(),
+                                                                            PhraseQuery(),
+                                                                            MonthlyArticlesAggQuery(use_request_cache=False),
+                                                                            MonthlyArticlesAggQuery(suffix="_cached",
+                                                                                                    use_request_cache=True),
+                                                                            ScrollQuery()
+                                                                        ])
         }
     ),
     track.Challenge(
@@ -112,7 +121,7 @@ pmc_challenges = [
                     "already exists in the index.",
         benchmark={
             track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=track.benchmarkFastSettings, bulk_size=500,
-                                                         id_conflicts=track.IndexIdConflict.SequentialConflicts)
+                                                                     id_conflicts=track.IndexIdConflict.SequentialConflicts)
         }
     )
 ]
@@ -130,14 +139,5 @@ pmcTrackSpec = track.Track(
     uncompressed_size_in_bytes=23256051757,
     document_file_name="documents.json.bz2",
     mapping_file_name="mappings.json",
-    # Queries to use in the search benchmark
-    queries=[
-        DefaultQuery(),
-        TermQuery(),
-        PhraseQuery(),
-        MonthlyArticlesAggQuery(use_request_cache=False),
-        MonthlyArticlesAggQuery(suffix="_cached", use_request_cache=True),
-        ScrollQuery()
-    ],
     challenges=pmc_challenges
 )

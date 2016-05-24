@@ -111,24 +111,23 @@ percolatorTrackSpec = track.Track(
             )
         ])
     ],
-    # Queries to use in the search benchmark
-    queries=[
-        PercolatorQuery(content="president bush"),
-        PercolatorQuery(content="saddam hussein"),
-        PercolatorQuery(content="hurricane katrina"),
-        PercolatorQuery(content="google"),
-        PercolatorQueryNoScoring(content="google"),
-        PercolatorQueryWithHighlighting(),
-        PercolatorQuery(content="ignore me"),
-        PercolatorQueryNoScoring(content="ignore me")
-    ],
     challenges=[track.Challenge(
         name="append-no-conflicts",
         description="Append documents without any ID conflicts",
         benchmark={
             track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=percolatorIndexSettings),
-            track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(iteration_count=100),
-            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(iteration_count=100)
+            track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(warmup_iteration_count=100, iteration_count=100),
+            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(warmup_iteration_count=100, iteration_count=100,
+                                                                        queries=[
+                                                                            PercolatorQuery(content="president bush"),
+                                                                            PercolatorQuery(content="saddam hussein"),
+                                                                            PercolatorQuery(content="hurricane katrina"),
+                                                                            PercolatorQuery(content="google"),
+                                                                            PercolatorQueryNoScoring(content="google"),
+                                                                            PercolatorQueryWithHighlighting(),
+                                                                            PercolatorQuery(content="ignore me"),
+                                                                            PercolatorQueryNoScoring(content="ignore me")
+                                                                        ])
         }
     )]
 )

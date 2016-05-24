@@ -110,14 +110,41 @@ tinyTrackSpec = track.Track(
                 uncompressed_size_in_bytes=564930)
         ])
     ],
-    # Queries to use in the search benchmark
-    queries=[
-        DefaultQuery(),
-        TermQuery(),
-        PhraseQuery(),
-        CountryAggQuery(use_request_cache=False),
-        CountryAggQuery(suffix="_cached", use_request_cache=True),
-        ScrollQuery()
-    ],
-    challenges=track.challenges)
+    challenges=[
+        track.Challenge(
+            name="append-no-conflicts",
+            description="Append documents without any ID conflicts",
+            benchmark={
+                track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=track.greenNodeSettings),
+                track.BenchmarkPhase.stats: track.LatencyBenchmarkSettings(warmup_iteration_count=100, iteration_count=100),
+                track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(warmup_iteration_count=1000, iteration_count=1000,
+                                                                            queries=[
+                                                                                DefaultQuery(),
+                                                                                TermQuery(),
+                                                                                PhraseQuery(),
+                                                                                CountryAggQuery(use_request_cache=False),
+                                                                                CountryAggQuery(suffix="_cached", use_request_cache=True),
+                                                                                ScrollQuery()
+                                                                            ])
+            }
+        ),
+        track.Challenge(
+            name="append-fast-no-conflicts",
+            description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % track.benchmarkFastSettings,
+            benchmark={
+                track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=track.benchmarkFastSettings)
+            }
+        ),
+
+        track.Challenge(
+            name="append-fast-with-conflicts",
+            description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
+                        "already exists in the index.",
+            benchmark={
+                track.BenchmarkPhase.index: track.IndexBenchmarkSettings(index_settings=track.benchmarkFastSettings,
+                                                                         id_conflicts=track.IndexIdConflict.SequentialConflicts)
+            }
+        )
+    ]
+)
 

@@ -59,29 +59,30 @@ class Benchmark:
 
 
 class LatencyBenchmark(Benchmark):
-    def __init__(self, cfg, clock, track, challenge, cluster, phase, queries, repetitions=1000):
+    def __init__(self, cfg, clock, track, challenge, cluster, phase, queries, warmup_repetitions=1000, repetitions=1000):
         Benchmark.__init__(self, cfg, clock, track, challenge, cluster, phase)
         self.queries = queries
+        self.warmup_repetitions = warmup_repetitions
         self.repetitions = repetitions
         self.stop_watch = self.clock.stop_watch()
 
     def run(self):
         logger.info("Running warmup iterations")
-        self._run_benchmark("  Benchmarking %s (warmup iteration %d/%d)")
+        self._run_benchmark("  Benchmarking %s (warmup iteration %d/%d)", self.warmup_repetitions)
         logger.info("Running measurement iterations")
-        times = self._run_benchmark("  Benchmarking %s (iteration %d/%d)")
+        times = self._run_benchmark("  Benchmarking %s (iteration %d/%d)", self.repetitions)
 
         for q in self.queries:
             latencies = [t[q.name] for t in times]
             for latency in latencies:
                 self.metrics_store.put_value_cluster_level("query_latency_%s" % q.name, convert.seconds_to_ms(latency), "ms")
 
-    def _run_benchmark(self, message):
+    def _run_benchmark(self, message, repetitions):
         times = []
         quiet = self.quiet_mode
         if not quiet:
             self._print_progress(message, 0)
-        for iteration in range(1, self.repetitions + 1):
+        for iteration in range(1, repetitions + 1):
             if not quiet:
                 self._print_progress(message, iteration)
             times.append(self._run_one_round())
@@ -108,6 +109,7 @@ class LatencyBenchmark(Benchmark):
 class SearchBenchmark(LatencyBenchmark):
     def __init__(self, cfg, clock, t, challenge, cluster):
         super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search, t.queries,
+                         challenge.benchmark[track.BenchmarkPhase.search].warmup_iteration_count,
                          challenge.benchmark[track.BenchmarkPhase.search].iteration_count)
 
 
@@ -134,7 +136,8 @@ class StatsBenchmark(LatencyBenchmark):
         super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.stats, [
             StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
             StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
-        ], challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
+        ], challenge.benchmark[track.BenchmarkPhase.stats].warmup_iteration_count,
+           challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
 
 
 class IndexedDocumentCountProbe:

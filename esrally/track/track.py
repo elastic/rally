@@ -142,7 +142,7 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url, challenges, queries, index_name=None, type_name=None,
+    def __init__(self, name, short_description, description, source_root_url, challenges, index_name=None, type_name=None,
                  number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None,
                  mapping_file_name=None, indices=None):
         """
@@ -163,7 +163,6 @@ class Track:
         :param challenges: A list of one or more challenges to use. If in doubt, reuse the predefined list "track.challenges". Rally's
         default configuration assumes that each track defines at least one challenge with the name "append-no-conflicts".
         This is not required but simplifies usage.
-        :param queries: A list of queries to run in case searching should be benchmarked.
         :param index_name: The name of the index to create.
         :param type_name: The type name for this index.
         :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting.
@@ -179,7 +178,6 @@ class Track:
         self.description = description
         self.source_root_url = source_root_url
         self.challenges = challenges
-        self.queries = queries
         self.readme_file_name = "README.txt"
         # multiple indices
         if index_name is None:
@@ -254,7 +252,18 @@ class BenchmarkPhase(Enum):
 
 
 class LatencyBenchmarkSettings:
-    def __init__(self, iteration_count=1000):
+    def __init__(self, queries=None, warmup_iteration_count=1000, iteration_count=1000):
+        """
+        Creates new LatencyBenchmarkSettings.
+
+        :param queries: A list of queries to run. Optional.
+        :param warmup_iteration_count: The number of times each query should be run for warmup. Defaults to 1000 iterations.
+        :param iteration_count: The number of times each query should be run. Defaults to 1000 iterations.
+        """
+        if queries is None:
+            queries = []
+        self.queries = queries
+        self.warmup_iteration_count = warmup_iteration_count
         self.iteration_count = iteration_count
 
 
@@ -448,35 +457,6 @@ cars = [
     Car(name="verbose_iw", logging_config=mergePartsLogConfig)
 ]
 
-challenges = [
-    Challenge(
-        name="append-no-conflicts",
-        description="Append documents without any ID conflicts",
-        benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=greenNodeSettings),
-            BenchmarkPhase.stats: LatencyBenchmarkSettings(iteration_count=100),
-            BenchmarkPhase.search: LatencyBenchmarkSettings(iteration_count=1000)
-        }
-    ),
-    Challenge(
-        name="append-fast-no-conflicts",
-        description="append-only, using 4 GB heap, and these settings: <pre>%s</pre>" % benchmarkFastSettings,
-        benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=benchmarkFastSettings)
-        }
-    ),
-
-    Challenge(
-        name="append-fast-with-conflicts",
-        description="the same as fast, except we pass in an ID (worst case random UUID) for each document and 25% of the time the ID "
-                    "already exists in the index.",
-        benchmark={
-            BenchmarkPhase.index: IndexBenchmarkSettings(index_settings=benchmarkFastSettings,
-                                                         id_conflicts=IndexIdConflict.SequentialConflicts)
-        }
-    )
-]
-
 
 class TrackSyntaxError(Exception):
     """
@@ -490,17 +470,16 @@ class TrackReader:
         pass
 
     def read(self, track_specification):
+        indices = [self._create_index(index) for index in self._r(track_specification, "indices")]
         return Track(name=self._r(track_specification, ["meta", "name"], expected_type=str),
                      short_description=self._r(track_specification, ["meta", "short-description"], expected_type=str),
                      description=self._r(track_specification, ["meta", "description"], expected_type=str),
-                     # TODO dm: Think about this
-                     source_root_url="",
-                     challenges=[],
-                     queries=[],
-                     indices=[self._create_index(index) for index in self._r(track_specification, "indices")]
+                     source_root_url=self._r(track_specification, ["meta", "data-url"], expected_type=str),
+                     challenges=self._create_challenges(track_specification, indices),
+                     indices=indices
                      )
 
-    def _r(self, root, path, expected_type=None):
+    def _r(self, root, path, expected_type=None, mandatory=True):
         if isinstance(path, str):
             path = [path]
 
@@ -520,7 +499,10 @@ class TrackReader:
                         "Value '%s' of element '%s' is not of expected type '%s'" % (structure, ".".join(path), expected_type))
             return structure
         except KeyError:
-            raise TrackSyntaxError("Mandatory element '%s' is missing" % ".".join(path))
+            if mandatory:
+                raise TrackSyntaxError("Mandatory element '%s' is missing" % ".".join(path))
+            else:
+                return None
 
     def _create_index(self, index_spec):
         return Index(name=self._r(index_spec, "name", expected_type=str),
@@ -536,6 +518,70 @@ class TrackReader:
                     uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", expected_type=int)
                     )
 
-    def _parse_operations(self, track_spec):
-        pass
+    def _create_challenges(self, track_spec, indices):
+        ops = self._parse_operations(self._r(track_spec, "operations"), indices)
+        challenges = []
+        for challenge in self._r(track_spec, "challenges"):
+            challenge_name = self._r(challenge, "name", expected_type=str)
+            benchmarks = {}
 
+            for schedule in self._r(challenge, "schedule"):
+                op = self._r(schedule, "name", expected_type=str)
+                if op not in ops:
+                    raise TrackSyntaxError("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
+                                           "Please add an operation '%s' to the 'operations' block." % (challenge_name, op, op))
+
+                benchmark_type, benchmark_spec = ops[op]
+                if benchmark_type in benchmarks:
+                    new_op_name = op
+                    old_op_name = benchmarks[benchmark_type].name
+                    raise TrackSyntaxError("'schedule' for challenge '%s' contains multiple operations of type '%s' which is currently "
+                                           "unsupported. Please remove one of these operations: '%s', '%s'" %
+                                           (challenge_name, benchmark_type, old_op_name, new_op_name))
+                benchmarks[benchmark_type] = benchmark_spec
+            challenges.append(Challenge(name=challenge_name,
+                                        description="TODO dm",
+                                        benchmark=benchmarks))
+
+        return challenges
+
+    def _parse_operations(self, ops_specs, indices):
+        # key = name, value = (BenchmarkPhase instance, BenchmarkSettings instance)
+        ops = {}
+        for ops_spec_entry in ops_specs:
+            ops_spec_name, ops_spec = next(iter(ops_spec_entry.items()))
+            ops[ops_spec_name] = self._create_op(ops_spec_name, ops_spec, indices)
+
+        return ops
+
+    def _create_op(self, ops_spec_name, ops_spec, indices):
+        benchmark_type = self._r(ops_spec, "type", expected_type=str)
+        if benchmark_type == "index":
+            id_conflicts = self._r(ops_spec, "conflicts", expected_type=str, mandatory=False)
+            if not id_conflicts:
+                id_conflicts = IndexIdConflict.NoConflicts
+            elif id_conflicts == "sequential":
+                id_conflicts = IndexIdConflict.SequentialConflicts
+            elif id_conflicts == "random":
+                id_conflicts = IndexIdConflict.RandomConflicts
+            else:
+                raise TrackSyntaxError("Unknown conflict type '%s' for operation '%s'" % (id_conflicts, ops_spec))
+
+            # TODO dm: Support all parameters here (i.e. force_merge)
+            return BenchmarkPhase.index, IndexBenchmarkSettings(index_settings=self._r(ops_spec, "index-settings"),
+                                                                bulk_size=self._r(ops_spec, "bulk-size", expected_type=int),
+                                                                id_conflicts=id_conflicts)
+        elif benchmark_type == "search":
+            # TODO dm: Implement queries - derive index and type ourselves if there is only one index and one type
+            return BenchmarkPhase.stats, LatencyBenchmarkSettings(
+                warmup_iteration_count=self._r(ops_spec, "warmup-iterations", expected_type=int),
+                iteration_count=self._r(ops_spec, "iterations", expected_type=int)
+            )
+        elif benchmark_type == "stats":
+            return BenchmarkPhase.stats, LatencyBenchmarkSettings(
+                warmup_iteration_count=self._r(ops_spec, "warmup-iterations", expected_type=int),
+                iteration_count=self._r(ops_spec, "iterations", expected_type=int)
+            )
+        else:
+            # TODO: This should actually be the name of the operation, not the ops_spec
+            raise TrackSyntaxError("Unknown benchmark type '%s' for operation '%s'" % (benchmark_type, ops_spec_name))

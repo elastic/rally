@@ -3,7 +3,8 @@
     "#COMMENT#": " can be derived from file name -> convention over configuration",
     "name": "geonames",
     "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
-    "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch"
+    "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+    "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
   },
   "indices": [
     {
@@ -12,11 +13,12 @@
         {
           "#COMMENT#": "Allow generators here - how do we run the generator (i.e. arbitrary Python code)?",
           "name": "type",
+          "mapping": "mappings.json",
           "documents": "documents.json.bz2",
           "document-count": 8647880,
           "compressed-bytes": 197857614,
-          "uncompressed-bytes": 2790927196,
-          "mapping": "mappings.json"
+          "uncompressed-bytes": 2790927196
+
         }
       ]
     }
@@ -77,6 +79,8 @@
     {
       "stats": {
         "type": "stats",
+        "warmup-iterations": 100,
+        "iterations": 100,
         "clients": {
           "count": 1,
           "connections-per-client": 1,
@@ -87,7 +91,7 @@
     {
       "search": {
         "type": "search",
-        "#COMMENT#": "This means 1 operation per second and per client connection",
+        "#COMMENT#": "This means 1 operation per second over all clients and connections",
         "target-throughput": 1,
         "warmup-iterations": 1000,
         "iterations": 1000,
@@ -107,7 +111,15 @@
             }
           },
           {
-            "term": {}
+            "term": {
+              "body": {
+                "query": {
+                  "term": {
+                    "country_code": "AT"
+                  }
+                }
+              }
+            }
           },
           {
             "phrase": {
