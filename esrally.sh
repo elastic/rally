@@ -18,7 +18,7 @@ pushd . >/dev/null 2>&1
 cd ${RALLY_SRC_HOME} >/dev/null 2>&1
 
 # see http://unix.stackexchange.com/a/155077
-if output=$(git status --porcelain) && [ -z "$output" ] && on_master=$(git rev-parse --abbrev-ref HEAD) && [$on_master -eq "master"]
+if output=$(git status --porcelain) && [ -z "$output" ] && on_master=$(git rev-parse --abbrev-ref HEAD) && [ "$on_master" == "master" ]
 then
   # Working directory clean -> we assume this is a user that is not actively developing Rally and just upgrade it every time it is invoked
   echo "Auto-updating Rally"
