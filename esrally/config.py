@@ -403,10 +403,14 @@ class Config:
     def _guess_es_src_dir(self):
         current_dir = os.getcwd()
         # try sibling elasticsearch directory (assuming that Rally is checked out alongside Elasticsearch)
+        #
+        # Note that if the current directory is the elasticsearch project directory, it will also be detected. We just cannot check
+        # the current directory directly, otherwise any directory that is a git working copy will be detected as Elasticsearch project
+        # directory.
         sibling_es_dir = os.path.abspath(os.path.join(current_dir, os.pardir, "elasticsearch"))
         child_es_dir = os.path.abspath(os.path.join(current_dir, "elasticsearch"))
 
-        for candidate in [current_dir, sibling_es_dir, child_es_dir]:
+        for candidate in [sibling_es_dir, child_es_dir]:
             if io.is_git_working_copy(candidate):
                 return candidate
         return None
