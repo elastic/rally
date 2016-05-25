@@ -406,11 +406,9 @@ class Config:
         child_es_dir = os.path.abspath(os.path.join(current_dir, "elasticsearch"))
 
         for candidate in [current_dir, sibling_es_dir, child_es_dir]:
-            if io.is_git_working_copy(candidate, "elastic/elasticsearch.git"):
+            if io.is_git_working_copy(candidate):
                 return candidate
         return None
-
-
 
     def _ask_data_store(self):
         data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")

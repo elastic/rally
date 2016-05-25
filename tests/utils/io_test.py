@@ -41,6 +41,6 @@ class IoTests(TestCase):
 
     def test_is_git_working_copy(self):
         test_dir = os.path.dirname(os.path.dirname(__file__))
-
-        self.assertFalse(io.is_git_working_copy(test_dir, "elastic/rally.git"))
-        self.assertTrue(io.is_git_working_copy(os.path.dirname(test_dir), "elastic/rally.git"))
+        # this test is assuming that nobody stripped the git repo info in their Rally working copy
+        self.assertFalse(io.is_git_working_copy(test_dir))
+        self.assertTrue(io.is_git_working_copy(os.path.dirname(test_dir)))

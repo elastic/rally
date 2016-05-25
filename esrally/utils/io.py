@@ -126,12 +126,13 @@ def _read_symlink(path):
         return None
 
 
-def is_git_working_copy(dir, repo_name):
-    if os.path.exists(dir) and os.path.exists("%s/.git" % dir):
-        repo_url = _run(["git", "-C", dir, "remote", "-v", "get-url", "origin"], fallback="", only_first_line=True)
-        return repo_url.endswith(repo_name)
-    else:
-        return False
+def is_git_working_copy(dir):
+    """
+    Checks whether the given directory is a git working copy.
+    :param dir: A directory. May or may not exist.
+    :return: True iff the given directory is a git working copy.
+    """
+    return os.path.exists(dir) and os.path.exists("%s/.git" % dir)
 
 
 def guess_install_location(binary_name, fallback=None):
@@ -142,7 +143,7 @@ def guess_install_location(binary_name, fallback=None):
     :param fallback: A fallback to return if the binary could not be found on the path.
     :return: The full path to the provided binary or the provided fallback.
     """
-    return _run(["which", binary_name], only_first_line=True)
+    return _run(["which", binary_name], fallback=fallback, only_first_line=True)
 
 
 def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_read_symlink):
@@ -187,4 +188,3 @@ def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_r
                 return path
             else:
                 return fallback
-
