@@ -44,3 +44,8 @@ class IoTests(TestCase):
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
         self.assertFalse(io.is_git_working_copy(test_dir))
         self.assertTrue(io.is_git_working_copy(os.path.dirname(test_dir)))
+
+    def test_normalize_path(self):
+        self.assertEqual("/already/a/normalized/path", io.normalize_path("/already/a/normalized/path"))
+        self.assertEqual("/not/normalized", io.normalize_path("/not/normalized/path/../"))
+        self.assertEqual(os.getenv("HOME"), io.normalize_path("~/Documents/.."))

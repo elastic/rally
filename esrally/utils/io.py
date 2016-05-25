@@ -89,6 +89,15 @@ def dirname(path):
     return os.path.dirname(path)
 
 
+def normalize_path(path):
+    """
+    Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.
+    :param path: A possibly non-normalized path.
+    :return: A normalized path.
+    """
+    return os.path.normpath(os.path.expanduser(path))
+
+
 def splitext(file_name):
     if file_name.endswith(".tar.gz"):
         return file_name[0:-7], file_name[-7:]

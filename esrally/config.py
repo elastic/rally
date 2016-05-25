@@ -328,8 +328,8 @@ class Config:
             else:
                 default_src_dir = "%s/src" % root_dir
                 logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
-                source_dir = self._ask_property("Enter your Elasticsearch project directory:",
-                                                default_value=default_src_dir)
+                source_dir = io.normalize_path(self._ask_property("Enter your Elasticsearch project directory:",
+                                                                  default_value=default_src_dir))
             # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
             repo_url = "https://github.com/elastic/elasticsearch.git"
 
@@ -337,7 +337,7 @@ class Config:
             jdk8_home = default_jdk_8
         else:
             print("")
-            jdk8_home = self._ask_property("Enter the JDK 8 root directory:", check_path_exists=True)
+            jdk8_home = io.normalize_path(self._ask_property("Enter the JDK 8 root directory:", check_path_exists=True))
 
         if advanced_config:
             env_name = self._ask_env_name()
