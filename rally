@@ -33,6 +33,8 @@ fi
 
 popd >/dev/null 2>&1
 
+# Provide a consistent binary name to the user and hide the fact that we call another binary under the hood.
+export RALLY_ALTERNATIVE_BINARY_NAME=$(basename "$0")
 RALLY_ROOT=$(python3 -c "import site; print(site.USER_BASE)")
 RALLY_BIN=${RALLY_ROOT}/bin/esrally
 if [ -x "$RALLY_BIN" ]

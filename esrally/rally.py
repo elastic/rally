@@ -20,6 +20,9 @@ BANNER = """
                 /____/
 """
 
+# Allow an alternative program name be set in case Rally is invoked a wrapper script
+PROGRAM_NAME = os.getenv("RALLY_ALTERNATIVE_BINARY_NAME", "esrally")
+
 
 # we want to use some basic logging even before the output to log file is configured
 def pre_configure_logging():
@@ -48,7 +51,7 @@ def configure_logging(cfg):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog="esrally",
+    parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
                                      epilog="Find out more about Rally at %s" % format.link("https://esrally.readthedocs.io"),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -77,20 +80,20 @@ def parse_args():
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
         "--baseline",
-        help="defines the race timestamp of the baseline for the comparison (see output esrally list races)",
+        help="defines the race timestamp of the baseline for the comparison (see output %s list races)" % PROGRAM_NAME,
         default="")
     compare_parser.add_argument(
         "--contender",
-        help="defines the race timestamp of the contender for the comparison (see output esrally list races)",
+        help="defines the race timestamp of the contender for the comparison (see output %s list races)" % PROGRAM_NAME,
         default="")
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
     for p in [parser, config_parser]:
         p.add_argument(
-                "--advanced-config",
-                help="show additional configuration options when creating the config file (default: false)",
-                default=False,
-                action="store_true")
+            "--advanced-config",
+            help="show additional configuration options when creating the config file (default: false)",
+            default=False,
+            action="store_true")
 
     for p in [parser, race_parser]:
         p.add_argument(
@@ -117,7 +120,7 @@ def parse_args():
         # Add this as a hidden parameter for now, we'll enable support in #92
         p.add_argument(
             "--rounds",
-            #help="Number of times each benchmark is run (default: 3)",
+            # help="Number of times each benchmark is run (default: 3)",
             help=argparse.SUPPRESS,
             default=1,
         )
@@ -140,16 +143,16 @@ def parse_args():
             default="")
         p.add_argument(
             "--track",
-            help="defines which track should be run. List possible tracks with `esrally list tracks` (default: geonames).",
+            help="defines which track should be run. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME,
             default="geonames")
         p.add_argument(
             "--challenge",
-            help="defines which challenge should be run. List possible challenges for tracks with `esrally list tracks`"
-                 " (default: append-no-conflicts).",
+            help="defines which challenge should be run. List possible challenges for tracks with `%s list tracks`"
+                 " (default: append-no-conflicts)." % PROGRAM_NAME,
             default="append-no-conflicts")  # optimized for local usage
         p.add_argument(
             "--car",
-            help="defines which car should drive on a track. List possible cars with `esrally list cars` (default: defaults).",
+            help="defines which car should drive on a track. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
 
         p.add_argument(
@@ -230,7 +233,7 @@ def main():
                 # Reload config after upgrading
                 cfg.load_config()
         else:
-            print("Error: No config present. Please run 'esrally configure' first.")
+            print("Error: No config present. Please run '%s configure' first." % PROGRAM_NAME)
             exit(64)
 
     # Add global meta info derived by rally itself
@@ -265,6 +268,7 @@ def main():
     success = race_control.start(sub_command)
     if not success:
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

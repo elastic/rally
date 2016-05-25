@@ -20,7 +20,7 @@ Installation Instructions for Development
 
     git clone https://github.com/elastic/rally.git
     cd rally
-    ./esrally.sh
+    ./rally
 
 
 If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
@@ -28,7 +28,7 @@ If you get errors during installation, it is probably due to the installation of
 Configuring Rally
 ~~~~~~~~~~~~~~~~~
 
-Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to ``~/.rally/rally.ini``. After you've configured Rally, it will exit.
+Before we can run our first benchmark, we have to configure Rally. Just invoke ``./rally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to ``~/.rally/rally.ini``. After you've configured Rally, it will exit.
 
 For more information see :doc:`configuration help page </configuration>`.
 

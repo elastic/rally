@@ -4,7 +4,7 @@ import urllib.error
 
 import tabulate
 
-from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time
+from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time, rally
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io
 # This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
@@ -55,14 +55,15 @@ class ComponentSelector:
                 return challenge
 
         raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
-                                              "challenges with esrally list tracks." % (selected_challenge, track.name))
+                                              "challenges with %s list tracks." % (selected_challenge, track.name, rally.PROGRAM_NAME))
 
     def find_car(self):
         selected_car = self.ctx.config.opts("benchmarks", "car")
         for car in track.cars:
             if car.name == selected_car:
                 return car
-        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with esrally list cars." % selected_car)
+        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with %s list cars."
+                                              % (selected_car, rally.PROGRAM_NAME))
 
 
 class Pipeline:
@@ -109,7 +110,7 @@ def check_can_handle_source_distribution(ctx, track):
     except config.ConfigError:
         logging.exception("Rally is not configured to build from sources")
         raise exceptions.SystemSetupError("Rally is not setup to build from sources. You can either benchmark a binary distribution or "
-                                          "install the required software and reconfigure Rally with esrally --configure.")
+                                          "install the required software and reconfigure Rally with %s --configure." % rally.PROGRAM_NAME)
 
 
 def kill(ctx, track):
@@ -260,8 +261,9 @@ class RaceControl:
             if command == "list":
                 self._list(ctx)
             elif command == "race":
-                pipeline = self._choose(pipelines, "pipeline", "You can list the available pipelines with esrally list pipelines.")(ctx)
-                t = self._choose(track.tracks, "track", "You can list the available tracks with esrally list tracks.")
+                pipeline = self._choose(pipelines, "pipeline",
+                                        "You can list the available pipelines with %s list pipelines." % rally.PROGRAM_NAME)(ctx)
+                t = self._choose(track.tracks, "track", "You can list the available tracks with %s list tracks." % rally.PROGRAM_NAME)
                 metrics.race_store(self._config).store_race(t)
                 pipeline.run(t)
                 return True
