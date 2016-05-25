@@ -1,23 +1,23 @@
 {
   "meta": {
     "#COMMENT#": " can be derived from file name -> convention over configuration",
-    "name": "geonames",
-    "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+    "name": "tiny",
+    "short-description": "First 2k documents of the geonames track for local tests",
     "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
-    "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
+    "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/tiny"
   },
   "indices": [
     {
-      "name": "geonames",
+      "name": "tiny",
       "types": [
         {
           "#COMMENT#": "Allow generators here - how do we run the generator (i.e. arbitrary Python code)?",
           "name": "type",
           "mapping": "mappings.json",
           "documents": "documents.json.bz2",
-          "document-count": 8647880,
-          "compressed-bytes": 197857614,
-          "uncompressed-bytes": 2790927196
+          "document-count": 2000,
+          "compressed-bytes": 28333,
+          "uncompressed-bytes": 564930
 
         }
       ]

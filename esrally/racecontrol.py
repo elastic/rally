@@ -260,8 +260,9 @@ class RaceControl:
             if command == "list":
                 self._list(ctx)
             elif command == "race":
-                pipeline = self._choose(pipelines, "pipeline", "You can list the available pipelines with esrally list pipelines.")(ctx)
-                t = self._choose(track.tracks, "track", "You can list the available tracks with esrally list tracks.")
+                pipeline = self._choose(lambda n: pipelines[n], "pipeline",
+                                        "You can list the available pipelines with esrally list pipelines.")(ctx)
+                t = self._choose(lambda n: ctx.track_reader.read(n), "track", "You can list the available tracks with esrally list tracks.")
                 metrics.race_store(self._config).store_race(t)
                 pipeline.run(t)
                 return True
@@ -285,11 +286,11 @@ class RaceControl:
             logging.exception("A fatal error occurred while the running benchmark.")
             raise e
 
-    def _choose(self, source, what, help):
+    def _choose(self, loader, what, help):
+        name = self._config.opts("system", what)
         try:
-            name = self._config.opts("system", what)
-            return source[name]
-        except KeyError:
+            return loader(name)
+        except BaseException:
             raise exceptions.ImproperlyConfigured("Unknown %s [%s]. %s" % (what, name, help))
 
     def _list(self, ctx):
@@ -300,8 +301,9 @@ class RaceControl:
             print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
         elif what == "tracks":
             print("Available tracks:\n")
-            print(tabulate.tabulate([[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in track.tracks.values()],
-                                    headers=["Name", "Description", "Challenges"]))
+            print(tabulate.tabulate(
+                tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in ctx.track_reader.all_tracks()],
+                headers=["Name", "Description", "Challenges"]))
 
         elif what == "pipelines":
             print("Available pipelines:\n")
@@ -316,8 +318,7 @@ class RaceControl:
             print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
         elif what == "cars":
             print("Available cars:\n")
-            print(tabulate.tabulate([[car.name] for car in track.cars],
-                                    headers=["Name"]))
+            print(tabulate.tabulate([[car.name] for car in track.cars], headers=["Name"]))
         else:
             raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
 
@@ -329,3 +330,4 @@ class RacingContext:
         self.marshal = track.Marshal(cfg)
         self.reporter = reporter.SummaryReporter(cfg)
         self.sweeper = sweeper.Sweeper(cfg)
+        self.track_reader = track.TrackFileReader(cfg)

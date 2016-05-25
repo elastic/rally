@@ -34,7 +34,7 @@ class TrackReaderTests(TestCase):
         reader = track.TrackReader()
         with self.assertRaises(track.TrackSyntaxError) as ctx:
             reader.read(track_specification)
-        self.assertEqual(ctx.exception.args[0], "Mandatory element 'meta.short-description' is missing")
+        self.assertEqual("Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
 
     def test_wrong_type_for_name_raises_syntax_error(self):
         track_specification = {
@@ -45,14 +45,15 @@ class TrackReaderTests(TestCase):
         reader = track.TrackReader()
         with self.assertRaises(track.TrackSyntaxError) as ctx:
             reader.read(track_specification)
-        self.assertEqual(ctx.exception.args[0], "Value '1.03' of element 'meta.name' is not of expected type '<class 'str'>'")
+        self.assertEqual("Value '1.03' of element 'meta.name' is not of expected type '<class 'str'>'", ctx.exception.args[0])
 
     def test_parse_valid_track_specification(self):
         track_specification = {
             "meta": {
                 "name": "unittest",
                 "short-description": "short description for unit test",
-                "description": "longer description of this track for unit test"
+                "description": "longer description of this track for unit test",
+                "data-url": "https://localhost/data"
             },
             "indices": [
                 {
@@ -77,15 +78,41 @@ class TrackReaderTests(TestCase):
 
                     ]
                 }
+            ],
+            "operations": [
+                {
+                    "index-append": {
+                        "type": "index",
+                        "index-settings": {},
+                        "clients": {
+                            "count": 8
+                        },
+                        "bulk-size": 5000,
+                        "force-merge": False
+                    }
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        "index-append"
+                    ]
+                }
+
             ]
         }
         reader = track.TrackReader()
         resulting_track = reader.read(track_specification)
-        self.assertEqual(resulting_track.name, "unittest")
-        self.assertEqual(resulting_track.short_description, "short description for unit test")
-        self.assertEqual(resulting_track.description, "longer description of this track for unit test")
-        self.assertEqual(len(resulting_track.indices), 1)
-        self.assertEqual(resulting_track.indices[0].name, "index-historical")
-        self.assertEqual(len(resulting_track.indices[0].types), 2)
-        self.assertEqual(resulting_track.indices[0].types[0].name, "main")
-        self.assertEqual(resulting_track.indices[0].types[1].name, "secondary")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("short description for unit test", resulting_track.short_description)
+        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual(1, len(resulting_track.indices))
+        self.assertEqual("index-historical", resulting_track.indices[0].name)
+        self.assertEqual(2, len(resulting_track.indices[0].types))
+        self.assertEqual("main", resulting_track.indices[0].types[0].name)
+        self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
+        self.assertEqual(1, len(resulting_track.challenges))
+        self.assertEqual("default-challenge", resulting_track.challenges[0].name)
+

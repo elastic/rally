@@ -144,9 +144,9 @@ class SummaryReporter:
                 store.open(invocation, t.name, challenge.name, selected_car)
 
                 stats = Stats(store,
-                              self.sample_size(challenge, track.BenchmarkPhase.stats),
-                              t.queries,
-                              self.sample_size(challenge, track.BenchmarkPhase.search))
+                              self.guarded(lambda: challenge.benchmark[track.BenchmarkPhase.stats].iteration_count),
+                              self.guarded(lambda: challenge.benchmark[track.BenchmarkPhase.search].queries),
+                              self.guarded(lambda: challenge.benchmark[track.BenchmarkPhase.search].iteration_count))
 
                 metrics_table = []
                 if track.BenchmarkPhase.index in challenge.benchmark:
@@ -169,10 +169,10 @@ class SummaryReporter:
 
                 print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], numalign="right", stralign="right"))
 
-    def sample_size(self, challenge, benchmark_phase):
-        if track.BenchmarkPhase.stats in challenge.benchmark:
-            return challenge.benchmark[benchmark_phase].iteration_count
-        else:
+    def guarded(self, op):
+        try:
+            return op()
+        except KeyError:
             return None
 
     def report_index_throughput(self, stats):

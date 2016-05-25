@@ -108,7 +108,8 @@ class LatencyBenchmark(Benchmark):
 
 class SearchBenchmark(LatencyBenchmark):
     def __init__(self, cfg, clock, t, challenge, cluster):
-        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search, t.queries,
+        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search,
+                         challenge.benchmark[track.BenchmarkPhase.search].queries,
                          challenge.benchmark[track.BenchmarkPhase.search].warmup_iteration_count,
                          challenge.benchmark[track.BenchmarkPhase.search].iteration_count)
 
@@ -229,7 +230,7 @@ class ThreadedIndexBenchmark(IndexBenchmark):
         super().__init__(config, clock, track, challenge, cluster)
 
     def index_documents(self, ids):
-        num_client_threads = self.challenge.clients
+        num_client_threads = self.challenge.benchmark[track.BenchmarkPhase.index].clients
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
         self.stop_watch.start()
