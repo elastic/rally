@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "track",
+  "description": "Specification of tracks for Rally",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "short-description": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "data-url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "name",
+        "short-description",
+        "description",
+        "data-url"
+      ]
+    },
+    "indices": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Index",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "types": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "title": "Type",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "mapping": {
+                  "type": "string"
+                },
+                "documents": {
+                  "type": "string"
+                },
+                "document-count": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "compressed-bytes": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "uncompressed-bytes": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "name",
+                "mapping",
+                "documents",
+                "document-count",
+                "compressed-bytes",
+                "uncompressed-bytes"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name",
+          "types"
+        ]
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Operation",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["index", "stats", "search"]
+          },
+          "index-settings": {
+            "type": "object"
+          },
+          "bulk-size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "force-merge": {
+            "type": "boolean"
+          },
+          "conflicts": {
+            "type": "string"
+          },
+          "clients": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1024
+              },
+              "connections-per-client": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65536
+              },
+              "compression": {
+                "type": "boolean"
+              }
+            },
+            "required": ["count", "connections-per-client", "compression"]
+          },
+          "warmup-iterations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "queries": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "query-type": {
+                  "type": "string",
+                  "enum": ["scroll"]
+                },
+                "index": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "pages": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "results-per-page": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "body": {
+                  "type": "object"
+                }
+              },
+              "required": ["name"]
+            }
+          }
+        },
+        "required": ["name", "type"]
+      }
+    },
+    "challenges": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Challenge",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "schedule": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "schedule"
+        ]
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@ import collections
 import json
 import urllib.error
 from enum import Enum
+import jsonschema
 
 from esrally import config, exceptions
 from esrally.utils import io, sysstats, convert, process, net
@@ -458,7 +459,7 @@ cars = [
 ]
 
 
-class TrackSyntaxError(Exception):
+class TrackSyntaxError(exceptions.RallyError):
     """
     Raised whenever a syntax problem is encountered when loading the track specification.
     """
@@ -468,6 +469,8 @@ class TrackSyntaxError(Exception):
 class TrackFileReader:
     def __init__(self, cfg):
         self.cfg = cfg
+        track_schema_file = "%s/track/track-schema.json" % (self.cfg.opts("system", "rally.root"))
+        self.track_schema = json.loads(open(track_schema_file).read())
 
     def _all_track_names(self):
         # TODO dm: This will do for now. Resolve this on the file system later (#69).
@@ -480,6 +483,12 @@ class TrackFileReader:
         # TODO dm: This will change with #69
         track_file = "%s/track/%s.json" % (self.cfg.opts("system", "rally.root"), track_name)
         track_spec = json.loads(open(track_file).read())
+        try:
+            jsonschema.validate(track_spec, self.track_schema)
+        except jsonschema.exceptions.ValidationError as ve:
+            raise TrackSyntaxError("Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
+                                   % (track_name, ve.message,
+                                      json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
         return TrackReader().read(track_spec)
 
 
@@ -488,37 +497,17 @@ class TrackReader:
         pass
 
     def read(self, track_specification):
-        name = self._r(track_specification, ["meta", "name"], expected_type=str)
-        short_description = self._r(track_specification, ["meta", "short-description"], expected_type=str)
-        description = self._r(track_specification, ["meta", "description"], expected_type=str)
-        source_root_url = self._r(track_specification, ["meta", "data-url"], expected_type=str)
+        name = self._r(track_specification, ["meta", "name"])
+        short_description = self._r(track_specification, ["meta", "short-description"])
+        description = self._r(track_specification, ["meta", "description"])
+        source_root_url = self._r(track_specification, ["meta", "data-url"])
         indices = [self._create_index(index) for index in self._r(track_specification, "indices")]
         challenges = self._create_challenges(track_specification, indices)
 
         return Track(name=name, short_description=short_description, description=description, source_root_url=source_root_url,
                      challenges=challenges, indices=indices)
 
-    def _check(self, value, msg, validator):
-        if not validator(value):
-            raise TrackSyntaxError(msg)
-        else:
-            return value
-
-    def _check_is_positive(self, name, value, zero_allowed=False):
-        if zero_allowed:
-            validator = lambda v: v >= 0
-        else:
-            validator = lambda v: v > 0
-        return self._check(value, "'%s' must be positive but is %d" % (name, value), validator)
-
-    def _check_non_empty(self, name, value, error_ctx=None):
-        if error_ctx:
-            msg = "'%s' must not be empty in '%s'." % (name, error_ctx)
-        else:
-            msg = "'%s' must not be empty." % name
-        return self._check(value, msg, lambda v: v and len(v) > 0)
-
-    def _r(self, root, path, error_ctx=None, expected_type=None, mandatory=True, default_value=None):
+    def _r(self, root, path, error_ctx=None, mandatory=True, default_value=None):
         if isinstance(path, str):
             path = [path]
 
@@ -526,16 +515,6 @@ class TrackReader:
         try:
             for k in path:
                 structure = structure[k]
-            if expected_type:
-                # either we cannot convert the data to this type or it is already the wrong type
-                try:
-                    converted = expected_type(structure)
-                except BaseException:
-                    raise TrackSyntaxError(
-                        "Value '%s' of element '%s' is not of expected type '%s'" % (structure, ".".join(path), expected_type))
-                if converted != structure:
-                    raise TrackSyntaxError(
-                        "Value '%s' of element '%s' is not of expected type '%s'" % (structure, ".".join(path), expected_type))
             return structure
         except KeyError:
             if mandatory:
@@ -547,29 +526,29 @@ class TrackReader:
                 return default_value
 
     def _create_index(self, index_spec):
-        return Index(name=self._r(index_spec, "name", expected_type=str),
+        return Index(name=self._r(index_spec, "name"),
                      types=[self._create_type(type_spec) for type_spec in self._r(index_spec, "types")]
                      )
 
     def _create_type(self, type_spec):
-        return Type(name=self._r(type_spec, "name", expected_type=str),
-                    mapping_file_name=self._r(type_spec, "mapping", expected_type=str),
-                    document_file_name=self._r(type_spec, "documents", expected_type=str),
-                    number_of_documents=self._r(type_spec, "document-count", expected_type=int),
-                    compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", expected_type=int),
-                    uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", expected_type=int)
+        return Type(name=self._r(type_spec, "name"),
+                    mapping_file_name=self._r(type_spec, "mapping"),
+                    document_file_name=self._r(type_spec, "documents"),
+                    number_of_documents=self._r(type_spec, "document-count"),
+                    compressed_size_in_bytes=self._r(type_spec, "compressed-bytes"),
+                    uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes")
                     )
 
     def _create_challenges(self, track_spec, indices):
         ops = self._parse_operations(self._r(track_spec, "operations"), indices)
         challenges = []
-        for challenge in self._check_non_empty("challenges", self._r(track_spec, "challenges")):
-            challenge_name = self._r(challenge, "name", expected_type=str, error_ctx="challenges")
-            challenge_description = self._r(challenge, "description", expected_type=str, error_ctx=challenge_name)
+        for challenge in self._r(track_spec, "challenges"):
+            challenge_name = self._r(challenge, "name", error_ctx="challenges")
+            challenge_description = self._r(challenge, "description", error_ctx=challenge_name)
             benchmarks = {}
 
             operations_per_type = {}
-            for op in self._check_non_empty("schedule", self._r(challenge, "schedule", error_ctx=challenge_name), error_ctx=challenge_name):
+            for op in self._r(challenge, "schedule", error_ctx=challenge_name):
                 if op not in ops:
                     raise TrackSyntaxError("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
                                            "Please add an operation '%s' to the 'operations' block." % (challenge_name, op, op))
@@ -592,19 +571,16 @@ class TrackReader:
     def _parse_operations(self, ops_specs, indices):
         # key = name, value = (BenchmarkPhase instance, BenchmarkSettings instance)
         ops = {}
-        for ops_spec_entry in ops_specs:
-            try:
-                ops_spec_name, ops_spec = next(iter(ops_spec_entry.items()))
-            except AttributeError:
-                raise TrackSyntaxError("Cannot parse '%s'. The ‘operations' block must contain only operation objects." % ops_spec_entry)
-            ops[ops_spec_name] = self._create_op(ops_spec_name, ops_spec, indices)
+        for op_spec in ops_specs:
+            ops_spec_name = self._r(op_spec, "name", error_ctx="operations")
+            ops[ops_spec_name] = self._create_op(ops_spec_name, op_spec, indices)
 
         return ops
 
     def _create_op(self, ops_spec_name, ops_spec, indices):
-        benchmark_type = self._r(ops_spec, "type", expected_type=str)
+        benchmark_type = self._r(ops_spec, "type")
         if benchmark_type == "index":
-            id_conflicts = self._r(ops_spec, "conflicts", expected_type=str, mandatory=False)
+            id_conflicts = self._r(ops_spec, "conflicts", mandatory=False)
             if not id_conflicts:
                 id_conflicts = IndexIdConflict.NoConflicts
             elif id_conflicts == "sequential":
@@ -616,35 +592,22 @@ class TrackReader:
 
             return (BenchmarkPhase.index,
                     IndexBenchmarkSettings(index_settings=self._r(ops_spec, "index-settings", error_ctx=ops_spec_name),
-                                           clients=self._check_is_positive("count",
-                                                                           self._r(ops_spec, ["clients", "count"],
-                                                                                   expected_type=int, error_ctx=ops_spec_name)),
-                                           bulk_size=self._check_is_positive("bulk-size",
-                                                                             self._r(ops_spec, "bulk-size",
-                                                                                     expected_type=int, error_ctx=ops_spec_name)),
-                                           force_merge=self._r(ops_spec, "force-merge", expected_type=bool, error_ctx=ops_spec_name),
+                                           clients=self._r(ops_spec, ["clients", "count"], error_ctx=ops_spec_name),
+                                           bulk_size=self._r(ops_spec, "bulk-size", error_ctx=ops_spec_name),
+                                           force_merge=self._r(ops_spec, "force-merge", error_ctx=ops_spec_name),
                                            id_conflicts=id_conflicts))
         elif benchmark_type == "search":
             # TODO: Honor clients settings
             return (BenchmarkPhase.search,
                     LatencyBenchmarkSettings(queries=self._create_queries(self._r(ops_spec, "queries", error_ctx=ops_spec_name), indices),
-                                             warmup_iteration_count=self._check_is_positive("warmup-iterations",
-                                                                                            self._r(ops_spec, "warmup-iterations",
-                                                                                                    expected_type=int,
-                                                                                                    error_ctx=ops_spec_name)
-                                                                                            , zero_allowed=True),
-                                             iteration_count=self._check_is_positive("iterations",
-                                                                                     self._r(ops_spec, "iterations", expected_type=int))))
+                                             warmup_iteration_count=self._r(ops_spec, "warmup-iterations", error_ctx=ops_spec_name),
+                                             iteration_count=self._r(ops_spec, "iterations")))
         elif benchmark_type == "stats":
             # TODO: Honor clients settings
             return (BenchmarkPhase.stats,
                     LatencyBenchmarkSettings(
-                       warmup_iteration_count=self._check_is_positive("warmup-iterations",
-                                                                      self._r(ops_spec, "warmup-iterations", expected_type=int,
-                                                                              error_ctx=ops_spec_name),
-                                                                      zero_allowed=True),
-                       iteration_count=self._check_is_positive("iterations", self._r(ops_spec, "iterations", expected_type=int,
-                                                                                     error_ctx=ops_spec_name))))
+                        warmup_iteration_count=self._r(ops_spec, "warmup-iterations", error_ctx=ops_spec_name),
+                        iteration_count=self._r(ops_spec, "iterations", error_ctx=ops_spec_name)))
         else:
             raise TrackSyntaxError("Unknown benchmark type '%s' for operation '%s'" % (benchmark_type, ops_spec_name))
 
@@ -656,25 +619,24 @@ class TrackReader:
             default_index = None
             default_type = None
         queries = []
-        for query_spec_entry in queries_spec:
-            query_name, query_spec = next(iter(query_spec_entry.items()))
-            query_type = self._r(query_spec, "type", expected_type=str, mandatory=False, default_value="default", error_ctx=query_name)
+        for query_spec in queries_spec:
+            query_name = self._r(query_spec, "name")
+            query_type = self._r(query_spec, "query-type", mandatory=False, default_value="default", error_ctx=query_name)
 
-            index_name = self._r(query_spec, "index", expected_type=str, mandatory=False, default_value=default_index, error_ctx=query_name)
-            type_name = self._r(query_spec, "type", expected_type=str, mandatory=False, default_value=default_type, error_ctx=query_name)
+            index_name = self._r(query_spec, "index", mandatory=False, default_value=default_index, error_ctx=query_name)
+            type_name = self._r(query_spec, "type", mandatory=False, default_value=default_type, error_ctx=query_name)
 
             if not index_name or not type_name:
                 raise TrackSyntaxError("Query '%s' requires an index and a type." % query_name)
-            request_cache = self._r(query_spec, "cache", expected_type=bool, mandatory=False, default_value=False, error_ctx=query_name)
+            request_cache = self._r(query_spec, "cache", mandatory=False, default_value=False, error_ctx=query_name)
             if query_type == "default":
                 query_body = self._r(query_spec, "body", error_ctx=query_name)
                 queries.append(DefaultQuery(index=index_name, type=type_name, name=query_name,
                                             body=query_body, use_request_cache=request_cache))
             elif query_type == "scroll":
                 query_body = self._r(query_spec, "body", mandatory=False, error_ctx=query_name)
-                pages = self._check_is_positive("pages", self._r(query_spec, "pages", expected_type=int, error_ctx=query_name))
-                items_per_page = self._check_is_positive("results-per-page",
-                                                         self._r(query_spec, "results-per-page", expected_type=int, error_ctx=query_name))
+                pages = self._r(query_spec, "pages", error_ctx=query_name)
+                items_per_page = self._r(query_spec, "results-per-page", error_ctx=query_name)
                 queries.append(ScrollQuery(index=index_name, type=type_name, name=query_name, body=query_body,
                                            use_request_cache=request_cache, pages=pages, items_per_page=items_per_page))
             else:

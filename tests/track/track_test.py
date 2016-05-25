@@ -36,17 +36,6 @@ class TrackReaderTests(TestCase):
             reader.read(track_specification)
         self.assertEqual("Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
 
-    def test_wrong_type_for_name_raises_syntax_error(self):
-        track_specification = {
-            "meta": {
-                "name": 1.03
-            }
-        }
-        reader = track.TrackReader()
-        with self.assertRaises(track.TrackSyntaxError) as ctx:
-            reader.read(track_specification)
-        self.assertEqual("Value '1.03' of element 'meta.name' is not of expected type '<class 'str'>'", ctx.exception.args[0])
-
     def test_parse_valid_track_specification(self):
         track_specification = {
             "meta": {
@@ -81,15 +70,14 @@ class TrackReaderTests(TestCase):
             ],
             "operations": [
                 {
-                    "index-append": {
-                        "type": "index",
-                        "index-settings": {},
-                        "clients": {
-                            "count": 8
-                        },
-                        "bulk-size": 5000,
-                        "force-merge": False
-                    }
+                    "name": "index-append",
+                    "type": "index",
+                    "index-settings": {},
+                    "clients": {
+                        "count": 8
+                    },
+                    "bulk-size": 5000,
+                    "force-merge": False
                 }
             ],
             "challenges": [

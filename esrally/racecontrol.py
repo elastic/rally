@@ -290,7 +290,7 @@ class RaceControl:
         name = self._config.opts("system", what)
         try:
             return loader(name)
-        except BaseException:
+        except (KeyError, FileNotFoundError):
             raise exceptions.ImproperlyConfigured("Unknown %s [%s]. %s" % (what, name, help))
 
     def _list(self, ctx):

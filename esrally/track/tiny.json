@@ -1,6 +1,5 @@
 {
   "meta": {
-    "#COMMENT#": " can be derived from file name -> convention over configuration",
     "name": "tiny",
     "short-description": "First 2k documents of the geonames track for local tests",
     "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
@@ -18,7 +17,6 @@
           "document-count": 2000,
           "compressed-bytes": 28333,
           "uncompressed-bytes": 564930
-
         }
       ]
     }
@@ -26,173 +24,162 @@
   "#COMMENT": "'operations' just define all possible operations but this is not the actual execution schedule. The execution is defined in the 'challenges' block and it just refers to the defined operations. The intention between this separation is to allow reuse of operations",
   "operations": [
     {
-      "index-append-default-settings": {
-        "type": "index",
-        "#COMMENT#": "Rally will refuse to benchmark against a cluster that is in any other state as 'green'",
-        "index-settings": {
-          "index.number_of_replicas": 0
-        },
-        "bulk-size": 5000,
-        "force-merge": true,
-        "clients": {
-          "count": 8,
-          "connections-per-client": 4,
-          "compression": false,
-          "#COMMENT#": "No authentication here - depends on server-side setup"
-        }
+      "name": "index-append-default-settings",
+      "type": "index",
+      "#COMMENT#": "Rally will refuse to benchmark against a cluster that is in any other state as 'green'",
+      "index-settings": {
+        "index.number_of_replicas": 0
+      },
+      "bulk-size": 5000,
+      "force-merge": true,
+      "clients": {
+        "count": 8,
+        "connections-per-client": 4,
+        "compression": false,
+        "#COMMENT#": "No authentication here - depends on server-side setup"
       }
     },
     {
-      "index-append-fast-settings": {
-        "type": "index",
-        "index-settings": {
-          "index.number_of_replicas": 0,
-          "index.refresh_interval": "30s",
-          "index.number_of_shards": 6,
-          "index.translog.flush_threshold_size": "4g"
-        },
-        "force-merge": true,
-        "bulk-size": 5000,
-        "clients": {
-          "count": 8,
-          "connections-per-client": 4,
-          "compression": false
-        }
+      "name": "index-append-fast-settings",
+      "type": "index",
+      "index-settings": {
+        "index.number_of_replicas": 0,
+        "index.refresh_interval": "30s",
+        "index.number_of_shards": 6,
+        "index.translog.flush_threshold_size": "4g"
+      },
+      "force-merge": true,
+      "bulk-size": 5000,
+      "clients": {
+        "count": 8,
+        "connections-per-client": 4,
+        "compression": false
       }
     },
     {
-      "index-append-update-fast-settings": {
-        "type": "index",
-        "index-settings": {
-          "index.number_of_replicas": 0,
-          "index.refresh_interval": "30s",
-          "index.number_of_shards": 6,
-          "index.translog.flush_threshold_size": "4g"
-        },
-        "bulk-size": 5000,
-        "force-merge": true,
-        "conflicts": "sequential",
-        "clients": {
-          "count": 8,
-          "connections-per-client": 4,
-          "compression": false
-        }
+      "name": "index-append-update-fast-settings",
+      "type": "index",
+      "index-settings": {
+        "index.number_of_replicas": 0,
+        "index.refresh_interval": "30s",
+        "index.number_of_shards": 6,
+        "index.translog.flush_threshold_size": "4g"
+      },
+      "bulk-size": 5000,
+      "force-merge": true,
+      "conflicts": "sequential",
+      "clients": {
+        "count": 8,
+        "connections-per-client": 4,
+        "compression": false
       }
     },
     {
-      "stats": {
-        "type": "stats",
-        "warmup-iterations": 100,
-        "iterations": 100,
-        "clients": {
-          "count": 1,
-          "connections-per-client": 1,
-          "compression": false
-        }
+      "name": "stats",
+      "type": "stats",
+      "warmup-iterations": 100,
+      "iterations": 100,
+      "clients": {
+        "count": 1,
+        "connections-per-client": 1,
+        "compression": false
       }
     },
     {
-      "search": {
-        "type": "search",
-        "#COMMENT#": "This means 1 operation per second over all clients and connections",
-        "target-throughput": 1,
-        "warmup-iterations": 1000,
-        "iterations": 1000,
-        "clients": {
-          "count": 8,
-          "connections-per-client": 4,
-          "compression": false
+      "name": "search",
+      "type": "search",
+      "#COMMENT#": "This means 1 operation per second over all clients and connections",
+      "target-throughput": 1,
+      "warmup-iterations": 1000,
+      "iterations": 1000,
+      "clients": {
+        "count": 8,
+        "connections-per-client": 4,
+        "compression": false
+      },
+      "queries": [
+        {
+          "name": "default",
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
         },
-        "queries": [
-          {
-            "default": {
-              "body": {
-                "query": {
-                  "match_all": {}
-                }
+        {
+          "name": "term",
+          "body": {
+            "query": {
+              "term": {
+                "country_code": "AT"
               }
             }
-          },
-          {
-            "term": {
-              "body": {
-                "query": {
-                  "term": {
-                    "country_code": "AT"
-                  }
-                }
+          }
+        },
+        {
+          "name": "phrase",
+          "body": {
+            "query": {
+              "match_phrase": {
+                "name": "Sankt Georgen"
               }
             }
-          },
-          {
-            "phrase": {
-              "body": {
-                "query": {
-                  "match_phrase": {
-                    "name": "Sankt Georgen"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "country_agg_uncached": {
-              "cache": false,
-              "body": {
-                "size": 0,
+          }
+        },
+        {
+          "name": "country_agg_uncached",
+          "cache": false,
+          "body": {
+            "size": 0,
+            "aggs": {
+              "country_population": {
+                "terms": {
+                  "field": "country_code"
+                },
                 "aggs": {
-                  "country_population": {
-                    "terms": {
-                      "field": "country_code"
-                    },
-                    "aggs": {
-                      "sum_population": {
-                        "sum": {
-                          "field": "population"
-                        }
-                      }
+                  "sum_population": {
+                    "sum": {
+                      "field": "population"
                     }
                   }
-                }
-              }
-            }
-          },
-          {
-            "country_agg_cached": {
-              "cache": true,
-              "body": {
-                "size": 0,
-                "aggs": {
-                  "country_population": {
-                    "terms": {
-                      "field": "country_code"
-                    },
-                    "aggs": {
-                      "sum_population": {
-                        "sum": {
-                          "field": "population"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "scroll": {
-              "type": "scroll",
-              "pages": 25,
-              "results-per-page": 1000,
-              "body": {
-                "query": {
-                  "match_all": {}
                 }
               }
             }
           }
-        ]
-      }
+        },
+        {
+          "name": "country_agg_cached",
+          "cache": true,
+          "body": {
+            "size": 0,
+            "aggs": {
+              "country_population": {
+                "terms": {
+                  "field": "country_code"
+                },
+                "aggs": {
+                  "sum_population": {
+                    "sum": {
+                      "field": "population"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "scroll",
+          "query-type": "scroll",
+          "pages": 25,
+          "results-per-page": 1000,
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        }
+      ]
     }
   ],
   "challenges": [
@@ -220,7 +207,6 @@
         "index-append-update-fast-settings"
       ]
     }
-
   ]
 }
 
