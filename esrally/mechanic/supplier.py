@@ -78,7 +78,7 @@ class Supplier:
     def _update(self):
         revision = self._config.opts("source", "revision")
         if revision == "latest":
-            logger.info("Fetching latest sources from %s." % self._repo.remote_url)
+            logger.info("Fetching latest sources from origin.")
             self._repo.pull()
         elif revision == "current":
             logger.info("Skip fetching sources")
