@@ -6,7 +6,7 @@ import logging
 import argparse
 import pkg_resources
 
-from esrally import config, paths, racecontrol
+from esrally import config, paths, racecontrol, PROGRAM_NAME
 from esrally.utils import io, format
 
 __version__ = pkg_resources.require("esrally")[0].version
@@ -19,10 +19,6 @@ BANNER = """
 /_/ |_|\__,_/_/_/\__, /
                 /____/
 """
-
-# Allow an alternative program name be set in case Rally is invoked a wrapper script
-PROGRAM_NAME = os.getenv("RALLY_ALTERNATIVE_BINARY_NAME", "esrally")
-
 
 # we want to use some basic logging even before the output to log file is configured
 def pre_configure_logging():

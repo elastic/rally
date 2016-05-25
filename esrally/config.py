@@ -6,7 +6,7 @@ import configparser
 from enum import Enum
 
 from esrally.utils import io, format, convert
-from esrally import time, rally
+from esrally import time, PROGRAM_NAME
 
 logger = logging.getLogger("rally.config")
 
@@ -210,7 +210,7 @@ class Config:
             print("")
             print("and then rerun Rally's configuration routine:")
             print("")
-            print("  %s configure" % rally.PROGRAM_NAME)
+            print("  %s configure" % PROGRAM_NAME)
             print("")
             print("Please also note you have %.1f GB of data in your current benchmark directory at"
                   % convert.bytes_to_gb(io.get_size(root_dir)))
@@ -274,7 +274,7 @@ class Config:
         else:
             print("Running simple configuration. You can run the advanced configuration with:")
             print("")
-            print("  %s configure --advanced-config" % rally.PROGRAM_NAME)
+            print("  %s configure --advanced-config" % PROGRAM_NAME)
             print("")
             logger.debug("Running simple configuration routine.")
 
@@ -309,7 +309,7 @@ class Config:
             print("")
             print("You can still benchmark binary distributions with e.g.:")
             print("")
-            print("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % rally.PROGRAM_NAME)
+            print("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
             print("")
             print("See %s" % format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
             print("**********************************************************************************")
@@ -390,15 +390,15 @@ class Config:
         if benchmark_from_sources:
             print("To benchmark the currently checked out version of Elasticsearch with the default benchmark run:")
             print("")
-            print("  %s" % rally.PROGRAM_NAME)
+            print("  %s" % PROGRAM_NAME)
         else:
             print("To benchmark Elasticsearch 5.0.0-alpha2 with the default benchmark run:")
             print("")
-            print("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % rally.PROGRAM_NAME)
+            print("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
 
         print()
         print("For help, type %s --help or see the user documentation at %s"
-              % (rally.PROGRAM_NAME, format.link("https://esrally.readthedocs.io")))
+              % (PROGRAM_NAME, format.link("https://esrally.readthedocs.io")))
 
     def _guess_es_src_dir(self):
         current_dir = os.getcwd()
