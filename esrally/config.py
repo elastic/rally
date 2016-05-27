@@ -3,6 +3,7 @@ import shutil
 import re
 import logging
 import configparser
+import getpass
 from enum import Enum
 
 from esrally.utils import io, format, convert
@@ -422,7 +423,7 @@ class Config:
                                                check_pattern=Config.BOOLEAN_PATTERN)
         data_store_user = self._ask_property("Username for basic authentication (empty if not needed)", mandatory=False, default_value="")
         data_store_password = self._ask_property("Password for basic authentication (empty if not needed)", mandatory=False,
-                                                 default_value="")
+                                                 default_value="", sensitive=True)
         # do an intermediate conversion to bool in order to normalize input
         return data_store_host, data_store_port, str(self._to_bool(data_store_secure)), data_store_user, data_store_password
 
@@ -430,12 +431,16 @@ class Config:
         return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
                                   check_pattern=Config.ENV_NAME_PATTERN)
 
-    def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, default_value=None):
+    def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, sensitive=False, default_value=None):
+        if default_value is not None:
+            final_prompt = "%s [default: '%s']: " % (prompt, default_value)
+        else:
+            final_prompt = "%s: " % prompt
         while True:
-            if default_value is not None:
-                value = input("%s [default: '%s']: " % (prompt, default_value))
+            if sensitive:
+                value = getpass.getpass(prompt=final_prompt)
             else:
-                value = input("%s: " % prompt)
+                value = input(final_prompt)
 
             if not value or value.strip() == "":
                 if mandatory and default_value is None:
