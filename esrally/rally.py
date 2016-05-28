@@ -20,6 +20,7 @@ BANNER = """
                 /____/
 """
 
+
 # we want to use some basic logging even before the output to log file is configured
 def pre_configure_logging():
     logging.basicConfig(level=logging.INFO)
@@ -203,21 +204,7 @@ def derive_sub_command(args, cfg):
         return "configure"
 
 
-def csv_to_list(csv):
-    if csv is None:
-        return None
-    else:
-        return [e.strip() for e in csv.split(",")]
-
-
-def main():
-    pre_configure_logging()
-    args = parse_args()
-    print(BANNER)
-
-    cfg = config.Config(config_name=args.configuration_name)
-    sub_command = derive_sub_command(args, cfg)
-
+def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
         cfg.create_config(advanced_config=args.advanced_config)
         exit(0)
@@ -232,6 +219,25 @@ def main():
             print("Error: No config present. Please run '%s configure' first." % PROGRAM_NAME)
             exit(64)
 
+
+def dispatch_sub_command(cfg, sub_command):
+    race_control = racecontrol.RaceControl(cfg)
+    return race_control.start(sub_command)
+
+
+def csv_to_list(csv):
+    if csv is None:
+        return None
+    else:
+        return [e.strip() for e in csv.split(",")]
+
+
+def main():
+    pre_configure_logging()
+    args = parse_args()
+    print(BANNER)
+
+    cfg = config.Config(config_name=args.configuration_name)
     # Add global meta info derived by rally itself
     cfg.add(config.Scope.application, "meta", "time.start", args.effective_start_date)
     cfg.add(config.Scope.application, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
@@ -251,17 +257,16 @@ def main():
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
-    if sub_command == "list":
-        cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-        cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-    if sub_command == "compare":
-        cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
-        cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
+    cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
+    cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+    cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
+    cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
+    sub_command = derive_sub_command(args, cfg)
+    ensure_configuration_present(cfg, args, sub_command)
     configure_logging(cfg)
 
-    race_control = racecontrol.RaceControl(cfg)
-    success = race_control.start(sub_command)
+    success = dispatch_sub_command(cfg, sub_command)
     if not success:
         sys.exit(1)
 
