@@ -81,18 +81,21 @@ class LatencyBenchmark(Benchmark):
         times = []
         quiet = self.quiet_mode
         if not quiet:
-            self._print_progress(message, 0)
+            self._print_progress(message, 0, repetitions)
         for iteration in range(1, repetitions + 1):
             if not quiet:
-                self._print_progress(message, iteration)
+                self._print_progress(message, iteration, repetitions)
             times.append(self._run_one_round())
         self.progress.finish()
         return times
 
-    def _print_progress(self, message, iteration):
-        if iteration % (self.repetitions // 20) == 0:
-            progress_percent = round(100 * iteration / self.repetitions)
-            self.progress.print(message % (self.phase.name, iteration, self.repetitions), "[%3d%% done]" % progress_percent)
+    def _print_progress(self, message, iteration, repetitions):
+        if repetitions == 0:
+            self.progress.print(message % (self.phase.name, iteration, repetitions), "[100% done]")
+        else:
+            if iteration % (self.repetitions // 20) == 0:
+                progress_percent = round(100 * iteration / repetitions)
+                self.progress.print(message % (self.phase.name, iteration, repetitions), "[%3d%% done]" % progress_percent)
 
     def _run_one_round(self):
         d = {}
