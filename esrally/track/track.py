@@ -566,7 +566,7 @@ class TrackReader:
         return Type(name=self._r(type_spec, "name"),
                     mapping_file_name=self._r(type_spec, "mapping"),
                     document_file_name=self._r(type_spec, "documents", mandatory=False),
-                    number_of_documents=self._r(type_spec, "document-count", mandatory=False),
+                    number_of_documents=self._r(type_spec, "document-count", mandatory=False, default_value=0),
                     compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", mandatory=False),
                     uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", mandatory=False)
                     )
