@@ -1,0 +1,239 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "track",
+  "description": "Specification of tracks for Rally",
+  "type": "object",
+  "properties": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "short-description": {
+          "type": "string",
+          "description": "A short description of this track suitable for command line usage. It should be less than 80 characters."
+        },
+        "description": {
+          "type": "string",
+          "description": "A longer description of this track."
+        },
+        "data-url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The root URL for track data. Has to be a publicly accessible http or https URL."
+        }
+      },
+      "required": [
+        "short-description",
+        "description",
+        "data-url"
+      ]
+    },
+    "indices": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Index",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the index to create."
+          },
+          "types": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "title": "Type",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the type to create."
+                },
+                "mapping": {
+                  "type": "string",
+                  "description": "File name of the corresponding mapping file. Example: mappings-mytype.json"
+                },
+                "documents": {
+                  "type": "string",
+                  "description": "File name of the corresponding documents that should be indexed. This file has to be compressed either as bz2, zip or tar.gz and must contain exactly one JSON file with the same name (Examples: documents.json.bz2, documents.zip (which should contain one file called 'documents.json')). At least one type must set this property and also document-count, compressed-bytes and uncompressed-bytes."
+                },
+                "document-count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Number of documents in the documents file. This number will be used to verify that all documents have been indexed successfully."
+                },
+                "compressed-bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The size in bytes of the compressed document file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete."
+                },
+                "uncompressed-bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The size in bytes of the documents file after decompression."
+                }
+              },
+              "required": [
+                "name",
+                "mapping"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name",
+          "types"
+        ]
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "The 'operations' block describes the operations that can be executed. These can be reused later in the 'challenges' block which describes the actual execution schedule.",
+      "items": {
+        "title": "Operation",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A human-readable name of this operation"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["index", "stats", "search"],
+            "description": "Type of this operation. Possible values are: 'index', 'stats', 'search'."
+          },
+          "index-settings": {
+            "type": "object",
+            "description": "[Only for type == 'index']: Defines the index settings of the benchmark candidate when the index is created."
+          },
+          "bulk-size": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "[Only for type == 'index']: Defines the bulk size."
+          },
+          "force-merge": {
+            "type": "boolean",
+            "description": "[Only for type == 'index']: Whether to perform a force merge after the index benchmark is done. It is recommended to do a force-merge when benchmarking search after indexing in order to reduce run-to-run variance."
+          },
+          "conflicts": {
+            "type": "string",
+            "enum": ["sequential", "random"],
+            "description": "[Only for type == 'index']: Type of index conflicts to simulate. If not specified, no conflicts will be simulated. Valid values are: 'sequential' (A document id is replaced with a document id with a sequentially increasing id), 'random' (A document id is replaced with a document id with a random other id)."
+          },
+          "clients": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1024,
+                "description": "Number of clients which should execute this operation."
+              },
+              "compression": {
+                "type": "boolean",
+                "description": "Whether to compress requests on the client."
+              }
+            },
+            "required": ["count"]
+          },
+          "warmup-iterations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "[Only for types 'stats', 'search']: Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "[Only for types 'stats', 'search']: Defines the number of times to run the operation."
+          },
+          "queries": {
+            "type": "array",
+            "minItems": 1,
+            "description": "[Only for type 'search']: Defines the queries to execute.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "A descriptive name for the query. It is recommended to use short names and to hyphenate parts of the words, e.g. 'query-most-recent-docs'. This name can be used to create graphs per query in Kibana."
+                },
+                "cache": {
+                  "type": "boolean",
+                  "description": "Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version."
+                },
+                "query-type": {
+                  "type": "string",
+                  "enum": ["scroll"],
+                  "description": "The type of query. Should currently only be set for 'scroll' queries (as they require additional properties and also behave differently). If not defined, a request body search will be executed."
+                },
+                "index": {
+                  "type": "string",
+                  "description": "The index or index pattern against which the query should be executed. This property is only necessary if there is more than one index or the index contains more than one type. Otherwise, Rally will derive the index and type by itself."
+                },
+                "type": {
+                  "type": "string",
+                  "description": "The type against which the query should be executed. This property is only necessary if there is more than one index or the index contains more than one type. Otherwise, Rally will derive the index and type by itself."
+                },
+                "pages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "[Only for query-type 'scroll'] Number of pages to retrieve."
+                },
+                "results-per-page": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "[Only for query-type 'scroll'] Number of documents to retrieve per page."
+                },
+                "body": {
+                  "type": "object",
+                  "description": "The query body."
+                }
+              },
+              "required": ["name"]
+            }
+          }
+        },
+        "required": ["name", "type"]
+      }
+    },
+    "challenges": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Challenge",
+        "type": "object",
+        "description": "Defines the concrete execution order",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users."
+          },
+          "description": {
+            "type": "string",
+            "description": "A human readable description of the challenge"
+          },
+          "schedule": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "description": "Defines the concrete execution order of operations. Currently, all operations are executed sequentially.",
+            "items": {
+              "type": "string",
+              "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
+            }
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "schedule"
+        ]
+      }
+    }
+  }
+}

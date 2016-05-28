@@ -14,6 +14,7 @@ install_requires = [
     "psutil==4.1.0",
     "py-cpuinfo==0.2.3",
     "tabulate==0.7.5",
+    "jsonschema==2.5.1",
     # always use the latest version, these are certificate files...
     "certifi"
 ]

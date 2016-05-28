@@ -59,39 +59,43 @@ class Benchmark:
 
 
 class LatencyBenchmark(Benchmark):
-    def __init__(self, cfg, clock, track, challenge, cluster, phase, queries, repetitions=1000):
+    def __init__(self, cfg, clock, track, challenge, cluster, phase, queries, warmup_repetitions=1000, repetitions=1000):
         Benchmark.__init__(self, cfg, clock, track, challenge, cluster, phase)
         self.queries = queries
+        self.warmup_repetitions = warmup_repetitions
         self.repetitions = repetitions
         self.stop_watch = self.clock.stop_watch()
 
     def run(self):
         logger.info("Running warmup iterations")
-        self._run_benchmark("  Benchmarking %s (warmup iteration %d/%d)")
+        self._run_benchmark("  Benchmarking %s (warmup iteration %d/%d)", self.warmup_repetitions)
         logger.info("Running measurement iterations")
-        times = self._run_benchmark("  Benchmarking %s (iteration %d/%d)")
+        times = self._run_benchmark("  Benchmarking %s (iteration %d/%d)", self.repetitions)
 
         for q in self.queries:
             latencies = [t[q.name] for t in times]
             for latency in latencies:
                 self.metrics_store.put_value_cluster_level("query_latency_%s" % q.name, convert.seconds_to_ms(latency), "ms")
 
-    def _run_benchmark(self, message):
+    def _run_benchmark(self, message, repetitions):
         times = []
         quiet = self.quiet_mode
         if not quiet:
-            self._print_progress(message, 0)
-        for iteration in range(1, self.repetitions + 1):
+            self._print_progress(message, 0, repetitions)
+        for iteration in range(1, repetitions + 1):
             if not quiet:
-                self._print_progress(message, iteration)
+                self._print_progress(message, iteration, repetitions)
             times.append(self._run_one_round())
         self.progress.finish()
         return times
 
-    def _print_progress(self, message, iteration):
-        if iteration % (self.repetitions // 20) == 0:
-            progress_percent = round(100 * iteration / self.repetitions)
-            self.progress.print(message % (self.phase.name, iteration, self.repetitions), "[%3d%% done]" % progress_percent)
+    def _print_progress(self, message, iteration, repetitions):
+        if repetitions == 0:
+            self.progress.print(message % (self.phase.name, iteration, repetitions), "[100% done]")
+        else:
+            progress_percent = round(100 * iteration / repetitions)
+            if ((100 * iteration) / repetitions) % 5 == 0:
+                self.progress.print(message % (self.phase.name, iteration, repetitions), "[%3d%% done]" % progress_percent)
 
     def _run_one_round(self):
         d = {}
@@ -107,7 +111,9 @@ class LatencyBenchmark(Benchmark):
 
 class SearchBenchmark(LatencyBenchmark):
     def __init__(self, cfg, clock, t, challenge, cluster):
-        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search, t.queries,
+        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search,
+                         challenge.benchmark[track.BenchmarkPhase.search].queries,
+                         challenge.benchmark[track.BenchmarkPhase.search].warmup_iteration_count,
                          challenge.benchmark[track.BenchmarkPhase.search].iteration_count)
 
 
@@ -134,7 +140,8 @@ class StatsBenchmark(LatencyBenchmark):
         super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.stats, [
             StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
             StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
-        ], challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
+        ], challenge.benchmark[track.BenchmarkPhase.stats].warmup_iteration_count,
+           challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
 
 
 class IndexedDocumentCountProbe:
@@ -226,7 +233,7 @@ class ThreadedIndexBenchmark(IndexBenchmark):
         super().__init__(config, clock, track, challenge, cluster)
 
     def index_documents(self, ids):
-        num_client_threads = self.challenge.clients
+        num_client_threads = self.challenge.benchmark[track.BenchmarkPhase.index].clients
         logger.info("Launching %d client bulk indexing threads" % num_client_threads)
 
         self.stop_watch.start()

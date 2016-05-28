@@ -1,0 +1,196 @@
+{
+  "meta": {
+    "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+    "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+    "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
+  },
+  "indices": [
+    {
+      "name": "geonames",
+      "types": [
+        {
+          "name": "type",
+          "mapping": "mappings.json",
+          "documents": "documents.json.bz2",
+          "document-count": 8647880,
+          "compressed-bytes": 197857614,
+          "uncompressed-bytes": 2790927196
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "name": "index-append-default-settings",
+      "type": "index",
+      "index-settings": {
+        "index.number_of_replicas": 0
+      },
+      "bulk-size": 5000,
+      "force-merge": true,
+      "clients": {
+        "count": 8
+      }
+    },
+    {
+      "name": "index-append-fast-settings",
+      "type": "index",
+      "index-settings": {
+        "index.number_of_replicas": 0,
+        "index.refresh_interval": "30s",
+        "index.number_of_shards": 6,
+        "index.translog.flush_threshold_size": "4g"
+      },
+      "force-merge": true,
+      "bulk-size": 5000,
+      "clients": {
+        "count": 8
+      }
+    },
+    {
+      "name": "index-append-update-fast-settings",
+      "type": "index",
+      "index-settings": {
+        "index.number_of_replicas": 0,
+        "index.refresh_interval": "30s",
+        "index.number_of_shards": 6,
+        "index.translog.flush_threshold_size": "4g"
+      },
+      "bulk-size": 5000,
+      "force-merge": true,
+      "conflicts": "sequential",
+      "clients": {
+        "count": 8
+      }
+    },
+    {
+      "name": "stats",
+      "type": "stats",
+      "warmup-iterations": 100,
+      "iterations": 100,
+      "clients": {
+        "count": 1
+      }
+    },
+    {
+      "name": "search",
+      "type": "search",
+      "target-throughput": 1,
+      "warmup-iterations": 1000,
+      "iterations": 1000,
+      "clients": {
+        "count": 1
+      },
+      "queries": [
+        {
+          "name": "default",
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        },
+        {
+          "name": "term",
+          "body": {
+            "query": {
+              "term": {
+                "country_code": "AT"
+              }
+            }
+          }
+        },
+        {
+          "name": "phrase",
+          "body": {
+            "query": {
+              "match_phrase": {
+                "name": "Sankt Georgen"
+              }
+            }
+          }
+        },
+        {
+          "name": "country_agg_uncached",
+          "cache": false,
+          "body": {
+            "size": 0,
+            "aggs": {
+              "country_population": {
+                "terms": {
+                  "field": "country_code"
+                },
+                "aggs": {
+                  "sum_population": {
+                    "sum": {
+                      "field": "population"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "country_agg_cached",
+          "cache": true,
+          "body": {
+            "size": 0,
+            "aggs": {
+              "country_population": {
+                "terms": {
+                  "field": "country_code"
+                },
+                "aggs": {
+                  "sum_population": {
+                    "sum": {
+                      "field": "population"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "scroll",
+          "query-type": "scroll",
+          "pages": 25,
+          "results-per-page": 1000,
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "challenges": [
+    {
+      "name": "append-no-conflicts",
+      "description": "",
+      "schedule": [
+        "index-append-default-settings",
+        "stats",
+        "search"
+      ]
+    },
+    {
+      "name": "append-fast-no-conflicts",
+      "description": "",
+      "schedule": [
+        "index-append-fast-settings"
+      ]
+    },
+    {
+      "name": "append-fast-with-conflicts",
+      "description": "",
+      "schedule": [
+        "index-append-update-fast-settings"
+      ]
+    }
+
+  ]
+}
+
