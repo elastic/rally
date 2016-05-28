@@ -114,7 +114,8 @@ class Type:
     Defines a type in Elasticsearch.
     """
 
-    def __init__(self, name, mapping_file_name, document_file_name=None, number_of_documents=0, compressed_size_in_bytes=0,
+    def __init__(self, name, mapping_file_name, document_file_name=None, number_of_documents=0,
+                 compressed_size_in_bytes=0,
                  uncompressed_size_in_bytes=0):
         """
 
@@ -138,14 +139,22 @@ class Type:
         self.compressed_size_in_bytes = compressed_size_in_bytes
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
 
+    def has_valid_document_data(self):
+        return self.document_file_name is not None and \
+               self.number_of_documents > 0 and \
+               self.compressed_size_in_bytes > 0 and \
+               self.uncompressed_size_in_bytes > 0
+
 
 class Track:
     """
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url, challenges, index_name=None, type_name=None,
-                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, document_file_name=None,
+    def __init__(self, name, short_description, description, source_root_url, challenges, index_name=None,
+                 type_name=None,
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0,
+                 document_file_name=None,
                  mapping_file_name=None, indices=None):
         """
 
@@ -270,7 +279,8 @@ class LatencyBenchmarkSettings:
 
 
 class IndexBenchmarkSettings:
-    def __init__(self, index_settings=None, clients=8, bulk_size=5000, id_conflicts=IndexIdConflict.NoConflicts, force_merge=True):
+    def __init__(self, index_settings=None, clients=8, bulk_size=5000, id_conflicts=IndexIdConflict.NoConflicts,
+                 force_merge=True):
         """
         :param index_settings: A hash of index-level settings that will be set when the index is created.
         :param clients: Number of concurrent clients that should index data.
@@ -355,7 +365,8 @@ class Marshal:
                     distribution_version = self._config.opts("source", "distribution.version", mandatory=False)
                     if distribution_version and len(distribution_version.strip()) > 0:
                         msg = "Could not download mapping file [%s] for Elasticsearch distribution [%s] from [%s]. Please note that only " \
-                              "versions starting from 5.0.0-alpha1 are supported." % (mapping_file_name, distribution_version, mapping_url)
+                              "versions starting from 5.0.0-alpha1 are supported." % (
+                              mapping_file_name, distribution_version, mapping_url)
                     else:
                         msg = "Could not download mapping file [%s] from [%s]. Please check that the data are available." % \
                               (mapping_file_name, mapping_url)
@@ -407,7 +418,8 @@ class Marshal:
                 elif url.startswith("s3"):
                     self._do_download_via_s3(url, local_path, size_in_bytes)
                 else:
-                    raise exceptions.SystemSetupError("Cannot download benchmark data from [%s]. Only http(s) and s3 are supported." % url)
+                    raise exceptions.SystemSetupError(
+                        "Cannot download benchmark data from [%s]. Only http(s) and s3 are supported." % url)
                 if size_in_bytes:
                     print("Done")
             except urllib.error.URLError:
@@ -418,10 +430,12 @@ class Marshal:
         # file must exist at this point -> verify
         if not os.path.isfile(local_path):
             if offline:
-                raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % local_path)
+                raise exceptions.SystemSetupError(
+                    "Cannot find %s. Please disable offline mode and retry again." % local_path)
             else:
-                raise exceptions.SystemSetupError("Could not download from %s to %s. Please verify that data are available at %s and "
-                                                  "check your internet connection." % (url, local_path, url))
+                raise exceptions.SystemSetupError(
+                    "Could not download from %s to %s. Please verify that data are available at %s and "
+                    "check your internet connection." % (url, local_path, url))
 
     def _decompress(self, data_set_path):
         # we assume that track data are always compressed and try to decompress them before running the benchmark
@@ -441,7 +455,8 @@ class Marshal:
                 # cleanup probably corrupt data file...
                 if os.path.isfile(tmp_data_set_path):
                     os.remove(tmp_data_set_path)
-                raise RuntimeError("Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
+                raise RuntimeError(
+                    "Could not get benchmark data from S3: '%s'. Is s3cmd installed and set up properly?" % s3cmd)
         except:
             logger.info("Removing temp file %s" % tmp_data_set_path)
             os.remove(tmp_data_set_path)
@@ -474,7 +489,7 @@ class TrackFileReader:
 
     def _all_track_names(self):
         # TODO dm: This will do for now. Resolve this on the file system later (#69).
-        return ["geonames", "tiny"]
+        return ["geonames", "geopoint", "pmc", "percolator", "tiny"]
 
     def all_tracks(self):
         return [self.read(track_name) for track_name in self._all_track_names()]
@@ -482,30 +497,39 @@ class TrackFileReader:
     def read(self, track_name):
         # TODO dm: This will change with #69
         track_file = "%s/track/%s.json" % (self.cfg.opts("system", "rally.root"), track_name)
-        track_spec = json.loads(open(track_file).read())
+        try:
+            track_spec = json.loads(open(track_file).read())
+        except json.JSONDecodeError as e:
+            logger.exception("Could not load [%s]." % track_file)
+            raise TrackSyntaxError("Could not load '%s'" % track_file, e)
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
-            raise TrackSyntaxError("Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
-                                   % (track_name, ve.message,
-                                      json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
-        return TrackReader().read(track_spec)
+            raise TrackSyntaxError(
+                "Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
+                % (track_name, ve.message,
+                   json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
+        return TrackReader().read(track_name, track_spec)
 
 
 class TrackReader:
     def __init__(self):
-        pass
+        self.name = None
 
-    def read(self, track_specification):
-        name = self._r(track_specification, ["meta", "name"])
+    def read(self, track_name, track_specification):
+        self.name = track_name
         short_description = self._r(track_specification, ["meta", "short-description"])
         description = self._r(track_specification, ["meta", "description"])
         source_root_url = self._r(track_specification, ["meta", "data-url"])
         indices = [self._create_index(index) for index in self._r(track_specification, "indices")]
         challenges = self._create_challenges(track_specification, indices)
 
-        return Track(name=name, short_description=short_description, description=description, source_root_url=source_root_url,
+        return Track(name=self.name, short_description=short_description, description=description,
+                     source_root_url=source_root_url,
                      challenges=challenges, indices=indices)
+
+    def _error(self, msg):
+        raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
 
     def _r(self, root, path, error_ctx=None, mandatory=True, default_value=None):
         if isinstance(path, str):
@@ -519,24 +543,32 @@ class TrackReader:
         except KeyError:
             if mandatory:
                 if error_ctx:
-                    raise TrackSyntaxError("Mandatory element '%s' is missing in '%s'." % (".".join(path), error_ctx))
+                    self._error("Mandatory element '%s' is missing in '%s'." % (".".join(path), error_ctx))
                 else:
-                    raise TrackSyntaxError("Mandatory element '%s' is missing." % ".".join(path))
+                    self._error("Mandatory element '%s' is missing." % ".".join(path))
             else:
                 return default_value
 
     def _create_index(self, index_spec):
-        return Index(name=self._r(index_spec, "name"),
-                     types=[self._create_type(type_spec) for type_spec in self._r(index_spec, "types")]
-                     )
+        index_name = self._r(index_spec, "name")
+        types = [self._create_type(type_spec) for type_spec in self._r(index_spec, "types")]
+        valid_document_data = False
+        for type in types:
+            if type.has_valid_document_data():
+                valid_document_data = True
+                break
+        if not valid_document_data:
+            self._error("Index '%s' is invalid. At least one of its types needs to define documents." % index_name)
+
+        return Index(name=index_name, types=types)
 
     def _create_type(self, type_spec):
         return Type(name=self._r(type_spec, "name"),
                     mapping_file_name=self._r(type_spec, "mapping"),
-                    document_file_name=self._r(type_spec, "documents"),
-                    number_of_documents=self._r(type_spec, "document-count"),
-                    compressed_size_in_bytes=self._r(type_spec, "compressed-bytes"),
-                    uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes")
+                    document_file_name=self._r(type_spec, "documents", mandatory=False),
+                    number_of_documents=self._r(type_spec, "document-count", mandatory=False),
+                    compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", mandatory=False),
+                    uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", mandatory=False)
                     )
 
     def _create_challenges(self, track_spec, indices):
@@ -550,16 +582,17 @@ class TrackReader:
             operations_per_type = {}
             for op in self._r(challenge, "schedule", error_ctx=challenge_name):
                 if op not in ops:
-                    raise TrackSyntaxError("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
-                                           "Please add an operation '%s' to the 'operations' block." % (challenge_name, op, op))
+                    self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
+                                "Please add an operation '%s' to the 'operations' block." % (challenge_name, op, op))
 
                 benchmark_type, benchmark_spec = ops[op]
                 if benchmark_type in benchmarks:
                     new_op_name = op
                     old_op_name = operations_per_type[benchmark_type]
-                    raise TrackSyntaxError("'schedule' for challenge '%s' contains multiple operations of type '%s' which is currently "
-                                           "unsupported. Please remove one of these operations: '%s', '%s'" %
-                                           (challenge_name, benchmark_type, old_op_name, new_op_name))
+                    self._error(
+                        "'schedule' for challenge '%s' contains multiple operations of type '%s' which is currently "
+                        "unsupported. Please remove one of these operations: '%s', '%s'" %
+                        (challenge_name, benchmark_type, old_op_name, new_op_name))
                 benchmarks[benchmark_type] = benchmark_spec
                 operations_per_type[benchmark_type] = op
             challenges.append(Challenge(name=challenge_name,

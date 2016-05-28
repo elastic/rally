@@ -28,18 +28,17 @@ class TrackReaderTests(TestCase):
     def test_missing_description_raises_syntax_error(self):
         track_specification = {
             "meta": {
-                "name": "unittest"
+                "description": "unittest track"
             }
         }
         reader = track.TrackReader()
         with self.assertRaises(track.TrackSyntaxError) as ctx:
-            reader.read(track_specification)
-        self.assertEqual("Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
+            reader.read("unittest", track_specification)
+        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
 
     def test_parse_valid_track_specification(self):
         track_specification = {
             "meta": {
-                "name": "unittest",
                 "short-description": "short description for unit test",
                 "description": "longer description of this track for unit test",
                 "data-url": "https://localhost/data"
@@ -92,7 +91,7 @@ class TrackReaderTests(TestCase):
             ]
         }
         reader = track.TrackReader()
-        resulting_track = reader.read(track_specification)
+        resulting_track = reader.read("unittest", track_specification)
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)
         self.assertEqual("longer description of this track for unit test", resulting_track.description)

@@ -1,0 +1,215 @@
+{
+  "meta": {
+    "short-description": "Percolator benchmark based on 2M AOL queries",
+    "description": "This benchmark indexes 2M AOL queries and use the percolate query to match",
+    "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/percolator"
+  },
+  "indices": [
+    {
+      "name": "queries",
+      "types": [
+        {
+          "name": "percolator",
+          "mapping": "queries-mapping.json",
+          "documents": "queries.json.bz2",
+          "document-count": 2000000,
+          "compressed-bytes": 123502,
+          "uncompressed-bytes": 148039748
+        },
+        {
+          "name": "content",
+          "mapping": "document-mapping.json"
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "name": "index-append-default-settings",
+      "type": "index",
+      "#COMMENT#": "TODO #69: To benchmark 5.0.0-alpha1, we need to set 'index.queries.cache.type': 'none' instead of 'index.queries.cache.enabled'",
+      "index-settings": {
+        "index.number_of_replicas": 0,
+        "index.queries.cache.enabled": false
+      },
+      "bulk-size": 5000,
+      "force-merge": true,
+      "clients": {
+        "count": 8
+      }
+    },
+    {
+      "name": "stats",
+      "type": "stats",
+      "warmup-iterations": 100,
+      "iterations": 100,
+      "clients": {
+        "count": 1
+      }
+    },
+    {
+      "name": "search",
+      "type": "search",
+      "target-throughput": 1,
+      "warmup-iterations": 1000,
+      "iterations": 1000,
+      "clients": {
+        "count": 1
+      },
+      "queries": [
+        {
+          "name": "percolator_with_content_president_bush",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "percolate" : {
+                "field" : "query",
+                "document_type" : "content",
+                "document" : {
+                  "body" : "president bush"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "percolator_with_content_saddam_hussein",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "percolate" : {
+                "field" : "query",
+                "document_type" : "content",
+                "document" : {
+                  "body" : "saddam hussein"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "percolator_with_content_hurricane_katrina",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "percolate" : {
+                "field" : "query",
+                "document_type" : "content",
+                "document" : {
+                  "body" : "hurricane katrina"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "percolator_with_content_google",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "percolate" : {
+                "field" : "query",
+                "document_type" : "content",
+                "document" : {
+                  "body" : "google"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "percolator_no_score_with_content_google",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "constant_score": {
+                "query": {
+                  "percolate" : {
+                    "field" : "query",
+                    "document_type" : "content",
+                    "document" : {
+                      "body" : "google"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },        {
+          "name": "percolator_with_highlighting",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query": {
+              "percolate" : {
+                "field" : "query",
+                "document_type" : "content",
+                "document" : {
+                  "body" : "Israeli prime minister Ariel Sharon suffers a massive stroke; he is replaced by acting prime minister Ehud Olmert"
+                }
+              }
+            },
+            "highlight": {
+              "fields": {
+                "body": {}
+              }
+            }
+          }
+        },
+        {
+          "name": "percolator_with_content_ignore_me",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "percolate" : {
+                "field" : "query",
+                "document_type" : "content",
+                "document" : {
+                  "body" : "ignore me"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "percolator_no_score_with_content_ignore_me",
+          "index": "queries",
+          "type": "percolator",
+          "body": {
+            "query" : {
+              "constant_score": {
+                "query": {
+                  "percolate" : {
+                    "field" : "query",
+                    "document_type" : "content",
+                    "document" : {
+                      "body" : "ignore me"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "challenges": [
+    {
+      "name": "append-no-conflicts",
+      "description": "",
+      "schedule": [
+        "index-append-default-settings",
+        "stats",
+        "search"
+      ]
+    }
+  ]
+}
+

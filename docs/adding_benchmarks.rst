@@ -80,77 +80,85 @@ Ensure to create a file called "README.txt" which can contain more information a
 
 Upload all three files to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example. For initial local testing you can also place all files in the data directory, which is located below the root directory you specified when initially configuring Rally. Let's say you specified ``/Users/daniel/benchmarks`` as root directory. Then you have to place the data for a track with the name "geonames" in ``/Users/daniel/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
 
-Finally, add a new Python source file in Rally's project directory. By convention, the file should be called "$BENCHMARK_NAME_track.py", so for our example the file is called "geonames_track.py". It is placed in "esrally/track/". ::
+Finally, add a new JSON file in Rally's project directory. By convention, the file should be called "$BENCHMARK_NAME.json", so for our example the file is called "geonames.json". It is placed in "esrally/track/". ::
 
-    from esrally.track import track
+    {
+      "meta": {
+        "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+        "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+        "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
+      },
+      "indices": [
+        {
+          "name": "geonames",
+          "types": [
+            {
+              "name": "type",
+              "mapping": "mappings.json",
+              "documents": "documents.json.bz2",
+              "document-count": 8647880,
+              "compressed-bytes": 197857614,
+              "uncompressed-bytes": 2790927196
+            }
+          ]
+        }
+      ],
+      "operations": [
+        {
+          "name": "index-append-default-settings",
+          "type": "index",
+          "index-settings": {
+            "index.number_of_replicas": 0
+          },
+          "bulk-size": 5000,
+          "force-merge": true,
+          "clients": {
+            "count": 8
+          }
+        },
+        {
+          "name": "search",
+          "type": "search",
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "clients": {
+            "count": 1
+          },
+          "queries": [
+            {
+              "name": "default",
+              "body": {
+                "query": {
+                  "match_all": {}
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "challenges": [
+        {
+          "name": "append-no-conflicts",
+          "description": "",
+          "schedule": [
+            "index-append-default-settings",
+            "search"
+          ]
+        }
+      ]
+    }
 
-    GEONAMES_INDEX_NAME = "geonames"
-    
-    class SampleQuery(track.Query):
-        def __init__(self):
-            track.Query.__init__(self, "sample")
-    
-        def run(self, es):
-            return es.search(index=GEONAMES_INDEX_NAME)
-    
-    geonamesTrackSpec = track.Track(
-        name="geonames",
-        short_description="Demo benchmark",
-        description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
-                    "request against Elasticsearch",
-        source_root_url="http://benchmarks.elastic.co/corpora/geonames",
-        index_name=GEONAMES_INDEX_NAME,
-        type_name="type",
-        number_of_documents=8647880,
-        compressed_size_in_bytes=197857614,
-        uncompressed_size_in_bytes=2790927196,
-        document_file_name="documents.json.bz2",
-        mapping_file_name="mappings.json",
-        # Queries to use in the search benchmark
-        queries=[SampleQuery()],
-        challenges=track.challenges
 
-
-In case you want to add multiple indices this is possible too. The same track needs to specified as follows then: ::
-
-
-    from esrally.track import track
-
-    GEONAMES_INDEX_NAME = "geonames"
-
-    class SampleQuery(track.Query):
-        def __init__(self):
-            track.Query.__init__(self, "sample")
-
-        def run(self, es):
-            return es.search(index=GEONAMES_INDEX_NAME)
-
-    geonamesTrackSpec = track.Track(
-        name="geonames",
-        short_description="Demo benchmark",
-        description="This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk "
-                    "request against Elasticsearch",
-        source_root_url="http://benchmarks.elastic.co/corpora/geonames",
-        indices=[
-            track.Index(name=GEONAMES_INDEX_NAME, types=[
-            track.Type(
-                name="type",
-                mapping_file_name="mappings.json",
-                document_file_name="documents.json.bz2",
-                number_of_documents=8647880,
-                compressed_size_in_bytes=197857614,
-                uncompressed_size_in_bytes=2790927196)
-                ])
-        ],
-        # Queries to use in the search benchmark
-        queries=[SampleQuery()],
-        challenges=track.challenges)
 
 A few things to note:
 
-* You can either use the standard challenges provided with Rally or add your own. Note that Rally assumes that the challenge that should be run by default is called "append-no-conflicts". It is possible to not use this name but it is more convenient for users. Otherwise, they have to provide the command line option ``--challenge``.
+* Rally assumes that the challenge that should be run by default is called "append-no-conflicts". If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 * You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
-* The numbers are needed to verify integrity and provide progress reports.
+* The numbers below the ``types`` property are needed to verify integrity and provide progress reports.
+
+.. note::
+
+    We have defined a `JSON schema for tracks <https://github.com/elastic/rally/tree/master/esrally/track/track-schema.json>`_ which you can use the check how to define your track. You should also check the tracks provided by Rally for inspiration.
 
 When you invoke ``esrally list tracks``, the new track should now appear::
 
@@ -165,8 +173,8 @@ When you invoke ``esrally list tracks``, the new track should now appear::
     Available tracks:
     
     Name        Description                                               Challenges
-    ----------  --------------------------------------------------------  -----------------------------------------------------------------------
-    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)     append-no-conflicts,append-fast-no-conflicts,append-fast-with-conflicts
+    ----------  --------------------------------------------------------  -------------------
+    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)     append-no-conflicts
 
 Congratulations, you have created your first track! You can test it with ``esrally --track=geonames`` (or whatever the name of your track is) and run specific challenges with ``esrally --track=geonames --challenge=append-fast-with-conflicts``.
 
