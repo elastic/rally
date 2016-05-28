@@ -238,6 +238,8 @@ def main():
     print(BANNER)
 
     cfg = config.Config(config_name=args.configuration_name)
+    sub_command = derive_sub_command(args, cfg)
+    ensure_configuration_present(cfg, args, sub_command)
     # Add global meta info derived by rally itself
     cfg.add(config.Scope.application, "meta", "time.start", args.effective_start_date)
     cfg.add(config.Scope.application, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
@@ -257,13 +259,13 @@ def main():
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
-    cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-    cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-    cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
-    cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
+    if sub_command == "list":
+        cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
+        cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+    if sub_command == "compare":
+        cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
+        cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
-    sub_command = derive_sub_command(args, cfg)
-    ensure_configuration_present(cfg, args, sub_command)
     configure_logging(cfg)
 
     success = dispatch_sub_command(cfg, sub_command)
