@@ -1,6 +1,5 @@
 import os
 import logging
-import collections
 import json
 import urllib.error
 from enum import Enum
@@ -10,24 +9,6 @@ from esrally import config, exceptions
 from esrally.utils import io, sysstats, convert, process, net
 
 logger = logging.getLogger("rally.track")
-
-# Ensure cluster status green even for single nodes. Please don't add anything else here except to get the cluster to status
-# 'green' even with a single node.
-greenNodeSettings = {
-    "index.number_of_replicas": 0
-}
-
-mergePartsSettings = {
-    "index.number_of_replicas": 0,
-    "index.merge.scheduler.auto_throttle": False
-}
-
-benchmarkFastSettings = {
-    "index.refresh_interval": "30s",
-    "index.number_of_shards": 6,
-    "index.number_of_replicas": 0,
-    "index.translog.flush_threshold_size": "4g"
-}
 
 mergePartsLogConfig = '''
 es.logger.level: INFO
@@ -78,11 +59,6 @@ appender:
       type: pattern
       conversionPattern: "[%d{ISO8601}][%-5p][%-25c] %m%n"
 '''
-
-# Specific tracks add themselves to this dictionary.
-#
-# key = Track name, value = Track instance
-tracks = collections.OrderedDict()
 
 
 class Index:
@@ -200,8 +176,6 @@ class Track:
                 Type(type_name, mapping_file_name, document_file_name, number_of_documents, compressed_size_in_bytes,
                      uncompressed_size_in_bytes)
             ])]
-        # self-register
-        tracks[name] = self
 
     @property
     def number_of_documents(self):
