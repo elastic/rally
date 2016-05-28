@@ -93,8 +93,8 @@ class LatencyBenchmark(Benchmark):
         if repetitions == 0:
             self.progress.print(message % (self.phase.name, iteration, repetitions), "[100% done]")
         else:
-            if iteration % (self.repetitions // 20) == 0:
-                progress_percent = round(100 * iteration / repetitions)
+            progress_percent = round(100 * iteration / repetitions)
+            if ((100 * iteration) / repetitions) % 5 == 0:
                 self.progress.print(message % (self.phase.name, iteration, repetitions), "[%3d%% done]" % progress_percent)
 
     def _run_one_round(self):
