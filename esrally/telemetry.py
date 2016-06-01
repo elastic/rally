@@ -1,13 +1,12 @@
 import logging
-import threading
-import re
 import os
-import subprocess
+import re
 import signal
+import subprocess
+import threading
 
+from esrally import metrics, track
 from esrally.utils import io, sysstats, process
-from esrally.track import track
-from esrally import metrics
 
 logger = logging.getLogger("rally.telemetry")
 

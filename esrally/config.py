@@ -6,7 +6,7 @@ import configparser
 import getpass
 from enum import Enum
 
-from esrally.utils import io, format, convert
+from esrally.utils import io, git, format, convert
 from esrally import time, PROGRAM_NAME
 
 logger = logging.getLogger("rally.config")
@@ -67,7 +67,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 4
+    CURRENT_CONFIG_VERSION = 5
 
     ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
 
@@ -144,6 +144,8 @@ class Config:
             "build::gradle.tasks.package": ":distribution:tar:assemble",
             "build::log.dir": "build",
             "benchmarks::metrics.log.dir": "telemetry",
+            "benchmarks::track.repository.dir": "tracks",
+            "benchmarks::track.default.repository": "default",
             "provisioning::node.name.prefix": "rally-node",
             "provisioning::node.http.port": 39200,
         }
@@ -236,6 +238,12 @@ class Config:
             # Remove obsolete settings
             config["build"].pop("maven.bin")
             config["benchmarks"].pop("metrics.stats.disk.device")
+        if current_version == 4:
+            config["tracks"] = {}
+            config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
+            current_version = 5
+            config["meta"]["config.version"] = str(current_version)
+
             # all migrations done
         self._config_file.store(config)
         logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
@@ -384,6 +392,9 @@ class Config:
         config["reporting"]["datastore.user"] = data_store_user
         config["reporting"]["datastore.password"] = data_store_password
 
+        config["tracks"] = {}
+        config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
+
         self._config_file.store(config)
 
         print("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % self._config_file.location)
@@ -412,7 +423,7 @@ class Config:
         child_es_dir = os.path.abspath(os.path.join(current_dir, "elasticsearch"))
 
         for candidate in [sibling_es_dir, child_es_dir]:
-            if io.is_git_working_copy(candidate):
+            if git.is_working_copy(candidate):
                 return candidate
         return None
 

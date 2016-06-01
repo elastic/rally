@@ -1,14 +1,13 @@
-import os
-import threading
-import subprocess
-import socket
-import signal
-import logging
 import json
+import logging
+import os
+import signal
+import socket
+import subprocess
+import threading
 
+from esrally import config, cluster, telemetry, time, exceptions, track
 from esrally.mechanic import gear
-from esrally import config, cluster, telemetry, time, exceptions
-from esrally.track import track
 
 logger = logging.getLogger("rally.launcher")
 
@@ -25,27 +24,12 @@ class Launcher:
 
     def setup_index(self, cluster, t, challenge):
         if track.BenchmarkPhase.index in challenge.benchmark:
-            mapping_path = self.cfg.opts("benchmarks", "mapping.path")
-            settings = challenge.benchmark[track.BenchmarkPhase.index].index_settings
-            # Workaround to support multiple versions (this is not how this will be handled in the future..)
-            if "master" in settings:
-                # check whether we do a binary benchmark
-                distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
-                if distribution_version and len(distribution_version.strip()) > 0:
-                    if distribution_version in settings:
-                        index_settings = settings[distribution_version]
-                    else:
-                        raise exceptions.SystemSetupError("Could not find index settings for Elasticsearch version [%s]" %
-                                                          distribution_version)
-                else:
-                    index_settings = settings["master"]
-            else:
-                index_settings = settings
+            index_settings = challenge.benchmark[track.BenchmarkPhase.index].index_settings
             for index in t.indices:
                 logger.debug("Creating index [%s]" % index.name)
                 cluster.client.indices.create(index=index.name, body=index_settings)
                 for type in index.types:
-                    mappings = open(mapping_path[type]).read()
+                    mappings = open(type.mapping_file).read()
                     logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
                     logger.debug(mappings)
                     cluster.client.indices.put_mapping(index=index.name,

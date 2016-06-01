@@ -1,9 +1,8 @@
-from unittest import TestCase
 import unittest.mock as mock
+from unittest import TestCase
 
-from esrally import config
+from esrally import config, car
 from esrally.mechanic import provisioner
-from esrally.track import track
 
 
 class ProvisionerTests(TestCase):
@@ -74,9 +73,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
         cfg.add(config.Scope.application, "provisioning", "datapaths", [])
 
-        car = track.Car(name="test-car")
-
         p = provisioner.Provisioner(cfg)
-        p.prepare(car)
+        p.prepare(car.Car(name="test-car"))
 
         self.assertEqual(cfg.opts("provisioning", "local.binary.path"), "/install/elasticsearch-5.0.0-SNAPSHOT")

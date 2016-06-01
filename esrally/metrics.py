@@ -1,16 +1,15 @@
-import logging
 import collections
 import datetime
+import logging
 import math
 import statistics
 from enum import Enum
 
+import certifi
 import elasticsearch
 import elasticsearch.helpers
-import certifi
 
-from esrally import time, exceptions
-from esrally.track import track
+from esrally import time, exceptions, track
 
 logger = logging.getLogger("rally.metrics")
 

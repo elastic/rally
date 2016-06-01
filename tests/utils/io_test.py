@@ -39,12 +39,6 @@ class IoTests(TestCase):
         # simulate not installed version
         self.assertIsNone(io.guess_java_home(major_version=7, runner=lambda args, fallback=None: None, read_symlink=mock_red_hat))
 
-    def test_is_git_working_copy(self):
-        test_dir = os.path.dirname(os.path.dirname(__file__))
-        # this test is assuming that nobody stripped the git repo info in their Rally working copy
-        self.assertFalse(io.is_git_working_copy(test_dir))
-        self.assertTrue(io.is_git_working_copy(os.path.dirname(test_dir)))
-
     def test_normalize_path(self):
         self.assertEqual("/already/a/normalized/path", io.normalize_path("/already/a/normalized/path"))
         self.assertEqual("/not/normalized", io.normalize_path("/not/normalized/path/../"))

@@ -42,3 +42,10 @@ class DataError(RallyError):
     def __str__(self):
         return self.message
 
+
+class SupplyError(RallyError):
+    pass
+
+
+class InvalidSyntax(RallyError):
+    pass

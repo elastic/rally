@@ -1,8 +1,8 @@
 import logging
+
 import tabulate
 
-from esrally import metrics
-from esrally.track import track
+from esrally import metrics, track
 from esrally.utils import convert, format
 
 logger = logging.getLogger("rally.reporting")
@@ -167,7 +167,7 @@ class SummaryReporter:
                 if track.BenchmarkPhase.stats in challenge.benchmark:
                     metrics_table += self.report_stats_latency(stats)
 
-                print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], numalign="right", stralign="right"))
+                print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pipe", numalign="right", stralign="right"))
 
     def guarded(self, op):
         try:

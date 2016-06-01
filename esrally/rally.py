@@ -134,11 +134,6 @@ def parse_args():
                  "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
-            "--distribution-version",
-            help="defines the version of the Elasticsearch distribution to download. Check https://www.elastic.co/downloads/elasticsearch "
-                 "for released versions.",
-            default="")
-        p.add_argument(
             "--track",
             help="defines which track should be run. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME,
             default="geonames")
@@ -182,12 +177,19 @@ def parse_args():
             help=argparse.SUPPRESS,
             default=None)
 
-    for p in [parser, config_parser, race_parser]:
+    for p in [parser, config_parser, list_parser, race_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
             help=argparse.SUPPRESS,
             default=None)
+
+    for p in [parser, list_parser, race_parser]:
+        p.add_argument(
+                "--distribution-version",
+                help="defines the version of the Elasticsearch distribution to download. Check https://www.elastic.co/downloads/elasticsearch "
+                     "for released versions.",
+                default="")
 
     return parser.parse_args()
 
@@ -248,6 +250,8 @@ def main():
     cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
     cfg.add(config.Scope.applicationOverride, "source", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
+    # Don't expose the ability to define different repositories for now
+    cfg.add(config.Scope.applicationOverride, "system", "track.repository", "default")
     cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)

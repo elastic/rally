@@ -1,8 +1,7 @@
-from unittest import TestCase
 import unittest.mock as mock
+from unittest import TestCase
 
-from esrally import config, metrics, telemetry, cluster
-from esrally.track import track
+from esrally import config, metrics, telemetry, cluster, car
 
 
 class MockClientFactory:
@@ -40,7 +39,7 @@ class TelemetryTests(TestCase):
 
         t = telemetry.Telemetry(cfg, metrics_store, devices)
 
-        default_car = track.Car(name="default-car")
+        default_car = car.Car(name="default-car")
         opts = t.instrument_candidate_env(default_car, "default-node")
 
         self.assertTrue(opts)
