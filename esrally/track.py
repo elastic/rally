@@ -286,7 +286,6 @@ def prepare_track(track, cfg):
                 decompress(type.document_archive, type.uncompressed_size_in_bytes)
 
 
-
 class TrackRepository:
     """
     Manages track specifications.

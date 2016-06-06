@@ -81,7 +81,6 @@ class Car:
         return self.name
 
 
-# This will eventually move out of track
 cars = [
     Car(name="defaults"),
     Car(name="4gheap", heap="4g"),
