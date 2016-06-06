@@ -3,6 +3,7 @@ from unittest import TestCase
 import unittest.mock as mock
 
 from esrally import config, metrics
+from esrally.track import track
 
 
 class MockClientFactory:
@@ -186,6 +187,75 @@ class EsMetricsTests(TestCase):
         self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
 
         self.assertEqual(throughput, actual_throughput)
+
+
+class EsRaceStoreTests(TestCase):
+    TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+
+    def setUp(self):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
+        self.cfg.add(config.Scope.application, "meta", "time.start", EsRaceStoreTests.TRIAL_TIMESTAMP)
+        self.race_store = metrics.EsRaceStore(self.cfg,
+                                              client_factory_class=MockClientFactory,
+                                              index_template_provider_class=DummyIndexTemplateProvider,
+                                              )
+        # get hold of the mocked client...
+        self.es_mock = self.race_store.client
+
+    def test_store_race(self):
+        self.cfg.add(config.Scope.application, "system", "pipeline", "unittest-pipeline")
+        self.cfg.add(config.Scope.application, "system", "user.tag", "")
+        self.cfg.add(config.Scope.application, "benchmarks", "challenge", "index-and-search")
+        self.cfg.add(config.Scope.application, "benchmarks", "car", "defaults")
+        self.cfg.add(config.Scope.application, "benchmarks", "rounds", 1)
+        self.cfg.add(config.Scope.application, "launcher", "external.target.hosts", "")
+        self.cfg.add(config.Scope.application, "source", "revision", "latest")
+        self.cfg.add(config.Scope.application, "source", "distribution.version", "5.0.0")
+
+        index = "tests"
+        type = "test-type"
+
+        benchmarks = {
+            track.BenchmarkPhase.index: track.IndexBenchmarkSettings(),
+            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(
+                queries=[track.DefaultQuery(index=index, type=type, name="default", body={
+                    "query": {
+                        "match_all": {}
+                    }
+                })])
+        }
+
+        t = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+                        source_root_url="http://example.org",
+                        indices=[track.Index(name=index, types=[track.Type(name=type, mapping_file_name=None)])],
+                        challenges=[
+                            track.Challenge(name="index-and-search", description="Index and Search Challenge", benchmark=benchmarks)
+                        ])
+        self.race_store.store_race(t)
+
+        expected_doc = {
+            "environment": "unittest-env",
+            "trial-timestamp": "20160131T000000Z",
+            "pipeline": "unittest-pipeline",
+            "revision": "latest",
+            "distribution-version": "5.0.0",
+            "track": "unittest",
+            "selected-challenge": {
+                "name": "index-and-search",
+                "benchmark-phase-index": True,
+                "benchmark-phase-search": {
+                    "sample-size": 1000,
+                    "queries": ["default"]
+                }
+            },
+            "car": "defaults",
+            "rounds": 1,
+            "target-hosts": "",
+            "user-tag": ""
+        }
+
+        self.es_mock.index.assert_called_with(index="rally-2016", doc_type="races", item=expected_doc)
 
 
 class InMemoryMetricsStoreTests(TestCase):

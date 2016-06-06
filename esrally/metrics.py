@@ -640,9 +640,10 @@ class EsRaceStore:
                         "sample-size": challenge.benchmark[track.BenchmarkPhase.stats].iteration_count
                     }
                 if track.BenchmarkPhase.search in challenge.benchmark:
+                    c = challenge.benchmark[track.BenchmarkPhase.search]
                     selected_challenge["benchmark-phase-search"] = {
-                        "queries": [q.name for q in t.queries],
-                        "sample-size": challenge.benchmark[track.BenchmarkPhase.search].iteration_count
+                        "queries": [q.name for q in c.queries],
+                        "sample-size": c.iteration_count
                     }
 
         doc = {
