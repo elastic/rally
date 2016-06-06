@@ -206,7 +206,8 @@ def derive_sub_command(args, cfg):
 
 def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
-        cfg.create_config(advanced_config=args.advanced_config)
+        # TODO dm: Consider creating a simple function
+        config.ConfigFactory().create_config(cfg.config_file, advanced_config=args.advanced_config)
         exit(0)
     else:
         if cfg.config_present():
