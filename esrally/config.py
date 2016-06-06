@@ -33,6 +33,7 @@ class ConfigFile:
     def __init__(self, config_name):
         self.config_name = config_name
 
+    @property
     def present(self):
         """
         :return: true iff a config file already exists.
@@ -45,7 +46,7 @@ class ConfigFile:
         return config
 
     def store(self, config):
-        io.ensure_dir(self.config_dir())
+        io.ensure_dir(self.config_dir)
         with open(self.location, "w") as configfile:
             config.write(configfile)
 
@@ -54,6 +55,7 @@ class ConfigFile:
         logger.info("Creating a backup of the current config file at [%s]." % config_file)
         shutil.copyfile(config_file, "%s.bak" % config_file)
 
+    @property
     def config_dir(self):
         return "%s/.rally" % os.getenv("HOME")
 
@@ -63,20 +65,11 @@ class ConfigFile:
             config_name_suffix = "-%s" % self.config_name
         else:
             config_name_suffix = ""
-        return "%s/rally%s.ini" % (self.config_dir(), config_name_suffix)
+        return "%s/rally%s.ini" % (self.config_dir, config_name_suffix)
 
 
 class Config:
     CURRENT_CONFIG_VERSION = 5
-
-    ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
-
-    PORT_RANGE_PATTERN = re.compile("^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$")
-
-    BOOLEAN_PATTERN = re.compile("^(True|true|Yes|yes|t|y|False|false|f|No|no|n)$")
-
-    def _to_bool(self, value):
-        return value in ["True", "true", "Yes", "yes", "t", "y"]
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -84,8 +77,8 @@ class Config:
     transparently resolved when a property is retrieved and the value on the most specific level is returned.
     """
 
-    def __init__(self, config_name=None):
-        self._config_file = ConfigFile(config_name)
+    def __init__(self, config_name=None, config_file_class=ConfigFile):
+        self.config_file = config_file_class(config_name)
         self._opts = {}
         self._clear_config()
 
@@ -124,13 +117,13 @@ class Config:
         """
         :return: true iff a config file already exists.
         """
-        return self._config_file.present()
+        return self.config_file.present
 
     def load_config(self):
         """
         Loads an existing config file.
         """
-        config = self._config_file.load()
+        config = self.config_file.load()
         # It's possible that we just reload the configuration
         self._clear_config()
         self._fill_from_config_file(config)
@@ -159,113 +152,45 @@ class Config:
         return self.CURRENT_CONFIG_VERSION == self._stored_config_version()
 
     def migrate_config(self):
-        # do migration one at a time, starting at the current one...
-        current_version = self._stored_config_version()
-        # Something is really fishy. We don't want to downgrade the configuration.
-        if current_version >= self.CURRENT_CONFIG_VERSION:
-            raise ConfigError("The existing config file is available in a later version already. Expected version <= [%s] but found [%s]"
-                              % (self.CURRENT_CONFIG_VERSION, current_version))
-        logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, self.CURRENT_CONFIG_VERSION))
-        # but first a backup...
-        self._config_file.backup()
-        config = self._config_file.load(interpolation=None)
-
-        if current_version == 0:
-            logger.info("Migrating config from version [0] to [1]")
-            current_version = 1
-            config["meta"] = {}
-            config["meta"]["config.version"] = str(current_version)
-            # in version 1 we changed some directories from being absolute to being relative
-            config["system"]["log.root.dir"] = "logs"
-            config["provisioning"]["local.install.dir"] = "install"
-            config["reporting"]["report.base.dir"] = "reports"
-        if current_version == 1:
-            logger.info("Migrating config from version [1] to [2]")
-            current_version = 2
-            config["meta"]["config.version"] = str(current_version)
-            # no need to ask the user now if we are about to upgrade to version 4
-            config["reporting"]["datastore.type"] = "in-memory"
-            config["reporting"]["datastore.host"] = ""
-            config["reporting"]["datastore.port"] = ""
-            config["reporting"]["datastore.secure"] = ""
-            config["reporting"]["datastore.user"] = ""
-            config["reporting"]["datastore.password"] = ""
-            config["system"]["env.name"] = "local"
-        if current_version == 2:
-            logger.info("Migrating config from version [2] to [3]")
-            current_version = 3
-            config["meta"]["config.version"] = str(current_version)
-            # Remove obsolete settings
-            config["reporting"].pop("report.base.dir")
-            config["reporting"].pop("output.html.report.filename")
-        if current_version == 3:
-            root_dir = config["system"]["root.dir"]
-            print("*****************************************************************************************")
-            print("")
-            print("You have an old configuration of Rally. Rally has now a much simpler setup")
-            print("routine which will autodetect lots of settings for you and it also does not");
-            print("require you to setup a metrics store anymore.")
-            print("")
-            print("Rally will now migrate your configuration but if you don't need advanced features")
-            print("like a metrics store, then you should delete the configuration directory:")
-            print("")
-            print("  rm -rf %s" % self._config_file.config_dir())
-            print("")
-            print("and then rerun Rally's configuration routine:")
-            print("")
-            print("  %s configure" % PROGRAM_NAME)
-            print("")
-            print("Please also note you have %.1f GB of data in your current benchmark directory at"
-                  % convert.bytes_to_gb(io.get_size(root_dir)))
-            print()
-            print("  %s" % root_dir)
-            print("")
-            print("You might want to clean up this directory also.")
-            print()
-            print("For more details please see %s" % format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
-            print("")
-            print("*****************************************************************************************")
-            print("")
-            print("Pausing for 10 seconds to let you consider this message.")
-            time.sleep(10)
-            logger.info("Migrating config from version [3] to [4]")
-            current_version = 4
-            config["meta"]["config.version"] = str(current_version)
-            if len(config["reporting"]["datastore.host"]) > 0:
-                config["reporting"]["datastore.type"] = "elasticsearch"
-            else:
-                config["reporting"]["datastore.type"] = "in-memory"
-            # Remove obsolete settings
-            config["build"].pop("maven.bin")
-            config["benchmarks"].pop("metrics.stats.disk.device")
-        if current_version == 4:
-            config["tracks"] = {}
-            config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
-            current_version = 5
-            config["meta"]["config.version"] = str(current_version)
-
-            # all migrations done
-        self._config_file.store(config)
-        logger.info("Successfully self-upgraded configuration to version [%s]" % self.CURRENT_CONFIG_VERSION)
+        migrate(self.config_file, self._stored_config_version(), Config.CURRENT_CONFIG_VERSION)
 
     def _stored_config_version(self):
         return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
-    def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
-        logger.debug("Autodetected %s at [%s]" % (what, result))
-        if additional_message:
-            message = " (%s)" % additional_message
+    # recursively find the most narrow scope for a key
+    def _resolve_scope(self, section, key, start_from=Scope.invocation):
+        if self._k(start_from, section, key) in self._opts:
+            return start_from
+        elif start_from == Scope.application:
+            return None
         else:
-            message = ""
+            # continue search in the enclosing scope
+            return self._resolve_scope(section, key, Scope(start_from.value - 1))
 
-        if result:
-            print("  %s: [%s]" % (what, format.green("✓")))
-        elif warn_if_missing:
-            print("  %s: [%s]%s" % (what, format.yellow("✕"), message))
+    def _k(self, scope, section, key):
+        # keep global config keys a bit shorter / nicer for now
+        if scope is None or scope == Scope.application:
+            return "%s::%s" % (section, key)
         else:
-            print("  %s: [%s]%s" % (what, format.red("✕"), message))
+            return "%s::%s::%s" % (scope.name, section, key)
 
-    def create_config(self, advanced_config=False):
+
+class ConfigFactory:
+    ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
+
+    PORT_RANGE_PATTERN = re.compile("^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$")
+
+    BOOLEAN_PATTERN = re.compile("^(True|true|Yes|yes|t|y|False|false|f|No|no|n)$")
+
+    def __init__(self, i=input, sec_i=getpass.getpass, o=print):
+        self.i = i
+        self.sec_i = sec_i
+        self.o = o
+
+    def _to_bool(self, value):
+        return value in ["True", "true", "Yes", "yes", "t", "y"]
+
+    def create_config(self, config_file, advanced_config=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
@@ -273,28 +198,28 @@ class Config:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         """
         if advanced_config:
-            print("Running advanced configuration. You can get additional help at:")
-            print("")
-            print("  %s" % format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
-            print("")
+            self.o("Running advanced configuration. You can get additional help at:")
+            self.o("")
+            self.o("  %s" % format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
+            self.o("")
 
             logger.debug("Running advanced configuration routine.")
-            print("")
+            self.o("")
         else:
-            print("Running simple configuration. You can run the advanced configuration with:")
-            print("")
-            print("  %s configure --advanced-config" % PROGRAM_NAME)
-            print("")
+            self.o("Running simple configuration. You can run the advanced configuration with:")
+            self.o("")
+            self.o("  %s configure --advanced-config" % PROGRAM_NAME)
+            self.o("")
             logger.debug("Running simple configuration routine.")
 
-        if self.config_present():
-            print("\nWARNING: Will overwrite existing config file at [%s]\n" % self._config_file.location)
-            logger.debug("Detected an existing configuration file at [%s]" % self._config_file.location)
+        if config_file.present:
+            self.o("\nWARNING: Will overwrite existing config file at [%s]\n" % config_file.location)
+            logger.debug("Detected an existing configuration file at [%s]" % config_file.location)
         else:
-            logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine." % self._config_file.location)
+            logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine." % config_file.location)
 
         # Autodetect settings
-        print("[✓] Autodetecting available third-party software")
+        self.o("[✓] Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
         gradle_bin = io.guess_install_location("gradle")
         # default_jdk_7 = io.guess_java_home(major_version=7)
@@ -307,32 +232,32 @@ class Config:
                                     warn_if_missing=True,
                                     additional_message="You cannot benchmark Elasticsearch 5.x without a JDK 8 installation")
         # self.print_detection_result("JDK 9 ", default_jdk_9, warn_if_missing=True)
-        print("")
+        self.o("")
 
         # users that don't have git and gradle cannot benchmark from sources
         benchmark_from_sources = git_path and gradle_bin
 
         if not benchmark_from_sources:
-            print("**********************************************************************************")
-            print("You don't have the necessary software to benchmark source builds of Elasticsearch.")
-            print("")
-            print("You can still benchmark binary distributions with e.g.:")
-            print("")
-            print("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
-            print("")
-            print("See %s" % format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
-            print("**********************************************************************************")
-            print("")
+            self.o("**********************************************************************************")
+            self.o("You don't have the necessary software to benchmark source builds of Elasticsearch.")
+            self.o("")
+            self.o("You can still benchmark binary distributions with e.g.:")
+            self.o("")
+            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
+            self.o("")
+            self.o("See %s" % format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
+            self.o("**********************************************************************************")
+            self.o("")
 
-        root_dir = "%s/benchmarks" % self._config_file.config_dir()
-        print("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
+        root_dir = "%s/benchmarks" % config_file.config_dir
+        self.o("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
 
         if benchmark_from_sources:
             # We try to autodetect an existing ES source directory
             guess = self._guess_es_src_dir()
             if guess:
                 source_dir = guess
-                print("[✓] Autodetected Elasticsearch project directory at [%s]." % source_dir)
+                self.o("[✓] Autodetected Elasticsearch project directory at [%s]." % source_dir)
                 logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
             else:
                 default_src_dir = "%s/src" % root_dir
@@ -345,7 +270,7 @@ class Config:
         if default_jdk_8:
             jdk8_home = default_jdk_8
         else:
-            print("")
+            self.o("")
             jdk8_home = io.normalize_path(self._ask_property("Enter the JDK 8 root directory:", check_path_exists=True))
 
         if advanced_config:
@@ -360,7 +285,7 @@ class Config:
 
         config = configparser.ConfigParser()
         config["meta"] = {}
-        config["meta"]["config.version"] = str(self.CURRENT_CONFIG_VERSION)
+        config["meta"]["config.version"] = str(Config.CURRENT_CONFIG_VERSION)
 
         config["system"] = {}
         config["system"]["root.dir"] = root_dir
@@ -395,22 +320,36 @@ class Config:
         config["tracks"] = {}
         config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
 
-        self._config_file.store(config)
+        config_file.store(config)
 
-        print("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % self._config_file.location)
-        print("")
+        self.o("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % config_file.location)
+        self.o("")
         if benchmark_from_sources:
-            print("To benchmark the currently checked out version of Elasticsearch with the default benchmark run:")
-            print("")
-            print("  %s" % PROGRAM_NAME)
+            self.o("To benchmark the currently checked out version of Elasticsearch with the default benchmark run:")
+            self.o("")
+            self.o("  %s" % PROGRAM_NAME)
         else:
-            print("To benchmark Elasticsearch 5.0.0-alpha2 with the default benchmark run:")
-            print("")
-            print("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
+            self.o("To benchmark Elasticsearch 5.0.0-alpha2 with the default benchmark run:")
+            self.o("")
+            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
 
-        print()
-        print("For help, type %s --help or see the user documentation at %s"
-              % (PROGRAM_NAME, format.link("https://esrally.readthedocs.io")))
+        self.o()
+        self.o("For help, type %s --help or see the user documentation at %s"
+               % (PROGRAM_NAME, format.link("https://esrally.readthedocs.io")))
+
+    def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
+        logger.debug("Autodetected %s at [%s]" % (what, result))
+        if additional_message:
+            message = " (%s)" % additional_message
+        else:
+            message = ""
+
+        if result:
+            self.o("  %s: [%s]" % (what, format.green("✓")))
+        elif warn_if_missing:
+            self.o("  %s: [%s]%s" % (what, format.yellow("✕"), message))
+        else:
+            self.o("  %s: [%s]%s" % (what, format.red("✕"), message))
 
     def _guess_es_src_dir(self):
         current_dir = os.getcwd()
@@ -429,9 +368,9 @@ class Config:
 
     def _ask_data_store(self):
         data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")
-        data_store_port = self._ask_property("Enter the port of the ES metrics store", check_pattern=Config.PORT_RANGE_PATTERN)
+        data_store_port = self._ask_property("Enter the port of the ES metrics store", check_pattern=ConfigFactory.PORT_RANGE_PATTERN)
         data_store_secure = self._ask_property("Use secure connection (True, False)", default_value=False,
-                                               check_pattern=Config.BOOLEAN_PATTERN)
+                                               check_pattern=ConfigFactory.BOOLEAN_PATTERN)
         data_store_user = self._ask_property("Username for basic authentication (empty if not needed)", mandatory=False, default_value="")
         data_store_password = self._ask_property("Password for basic authentication (empty if not needed)", mandatory=False,
                                                  default_value="", sensitive=True)
@@ -440,7 +379,7 @@ class Config:
 
     def _ask_env_name(self):
         return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
-                                  check_pattern=Config.ENV_NAME_PATTERN)
+                                  check_pattern=ConfigFactory.ENV_NAME_PATTERN)
 
     def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, sensitive=False, default_value=None):
         if default_value is not None:
@@ -449,42 +388,116 @@ class Config:
             final_prompt = "%s: " % prompt
         while True:
             if sensitive:
-                value = getpass.getpass(prompt=final_prompt)
+                value = self.sec_i(final_prompt)
             else:
-                value = input(final_prompt)
+                value = self.i(final_prompt)
 
             if not value or value.strip() == "":
                 if mandatory and default_value is None:
-                    print("  Value is required. Please retry.")
+                    self.o("  Value is required. Please retry.")
                     continue
                 else:
-                    print("  Using default value '%s'" % default_value)
+                    self.o("  Using default value '%s'" % default_value)
                     # this way, we can still check the path...
                     value = default_value
 
             if check_path_exists and not os.path.exists(value):
-                print("'%s' does not exist. Please check and retry." % value)
+                self.o("'%s' does not exist. Please check and retry." % value)
                 continue
             if check_pattern is not None and not check_pattern.match(str(value)):
-                print("Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
+                self.o("Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
                 continue
-            print("")
+            self.o("")
             # user entered a valid value
             return value
 
-    # recursively find the most narrow scope for a key
-    def _resolve_scope(self, section, key, start_from=Scope.invocation):
-        if self._k(start_from, section, key) in self._opts:
-            return start_from
-        elif start_from == Scope.application:
-            return None
-        else:
-            # continue search in the enclosing scope
-            return self._resolve_scope(section, key, Scope(start_from.value - 1))
 
-    def _k(self, scope, section, key):
-        # keep global config keys a bit shorter / nicer for now
-        if scope is None or scope == Scope.application:
-            return "%s::%s" % (section, key)
+def migrate(config_file, current_version, target_version, out=print):
+    logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, target_version))
+    # Something is really fishy. We don't want to downgrade the configuration.
+    if current_version >= target_version:
+        raise ConfigError("The existing config file is available in a later version already. Expected version <= [%s] but found [%s]"
+                          % (target_version, current_version))
+    # but first a backup...
+    config_file.backup()
+    config = config_file.load(interpolation=None)
+
+    if current_version == 0 and target_version > current_version:
+        logger.info("Migrating config from version [0] to [1]")
+        current_version = 1
+        config["meta"] = {}
+        config["meta"]["config.version"] = str(current_version)
+        # in version 1 we changed some directories from being absolute to being relative
+        config["system"]["log.root.dir"] = "logs"
+        config["provisioning"]["local.install.dir"] = "install"
+        config["reporting"]["report.base.dir"] = "reports"
+    if current_version == 1 and target_version > current_version:
+        logger.info("Migrating config from version [1] to [2]")
+        current_version = 2
+        config["meta"]["config.version"] = str(current_version)
+        # no need to ask the user now if we are about to upgrade to version 4
+        config["reporting"]["datastore.type"] = "in-memory"
+        config["reporting"]["datastore.host"] = ""
+        config["reporting"]["datastore.port"] = ""
+        config["reporting"]["datastore.secure"] = ""
+        config["reporting"]["datastore.user"] = ""
+        config["reporting"]["datastore.password"] = ""
+        config["system"]["env.name"] = "local"
+    if current_version == 2 and target_version > current_version:
+        logger.info("Migrating config from version [2] to [3]")
+        current_version = 3
+        config["meta"]["config.version"] = str(current_version)
+        # Remove obsolete settings
+        config["reporting"].pop("report.base.dir")
+        config["reporting"].pop("output.html.report.filename")
+    if current_version == 3 and target_version > current_version:
+        root_dir = config["system"]["root.dir"]
+        out("*****************************************************************************************")
+        out("")
+        out("You have an old configuration of Rally. Rally has now a much simpler setup")
+        out("routine which will autodetect lots of settings for you and it also does not")
+        out("require you to setup a metrics store anymore.")
+        out("")
+        out("Rally will now migrate your configuration but if you don't need advanced features")
+        out("like a metrics store, then you should delete the configuration directory:")
+        out("")
+        out("  rm -rf %s" % config_file.config_dir)
+        out("")
+        out("and then rerun Rally's configuration routine:")
+        out("")
+        out("  %s configure" % PROGRAM_NAME)
+        out("")
+        out("Please also note you have %.1f GB of data in your current benchmark directory at"
+              % convert.bytes_to_gb(io.get_size(root_dir)))
+        out()
+        out("  %s" % root_dir)
+        out("")
+        out("You might want to clean up this directory also.")
+        out()
+        out("For more details please see %s" % format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
+        out("")
+        out("*****************************************************************************************")
+        out("")
+        out("Pausing for 10 seconds to let you consider this message.")
+        time.sleep(10)
+        logger.info("Migrating config from version [3] to [4]")
+        current_version = 4
+        config["meta"]["config.version"] = str(current_version)
+        if len(config["reporting"]["datastore.host"]) > 0:
+            config["reporting"]["datastore.type"] = "elasticsearch"
         else:
-            return "%s::%s::%s" % (scope.name, section, key)
+            config["reporting"]["datastore.type"] = "in-memory"
+        # Remove obsolete settings
+        config["build"].pop("maven.bin")
+        config["benchmarks"].pop("metrics.stats.disk.device")
+
+    if current_version == 4 and target_version > current_version:
+        config["tracks"] = {}
+        config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
+        current_version = 5
+        config["meta"]["config.version"] = str(current_version)
+
+# all migrations done
+    config_file.store(config)
+    logger.info("Successfully self-upgraded configuration to version [%s]" % target_version)
+

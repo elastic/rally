@@ -2,8 +2,7 @@ import datetime
 from unittest import TestCase
 import unittest.mock as mock
 
-from esrally import config, metrics
-from esrally.track import track
+from esrally import config, metrics, track
 
 
 class MockClientFactory:
@@ -228,7 +227,7 @@ class EsRaceStoreTests(TestCase):
 
         t = track.Track(name="unittest", short_description="unittest track", description="unittest track",
                         source_root_url="http://example.org",
-                        indices=[track.Index(name=index, types=[track.Type(name=type, mapping_file_name=None)])],
+                        indices=[track.Index(name=index, types=[track.Type(name=type, mapping_file=None)])],
                         challenges=[
                             track.Challenge(name="index-and-search", description="Index and Search Challenge", benchmark=benchmarks)
                         ])
