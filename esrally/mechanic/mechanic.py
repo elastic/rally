@@ -10,7 +10,7 @@ class Mechanic:
 
     def __init__(self, cfg):
         self._config = cfg
-        self._supplier = supplier.Supplier(cfg, supplier.GitRepository(cfg))
+        self._supplier = supplier.Supplier(cfg)
         self._builder = builder.Builder(cfg)
         self._provisioner = provisioner.Provisioner(cfg)
         self._launcher = launcher.InProcessLauncher(cfg)

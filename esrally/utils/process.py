@@ -11,6 +11,10 @@ def run_subprocess(command_line):
     return os.system(command_line)
 
 
+def run_subprocess_with_output(command_line):
+    return os.popen(command_line).readlines()
+
+
 def run_subprocess_with_logging(command_line, header=None):
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.

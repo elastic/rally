@@ -1,9 +1,8 @@
-import random
 import logging
+import random
 import threading
 
-from esrally import time
-from esrally.track import track
+from esrally import time, track
 from esrally.utils import convert, progress
 
 logger = logging.getLogger("rally.driver")
@@ -102,10 +101,10 @@ class LatencyBenchmark(Benchmark):
         es = self.cluster.client
         for query in self.queries:
             self.stop_watch.start()
-            query.run(es)
+            with query:
+                query(es)
             self.stop_watch.stop()
             d[query.name] = self.stop_watch.total_time() / query.normalization_factor
-            query.close(es)
         return d
 
 
@@ -125,11 +124,15 @@ class StatsQueryAdapter:
         self.kwargs = kwargs
         self.normalization_factor = 1
 
-    def run(self, client):
+    def __enter__(self):
+        return self
+
+    def __call__(self, client):
         self.op(*self.args, **self.kwargs)
 
-    def close(self, client):
-        pass
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
 
     def __str__(self):
         return self.name
@@ -141,7 +144,7 @@ class StatsBenchmark(LatencyBenchmark):
             StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
             StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
         ], challenge.benchmark[track.BenchmarkPhase.stats].warmup_iteration_count,
-           challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
+                         challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
 
 
 class IndexedDocumentCountProbe:
@@ -241,10 +244,8 @@ class ThreadedIndexBenchmark(IndexBenchmark):
 
         for index in self.track.indices:
             for type in index.types:
-                if type.document_file_name:
-                    documents = self.cfg.opts("benchmarks", "dataset.path")
-                    docs_file = documents[type]
-                    logger.info("Indexing JSON docs file: [%s]" % docs_file)
+                if type.document_file:
+                    logger.info("Indexing JSON docs file: [%s]" % type.document_file)
 
                     start_signal = CountDownLatch(1)
                     stop_event = threading.Event()
@@ -252,7 +253,7 @@ class ThreadedIndexBenchmark(IndexBenchmark):
                     # Isn't this wrong for the bulk iterator? (should be on another level, namely type level)
                     docs_to_index = self.track.number_of_documents
 
-                    iterator = BulkIterator(index.name, type.name, docs_file, ids, docs_to_index, self.bulk_size)
+                    iterator = BulkIterator(index.name, type.name, type.document_file, ids, docs_to_index, self.bulk_size)
 
                     threads = []
                     try:

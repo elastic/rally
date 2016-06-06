@@ -135,15 +135,6 @@ def _read_symlink(path):
         return None
 
 
-def is_git_working_copy(dir):
-    """
-    Checks whether the given directory is a git working copy.
-    :param dir: A directory. May or may not exist.
-    :return: True iff the given directory is a git working copy.
-    """
-    return os.path.exists(dir) and os.path.exists("%s/.git" % dir)
-
-
 def guess_install_location(binary_name, fallback=None):
     """
     Checks whether a given binary is available on the user's path.

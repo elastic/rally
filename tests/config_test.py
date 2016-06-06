@@ -89,7 +89,7 @@ class ConfigFactoryTests(TestCase):
         f.create_config(config_store)
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEquals("4", config_store.config["meta"]["config.version"])
+        self.assertEquals("5", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEquals("local", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
@@ -149,7 +149,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEquals("4", config_store.config["meta"]["config.version"])
+        self.assertEquals("5", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEquals("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
@@ -262,3 +262,18 @@ class ConfigMigrationTests(TestCase):
         self.assertTrue("benchmarks" in config_file.config)
         self.assertFalse("metrics.stats.disk.device" in config_file.config["benchmarks"])
         self.assertEquals("in-memory", config_file.config["reporting"]["datastore.type"])
+
+    def test_migrate_from_4_to_5(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 4
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 4, 5, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEquals("5", config_file.config["meta"]["config.version"])
+        self.assertTrue("tracks" in config_file.config)
+        self.assertEquals("https://github.com/elastic/rally-tracks", config_file.config["tracks"]["default.url"])

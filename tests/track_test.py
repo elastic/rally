@@ -1,27 +1,19 @@
 from unittest import TestCase
 
-from esrally import config
-from esrally.track import track
+from esrally import track, exceptions, config
 
 
-class MarshalTests(TestCase):
-    def test_adds_distribution_version_to_mapping(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "source", "distribution.version", "5.0.0")
+class TrackRepositoryTests(TestCase):
+    def test_versions_parses_correct_version_string(self):
+        self.assertEquals(["5.0.3", "5.0", "5"], track.TrackRepository.versions("5.0.3"))
+        self.assertEquals(["5.0.0-SNAPSHOT", "5.0.0", "5.0", "5"], track.TrackRepository.versions("5.0.0-SNAPSHOT"))
+        self.assertEquals(["10.3.63", "10.3", "10"], track.TrackRepository.versions("10.3.63"))
 
-        t = track.Type("test", "test-mapping.json")
-
-        marshal = track.Marshal(cfg)
-        self.assertEqual(marshal.mapping_file_name(t), "test-mapping-5.0.0.json")
-
-    def test_no_distribution_version_for_source_distro(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "source", "distribution.version", "")
-
-        t = track.Type("test", "test-mapping.json")
-
-        marshal = track.Marshal(cfg)
-        self.assertEqual(marshal.mapping_file_name(t), "test-mapping.json")
+    def test_versions_rejects_invalid_version_strings(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            track.TrackRepository.versions("5.0.0a-SNAPSHOT")
+        self.assertEqual("version string '5.0.0a-SNAPSHOT' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"
+                         , ctx.exception.args[0])
 
 
 class TrackReaderTests(TestCase):
@@ -33,7 +25,7 @@ class TrackReaderTests(TestCase):
         }
         reader = track.TrackReader()
         with self.assertRaises(track.TrackSyntaxError) as ctx:
-            reader.read("unittest", track_specification)
+            reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
 
     def test_parse_valid_track_specification(self):
@@ -91,7 +83,7 @@ class TrackReaderTests(TestCase):
             ]
         }
         reader = track.TrackReader()
-        resulting_track = reader.read("unittest", track_specification)
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)
         self.assertEqual("longer description of this track for unit test", resulting_track.description)
@@ -99,6 +91,9 @@ class TrackReaderTests(TestCase):
         self.assertEqual("index-historical", resulting_track.indices[0].name)
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0].name)
+        self.assertEqual("/data/documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
+        self.assertEqual("/data/documents-main.json", resulting_track.indices[0].types[0].document_file)
+        self.assertEqual("/mappings/main-type-mappings.json", resulting_track.indices[0].types[0].mapping_file)
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)

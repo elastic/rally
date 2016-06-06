@@ -4,15 +4,13 @@ Adding new benchmarks to Rally
 Overview
 --------
 
-Although it is possible to add new benchmarks to Rally, it is needed to :doc:`set up Rally in development mode first </developing>`. We will eventually `split benchmark specifications from Rally <https://github.com/elastic/rally/issues/26>`_ but the API is currently not stable enough to support this reliably.
-
 First of all we need to clarify what a benchmark is. Rally has a few assumptions built-in:
 
 1. Rally sets up a fresh Elasticsearch cluster, i.e. the cluster is entirely under Rally's control.
 2. The first step of the benchmark is to index all required documents via the `bulk API <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. Rally will measure metrics like indexing throughput in this phase.
 3. An optional second step is to run one or more queries against the index. Rally will measure metrics like query latency in this phase.
 
-A benchmark is called a "track" in Rally. The most important attributes of a track are:
+This is called a "track" in Rally. The most important attributes of a track are:
 
 * One or more indices, each with one or more types
 * The queries to issue
@@ -21,11 +19,13 @@ A benchmark is called a "track" in Rally. The most important attributes of a tra
 
 Separately from a track, we also have "cars" which define the settings of the benchmark candidate (Elasticsearch), like how much heap memory to use, the number of nodes to start and so on. Rally comes with a set of default tracks and cars which you can use for your own benchmarks (but you don't have to).
 
+Tracks are written as JSON files and are kept in a track repository, which is currently located at https://github.com/elastic/rally-tracks. The repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter `--distribution-version`. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the master branch of the track repository.
+
 Example track
 -------------
 
 Let's create an example track step by step. First of all, we need some data. There are a lot of public data sets available which are interesting for new benchmarks and we also have a
-`backlog of benchmarks to add <https://github.com/elastic/rally/issues?q=is%3Aissue+is%3Aopen+label%3A%3ABenchmark>`_.
+`backlog of benchmarks to add <https://github.com/elastic/rally-tracks/issues>`_.
 
 `Geonames <http://www.geonames.org/>`_ provides geo data under a `creative commons license <http://creativecommons.org/licenses/by/3.0/>`_. We will download `allCountries.zip <http://download.geonames.org/export/dump/allCountries.zip>`_ (around 300MB), extract it and inspect ``allCountries.txt``.
 
@@ -72,15 +72,11 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
     
        print(json.dumps(d))
 
-We can invoke the script with ``python3 toJSON.py > documents.json``. Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``.
+We can invoke the script with ``python3 toJSON.py > documents.json``. Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``. Upload the data file to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example. For initial local testing you can also place the data file in the data directory, which is located in ``~/.rally/benchmarks/data``. For this example you need to place the data for the "geonames" track in ``~/.rally/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
 
-Next we need a mapping file for these documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at the `example mapping file <http://benchmarks.elastic.co/corpora/geonames/mappings.json>`_.
+Next we need a mapping file for these documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at the `example mapping file <http://benchmarks.elastic.co/corpora/geonames/mappings.json>`_. Place the mapping file in your `rally-tracks` repository in a dedicated folder. This repository is located in ``~/.rally/benchmarks/tracks/default`` and we place the mapping file in ``~/.rally/benchmarks/tracks/default/geonames`` for this track.
 
-Ensure to create a file called "README.txt" which can contain more information about a benchmark and must contain license information.
-
-Upload all three files to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example. For initial local testing you can also place all files in the data directory, which is located below the root directory you specified when initially configuring Rally. Let's say you specified ``/Users/daniel/benchmarks`` as root directory. Then you have to place the data for a track with the name "geonames" in ``/Users/daniel/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
-
-Finally, add a new JSON file in Rally's project directory. By convention, the file should be called "$BENCHMARK_NAME.json", so for our example the file is called "geonames.json". It is placed in "esrally/track/". ::
+Finally, add a new JSON file right next to the mapping file. The file has to be called "track.json" ::
 
     {
       "meta": {
@@ -187,6 +183,6 @@ First of all, please read the `contributors guide <https://github.com/elastic/ra
 
 If you want to contribute your track, follow these steps:
 
-1. Create a track file as described above
-2. Upload the associated data so they can be publicly downloaded via HTTP. The data have to include three files: the actual benchmark data (either as .bz2 (recommended) or as .zip), the mapping file, and a readme, called "README.txt" which has to contain also the licensing terms of the track (respecting the licensing terms of the source data). Note that pull requests for tracks without a license cannot be accepted.
-3. Create a pull request for the `Rally Github repo <https://github.com/elastic/rally>`_.
+1. Create a track JSON file and mapping files as described above and place them in a separate folder in the ``rally-tracks`` repository. Please also add a README file in this folder which contains licensing information (respecting the licensing terms of the source data). Note that pull requests for tracks without a license cannot be accepted.
+2. Upload the associated data so they can be publicly downloaded via HTTP. The data should be compressed either as .bz2 (recommended) or as .zip.
+3. Create a pull request for the `rally-tracks Github repo <https://github.com/elastic/rally-tracks>`_.

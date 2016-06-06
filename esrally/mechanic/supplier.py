@@ -1,18 +1,43 @@
-import os
 import logging
 
-from esrally.utils import io, process
+from esrally.utils import git
 
 logger = logging.getLogger("rally.supplier")
 
 
-class SupplyError(BaseException):
-    pass
+class Supplier:
+    """
+    Supplier fetches the benchmark candidate source tree from the remote repository. In the current implementation, only git is supported.
+    """
 
-
-class GitRepository:
     def __init__(self, cfg):
         self.cfg = cfg
+
+    def fetch(self):
+        # assume fetching of latest version for now
+        self._try_init()
+        self._update()
+
+    def _try_init(self):
+        if not git.is_working_copy(self.src_dir):
+            print("Downloading sources from %s to %s." % (self.remote_url, self.src_dir))
+            git.clone(self.src_dir, self.remote_url)
+
+    def _update(self):
+        revision = self.cfg.opts("source", "revision")
+        if revision == "latest":
+            logger.info("Fetching latest sources from origin.")
+            git.pull(self.src_dir)
+        elif revision == "current":
+            logger.info("Skip fetching sources")
+        elif revision.startswith("@"):
+            # concert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
+            git.pull_ts(self.src_dir, revision[1:])
+        else:  # assume a git commit hash
+            git.pull_revision(self.src_dir, revision)
+
+        git_revision = git.head_revision(self.src_dir)
+        logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))
 
     @property
     def src_dir(self):
@@ -22,71 +47,3 @@ class GitRepository:
     def remote_url(self):
         return self.cfg.opts("source", "remote.repo.url")
 
-    def is_cloned(self):
-        return os.path.isdir("%s/.git" % self.src_dir)
-
-    def clone(self):
-        src = self.src_dir
-        remote = self.remote_url
-        io.ensure_dir(src)
-        print("Downloading sources from %s to %s." % (remote, src))
-        # Don't swallow subprocess output, user might need to enter credentials...
-        if process.run_subprocess("git clone %s %s" % (remote, src)):
-            raise SupplyError("Could not clone from %s to %s" % (remote, src))
-
-    def pull(self, remote="origin", branch="master"):
-        # Don't swallow output but silence git at least a bit... (--quiet)
-        if process.run_subprocess(
-            "sh -c 'cd {0}; git checkout --quiet {2} && git fetch --quiet {1} && git rebase --quiet {1}/{2}'"
-                .format(self.src_dir, remote, branch)):
-            raise SupplyError("Could not fetch latest source tree")
-
-    def pull_ts(self, ts):
-        if process.run_subprocess(
-                "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet `git rev-list -n 1 --before=\"%s\" "
-                "--date=iso8601 origin/master`'" %
-                (self.src_dir, ts)):
-            raise SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
-
-    def pull_revision(self, revision):
-        if process.run_subprocess(
-                "sh -c 'cd %s; git fetch --quiet origin && git checkout --quiet %s'" % (self.src_dir, revision)):
-            raise SupplyError("Could not fetch source tree for revision %s" % revision)
-
-    def head_revision(self):
-        return os.popen("sh -c 'cd %s; git rev-parse --short HEAD'" % self.src_dir).readline().split()[0]
-
-
-class Supplier:
-    """
-    Supplier fetches the benchmark candidate source tree from the remote repository. In the current implementation, only git is supported.
-    """
-
-    def __init__(self, cfg, repo):
-        self._config = cfg
-        self._repo = repo
-
-    def fetch(self):
-        # assume fetching of latest version for now
-        self._try_init()
-        self._update()
-
-    def _try_init(self):
-        if not self._repo.is_cloned():
-            self._repo.clone()
-
-    def _update(self):
-        revision = self._config.opts("source", "revision")
-        if revision == "latest":
-            logger.info("Fetching latest sources from origin.")
-            self._repo.pull()
-        elif revision == "current":
-            logger.info("Skip fetching sources")
-        elif revision.startswith("@"):
-            # concert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
-            self._repo.pull_ts(revision[1:])
-        else:  # assume a git commit hash
-            self._repo.pull_revision(revision)
-
-        git_revision = self._repo.head_revision()
-        logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))

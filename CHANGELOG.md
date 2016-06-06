@@ -13,6 +13,8 @@ This influences the command line interface in a couple of ways:
 * Tournaments created by older versions of Rally are incompatible
 * Rally must now be invoked with only one challenge and only one car (previously it was possible to specify multiple track setups)
 
+We have also [moved tracks](https://github.com/elastic/rally/issues/69) to a [dedicated repository](https://github.com/elastic/rally-tracks). This allows you to support tracks for multiple versions of Elasticsearch but also requires that all users have `git` installed. 
+
 #### Simplified configuration in 0.3
 
 We have spent a lot of time to simplify first time setup of Rally. For starters, you are not required to setup your own metrics store if you don't need it. 

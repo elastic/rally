@@ -4,11 +4,9 @@ import urllib.error
 
 import tabulate
 
-from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time, PROGRAM_NAME
+from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time, track, car, PROGRAM_NAME
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io
-# This is one of the few occasions where we really want to use a star import. As new tracks are added we want to "autodiscover" them
-from esrally.track import *
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -59,9 +57,9 @@ class ComponentSelector:
 
     def find_car(self):
         selected_car = self.ctx.config.opts("benchmarks", "car")
-        for car in track.cars:
-            if car.name == selected_car:
-                return car
+        for c in car.cars:
+            if c.name == selected_car:
+                return c
         raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with %s list cars."
                                               % (selected_car, PROGRAM_NAME))
 
@@ -119,10 +117,10 @@ def kill(ctx, track):
     process.kill_running_es_instances(node_prefix)
 
 
-def prepare_track(ctx, track):
-    ctx.marshal.setup(track)
+def prepare_track(ctx, t):
+    track.prepare_track(t, ctx.config)
     race_paths = paths.Paths(ctx.config)
-    track_root = race_paths.track_root(track.name)
+    track_root = race_paths.track_root(t.name)
     ctx.config.add(config.Scope.benchmark, "system", "track.root.dir", track_root)
 
 
@@ -263,7 +261,8 @@ class RaceControl:
             elif command == "race":
                 pipeline = self._choose(lambda n: pipelines[n], "pipeline",
                                         "You can list the available pipelines with %s list pipelines." % PROGRAM_NAME)(ctx)
-                t = self._choose(lambda n: ctx.track_reader.read(n), "track", "You can list the available tracks with %s list tracks." % PROGRAM_NAME)
+                t = self._choose(lambda n: track.load_track(ctx.config, n), "track",
+                                 "You can list the available tracks with %s list tracks." % PROGRAM_NAME)
                 metrics.race_store(self._config).store_race(t)
                 pipeline.run(t)
                 return True
@@ -303,7 +302,7 @@ class RaceControl:
         elif what == "tracks":
             print("Available tracks:\n")
             print(tabulate.tabulate(
-                tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in ctx.track_reader.all_tracks()],
+                tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in track.list_tracks(self._config)],
                 headers=["Name", "Description", "Challenges"]))
 
         elif what == "pipelines":
@@ -319,7 +318,7 @@ class RaceControl:
             print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
         elif what == "cars":
             print("Available cars:\n")
-            print(tabulate.tabulate([[car.name] for car in track.cars], headers=["Name"]))
+            print(tabulate.tabulate([[c.name] for c in car.cars], headers=["Name"]))
         else:
             raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
 
@@ -328,7 +327,5 @@ class RacingContext:
     def __init__(self, cfg):
         self.config = cfg
         self.mechanic = mechanic.Mechanic(cfg)
-        self.marshal = track.Marshal(cfg)
         self.reporter = reporter.SummaryReporter(cfg)
         self.sweeper = sweeper.Sweeper(cfg)
-        self.track_reader = track.TrackFileReader(cfg)
