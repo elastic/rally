@@ -530,11 +530,12 @@ class InMemoryMetricsStore(MetricsStore):
     def get_percentiles(self, name, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
-        values = self.get(name)
-        sorted_values = sorted(values)
         result = collections.OrderedDict()
-        for percentile in percentiles:
-            result[percentile] = self.percentile_value(sorted_values, percentile)
+        values = self.get(name)
+        if len(values) > 0:
+            sorted_values = sorted(values)
+            for percentile in percentiles:
+                result[percentile] = self.percentile_value(sorted_values, percentile)
         return result
 
     def percentile_value(self, sorted_values, percentile):
