@@ -250,7 +250,7 @@ class SummaryReporter:
                 ["Heap used for terms [MB]", convert.bytes_to_mb(stats.memory_terms)],
                 ["Heap used for norms [MB]", convert.bytes_to_mb(stats.memory_norms)],
                 ["Heap used for points [MB]", convert.bytes_to_mb(stats.memory_points)],
-                ["Heap used for points [MB]", convert.bytes_to_mb(stats.memory_stored_fields)],
+                ["Heap used for stored fields [MB]", convert.bytes_to_mb(stats.memory_stored_fields)],
             ]
         else:
             return []
