@@ -1,13 +1,13 @@
 import os
-import re
 import logging
 import json
 import urllib.error
 from enum import Enum
+
 import jsonschema
 
 from esrally import exceptions
-from esrally.utils import io, convert, net, git
+from esrally.utils import io, convert, net, git, versions
 
 logger = logging.getLogger("rally.track")
 
@@ -290,7 +290,6 @@ class TrackRepository:
     """
     Manages track specifications.
     """
-    VERSIONS = re.compile("^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$")
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -323,61 +322,22 @@ class TrackRepository:
         self._update(distribution_version)
         return "%s/track.json" % self.track_dir(track_name)
 
-    @staticmethod
-    def versions(version):
-        """
-        Determines possible variations of a version.
-
-        E.g. if version "5.0.0-SNAPSHOT" is given, the possible variations are:
-
-        ["5.0.0-SNAPSHOT", "5.0.0", "5.0", "5"]
-
-        :param version: A version string in the format major.minor.path-suffix (suffix is optional)
-        :return: a list of version variations ordered from most specific to most generic variation.
-        """
-        v = []
-        matches = TrackRepository.VERSIONS.match(version)
-        if matches:
-            if matches.start(4) > 0:
-                v.append("%s.%s.%s-%s" % (matches.group(1), matches.group(2), matches.group(3), matches.group(4)))
-            v.append("%s.%s.%s" % (matches.group(1), matches.group(2), matches.group(3)))
-            v.append("%s.%s" % (matches.group(1), matches.group(2)))
-            v.append("%s" % matches.group(1))
-        else:
-            raise exceptions.InvalidSyntax("version string '%s' does not conform to pattern '%s'" %
-                                           (version, TrackRepository.VERSIONS.pattern))
-        return v
-
-    @staticmethod
-    def best_match(branches, distribution_version):
-        """
-
-        Finds the most specific branch for a given distribution version assuming that versions have the pattern:
-
-            major.minor.patch-suffix
-
-        and branch names reflect this pattern.
-
-        :param branches: A list of branch names.
-        :param distribution_version: An Elasticsearch distribution version.
-        :return: The most specific branch available (most components of the version match)
-        """
-        if distribution_version and len(distribution_version.strip()) > 0:
-            for version in TrackRepository.versions(distribution_version):
-                if version in branches:
-                    return version
-            raise exceptions.SystemSetupError(
-                "Cannot find track data for distribution version %s" % distribution_version)
-        else:
-            return "master"
-
     def _update(self, distribution_version):
-        branch = self.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
         try:
             if self.remote:
-                git.rebase(self.tracks_dir, branch=branch)
-            else:
+                branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
+                if branch:
+                    git.rebase(self.tracks_dir, branch=branch)
+                    return
+                else:
+                    msg = "Could not find track data remotely for distribution version %s. " \
+                          "Trying to find track data locally." % distribution_version
+                    logger.warn(msg)
+            branch = versions.best_match(git.branches(self.tracks_dir, remote=False), distribution_version)
+            if branch:
                 git.checkout(self.tracks_dir, branch=branch)
+            else:
+                raise exceptions.SystemSetupError("Cannot find track data for distribution version %s" % distribution_version)
         except exceptions.SupplyError as e:
             raise exceptions.DataError("Cannot update track data in '%s': %s" % (self.tracks_dir, e))
 

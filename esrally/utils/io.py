@@ -89,6 +89,10 @@ def dirname(path):
     return os.path.dirname(path)
 
 
+def basename(path):
+    return os.path.basename(path)
+
+
 def normalize_path(path):
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.

@@ -44,7 +44,7 @@ class EsClientFactory:
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
     def __init__(self, hosts):
-        self.client = elasticsearch.Elasticsearch(hosts=hosts, timeout=60, request_timeout=60)
+        self.client = elasticsearch.Elasticsearch(hosts=hosts, timeout=90, request_timeout=90)
 
     def create(self):
         return self.client
@@ -139,7 +139,14 @@ class Cluster:
 
     def force_merge(self):
         logger.info("Force merging all indices.")
-        self.client.indices.forcemerge()
+        try:
+            self.client.indices.forcemerge()
+        except elasticsearch.TransportError as e:
+            # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
+            if e.status_code == 400:
+                self.client.indices.optimize()
+            else:
+                raise e
 
     def on_benchmark_start(self, phase=None):
         """

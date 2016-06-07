@@ -8,6 +8,7 @@ import threading
 
 from esrally import config, cluster, telemetry, time, exceptions, track
 from esrally.mechanic import gear
+from esrally.utils import versions, format
 
 logger = logging.getLogger("rally.launcher")
 
@@ -76,6 +77,16 @@ class InProcessLauncher(Launcher):
 
     # TODO 68: We should externalize this (see #68)
     ES_CMD_LINE_OPTS_PER_VERSION = {
+        "1": {
+            "processors": "-Des.processors",
+            "log_path": "-Des.path.logs",
+            "node_name": "-Des.node.name"
+        },
+        "2": {
+            "processors": "-Des.processors",
+            "log_path": "-Des.path.logs",
+            "node_name": "-Des.node.name"
+        },
         "5.0.0-alpha1": {
             "processors": "-Ees.processors",
             "log_path": "-Ees.path.logs",
@@ -173,11 +184,12 @@ class InProcessLauncher(Launcher):
         return cmd
 
     def cmd_line_opt(self, distribution_version, key):
-        if distribution_version and len(distribution_version.strip()) > 0:
-            if distribution_version in InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION:
-                return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION[distribution_version][key]
-        # assume master, it will fail anyway otherwise and we can add the version then
-        return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION["master"][key]
+        best_version = versions.best_match(InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION.keys(), distribution_version)
+        if best_version:
+            return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION[best_version][key]
+        else:
+            raise exceptions.LaunchError("Cannot start cluster. Unsupported distribution version %s. "
+                                         "Please raise a bug at %s." % (distribution_version, format.link("https://github.com/elastic/rally")))
 
     def _start_process(self, cmd, env, node_name):
         install_dir = self.cfg.opts("provisioning", "local.binary.path")

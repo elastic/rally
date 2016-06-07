@@ -6,7 +6,7 @@ import tabulate
 
 from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time, track, car, PROGRAM_NAME
 from esrally.mechanic import mechanic
-from esrally.utils import process, net, io
+from esrally.utils import process, net, io, versions
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -153,8 +153,13 @@ def download_benchmark_candidate(ctx, track):
     io.ensure_dir(distributions_root)
     distribution_path = "%s/elasticsearch-%s.tar.gz" % (distributions_root, version)
 
-    download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
-                   "elasticsearch-%s.tar.gz" % (version, version)
+    major_version = int(versions.components(version)["major"])
+
+    if major_version > 1:
+        download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
+                       "elasticsearch-%s.tar.gz" % (version, version)
+    else:
+        download_url = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-%s.tar.gz" % version
     if not os.path.isfile(distribution_path):
         try:
             print("Downloading Elasticsearch %s ..." % version)
