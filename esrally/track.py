@@ -373,10 +373,13 @@ class TrackRepository:
 
     def _update(self, distribution_version):
         branch = self.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
-        if self.remote:
-            git.rebase(self.tracks_dir, branch=branch)
-        else:
-            git.checkout(self.tracks_dir, branch=branch)
+        try:
+            if self.remote:
+                git.rebase(self.tracks_dir, branch=branch)
+            else:
+                git.checkout(self.tracks_dir, branch=branch)
+        except exceptions.SupplyError as e:
+            raise exceptions.DataError("Cannot update track data in '%s': %s" % (self.tracks_dir, e))
 
 
 class TrackFileReader:
