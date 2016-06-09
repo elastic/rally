@@ -234,8 +234,8 @@ class ConfigFactory:
         # self.print_detection_result("JDK 9 ", default_jdk_9, warn_if_missing=True)
         self.o("")
 
-        # users that don't have git and gradle cannot benchmark from sources
-        benchmark_from_sources = git_path and gradle_bin
+        # users that don't have Gradle available cannot benchmark from sources
+        benchmark_from_sources = gradle_bin
 
         if not benchmark_from_sources:
             self.o("**********************************************************************************")
