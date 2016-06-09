@@ -150,7 +150,7 @@ class IndexedDocumentCountProbe:
     def __init__(self, cluster, indices=None, expected_doc_count=None):
         self.cluster = cluster
         if indices:
-            self.indices = "".join(indices)
+            self.indices = ",".join(indices)
         else:
             self.indices = None
         self.expected_doc_count = expected_doc_count
