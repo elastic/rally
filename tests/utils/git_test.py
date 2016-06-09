@@ -105,7 +105,7 @@ class GitTests(TestCase):
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_head_revision(self, run_subprocess):
         run_subprocess.return_value = ["3694a07"]
-        self.assertEquals("3694a07", git.head_revision("/src"))
+        self.assertEqual("3694a07", git.head_revision("/src"))
         run_subprocess.assert_called_with("git -C /src rev-parse --short HEAD")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -114,7 +114,7 @@ class GitTests(TestCase):
                                        "  origin/master",
                                        "  origin/5.0.0-alpha1",
                                        "  origin/5"]
-        self.assertEquals(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=True))
+        self.assertEqual(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=True))
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/remotes/ --format='%(refname:short)'")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -123,5 +123,5 @@ class GitTests(TestCase):
                                        "  master",
                                        "  5.0.0-alpha1",
                                        "  5"]
-        self.assertEquals(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=False))
+        self.assertEqual(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=False))
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/heads/ --format='%(refname:short)'")

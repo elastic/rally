@@ -49,7 +49,7 @@ class ConfigTests(TestCase):
         cfg = config.Config(config_file_class=InMemoryConfigStore)
         self.assertFalse(cfg.config_present())
         # standard properties are still available
-        self.assertEquals("rally-node", cfg.opts("provisioning", "node.name.prefix"))
+        self.assertEqual("rally-node", cfg.opts("provisioning", "node.name.prefix"))
 
     def test_load_existing_config(self):
         cfg = config.Config(config_file_class=InMemoryConfigStore)
@@ -68,11 +68,11 @@ class ConfigTests(TestCase):
         self.assertTrue(cfg.config_present())
         cfg.load_config()
         # standard properties are still available
-        self.assertEquals("rally-node", cfg.opts("provisioning", "node.name.prefix"))
-        self.assertEquals("value", cfg.opts("tests", "sample.key"))
+        self.assertEqual("rally-node", cfg.opts("provisioning", "node.name.prefix"))
+        self.assertEqual("value", cfg.opts("tests", "sample.key"))
         # we can also override values
         cfg.add(config.Scope.applicationOverride, "tests", "sample.key", "override")
-        self.assertEquals("override", cfg.opts("tests", "sample.key"))
+        self.assertEqual("override", cfg.opts("tests", "sample.key"))
 
 
 class ConfigFactoryTests(TestCase):
@@ -89,18 +89,18 @@ class ConfigFactoryTests(TestCase):
         f.create_config(config_store)
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEquals("5", config_store.config["meta"]["config.version"])
+        self.assertEqual("5", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
-        self.assertEquals("local", config_store.config["system"]["env.name"])
+        self.assertEqual("local", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
         self.assertTrue("build" in config_store.config)
-        self.assertEquals("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
+        self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
         self.assertTrue("provisioning" in config_store.config)
         self.assertTrue("runtime" in config_store.config)
-        self.assertEquals("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
         self.assertTrue("benchmarks" in config_store.config)
         self.assertTrue("reporting" in config_store.config)
-        self.assertEquals("in-memory", config_store.config["reporting"]["datastore.type"])
+        self.assertEqual("in-memory", config_store.config["reporting"]["datastore.type"])
         self.assertTrue("tracks" in config_store.config)
 
     @mock.patch("esrally.utils.io.guess_java_home")
@@ -121,7 +121,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("runtime" in config_store.config)
-        self.assertEquals("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
 
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
@@ -149,23 +149,23 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEquals("5", config_store.config["meta"]["config.version"])
+        self.assertEqual("5", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
-        self.assertEquals("unittest-env", config_store.config["system"]["env.name"])
+        self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
         self.assertTrue("build" in config_store.config)
-        self.assertEquals("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
+        self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
         self.assertTrue("provisioning" in config_store.config)
         self.assertTrue("runtime" in config_store.config)
-        self.assertEquals("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
         self.assertTrue("benchmarks" in config_store.config)
         self.assertTrue("reporting" in config_store.config)
-        self.assertEquals("elasticsearch", config_store.config["reporting"]["datastore.type"])
-        self.assertEquals("localhost", config_store.config["reporting"]["datastore.host"])
-        self.assertEquals("9200", config_store.config["reporting"]["datastore.port"])
-        self.assertEquals("True", config_store.config["reporting"]["datastore.secure"])
-        self.assertEquals("user", config_store.config["reporting"]["datastore.user"])
-        self.assertEquals("pw", config_store.config["reporting"]["datastore.password"])
+        self.assertEqual("elasticsearch", config_store.config["reporting"]["datastore.type"])
+        self.assertEqual("localhost", config_store.config["reporting"]["datastore.host"])
+        self.assertEqual("9200", config_store.config["reporting"]["datastore.port"])
+        self.assertEqual("True", config_store.config["reporting"]["datastore.secure"])
+        self.assertEqual("user", config_store.config["reporting"]["datastore.user"])
+        self.assertEqual("pw", config_store.config["reporting"]["datastore.password"])
         self.assertTrue("tracks" in config_store.config)
 
 
@@ -199,7 +199,7 @@ class ConfigMigrationTests(TestCase):
         config.migrate(config_file, 0, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
 
         self.assertTrue(config_file.backup_created)
-        self.assertEquals(str(config.Config.CURRENT_CONFIG_VERSION), config_file.config["meta"]["config.version"])
+        self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_file.config["meta"]["config.version"])
 
     def test_migrate_from_2_to_3(self):
         config_file = InMemoryConfigStore("test")
@@ -220,7 +220,7 @@ class ConfigMigrationTests(TestCase):
         config.migrate(config_file, 2, 3, out=null_output)
 
         self.assertTrue(config_file.backup_created)
-        self.assertEquals("3", config_file.config["meta"]["config.version"])
+        self.assertEqual("3", config_file.config["meta"]["config.version"])
         # Did not delete the section...
         self.assertTrue("reporting" in config_file.config)
         # ... but the key
@@ -254,14 +254,14 @@ class ConfigMigrationTests(TestCase):
         config.migrate(config_file, 3, 4, out=null_output)
 
         self.assertTrue(config_file.backup_created)
-        self.assertEquals("4", config_file.config["meta"]["config.version"])
+        self.assertEqual("4", config_file.config["meta"]["config.version"])
         # Did not delete the section...
         self.assertTrue("build" in config_file.config)
         # ... but the key
         self.assertFalse("maven.bin" in config_file.config["build"])
         self.assertTrue("benchmarks" in config_file.config)
         self.assertFalse("metrics.stats.disk.device" in config_file.config["benchmarks"])
-        self.assertEquals("in-memory", config_file.config["reporting"]["datastore.type"])
+        self.assertEqual("in-memory", config_file.config["reporting"]["datastore.type"])
 
     def test_migrate_from_4_to_5(self):
         config_file = InMemoryConfigStore("test")
@@ -274,6 +274,6 @@ class ConfigMigrationTests(TestCase):
         config.migrate(config_file, 4, 5, out=null_output)
 
         self.assertTrue(config_file.backup_created)
-        self.assertEquals("5", config_file.config["meta"]["config.version"])
+        self.assertEqual("5", config_file.config["meta"]["config.version"])
         self.assertTrue("tracks" in config_file.config)
-        self.assertEquals("https://github.com/elastic/rally-tracks", config_file.config["tracks"]["default.url"])
+        self.assertEqual("https://github.com/elastic/rally-tracks", config_file.config["tracks"]["default.url"])
