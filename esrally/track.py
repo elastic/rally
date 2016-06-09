@@ -5,6 +5,7 @@ import urllib.error
 from enum import Enum
 
 import jinja2
+import jinja2.exceptions
 import jsonschema
 
 from esrally import exceptions, time
@@ -382,21 +383,22 @@ class TrackFileReader:
         :param data_dir: The directory where the data file for this track are stored locally.
         :return: A corresponding track instance if the track file is valid.
         """
+
+        logger.info("Reading track file %s." % track_file)
         try:
-            logger.info("Reading track file %s." % track_file)
             rendered = render_template_from_file(track_file)
             logger.info("Final rendered track for '%s': %s" % (track_file, rendered))
             track_spec = json.loads(rendered)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
             logger.exception("Could not load [%s]." % track_file)
             raise TrackSyntaxError("Could not load '%s'" % track_file, e)
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
             raise TrackSyntaxError(
-                    "Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
-                    % (track_name, ve.message,
-                       json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
+                "Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
+                % (track_name, ve.message,
+                   json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
         return self.read_track(track_name, track_spec, mapping_dir, data_dir)
 
 
