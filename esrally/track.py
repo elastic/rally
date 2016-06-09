@@ -4,9 +4,10 @@ import json
 import urllib.error
 from enum import Enum
 
+import jinja2
 import jsonschema
 
-from esrally import exceptions
+from esrally import exceptions, time
 from esrally.utils import io, convert, net, git, versions
 
 logger = logging.getLogger("rally.track")
@@ -327,6 +328,7 @@ class TrackRepository:
             if self.remote:
                 branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
                 if branch:
+                    logger.info("Rebasing on '%s' in '%s' for distribution version '%s'." % (branch, self.tracks_dir, distribution_version))
                     git.rebase(self.tracks_dir, branch=branch)
                     return
                 else:
@@ -335,11 +337,25 @@ class TrackRepository:
                     logger.warn(msg)
             branch = versions.best_match(git.branches(self.tracks_dir, remote=False), distribution_version)
             if branch:
+                logger.info("Checking out '%s' in '%s' for distribution version '%s'." % (branch, self.tracks_dir, distribution_version))
                 git.checkout(self.tracks_dir, branch=branch)
             else:
                 raise exceptions.SystemSetupError("Cannot find track data for distribution version %s" % distribution_version)
         except exceptions.SupplyError as e:
             raise exceptions.DataError("Cannot update track data in '%s': %s" % (self.tracks_dir, e))
+
+
+def render_template(loader, template_name, clock=time.Clock):
+    env = jinja2.Environment(loader=loader)
+    env.globals["now"] = clock.now()
+    env.filters["days_ago"] = time.days_ago
+    template = env.get_template(template_name)
+
+    return template.render()
+
+
+def render_template_from_file(template_file_name):
+    return render_template(loader=jinja2.FileSystemLoader(io.dirname(template_file_name)), template_name=io.basename(template_file_name))
 
 
 class TrackFileReader:
@@ -364,7 +380,10 @@ class TrackFileReader:
         :return: A corresponding track instance if the track file is valid.
         """
         try:
-            track_spec = json.loads(open(track_file).read())
+            logger.info("Reading track file %s." % track_file)
+            rendered = render_template_from_file(track_file)
+            logger.info("Final rendered track for '%s': %s" % (track_file, rendered))
+            track_spec = json.loads(rendered)
         except json.JSONDecodeError as e:
             logger.exception("Could not load [%s]." % track_file)
             raise TrackSyntaxError("Could not load '%s'" % track_file, e)

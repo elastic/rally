@@ -1,6 +1,40 @@
 from unittest import TestCase
 
+import jinja2
+
 from esrally import track
+
+
+class StaticClock:
+    NOW = 1453362707.0
+
+    @staticmethod
+    def now():
+        return StaticClock.NOW
+
+    @staticmethod
+    def stop_watch():
+        return None
+
+
+class TemplateRenderTests(TestCase):
+    def test_render_template(self):
+        template = """
+        {
+            "key": {{'01-01-2000' | days_ago(now)}},
+            "key2": "static value"
+        }
+        """
+
+        rendered = track.render_template(loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
+
+        expected = """
+        {
+            "key": 5864,
+            "key2": "static value"
+        }
+        """
+        self.assertEqual(expected, rendered)
 
 
 class TrackReaderTests(TestCase):

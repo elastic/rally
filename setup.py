@@ -15,6 +15,7 @@ install_requires = [
     "py-cpuinfo==0.2.3",
     "tabulate==0.7.5",
     "jsonschema==2.5.1",
+    "Jinja2==2.8",
     # always use the latest version, these are certificate files...
     "certifi"
 ]
