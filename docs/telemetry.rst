@@ -32,6 +32,10 @@ To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will t
 .. image:: jfr-es.png
    :alt: Sample Java Flight Recording
 
+.. note::
+
+   The licensing terms of Java flight recorder do not allow you to run it in production environments without a valid license (for details, please refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
+
 jit
 ---
 

@@ -3,7 +3,7 @@ Configuration
 
 Rally has to be configured before it is ready. Just run ``esrally`` after installation. Rally will detect that the configuration is missing and ask a few questions.
 
-If you want to reconfigure Rally at any later time, just run ``esrally configure``.
+If you want to reconfigure Rally at any later time, just run ``esrally configure`` again.
 
 Simple Configuration
 --------------------
@@ -12,12 +12,9 @@ By default, Rally will run a simpler configuration routine and autodetect as muc
 
 Rally can build Elasticsearch either from sources or use an `official binary distribution <https://www.elastic.co/downloads/elasticsearch>`_. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
 
-If you want to build Elasticsearch from sources you will also need:
+If you want to build Elasticsearch from sources you will also need Gradle 2.13+.
 
-* Gradle 2.8+
-* git
-
-Let's go through an example step by step: First run `esrally`::
+Let's go through an example step by step: First run ``esrally``::
 
     dm@io:~ $ esrally
 
@@ -39,7 +36,7 @@ Let's go through an example step by step: First run `esrally`::
 
     [✓] Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
 
-As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. If you don't have git or Gradle, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you don't have Gradle installed::
+As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. If you don't have Gradle, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you don't have Gradle installed::
 
     dm@io:~ $ esrally
 
@@ -84,7 +81,7 @@ Otherwise, Rally will choose a default directory and ask you for confirmation::
 
 If you are ok with this default, just press "Enter" and Rally will take care of the rest. Otherwise, provide your Elasticsearch project directory here. Please keep in mind that Rally will run builds with Gradle in this directory if you start a benchmark.
 
-If Rally has not found git and Gradle in the first step, it will not ask you for a source directory and just go on.
+If Rally has not found Gradle in the first step, it will not ask you for a source directory and just go on.
 
 Now Rally is done::
 

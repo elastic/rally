@@ -9,7 +9,7 @@ Please ensure that the following packages are installed before installing Rally 
 * Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
 * JDK 8+
 * git
-* Gradle
+* Gradle 2.13+
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 
@@ -45,7 +45,7 @@ To get a rough understanding of Rally, it makes sense to get to know its key com
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
-When implementing a new benchmark, create a new file in ``track`` and create a new ``Track`` and one or more ``Challenge`` instances. See ``track/geonames_track.py`` for an example and the :doc:`tutorial on adding benchmarks </adding_benchmarks>`. The new track will be picked up automatically. You can run Rally with your track by issuing ``esrally --track=your-track-name``. All available tracks can be listed with ``esrally list tracks``.
+There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_benchmarks>`.
 
 How to contribute code
 ----------------------
