@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import signal
@@ -6,7 +5,7 @@ import socket
 import subprocess
 import threading
 
-from esrally import config, cluster, telemetry, time, exceptions, track
+from esrally import config, cluster, telemetry, time, exceptions
 from esrally.mechanic import gear
 from esrally.utils import versions, format
 
@@ -18,35 +17,12 @@ class ClusterFactory:
         return cluster.Cluster(hosts, nodes, metrics_store, telemetry)
 
 
-class Launcher:
+class ExternalLauncher:
     def __init__(self, cfg, cluster_factory_class=ClusterFactory):
         self.cfg = cfg
         self.cluster_factory = cluster_factory_class()
 
-    def setup_index(self, cluster, t, challenge):
-        if track.BenchmarkPhase.index in challenge.benchmark:
-            index_settings = challenge.benchmark[track.BenchmarkPhase.index].index_settings
-            for index in t.indices:
-                if cluster.client.indices.exists(index=index.name):
-                    logger.warn("Index [%s] already exists. Deleting it." % index.name)
-                    cluster.client.indices.delete(index=index.name)
-                logger.info("Creating index [%s]" % index.name)
-                cluster.client.indices.create(index=index.name, body=index_settings)
-                for type in index.types:
-                    mappings = open(type.mapping_file).read()
-                    logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
-                    logger.debug(mappings)
-                    cluster.client.indices.put_mapping(index=index.name,
-                                                       doc_type=type.name,
-                                                       body=json.loads(mappings))
-        cluster.wait_for_status_green()
-
-
-class ExternalLauncher(Launcher):
-    def __init__(self, cfg, cluster_factory_class=ClusterFactory):
-        super().__init__(cfg, cluster_factory_class)
-
-    def start(self, track, challenge, metrics_store):
+    def start(self, metrics_store):
         configured_host_list = self.cfg.opts("launcher", "external.target.hosts")
         hosts = []
         try:
@@ -65,12 +41,20 @@ class ExternalLauncher(Launcher):
             telemetry.IndexStats(self.cfg, metrics_store)
         ])
         c = self.cluster_factory.create(hosts, [], metrics_store, t)
+        user_defined_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+        distribution_version = c.info()["version"]["number"]
+        if not user_defined_version or user_defined_version.strip() == "":
+            logger.info("Distribution version was not specified by user. Rally-determined version is [%s]" % distribution_version)
+            self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
+        elif user_defined_version != distribution_version:
+            logger.warn("User specified version [%s] but cluster reports version [%s]." % (user_defined_version, distribution_version))
+            print("Warning: Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
+                  (user_defined_version, distribution_version))
         t.attach_to_cluster(c)
-        self.setup_index(c, track, challenge)
         return c
 
 
-class InProcessLauncher(Launcher):
+class InProcessLauncher:
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
 
@@ -108,11 +92,12 @@ class InProcessLauncher(Launcher):
     }
 
     def __init__(self, cfg, clock=time.Clock, cluster_factory_class=ClusterFactory):
-        super().__init__(cfg, cluster_factory_class)
+        self.cfg = cfg
+        self.cluster_factory = cluster_factory_class()
         self._clock = clock
         self._servers = []
 
-    def start(self, track, challenge, car, metrics_store):
+    def start(self, car, metrics_store):
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
         first_http_port = self.cfg.opts("provisioning", "node.http.port")
@@ -124,7 +109,6 @@ class InProcessLauncher(Launcher):
             metrics_store, t
         )
         t.attach_to_cluster(c)
-        self.setup_index(c, track, challenge)
         return c
 
     def _start_node(self, node, car, metrics_store):

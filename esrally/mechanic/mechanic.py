@@ -1,5 +1,10 @@
-from esrally import metrics
+import logging
+import json
+
+from esrally import metrics, track
 from esrally.mechanic import builder, supplier, provisioner, launcher
+
+logger = logging.getLogger("rally.mechanic")
 
 
 class Mechanic:
@@ -28,15 +33,33 @@ class Mechanic:
     def start_metrics(self, track, challenge, car):
         invocation = self._config.opts("meta", "time.start")
         self._metrics_store = metrics.metrics_store(self._config)
-        self._metrics_store.open(invocation, track.name, challenge.name, car.name, create=True)
+        self._metrics_store.open(invocation, str(track), str(challenge), str(car), create=True)
 
-    def start_engine(self, track, challenge, car):
+    def start_engine(self, car):
         self._provisioner.prepare(car)
-        return self._launcher.start(track, challenge, car, self._metrics_store)
+        return self._launcher.start(car, self._metrics_store)
 
-    def start_engine_external(self, track, challenge, car):
+    def start_engine_external(self, car):
         external_launcher = launcher.ExternalLauncher(self._config)
-        return external_launcher.start(track, challenge, self._metrics_store)
+        return external_launcher.start(self._metrics_store)
+
+    def setup_index(self, cluster, t, challenge):
+        if track.BenchmarkPhase.index in challenge.benchmark:
+            index_settings = challenge.benchmark[track.BenchmarkPhase.index].index_settings
+            for index in t.indices:
+                if cluster.client.indices.exists(index=index.name):
+                    logger.warn("Index [%s] already exists. Deleting it." % index.name)
+                    cluster.client.indices.delete(index=index.name)
+                logger.info("Creating index [%s]" % index.name)
+                cluster.client.indices.create(index=index.name, body=index_settings)
+                for type in index.types:
+                    mappings = open(type.mapping_file).read()
+                    logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
+                    logger.debug(mappings)
+                    cluster.client.indices.put_mapping(index=index.name,
+                                                       doc_type=type.name,
+                                                       body=json.loads(mappings))
+        cluster.wait_for_status_green()
 
     def stop_engine(self, cluster):
         self._launcher.stop(cluster)

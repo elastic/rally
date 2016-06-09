@@ -51,7 +51,6 @@ appender:
 '''
 
 
-# This will eventually move out of track
 class Car:
     def __init__(self, name, config_snippet=None, logging_config=None, nodes=1, processors=1, heap=None,
                  java_opts=None, gc_opts=None):

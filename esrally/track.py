@@ -109,6 +109,9 @@ class Track:
             num_docs += index.number_of_documents
         return num_docs
 
+    def __str__(self):
+        return self.name
+
 
 class IndexIdConflict(Enum):
     """
