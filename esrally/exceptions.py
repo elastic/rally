@@ -31,6 +31,12 @@ class SystemSetupError(RallyError):
         return self.message
 
 
+class RallyAssertionError(RallyError):
+    """
+    Thrown when a (precondition) check has been violated.
+    """
+
+
 class DataError(RallyError):
     """
     Thrown when something is wrong with the benchmark data

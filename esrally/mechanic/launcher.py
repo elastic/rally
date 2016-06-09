@@ -27,7 +27,10 @@ class Launcher:
         if track.BenchmarkPhase.index in challenge.benchmark:
             index_settings = challenge.benchmark[track.BenchmarkPhase.index].index_settings
             for index in t.indices:
-                logger.debug("Creating index [%s]" % index.name)
+                if cluster.client.indices.exists(index=index.name):
+                    logger.warn("Index [%s] already exists. Deleting it." % index.name)
+                    cluster.client.indices.delete(index=index.name)
+                logger.info("Creating index [%s]" % index.name)
                 cluster.client.indices.create(index=index.name, body=index_settings)
                 for type in index.types:
                     mappings = open(type.mapping_file).read()

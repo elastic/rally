@@ -2,7 +2,7 @@ import logging
 import random
 import threading
 
-from esrally import time, track
+from esrally import time, track, exceptions
 from esrally.utils import convert, progress
 
 logger = logging.getLogger("rally.driver")
@@ -133,7 +133,6 @@ class StatsQueryAdapter:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return False
 
-
     def __str__(self):
         return self.name
 
@@ -148,18 +147,23 @@ class StatsBenchmark(LatencyBenchmark):
 
 
 class IndexedDocumentCountProbe:
-    def __init__(self, cluster, expected_doc_count):
+    def __init__(self, cluster, indices=None, expected_doc_count=None):
         self.cluster = cluster
+        if indices:
+            self.indices = "".join(indices)
+        else:
+            self.indices = None
         self.expected_doc_count = expected_doc_count
 
     def assert_doc_count(self):
-        stats = self.cluster.indices_stats(metric="_all", level="shards")
-        actual_doc_count = stats["_all"]["primaries"]["docs"]["count"]
-        if self.expected_doc_count is not None and self.expected_doc_count != actual_doc_count:
-            msg = "Wrong number of documents indexed: expected %s but got %s. If you benchmark against an external cluster be sure to " \
-                  "start with all indices empty." % (self.expected_doc_count, actual_doc_count)
-            logger.error(msg)
-            raise AssertionError(msg)
+        if self.expected_doc_count is not None:
+            stats = self.cluster.indices_stats(index=self.indices, metric="_all", level="shards")
+            actual_doc_count = stats["_all"]["primaries"]["docs"]["count"]
+            if self.expected_doc_count != actual_doc_count:
+                msg = "Wrong number of documents: expected %s but got %s. If you benchmark against an external cluster be sure to " \
+                      "start with all indices empty." % (self.expected_doc_count, actual_doc_count)
+                logger.error(msg)
+                raise exceptions.RallyAssertionError(msg)
 
 
 class IndexBenchmark(Benchmark):
@@ -180,16 +184,20 @@ class IndexBenchmark(Benchmark):
             logger.info("IndexBenchmark finished successfully: %s" % finished)
 
     def index(self):
+        index_names = [i.name for i in self.track.indices]
+        # check precondition, indices should be empty
+        IndexedDocumentCountProbe(self.cluster, indices=index_names, expected_doc_count=0).assert_doc_count()
+
         force_merge = self.challenge.benchmark[self.phase].force_merge
         docs_to_index = self.track.number_of_documents
 
         conflicts = self.challenge.benchmark[self.phase].id_conflicts
         if conflicts == track.IndexIdConflict.NoConflicts:
-            doc_count_probe = IndexedDocumentCountProbe(self.cluster, docs_to_index)
+            doc_count_probe = IndexedDocumentCountProbe(self.cluster, indices=index_names, expected_doc_count=docs_to_index)
             ids = None
         else:
             # We cannot know how many docs have been updated if we produce id conflicts
-            doc_count_probe = IndexedDocumentCountProbe(self.cluster, None)
+            doc_count_probe = IndexedDocumentCountProbe(self.cluster)
             ids = self.build_conflicting_ids(conflicts)
 
         self.index_documents(ids)
