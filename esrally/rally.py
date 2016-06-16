@@ -6,7 +6,7 @@ import logging
 import argparse
 import pkg_resources
 
-from esrally import config, paths, racecontrol, PROGRAM_NAME
+from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
 from esrally.utils import io, format
 
 __version__ = pkg_resources.require("esrally")[0].version
@@ -223,9 +223,40 @@ def ensure_configuration_present(cfg, args, sub_command):
             exit(64)
 
 
+def list(cfg):
+    what = cfg.opts("system", "list.config.option")
+    if what == "telemetry":
+        telemetry.list_telemetry(cfg)
+    elif what == "tracks":
+        track.list_tracks(cfg)
+    elif what == "pipelines":
+        racecontrol.list_pipelines()
+    elif what == "races":
+        metrics.list_races(cfg)
+    elif what == "cars":
+        car.list_cars()
+    else:
+        raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
+
+
 def dispatch_sub_command(cfg, sub_command):
-    race_control = racecontrol.RaceControl(cfg)
-    return race_control.start(sub_command)
+    try:
+        if sub_command == "compare":
+            reporter.compare(cfg)
+        elif sub_command == "list":
+            list(cfg)
+        elif sub_command == "race":
+            racecontrol.run(cfg)
+        else:
+            raise exceptions.ImproperlyConfigured("Unknown subcommand [%s]" % sub_command)
+        return True
+    except exceptions.RallyError as e:
+        logging.exception("Cannot run subcommand [%s]." % sub_command)
+        print("\nERROR: Cannot %s\n\nReason: %s" % (sub_command, e))
+        return False
+    except BaseException as e:
+        logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
+        raise e
 
 
 def csv_to_list(csv):

@@ -2,12 +2,24 @@ import logging
 
 import tabulate
 
-from esrally import metrics, track
+from esrally import metrics, track, exceptions
 from esrally.utils import convert, format
 
 logger = logging.getLogger("rally.reporting")
 
 MEDIAN = "50.0"
+
+
+def compare(cfg):
+    baseline_ts = cfg.opts("report", "comparison.baseline.timestamp")
+    contender_ts = cfg.opts("report", "comparison.contender.timestamp")
+
+    if not baseline_ts or not contender_ts:
+        raise exceptions.ImproperlyConfigured("compare needs baseline and a contender")
+    race_store = metrics.race_store(cfg)
+    ComparisonReporter(cfg).report(
+        race_store.find_by_timestamp(baseline_ts),
+        race_store.find_by_timestamp(contender_ts))
 
 
 def print_internal(message):

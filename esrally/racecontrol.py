@@ -152,7 +152,7 @@ def benchmark_internal(ctx, challenge, car):
 def prepare_benchmark_external(ctx):
     track_name = ctx.config.opts("system", "track")
     challenge_name = ctx.config.opts("benchmarks", "challenge")
-    car_name = ctx.config.opts("benchmarks", "challenge")
+    car_name = ctx.config.opts("benchmarks", "car")
     ctx.mechanic.start_metrics(track_name, challenge_name, car_name)
     ctx.cluster = ctx.mechanic.start_engine_external(car)
 
@@ -168,8 +168,8 @@ def benchmark_external(ctx, challenge, car):
 def download_benchmark_candidate(ctx):
     version = ctx.config.opts("source", "distribution.version")
     if version.strip() == "":
-        raise exceptions.SystemSetupError("Could not determine version. Please specify the command line the Elasticsearch "
-                                          "distribution to download with the command line parameter --distribution-version. "
+        raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
+                                          "to download with the command line parameter --distribution-version. "
                                           "E.g. --distribution-version=5.0.0")
 
     distributions_root = "%s/%s" % (ctx.config.opts("system", "root.dir"), ctx.config.opts("source", "distribution.dir"))
@@ -276,81 +276,21 @@ pipelines = {
 }
 
 
-class RaceControl:
-    def __init__(self, cfg):
-        self._config = cfg
+def list_pipelines():
+    print("Available pipelines:\n")
+    # TODO dm: Get rid of the need for ctx here (workaround: use None)
+    print(tabulate.tabulate([[pipeline(None).name, pipeline(None).description] for pipeline in pipelines.values()],
+                            headers=["Name", "Description"]))
 
-    def start(self, command):
-        """
-        Starts the provided command.
 
-        :param command: A command name.
-        :return: True on success, False otherwise
-        """
-        ctx = RacingContext(self._config)
-        try:
-            if command == "list":
-                self._list(ctx)
-            elif command == "race":
-                pipeline = self._choose(lambda n: pipelines[n], "pipeline",
-                                        "You can list the available pipelines with %s list pipelines." % PROGRAM_NAME)(ctx)
-                pipeline()
-                return True
-            elif command == "compare":
-                baseline_ts = self._config.opts("report", "comparison.baseline.timestamp")
-                contender_ts = self._config.opts("report", "comparison.contender.timestamp")
-
-                if not baseline_ts or not contender_ts:
-                    raise exceptions.ImproperlyConfigured("compare needs baseline and a contender")
-                race_store = metrics.race_store(self._config)
-                reporter.ComparisonReporter(self._config).report(
-                    race_store.find_by_timestamp(baseline_ts),
-                    race_store.find_by_timestamp(contender_ts))
-            else:
-                raise exceptions.ImproperlyConfigured("Unknown command [%s]" % command)
-        except exceptions.RallyError as e:
-            logging.exception("Cannot run benchmark")
-            print("\nERROR: Cannot run benchmark\n\nReason: %s" % e)
-            return False
-        except BaseException as e:
-            logging.exception("A fatal error occurred while the running benchmark.")
-            raise e
-
-    def _choose(self, loader, what, help):
-        name = self._config.opts("system", what)
-        try:
-            return loader(name)
-        except (KeyError, FileNotFoundError):
-            raise exceptions.ImproperlyConfigured("Unknown %s [%s]. %s" % (what, name, help))
-
-    def _list(self, ctx):
-        what = ctx.config.opts("system", "list.config.option")
-        if what == "telemetry":
-            print("Available telemetry devices:\n")
-            print(tabulate.tabulate(telemetry.Telemetry(ctx.config).list(), ["Command", "Name", "Description"]))
-            print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
-        elif what == "tracks":
-            print("Available tracks:\n")
-            print(tabulate.tabulate(
-                tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in track.list_tracks(self._config)],
-                headers=["Name", "Description", "Challenges"]))
-
-        elif what == "pipelines":
-            print("Available pipelines:\n")
-            print(tabulate.tabulate([[pipeline(ctx).name, pipeline(ctx).description] for pipeline in pipelines.values()],
-                                    headers=["Name", "Description"]))
-        elif what == "races":
-            print("Recent races:\n")
-            races = []
-            for race in metrics.race_store(ctx.config).list():
-                races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car, race.user_tag])
-
-            print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
-        elif what == "cars":
-            print("Available cars:\n")
-            print(tabulate.tabulate([[c.name] for c in car.cars], headers=["Name"]))
-        else:
-            raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
+def run(cfg):
+    name = cfg.opts("system", "pipeline")
+    try:
+        pipeline = pipelines[name](RacingContext(cfg))
+        pipeline()
+    except KeyError:
+        raise exceptions.ImproperlyConfigured(
+            "Unknown pipeline [%s]. You can list the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
 
 
 class RacingContext:

@@ -1,4 +1,12 @@
+import tabulate
+
 from esrally.utils import sysstats
+
+
+def list_cars():
+    print("Available cars:\n")
+    print(tabulate.tabulate([[c.name] for c in cars], headers=["Name"]))
+
 
 mergePartsLogConfig = '''
 es.logger.level: INFO

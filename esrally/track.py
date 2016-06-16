@@ -7,6 +7,7 @@ from enum import Enum
 import jinja2
 import jinja2.exceptions
 import jsonschema
+import tabulate
 
 from esrally import exceptions, time
 from esrally.utils import io, convert, net, git, versions
@@ -196,7 +197,7 @@ class TrackSyntaxError(exceptions.InvalidSyntax):
     pass
 
 
-def list_tracks(cfg):
+def tracks(cfg):
     """
 
     Lists all known tracks. Note that users can specify a distribution version so if different tracks are available for
@@ -215,6 +216,13 @@ def list_tracks(cfg):
                         "%s/%s" % (data_root, track_name.lower())
                         )
             for track_name in repo.track_names(distribution_version)]
+
+
+def list_tracks(cfg):
+    print("Available tracks:\n")
+    print(tabulate.tabulate(
+        tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in tracks(cfg)],
+        headers=["Name", "Description", "Challenges"]))
 
 
 def load_track(cfg, track_name):

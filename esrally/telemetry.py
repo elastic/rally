@@ -5,10 +5,18 @@ import signal
 import subprocess
 import threading
 
+import tabulate
+
 from esrally import metrics, track
 from esrally.utils import io, sysstats, process
 
 logger = logging.getLogger("rally.telemetry")
+
+
+def list_telemetry(cfg):
+    print("Available telemetry devices:\n")
+    print(tabulate.tabulate(Telemetry(cfg).list(), ["Command", "Name", "Description"]))
+    print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
 
 class Telemetry:
