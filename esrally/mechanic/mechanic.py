@@ -39,7 +39,7 @@ class Mechanic:
         self._provisioner.prepare(car)
         return self._launcher.start(car, self._metrics_store)
 
-    def start_engine_external(self, car):
+    def start_engine_external(self):
         external_launcher = launcher.ExternalLauncher(self._config)
         return external_launcher.start(self._metrics_store)
 

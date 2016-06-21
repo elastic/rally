@@ -4,7 +4,7 @@ import urllib.error
 
 import tabulate
 
-from esrally import config, driver, exceptions, paths, telemetry, sweeper, reporter, metrics, time, track, car, PROGRAM_NAME
+from esrally import config, driver, exceptions, paths, sweeper, reporter, metrics, track, car, PROGRAM_NAME
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io, versions
 
@@ -25,44 +25,6 @@ class PipelineStep:
             self.command(self.ctx)
         else:
             self.command(self.ctx, challenge, car)
-
-
-class ComponentSelector:
-    """
-    A special step in a pipeline which extracts car and challenge based on the current configuration.
-    """
-    def __init__(self, ctx, step):
-        self.ctx = ctx
-        self.step = step
-
-    def __call__(self):
-        track = self.ctx.track
-        challenge = self.find_challenge(track)
-        car = self.find_car()
-        race_paths = paths.Paths(self.ctx.config)
-        self.ctx.config.add(config.Scope.challenge, "system", "challenge.root.dir",
-                            race_paths.challenge_root(track.name, challenge.name))
-        self.ctx.config.add(config.Scope.challenge, "system", "challenge.log.dir",
-                            race_paths.challenge_logs(track.name, challenge.name))
-        print("Racing on track [%s] and challenge [%s] with car [%s]" % (track.name, challenge.name, car.name))
-        self.step(challenge, car)
-
-    def find_challenge(self, track):
-        selected_challenge = self.ctx.config.opts("benchmarks", "challenge")
-        for challenge in track.challenges:
-            if challenge.name == selected_challenge:
-                return challenge
-
-        raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
-                                              "challenges with %s list tracks." % (selected_challenge, track.name, PROGRAM_NAME))
-
-    def find_car(self):
-        selected_car = self.ctx.config.opts("benchmarks", "car")
-        for c in car.cars:
-            if c.name == selected_car:
-                return c
-        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with %s list cars."
-                                              % (selected_car, PROGRAM_NAME))
 
 
 class Pipeline:
@@ -132,14 +94,44 @@ def prepare_track(ctx):
     track_root = race_paths.track_root(track_name)
     ctx.config.add(config.Scope.benchmark, "system", "track.root.dir", track_root)
 
+    selected_challenge = ctx.config.opts("benchmarks", "challenge")
+    for challenge in ctx.track.challenges:
+        if challenge.name == selected_challenge:
+            ctx.challenge = challenge
+
+    if not ctx.challenge:
+        raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
+                                              "challenges with %s list tracks." % (selected_challenge, ctx.track.name, PROGRAM_NAME))
+
+    race_paths = paths.Paths(ctx.config)
+    ctx.config.add(config.Scope.challenge, "system", "challenge.root.dir",
+                        race_paths.challenge_root(ctx.track.name, ctx.challenge.name))
+    ctx.config.add(config.Scope.challenge, "system", "challenge.log.dir",
+                        race_paths.challenge_logs(ctx.track.name, ctx.challenge.name))
+
+
+def prepare_car(ctx):
+    selected_car = ctx.config.opts("benchmarks", "car")
+    for c in car.cars:
+        if c.name == selected_car:
+            ctx.car = c
+
+    if not ctx.car:
+        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with %s list cars."
+                                              % (selected_car, PROGRAM_NAME))
+
 
 def store_race(ctx):
     metrics.race_store(ctx.config).store_race(ctx.track)
 
 
 # benchmark when we provision ourselves
-def benchmark_internal(ctx, challenge, car):
+def benchmark_internal(ctx):
     track = ctx.track
+    challenge = ctx.challenge
+    car = ctx.car
+    print("Racing on track [%s] and challenge [%s] with car [%s]" % (track.name, challenge.name, car.name))
+
     ctx.mechanic.start_metrics(track, challenge, car)
     cluster = ctx.mechanic.start_engine(car)
     ctx.mechanic.setup_index(cluster, track, challenge)
@@ -150,16 +142,15 @@ def benchmark_internal(ctx, challenge, car):
 
 
 def prepare_benchmark_external(ctx):
-    track_name = ctx.config.opts("system", "track")
-    challenge_name = ctx.config.opts("benchmarks", "challenge")
-    car_name = ctx.config.opts("benchmarks", "car")
-    ctx.mechanic.start_metrics(track_name, challenge_name, car_name)
-    ctx.cluster = ctx.mechanic.start_engine_external(car)
+    ctx.mechanic.start_metrics(ctx.track.name, ctx.challenge.name, "external")
+    ctx.cluster = ctx.mechanic.start_engine_external()
 
 
 # benchmark assuming Elasticsearch is already running externally
-def benchmark_external(ctx, challenge, car):
+def benchmark_external(ctx):
     track = ctx.track
+    challenge = ctx.challenge
+    print("Racing on track [%s] and challenge [%s]" % (track.name, challenge.name))
     ctx.mechanic.setup_index(ctx.cluster, track, challenge)
     driver.Driver(ctx.config, ctx.cluster, track, challenge).go()
     ctx.mechanic.stop_metrics()
@@ -219,57 +210,60 @@ the index size).
 
 pipelines = {
     "from-sources-complete":
-        lambda ctx: Pipeline("from-sources-complete", "Builds and provisions Elasticsearch, runs a benchmark and reports results.",
+        lambda ctx=None: Pipeline("from-sources-complete", "Builds and provisions Elasticsearch, runs a benchmark and reports results.",
                          [
                              PipelineStep("check-can-handle-sources", ctx, check_can_handle_source_distribution),
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
+                             PipelineStep("prepare-car", ctx, prepare_car),
                              PipelineStep("store-race", ctx, store_race),
                              PipelineStep("build", ctx, lambda ctx: ctx.mechanic.prepare_candidate()),
                              PipelineStep("find-candidate", ctx, lambda ctx: ctx.mechanic.find_candidate()),
-                             ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_internal)),
+                             PipelineStep("benchmark", ctx, benchmark_internal),
                              PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                             PipelineStep("sweep", ctx, lambda ctx: ctx.sweeper.run(ctx.track))
+                             PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
                          ]
                          ),
     "from-sources-skip-build":
-        lambda ctx: Pipeline("from-sources-skip-build", "Provisions Elasticsearch (skips the build), runs a benchmark and reports results.",
+        lambda ctx=None: Pipeline("from-sources-skip-build", "Provisions Elasticsearch (skips the build), runs a benchmark and reports results.",
                          [
                              PipelineStep("check-can-handle-sources", ctx, check_can_handle_source_distribution),
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
+                             PipelineStep("prepare-car", ctx, prepare_car),
                              PipelineStep("store-race", ctx, store_race),
                              PipelineStep("find-candidate", ctx, lambda ctx: ctx.mechanic.find_candidate()),
-                             ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_internal)),
+                             PipelineStep("benchmark", ctx, benchmark_internal),
                              PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                             PipelineStep("sweep", ctx, lambda ctx: ctx.sweeper.run(ctx.track))
+                             PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
                          ]
 
                          ),
     "from-distribution":
-        lambda ctx: Pipeline("from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports "
+        lambda ctx=None: Pipeline("from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports "
                                                   "results.",
                              [
                                  PipelineStep("kill-es", ctx, kill),
                                  PipelineStep("download-candidate", ctx, download_benchmark_candidate),
                                  PipelineStep("prepare-track", ctx, prepare_track),
+                                 PipelineStep("prepare-car", ctx, prepare_car),
                                  PipelineStep("store-race", ctx, store_race),
-                                 ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_internal)),
+                                 PipelineStep("benchmark", ctx, benchmark_internal),
                                  PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                                 PipelineStep("sweep", ctx, lambda ctx: ctx.sweeper.run(ctx.track))
+                                 PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
                              ]
 
                              ),
     "benchmark-only":
-        lambda ctx: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
+        lambda ctx=None: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
                              [
                                  PipelineStep("warn-bogus", ctx, lambda ctx: print(bogus_results_warning)),
-                                 PipelineStep("prepare-benchmark-external", ctx, prepare_benchmark_external),
                                  PipelineStep("prepare-track", ctx, prepare_track),
+                                 PipelineStep("prepare-benchmark-external", ctx, prepare_benchmark_external),
                                  PipelineStep("store-race", ctx, store_race),
-                                 ComponentSelector(ctx, PipelineStep("benchmark", ctx, benchmark_external)),
+                                 PipelineStep("benchmark", ctx, benchmark_external),
                                  PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                                 PipelineStep("sweep", ctx, lambda ctx: ctx.sweeper.run(ctx.track))
+                                 PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
                              ]
                              ),
 
@@ -278,8 +272,7 @@ pipelines = {
 
 def list_pipelines():
     print("Available pipelines:\n")
-    # TODO dm: Get rid of the need for ctx here (workaround: use None)
-    print(tabulate.tabulate([[pipeline(None).name, pipeline(None).description] for pipeline in pipelines.values()],
+    print(tabulate.tabulate([[pipeline().name, pipeline().description] for pipeline in pipelines.values()],
                             headers=["Name", "Description"]))
 
 
@@ -298,6 +291,8 @@ class RacingContext:
         self.config = cfg
         self.mechanic = mechanic.Mechanic(cfg)
         self.reporter = reporter.SummaryReporter(cfg)
-        self.sweeper = sweeper.Sweeper(cfg)
+        self.sweep = sweeper.Sweeper(cfg)
         self.track = None
+        self.challenge = None
+        self.car = None
         self.cluster = None
