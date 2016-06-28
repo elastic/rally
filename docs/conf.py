@@ -16,6 +16,7 @@
 import sys
 import os
 import pkg_resources
+from os.path import join, dirname
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -56,7 +57,16 @@ author = 'Daniel Mitterdorfer'
 # built documents.
 #
 # The short X.Y version.
-version = "0.3.1"
+
+
+# development versions always have the suffix '.dev0'
+def read_version():
+    with open(join(dirname(__file__), os.pardir, "version.txt")) as f:
+        raw_version = f.read().strip()
+        return raw_version.replace(".dev0", "")
+
+
+version = read_version()
 # The full version, including alpha/beta/rc tags.
 release = version
 

@@ -1,13 +1,18 @@
 from os.path import join, dirname
 from setuptools import setup, find_packages
 
-VERSION = (0, 3, 1, "dev0")
-__version__ = VERSION
-__versionstr__ = ".".join(map(str, VERSION))
 
-f = open(join(dirname(__file__), "README.rst"))
-long_description = f.read().strip()
-f.close()
+def str_from_file(name):
+    with open(join(dirname(__file__), name)) as f:
+        return f.read().strip()
+
+
+raw_version = str_from_file("version.txt")
+VERSION = raw_version.split(".")
+__version__ = VERSION
+__versionstr__ = raw_version
+
+long_description = str_from_file("README.rst")
 
 install_requires = [
     "elasticsearch==2.3.0",
