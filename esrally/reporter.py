@@ -1,9 +1,11 @@
 import logging
+import io
+import csv
 
 import tabulate
 
 from esrally import metrics, track, exceptions
-from esrally.utils import convert, format
+from esrally.utils import convert, format, io as rio
 
 logger = logging.getLogger("rally.reporting")
 
@@ -179,7 +181,35 @@ class SummaryReporter:
                 if track.BenchmarkPhase.stats in challenge.benchmark:
                     metrics_table += self.report_stats_latency(stats)
 
-                print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Value"], tablefmt="pipe", numalign="right", stralign="right"))
+                self.write_report(metrics_table)
+
+    def write_report(self, metrics_table):
+        headers = ["Metric", "Value"]
+        report_format = self._config.opts("report", "reportformat")
+        report_file = self._config.opts("report", "reportfile")
+
+        if report_format == "markdown":
+            report = tabulate.tabulate(metrics_table, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
+        elif report_format == "csv":
+            with io.StringIO() as out:
+                writer = csv.writer(out)
+                writer.writerow(headers)
+                for metric_record in metrics_table:
+                    writer.writerow(metric_record)
+                report = out.getvalue()
+        else:
+            raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
+
+        print_internal(report)
+        if len(report_file) > 0:
+            normalized_report_file = rio.normalize_path(report_file)
+            logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
+                        (normalized_report_file, report_file, report_format))
+            print("\nWriting report also to '%s'" % normalized_report_file)
+            # ensure that the parent folder already exists when we try to write the file...
+            rio.ensure_dir(rio.dirname(normalized_report_file))
+            with open(normalized_report_file, mode="w", encoding="UTF-8") as f:
+                f.writelines(report)
 
     def guarded(self, op):
         try:

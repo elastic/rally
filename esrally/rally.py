@@ -157,6 +157,16 @@ def parse_args():
             help="defines a user-specific key-value pair that is separated by a ':' and added to each metric record as meta info. "
                  "Example: intention:baseline-ticket-12345",
             default="")
+        p.add_argument(
+            "--report-format",
+            help="The output format for the command line report. Possible values are: markdown, csv (default: markdown)",
+            choices=["markdown", "csv"],
+            default="markdown")
+        p.add_argument(
+            "--report-file",
+            help="If provided, Rally writes the report also to this file (default: only write to stdout)",
+            default="")
+
 
     ###############################################################################
     #
@@ -295,6 +305,8 @@ def main():
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
+    cfg.add(config.Scope.applicationOverride, "report", "reportformat", args.report_format)
+    cfg.add(config.Scope.applicationOverride, "report", "reportfile", args.report_file)
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)

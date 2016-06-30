@@ -122,6 +122,10 @@ When the benchmark is done, a summary report is written to the command line:::
                           Nodes Stats(99.0 percentile) [ms]    4.44111
                          Nodes Stats(100.0 percentile) [ms]    5.22527
 
+.. note::
+You can save this report also to a file by using ``--report-file=/path/to/your/report.md`` and write it also as CSV with ``--report-format=csv``.
+
+
 Before relying too much on the numbers, please double-check that you did not introduce any bottlenecks and that your hardware is sufficient (e.g. spinning disks are not a good idea, better use SSDs). For additional insights and metrics you can activate different :doc:`telemetry devices </telemetry>` in Rally.
 
 Also be very careful and get a deep understanding of the measurement approaches when comparing performance numbers on different OS. Sometimes certain measurements are supported only on one OS but not on another (e.g. disk I/O statistics) and different OS handle I/O differently.
