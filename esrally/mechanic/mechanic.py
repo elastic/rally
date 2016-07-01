@@ -54,8 +54,7 @@ class Mechanic:
                 cluster.client.indices.create(index=index.name, body=index_settings)
                 for type in index.types:
                     mappings = open(type.mapping_file).read()
-                    logger.debug("create mapping for type [%s] in index [%s]" % (type.name, index.name))
-                    logger.debug(mappings)
+                    logger.info("create mapping for type [%s] in index [%s] with content:\n%s" % (type.name, index.name, mappings))
                     cluster.client.indices.put_mapping(index=index.name,
                                                        doc_type=type.name,
                                                        body=json.loads(mappings))
