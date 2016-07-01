@@ -254,23 +254,17 @@ class SummaryReporter:
 
     def report_merge_part_times(self, stats):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
+        merge_part_times = []
         if stats.has_merge_part_stats():
-            return [
-                ["Merge time (postings) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_postings, 0))],
-                ["Merge time (stored fields) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_stored_fields, 0))],
-                ["Merge time (doc values) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_doc_values, 0))],
-                ["Merge time (norms) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_norms, 0))],
-                ["Merge time (vectors) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_vectors, 0))],
-                ["Merge time (points) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_points, 0))]
-            ]
-        else:
-            return []
-
-    def value_or_default(self, v, default):
-        if v is not None:
-            return v
-        else:
-            return default
+            self.append_if_present(merge_part_times, "Merge time (postings) [min]", stats.merge_part_time_postings, convert.ms_to_minutes)
+            self.append_if_present(merge_part_times, "Merge time (stored fields) [min]", stats.merge_part_time_stored_fields,
+                                   convert.ms_to_minutes)
+            self.append_if_present(merge_part_times, "Merge time (doc values) [min]", stats.merge_part_time_doc_values,
+                                   convert.ms_to_minutes)
+            self.append_if_present(merge_part_times, "Merge time (norms) [min]", stats.merge_part_time_norms, convert.ms_to_minutes)
+            self.append_if_present(merge_part_times, "Merge time (vectors) [min]", stats.merge_part_time_vectors, convert.ms_to_minutes)
+            self.append_if_present(merge_part_times, "Merge time (points) [min]", stats.merge_part_time_points, convert.ms_to_minutes)
+        return merge_part_times
 
     def report_cpu_usage(self, stats):
         cpu_usage = []
