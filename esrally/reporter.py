@@ -1,6 +1,7 @@
 import logging
 import io
 import csv
+import collections
 
 import tabulate
 
@@ -47,7 +48,8 @@ class Stats:
         self.merge_part_time_doc_values = store.get_one("merge_parts_total_time_doc_values")
         self.merge_part_time_norms = store.get_one("merge_parts_total_time_norms")
         self.merge_part_time_vectors = store.get_one("merge_parts_total_time_vectors")
-        self.query_latencies = {}
+        self.merge_part_time_points = store.get_one("merge_parts_total_time_points")
+        self.query_latencies = collections.OrderedDict()
         if search_sample_size and search_sample_size > 0:
             for query in queries:
                 self.query_latencies[query] = self.single_latency(store, query, search_sample_size)
@@ -91,11 +93,12 @@ class Stats:
         return self.total_time and self.merge_time and self.refresh_time and self.flush_time and self.merge_throttle_time
 
     def has_merge_part_stats(self):
-        return self.merge_part_time_postings and \
-               self.merge_part_time_stored_fields and \
-               self.memory_doc_values and \
-               self.merge_part_time_norms and \
-               self.merge_part_time_vectors
+        return self.merge_part_time_postings or \
+               self.merge_part_time_stored_fields or \
+               self.memory_doc_values or \
+               self.merge_part_time_norms or \
+               self.merge_part_time_vectors or \
+               self.merge_part_time_points
 
     def has_memory_stats(self):
         return self.memory_segments and \
@@ -253,14 +256,21 @@ class SummaryReporter:
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
         if stats.has_merge_part_stats():
             return [
-                ["Merge time (postings) [min]", convert.ms_to_minutes(stats.merge_part_time_postings)],
-                ["Merge time (stored fields) [min]", convert.ms_to_minutes(stats.merge_part_time_stored_fields)],
-                ["Merge time (doc values) [min]", convert.ms_to_minutes(stats.merge_part_time_doc_values)],
-                ["Merge time (norms) [min]", convert.ms_to_minutes(stats.merge_part_time_norms)],
-                ["Merge time (vectors) [min]", convert.ms_to_minutes(stats.merge_part_time_vectors)]
+                ["Merge time (postings) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_postings, 0))],
+                ["Merge time (stored fields) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_stored_fields, 0))],
+                ["Merge time (doc values) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_doc_values, 0))],
+                ["Merge time (norms) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_norms, 0))],
+                ["Merge time (vectors) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_vectors, 0))],
+                ["Merge time (points) [min]", convert.ms_to_minutes(self.value_or_default(stats.merge_part_time_points, 0))]
             ]
         else:
             return []
+
+    def value_or_default(self, v, default):
+        if v is not None:
+            return v
+        else:
+            return default
 
     def report_cpu_usage(self, stats):
         cpu_usage = []
