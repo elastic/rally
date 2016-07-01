@@ -142,7 +142,9 @@ def benchmark_internal(ctx):
 
 
 def prepare_benchmark_external(ctx):
-    ctx.mechanic.start_metrics(ctx.track.name, ctx.challenge.name, "external")
+    track_name = ctx.config.opts("system", "track")
+    challenge_name = ctx.config.opts("benchmarks", "challenge")
+    ctx.mechanic.start_metrics(track_name, challenge_name, "external")
     ctx.cluster = ctx.mechanic.start_engine_external()
 
 
@@ -258,8 +260,8 @@ pipelines = {
         lambda ctx=None: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
                              [
                                  PipelineStep("warn-bogus", ctx, lambda ctx: print(bogus_results_warning)),
-                                 PipelineStep("prepare-track", ctx, prepare_track),
                                  PipelineStep("prepare-benchmark-external", ctx, prepare_benchmark_external),
+                                 PipelineStep("prepare-track", ctx, prepare_track),
                                  PipelineStep("store-race", ctx, store_race),
                                  PipelineStep("benchmark", ctx, benchmark_external),
                                  PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
