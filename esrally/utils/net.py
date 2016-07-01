@@ -24,6 +24,11 @@ def download(url, local_path, expected_size_in_bytes=None):
             "Cannot download data from [%s]. Only http(s) and s3 are supported." % url)
 
 
+def retrieve_content_as_string(url):
+    with urllib.request.urlopen(url) as response:
+        return response.read().decode("utf-8")
+
+
 def download_via_http(url, local_path, expected_size_in_bytes=None):
     tmp_data_set_path = local_path + ".tmp"
     try:

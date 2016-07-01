@@ -197,9 +197,14 @@ def parse_args():
     for p in [parser, list_parser, race_parser]:
         p.add_argument(
                 "--distribution-version",
-                help="defines the version of the Elasticsearch distribution to download. Check https://www.elastic.co/downloads/elasticsearch "
-                     "for released versions.",
+                help="defines the version of the Elasticsearch distribution to download. "
+                     "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
                 default="")
+        p.add_argument(
+                "--distribution-repository",
+                help="defines the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+                choices=["snapshot", "release"],
+                default="release")
 
     return parser.parse_args()
 
@@ -291,6 +296,7 @@ def main():
     # Add command line config
     cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
     cfg.add(config.Scope.applicationOverride, "source", "distribution.version", args.distribution_version)
+    cfg.add(config.Scope.applicationOverride, "source", "distribution.repository", args.distribution_repository)
     cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
     # Don't expose the ability to define different repositories for now
     cfg.add(config.Scope.applicationOverride, "system", "track.repository", "default")

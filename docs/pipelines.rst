@@ -35,6 +35,12 @@ This pipeline allows to benchmark an official Elasticsearch distribution which w
 
 The version numbers have to match the name in the download URL path.
 
+You can also benchmark Elasticsearch snapshot versions by specifying the snapshot repository:
+
+    esrally --pipeline=from-distribution --distribution-version=5.0.0-SNAPSHOT --distribution-repository=snapshot
+
+However, this feature is mainly intended for continuous integration environments and by default you should just benchmark official distributions.
+
 from-sources-complete
 ~~~~~~~~~~~~~~~~~~~~~
 

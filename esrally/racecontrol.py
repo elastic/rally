@@ -1,6 +1,8 @@
 import logging
 import os
 import urllib.error
+# Sorry, but Maven relies on XML...
+import xml.etree.ElementTree
 
 import tabulate
 
@@ -160,23 +162,25 @@ def benchmark_external(ctx):
 
 def download_benchmark_candidate(ctx):
     version = ctx.config.opts("source", "distribution.version")
+    repo_name = ctx.config.opts("source", "distribution.repository")
     if version.strip() == "":
         raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
                                           "to download with the command line parameter --distribution-version. "
                                           "E.g. --distribution-version=5.0.0")
-
     distributions_root = "%s/%s" % (ctx.config.opts("system", "root.dir"), ctx.config.opts("source", "distribution.dir"))
     io.ensure_dir(distributions_root)
     distribution_path = "%s/elasticsearch-%s.tar.gz" % (distributions_root, version)
 
-    major_version = int(versions.components(version)["major"])
+    try:
+        repo = distribution_repos[repo_name]
+    except KeyError:
+        raise exceptions.SystemSetupError("Unknown distribution repository [%s]. Valid values are: [%s]"
+                                          % (repo_name, ",".join(distribution_repos.keys())))
 
-    if major_version > 1:
-        download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
-                       "elasticsearch-%s.tar.gz" % (version, version)
-    else:
-        download_url = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-%s.tar.gz" % version
-    if not os.path.isfile(distribution_path):
+    download_url = repo.download_url(version)
+    logger.info("Resolved download URL [%s] for version [%s]" % (download_url, version))
+    if not os.path.isfile(distribution_path) or repo.must_download:
+        logger.info("Downloading distribution for version [%s]." % version)
         try:
             print("Downloading Elasticsearch %s ..." % version)
             net.download(download_url, distribution_path)
@@ -188,6 +192,49 @@ def download_benchmark_candidate(ctx):
         logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (version, distribution_path))
 
     ctx.config.add(config.Scope.invocation, "builder", "candidate.bin.path", distribution_path)
+
+
+class ReleaseDistributionRepo:
+    def __init__(self):
+        self.must_download = False
+
+    def download_url(self, version):
+        major_version = int(versions.components(version)["major"])
+        if major_version > 1:
+            download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
+                           "elasticsearch-%s.tar.gz" % (version, version)
+        else:
+            download_url = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-%s.tar.gz" % version
+
+        return download_url
+
+
+class SnapshotDistributionRepo:
+    def __init__(self):
+        self.must_download = True
+
+    def download_url(self, version):
+        root_path = "https://oss.sonatype.org/content/repositories/snapshots/org/elasticsearch/distribution/tar/elasticsearch/%s" % version
+        metadata_url = "%s/maven-metadata.xml" % root_path
+        try:
+            metadata = net.retrieve_content_as_string(metadata_url)
+            x = xml.etree.ElementTree.fromstring(metadata)
+            found_snapshot_versions = x.findall("./versioning/snapshotVersions/snapshotVersion/[extension='tar.gz']/value")
+        except Exception:
+            logger.exception("Could not retrieve a valid metadata.xml file from remote URL [%s]." % metadata_url)
+            raise exceptions.SystemSetupError("Cannot derive download URL for Elasticsearch %s" % version)
+
+        if len(found_snapshot_versions) == 1:
+            snapshot_id = found_snapshot_versions[0].text
+            return "%s/elasticsearch-%s.tar.gz" % (root_path, snapshot_id)
+        else:
+            logger.error("Found [%d] version identifiers in [%s]. Contents: %s" % (len(found_snapshot_versions), metadata_url, metadata))
+            raise exceptions.SystemSetupError("Cannot derive download URL for Elasticsearch %s" % version)
+
+distribution_repos = {
+    "release": ReleaseDistributionRepo(),
+    "snapshot": SnapshotDistributionRepo()
+}
 
 
 # benchmarks with external candidates are really scary and we should warn users.
