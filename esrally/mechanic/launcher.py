@@ -84,6 +84,11 @@ class InProcessLauncher:
             "log_path": "-Ees.path.logs",
             "node_name": "-Ees.node.name"
         },
+        "5": {
+            "processors": "-Eprocessors",
+            "log_path": "-Epath.logs",
+            "node_name": "-Enode.name"
+        },
         "master": {
             "processors": "-Eprocessors",
             "log_path": "-Epath.logs",
