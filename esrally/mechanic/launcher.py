@@ -100,6 +100,7 @@ class InProcessLauncher:
     def start(self, car, metrics_store):
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
+        logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
         first_http_port = self.cfg.opts("provisioning", "node.http.port")
 
         t = telemetry.Telemetry(self.cfg, metrics_store)
@@ -211,12 +212,13 @@ class InProcessLauncher:
             l = l.rstrip()
 
             if l.find("Initialization Failed") != -1:
+                logger.warn("[%s] has started with initialization errors." % node_name)
                 startup_event.set()
 
             logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
             if l.endswith("started") and not startup_event.isSet():
                 startup_event.set()
-                logger.info("%s: started" % node_name)
+                logger.info("[%s] has successfully started." % node_name)
 
     def stop(self, cluster):
         logger.info("Shutting down ES cluster")
