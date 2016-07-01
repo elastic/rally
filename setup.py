@@ -1,6 +1,9 @@
 from os.path import join, dirname
-from setuptools import setup, find_packages
-
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    print("*** Could not find setuptools. Did you install pip3? *** \n\n")
+    raise
 
 def str_from_file(name):
     with open(join(dirname(__file__), name)) as f:
