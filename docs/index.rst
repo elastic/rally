@@ -49,6 +49,18 @@ If you don't want to use ``sudo`` when installing Rally, installation is still p
 
 You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
 
+VirtualEnv Install
+~~~~~~~~~~~~~~~~
+
+You can also use Virtualenv to install Rally into an isolated Python environment without sudo.
+
+1. Set up a new virtualenv environment in a directory with ``virtualenv --python=python3``.
+2. Activate the environment with ``/path/to/virtualenv/dir/bin/activate``.
+3. Install Rally with ``pip install esrally``
+
+Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
+
+
 Configuring Rally
 -----------------
 
