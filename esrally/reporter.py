@@ -289,17 +289,14 @@ class SummaryReporter:
             return []
 
     def report_segment_memory(self, stats):
-        if stats.has_memory_stats():
-            return [
-                ["Heap used for segments [MB]", convert.bytes_to_mb(stats.memory_segments)],
-                ["Heap used for doc values [MB]", convert.bytes_to_mb(stats.memory_doc_values)],
-                ["Heap used for terms [MB]", convert.bytes_to_mb(stats.memory_terms)],
-                ["Heap used for norms [MB]", convert.bytes_to_mb(stats.memory_norms)],
-                ["Heap used for points [MB]", convert.bytes_to_mb(stats.memory_points)],
-                ["Heap used for stored fields [MB]", convert.bytes_to_mb(stats.memory_stored_fields)],
-            ]
-        else:
-            return []
+        memory_stats = []
+        self.append_if_present(memory_stats, "Heap used for segments [MB]", stats.memory_segments, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for doc values [MB]", stats.memory_doc_values, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for terms [MB]", stats.memory_terms, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for norms [MB]", stats.memory_norms, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for points [MB]", stats.memory_points, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for stored fields [MB]", stats.memory_stored_fields, convert.bytes_to_mb)
+        return memory_stats
 
     def report_segment_counts(self, stats):
         if stats.segment_count:
