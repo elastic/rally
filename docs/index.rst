@@ -50,7 +50,7 @@ If you don't want to use ``sudo`` when installing Rally, installation is still p
 You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
 
 VirtualEnv Install
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 You can also use Virtualenv to install Rally into an isolated Python environment without sudo.
 
@@ -65,6 +65,11 @@ Configuring Rally
 -----------------
 
 Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
+
+.. note::
+
+   If you get the error ``UnicodeEncodeError: 'ascii' codec can't encode character``, please configure your shell so it supports UTF-8 encoding. You can check the output of ``locale`` which should show UTF-8 as sole encoding. If in doubt, add `export LC_ALL=en_US.UTF-8` to your shell init file (e.g. ``~.bashrc`` if you use Bash) and relogin.
+
 
 For more information see :doc:`configuration help page </configuration>`.
 
