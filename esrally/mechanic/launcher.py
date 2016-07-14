@@ -13,8 +13,8 @@ logger = logging.getLogger("rally.launcher")
 
 
 class ClusterFactory:
-    def create(self, hosts, nodes, metrics_store, telemetry):
-        return cluster.Cluster(hosts, nodes, metrics_store, telemetry)
+    def create(self, hosts, nodes, client_options, metrics_store, telemetry):
+        return cluster.Cluster(hosts, nodes, client_options, metrics_store, telemetry)
 
 
 class ExternalLauncher:
@@ -40,7 +40,7 @@ class ExternalLauncher:
             telemetry.NodeStats(self.cfg, metrics_store),
             telemetry.IndexStats(self.cfg, metrics_store)
         ])
-        c = self.cluster_factory.create(hosts, [], metrics_store, t)
+        c = self.cluster_factory.create(hosts, [], self.cfg.opts("launcher", "client.options"), metrics_store, t)
         user_defined_version = self.cfg.opts("source", "distribution.version", mandatory=False)
         distribution_version = c.info()["version"]["number"]
         if not user_defined_version or user_defined_version.strip() == "":
@@ -112,6 +112,7 @@ class InProcessLauncher:
         c = self.cluster_factory.create(
             [{"host": "localhost", "port": first_http_port}],
             [self._start_node(node, car, metrics_store) for node in range(car.nodes)],
+            self.cfg.opts("launcher", "client.options"),
             metrics_store, t
         )
         t.attach_to_cluster(c)

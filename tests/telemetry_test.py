@@ -5,7 +5,7 @@ from esrally import config, metrics, telemetry, cluster, car
 
 
 class MockClientFactory:
-    def __init__(self, hosts):
+    def __init__(self, hosts, client_options):
         pass
 
     def create(self):
@@ -134,7 +134,7 @@ class EnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.EnvironmentInfo(cfg, metrics_store)
         t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, t, client_factory_class=MockClientFactory))
+        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], {}, metrics_store, t, client_factory_class=MockClientFactory))
 
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
@@ -230,7 +230,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.ExternalEnvironmentInfo(cfg, metrics_store)
         t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], metrics_store, t, client_factory_class=MockClientFactory))
+        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], {}, metrics_store, t, client_factory_class=MockClientFactory))
 
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),

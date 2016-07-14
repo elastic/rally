@@ -153,6 +153,11 @@ def parse_args():
                  "(default: localhost:9200).",
             default="localhost:9200")
         p.add_argument(
+            "--client-options",
+            help="defines a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
+                 "(default: timeout:90,request_timeout:90).",
+            default="timeout:90,request_timeout:90")
+        p.add_argument(
             "--user-tag",
             help="defines a user-specific key-value pair that is separated by a ':' and added to each metric record as meta info. "
                  "Example: intention:baseline-ticket-12345",
@@ -281,6 +286,41 @@ def csv_to_list(csv):
         return [e.strip() for e in csv.split(",")]
 
 
+def kv_to_map(kvs):
+    result = {}
+    for kv in kvs:
+        k, v = kv.split(":")
+        # key is always considered a string, value needs to be converted
+        result[k.strip()] = convert(v.strip())
+    return result
+
+
+def convert(v):
+    # string
+    if v.startswith("'"):
+        return v[1:-1]
+
+    # int
+    try:
+        return int(v)
+    except ValueError:
+        pass
+
+    # float
+    try:
+        return float(v)
+    except ValueError:
+        pass
+
+    # boolean
+    if v.lower() == "false":
+        return False
+    elif v.lower() == "true":
+        return True
+    else:
+        raise ValueError("Could not convert value '%s'" % v)
+
+
 def main():
     pre_configure_logging()
     args = parse_args()
@@ -311,6 +351,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
+    cfg.add(config.Scope.applicationOverride, "launcher", "client.options", kv_to_map(csv_to_list(args.client_options)))
     cfg.add(config.Scope.applicationOverride, "report", "reportformat", args.report_format)
     cfg.add(config.Scope.applicationOverride, "report", "reportfile", args.report_file)
     if sub_command == "list":

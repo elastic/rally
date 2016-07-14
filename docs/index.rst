@@ -150,7 +150,7 @@ Also be very careful and get a deep understanding of the measurement approaches 
 Other command line flags
 ------------------------
 
-Rally supports more command line flags, just run ``esrally --help`` to see what's possible.
+Rally supports more command line flags, just run ``esrally --help`` to see what's possible or check the :doc:`command line flags reference </command_line_flags>`.
 
 Contents
 --------
@@ -159,6 +159,7 @@ Contents
    :maxdepth: 2
 
    configuration
+   command_line_flags
    tournament
    telemetry
    pipelines

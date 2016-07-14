@@ -10,9 +10,10 @@ class MockMetricsStore:
 
 
 class MockCluster:
-    def __init__(self, hosts, nodes, metrics_store, telemetry):
+    def __init__(self, hosts, nodes, client_options, metrics_store, telemetry):
         self.hosts = hosts
         self.nodes = nodes
+        self.client_options = client_options
         self.metrics_store = metrics_store
         self.telemetry = telemetry
 
@@ -60,8 +61,8 @@ class MockCluster:
 
 
 class MockClusterFactory:
-    def create(self, hosts, nodes, metrics_store, telemetry):
-        return MockCluster(hosts, nodes, metrics_store, telemetry)
+    def create(self, hosts, nodes, client_options, metrics_store, telemetry):
+        return MockCluster(hosts, nodes, client_options, metrics_store, telemetry)
 
 
 class ExternalLauncherTests(TestCase):
@@ -69,6 +70,7 @@ class ExternalLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "launcher", "external.target.hosts", ["localhost:9200"])
+        cfg.add(config.Scope.application, "launcher", "client.options", {})
 
         m = launcher.ExternalLauncher(cfg, cluster_factory_class=MockClusterFactory)
         cluster = m.start(MockMetricsStore())
@@ -83,6 +85,7 @@ class ExternalLauncherTests(TestCase):
         cfg.add(config.Scope.application, "source", "distribution.version", "2.3.3")
         cfg.add(config.Scope.application, "launcher", "external.target.hosts",
                 ["search.host-a.internal:9200", "search.host-b.internal:9200"])
+        cfg.add(config.Scope.application, "launcher", "client.options", {})
 
         m = launcher.ExternalLauncher(cfg, cluster_factory_class=MockClusterFactory)
         cluster = m.start(MockMetricsStore())
@@ -98,6 +101,7 @@ class ExternalLauncherTests(TestCase):
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "launcher", "external.target.hosts",
                 ["search.host-a.internal", "search.host-b.internal:9200"])
+        cfg.add(config.Scope.application, "launcher", "client.options", {})
 
         m = launcher.ExternalLauncher(cfg, cluster_factory_class=MockClusterFactory)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
