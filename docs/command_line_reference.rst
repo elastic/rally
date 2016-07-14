@@ -75,6 +75,7 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 
 This activates Java flight recorder and the JIT compiler telemetry devices.
 
+.. _command_line_reference_revision:
 ``revision``
 ~~~~~~~~~~~~
 

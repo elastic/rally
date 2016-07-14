@@ -35,7 +35,7 @@ This pipeline allows to benchmark an official Elasticsearch distribution which w
 
 The version numbers have to match the name in the download URL path.
 
-You can also benchmark Elasticsearch snapshot versions by specifying the snapshot repository:
+You can also benchmark Elasticsearch snapshot versions by specifying the snapshot repository::
 
     esrally --pipeline=from-distribution --distribution-version=5.0.0-SNAPSHOT --distribution-repository=snapshot
 
@@ -48,12 +48,7 @@ You should use this pipeline when you want to build and benchmark Elasticsearch 
 
     esrally --pipeline=from-sources-complete --revision=latest
 
-You have to specify a revision, which can be:
-
-* "latest": the latest master revision on Github
-* "current": the currently checked out revision in your local source directory
-* a git commit hash (either short or long format)
-* a valid ISO8601 timestamp prepended by "@": e.g. "@2013-07-27T10:37:00Z". Rally will then resolve the corresponding git revision
+You have to specify a :ref:`command_line_reference_revision`.
 
 from-sources-skip-build
 ~~~~~~~~~~~~~~~~~~~~~~~
