@@ -132,11 +132,16 @@ Other command line flags
 
 Rally supports more command line flags, just run ``esrally --help`` to see what's possible. For more details, please refer to `Rally's user guide <https://esrally.readthedocs.io/>`_.
 
+Getting help
+------------
+ 
+Please ask questions about Rally in the `Elasticsearch Discuss forum <https://discuss.elastic.co/c/elasticsearch>`_.
+
 How to Contribute
 -----------------
- 
+
 See all details in the `contributor guidelines <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_.
- 
+
 License
 -------
  

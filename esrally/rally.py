@@ -41,11 +41,16 @@ def pre_configure_logging():
     logging.basicConfig(level=logging.INFO)
 
 
-def configure_logging(cfg):
+def log_file_path(cfg):
     log_dir = paths.Paths(cfg).log_root()
+    return "%s/rally_out.log" % log_dir
+
+
+def configure_logging(cfg):
+    log_file = log_file_path(cfg)
+    log_dir = os.path.dirname(log_file)
     io.ensure_dir(log_dir)
     cfg.add(config.Scope.application, "system", "log.dir", log_dir)
-    log_file = "%s/rally_out.log" % log_dir
 
     print("\nWriting additional logs to %s\n" % log_file)
 
@@ -274,6 +279,16 @@ def list(cfg):
         raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
 
 
+def print_help_on_errors(cfg):
+    print("Please check the log file [%s] for further details first." % log_file_path(cfg))
+    print("")
+    print("If you need further help, please check Rally's docs at %s or ask a question in the forum at %s."
+          % (format.link("https://esrally.readthedocs.io"), format.link("https://discuss.elastic.co/c/elasticsearch")))
+    print("")
+    print("If you think this is a bug, please file a report at %s and include the log file for this race (%s)." %
+          (format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
+
+
 def dispatch_sub_command(cfg, sub_command):
     try:
         if sub_command == "compare":
@@ -288,10 +303,15 @@ def dispatch_sub_command(cfg, sub_command):
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
         print("\nERROR: Cannot %s\n\nReason: %s" % (sub_command, e))
+        print("")
+        print_help_on_errors(cfg)
         return False
     except BaseException as e:
         logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
-        raise e
+        print("\nFATAL: Cannot %s\n\nReason: %s" % (sub_command, e))
+        print("")
+        print_help_on_errors(cfg)
+        return False
 
 
 def csv_to_list(csv):
