@@ -146,7 +146,11 @@ def benchmark_internal(ctx):
 def prepare_benchmark_external(ctx):
     track_name = ctx.config.opts("system", "track")
     challenge_name = ctx.config.opts("benchmarks", "challenge")
-    ctx.mechanic.start_metrics(track_name, challenge_name, "external")
+    # override externally used car name for this benchmark. We'll use a fixed one for external benchmarks.
+    car_name = "external"
+    ctx.config.add(config.Scope.benchmark, "benchmarks", "car", car_name)
+
+    ctx.mechanic.start_metrics(track_name, challenge_name, car_name)
     ctx.cluster = ctx.mechanic.start_engine_external()
 
 
