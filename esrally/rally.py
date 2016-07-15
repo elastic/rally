@@ -7,7 +7,7 @@ import argparse
 import pkg_resources
 
 from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
-from esrally.utils import io, format
+from esrally.utils import io, format, git
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -19,6 +19,21 @@ BANNER = """
 /_/ |_|\__,_/_/_/\__, /
                 /____/
 """
+
+logger = logging.getLogger("rally.main")
+
+
+def rally_root_path():
+    return os.path.dirname(os.path.realpath(__file__))
+
+def version():
+    release = __version__
+    try:
+        revision = git.head_revision(rally_root_path())
+        return "%s (git revision: %s)" % (release, revision.strip())
+    except BaseException:
+        # cannot determine head revision so user has probably installed Rally via pip instead of git clone
+        return release
 
 
 # we want to use some basic logging even before the output to log file is configured
@@ -52,7 +67,7 @@ def parse_args():
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
                                      epilog="Find out more about Rally at %s" % format.link("https://esrally.readthedocs.io"),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--version', action='version', version="%(prog)s " + __version__)
+    parser.add_argument('--version', action='version', version="%(prog)s " + version())
 
     subparsers = parser.add_subparsers(
         title="subcommands",
@@ -331,7 +346,7 @@ def main():
     ensure_configuration_present(cfg, args, sub_command)
     # Add global meta info derived by rally itself
     cfg.add(config.Scope.application, "meta", "time.start", args.effective_start_date)
-    cfg.add(config.Scope.application, "system", "rally.root", os.path.dirname(os.path.realpath(__file__)))
+    cfg.add(config.Scope.application, "system", "rally.root", rally_root_path())
     cfg.add(config.Scope.application, "system", "invocation.root.dir", paths.Paths(cfg).invocation_root())
     # Add command line config
     cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
@@ -362,6 +377,9 @@ def main():
         cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
     configure_logging(cfg)
+
+    logger.info("Rally version [%s]" % version())
+    logger.info("Command line arguments: %s" % args)
 
     success = dispatch_sub_command(cfg, sub_command)
     if not success:
