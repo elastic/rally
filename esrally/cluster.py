@@ -76,7 +76,7 @@ class EsClientFactory:
             client_options["ca_certs"] = certifi.where()
         if self._is_set(client_options, "basic_auth_user") and self._is_set(client_options, "basic_auth_password"):
             # Maybe we should remove these keys from the dict?
-            client_options["auth"] = (client_options["basic_auth_user"], client_options["basic_auth_password"])
+            client_options["http_auth"] = (client_options["basic_auth_user"], client_options["basic_auth_password"])
         self.client = elasticsearch.Elasticsearch(hosts=hosts, connection_class=ConfigurableHttpConnection, **client_options)
 
     def _is_set(self, client_opts, k):
