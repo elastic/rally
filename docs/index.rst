@@ -21,9 +21,9 @@ Prerequisites
 
 Please ensure that the following packages are installed before installing Rally:
 
-* Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
+* Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` or higher)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
-* JDK 8+
+* JDK 8
 * git
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
@@ -68,7 +68,7 @@ Before we can run our first benchmark, we have to configure Rally. Just invoke `
 
 .. note::
 
-   If you get the error ``UnicodeEncodeError: 'ascii' codec can't encode character``, please configure your shell so it supports UTF-8 encoding. You can check the output of ``locale`` which should show UTF-8 as sole encoding. If in doubt, add `export LC_ALL=en_US.UTF-8` to your shell init file (e.g. ``~.bashrc`` if you use Bash) and relogin.
+   If you get the error ``UnicodeEncodeError: 'ascii' codec can't encode character``, please configure your shell so it supports UTF-8 encoding. You can check the output of ``locale`` which should show UTF-8 as sole encoding. If in doubt, add ``export LC_ALL=en_US.UTF-8`` to your shell init file (e.g. ``~.bashrc`` if you use Bash) and relogin.
 
 
 For more information see :doc:`configuration help page </configuration>`.
@@ -145,7 +145,7 @@ You can save this report also to a file by using ``--report-file=/path/to/your/r
 
 Before relying too much on the numbers, please double-check that you did not introduce any bottlenecks and that your hardware is sufficient (e.g. spinning disks are not a good idea, better use SSDs). For additional insights and metrics you can activate different :doc:`telemetry devices </telemetry>` in Rally.
 
-Also be very careful and get a deep understanding of the measurement approaches when comparing performance numbers on different OS. Sometimes certain measurements are supported only on one OS but not on another (e.g. disk I/O statistics) and different OS handle I/O differently.
+Also be very careful and get a deep understanding of the measurement approaches when comparing performance numbers on different OS. Sometimes certain measurements are supported only on one OS but not on another (e.g. disk I/O statistics) and different OS handle I/O differently, so often it makes no sense to directly compare the results of benchmarks run on different OSes.
 
 Other command line flags
 ------------------------

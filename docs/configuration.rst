@@ -1,7 +1,7 @@
 Configuration
 =============
 
-Rally has to be configured before it is ready. Just run ``esrally`` after installation. Rally will detect that the configuration is missing and ask a few questions.
+Rally has to be configured once after installation. If you just run ``esrally`` after installation, Rally will detect that the configuration file is missing and asks you a few questions.
 
 If you want to reconfigure Rally at any later time, just run ``esrally configure`` again.
 
@@ -12,7 +12,7 @@ By default, Rally will run a simpler configuration routine and autodetect as muc
 
 Rally can build Elasticsearch either from sources or use an `official binary distribution <https://www.elastic.co/downloads/elasticsearch>`_. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
 
-If you want to build Elasticsearch from sources you will also need Gradle 2.13+.
+If you want to build Elasticsearch from sources, Gradle 2.13 needs to be installed prior to running the configuration routine.
 
 Let's go through an example step by step: First run ``esrally``::
 
@@ -116,12 +116,7 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
 
    Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure that this port range is not used by the metrics store.
 
-Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. Kibana will not be auto-configured but a sample
-dashboard is delivered with Rally in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` which can be imported as follows to Kibana:
-
-1. Create a new Kibana instance pointing to Rally's Elasticsearch data store
-2. Create an index pattern ``rally-*`` and use ``trial-timestamp`` as time-field name (you might need to import some data first)
-3. Go to Settings > Objects and import ``$PACKAGE_ROOT/esrally/resources/kibana.json``. Note that it assumes that the environment name is "nightly". Otherwise you won't see any data in graphs. You can either provide "nightly" as environment name during the initial configuration of Rally or search and replace it in ``$PACKAGE_ROOT/esrally/resources/kibana.json`` with your environment name before uploading it to Kibana.
+Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. However, note that Kibana will not be auto-configured by Rally.
 
 Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~
@@ -130,7 +125,7 @@ Rally will ask you a few more things in the advanced setup:
 
 * Elasticsearch project directory: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with Gradle in this directory (it runs ``gradle clean`` and ``gradle :distribution:tar:assemble``).
 * JDK 8 root directory: Rally will only ask this if it could not autodetect the JDK 8 home by itself. Just enter the root directory of the JDK you want to use.
-* Name for this benchmark environment: You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different metrics.
+* Name for this benchmark environment: You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different environments by choosing a different name.
 * metrics store settings: Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. There is currently no support for choosing the in-memory metrics store when you run the advanced configuration. If you really need it, please raise an issue on Github.
 
 

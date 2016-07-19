@@ -9,7 +9,7 @@ Please ensure that the following packages are installed before installing Rally 
 * Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
 * JDK 8+
 * git
-* Gradle 2.13+
+* Gradle 2.13
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 

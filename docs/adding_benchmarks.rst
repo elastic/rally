@@ -19,7 +19,7 @@ This is called a "track" in Rally. The most important attributes of a track are:
 
 Separately from a track, we also have "cars" which define the settings of the benchmark candidate (Elasticsearch), like how much heap memory to use, the number of nodes to start and so on. Rally comes with a set of default tracks and cars which you can use for your own benchmarks (but you don't have to).
 
-Tracks are written as JSON files and are kept in a separate track repository, which is located at https://github.com/elastic/rally-tracks. The repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter `--distribution-version`. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the master branch of the track repository.
+Tracks are written as JSON files and are kept in a separate track repository, which is located at https://github.com/elastic/rally-tracks. This repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter ``--distribution-version``. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the master branch of the track repository.
 
 Example track
 -------------
@@ -72,11 +72,15 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
     
        print(json.dumps(d))
 
-We can invoke the script with ``python3 toJSON.py > documents.json``. Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``. Upload the data file to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example. For initial local testing you can also place the data file in the data directory, which is located in ``~/.rally/benchmarks/data``. For this example you need to place the data for the "geonames" track in ``~/.rally/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
+We can invoke the script with ``python3 toJSON.py > documents.json``.
 
-Next we need a mapping file for these documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at the `example mapping file <http://benchmarks.elastic.co/corpora/geonames/mappings.json>`_. Place the mapping file in your `rally-tracks` repository in a dedicated folder. This repository is located in ``~/.rally/benchmarks/tracks/default`` and we place the mapping file in ``~/.rally/benchmarks/tracks/default/geonames`` for this track.
+Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``. Upload the data file to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example.
 
-The track repository is managed by git, so ensure that you are on the ``master`` branch by running ``git checkout master``. Then add a new JSON file right next to the mapping file. The file has to be called "track.json" ::
+For initial local testing you can place the data file in Rally's data directory, which is located in ``~/.rally/benchmarks/data``. For this example you need to place the data for the "geonames" track in ``~/.rally/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
+
+Next we need a mapping file for our documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at the `example mapping file <https://github.com/elastic/rally-tracks/blob/master/geonames/mappings.json>`_. Place the mapping file in your ``rally-tracks`` repository in a dedicated folder. This repository is located in ``~/.rally/benchmarks/tracks/default`` and we place the mapping file in ``~/.rally/benchmarks/tracks/default/geonames`` for this track.
+
+The track repository is managed by git, so ensure that you are on the ``master`` branch by running ``git checkout master``. Then add a new JSON file right next to the mapping file. The file has to be called "track.json" and is the actual track specification ::
 
     {
       "meta": {
@@ -154,7 +158,7 @@ A few things to note:
 
 .. note::
 
-    We have defined a `JSON schema for tracks <https://github.com/elastic/rally/tree/master/esrally/track/track-schema.json>`_ which you can use the check how to define your track. You should also check the tracks provided by Rally for inspiration.
+    We have defined a `JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_ which you can use to check how to define your track. You should also check the tracks provided by Rally for inspiration.
 
 When you invoke ``esrally list tracks``, the new track should now appear::
 
@@ -174,18 +178,18 @@ When you invoke ``esrally list tracks``, the new track should now appear::
 
 Congratulations, you have created your first track! You can test it with ``esrally --track=geonames --offline`` (or whatever the name of your track is) and run specific challenges with ``esrally --track=geonames --challenge=append-fast-with-conflicts --offline``.
 
-If you want to share it with the community, please read on.
+If you want to share your track with the community, please read on.
 
 How to contribute a track
 -------------------------
 
-First of all, please read the `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_
+First of all, please read Rally's `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_.
 
 If you want to contribute your track, follow these steps:
 
 1. Create a track JSON file and mapping files as described above and place them in a separate folder in the ``rally-tracks`` repository. Please also add a README file in this folder which contains licensing information (respecting the licensing terms of the source data). Note that pull requests for tracks without a license cannot be accepted.
 2. Upload the associated data so they can be publicly downloaded via HTTP. The data should be compressed either as .bz2 (recommended) or as .zip.
-3. Create a pull request for the `rally-tracks Github repo <https://github.com/elastic/rally-tracks>`_.
+3. Create a pull request in the `rally-tracks Github repo <https://github.com/elastic/rally-tracks>`_.
 
 Advanced topics
 ---------------
@@ -202,26 +206,26 @@ Extension Points
 Rally also provides a few extension points to Jinja2:
 
 * ``now``: This is a global variable that represents the current date and time when the template is evaluated by Rally.
-* `days_ago()`: This is a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that
+* ``days_ago()``: This is a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
-An example can be found in the logging track::
+You can find an examle in the logging track::
 
     {
-        "name": "range",
+      "name": "range",
         "index": "logs-*",
         "type": "type",
         "body": {
-            "query": {
-                "range": {
-                    "@timestamp": {
-                        "gte": "now-{{'15-05-1998' | days_ago(now)}}d/d",
-                        "lt": "now/d"
-                    }
-                }
+          "query": {
+            "range": {
+              "@timestamp": {
+                "gte": "now-{{'15-05-1998' | days_ago(now)}}d/d",
+                "lt": "now/d"
+              }
             }
           }
         }
+      }
     }
 
-The data set that is used in the logging track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. UpThe expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days and allows us to benchmark time range queries relative to the current point in time with a predetermined data set.
+The data set that is used in the logging track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
 

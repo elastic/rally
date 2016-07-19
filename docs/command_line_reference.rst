@@ -23,7 +23,7 @@ The ``list`` subcommand is used to list different configuration options:
 * telemetry: Will show all :doc:`telemetry devices </telemetry>` that are supported by Rally.
 * tracks: Will show all tracks that are supported by Rally. As this *may* depend on the Elasticsearch version that you want to benchmark, you can specify ``--distribution-version`` and also ``--distribution-repository`` as additional options.
 * pipelines: Will show all :doc:`pipelines </pipelines>` that are supported by Rally.
-* races: Will show all races that are currently stored. This is basically only needed for the tournament mode and it will also only work if you have setup Rally so it supports tournaments. See the documentation on :doc:`tournament mode </tournament>` for more details.
+* races: Will show all races that are currently stored. This is basically only needed for the :doc:`tournament mode </tournament>` and it will also only work if you have setup Rally so it supports tournaments.
 * cars: Will show all cars that are supported by Rally (i.e. Elasticsearch configurations).
 
 To list a specific configuration option, place it after the ``list`` subcommand. For example, ``esrally list pipelines`` will list all pipelines known to Rally.
@@ -36,7 +36,7 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 ``configure``
 ~~~~~~~~~~~~~
 
-This subcommand is needed to :doc:`configure </configuration>` Rally. It is implicitly chosen if you start Rally for the first time. But you can rerun this command at any time.
+This subcommand is needed to :doc:`configure </configuration>` Rally. It is implicitly chosen if you start Rally for the first time but you can rerun this command at any time.
 
 Command Line Flags
 ------------------
@@ -44,7 +44,7 @@ Command Line Flags
 ``track``
 ~~~~~~~~~
 
-Selects the specific track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding benchmarks </adding_benchmarks>`.
+Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding benchmarks </adding_benchmarks>`.
 
 ``challenge``
 ~~~~~~~~~~~~~
@@ -59,7 +59,7 @@ A car defines the Elasticsearch configuration that will be used for the benchmar
 ``pipeline``
 ~~~~~~~~~~~~
 
-Selects the specific :doc:`pipeline </pipelines>` that Rally should run.
+Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 ``telemetry``
 ~~~~~~~~~~~~~
@@ -79,7 +79,7 @@ This activates Java flight recorder and the JIT compiler telemetry devices.
 ``revision``
 ~~~~~~~~~~~~
 
-If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which will Rally create for you), you can specify the concrete git source code revision that you want to benchmark. But note that Rally does only support Gradle as build tool which effectively means that it will only support this for Elasticsearch 5.0 or better. The default value is ``current``.
+If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which will Rally create for you), you can specify the git revision of Elasticsearch that you want to benchmark. But note that Rally does only support Gradle as build tool which effectively means that it will only support this for Elasticsearch 5.0 or better. The default value is ``current``.
 
 You can specify the revision in different formats:
 
@@ -136,22 +136,22 @@ By default, the command line reporter will print the results only on standard ou
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
 
-With this option you can customize the Rally's internal client that is used to connect to the benchmark candidate.
+With this option you can customize Rally's internal Elasticsearch client.
 
-It accepts a list of comma-separated key-value pairs. The key-value pairs are be delimited by a colon. These options are passed directly to the Elasticsearch Python client API. See `their documentation on a list of supported options <http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.Elasticsearch>`_.
+It accepts a list of comma-separated key-value pairs. The key-value pairs have to be delimited by a colon. These options are passed directly to the Elasticsearch Python client API. See `their documentation on a list of supported options <http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.Elasticsearch>`_.
 
 We support the following data types:
 
 * Strings: Have to be enclosed in single quotes. Example: ``ca_certs:'/path/to/CA_certs'``
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
-* Booleans: Specify either `true` or `false`. Example: ``use_ssl:true``
+* Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
 
 In addition to the options, supported by the Elasticsearch client, it is also possible to enable HTTP compression by specifying ``compressed:true``
 
 Default value: ``timeout:90,request_timeout:90``
 
 .. warning::
-   If you provide your own client options, the default value will not be magically merged. You have to specify all client options explicitly. The only exceptions to this rule are documented below.
+   If you provide your own client options, the default value will not be magically merged. You have to specify all client options explicitly. The only exceptions to this rule is ``ca_cert`` (see below).
 
 **Examples**
 
@@ -187,7 +187,7 @@ Tells Rally that it should assume it has no connection to the Internet when chec
 ``preserve-install``
 ~~~~~~~~~~~~~~~~~~~~
 
-Rally usually installs and launches an Elasticsearch cluster internally and wipes the entire directory after the benchmark is done. Sometimes you want to keep the final cluster including all data after the benchmark has finished and that's what you can do with this flag. Note that depending on the track that has been run, the cluster can eat up a very significant of disk space (at least dozens of GB). The default value is ``false``.
+Rally usually installs and launches an Elasticsearch cluster internally and wipes the entire directory after the benchmark is done. Sometimes you want to keep this cluster including all data after the benchmark has finished and that's what you can do with this flag. Note that depending on the track that has been run, the cluster can eat up a very significant amount of disk space (at least dozens of GB). The default value is ``false``.
 
 .. note::
 This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
@@ -233,4 +233,4 @@ When you run ``esrally list races``, this will show up again::
     ----------------  -------  -------------------  --------  ------------------------------
     20160518T122341Z  pmc      append-no-conflicts  defaults  github-issue-1234-baseline
 
-This will help you recognize a specific race again later.
+This will help you recognize a specific race when running ``esrally compare``.
