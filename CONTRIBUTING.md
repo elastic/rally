@@ -31,6 +31,8 @@ the best approach before writing too much code.
 The process for contributing to any of the [Elastic repositories](https://github.com/elastic/) is similar. Details for individual projects 
 can be found below.
 
+If you want to get started in the project, a good idea is to check issues labeled with [help wanted](https://github.com/elastic/rally/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22). These are issues that should help newcomers to the project get something achieved without too much hassle. 
+
 ### Fork and clone the repository
 
 You will need to fork the Rally repository and clone it to your local machine. See 
