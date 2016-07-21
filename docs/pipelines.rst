@@ -29,9 +29,9 @@ To benchmark a cluster, you also have to specify the hosts to connect to. An exa
 from-distribution
 ~~~~~~~~~~~~~~~~~
 
-This pipeline allows to benchmark an official Elasticsearch distribution which will be automatically downloaded by Rally. The earliest supported version is Elasticsearch 5.0.0-alpha1. An example invocation::
+This pipeline allows to benchmark an official Elasticsearch distribution which will be automatically downloaded by Rally. The earliest supported version is Elasticsearch 1.7.0. An example invocation::
 
-    esrally --pipeline=from-distribution --distribution-version=5.0.0-alpha1
+    esrally --pipeline=from-distribution --distribution-version=1.7.5
 
 The version numbers have to match the name in the download URL path.
 
