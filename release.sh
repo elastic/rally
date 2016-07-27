@@ -19,7 +19,7 @@ echo "============================="
 
 # * Update version in `setup.py` and `docs/conf.py`
 echo "$RELEASE_VERSION" > version.txt
-git commit -a -m 'Bump version to $RELEASE_VERSION'
+git commit -a -m "Bump version to $RELEASE_VERSION"
 
 cd docs && make html && cd -
 # run integration tests, note that this requires that tox is properly set up
@@ -40,7 +40,7 @@ python3 setup.py bdist_wheel
 twine upload dist/esrally-${RELEASE_VERSION}-*.whl
 
 # Create release tag
-git tag -a ${RELEASE_VERSION} -m 'Rally release $RELEASE_VERSION'
+git tag -a ${RELEASE_VERSION} -m "Rally release $RELEASE_VERSION"
 git push --tags
 
 # Update version to next dev version
@@ -49,7 +49,7 @@ echo "$NEXT_RELEASE" > version.txt
 # Install locally for development
 python3 setup.py develop
 
-git commit -a -m 'Continue in $NEXT_RELEASE'
+git commit -a -m "Continue in $NEXT_RELEASE"
 git push origin master
 
 echo ""
