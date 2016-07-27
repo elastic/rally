@@ -28,9 +28,9 @@ tox
 python3 setup.py develop
 
 # Check version
-if [ "`esrally --version`" != "esrally $RELEASE_VERSION" ]
+if ! [[ "`esrally --version`" =~ "esrally ${RELEASE_VERSION} (git revision" ]]
 then
-    echo "ERROR: Rally version string [`esrally --version`] does not match expected version [esrally $RELEASE_VERSION]"
+    echo "ERROR: Rally version string [`esrally --version`] does not start with expected version string [esrally $RELEASE_VERSION]"
     exit 2
 fi
 
