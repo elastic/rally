@@ -26,14 +26,17 @@ logger = logging.getLogger("rally.main")
 def rally_root_path():
     return os.path.dirname(os.path.realpath(__file__))
 
+
 def version():
     release = __version__
     try:
-        revision = git.head_revision(rally_root_path())
-        return "%s (git revision: %s)" % (release, revision.strip())
+        if git.is_working_copy(io.normalize_path("%s/.." % rally_root_path())):
+            revision = git.head_revision(rally_root_path())
+            return "%s (git revision: %s)" % (release, revision.strip())
     except BaseException:
-        # cannot determine head revision so user has probably installed Rally via pip instead of git clone
-        return release
+        pass
+    # cannot determine head revision so user has probably installed Rally via pip instead of git clone
+    return release
 
 
 # we want to use some basic logging even before the output to log file is configured
