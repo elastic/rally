@@ -4,7 +4,7 @@ import logging
 
 from esrally import config
 from esrally.utils import io, process
-from esrally.exceptions import ImproperlyConfigured
+from esrally.exceptions import ImproperlyConfigured, BuildError
 
 logger = logging.getLogger("rally.builder")
 
@@ -47,6 +47,13 @@ class Builder:
         log_file = "%s/build.%s.log" % (log_dir, task_key)
 
         # we capture all output to a dedicated build log file
-        if process.run_subprocess("cd %s; %s %s > %s.tmp 2>&1" % (src_dir, gradle, task, log_file)):
-            logger.warning("Executing '%s %s' failed" % (gradle, task))
-        os.rename(("%s.tmp" % log_file), log_file)
+        if process.run_subprocess("cd %s; %s %s > %s 2>&1" % (src_dir, gradle, task, log_file)):
+            #logger.warning("Executing '%s %s' failed" % (gradle, task))
+            msg = "Executing '%s %s' failed. Here are the last 20 lines in the build log file:\n" % (gradle, task)
+            msg += "=========================================================================================================\n"
+            with open(log_file, "r") as f:
+                msg += "\t"
+                msg += "\t".join(f.readlines()[-20:])
+            msg += "=========================================================================================================\n"
+            msg += "The full build log is available at [%s]." % log_file
+            raise BuildError(msg)

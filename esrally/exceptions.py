@@ -53,5 +53,9 @@ class SupplyError(RallyError):
     pass
 
 
+class BuildError(RallyError):
+    pass
+
+
 class InvalidSyntax(RallyError):
     pass
