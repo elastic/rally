@@ -1,7 +1,7 @@
-import logging
-import io
-import csv
 import collections
+import csv
+import io
+import logging
 
 import tabulate
 
@@ -372,7 +372,9 @@ class ComparisonReporter:
         metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
         metrics_table += self.report_stats_latency(baseline_stats, contender_stats)
 
-        print_internal(tabulate.tabulate(metrics_table, headers=["Metric", "Baseline", "Contender", "Diff"], numalign="right", stralign="right"))
+
+        print_internal(
+            tabulate.tabulate(metrics_table, headers=["Metric", "Baseline", "Contender", "Diff"], numalign="right", stralign="right"))
 
     def report_index_throughput(self, baseline_stats, contender_stats):
         if baseline_stats.indexing_throughput and contender_stats.indexing_throughput:
@@ -388,24 +390,34 @@ class ComparisonReporter:
 
     def report_merge_part_times(self, baseline_stats, contender_stats):
         if baseline_stats.has_merge_part_stats() and contender_stats.has_merge_part_stats():
-            return [
-                self.line("Merge time (postings) [min]", baseline_stats.merge_part_time_postings, contender_stats.merge_part_time_postings,
-                          treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (stored fields) [min]", baseline_stats.merge_part_time_stored_fields,
-                          contender_stats.merge_part_time_stored_fields,
-                          treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (doc values) [min]", baseline_stats.merge_part_time_doc_values,
-                          contender_stats.merge_part_time_doc_values,
-                          treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (norms) [min]", baseline_stats.merge_part_time_norms,
-                          contender_stats.merge_part_time_norms,
-                          treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (vectors) [min]", baseline_stats.merge_part_time_vectors,
-                          contender_stats.merge_part_time_vectors,
-                          treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
-            ]
+            res = []
+            self.append_if_present(res,
+                                   self.line("Merge time (postings) [min]", baseline_stats.merge_part_time_postings,
+                                             contender_stats.merge_part_time_postings,
+                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(res,
+                                   self.line("Merge time (stored fields) [min]", baseline_stats.merge_part_time_stored_fields,
+                                             contender_stats.merge_part_time_stored_fields,
+                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(res,
+                                   self.line("Merge time (doc values) [min]", baseline_stats.merge_part_time_doc_values,
+                                             contender_stats.merge_part_time_doc_values,
+                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(res,
+                                   self.line("Merge time (norms) [min]", baseline_stats.merge_part_time_norms,
+                                             contender_stats.merge_part_time_norms,
+                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(res,
+                                   self.line("Merge time (vectors) [min]", baseline_stats.merge_part_time_vectors,
+                                             contender_stats.merge_part_time_vectors,
+                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            return res
         else:
             return []
+
+    def append_if_present(self, l, v):
+        if v and len(v) > 0:
+            l.append(v)
 
     def report_total_times(self, baseline_stats, contender_stats):
         return [
