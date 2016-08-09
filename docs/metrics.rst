@@ -83,3 +83,36 @@ Rally captures also some meta information for each metric record:
 * Custom tag: You can define one custom tag with the command line flag ``--user-tag``. The tag is prefixed by "tag_" in order to avoid accidental clashes with Rally internal tags.
 
 Note that depending on the "level" of a metric record, certain meta information might be missing. It makes no sense to record host level meta info for a cluster wide metric record, like a query latency (as it cannot be attributed to a single node).
+
+Metric Keys
+===========
+
+Rally stores the following metrics:
+
+* ``query_latency_*``: Time period between sending of a request and receiving the response. It also includes queueing time, i.e. the time the request spends waiting until it is ready to be serviced by Elasticsearch. Suffixed by the query name.
+* ``indexing_throughput``: Number of documents that Elasticsearch can index within a second.
+* ``merge_parts_total_time_*``: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled.
+* ``merge_parts_total_docs_*``: See ``merge_parts_total_time_*``
+* ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
+* ``disk_io_read_bytes``: number of bytes that have been read from disk during the benchmark. The same caveats apply on Mac OS X as for ``disk_io_write_bytes``.
+* ``cpu_utilization_1s``: CPU usage in percent of the Elasticsearch process based on a one second sample period. The maximum value is N * 100% where N is the number of CPU cores available.
+* ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_young_gen_gc_time``: The total runtime of the young generation garbage collector across the whole cluster as reported by the node stats API.
+* ``segments_count``: Total number of segments as reported by the indices stats API.
+* ``segments_memory_in_bytes``: Number of bytes used for segments as reported by the indices stats API.
+* ``segments_doc_values_memory_in_bytes``: Number of bytes used for doc values as reported by the indices stats API.
+* ``segments_stored_fields_memory_in_bytes``: Number of bytes used for stored fields as reported by the indices stats API.
+* ``segments_terms_memory_in_bytes``: Number of bytes used for terms as reported by the indices stats API.
+* ``segments_norms_memory_in_bytes``: Number of bytes used for norms as reported by the indices stats API.
+* ``segments_points_memory_in_bytes``: Number of bytes used for points as reported by the indices stats API.
+* ``merges_total_time``: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes).
+* ``merges_total_throttled_time``: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
+* ``indexing_total_time``: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time.
+* ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
+* ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
+* ``final_index_size_bytes``: Final resulting index size after the benchmark.
+
+
+.. note::
+
+   The metrics ``query_latency_*`` and ``indexing_throughput`` will be removed with the next version of Rally (0.4.0) and replaced with ``service_time`` and ``throughput`` respectively. These metrics will be available for all request types (i.e. we determine service times for indexing requests as well as we'll determine throughput also for queries). In addition, we will add another metric ``latency`` which represents latency in the actual sense (including queueing delay).
