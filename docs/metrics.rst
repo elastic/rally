@@ -89,7 +89,7 @@ Metric Keys
 
 Rally stores the following metrics:
 
-* ``query_latency_*``: Time period between sending of a request and receiving the response. It also includes queueing time, i.e. the time the request spends waiting until it is ready to be serviced by Elasticsearch. Suffixed by the query name.
+* ``query_latency_*``: Time period between start of request processing and receiving the response. Suffixed by the query name.
 * ``indexing_throughput``: Number of documents that Elasticsearch can index within a second.
 * ``merge_parts_total_time_*``: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled.
 * ``merge_parts_total_docs_*``: See ``merge_parts_total_time_*``
