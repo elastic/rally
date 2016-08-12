@@ -36,7 +36,8 @@ def download_via_http(url, local_path, expected_size_in_bytes=None):
     tmp_data_set_path = local_path + ".tmp"
     http = urllib3.PoolManager()
     try:
-        with http.request("GET", url, preload_content=False, timeout=60) as r, open(tmp_data_set_path, "wb") as out_file:
+        with http.request("GET", url, preload_content=False, retries=10,
+                          timeout=urllib3.Timeout(connect=45, read=240)) as r, open(tmp_data_set_path, "wb") as out_file:
             shutil.copyfileobj(r, out_file)
     except:
         if os.path.isfile(tmp_data_set_path):
