@@ -156,7 +156,7 @@ Contents
 --------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    configuration
    command_line_reference

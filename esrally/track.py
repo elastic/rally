@@ -38,6 +38,9 @@ class Index:
             num_docs += t.number_of_documents
         return num_docs
 
+    def __str__(self, *args, **kwargs):
+        return self.name
+
 
 class Type:
     """
@@ -77,6 +80,9 @@ class Type:
                self.number_of_documents > 0 and \
                self.compressed_size_in_bytes > 0 and \
                self.uncompressed_size_in_bytes > 0
+
+    def __str__(self, *args, **kwargs):
+        return self.name
 
 
 class Track:

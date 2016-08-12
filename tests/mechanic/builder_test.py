@@ -11,6 +11,8 @@ class BuilderTests(TestCase):
     @mock.patch("os.rename")
     @mock.patch("esrally.utils.process.run_subprocess")
     def test_build(self, mock_run_subprocess, mock_rename, mock_ensure_dir):
+        mock_run_subprocess.return_value = False
+
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/usr/local/gradle")
@@ -24,11 +26,9 @@ class BuilderTests(TestCase):
 
         calls = [
             # Actual call
-            mock.call("cd /src; /usr/local/gradle clean > logs/build/build.gradle.tasks.clean.log.tmp 2>&1"),
+            mock.call("cd /src; /usr/local/gradle clean > logs/build/build.gradle.tasks.clean.log 2>&1"),
             # Return value check
-            mock.call().__bool__(),
-            mock.call("cd /src; /usr/local/gradle assemble > logs/build/build.gradle.tasks.package.log.tmp 2>&1"),
-            mock.call().__bool__(),
+            mock.call("cd /src; /usr/local/gradle assemble > logs/build/build.gradle.tasks.package.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)

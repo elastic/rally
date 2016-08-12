@@ -48,7 +48,6 @@ class Builder:
 
         # we capture all output to a dedicated build log file
         if process.run_subprocess("cd %s; %s %s > %s 2>&1" % (src_dir, gradle, task, log_file)):
-            #logger.warning("Executing '%s %s' failed" % (gradle, task))
             msg = "Executing '%s %s' failed. Here are the last 20 lines in the build log file:\n" % (gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:
