@@ -285,7 +285,10 @@ def prepare_track(track, cfg):
         basename, extension = io.splitext(data_set_path)
         if not os.path.isfile(basename) or os.path.getsize(basename) != expected_size_in_bytes:
             logger.info("Unzipping track data from [%s] to [%s]." % (data_set_path, basename))
+            print("Decompressing %s (resulting size: %.2f GB) ... " %
+                  (type.document_archive, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True)
             io.decompress(data_set_path, io.dirname(data_set_path))
+            print("Done")
             extracted_bytes = os.path.getsize(basename)
             if extracted_bytes != expected_size_in_bytes:
                 raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
