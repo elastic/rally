@@ -1,10 +1,12 @@
+import argparse
 import datetime
-import time
+import logging
 import os
 import sys
-import logging
-import argparse
+import time
+
 import pkg_resources
+import thespian.actors
 
 from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
 from esrally.utils import io, format, git
@@ -21,6 +23,35 @@ BANNER = """
 """
 
 logger = logging.getLogger("rally.main")
+
+SKULL = '''
+                 uuuuuuu
+             uu$$$$$$$$$$$uu
+          uu$$$$$$$$$$$$$$$$$uu
+         u$$$$$$$$$$$$$$$$$$$$$u
+        u$$$$$$$$$$$$$$$$$$$$$$$u
+       u$$$$$$$$$$$$$$$$$$$$$$$$$u
+       u$$$$$$$$$$$$$$$$$$$$$$$$$u
+       u$$$$$$"   "$$$"   "$$$$$$u
+       "$$$$"      u$u       $$$$"
+        $$$u       u$u       u$$$
+        $$$u      u$$$u      u$$$
+         "$$$$uu$$$   $$$uu$$$$"
+          "$$$$$$$"   "$$$$$$$"
+            u$$$$$$$u$$$$$$$u
+             u$"$"$"$"$"$"$u
+  uuu        $$u$ $ $ $ $u$$       uuu
+ u$$$$        $$$$$u$u$u$$$       u$$$$
+  $$$$$uu      "$$$$$$$$$"     uu$$$$$$
+u$$$$$$$$$$$uu    """""    uuuu$$$$$$$$$$
+$$$$"""$$$$$$$$$$uuu   uu$$$$$$$$$"""$$$"
+"""      ""$$$$$$$$$$$uu ""$"""
+uuuu ""$$$$$$$$$$uuu
+u$$$uuu$$$$$$$$$uu ""$$$$$$$$$$$uuu$$$
+$$$$$$$$$$""""           ""$$$$$$$$$$$"
+   "$$$$$"                      ""$$$$""
+     $$$"                         $$$$"
+'''
 
 
 def rally_root_path():
@@ -46,7 +77,11 @@ def pre_configure_logging():
 
 def log_file_path(cfg):
     log_dir = paths.Paths(cfg).log_root()
-    return "%s/rally_out.log" % log_dir
+    node_name = cfg.opts("system", "node.name", mandatory=False)
+    if node_name:
+        return "%s/rally_out_%s.log" % (log_dir, node_name)
+    else:
+        return "%s/rally_out.log" % log_dir
 
 
 def configure_logging(cfg):
@@ -63,11 +98,64 @@ def configure_logging(cfg):
 
     log_level = logging.INFO
     ch = logging.FileHandler(filename=log_file, mode="a")
+    # ch = logging.StreamHandler(stream=sys.stdout)
     ch.setLevel(log_level)
     formatter = logging.Formatter("%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     formatter.converter = time.gmtime
     ch.setFormatter(formatter)
     logging.root.addHandler(ch)
+
+
+def configure_actor_logging(cfg):
+    class ActorLogFilter(logging.Filter):
+        def filter(self, logrecord):
+            return "actorAddress" in logrecord.__dict__
+
+    class NotActorLogFilter(logging.Filter):
+        def filter(self, logrecord):
+            return "actorAddress" not in logrecord.__dict__
+
+    log_dir = paths.Paths(cfg).log_root()
+
+    return {
+        "version": 1,
+        "formatters": {
+            "normal": {
+                "format": "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s"
+            },
+            "actor": {
+                "format": "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(actorAddress)s => %(message)s"
+            }
+        },
+        "filters": {
+            "isActorLog": {
+                "()": ActorLogFilter
+            },
+            "notActorLog": {
+                "()": NotActorLogFilter
+            }
+        },
+        "handlers": {
+            "h1": {
+                "class": "logging.FileHandler",
+                "filename": "%s/rally-actors.log" % log_dir,
+                "formatter": "normal",
+                "filters": ["notActorLog"],
+                "level": logging.INFO
+            },
+            "h2": {
+                "class": "logging.FileHandler",
+                "filename": "%s/rally-actor-messages.log" % log_dir,
+                "formatter": "actor",
+                "filters": ["isActorLog"],
+                "level": logging.INFO},
+        },
+        "loggers": {
+            "": {
+                "handlers": ["h1", "h2"], "level": logging.INFO
+            }
+        }
+    }
 
 
 def parse_args():
@@ -121,12 +209,6 @@ def parse_args():
             help="Selects a specific pipeline to run. A pipeline defines the steps that are executed (default: from-sources-complete).",
             default="from-sources-complete")
         p.add_argument(
-            "--quiet",
-            help="Suppresses as much as output as possible. Activate it unless you want to see what's happening during the "
-                 "benchmark (default: false)",
-            default=False,
-            action="store_true")
-        p.add_argument(
             "--offline",
             help="Assume that Rally has no connection to the Internet (default: false)",
             default=False,
@@ -137,13 +219,6 @@ def parse_args():
                  "space! (default: false)",
             default=False,
             action="store_true")
-        # Add this as a hidden parameter for now, we'll enable support in #92
-        p.add_argument(
-            "--rounds",
-            # help="Number of times each benchmark is run (default: 3)",
-            help=argparse.SUPPRESS,
-            default=1,
-        )
         p.add_argument(
             "--telemetry",
             help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
@@ -194,7 +269,12 @@ def parse_args():
             "--report-file",
             help="If provided, Rally writes the report also to this file (default: only write to stdout)",
             default="")
-
+        p.add_argument(
+            "--quiet",
+            help="Suppresses as much as output as possible. Activate it unless you want to see what's happening during the "
+                 "benchmark (default: false)",
+            default=False,
+            action="store_true")
 
     ###############################################################################
     #
@@ -207,7 +287,7 @@ def parse_args():
         p.add_argument(
             "--effective-start-date",
             help=argparse.SUPPRESS,
-            type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
+            type=lambda s: datetime.datetime.strptime(s, format.CMD_LINE_TIMESTAMP_FORMAT),
             default=datetime.datetime.utcnow())
         # This is a highly experimental option and will likely be removed
         p.add_argument(
@@ -251,7 +331,6 @@ def derive_sub_command(args, cfg):
 
 def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
-        # TODO dm: Consider creating a simple function
         config.ConfigFactory().create_config(cfg.config_file, advanced_config=args.advanced_config)
         exit(0)
     else:
@@ -320,6 +399,8 @@ def dispatch_sub_command(cfg, sub_command):
 def csv_to_list(csv):
     if csv is None:
         return None
+    elif len(csv.strip()) == 0:
+        return []
     else:
         return [e.strip() for e in csv.split(",")]
 
@@ -359,10 +440,25 @@ def convert(v):
         raise ValueError("Could not convert value '%s'" % v)
 
 
+def convert_hosts(configured_host_list):
+    hosts = []
+    try:
+        for authority in configured_host_list:
+            host, port = authority.split(":")
+            hosts.append({"host": host, "port": port})
+        return hosts
+    except ValueError:
+        msg = "Could not convert hosts. Invalid format for %s. Expected a comma-separated list of host:port pairs, " \
+              "e.g. host1:9200,host2:9200." % configured_host_list
+        logger.exception(msg)
+        raise exceptions.SystemSetupError(msg)
+
+
 def main():
     pre_configure_logging()
     args = parse_args()
-    print(BANNER)
+    if not args.quiet:
+        print(BANNER)
 
     cfg = config.Config(config_name=args.configuration_name)
     sub_command = derive_sub_command(args, cfg)
@@ -385,13 +481,13 @@ def main():
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "rounds", args.rounds)
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
-    cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
+    cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", convert_hosts(csv_to_list(args.target_hosts)))
     cfg.add(config.Scope.applicationOverride, "launcher", "client.options", kv_to_map(csv_to_list(args.client_options)))
     cfg.add(config.Scope.applicationOverride, "report", "reportformat", args.report_format)
     cfg.add(config.Scope.applicationOverride, "report", "reportfile", args.report_file)
+
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
@@ -401,12 +497,49 @@ def main():
 
     configure_logging(cfg)
 
+    # bootstrap Rally's Actor system
+    try:
+        actors = thespian.actors.ActorSystem("multiprocTCPBase", logDefs=configure_actor_logging(cfg))
+    except thespian.actors.ActorSystemException:
+        logger.exception("Could not initialize internal actor system. Terminating.")
+        print("ERROR: Could not initialize successfully.")
+        print("")
+        print("The most likely cause is that there are still processes running from a previous race.")
+        print("Please check for running Python processes and terminate them before running Rally again.")
+        print("")
+        print_help_on_errors(cfg)
+        sys.exit(70)
+
     logger.info("Rally version [%s]" % version())
     logger.info("Command line arguments: %s" % args)
+    success = False
+    try:
+        success = dispatch_sub_command(cfg, sub_command)
+    finally:
+        shutdown_complete = False
+        times_interrupted = 0
+        while not shutdown_complete and times_interrupted < 2:
+            try:
+                actors.shutdown()
+                shutdown_complete = True
+            except KeyboardInterrupt:
+                times_interrupted += 1
+                logger.warn("User interrupted shutdown of internal actor system.")
+                print("Please wait a moment for Rally's internal components to shutdown.")
+        if not shutdown_complete and times_interrupted > 0:
+            logger.warn("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
+            print("**********************************************************************")
+            print("")
+            print("WARN: Terminating now at the risk of leaving child processes behind.")
+            print("")
+            print("The next race may fail due to an unclean shutdown.")
+            print("")
+            print(SKULL)
+            print("")
+            print("**********************************************************************")
 
-    success = dispatch_sub_command(cfg, sub_command)
     if not success:
-        sys.exit(1)
+        sys.exit(64)
 
 
 if __name__ == "__main__":

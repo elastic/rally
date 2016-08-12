@@ -84,12 +84,7 @@ class TrackReaderTests(TestCase):
                 {
                     "name": "index-append",
                     "type": "index",
-                    "index-settings": {},
-                    "clients": {
-                        "count": 8
-                    },
                     "bulk-size": 5000,
-                    "force-merge": False
                 }
             ],
             "challenges": [
@@ -97,7 +92,11 @@ class TrackReaderTests(TestCase):
                     "name": "default-challenge",
                     "description": "Default challenge",
                     "schedule": [
-                        "index-append"
+                        {
+                            "index-settings": {},
+                            "clients": 8,
+                            "operation": "index-append"
+                        }
                     ]
                 }
 
@@ -118,4 +117,3 @@ class TrackReaderTests(TestCase):
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
-

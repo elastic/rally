@@ -7,7 +7,7 @@ import threading
 
 import tabulate
 
-from esrally import metrics, track
+from esrally import metrics
 from esrally.utils import io, sysstats, process
 
 logger = logging.getLogger("rally.telemetry")
@@ -20,18 +20,19 @@ def list_telemetry(cfg):
 
 
 class Telemetry:
-    def __init__(self, config, metrics_store=None, devices=None):
+    def __init__(self, config, client=None, metrics_store=None, devices=None):
         self._config = config
         if devices is None:
             self._devices = [
                 FlightRecorder(config, metrics_store),
                 JitCompiler(config, metrics_store),
                 PerfStat(config, metrics_store),
-                Ps(config, metrics_store),
+                DiskIo(config, metrics_store),
+                CpuUsage(config, metrics_store),
                 MergeParts(config, metrics_store),
-                EnvironmentInfo(config, metrics_store),
-                NodeStats(config, metrics_store),
-                IndexStats(config, metrics_store),
+                EnvironmentInfo(config, client, metrics_store),
+                NodeStats(config, client, metrics_store),
+                IndexStats(config, client, metrics_store),
                 IndexSize(config, metrics_store)
                 # We do not include the ExternalEnvironmentInfo here by intention as it should only be used for externally launched clusters
             ]
@@ -74,15 +75,17 @@ class Telemetry:
             if self._enabled(device):
                 device.detach_from_node(node)
 
-    def on_benchmark_start(self, phase):
+    def on_benchmark_start(self):
+        logger.info("Benchmark start")
         for device in self._devices:
             if self._enabled(device):
-                device.on_benchmark_start(phase)
+                device.on_benchmark_start()
 
-    def on_benchmark_stop(self, phase):
+    def on_benchmark_stop(self):
+        logger.info("Benchmark stop")
         for device in self._devices:
             if self._enabled(device):
-                device.on_benchmark_stop(phase)
+                device.on_benchmark_stop()
 
     def detach_from_cluster(self, cluster):
         for device in self._devices:
@@ -143,10 +146,10 @@ class TelemetryDevice:
     def detach_from_cluster(self, cluster):
         pass
 
-    def on_benchmark_start(self, phase):
+    def on_benchmark_start(self):
         pass
 
-    def on_benchmark_stop(self, phase):
+    def on_benchmark_stop(self):
         pass
 
 
@@ -295,20 +298,15 @@ class MergeParts(InternalTelemetryDevice):
         super().__init__(config, metrics_store)
         self._t = None
 
-    def on_benchmark_stop(self, phase):
-        # TODO: This works currently only by coincidence (as this method is called once per node instead of once per cluster.
-        # But as we only use it in a single node benchmark, it has the same effect. As we need to rethink this API anyway, let's leave
-        # it for now but we need to change this later).
-        # only gather metrics when the whole benchmark is done
-        if phase is None:
-            server_log_dir = self._config.opts("launcher", "candidate.log.dir")
-            for log_file in os.listdir(server_log_dir):
-                log_path = "%s/%s" % (server_log_dir, log_file)
-                logger.debug("Analyzing merge parts in [%s]" % log_path)
-                with open(log_path) as f:
-                    merge_times = self._extract_merge_times(f)
-                    if merge_times:
-                        self._store_merge_times(merge_times)
+    def on_benchmark_stop(self):
+        server_log_dir = self._config.opts("launcher", "candidate.log.dir")
+        for log_file in os.listdir(server_log_dir):
+            log_path = "%s/%s" % (server_log_dir, log_file)
+            logger.debug("Analyzing merge parts in [%s]" % log_path)
+            with open(log_path) as f:
+                merge_times = self._extract_merge_times(f)
+                if merge_times:
+                    self._store_merge_times(merge_times)
 
     def _extract_merge_times(self, file):
         merge_times = {}
@@ -326,55 +324,45 @@ class MergeParts(InternalTelemetryDevice):
     def _store_merge_times(self, merge_times):
         for k, v in merge_times.items():
             metric_suffix = k.replace(" ", "_")
+            # TODO dm: This is actually a node level metric (it is extracted from the *node's* log file), we have to add node info here)
             self._metrics_store.put_value_cluster_level("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
             self._metrics_store.put_count_cluster_level("merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
-class Ps(InternalTelemetryDevice):
+class DiskIo(InternalTelemetryDevice):
     """
-    Gathers process statistics like CPU usage or disk I/O.
+    Gathers disk I/O stats.
     """
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
-        self._t = None
-
-    def attach_to_node(self, node):
-        self._t = {}
-        for phase in track.BenchmarkPhase:
-            self._t[phase] = GatherProcessStats(node, self._metrics_store, phase)
-
-    def on_benchmark_start(self, phase):
-        if self._t and phase:
-            self._t[phase].start()
-
-    def on_benchmark_stop(self, phase):
-        if self._t and phase:
-            self._t[phase].finish()
-
-
-class GatherProcessStats(threading.Thread):
-    def __init__(self, node, metrics_store, phase):
-        threading.Thread.__init__(self)
-        self.stop = False
-        self.node = node
-        self.process = sysstats.setup_process_stats(node.process.pid)
-        self.metrics_store = metrics_store
-        self.phase = phase
+        self.node = None
+        self.process = None
         self.disk_start = None
         self.process_start = None
 
-    def finish(self):
-        self.stop = True
-        self.join()
-        # Be aware the semantics of write counts etc. are different for disk and process statistics.
-        # Thus we're conservative and only report I/O bytes now.
-        disk_end = sysstats.disk_io_counters()
-        process_end = sysstats.process_io_counters(self.process)
+    def attach_to_node(self, node):
+        self.node = node
+        self.process = sysstats.setup_process_stats(node.process.pid)
 
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes_%s" % self.phase.name,
-                                                self.write_bytes(process_end, disk_end), "byte")
-        self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes_%s" % self.phase.name,
-                                                self.read_bytes(process_end, disk_end), "byte")
+    def on_benchmark_start(self):
+        if self.process is not None:
+            self.disk_start = sysstats.disk_io_counters()
+            self.process_start = sysstats.process_io_counters(self.process)
+            if self.process_start:
+                logger.info("Using more accurate process-based I/O counters.")
+            else:
+                logger.warn("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+
+    def on_benchmark_stop(self):
+        if self.process is not None:
+            # Be aware the semantics of write counts etc. are different for disk and process statistics.
+            # Thus we're conservative and only report I/O bytes now.
+            disk_end = sysstats.disk_io_counters()
+            process_end = sysstats.process_io_counters(self.process)
+            self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes",
+                                                    self.write_bytes(process_end, disk_end), "byte")
+            self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
+                                                    self.read_bytes(process_end, disk_end), "byte")
 
     def read_bytes(self, process_end, disk_end):
         if self.process_start and process_end:
@@ -388,31 +376,63 @@ class GatherProcessStats(threading.Thread):
         else:
             return disk_end.write_bytes - self.disk_start.write_bytes
 
-    def run(self):
-        self.disk_start = sysstats.disk_io_counters()
-        self.process_start = sysstats.process_io_counters(self.process)
-        if self.process_start:
-            logger.info("Using more accurate process-based I/O counters.")
-        else:
-            logger.warn("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
 
-        while not self.stop:
-            self.metrics_store.put_value_node_level(self.node.node_name, "cpu_utilization_1s_%s" % self.phase.name,
-                                                    sysstats.cpu_utilization(self.process), "%")
+class CpuUsage(InternalTelemetryDevice):
+    """
+    Gathers CPU usage statistics.
+    """
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+        self.sampler = None
+        self.node = None
+
+    def attach_to_node(self, node):
+        self.node = node
+
+    def on_benchmark_start(self):
+        if self.node:
+            self.sampler = SampleCpuUsage(self.node, self._metrics_store)
+            self.sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.sampler:
+            self.sampler.finish()
+
+
+class SampleCpuUsage(threading.Thread):
+    def __init__(self, node, metrics_store):
+        threading.Thread.__init__(self)
+        self.stop = False
+        self.node = node
+        self.process = sysstats.setup_process_stats(node.process.pid)
+        self.metrics_store = metrics_store
+
+    def finish(self):
+        self.stop = True
+        self.join()
+
+    def run(self):
+        try:
+            while not self.stop:
+                self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",
+                                                        value=sysstats.cpu_utilization(self.process), unit="%")
+        except BaseException:
+            logger.exception("Could not determine CPU utilization")
 
 
 class EnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
     """
-    def __init__(self, config, metrics_store):
+    def __init__(self, config, client, metrics_store):
         super().__init__(config, metrics_store)
+        self.client = client
         self._t = None
 
     def attach_to_cluster(self, cluster):
-        revision = cluster.info()["version"]["build_hash"]
+        revision = self.client.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
-        info = cluster.nodes_info()
+        info = self.client.nodes.info()
         for node in info["nodes"].values():
             node_name = node["name"]
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
@@ -435,22 +455,23 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information for externally provisioned clusters.
     """
-    def __init__(self, config, metrics_store):
+    def __init__(self, config, client, metrics_store):
         super().__init__(config, metrics_store)
+        self.client = client
         self._t = None
 
     def attach_to_cluster(self, cluster):
-        revision = cluster.info()["version"]["build_hash"]
+        revision = self.client.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
 
-        stats = cluster.nodes_stats(metric="_all", level="shards")
+        stats = self.client.nodes.stats(metric="_all", level="shards")
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", node["host"])
 
-        info = cluster.nodes_info()
+        info = self.client.nodes.info()
         for node in info["nodes"].values():
             self.try_store_node_info(node, "os_name", ["os", "name"])
             self.try_store_node_info(node, "os_version", ["os", "version"])
@@ -474,67 +495,58 @@ class NodeStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch nodes stats API
     """
-    def __init__(self, config, metrics_store):
+    def __init__(self, config, client, metrics_store):
         super().__init__(config, metrics_store)
-        self.cluster = None
+        self.client = client
 
-    def attach_to_cluster(self, cluster):
-        self.cluster = cluster
+    def on_benchmark_stop(self):
+        logger.info("Gathering nodes stats")
+        stats = self.client.nodes.stats(metric="_all", level="shards")
+        total_old_gen_collection_time = 0
+        total_young_gen_collection_time = 0
+        nodes = stats["nodes"]
+        for node in nodes.values():
+            node_name = node["name"]
+            gc = node["jvm"]["gc"]["collectors"]
+            old_gen_collection_time = gc["old"]["collection_time_in_millis"]
+            young_gen_collection_time = gc["young"]["collection_time_in_millis"]
+            self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gen_collection_time, "ms")
+            self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gen_collection_time, "ms")
+            total_old_gen_collection_time += old_gen_collection_time
+            total_young_gen_collection_time += young_gen_collection_time
 
-    def on_benchmark_stop(self, phase):
-        # only gather metrics when the whole benchmark is done
-        if self.cluster and phase is None:
-            logger.info("Gathering nodes stats")
-            stats = self.cluster.nodes_stats(metric="_all", level="shards")
-            total_old_gen_collection_time = 0
-            total_young_gen_collection_time = 0
-            nodes = stats["nodes"]
-            for node in nodes.values():
-                node_name = node["name"]
-                gc = node["jvm"]["gc"]["collectors"]
-                old_gen_collection_time = gc["old"]["collection_time_in_millis"]
-                young_gen_collection_time = gc["young"]["collection_time_in_millis"]
-                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gen_collection_time, "ms")
-                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gen_collection_time, "ms")
-                total_old_gen_collection_time += old_gen_collection_time
-                total_young_gen_collection_time += young_gen_collection_time
-
-            self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
-            self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
+        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
 
 
 class IndexStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch index stats API
     """
-    def __init__(self, config, metrics_store):
+    def __init__(self, config, client, metrics_store):
         super().__init__(config, metrics_store)
-        self.cluster = None
+        self.client = client
 
-    def attach_to_cluster(self, cluster):
-        self.cluster = cluster
+    def on_benchmark_stop(self):
+        logger.info("Gathering indices stats")
+        stats = self.client.indices.stats(metric="_all", level="shards")
+        p = stats["_all"]["primaries"]
 
-    def on_benchmark_stop(self, phase):
-        if self.cluster and phase is track.BenchmarkPhase.index:
-            logger.info("Gathering indices stats")
-            stats = self.cluster.indices_stats(metric="_all", level="shards")
-            primaries = stats["_all"]["primaries"]
+        self.add_metrics(p, "segments_count", None, ["segments", "count"])
+        self.add_metrics(p, "segments_memory_in_bytes", "byte", ["segments", "memory_in_bytes"])
+        self.add_metrics(p, "segments_doc_values_memory_in_bytes", "byte", ["segments", "doc_values_memory_in_bytes"])
+        self.add_metrics(p, "segments_stored_fields_memory_in_bytes", "byte", ["segments", "stored_fields_memory_in_bytes"])
+        self.add_metrics(p, "segments_terms_memory_in_bytes", "byte", ["segments", "terms_memory_in_bytes"])
+        self.add_metrics(p, "segments_norms_memory_in_bytes", "byte", ["segments", "norms_memory_in_bytes"])
+        self.add_metrics(p, "segments_points_memory_in_bytes", "byte", ["segments", "points_memory_in_bytes"])
 
-            self.try_store_cluster_metrics(primaries, "segments_count", None, ["segments", "count"])
-            self.try_store_cluster_metrics(primaries, "segments_memory_in_bytes", "byte", ["segments", "memory_in_bytes"])
-            self.try_store_cluster_metrics(primaries, "segments_doc_values_memory_in_bytes", "byte", ["segments", "doc_values_memory_in_bytes"])
-            self.try_store_cluster_metrics(primaries, "segments_stored_fields_memory_in_bytes", "byte", ["segments", "stored_fields_memory_in_bytes"])
-            self.try_store_cluster_metrics(primaries, "segments_terms_memory_in_bytes", "byte", ["segments", "terms_memory_in_bytes"])
-            self.try_store_cluster_metrics(primaries, "segments_norms_memory_in_bytes", "byte", ["segments", "norms_memory_in_bytes"])
-            self.try_store_cluster_metrics(primaries, "segments_points_memory_in_bytes", "byte", ["segments", "points_memory_in_bytes"])
+        self.add_metrics(p, "merges_total_time", "ms", ["merges", "total_time_in_millis"])
+        self.add_metrics(p, "merges_total_throttled_time", "ms", ["merges", "total_throttled_time_in_millis"])
+        self.add_metrics(p, "indexing_total_time", "ms", ["indexing", "index_time_in_millis"])
+        self.add_metrics(p, "refresh_total_time", "ms", ["refresh", "total_time_in_millis"])
+        self.add_metrics(p, "flush_total_time", "ms", ["flush", "total_time_in_millis"])
 
-            self.try_store_cluster_metrics(primaries, "merges_total_time", "ms", ["merges", "total_time_in_millis"])
-            self.try_store_cluster_metrics(primaries, "merges_total_throttled_time", "ms", ["merges", "total_throttled_time_in_millis"])
-            self.try_store_cluster_metrics(primaries, "indexing_total_time", "ms", ["indexing", "index_time_in_millis"])
-            self.try_store_cluster_metrics(primaries, "refresh_total_time", "ms", ["refresh", "total_time_in_millis"])
-            self.try_store_cluster_metrics(primaries, "flush_total_time", "ms", ["flush", "total_time_in_millis"])
-
-    def try_store_cluster_metrics(self, primaries, metric_key, unit, path):
+    def add_metrics(self, primaries, metric_key, unit, path):
         value = primaries
         try:
             for k in path:

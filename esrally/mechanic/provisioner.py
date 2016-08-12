@@ -18,9 +18,10 @@ class Provisioner:
     def __init__(self, config):
         self._config = config
 
-    def prepare(self, car):
+    # TODO #71: This should be split into an environment independent configuration (car) and environment dependent configuration (http_port)
+    def prepare(self, car, http_port):
         self._install_binary()
-        self._configure(car)
+        self._configure(car, http_port)
 
     def cleanup(self):
         preserve = self._config.opts("provisioning", "install.preserve")
@@ -47,9 +48,9 @@ class Provisioner:
         binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
         self._config.add(config.Scope.benchmark, "provisioning", "local.binary.path", binary_path)
 
-    def _configure(self, car):
+    def _configure(self, car, http_port):
         self._configure_logging(car)
-        self._configure_cluster(car)
+        self._configure_cluster(car, http_port)
 
     def _configure_logging(self, car):
         log_cfg = car.custom_logging_config
@@ -58,10 +59,9 @@ class Provisioner:
             binary_path = self._config.opts("provisioning", "local.binary.path")
             open("%s/config/logging.yml" % binary_path, "w").write(log_cfg)
 
-    def _configure_cluster(self, car):
+    def _configure_cluster(self, car, http_port):
         binary_path = self._config.opts("provisioning", "local.binary.path")
-        first_http_port = self._config.opts("provisioning", "node.http.port")
-        logger.info("Using port [%d]" % first_http_port)
+        logger.info("Using port [%d]" % http_port)
         env_name = self._config.opts("system", "env.name")
         additional_config = car.custom_config_snippet
         data_paths = self._data_paths(car)
@@ -70,8 +70,8 @@ class Provisioner:
         s = open("%s/config/elasticsearch.yml" % binary_path, "r").read()
         s += "\ncluster.name: %s\n" % "benchmark.%s" % env_name
         s += "\npath.data: %s" % ", ".join(data_paths)
-        s += "\nhttp.port: %d-%d" % (first_http_port, first_http_port + 100)
-        s += "\ntransport.tcp.port: %d-%d" % (first_http_port + 100, first_http_port + 200)
+        s += "\nhttp.port: %d-%d" % (http_port, http_port + 100)
+        s += "\ntransport.tcp.port: %d-%d" % (http_port + 100, http_port + 200)
         if additional_config:
             s += "\n%s" % additional_config
         open("%s/config/elasticsearch.yml" % binary_path, "w").write(s)

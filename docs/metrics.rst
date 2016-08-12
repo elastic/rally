@@ -15,9 +15,11 @@ Here is a typical metrics record::
           "trial-timestamp": "20160421T042749Z",
           "@timestamp": 1461213093093,
           "relative-time": 10507328,
-          "name": "cpu_utilization_1s_index",
-          "value": 3385.1,
-          "unit": "%",
+          "name": "throughput",
+          "value": 27385,
+          "unit": "docs/s",
+          "operation": "index-append-no-conflicts",
+          "operation-type": "Index",
           "meta": {
             "cpu_physical_cores": 36,
             "cpu_logical_cores": 72,
@@ -70,6 +72,14 @@ name, value, unit
 
 This is the actual metric name and value with an optional unit (counter metrics don't have a unit). Depending on the nature of a metric, it is either sampled periodically by Rally, e.g. the CPU utilization or query latency or just measured once like the final size of the index.
 
+operation, operation-type
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``operation`` is the name of the operation (as specified in the track file) that ran when this metric has been gathered. It will only be set for metrics with name ``latency`` and ``throughput``.
+
+``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different ``operation``s but they all have the same ``operation-type`` (Search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
+
+
 meta
 ~~~~
 
@@ -89,8 +99,9 @@ Metric Keys
 
 Rally stores the following metrics:
 
-* ``query_latency_*``: Time period between start of request processing and receiving the response. Suffixed by the query name.
-* ``indexing_throughput``: Number of documents that Elasticsearch can index within a second.
+* ``latency``: Time period between submission of a request and receiving the complete response. It also includes wait time, i.e. the time the request spends waiting until it is ready to be serviced by Elasticsearch.
+* ``service_time`` Time period between start of request processing and receiving the complete response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
+* ``throughput``: Number of operations that Elasticsearch can perform within a certain time period, usually per second.
 * ``merge_parts_total_time_*``: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled.
 * ``merge_parts_total_docs_*``: See ``merge_parts_total_time_*``
 * ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
@@ -111,8 +122,3 @@ Rally stores the following metrics:
 * ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
 * ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
 * ``final_index_size_bytes``: Final resulting index size after the benchmark.
-
-
-.. note::
-
-   The metrics ``query_latency_*`` and ``indexing_throughput`` will be removed with the next version of Rally (0.4.0) and replaced with ``service_time`` and ``throughput`` respectively. These metrics will be available for all request types (i.e. we determine service times for indexing requests as well as we'll determine throughput also for queries). In addition, we will add another metric ``latency`` which represents latency in the actual sense (including queueing delay).

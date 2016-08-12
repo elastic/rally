@@ -4,14 +4,6 @@ from unittest import TestCase
 from esrally import config, metrics, telemetry, cluster, car
 
 
-class MockClientFactory:
-    def __init__(self, hosts, client_options):
-        pass
-
-    def create(self):
-        return None
-
-
 class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
     def __init__(self, cfg, metrics_store, mock_env):
         super().__init__(cfg, metrics_store)
@@ -37,12 +29,13 @@ class TelemetryTests(TestCase):
             MockTelemetryDevice(cfg, metrics_store, {"ES_NET_HOST": "127.0.0.1"})
         ]
 
-        t = telemetry.Telemetry(cfg, metrics_store, devices)
+        t = telemetry.Telemetry(config=cfg, metrics_store=metrics_store, devices=devices)
 
         default_car = car.Car(name="default-car")
         opts = t.instrument_candidate_env(default_car, "default-node")
 
         self.assertTrue(opts)
+        print(opts)
         self.assertEqual(len(opts), 2)
         self.assertEqual("-Xms256M -Xmx512M", opts["ES_JAVA_OPTS"])
         self.assertEqual("127.0.0.1", opts["ES_NET_HOST"])
@@ -61,7 +54,7 @@ class MergePartsDeviceTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         merge_parts_device = telemetry.MergeParts(cfg, metrics_store)
-        merge_parts_device.on_benchmark_stop(phase=None)
+        merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_not_called()
         metrics_store_put_count.assert_not_called()
@@ -85,7 +78,7 @@ class MergePartsDeviceTests(TestCase):
         config = self.create_config()
         metrics_store = metrics.EsMetricsStore(config)
         merge_parts_device = telemetry.MergeParts(config, metrics_store)
-        merge_parts_device.on_benchmark_stop(phase=None)
+        merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_called_with("merge_parts_total_time_doc_values", 350, "ms")
         metrics_store_put_count.assert_called_with("merge_parts_total_docs_doc_values", 1850)
@@ -102,12 +95,31 @@ class MergePartsDeviceTests(TestCase):
         return cfg
 
 
+class Client:
+    def __init__(self, cluster, nodes, info):
+        self.cluster = cluster
+        self.nodes = nodes
+        self._info = info
+
+    def info(self):
+        return self._info
+
+
+class SubClient:
+    def __init__(self, info):
+        self._info = info
+
+    def stats(self, *args, **kwargs):
+        return self._info
+
+    def info(self):
+        return self._info
+
+
 class EnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
-    @mock.patch("esrally.cluster.Cluster.info")
-    @mock.patch("esrally.cluster.Cluster.nodes_info")
-    def test_stores_cluster_level_metrics_on_attach(self, nodes_info, cluster_info, metrics_store_add_meta_info):
-        nodes_info.return_value = {
+    def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
+        nodes_info = {
             "nodes": {
                 "FCFjozkeTiOpN-SI88YEcg": {
                     "name": "rally0",
@@ -124,17 +136,20 @@ class EnvironmentInfoTests(TestCase):
                 }
             }
         }
-        cluster_info.return_value = {
+        cluster_info = {
             "version":
                 {
                     "build_hash": "abc123"
                 }
         }
+
+        client = Client(None, SubClient(nodes_info), cluster_info)
+
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.EnvironmentInfo(cfg, metrics_store)
+        env_device = telemetry.EnvironmentInfo(cfg, client, metrics_store)
         t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], {}, metrics_store, t, client_factory_class=MockClientFactory))
+        t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
@@ -160,7 +175,7 @@ class EnvironmentInfoTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         node = cluster.Node(None, "io", "rally0", None)
-        env_device = telemetry.EnvironmentInfo(cfg, metrics_store)
+        env_device = telemetry.EnvironmentInfo(cfg, None, metrics_store)
         env_device.attach_to_node(node)
 
         calls = [
@@ -190,11 +205,8 @@ class EnvironmentInfoTests(TestCase):
 
 class ExternalEnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
-    @mock.patch("esrally.cluster.Cluster.info")
-    @mock.patch("esrally.cluster.Cluster.nodes_info")
-    @mock.patch("esrally.cluster.Cluster.nodes_stats")
-    def test_stores_cluster_level_metrics_on_attach(self, nodes_stats, nodes_info, cluster_info, metrics_store_add_meta_info):
-        nodes_stats.return_value = {
+    def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
+        nodes_stats = {
             "nodes": {
                 "FCFjozkeTiOpN-SI88YEcg": {
                     "name": "rally0",
@@ -203,7 +215,7 @@ class ExternalEnvironmentInfoTests(TestCase):
             }
         }
 
-        nodes_info.return_value = {
+        nodes_info = {
             "nodes": {
                 "FCFjozkeTiOpN-SI88YEcg": {
                     "name": "rally0",
@@ -220,17 +232,18 @@ class ExternalEnvironmentInfoTests(TestCase):
                 }
             }
         }
-        cluster_info.return_value = {
+        cluster_info = {
             "version":
                 {
                     "build_hash": "abc123"
                 }
         }
+        client = Client(SubClient(nodes_stats), SubClient(nodes_info), cluster_info)
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ExternalEnvironmentInfo(cfg, metrics_store)
+        env_device = telemetry.ExternalEnvironmentInfo(cfg, client, metrics_store)
         t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([{"host": "::1:9200"}], [], {}, metrics_store, t, client_factory_class=MockClientFactory))
+        t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),

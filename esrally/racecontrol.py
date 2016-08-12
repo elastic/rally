@@ -1,12 +1,14 @@
 import logging
 import os
+import sys
 import urllib.error
 # Sorry, but Maven relies on XML...
 import xml.etree.ElementTree
 
 import tabulate
+import thespian.actors
 
-from esrally import config, driver, exceptions, paths, sweeper, reporter, metrics, track, car, PROGRAM_NAME
+from esrally import config, driver, exceptions, sweeper, track, reporter, metrics, car, client, PROGRAM_NAME
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io, versions
 
@@ -67,6 +69,7 @@ class Pipeline:
 #################################################
 
 
+# TODO dm module refactoring: mechanic
 def check_can_handle_source_distribution(ctx):
     try:
         ctx.config.opts("source", "local.src.dir")
@@ -76,10 +79,16 @@ def check_can_handle_source_distribution(ctx):
                                           "install the required software and reconfigure Rally with %s --configure." % PROGRAM_NAME)
 
 
+# TODO dm module refactoring: mechanic (once per node or actually once per machine)
 def kill(ctx):
     # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
     node_prefix = ctx.config.opts("provisioning", "node.name.prefix")
     process.kill_running_es_instances(node_prefix)
+
+
+# TODO dm module refactoring: reporter?
+def store_race(ctx):
+    metrics.race_store(ctx.config).store_race(ctx.track)
 
 
 def prepare_track(ctx):
@@ -90,59 +99,58 @@ def prepare_track(ctx):
         logger.error("Cannot load track [%s]" % track_name)
         raise exceptions.ImproperlyConfigured("Cannot load track %s. You can list the available tracks with %s list tracks." %
                                               (track_name, PROGRAM_NAME))
-
+    # TODO #71: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
     track.prepare_track(ctx.track, ctx.config)
-    race_paths = paths.Paths(ctx.config)
-    track_root = race_paths.track_root(track_name)
-    ctx.config.add(config.Scope.benchmark, "system", "track.root.dir", track_root)
-
-    selected_challenge = ctx.config.opts("benchmarks", "challenge")
-    for challenge in ctx.track.challenges:
-        if challenge.name == selected_challenge:
-            ctx.challenge = challenge
-
-    if not ctx.challenge:
-        raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
-                                              "challenges with %s list tracks." % (selected_challenge, ctx.track.name, PROGRAM_NAME))
-
-    race_paths = paths.Paths(ctx.config)
-    ctx.config.add(config.Scope.challenge, "system", "challenge.root.dir",
-                        race_paths.challenge_root(ctx.track.name, ctx.challenge.name))
-    ctx.config.add(config.Scope.challenge, "system", "challenge.log.dir",
-                        race_paths.challenge_logs(ctx.track.name, ctx.challenge.name))
-
-
-def prepare_car(ctx):
-    selected_car = ctx.config.opts("benchmarks", "car")
-    for c in car.cars:
-        if c.name == selected_car:
-            ctx.car = c
-
-    if not ctx.car:
-        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with %s list cars."
-                                              % (selected_car, PROGRAM_NAME))
-
-
-def store_race(ctx):
-    metrics.race_store(ctx.config).store_race(ctx.track)
 
 
 # benchmark when we provision ourselves
 def benchmark_internal(ctx):
-    track = ctx.track
-    challenge = ctx.challenge
-    car = ctx.car
-    print("Racing on track [%s] and challenge [%s] with car [%s]" % (track.name, challenge.name, car.name))
+    track_name = ctx.config.opts("system", "track")
+    challenge_name = ctx.config.opts("benchmarks", "challenge")
+    selected_car_name = ctx.config.opts("benchmarks", "car")
 
-    ctx.mechanic.start_metrics(track, challenge, car)
-    cluster = ctx.mechanic.start_engine(car)
-    ctx.mechanic.setup_index(cluster, track, challenge)
-    driver.Driver(ctx.config, cluster, track, challenge).go()
+    print("Racing on track [%s] and challenge [%s] with car [%s]" % (track_name, challenge_name, selected_car_name))
+    # TODO dm module refactoring: mechanic
+    selected_car = None
+    for c in car.cars:
+        if c.name == selected_car_name:
+            selected_car = c
+
+    if not selected_car:
+        raise exceptions.ImproperlyConfigured("Unknown car [%s]. You can list the available cars with %s list cars."
+                                              % (selected_car_name, PROGRAM_NAME))
+
+    port = ctx.config.opts("provisioning", "node.http.port")
+    hosts = [{"host": "localhost", "port": port}]
+    client_options = ctx.config.opts("launcher", "client.options")
+    # unified client config
+    ctx.config.add(config.Scope.benchmark, "client", "hosts", hosts)
+    ctx.config.add(config.Scope.benchmark, "client", "options", client_options)
+
+    es_client = client.EsClientFactory(hosts, client_options).create()
+
+    # TODO dm module refactoring: separate module? don't let the mechanic handle the metrics store but rather just provide it
+    ctx.mechanic.start_metrics(track_name, challenge_name, selected_car_name)
+    cluster = ctx.mechanic.start_engine(selected_car, es_client, port)
+    actors = thespian.actors.ActorSystem()
+    main_driver = actors.createActor(driver.Driver)
+
+    #TODO dm: Retrieving the metrics store here is *dirty*...
+    metrics_store = ctx.mechanic._metrics_store
+
+    cluster.on_benchmark_start()
+    completed = actors.ask(main_driver, driver.StartBenchmark(ctx.config, ctx.track, metrics_store.meta_info))
+    cluster.on_benchmark_stop()
+    if not hasattr(completed, "metrics"):
+        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(completed))
+    metrics_store.bulk_add(completed.metrics)
+
     ctx.mechanic.stop_engine(cluster)
     ctx.mechanic.revise_candidate()
     ctx.mechanic.stop_metrics()
 
 
+# TODO dm module refactoring: mechanic
 def prepare_benchmark_external(ctx):
     track_name = ctx.config.opts("system", "track")
     challenge_name = ctx.config.opts("benchmarks", "challenge")
@@ -151,19 +159,38 @@ def prepare_benchmark_external(ctx):
     ctx.config.add(config.Scope.benchmark, "benchmarks", "car", car_name)
 
     ctx.mechanic.start_metrics(track_name, challenge_name, car_name)
-    ctx.cluster = ctx.mechanic.start_engine_external()
+
+    hosts = ctx.config.opts("launcher", "external.target.hosts")
+    client_options = ctx.config.opts("launcher", "client.options")
+    # unified client config
+    ctx.config.add(config.Scope.benchmark, "client", "hosts", hosts)
+    ctx.config.add(config.Scope.benchmark, "client", "options", client_options)
+
+    es_client = client.EsClientFactory(hosts, client_options).create()
+    ctx.cluster = ctx.mechanic.start_engine_external(es_client)
 
 
 # benchmark assuming Elasticsearch is already running externally
 def benchmark_external(ctx):
-    track = ctx.track
-    challenge = ctx.challenge
-    print("Racing on track [%s] and challenge [%s]" % (track.name, challenge.name))
-    ctx.mechanic.setup_index(ctx.cluster, track, challenge)
-    driver.Driver(ctx.config, ctx.cluster, track, challenge).go()
+    # TODO dm module refactoring: we can just inline prepare_benchmark_external and simplify this code a bit
+    track_name = ctx.config.opts("system", "track")
+    challenge_name = ctx.config.opts("benchmarks", "challenge")
+    print("Racing on track [%s] and challenge [%s]" % (track_name, challenge_name))
+    actors = thespian.actors.ActorSystem()
+    main_driver = actors.createActor(driver.Driver)
+    #TODO dm: Retrieving the metrics store here is *dirty*...
+    metrics_store = ctx.mechanic._metrics_store
+
+    ctx.cluster.on_benchmark_start()
+    completed = actors.ask(main_driver, driver.StartBenchmark(ctx.config, ctx.track, metrics_store.meta_info))
+    ctx.cluster.on_benchmark_stop()
+    if not hasattr(completed, "metrics"):
+        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(completed))
+    metrics_store.bulk_add(completed.metrics)
     ctx.mechanic.stop_metrics()
 
 
+# TODO dm module refactoring: mechanic
 def download_benchmark_candidate(ctx):
     version = ctx.config.opts("source", "distribution.version")
     repo_name = ctx.config.opts("source", "distribution.repository")
@@ -268,13 +295,12 @@ pipelines = {
                              PipelineStep("check-can-handle-sources", ctx, check_can_handle_source_distribution),
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
-                             PipelineStep("prepare-car", ctx, prepare_car),
                              PipelineStep("store-race", ctx, store_race),
                              PipelineStep("build", ctx, lambda ctx: ctx.mechanic.prepare_candidate()),
                              PipelineStep("find-candidate", ctx, lambda ctx: ctx.mechanic.find_candidate()),
                              PipelineStep("benchmark", ctx, benchmark_internal),
                              PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                             PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
+                             PipelineStep("sweep", ctx, sweeper.sweep)
                          ]
                          ),
     "from-sources-skip-build":
@@ -283,12 +309,11 @@ pipelines = {
                              PipelineStep("check-can-handle-sources", ctx, check_can_handle_source_distribution),
                              PipelineStep("kill-es", ctx, kill),
                              PipelineStep("prepare-track", ctx, prepare_track),
-                             PipelineStep("prepare-car", ctx, prepare_car),
                              PipelineStep("store-race", ctx, store_race),
                              PipelineStep("find-candidate", ctx, lambda ctx: ctx.mechanic.find_candidate()),
                              PipelineStep("benchmark", ctx, benchmark_internal),
                              PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                             PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
+                             PipelineStep("sweep", ctx, sweeper.sweep)
                          ]
 
                          ),
@@ -299,11 +324,10 @@ pipelines = {
                                  PipelineStep("kill-es", ctx, kill),
                                  PipelineStep("download-candidate", ctx, download_benchmark_candidate),
                                  PipelineStep("prepare-track", ctx, prepare_track),
-                                 PipelineStep("prepare-car", ctx, prepare_car),
                                  PipelineStep("store-race", ctx, store_race),
                                  PipelineStep("benchmark", ctx, benchmark_internal),
                                  PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                                 PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
+                                 PipelineStep("sweep", ctx, sweeper.sweep)
                              ]
 
                              ),
@@ -311,12 +335,12 @@ pipelines = {
         lambda ctx=None: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
                              [
                                  PipelineStep("warn-bogus", ctx, lambda ctx: print(bogus_results_warning)),
-                                 PipelineStep("prepare-benchmark-external", ctx, prepare_benchmark_external),
                                  PipelineStep("prepare-track", ctx, prepare_track),
+                                 PipelineStep("prepare-benchmark-external", ctx, prepare_benchmark_external),
                                  PipelineStep("store-race", ctx, store_race),
                                  PipelineStep("benchmark", ctx, benchmark_external),
                                  PipelineStep("report", ctx, lambda ctx: ctx.reporter.report(ctx.track)),
-                                 PipelineStep("sweep", ctx, lambda ctx: ctx.sweep(ctx.track, ctx.challenge, ctx.car))
+                                 PipelineStep("sweep", ctx, sweeper.sweep)
                              ]
                              ),
 
@@ -333,10 +357,14 @@ def run(cfg):
     name = cfg.opts("system", "pipeline")
     try:
         pipeline = pipelines[name](RacingContext(cfg))
-        pipeline()
     except KeyError:
         raise exceptions.ImproperlyConfigured(
             "Unknown pipeline [%s]. You can list the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
+    try:
+        pipeline()
+    except BaseException:
+        tb = sys.exc_info()[2]
+        raise exceptions.RallyError("This race ended early with a fatal crash. For details please see the logs.").with_traceback(tb)
 
 
 class RacingContext:
@@ -344,8 +372,5 @@ class RacingContext:
         self.config = cfg
         self.mechanic = mechanic.Mechanic(cfg)
         self.reporter = reporter.SummaryReporter(cfg)
-        self.sweep = sweeper.Sweeper(cfg)
         self.track = None
-        self.challenge = None
-        self.car = None
         self.cluster = None
