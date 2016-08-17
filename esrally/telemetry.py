@@ -203,7 +203,7 @@ class FlightRecorder(TelemetryDevice):
         #
         # in that case change to: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints -XX:+FlightRecorder "
-                                "-XX:FlightRecorderOptions=disk=true,dumponexit=true,dumponexitpath=%s "
+                                "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=%s "
                                 "-XX:StartFlightRecording=defaultrecording=true" % log_file}
 
 
