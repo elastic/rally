@@ -253,6 +253,10 @@ def parse_args():
                 help="defines the repository from where the Elasticsearch distribution should be downloaded (default: release).",
                 choices=["snapshot", "release"],
                 default="release")
+        p.add_argument(
+                "--track-repository",
+                help="defines the repository from where Rally will load tracks (default: default).",
+                default="default")
 
     return parser.parse_args()
 
@@ -395,8 +399,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "source", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "source", "distribution.repository", args.distribution_repository)
     cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
-    # Don't expose the ability to define different repositories for now
-    cfg.add(config.Scope.applicationOverride, "system", "track.repository", "default")
+    cfg.add(config.Scope.applicationOverride, "system", "track.repository", args.track_repository)
     cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
