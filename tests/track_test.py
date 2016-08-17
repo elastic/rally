@@ -83,7 +83,7 @@ class TrackReaderTests(TestCase):
             "operations": [
                 {
                     "name": "index-append",
-                    "type": "index",
+                    "operation-type": "index",
                     "bulk-size": 5000,
                 }
             ],
