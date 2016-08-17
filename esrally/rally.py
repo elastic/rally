@@ -1,13 +1,14 @@
 import datetime
 import time
 import os
+import shutil
 import sys
 import logging
 import argparse
 import pkg_resources
 
 from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
-from esrally.utils import io, format, git
+from esrally.utils import io, format, convert, git
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -71,6 +72,26 @@ def configure_logging(cfg):
 
 
 def parse_args():
+    # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
+    cfg = config.Config()
+    if cfg.config_present():
+        cfg.load_config()
+        preserve_install = cfg.opts("defaults", "preserve_benchmark_candidate", default_value=False, mandatory=False)
+    else:
+        preserve_install = False
+
+    # workaround for http://bugs.python.org/issue13041
+    #
+    # Set a proper width (see argparse.HelpFormatter)
+    try:
+        int(os.environ["COLUMNS"])
+    except (KeyError, ValueError):
+        try:
+            os.environ['COLUMNS'] = str(shutil.get_terminal_size().columns)
+        except BaseException:
+            # don't fail if anything goes wrong here
+            pass
+
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
                                      epilog="Find out more about Rally at %s" % format.link("https://esrally.readthedocs.io"),
@@ -134,9 +155,8 @@ def parse_args():
         p.add_argument(
             "--preserve-install",
             help="preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk "
-                 "space! (default: false)",
-            default=False,
-            action="store_true")
+                 "space! (default: %s)" % str(preserve_install).lower(),
+            default=preserve_install)
         # Add this as a hidden parameter for now, we'll enable support in #92
         p.add_argument(
             "--rounds",
@@ -325,38 +345,37 @@ def csv_to_list(csv):
 
 
 def kv_to_map(kvs):
+    def convert(v):
+        # string
+        if v.startswith("'"):
+            return v[1:-1]
+
+        # int
+        try:
+            return int(v)
+        except ValueError:
+            pass
+
+        # float
+        try:
+            return float(v)
+        except ValueError:
+            pass
+
+        # boolean
+        if v.lower() == "false":
+            return False
+        elif v.lower() == "true":
+            return True
+        else:
+            raise ValueError("Could not convert value '%s'" % v)
+
     result = {}
     for kv in kvs:
         k, v = kv.split(":")
         # key is always considered a string, value needs to be converted
         result[k.strip()] = convert(v.strip())
     return result
-
-
-def convert(v):
-    # string
-    if v.startswith("'"):
-        return v[1:-1]
-
-    # int
-    try:
-        return int(v)
-    except ValueError:
-        pass
-
-    # float
-    try:
-        return float(v)
-    except ValueError:
-        pass
-
-    # boolean
-    if v.lower() == "false":
-        return False
-    elif v.lower() == "true":
-        return True
-    else:
-        raise ValueError("Could not convert value '%s'" % v)
 
 
 def main():
@@ -387,7 +406,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "rounds", args.rounds)
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
-    cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", args.preserve_install)
+    cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", csv_to_list(args.target_hosts))
     cfg.add(config.Scope.applicationOverride, "launcher", "client.options", kv_to_map(csv_to_list(args.client_options)))
     cfg.add(config.Scope.applicationOverride, "report", "reportformat", args.report_format)

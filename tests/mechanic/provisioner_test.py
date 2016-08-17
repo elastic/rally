@@ -71,6 +71,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
         cfg.add(config.Scope.application, "builder", "candidate.bin.path", "/data/builds/distributions/")
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
+        cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
         cfg.add(config.Scope.application, "provisioning", "datapaths", [])
 
         p = provisioner.Provisioner(cfg)
