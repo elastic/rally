@@ -34,7 +34,6 @@ def print_header(message):
     print_internal("\033[1m%s\033[0m" % message)
 
 
-# TODO dm: Adjust nightly parsing code for the CSV!!!!!! Otherwise everything will break
 class Stats:
     def __init__(self, store, challenge):
         self.op_metrics = collections.OrderedDict()

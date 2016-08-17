@@ -105,44 +105,47 @@ The track repository is managed by git, so ensure that you are on the ``master``
       ],
       "operations": [
         {
-          "name": "index-append-default-settings",
+          "name": "index",
           "type": "index",
-          "index-settings": {
-            "index.number_of_replicas": 0
-          },
-          "bulk-size": 5000,
-          "force-merge": true,
-          "clients": {
-            "count": 8
-          }
+          "bulk-size": 5000
         },
         {
-          "name": "search",
-          "type": "search",
-          "warmup-iterations": 1000,
-          "iterations": 1000,
-          "clients": {
-            "count": 1
-          },
-          "queries": [
-            {
-              "name": "default",
-              "body": {
-                "query": {
-                  "match_all": {}
-                }
-              }
+          "name": "force-merge",
+          "type": "force-merge"
+        },
+        {
+          "name": "query-match-all",
+          "operation-type": "search",
+          "body": {
+            "query": {
+              "match_all": {}
             }
-          ]
-        }
+          }
+        },
       ],
       "challenges": [
         {
           "name": "append-no-conflicts",
           "description": "",
+          "index-settings": {
+            "index.number_of_replicas": 0
+          },
           "schedule": [
-            "index-append-default-settings",
-            "search"
+            {
+              "operation": "index",
+              "clients": 8
+            },
+            {
+              "operation": "force-merge",
+              "clients": 1
+            },
+            {
+              "operation": "query-match-all",
+              "clients": 8,
+              "warmup-iterations": 1000,
+              "iterations": 1000,
+              "target-throughput": 100
+            }
           ]
         }
       ]
@@ -208,7 +211,7 @@ Rally also provides a few extension points to Jinja2:
 * ``now``: This is a global variable that represents the current date and time when the template is evaluated by Rally.
 * ``days_ago()``: This is a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
-You can find an examle in the logging track::
+You can find an example in the logging track::
 
     {
       "name": "range",

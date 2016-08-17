@@ -509,7 +509,7 @@ class TrackReader:
         return ops
 
     def _create_op(self, ops_spec_name, ops_spec, indices):
-        benchmark_type = self._r(ops_spec, "type")
+        benchmark_type = self._r(ops_spec, "operation-type")
         if benchmark_type == "index":
             id_conflicts = self._r(ops_spec, "conflicts", mandatory=False)
             if not id_conflicts:
