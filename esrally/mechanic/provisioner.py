@@ -15,8 +15,9 @@ class Provisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, config):
-        self._config = config
+    def __init__(self, cfg):
+        self._config = cfg
+        self.preserve = self._config.opts("provisioning", "install.preserve")
 
     # TODO #71: This should be split into an environment independent configuration (car) and environment dependent configuration (http_port)
     def prepare(self, car, http_port):
@@ -24,10 +25,11 @@ class Provisioner:
         self._configure(car, http_port)
 
     def cleanup(self):
-        preserve = self._config.opts("provisioning", "install.preserve")
         install_dir = self._install_dir()
-        if preserve:
+        if self.preserve:
             logger.info("Preserving benchmark candidate installation at [%s]." % install_dir)
+            print("\nRally will keep the benchmark candidate including all data at [%s].\nRemember to delete it when you don't need it "
+                  "anymore as it will take up a significant amount of disk space." % install_dir)
         else:
             logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
             if os.path.exists(install_dir):
@@ -43,6 +45,9 @@ class Provisioner:
         install_dir = self._install_dir()
         logger.info("Preparing candidate locally in %s." % install_dir)
         io.ensure_dir(install_dir)
+        if not self.preserve:
+            print("Rally will wipe the benchmark candidate directory [%s] after the benchmark.\n" % install_dir)
+
         logger.info("Unzipping %s to %s" % (binary, install_dir))
         io.decompress(binary, install_dir)
         binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]

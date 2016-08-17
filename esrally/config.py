@@ -1,13 +1,13 @@
-import os.path
-import shutil
-import re
-import logging
 import configparser
 import getpass
+import logging
+import os.path
+import re
+import shutil
 from enum import Enum
 
-from esrally.utils import io, git, format, convert
 from esrally import time, PROGRAM_NAME
+from esrally.utils import io, git, format, convert
 
 logger = logging.getLogger("rally.config")
 
@@ -69,7 +69,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 5
+    CURRENT_CONFIG_VERSION = 6
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -187,9 +187,6 @@ class ConfigFactory:
         self.sec_i = sec_i
         self.o = o
 
-    def _to_bool(self, value):
-        return value in ["True", "true", "Yes", "yes", "t", "y"]
-
     def create_config(self, config_file, advanced_config=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
@@ -277,11 +274,16 @@ class ConfigFactory:
             env_name = self._ask_env_name()
             data_store_type = "elasticsearch"
             data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
+
+            preserve_install = convert.to_bool(self._ask_property("Do you want Rally to keep the Elasticsearch benchmark candidate "
+                                                                  "installation including all data (will use lots of disk space)",
+                                                                  default_value=False))
         else:
             # Does not matter too much for an in-memory store
             env_name = "local"
             data_store_type = "in-memory"
             data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
+            preserve_install = False
 
         config = configparser.ConfigParser()
         config["meta"] = {}
@@ -319,6 +321,9 @@ class ConfigFactory:
 
         config["tracks"] = {}
         config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
+
+        config["defaults"] = {}
+        config["defaults"]["preserve_benchmark_candidate"] = str(preserve_install)
 
         config_file.store(config)
 
@@ -375,7 +380,7 @@ class ConfigFactory:
         data_store_password = self._ask_property("Password for basic authentication (empty if not needed)", mandatory=False,
                                                  default_value="", sensitive=True)
         # do an intermediate conversion to bool in order to normalize input
-        return data_store_host, data_store_port, str(self._to_bool(data_store_secure)), data_store_user, data_store_password
+        return data_store_host, data_store_port, str(convert.to_bool(data_store_secure)), data_store_user, data_store_password
 
     def _ask_env_name(self):
         return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
@@ -468,7 +473,7 @@ def migrate(config_file, current_version, target_version, out=print):
         out("  %s configure" % PROGRAM_NAME)
         out("")
         out("Please also note you have %.1f GB of data in your current benchmark directory at"
-              % convert.bytes_to_gb(io.get_size(root_dir)))
+            % convert.bytes_to_gb(io.get_size(root_dir)))
         out()
         out("  %s" % root_dir)
         out("")
@@ -497,7 +502,13 @@ def migrate(config_file, current_version, target_version, out=print):
         current_version = 5
         config["meta"]["config.version"] = str(current_version)
 
-# all migrations done
+    if current_version == 5 and target_version > current_version:
+        config["defaults"] = {}
+        config["defaults"]["preserve_benchmark_candidate"] = str(False)
+        current_version = 6
+        config["meta"]["config.version"] = str(current_version)
+
+
+    # all migrations done
     config_file.store(config)
     logger.info("Successfully self-upgraded configuration to version [%s]" % target_version)
-

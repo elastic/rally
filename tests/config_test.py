@@ -89,7 +89,7 @@ class ConfigFactoryTests(TestCase):
         f.create_config(config_store)
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("5", config_store.config["meta"]["config.version"])
+        self.assertEqual("6", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
@@ -102,6 +102,8 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("reporting" in config_store.config)
         self.assertEqual("in-memory", config_store.config["reporting"]["datastore.type"])
         self.assertTrue("tracks" in config_store.config)
+        self.assertTrue("defaults" in config_store.config)
+        self.assertEqual("False", config_store.config["defaults"]["preserve_benchmark_candidate"])
 
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
@@ -141,7 +143,9 @@ class ConfigFactoryTests(TestCase):
             # data_store_secure
             "Yes",
             # data_store_user
-            "user"
+            "user",
+            # preserve benchmark candidate
+            "y"
         ]), sec_i=MockInput(["pw"]), o=null_output)
 
         config_store = InMemoryConfigStore("test")
@@ -149,7 +153,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("5", config_store.config["meta"]["config.version"])
+        self.assertEqual("6", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
@@ -167,6 +171,8 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("user", config_store.config["reporting"]["datastore.user"])
         self.assertEqual("pw", config_store.config["reporting"]["datastore.password"])
         self.assertTrue("tracks" in config_store.config)
+        self.assertTrue("defaults" in config_store.config)
+        self.assertEqual("True", config_store.config["defaults"]["preserve_benchmark_candidate"])
 
 
 class ConfigMigrationTests(TestCase):
@@ -277,3 +283,20 @@ class ConfigMigrationTests(TestCase):
         self.assertEqual("5", config_file.config["meta"]["config.version"])
         self.assertTrue("tracks" in config_file.config)
         self.assertEqual("https://github.com/elastic/rally-tracks", config_file.config["tracks"]["default.url"])
+
+    def test_migrate_from_5_to_6(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 5
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 5, 6, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("6", config_file.config["meta"]["config.version"])
+        self.assertTrue("defaults" in config_file.config)
+        self.assertEqual("False", config_file.config["defaults"]["preserve_benchmark_candidate"])
+
+

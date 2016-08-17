@@ -20,3 +20,13 @@ def ms_to_seconds(ms):
 
 def ms_to_minutes(ms):
     return ms / 1000.0 / 60.0
+
+
+def to_bool(value):
+    if value in ["True", "true", "Yes", "yes", "t", "y", "1"]:
+        return True
+    elif value in ["False", "false", "No", "no", "f", "n", "0"]:
+        return False
+    else:
+        return ValueError("Cannot convert [%s] to bool." % value)
+
