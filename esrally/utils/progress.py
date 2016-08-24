@@ -1,4 +1,5 @@
 import sys
+import os
 
 
 class CmdLineProgressReporter:
@@ -6,9 +7,12 @@ class CmdLineProgressReporter:
     CmdLineProgressReporter supports displaying an updating progress indication together with an information message.
     """
 
-    def __init__(self, width=80):
+    def __init__(self, width=80, plain_output=False):
         self._width = width
         self._first_print = True
+        self._plain_output = plain_output
+        if (os.environ.get('TERM') == 'dumb'):
+            self._plain_output = True
 
     def print(self, message, progress):
         """
@@ -26,7 +30,11 @@ class CmdLineProgressReporter:
             self._first_print = False
 
         formatted_progress = progress.rjust(w - len(message))
-        print("\033[{0}D{1}{2}".format(w, message, formatted_progress), end="")
+        if (self._plain_output):
+            print("\n{0}{1}".format(message, formatted_progress), end="")
+        else:
+            print("\033[{0}D{1}{2}".format(w, message, formatted_progress), end="")
+
         sys.stdout.flush()
 
     def finish(self):
