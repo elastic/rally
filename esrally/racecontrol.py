@@ -274,7 +274,7 @@ bogus_results_warning = """
 ************** WARNING: A dark dungeon lies ahead of you  **************
 ************************************************************************
 
-Rally dos not have control over the configuration of the benchmarked
+Rally does not have control over the configuration of the benchmarked
 Elasticsearch cluster.
 
 Be aware that results may be misleading due to problems with the setup.

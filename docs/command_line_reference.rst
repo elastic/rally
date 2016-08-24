@@ -44,6 +44,11 @@ Command Line Flags
 ``track``
 ~~~~~~~~~
 
+Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available on `Github <https://github.com/elastic/rally-tracks>`_. See :doc:`adding benchmarks </adding_benchmarks>` on how to add your own track repositories.
+
+``track``
+~~~~~~~~~
+
 Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding benchmarks </adding_benchmarks>`.
 
 ``challenge``

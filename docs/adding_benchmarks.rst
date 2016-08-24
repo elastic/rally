@@ -336,3 +336,60 @@ This will ensure that the phrase query will be executed by two clients. All othe
 
 .. warning::
     You cannot nest parallel tasks.
+
+Custom Track Repositories
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally provides a default track repository that is hosted on `Github <https://github.com/elastic/rally-tracks>`_. You can also add your own track repositories although this requires a bit of additional work. First of all, track repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match for each track. The versioning scheme is as follows:
+
+* The `master` branch needs to work with the latest `master` branch of Elasticsearch.
+* All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
+
+Rally implements a fallback logic so you don't need to define a branch for each patch release of Elasticsearch. For example:
+
+* The branch `5.0.0-alpha1` will be chosen for the version ``5.0.0-alpha1`` of Elasticsearch.
+* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3``, ``5.0.0-beta1`` (provided there is no specific branch).
+
+Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
+
+Creating a new track repository
+"""""""""""""""""""""""""""""""
+
+All track repositories are located in ``~/.rally/benchmarks/tracks``. If you want to add a dedicated track repository, called ``private`` follow these steps::
+
+    cd ~/.rally/benchmarks/tracks
+    mkdir private
+    cd private
+    git init
+    # add your track now
+    git commit -a -m "Initial commit"
+
+
+If you also have a remote for this repository, open ``~/.rally/rally.ini`` in your editor of choice and add the following line in the section ``tracks``, otherwise just skip this step::
+
+    private.url = <<URL_TO_YOUR_ORIGIN>>
+
+Rally will then automatically update the local tracking branches before the benchmark starts.
+
+You can now verify that everything works by listing all tracks in this track repository::
+
+    esrally list tracks --track-repository=private
+
+This shows all tracks that are available on the ``master`` branch of this repository. Suppose you only created tracks on the branch ``2`` because you're interested in the performance of Elasticsearch 2.x, then you can specify also the distribution version::
+
+    esrally list tracks --track-repository=private --distribution-version=2.0.0
+
+
+Rally will follow the same branch fallback logic as described above.
+
+Adding an already existing track repository
+"""""""""""""""""""""""""""""""""""""""""""
+
+If you want to add a track repository that already exists, just open ``~/.rally/rally.ini`` in your editor of choice and add the following line in the section ``tracks``::
+
+    your_repo_name.url = <<URL_TO_YOUR_ORIGIN>>
+
+After you have added this line, have Rally list the tracks in this repository::
+
+    esrally list tracks --track-repository=your_repo_name
+
