@@ -508,7 +508,6 @@ def migrate(config_file, current_version, target_version, out=print):
         current_version = 6
         config["meta"]["config.version"] = str(current_version)
 
-
     # all migrations done
     config_file.store(config)
     logger.info("Successfully self-upgraded configuration to version [%s]" % target_version)
