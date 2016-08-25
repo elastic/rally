@@ -57,9 +57,12 @@ def kill_running_es_instances(node_prefix):
     """
     logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % node_prefix)
     for p in psutil.process_iter():
-        if p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any("node.name=rally" in e for e in p.cmdline()):
-            # check if command line contains elasticsearch and rally
-            logger.info("Killing lingering ES benchmark instance with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
-            p.kill()
-        else:
-            logger.info("Skipping [%s]" % p.cmdline())
+        try:
+            if p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any("node.name=rally" in e for e in p.cmdline()):
+                # check if command line contains elasticsearch and rally
+                logger.info("Killing lingering ES benchmark instance with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
+                p.kill()
+            else:
+                logger.info("Skipping [%s]" % p.cmdline())
+        except (psutil.ZombieProcess, psutil.AccessDenied):
+            pass
