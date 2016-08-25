@@ -3,6 +3,7 @@ import logging
 import subprocess
 import signal
 import os
+import psutil
 
 logger = logging.getLogger("rally.process")
 
@@ -56,11 +57,10 @@ def kill_running_es_instances(node_prefix):
     :param node_prefix a prefix of the node names that should be killed.
     """
     logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % node_prefix)
-    for line in subprocess.Popen(["ps", "aux"], stdout=subprocess.PIPE).communicate()[0].splitlines():
-        line = line.decode("utf-8")
-        if "java" in line and "elasticsearch" in line and node_prefix in line:
-            pid = int(line.split()[1])
-            logger.info("Killing lingering ES benchmark instance with PID [%s]." % pid)
-            os.kill(pid, signal.SIGKILL)
+    for p in psutil.process_iter():
+        if p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any("rally" in e for e in p.cmdline()):
+            # check if command line contains elasticsearch and rally
+            logger.info("Killing lingering ES benchmark instance with PID [%s] and command line [%s]." % (p.pid(), p.cmdline()))
+            p.kill()
         else:
-            logger.info("Skipping [%s]" % line)
+            logger.info("Skipping [%s]" % p.cmdline())
