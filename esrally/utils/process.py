@@ -55,9 +55,12 @@ def kill_running_es_instances(node_prefix):
 
     :param node_prefix a prefix of the node names that should be killed.
     """
+    logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % node_prefix)
     for line in subprocess.Popen(["ps", "aux"], stdout=subprocess.PIPE).communicate()[0].splitlines():
         line = line.decode("utf-8")
         if "java" in line and "elasticsearch" in line and node_prefix in line:
             pid = int(line.split()[1])
             logger.info("Killing lingering ES benchmark instance with PID [%s]." % pid)
             os.kill(pid, signal.SIGKILL)
+        else:
+            logger.info("Skipping [%s]" % line)
