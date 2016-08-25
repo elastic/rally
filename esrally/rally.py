@@ -237,6 +237,10 @@ def parse_args():
             "--data-paths",
             help=argparse.SUPPRESS,
             default=None)
+        p.add_argument(
+            "--override-src-dir",
+            help=argparse.SUPPRESS,
+            default=None)
 
     for p in [parser, config_parser, list_parser, race_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -417,6 +421,8 @@ def main():
     cfg.add(config.Scope.applicationOverride, "launcher", "client.options", kv_to_map(csv_to_list(args.client_options)))
     cfg.add(config.Scope.applicationOverride, "report", "reportformat", args.report_format)
     cfg.add(config.Scope.applicationOverride, "report", "reportfile", args.report_file)
+    if args.override_src_dir is not None:
+        cfg.add(config.Scope.applicationOverride, "source", "local.src.dir", args.override_src_dir)
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)

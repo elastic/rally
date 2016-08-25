@@ -35,6 +35,7 @@ class Builder:
 
     def _exec(self, task_key):
         src_dir = self._config.opts("source", "local.src.dir")
+        logger.info("Building Elasticsearch from sources in [%s]." % src_dir)
         gradle = self._config.opts("build", "gradle.bin")
         task = self._config.opts("build", task_key)
 
