@@ -57,6 +57,9 @@ def configure_logging(cfg):
     cfg.add(config.Scope.application, "system", "log.dir", log_dir)
 
     print("\nWriting additional logs to %s\n" % log_file)
+    # there is an old log file lying around -> backup
+    if os.path.exists(log_file):
+        os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
 
     # Remove all handlers associated with the root logger object so we can start over with an entirely fresh log configuration
     for handler in logging.root.handlers[:]:
