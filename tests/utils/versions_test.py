@@ -5,6 +5,15 @@ from esrally.utils import versions
 
 
 class VersionsTests(TestCase):
+    def test_is_version_identifier(self):
+        self.assertFalse(versions.is_version_identifier(None))
+        self.assertFalse(versions.is_version_identifier(""))
+        self.assertFalse(versions.is_version_identifier("     \t "))
+        self.assertFalse(versions.is_version_identifier("5-ab-c"))
+        self.assertTrue(versions.is_version_identifier("5.0.0"))
+        self.assertTrue(versions.is_version_identifier("1.7.3"))
+        self.assertTrue(versions.is_version_identifier("20.3.7-SNAPSHOT"))
+
     def test_finds_components_for_valid_version(self):
         self.assertEqual({"major": "5", "minor": "0", "patch": "3"}, versions.components("5.0.3"))
         self.assertEqual({"major": "5", "minor": "0", "patch": "3", "suffix": "SNAPSHOT"}, versions.components("5.0.3-SNAPSHOT"))

@@ -4,7 +4,7 @@ import shutil
 import logging
 
 from esrally import config
-from esrally.utils import io
+from esrally.utils import io, versions
 
 logger = logging.getLogger("rally.provisioner")
 
@@ -74,12 +74,25 @@ class Provisioner:
         self._config.add(config.Scope.challenge, "provisioning", "local.data.paths", data_paths)
         s = open("%s/config/elasticsearch.yml" % binary_path, "r").read()
         s += "\ncluster.name: %s\n" % "benchmark.%s" % env_name
+        s += self.number_of_nodes(car)
         s += "\npath.data: %s" % ", ".join(data_paths)
         s += "\nhttp.port: %d-%d" % (first_http_port, first_http_port + 100)
         s += "\ntransport.tcp.port: %d-%d" % (first_http_port + 100, first_http_port + 200)
         if additional_config:
             s += "\n%s" % additional_config
         open("%s/config/elasticsearch.yml" % binary_path, "w").write(s)
+
+    def number_of_nodes(self, car):
+        distribution_version = self._config.opts("source", "distribution.version", mandatory=False)
+        configure = False
+        if versions.is_version_identifier(distribution_version):
+            major_version = int(versions.components(distribution_version)["major"])
+            if major_version >= 2:
+                configure = True
+        else:
+            # we're very likely benchmarking from sources which is ES 5+
+            configure = True
+        return "\nnode.max_local_storage_nodes: %d" % car.nodes if configure else ""
 
     def _data_paths(self, car):
         binary_path = self._config.opts("provisioning", "local.binary.path")

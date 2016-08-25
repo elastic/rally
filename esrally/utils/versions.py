@@ -5,6 +5,10 @@ from esrally import exceptions
 VERSIONS = re.compile("^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$")
 
 
+def is_version_identifier(text):
+    return text is not None and VERSIONS.match(text) is not None
+
+
 def components(version):
     """
     Determines components of a version string.
