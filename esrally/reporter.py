@@ -174,6 +174,7 @@ class SummaryReporter:
                 stats = Stats(store, challenge)
 
                 metrics_table = []
+                meta_info_table = []
                 metrics_table += self.report_total_times(stats)
                 metrics_table += self.report_merge_part_times(stats)
 
@@ -190,20 +191,31 @@ class SummaryReporter:
                         metrics_table += self.report_latency(stats, task.operation)
                         metrics_table += self.report_service_time(stats, task.operation)
 
-                self.write_report(metrics_table)
+                meta_info_table += self.report_meta_info()
 
-    def write_report(self, metrics_table):
-        headers = ["Metric", "Operation", "Value", "Unit"]
+                self.write_report(metrics_table, meta_info_table)
+
+    def write_report(self, metrics_table, meta_info_table):
         report_format = self._config.opts("report", "reportformat")
         report_file = self._config.opts("report", "reportfile")
 
+        if len(report_file) > 0:
+            meta_info_file = "%s.meta" % report_file
+        else:
+            meta_info_file = report_file
+
+        self.write_single_report(report_format, report_file, headers=["Metric", "Operation", "Value", "Unit"], data=metrics_table, verbose=True)
+        print_header("\n\nRace Meta Info:")
+        self.write_single_report(report_format, meta_info_file, headers=["Name", "Value"], data=meta_info_table, verbose=False)
+
+    def write_single_report(self, report_format, report_file, headers, data, verbose):
         if report_format == "markdown":
-            report = tabulate.tabulate(metrics_table, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
+            report = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
         elif report_format == "csv":
             with io.StringIO() as out:
                 writer = csv.writer(out)
                 writer.writerow(headers)
-                for metric_record in metrics_table:
+                for metric_record in data:
                     writer.writerow(metric_record)
                 report = out.getvalue()
         else:
@@ -214,7 +226,8 @@ class SummaryReporter:
             normalized_report_file = rio.normalize_path(report_file)
             logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
                         (normalized_report_file, report_file, report_format))
-            print("\nWriting report also to '%s'" % normalized_report_file)
+            if verbose:
+                print("\nWriting report also to '%s'" % normalized_report_file)
             # ensure that the parent folder already exists when we try to write the file...
             rio.ensure_dir(rio.dirname(normalized_report_file))
             with open(normalized_report_file, mode="w", encoding="UTF-8") as f:
@@ -307,6 +320,11 @@ class SummaryReporter:
             return [["Segment count", "", stats.segment_count, ""]]
         else:
             return []
+
+    def report_meta_info(self):
+        return [
+            ["Elasticsearch source revision", self._config.opts("meta", "source.revision", mandatory=False, default_value="unknown")]
+        ]
 
 
 class ComparisonReporter:

@@ -7,7 +7,7 @@ import threading
 
 import tabulate
 
-from esrally import metrics
+from esrally import metrics, config
 from esrally.utils import io, sysstats, process
 
 logger = logging.getLogger("rally.telemetry")
@@ -432,6 +432,7 @@ class EnvironmentInfo(InternalTelemetryDevice):
     def attach_to_cluster(self, cluster):
         revision = self.client.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+        self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
         info = self.client.nodes.info()
         for node in info["nodes"].values():
             node_name = node["name"]
@@ -463,6 +464,7 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
     def attach_to_cluster(self, cluster):
         revision = self.client.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+        self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
 
         stats = self.client.nodes.stats(metric="_all", level="shards")
         nodes = stats["nodes"]
