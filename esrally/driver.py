@@ -195,7 +195,7 @@ class Driver(thespian.actors.Actor):
 
         aggregates = calculate_global_throughput(self.raw_samples)
         for op, samples in aggregates.items():
-            for absolute_time, relative_time, sample_type, throughput in samples:
+            for absolute_time, relative_time, sample_type, throughput in moving_average(samples):
                 self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=op.granularity_unit,
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time)
@@ -451,6 +451,29 @@ def calculate_global_throughput(samples, bucket_interval_secs=5):
         if most_recent_unsaved_record:
             global_throughput[op].append(most_recent_unsaved_record)
     return global_throughput
+
+
+def moving_average(data):
+    average_data = []
+    for idx, record in enumerate(data):
+        if idx < 3:
+            average_data.append(record)
+        elif idx >= len(data) - 3:
+            average_data.append(record)
+        else:
+            absolute_time, relative_time, sample_type, value = record
+            _, _, sample_type_prev_3, value_prev_3 = data[idx - 2]
+            _, _, sample_type_prev_2, value_prev_2 = data[idx - 2]
+            _, _, sample_type_prev_1, value_prev_1 = data[idx - 1]
+            _, _, sample_type_next_1, value_next_1 = data[idx + 1]
+            _, _, sample_type_next_2, value_next_2 = data[idx + 2]
+            _, _, sample_type_next_3, value_next_3 = data[idx + 3]
+            if sample_type_prev_3 == sample_type and sample_type_next_3 == sample_type:
+                average_data.append((absolute_time, relative_time, sample_type,
+                                     (value + value_prev_1 + value_prev_2 + value_prev_3 + value_next_1 + value_next_2 + value_next_3) / 7))
+            else:
+                average_data.append(record)
+    return average_data
 
 
 def generate_tasks_for_schedule(task_queue, op, schedule):
