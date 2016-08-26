@@ -61,6 +61,8 @@ Once your changes and tests are ready to submit for review:
 
 Then sit back and wait. There will probably be discussion about the pull request and, if any changes are needed, we would love to work with you to get your pull request merged into Rally.
 
+Note: Contributors belonging to the "Elastic" organization on Github can merge PRs themselves after getting a "LGTM" (Looks good to me); this workflow is similar to the established one in the Elasticsearch project.
+
 # Contributing to the Rally codebase
 
 **Repository:** [https://github.com/elastic/rally](https://github.com/elastic/rally)

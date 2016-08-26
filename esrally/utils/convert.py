@@ -23,9 +23,9 @@ def ms_to_minutes(ms):
 
 
 def to_bool(value):
-    if value in ["True", "true", "Yes", "yes", "t", "y", "1"]:
+    if value in ["True", "true", "Yes", "yes", "t", "y", "1", True]:
         return True
-    elif value in ["False", "false", "No", "no", "f", "n", "0"]:
+    elif value in ["False", "false", "No", "no", "f", "n", "0", False]:
         return False
     else:
         return ValueError("Cannot convert [%s] to bool." % value)
