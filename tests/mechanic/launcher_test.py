@@ -56,7 +56,7 @@ class SubClient:
     def stats(self, *args, **kwargs):
         return self._info
 
-    def info(self):
+    def info(self, *args, **kwargs):
         return self._info
 
 

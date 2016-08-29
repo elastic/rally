@@ -278,13 +278,14 @@ class TrackRepository:
     def __init__(self, cfg):
         self.cfg = cfg
         self.name = cfg.opts("system", "track.repository")
+        self.offline = cfg.opts("system", "offline.mode")
         # If no URL is found, we consider this a local only repo (but still require that it is a git repo)
         self.url = cfg.opts("tracks", "%s.url" % self.name, mandatory=False)
         self.remote = self.url is not None and self.url.strip() != ""
         root = cfg.opts("system", "root.dir")
         track_repositories = cfg.opts("benchmarks", "track.repository.dir")
         self.tracks_dir = "%s/%s/%s" % (root, track_repositories, self.name)
-        if self.remote:
+        if self.remote and not self.offline:
             # a normal git repo with a remote
             if not git.is_working_copy(self.tracks_dir):
                 git.clone(src=self.tracks_dir, remote=self.url)
@@ -308,7 +309,7 @@ class TrackRepository:
 
     def _update(self, distribution_version):
         try:
-            if self.remote:
+            if self.remote and not self.offline:
                 branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
                 if branch:
                     logger.info("Rebasing on '%s' in '%s' for distribution version '%s'." % (branch, self.tracks_dir, distribution_version))

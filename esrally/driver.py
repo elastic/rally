@@ -53,9 +53,9 @@ class StartLoadGenerator:
         self.tasks = tasks
 
 
-class Continue:
+class Drive:
     """
-    Tells a load generator to continue after a join point.
+    Tells a load generator to drive (either after a join point or initially).
     """
     pass
 
@@ -147,6 +147,10 @@ class Driver(thespian.actors.Actor):
             self.drivers.append(self.createActor(LoadGenerator))
         for idx, driver in enumerate(self.drivers):
             self.send(driver, StartLoadGenerator(idx, self.config, track.indices, self.allocations[idx]))
+        time.sleep(3)
+        for driver in self.drivers:
+            self.send(driver, Drive())
+
         self.update_progress_message()
         self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
 
@@ -169,12 +173,11 @@ class Driver(thespian.actors.Actor):
                 self.post_process_samples()
                 self.send(self.start_sender, BenchmarkComplete(self.metrics_store.to_externalizable()))
                 self.metrics_store.close()
-
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
                 self.update_progress_message()
                 for driver in self.drivers:
-                    self.send(driver, Continue())
+                    self.send(driver, Drive())
 
     def finished(self):
         return self.current_step == self.number_of_steps
@@ -234,8 +237,6 @@ class LoadGenerator(thespian.actors.Actor):
         self.start_timestamp = None
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.executor_future = None
-        self.generator_future = None
-        self.task_queue = queue.Queue(maxsize=1024)
         self.sampler = None
 
     def receiveMessage(self, msg, sender):
@@ -249,17 +250,16 @@ class LoadGenerator(thespian.actors.Actor):
             self.tasks = msg.tasks
             self.current_task = 0
             self.start_timestamp = time.perf_counter()
-            self.drive()
-        elif isinstance(msg, Continue):
+        elif isinstance(msg, Drive):
             logger.debug("client [%d] is continuing its work at task index [%d]." % (self.client_id, self.current_task))
             self.master = sender
             self.drive()
         elif isinstance(msg, thespian.actors.WakeupMessage):
             logger.debug("client [%d] woke up." % self.client_id)
             self.send_samples()
-            if self.generator_future is not None:
-                if self.generator_future.done():
-                    self.generator_future = None
+            if self.executor_future is not None:
+                if self.executor_future.done():
+                    self.executor_future = None
                     self.drive()
                 else:
                     self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
@@ -277,10 +277,6 @@ class LoadGenerator(thespian.actors.Actor):
             logger.info("client [%d] reached join point [%s]." % (self.client_id, task))
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
-                # drain the task queue
-                self.task_queue.join()
-                # signal termination
-                self.task_queue.put(None)
                 self.executor_future.result()
             self.send_samples()
             self.executor_future = None
@@ -288,11 +284,9 @@ class LoadGenerator(thespian.actors.Actor):
             self.send(self.master, JoinPointReached(task))
         elif isinstance(task, track.Task):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
-            self.sampler = Sampler(task.operation, self.start_timestamp)
-            if self.executor_future is None:
-                self.executor_future = self.pool.submit(execute_tasks, self.task_queue, self.es, self.sampler)
+            self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
             schedule = schedule_for(task, self.client_id, self.indices)
-            self.generator_future = self.pool.submit(generate_tasks_for_schedule, self.task_queue, task.operation, schedule)
+            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
@@ -308,14 +302,15 @@ class Sampler:
     """
     Encapsulates management of gathered samples.
     """
-    def __init__(self, operation, start_timestamp):
+    def __init__(self, client_id, operation, start_timestamp):
+        self.client_id = client_id
         self.operation = operation
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=1024)
 
     def add(self, sample_type, latency_ms, service_time_ms, total_ops, time_period):
         try:
-            self.q.put_nowait(Sample(time.time(), time.perf_counter() - self.start_timestamp, self.operation, sample_type, latency_ms,
+            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation, sample_type, latency_ms,
                                      service_time_ms, total_ops, time_period))
         except queue.Full:
             logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
@@ -332,7 +327,8 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops, time_period):
+    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops, time_period):
+        self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
         self.operation = operation
@@ -409,7 +405,7 @@ def _do_wait(es, expected_cluster_status):
     raise exceptions.RallyAssertionError(msg)
 
 
-def calculate_global_throughput(samples, bucket_interval_secs=5):
+def calculate_global_throughput(samples, bucket_interval_secs=1):
     """
     Calculates global throughput based on samples gathered from multiple load generators.
 
@@ -432,20 +428,30 @@ def calculate_global_throughput(samples, bucket_interval_secs=5):
         op, sample_type = k
         if op not in global_throughput:
             global_throughput[op] = []
-        # sort all samples by relative time
-        current_samples = sorted(v, key=lambda s: s.time_period)
+        # sort all samples by time
+        current_samples = sorted(v, key=lambda s: s.absolute_time)
 
-        bucket = 0
+        next_bucket = bucket_interval_secs
         total_count = 0
+        reference_time = 0
+        previous_reference_time = 0
         most_recent_unsaved_record = None
+        start_time = current_samples[0].absolute_time - current_samples[0].time_period
 
         for sample in current_samples:
             total_count += sample.total_ops
-            most_recent_unsaved_record = (sample.absolute_time, sample.relative_time, sample_type, (total_count / sample.time_period))
-            if sample.time_period >= bucket + bucket_interval_secs:
+            reference_time = sample.absolute_time - start_time
+            # avoid division by zero
+            interval = reference_time - previous_reference_time
+            if interval == 0:
+                continue
+            most_recent_unsaved_record = (sample.absolute_time, sample.relative_time, sample_type, (total_count / interval))
+            if reference_time >= next_bucket:
                 global_throughput[op].append(most_recent_unsaved_record)
-                bucket = sample.time_period
+                next_bucket += bucket_interval_secs
+                previous_reference_time = reference_time
                 # we saved it
+                total_count = 0
                 most_recent_unsaved_record = None
         # also append last record in case we don't align perfectly with the bucket interval
         if most_recent_unsaved_record:
@@ -453,94 +459,59 @@ def calculate_global_throughput(samples, bucket_interval_secs=5):
     return global_throughput
 
 
-def moving_average(data):
+def moving_average(data, window=3):
     average_data = []
     for idx, record in enumerate(data):
-        if idx < 3:
+        if idx < window:
             average_data.append(record)
-        elif idx >= len(data) - 3:
+        elif idx >= len(data) - window:
             average_data.append(record)
         else:
+            sum_in_window = 0
+            # also include upper bound
+            for offset in range(-window, window + 1):
+                _, _, _, v = data[idx + offset]
+                sum_in_window += v
             absolute_time, relative_time, sample_type, value = record
-            _, _, sample_type_prev_3, value_prev_3 = data[idx - 2]
-            _, _, sample_type_prev_2, value_prev_2 = data[idx - 2]
-            _, _, sample_type_prev_1, value_prev_1 = data[idx - 1]
-            _, _, sample_type_next_1, value_next_1 = data[idx + 1]
-            _, _, sample_type_next_2, value_next_2 = data[idx + 2]
-            _, _, sample_type_next_3, value_next_3 = data[idx + 3]
-            if sample_type_prev_3 == sample_type and sample_type_next_3 == sample_type:
-                average_data.append((absolute_time, relative_time, sample_type,
-                                     (value + value_prev_1 + value_prev_2 + value_prev_3 + value_next_1 + value_next_2 + value_next_3) / 7))
-            else:
-                average_data.append(record)
+            average_data.append((absolute_time, relative_time, sample_type, sum_in_window / (2 * window + 1)))
     return average_data
 
 
-def generate_tasks_for_schedule(task_queue, op, schedule):
+def execute_schedule(schedule, es, sampler):
     """
-    Generates tasks according to the schedule for a given operation.
+    Executes tasks according to the schedule for a given operation.
 
-    :param task_queue: A queue on which to put tasks on. Should be sufficiently large to avoid blocking.
-    :param op: The affected operation.
     :param schedule: The schedule for this operation.
-    """
-    total_start = time.perf_counter()
-    for expected_scheduled_time, sample_type, curr_iteration, total_iterations, runner, params in schedule:
-        logger.info("Start iteration [%d/%d] for [%s] and expected scheduled time [%f]" % (
-            curr_iteration, total_iterations, op.name, expected_scheduled_time))
-        absolute_scheduled_time = time.perf_counter()
-        relative_scheduled_time = absolute_scheduled_time - total_start
-        task_queue.put((absolute_scheduled_time, runner, params, op, sample_type))
-        rest = expected_scheduled_time - relative_scheduled_time
-        # noinspection PyChainedComparisons
-        if rest > 0:
-            time.sleep(rest)
-        # we have introduced an accidental time lag
-        elif rest < 0 and expected_scheduled_time > 0:
-            logger.warn("Load generator cannot keep up. Expected scheduled time [%d] ms, actual scheduled time: [%d] ms "
-                        "for operation [%s]. Please decrease target throughput accordingly or add more clients." %
-                        (convert.seconds_to_ms(expected_scheduled_time), convert.seconds_to_ms(relative_scheduled_time), op))
-
-
-def execute_tasks(task_queue, es, sampler):
-    """
-    Executes the actual tasks generated by `generate_tasks_for_schedule()`.
-
-    :param task_queue: A queue which is used to pull tasks from.
     :param es: Elasticsearch client that will be used to execute the operation.
     :param sampler: A container to store raw samples.
     """
-
     relative = None
     previous_sample_type = None
-    while True:
-        # lazily unpack task to avoid that clients need to send the correct tuple structure on termination
-        next_task = task_queue.get()
-        if next_task is None:
-            task_queue.task_done()
-            logger.debug("All tasks for the current operation have been invoked. Terminating...")
-            break
-        try:
-            scheduled_time, runner, params, op, sample_type = next_task
-            # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
-            # the relative time zero which simplifies throughput calculation.
-            #
-            # Assumption: We always get the same operation here, otherwise simply resetting one timer will not work!
-            if sample_type != previous_sample_type:
-                relative = time.perf_counter()
-                previous_sample_type = sample_type
+    for expected_scheduled_time, sample_type, curr_iteration, total_iterations, runner, params in schedule:
+        # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
+        # the relative time zero which simplifies throughput calculation.
+        #
+        # Assumption: We always get the same operation here, otherwise simply resetting one timer will not work!
+        if sample_type != previous_sample_type:
+            relative = time.perf_counter()
+            previous_sample_type = sample_type
+        # expected_scheduled_time is relative to the start of the first iteration
+        absolute_expected_schedule_time = relative + expected_scheduled_time
+        # do we even throttle throughput?
+        if expected_scheduled_time > 0:
+            rest = absolute_expected_schedule_time - time.perf_counter()
+            if rest > 0:
+                time.sleep(rest)
+        start = time.perf_counter()
+        with runner:
+            weight = runner(es, params)
+        stop = time.perf_counter()
 
-            start = time.perf_counter()
-            with runner:
-                weight = runner(es, params)
-            stop = time.perf_counter()
+        service_time = stop - start
+        #TODO dm: Do not calculate latency when we don't throttle throughput. This metric is just confusing then.
+        latency = stop - absolute_expected_schedule_time
 
-            service_time = stop - start
-            latency = stop - scheduled_time
-
-            sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative))
-        finally:
-            task_queue.task_done()
+        sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative))
 
 
 class JoinPoint:
@@ -706,7 +677,7 @@ def iteration_count_based(target_throughput, warmup_iterations, iterations, runn
         yield (wait_time * i, metrics.SampleType.Warmup, i, warmup_iterations, runner, params)
 
     for i in range(0, iterations):
-        yield (wait_time * (i + warmup_iterations), metrics.SampleType.Normal, i, iterations, runner, params)
+        yield (wait_time * i, metrics.SampleType.Normal, i, iterations, runner, params)
 
 
 def build_conflicting_ids(conflicts, docs_to_index, offset):
@@ -813,6 +784,8 @@ def bulk_data_based(target_throughput, num_clients, client_index, indices, runne
     # schedule this may not be true (as we may terminate earlier)
 
     # TODO dm: Consider making this configurable per track
+    # TODO dm: Make time-based (i.e. 2 minutes warmup), not document based
+    # TODO dm: Consider deciding on the master when warmup is done (based on returned sample count)
     # consider 10% for warmup
     warmup_iterations = bulks // 10
     iterations = bulks - warmup_iterations

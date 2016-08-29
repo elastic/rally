@@ -108,6 +108,7 @@ def configure_logging(cfg):
     formatter.converter = time.gmtime
     ch.setFormatter(formatter)
     logging.root.addHandler(ch)
+    logging.getLogger("elasticsearch").setLevel(logging.WARN)
 
 
 def configure_actor_logging(cfg):

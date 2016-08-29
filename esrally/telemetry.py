@@ -433,7 +433,7 @@ class EnvironmentInfo(InternalTelemetryDevice):
         revision = self.client.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
-        info = self.client.nodes.info()
+        info = self.client.nodes.info(node_id="_all")
         for node in info["nodes"].values():
             node_name = node["name"]
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
@@ -473,7 +473,7 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", node["host"])
 
-        info = self.client.nodes.info()
+        info = self.client.nodes.info(node_id="_all")
         for node in info["nodes"].values():
             self.try_store_node_info(node, "os_name", ["os", "name"])
             self.try_store_node_info(node, "os_version", ["os", "version"])

@@ -131,12 +131,15 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Index)
 
         samples = [
-            driver.Sample(1470838595, 21, op, metrics.SampleType.Normal, -1, -1, 5000, 1),
-            driver.Sample(1470838596, 22, op, metrics.SampleType.Normal, -1, -1, 5000, 2),
-            driver.Sample(1470838597, 23, op, metrics.SampleType.Normal, -1, -1, 5000, 3),
-            driver.Sample(1470838598, 24, op, metrics.SampleType.Normal, -1, -1, 5000, 4),
-            driver.Sample(1470838599, 25, op, metrics.SampleType.Normal, -1, -1, 5000, 5),
-            driver.Sample(1470838600, 26, op, metrics.SampleType.Normal, -1, -1, 5000, 6)
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, -1, -1, 5000, 1),
+            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, -1, -1, 5000, 2),
+            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, -1, -1, 5000, 3),
+            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, -1, -1, 5000, 4),
+            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, -1, -1, 5000, 5),
+            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, -1, -1, 5000, 6),
+            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, -1, -1, 5000, 4.5),
+            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, -1, -1, 5000, 5.5),
+            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, -1, -1, 5000, 6.5)
         ]
 
         aggregated = driver.calculate_global_throughput(samples)
@@ -144,12 +147,16 @@ class MetricsAggregationTests(TestCase):
         self.assertIn(op, aggregated)
         self.assertEqual(1, len(aggregated))
 
-        # we should have two buckets
         throughput = aggregated[op]
         print(throughput)
-        self.assertEqual(2, len(throughput))
-        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 5000), throughput[0])
-        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 5000), throughput[1])
+        self.assertEqual(7, len(throughput))
+        self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000), throughput[0])
+        self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000), throughput[1])
+        self.assertEqual((1470838597, 23, metrics.SampleType.Normal, 5000), throughput[2])
+        self.assertEqual((1470838598, 24, metrics.SampleType.Normal, 5000), throughput[3])
+        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 10000), throughput[4])
+        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 10000), throughput[5])
+        self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
 
 
 class SchedulerTests(TestCase):
@@ -162,11 +169,11 @@ class SchedulerTests(TestCase):
             (0, metrics.SampleType.Warmup, 0, 3, None, {}),
             (0.1, metrics.SampleType.Warmup, 1, 3, None, {}),
             (0.2, metrics.SampleType.Warmup, 2, 3, None, {}),
-            (0.3, metrics.SampleType.Normal, 0, 5, None, {}),
-            (0.4, metrics.SampleType.Normal, 1, 5, None, {}),
-            (0.5, metrics.SampleType.Normal, 2, 5, None, {}),
-            (0.6, metrics.SampleType.Normal, 3, 5, None, {}),
-            (0.7, metrics.SampleType.Normal, 4, 5, None, {}),
+            (0, metrics.SampleType.Normal, 0, 5, None, {}),
+            (0.1, metrics.SampleType.Normal, 1, 5, None, {}),
+            (0.2, metrics.SampleType.Normal, 2, 5, None, {}),
+            (0.3, metrics.SampleType.Normal, 3, 5, None, {}),
+            (0.4, metrics.SampleType.Normal, 4, 5, None, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
@@ -177,11 +184,11 @@ class SchedulerTests(TestCase):
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 0, 1, None, {}),
-            (0.2, metrics.SampleType.Normal, 0, 5, None, {}),
-            (0.4, metrics.SampleType.Normal, 1, 5, None, {}),
-            (0.6, metrics.SampleType.Normal, 2, 5, None, {}),
-            (0.8, metrics.SampleType.Normal, 3, 5, None, {}),
-            (1.0, metrics.SampleType.Normal, 4, 5, None, {}),
+            (0, metrics.SampleType.Normal, 0, 5, None, {}),
+            (0.2, metrics.SampleType.Normal, 1, 5, None, {}),
+            (0.4, metrics.SampleType.Normal, 2, 5, None, {}),
+            (0.6, metrics.SampleType.Normal, 3, 5, None, {}),
+            (0.8, metrics.SampleType.Normal, 4, 5, None, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
