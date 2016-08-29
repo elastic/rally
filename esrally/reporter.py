@@ -204,11 +204,11 @@ class SummaryReporter:
         else:
             meta_info_file = report_file
 
-        self.write_single_report(report_format, report_file, headers=["Metric", "Operation", "Value", "Unit"], data=metrics_table, verbose=True)
-        print_header("\n\nRace Meta Info:")
-        self.write_single_report(report_format, meta_info_file, headers=["Name", "Value"], data=meta_info_table, verbose=False)
+        self.write_single_report(report_format, report_file, headers=["Metric", "Operation", "Value", "Unit"], data=metrics_table)
+        self.write_single_report(report_format, meta_info_file, headers=["Name", "Value"], data=meta_info_table,
+                                 force_cmd_line_output=False)
 
-    def write_single_report(self, report_format, report_file, headers, data, verbose):
+    def write_single_report(self, report_format, report_file, headers, data, force_cmd_line_output=True):
         if report_format == "markdown":
             report = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
         elif report_format == "csv":
@@ -221,12 +221,13 @@ class SummaryReporter:
         else:
             raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
 
-        print_internal(report)
+        if force_cmd_line_output:
+            print_internal(report)
         if len(report_file) > 0:
             normalized_report_file = rio.normalize_path(report_file)
             logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
                         (normalized_report_file, report_file, report_format))
-            if verbose:
+            if force_cmd_line_output:
                 print("\nWriting report also to '%s'" % normalized_report_file)
             # ensure that the parent folder already exists when we try to write the file...
             rio.ensure_dir(rio.dirname(normalized_report_file))
