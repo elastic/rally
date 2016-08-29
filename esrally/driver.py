@@ -859,7 +859,7 @@ class BulkIndex(Runner):
 
     """
     def __call__(self, es, params):
-        response = es.bulk(body=params["body"], params={"request_timeout": 60000})
+        response = es.bulk(body=params["body"])
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
                 if item["index"]["status"] != 201:

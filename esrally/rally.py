@@ -277,8 +277,8 @@ def parse_args():
         p.add_argument(
             "--client-options",
             help="defines a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
-                 "(default: timeout:90,request_timeout:90).",
-            default="timeout:90,request_timeout:90")
+                 "(default: timeout:60000,request_timeout:60000).",
+            default="timeout:60000,request_timeout:60000")
         p.add_argument(
             "--user-tag",
             help="defines a user-specific key-value pair that is separated by a ':' and added to each metric record as meta info. "
