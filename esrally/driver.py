@@ -57,7 +57,8 @@ class Drive:
     """
     Tells a load generator to drive (either after a join point or initially).
     """
-    pass
+    def __init__(self, client_start_timestamp):
+        self.client_start_timestamp = client_start_timestamp
 
 
 class UpdateSamples:
@@ -73,7 +74,9 @@ class JoinPointReached:
     """
     Tells the master that a load generator has reached a join point. Used for coordination across multiple load generators.
     """
-    def __init__(self, task):
+    def __init__(self, client_id, task):
+        self.client_id = client_id
+        self.client_local_timestamp = time.perf_counter()
         self.task = task
 
 
@@ -98,7 +101,8 @@ class Driver(thespian.actors.Actor):
         self.metrics_store = None
         self.raw_samples = []
         self.currently_completed = 0
-        self.current_step = 0
+        self.clients_completed_current_step = {}
+        self.current_step = -1
         self.number_of_steps = 0
         self.start_sender = None
         self.allocations = None
@@ -137,25 +141,23 @@ class Driver(thespian.actors.Actor):
         setup_index(self.es, track, challenge)
         allocator = Allocator(challenge.schedule)
         self.allocations = allocator.allocations
-        self.number_of_steps = len(allocator.join_points)
+        self.number_of_steps = len(allocator.join_points) - 1
         self.ops_per_join_point = allocator.operations_per_joinpoint
 
         logger.info("Benchmark consists of [%d] steps executed by (at most) [%d] clients as specified by the allocation matrix:\n%s" %
                     (self.number_of_steps, len(self.allocations), self.allocations))
 
-        for idx in range(allocator.clients):
+        for client_id in range(allocator.clients):
             self.drivers.append(self.createActor(LoadGenerator))
-        for idx, driver in enumerate(self.drivers):
-            self.send(driver, StartLoadGenerator(idx, self.config, track.indices, self.allocations[idx]))
-        time.sleep(3)
-        for driver in self.drivers:
-            self.send(driver, Drive())
+        for client_id, driver in enumerate(self.drivers):
+            self.send(driver, StartLoadGenerator(client_id, self.config, track.indices, self.allocations[client_id]))
 
         self.update_progress_message()
         self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
 
     def joinpoint_reached(self, msg):
         self.currently_completed += 1
+        self.clients_completed_current_step[msg.client_id] = (msg.client_local_timestamp, time.perf_counter())
         logger.debug("[%d/%d] drivers reached join point [%d/%d]." %
                      (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
         if self.currently_completed == len(self.drivers):
@@ -163,6 +165,9 @@ class Driver(thespian.actors.Actor):
                         (self.current_step + 1, self.number_of_steps))
             # we can go on to the next step
             self.currently_completed = 0
+            # make a copy and reset early to avoid any race conditions from clients that reach a join point already while we are sending...
+            clients_curr_step = self.clients_completed_current_step
+            self.clients_completed_current_step = {}
             self.current_step += 1
             if self.finished():
                 self.update_progress_message(finished=True)
@@ -176,8 +181,17 @@ class Driver(thespian.actors.Actor):
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
                 self.update_progress_message()
-                for driver in self.drivers:
-                    self.send(driver, Drive())
+                # start the next task in three seconds (relative to master's timestamp)
+                #
+                # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
+                #             (it doesn't matter too much if we're a few ms off).
+                start_next_task = time.perf_counter() + 3.0
+                for client_id, driver in enumerate(self.drivers):
+                    client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
+                    client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
+                    logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])" %
+                                (client_id, client_start_timestamp, start_next_task))
+                    self.send(driver, Drive(client_start_timestamp))
 
     def finished(self):
         return self.current_step == self.number_of_steps
@@ -238,6 +252,7 @@ class LoadGenerator(thespian.actors.Actor):
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.executor_future = None
         self.sampler = None
+        self.start_driving = False
 
     def receiveMessage(self, msg, sender):
         if isinstance(msg, StartLoadGenerator):
@@ -250,19 +265,27 @@ class LoadGenerator(thespian.actors.Actor):
             self.tasks = msg.tasks
             self.current_task = 0
             self.start_timestamp = time.perf_counter()
-        elif isinstance(msg, Drive):
-            logger.debug("client [%d] is continuing its work at task index [%d]." % (self.client_id, self.current_task))
-            self.master = sender
             self.drive()
+        elif isinstance(msg, Drive):
+            logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %
+                         (self.client_id, self.current_task, msg.client_start_timestamp))
+            self.master = sender
+            self.start_driving = True
+            self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
         elif isinstance(msg, thespian.actors.WakeupMessage):
             logger.debug("client [%d] woke up." % self.client_id)
-            self.send_samples()
-            if self.executor_future is not None:
-                if self.executor_future.done():
-                    self.executor_future = None
-                    self.drive()
-                else:
-                    self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
+            # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
+            if self.start_driving:
+                self.start_driving = False
+                self.drive()
+            else:
+                self.send_samples()
+                if self.executor_future is not None:
+                    if self.executor_future.done():
+                        self.executor_future = None
+                        self.drive()
+                    else:
+                        self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
 
@@ -281,7 +304,7 @@ class LoadGenerator(thespian.actors.Actor):
             self.send_samples()
             self.executor_future = None
             self.sampler = None
-            self.send(self.master, JoinPointReached(task))
+            self.send(self.master, JoinPointReached(self.client_id, task))
         elif isinstance(task, track.Task):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
@@ -551,6 +574,11 @@ class Allocator:
         for client_index in range(max_clients):
             allocations[client_index] = []
         join_point_id = 0
+        # start with an artificial join point to allow master to coordinate that all clients start at the same time
+        next_join_point = JoinPoint(join_point_id)
+        for client_index in range(max_clients):
+            allocations[client_index].append(next_join_point)
+        join_point_id += 1
 
         for task in self.schedule:
             start_client_index = 0

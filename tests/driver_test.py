@@ -11,8 +11,8 @@ class AllocatorTests(TestCase):
         allocator = driver.Allocator([task])
 
         self.assertEqual(1, allocator.clients)
-        self.assertEqual(2, len(allocator.allocations[0]))
-        self.assertEqual(1, len(allocator.join_points))
+        self.assertEqual(3, len(allocator.allocations[0]))
+        self.assertEqual(2, len(allocator.join_points))
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
 
     def test_allocates_two_serial_tasks(self):
@@ -22,9 +22,9 @@ class AllocatorTests(TestCase):
         allocator = driver.Allocator([task, task])
 
         self.assertEqual(1, allocator.clients)
-        # we have two operations and two join points
-        self.assertEqual(4, len(allocator.allocations[0]))
-        self.assertEqual(2, len(allocator.join_points))
+        # we have two operations and three join points
+        self.assertEqual(5, len(allocator.allocations[0]))
+        self.assertEqual(3, len(allocator.join_points))
         self.assertEqual([{op}, {op}], allocator.operations_per_joinpoint)
 
     def test_allocates_two_parallel_tasks(self):
@@ -34,9 +34,9 @@ class AllocatorTests(TestCase):
         allocator = driver.Allocator([track.Parallel([task, task])])
 
         self.assertEqual(2, allocator.clients)
-        self.assertEqual(2, len(allocator.allocations[0]))
-        self.assertEqual(2, len(allocator.allocations[1]))
-        self.assertEqual(1, len(allocator.join_points))
+        self.assertEqual(3, len(allocator.allocations[0]))
+        self.assertEqual(3, len(allocator.allocations[1]))
+        self.assertEqual(2, len(allocator.join_points))
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
 
     def test_allocates_mixed_tasks(self):
@@ -56,12 +56,11 @@ class AllocatorTests(TestCase):
 
         self.assertEqual(3, allocator.clients)
 
-        # 1 op, 1 join point, 1 (parallel) op, 1 join point, 1 op, 1 join point, 1 op, 1 join point, 1 (parallel) op, 1 join point
-        self.assertEqual(10, len(allocator.allocations[0]))
-        self.assertEqual(5, len(allocator.join_points))
-        # 1 join point, 1 op, 1 join point
-        self.assertEqual(10, len(allocator.allocations[1]))
-        self.assertEqual(10, len(allocator.allocations[2]))
+        # 1 join point, 1 op, 1 jp, 1 (parallel) op, 1 jp, 1 op, 1 jp, 1 op, 1 jp, 1 (parallel) op, 1 jp
+        self.assertEqual(11, len(allocator.allocations[0]))
+        self.assertEqual(11, len(allocator.allocations[1]))
+        self.assertEqual(11, len(allocator.allocations[2]))
+        self.assertEqual(6, len(allocator.join_points))
         self.assertEqual([{op1}, {op1, op2}, {op1}, {op1}, {op3}], allocator.operations_per_joinpoint)
 
     def test_allocates_more_tasks_than_clients(self):
@@ -84,14 +83,13 @@ class AllocatorTests(TestCase):
         allocations = allocator.allocations
 
         self.assertEqual(2, len(allocations))
-        # index_a, index_c, index_e, join_point
-        self.assertEqual(4, len(allocations[0]))
+        # join_point, index_a, index_c, index_e, join_point
+        self.assertEqual(5, len(allocations[0]))
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual([index_a, index_c, index_e, allocations[0][3]], allocations[0])
-        # index_a, index_c, None, join_point
-        print(allocations[1])
-        self.assertEqual(4, len(allocator.allocations[1]))
-        self.assertEqual([index_b, index_d, None, allocations[1][3]], allocations[1])
+        self.assertEqual([allocations[0][0], index_a, index_c, index_e, allocations[0][4]], allocations[0])
+        # join_point, index_a, index_c, None, join_point
+        self.assertEqual(5, len(allocator.allocations[1]))
+        self.assertEqual([allocations[1][0], index_b, index_d, None, allocations[1][4]], allocations[1])
 
         self.assertEqual([{op1, op2, op3, op4, op5}], allocator.operations_per_joinpoint)
 
@@ -111,17 +109,16 @@ class AllocatorTests(TestCase):
         allocations = allocator.allocations
 
         self.assertEqual(3, len(allocations))
-        # index_a, index_c, join_point
-        self.assertEqual(3, len(allocations[0]))
+        # join_point, index_a, index_c, join_point
+        self.assertEqual(4, len(allocations[0]))
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual([index_a, index_c, allocations[0][2]], allocations[0])
-        # index_b, None, join_point
-        print(allocations[1])
-        self.assertEqual(3, len(allocator.allocations[1]))
-        self.assertEqual([index_b, None, allocations[1][2]], allocations[1])
+        self.assertEqual([allocations[0][0], index_a, index_c, allocations[0][3]], allocations[0])
+        # join_point, index_b, None, join_point
+        self.assertEqual(4, len(allocator.allocations[1]))
+        self.assertEqual([allocations[1][0], index_b, None, allocations[1][3]], allocations[1])
 
-        self.assertEqual(3, len(allocator.allocations[2]))
-        self.assertEqual([index_c, None, allocations[2][2]], allocations[2])
+        self.assertEqual(4, len(allocator.allocations[2]))
+        self.assertEqual([allocations[2][0], index_c, None, allocations[2][3]], allocations[2])
 
         self.assertEqual([{op1, op2, op3}], allocator.operations_per_joinpoint)
 
