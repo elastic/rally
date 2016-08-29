@@ -536,7 +536,8 @@ class TrackReader:
                              params=params,
                              granularity_unit="docs/s")
         elif benchmark_type == "force-merge":
-            return Operation(name=ops_spec_name, operation_type=OperationType.ForceMerge, params={"indices": indices})
+            return Operation(name=ops_spec_name, operation_type=OperationType.ForceMerge,
+                             params={"indices": [index.name for index in indices]})
         elif benchmark_type == "search":
             return self._create_query(ops_spec, ops_spec_name, indices)
         elif benchmark_type == "index-stats":

@@ -877,13 +877,14 @@ class ForceMerge(Runner):
     Runs a force merge operation against Elasticsearch.
     """
     def __call__(self, es, params):
-        logger.info("Force merging all indices.")
+        indices = ",".join(params["indices"])
+        logger.info("Force merging indices [%s]." % indices)
         try:
-            es.indices.forcemerge()
+            es.indices.forcemerge(index=indices)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                es.indices.optimize()
+                es.indices.optimize(index=indices)
             else:
                 raise e
         return 1
