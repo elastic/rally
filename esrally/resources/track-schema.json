@@ -137,6 +137,11 @@
             "minimum": 0,
             "description": "[Only for types 'stats', 'search']: Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
           },
+          "warmup-time-period": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "[Only for type 'index']: Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+          },
           "iterations": {
             "type": "integer",
             "minimum": 1,

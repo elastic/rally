@@ -133,6 +133,7 @@ The track repository is managed by git, so ensure that you are on the ``master``
           "schedule": [
             {
               "operation": "index",
+              "warmup-time-period": 120,
               "clients": 8
             },
             {

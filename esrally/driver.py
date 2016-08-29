@@ -223,8 +223,9 @@ class Driver(thespian.actors.Actor):
         ops = ",".join([op.name for op in self.ops_per_join_point[step]])
 
         self.progress_counter = (self.progress_counter + 1) % len(progress_indicator) if not finished else 0
-        self.progress_reporter.print("Running %s" % (ops),
-                                     "[%3d%% done]%s" % (round((self.current_step / self.number_of_steps) * 100), progress_indicator[self.progress_counter]))
+        self.progress_reporter.print("Running %s" % ops,
+                                     "[%3d%% done]%s" % (round((self.current_step / self.number_of_steps) * 100),
+                                                         progress_indicator[self.progress_counter]))
 
         if finished:
             self.progress_reporter.finish()
@@ -333,8 +334,8 @@ class Sampler:
 
     def add(self, sample_type, latency_ms, service_time_ms, total_ops, time_period):
         try:
-            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation, sample_type, latency_ms,
-                                     service_time_ms, total_ops, time_period))
+            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
+                                     sample_type, latency_ms, service_time_ms, total_ops, time_period))
         except queue.Full:
             logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
 
@@ -428,7 +429,7 @@ def _do_wait(es, expected_cluster_status):
     raise exceptions.RallyAssertionError(msg)
 
 
-def calculate_global_throughput(samples, bucket_interval_secs=1):
+def calculate_global_throughput(samples, bucket_interval_secs=2):
     """
     Calculates global throughput based on samples gathered from multiple load generators.
 
@@ -510,7 +511,9 @@ def execute_schedule(schedule, es, sampler):
     """
     relative = None
     previous_sample_type = None
-    for expected_scheduled_time, sample_type, curr_iteration, total_iterations, runner, params in schedule:
+    total_start = time.perf_counter()
+    for expected_scheduled_time, sample_type_calculator, curr_iteration, total_iterations, runner, params in schedule:
+        sample_type = sample_type_calculator(total_start)
         # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
         # the relative time zero which simplifies throughput calculation.
         #
@@ -520,8 +523,8 @@ def execute_schedule(schedule, es, sampler):
             previous_sample_type = sample_type
         # expected_scheduled_time is relative to the start of the first iteration
         absolute_expected_schedule_time = relative + expected_scheduled_time
-        # do we even throttle throughput?
-        if expected_scheduled_time > 0:
+        throughput_throttled = expected_scheduled_time > 0
+        if throughput_throttled:
             rest = absolute_expected_schedule_time - time.perf_counter()
             if rest > 0:
                 time.sleep(rest)
@@ -531,9 +534,8 @@ def execute_schedule(schedule, es, sampler):
         stop = time.perf_counter()
 
         service_time = stop - start
-        #TODO dm: Do not calculate latency when we don't throttle throughput. This metric is just confusing then.
-        latency = stop - absolute_expected_schedule_time
-
+        # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
+        latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
         sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative))
 
 
@@ -677,8 +679,8 @@ def schedule_for(task, client_index, indices):
 
     if op.type == track.OperationType.Index:
         runner = BulkIndex()
-        return bulk_data_based(target_throughput, num_clients, client_index, indices, runner, op.params["bulk-size"],
-                               op.params["id-conflicts"])
+        return bulk_data_based(target_throughput, task.warmup_time_period, num_clients, client_index, indices, runner,
+                               op.params["bulk-size"], op.params["id-conflicts"])
     else:
         runner = runners[op.type]()
         # will queries always be iteration based?
@@ -702,10 +704,10 @@ def iteration_count_based(target_throughput, warmup_iterations, iterations, runn
     if params is None:
         params = []
     for i in range(0, warmup_iterations):
-        yield (wait_time * i, metrics.SampleType.Warmup, i, warmup_iterations, runner, params)
+        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, warmup_iterations, runner, params)
 
     for i in range(0, iterations):
-        yield (wait_time * i, metrics.SampleType.Normal, i, iterations, runner, params)
+        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, iterations, runner, params)
 
 
 def build_conflicting_ids(conflicts, docs_to_index, offset):
@@ -785,13 +787,14 @@ def bounds(total_docs, client_index, num_clients):
     return offset, docs_per_client
 
 
-def bulk_data_based(target_throughput, num_clients, client_index, indices, runner, bulk_size, id_conflicts,
+def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_index, indices, runner, bulk_size, id_conflicts,
                     create_reader=create_default_reader):
     """
     Calculates the necessary schedule for bulk operations.
 
 
     :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
+    :param warmup_time_period: The time period in seconds that is considered for warmup.
     :param num_clients: The total number of clients that will run the bulk operation.
     :param client_index: The current client for which we calculated the schedule. Must be in the range [0, `num_clients').
     :param indices: Specification of affected indices.
@@ -811,12 +814,7 @@ def bulk_data_based(target_throughput, num_clients, client_index, indices, runne
     # determine amount of warmup iterations based on number of records to index. Problem: this assumes we index all data. Depending on the
     # schedule this may not be true (as we may terminate earlier)
 
-    # TODO dm: Consider making this configurable per track
-    # TODO dm: Make time-based (i.e. 2 minutes warmup), not document based
-    # TODO dm: Consider deciding on the master when warmup is done (based on returned sample count)
-    # consider 10% for warmup
-    warmup_iterations = bulks // 10
-    iterations = bulks - warmup_iterations
+    iterations = bulks
     readers = []
     for index in indices:
         for type in index.types:
@@ -827,10 +825,9 @@ def bulk_data_based(target_throughput, num_clients, client_index, indices, runne
     reader = chain(*readers)
     it = 0
     for bulk in reader:
-        if it < warmup_iterations:
-            yield (wait_time * it, metrics.SampleType.Warmup, it, warmup_iterations, runner, {"body": bulk})
-        else:
-            yield (wait_time * it, metrics.SampleType.Normal, it - warmup_iterations, iterations, runner, {"body": bulk})
+        yield (wait_time * it,
+               lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
+               it, iterations, runner, {"body": bulk})
         it += 1
 
 

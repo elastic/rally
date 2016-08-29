@@ -496,6 +496,8 @@ class TrackReader:
         return Task(operation=ops[op_name],
                     warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
                                               default_value=default_warmup_iterations),
+                    warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False,
+                                               default_value=0),
                     iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
                     clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
                     target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
@@ -534,7 +536,7 @@ class TrackReader:
                              params=params,
                              granularity_unit="docs/s")
         elif benchmark_type == "force-merge":
-            return Operation(name=ops_spec_name, operation_type=OperationType.ForceMerge)
+            return Operation(name=ops_spec_name, operation_type=OperationType.ForceMerge, params={"indices": indices})
         elif benchmark_type == "search":
             return self._create_query(ops_spec, ops_spec_name, indices)
         elif benchmark_type == "index-stats":
@@ -613,9 +615,10 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, operation, warmup_iterations=0, iterations=1, clients=1, target_throughput=None):
+    def __init__(self, operation, warmup_iterations=0, warmup_time_period=0, iterations=1, clients=1, target_throughput=None):
         self.operation = operation
         self.warmup_iterations = warmup_iterations
+        self.warmup_time_period = warmup_time_period
         self.iterations = iterations
         self.clients = clients
         self.target_throughput = target_throughput
