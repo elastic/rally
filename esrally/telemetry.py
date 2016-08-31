@@ -470,8 +470,12 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
+            try:
+                host = node["host"]
+            except KeyError:
+                host = "unknown"
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", node["host"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host)
 
         info = self.client.nodes.info(node_id="_all")
         for node in info["nodes"].values():
