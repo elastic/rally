@@ -63,6 +63,6 @@ def kill_running_es_instances(node_prefix):
                 logger.info("Killing lingering ES benchmark instance with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
                 p.kill()
             else:
-                logger.info("Skipping [%s]" % p.cmdline())
+                logger.debug("Skipping [%s]" % p.cmdline())
         except (psutil.ZombieProcess, psutil.AccessDenied):
             pass
