@@ -17,6 +17,19 @@ echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
 
+# Update author information
+git log --format='%aN' | sort -u > AUTHORS
+# This will produce a non-zero exit code iff there are changes.
+# Obviously we should disable exiting on error temporarily.
+set +e
+git diff --exit-code
+set -e
+exit_code=$?
+if [[ ${exit_code} != 0 ]]
+then
+    git commit -a -m "Update AUTHORS for Rally release $RELEASE_VERSION"
+fi
+
 # * Update version in `setup.py` and `docs/conf.py`
 echo "$RELEASE_VERSION" > version.txt
 git commit -a -m "Bump version to $RELEASE_VERSION"
