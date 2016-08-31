@@ -238,7 +238,7 @@ class LoadGenerator(thespian.actors.Actor):
     It will also regularly send measurements to the master node so it can consolidate them.
     """
 
-    WAKEUP_INTERVAL_SECONDS = 1
+    WAKEUP_INTERVAL_SECONDS = 5
 
     def __init__(self):
         super().__init__()
@@ -250,7 +250,7 @@ class LoadGenerator(thespian.actors.Actor):
         self.tasks = None
         self.current_task = 0
         self.start_timestamp = None
-        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.executor_future = None
         self.sampler = None
         self.start_driving = False
