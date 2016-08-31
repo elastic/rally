@@ -56,16 +56,6 @@ class InProcessLauncher:
             "log_path": "-Des.path.logs",
             "node_name": "-Des.node.name"
         },
-        "5.0.0-alpha1": {
-            "processors": "-Ees.processors",
-            "log_path": "-Ees.path.logs",
-            "node_name": "-Ees.node.name"
-        },
-        "5.0.0-alpha2": {
-            "processors": "-Ees.processors",
-            "log_path": "-Ees.path.logs",
-            "node_name": "-Ees.node.name"
-        },
         "5": {
             "processors": "-Eprocessors",
             "log_path": "-Epath.logs",

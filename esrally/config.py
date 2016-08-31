@@ -224,7 +224,6 @@ class ConfigFactory:
 
         self.print_detection_result("git    ", git_path)
         self.print_detection_result("gradle ", gradle_bin)
-        # self.print_detection_result("JDK 7  ", default_jdk_7, warn_if_missing=True, additional_message="Cannot benchmark Elasticsearch 2.x")
         self.print_detection_result("JDK 8  ", default_jdk_8,
                                     warn_if_missing=True,
                                     additional_message="You cannot benchmark Elasticsearch 5.x without a JDK 8 installation")
@@ -240,7 +239,7 @@ class ConfigFactory:
             self.o("")
             self.o("You can still benchmark binary distributions with e.g.:")
             self.o("")
-            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
+            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha5" % PROGRAM_NAME)
             self.o("")
             self.o("See %s" % format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
             self.o("**********************************************************************************")
