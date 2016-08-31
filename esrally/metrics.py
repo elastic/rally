@@ -781,7 +781,7 @@ class EsRaceStore:
             "track": t.name,
             "selected-challenge": selected_challenge,
             "car": self.config.opts("benchmarks", "car"),
-            "target-hosts": self.config.opts("launcher", "external.target.hosts"),
+            "target-hosts": ["%s:%s" % (i["host"], i["port"]) for i in self.config.opts("launcher", "external.target.hosts")],
             "user-tag": self.config.opts("system", "user.tag")
         }
         self.client.index(index_name(trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc)

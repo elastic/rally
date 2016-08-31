@@ -233,7 +233,7 @@ class EsRaceStoreTests(TestCase):
         self.cfg.add(config.Scope.application, "benchmarks", "challenge", "index-and-search")
         self.cfg.add(config.Scope.application, "benchmarks", "car", "defaults")
         self.cfg.add(config.Scope.application, "benchmarks", "rounds", 1)
-        self.cfg.add(config.Scope.application, "launcher", "external.target.hosts", "")
+        self.cfg.add(config.Scope.application, "launcher", "external.target.hosts", [{"host": "localhost", "port": "9200"}])
         self.cfg.add(config.Scope.application, "source", "revision", "latest")
         self.cfg.add(config.Scope.application, "source", "distribution.version", "5.0.0")
 
@@ -268,7 +268,7 @@ class EsRaceStoreTests(TestCase):
                 ]
             },
             "car": "defaults",
-            "target-hosts": "",
+            "target-hosts": ["localhost:9200"],
             "user-tag": ""
         }
 
