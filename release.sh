@@ -25,7 +25,7 @@ set +e
 git diff --exit-code
 set -e
 exit_code=$?
-if [[ ${exit_code} != 0 ]]
+if [[ ${exit_code} != "0" ]]
 then
     git commit -a -m "Update AUTHORS for Rally release $RELEASE_VERSION"
 fi
