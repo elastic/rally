@@ -135,7 +135,7 @@ Rally supports more command line flags, just run ``esrally --help`` to see what'
 Getting help
 ------------
  
-Please ask questions about Rally in the `Elasticsearch Discuss forum <https://discuss.elastic.co/c/elasticsearch>`_.
+Please ask questions about Rally in the `Rally Discuss forum <https://discuss.elastic.co/c/rally>`_.
 
 How to Contribute
 -----------------

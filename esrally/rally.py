@@ -397,7 +397,7 @@ def print_help_on_errors(cfg):
     print("Please check the log file [%s] for further details first." % log_file_path(cfg))
     print("")
     print("If you need further help, please check Rally's docs at %s or ask a question in the forum at %s."
-          % (format.link("https://esrally.readthedocs.io"), format.link("https://discuss.elastic.co/c/elasticsearch")))
+          % (format.link("https://esrally.readthedocs.io"), format.link("https://discuss.elastic.co/c/rally")))
     print("")
     print("If you think this is a bug, please file a report at %s and include the log file for this race (%s)." %
           (format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
