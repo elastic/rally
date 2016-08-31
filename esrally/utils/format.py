@@ -1,3 +1,6 @@
+CMD_LINE_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
 def link(href):
     return "\033[4m%s\033[0m" % href
 

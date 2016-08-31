@@ -1,3 +1,19 @@
+### 0.4.0
+
+#### Breaking changes in 0.4.0
+
+The track format has changed a bit due a more flexible approach in how benchmarks are executed:
+ 
+* Operations are defined in the `operations` section, execution details like number of warmup iterations, warmup time etc. are defined as part of the `schedule`.
+* Each query needs to be defined as a separate operation and referenced in the `schedule`
+* You can (and in fact should) specify a `warmup-time-period` (defined in sections) for bulk index operations. The warmup time period is specified in seconds.
+
+For details please refer to the updated [JSON schema for Rally tracks](https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json).
+
+Hint: This is just relevant for you, if you have defined your own tracks. We already took care of updating the [official Rally tracks](https://github.com/elastic/rally-tracks).
+
+[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.4.0+is%3Aclosed)
+
 ### 0.3.0
 
 #### Breaking changes in 0.3

@@ -24,6 +24,8 @@ install_requires = [
     "tabulate==0.7.5",
     "jsonschema==2.5.1",
     "Jinja2==2.8",
+    # remote messaging
+    "thespian==3.0.4",
     # always use the latest version, these are certificate files...
     "certifi"
 ]

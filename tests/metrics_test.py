@@ -85,6 +85,31 @@ class EsMetricsTests(TestCase):
         self.es_mock.create_index.assert_called_with(index="rally-2016")
         self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
 
+    def test_put_value_with_explicit_timestamps(self):
+        throughput = 5000
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+
+        self.metrics_store.put_count_cluster_level(name="indexing_throughput", count=throughput, unit="docs/s",
+                                                   absolute_time=0, relative_time=10)
+        expected_doc = {
+            "@timestamp": 0,
+            "trial-timestamp": "20160131T000000Z",
+            "relative-time": 10000000,
+            "environment": "unittest",
+            "sample-type": "normal",
+            "track": "test",
+            "challenge": "append-no-conflicts",
+            "car": "defaults",
+            "name": "indexing_throughput",
+            "value": throughput,
+            "unit": "docs/s",
+            "meta": {}
+        }
+        self.metrics_store.close()
+        self.es_mock.exists.assert_called_with(index="rally-2016")
+        self.es_mock.create_index.assert_called_with(index="rally-2016")
+        self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
+
     def test_put_value_with_meta_info(self):
         throughput = 5000
         # add a user-defined tag
@@ -215,21 +240,16 @@ class EsRaceStoreTests(TestCase):
         index = "tests"
         type = "test-type"
 
-        benchmarks = {
-            track.BenchmarkPhase.index: track.IndexBenchmarkSettings(),
-            track.BenchmarkPhase.search: track.LatencyBenchmarkSettings(
-                queries=[track.DefaultQuery(index=index, type=type, name="default", body={
-                    "query": {
-                        "match_all": {}
-                    }
-                })])
-        }
+        schedule = [
+            track.Task(track.Operation("index", track.OperationType.Index)),
+            track.Task(track.Operation("search-all", track.OperationType.Search)),
+        ]
 
         t = track.Track(name="unittest", short_description="unittest track", description="unittest track",
                         source_root_url="http://example.org",
                         indices=[track.Index(name=index, types=[track.Type(name=type, mapping_file=None)])],
                         challenges=[
-                            track.Challenge(name="index-and-search", description="Index and Search Challenge", benchmark=benchmarks)
+                            track.Challenge(name="index-and-search", description="Index & Search", index_settings=None, schedule=schedule)
                         ])
         self.race_store.store_race(t)
 
@@ -242,14 +262,12 @@ class EsRaceStoreTests(TestCase):
             "track": "unittest",
             "selected-challenge": {
                 "name": "index-and-search",
-                "benchmark-phase-index": True,
-                "benchmark-phase-search": {
-                    "sample-size": 1000,
-                    "queries": ["default"]
-                }
+                "operations": [
+                    "index",
+                    "search-all"
+                ]
             },
             "car": "defaults",
-            "rounds": 1,
             "target-hosts": "",
             "user-tag": ""
         }
@@ -266,6 +284,7 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_value(self):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_count_cluster_level("indexing_throughput", 1, "docs/s", sample_type=metrics.SampleType.Warmup)
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
 
@@ -273,7 +292,8 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertEqual(throughput, self.metrics_store.get_one("indexing_throughput"))
+        self.assertEqual(1, self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Warmup))
+        self.assertEqual(throughput, self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Normal))
 
     def test_get_percentile(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)

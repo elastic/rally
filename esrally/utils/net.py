@@ -3,6 +3,7 @@ import shutil
 import urllib.request
 
 import urllib3
+import certifi
 
 from esrally import exceptions
 from esrally.utils import process
@@ -34,7 +35,7 @@ def retrieve_content_as_string(url):
 
 def download_via_http(url, local_path, expected_size_in_bytes=None):
     tmp_data_set_path = local_path + ".tmp"
-    http = urllib3.PoolManager()
+    http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
     try:
         with http.request("GET", url, preload_content=False, retries=10,
                           timeout=urllib3.Timeout(connect=45, read=240)) as r, open(tmp_data_set_path, "wb") as out_file:

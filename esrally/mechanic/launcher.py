@@ -12,37 +12,19 @@ from esrally.utils import versions, format
 logger = logging.getLogger("rally.launcher")
 
 
-class ClusterFactory:
-    def create(self, hosts, nodes, client_options, metrics_store, telemetry):
-        return cluster.Cluster(hosts, nodes, client_options, metrics_store, telemetry)
-
-
 class ExternalLauncher:
-    def __init__(self, cfg, cluster_factory_class=ClusterFactory):
+    def __init__(self, cfg):
         self.cfg = cfg
-        self.cluster_factory = cluster_factory_class()
 
-    def start(self, metrics_store):
-        configured_host_list = self.cfg.opts("launcher", "external.target.hosts")
-        hosts = []
-        try:
-            for authority in configured_host_list:
-                host, port = authority.split(":")
-                hosts.append({"host": host, "port": port})
-        except ValueError:
-            msg = "Could not initialize external cluster. Invalid format for %s. Expected a comma-separated list of host:port pairs, " \
-                  "e.g. host1:9200,host2:9200." % configured_host_list
-            logger.exception(msg)
-            raise exceptions.SystemSetupError(msg)
-
-        t = telemetry.Telemetry(self.cfg, metrics_store, devices=[
-            telemetry.ExternalEnvironmentInfo(self.cfg, metrics_store),
-            telemetry.NodeStats(self.cfg, metrics_store),
-            telemetry.IndexStats(self.cfg, metrics_store)
+    def start(self, client, metrics_store):
+        t = telemetry.Telemetry(self.cfg, client=client, metrics_store=metrics_store, devices=[
+            telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store),
+            telemetry.NodeStats(self.cfg, client, metrics_store),
+            telemetry.IndexStats(self.cfg, client, metrics_store)
         ])
-        c = self.cluster_factory.create(hosts, [], self.cfg.opts("launcher", "client.options"), metrics_store, t)
+        c = cluster.Cluster([], t)
         user_defined_version = self.cfg.opts("source", "distribution.version", mandatory=False)
-        distribution_version = c.info()["version"]["number"]
+        distribution_version = client.info()["version"]["number"]
         if not user_defined_version or user_defined_version.strip() == "":
             logger.info("Distribution version was not specified by user. Rally-determined version is [%s]" % distribution_version)
             self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
@@ -74,16 +56,6 @@ class InProcessLauncher:
             "log_path": "-Des.path.logs",
             "node_name": "-Des.node.name"
         },
-        "5.0.0-alpha1": {
-            "processors": "-Ees.processors",
-            "log_path": "-Ees.path.logs",
-            "node_name": "-Ees.node.name"
-        },
-        "5.0.0-alpha2": {
-            "processors": "-Ees.processors",
-            "log_path": "-Ees.path.logs",
-            "node_name": "-Ees.node.name"
-        },
         "5": {
             "processors": "-Eprocessors",
             "log_path": "-Epath.logs",
@@ -96,32 +68,25 @@ class InProcessLauncher:
         }
     }
 
-    def __init__(self, cfg, clock=time.Clock, cluster_factory_class=ClusterFactory):
+    def __init__(self, cfg, clock=time.Clock):
         self.cfg = cfg
-        self.cluster_factory = cluster_factory_class()
         self._clock = clock
         self._servers = []
 
-    def start(self, car, metrics_store):
+    def start(self, car, client, metrics_store):
         if self._servers:
             logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
         logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
-        first_http_port = self.cfg.opts("provisioning", "node.http.port")
 
-        t = telemetry.Telemetry(self.cfg, metrics_store)
-        c = self.cluster_factory.create(
-            [{"host": "localhost", "port": first_http_port}],
-            [self._start_node(node, car, metrics_store) for node in range(car.nodes)],
-            self.cfg.opts("launcher", "client.options"),
-            metrics_store, t
-        )
+        t = telemetry.Telemetry(self.cfg, client, metrics_store)
+        c = cluster.Cluster([self._start_node(node, car, client, metrics_store) for node in range(car.nodes)], t)
         t.attach_to_cluster(c)
         return c
 
-    def _start_node(self, node, car, metrics_store):
+    def _start_node(self, node, car, client, metrics_store):
         node_name = self._node_name(node)
         host_name = socket.gethostname()
-        t = telemetry.Telemetry(self.cfg, metrics_store)
+        t = telemetry.Telemetry(self.cfg, client, metrics_store)
 
         env = self._prepare_env(car, node_name, t)
         cmd = self.prepare_cmd(car, node_name)

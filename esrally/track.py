@@ -1,6 +1,7 @@
-import os
-import logging
 import json
+import logging
+import os
+
 import urllib.error
 from enum import Enum
 
@@ -136,47 +137,6 @@ class IndexIdConflict(Enum):
     RandomConflicts = 2
 
 
-class BenchmarkPhase(Enum):
-    index = 0,
-    stats = 1
-    search = 2,
-
-
-class LatencyBenchmarkSettings:
-    def __init__(self, queries=None, warmup_iteration_count=1000, iteration_count=1000):
-        """
-        Creates new LatencyBenchmarkSettings.
-
-        :param queries: A list of queries to run. Optional.
-        :param warmup_iteration_count: The number of times each query should be run for warmup. Defaults to 1000 iterations.
-        :param iteration_count: The number of times each query should be run. Defaults to 1000 iterations.
-        """
-        if queries is None:
-            queries = []
-        self.queries = queries
-        self.warmup_iteration_count = warmup_iteration_count
-        self.iteration_count = iteration_count
-
-
-class IndexBenchmarkSettings:
-    def __init__(self, index_settings=None, clients=8, bulk_size=5000, id_conflicts=IndexIdConflict.NoConflicts,
-                 force_merge=True):
-        """
-        :param index_settings: A hash of index-level settings that will be set when the index is created.
-        :param clients: Number of concurrent clients that should index data.
-        :param bulk_size: The number of documents to submit in a single bulk (Default: 5000).
-        :param id_conflicts: Whether to produce index id conflicts during indexing (Default: NoConflicts).
-        :param force_merge: Whether to do a force merge after the index benchmark (Default: True).
-        """
-        if index_settings is None:
-            index_settings = {}
-        self.index_settings = index_settings
-        self.clients = clients
-        self.bulk_size = bulk_size
-        self.id_conflicts = id_conflicts
-        self.force_merge = force_merge
-
-
 class Challenge:
     """
     A challenge defines the concrete operations that will be done.
@@ -185,12 +145,14 @@ class Challenge:
     def __init__(self,
                  name,
                  description,
-                 benchmark=None):
-        if benchmark is None:
-            benchmark = {}
+                 index_settings,
+                 schedule=None):
+        if schedule is None:
+            schedule = {}
         self.name = name
         self.description = description
-        self.benchmark = benchmark
+        self.index_settings = index_settings
+        self.schedule = schedule
 
     def __str__(self):
         return self.name
@@ -280,11 +242,11 @@ def prepare_track(track, cfg):
         if not os.path.isfile(local_path):
             if offline:
                 raise exceptions.SystemSetupError(
-                        "Cannot find %s. Please disable offline mode and retry again." % local_path)
+                    "Cannot find %s. Please disable offline mode and retry again." % local_path)
             else:
                 raise exceptions.SystemSetupError(
-                        "Could not download from %s to %s. Please verify that data are available at %s and "
-                        "check your internet connection." % (url, local_path, url))
+                    "Could not download from %s to %s. Please verify that data are available at %s and "
+                    "check your internet connection." % (url, local_path, url))
 
     def decompress(data_set_path, expected_size_in_bytes):
         # we assume that track data are always compressed and try to decompress them before running the benchmark
@@ -316,13 +278,14 @@ class TrackRepository:
     def __init__(self, cfg):
         self.cfg = cfg
         self.name = cfg.opts("system", "track.repository")
+        self.offline = cfg.opts("system", "offline.mode")
         # If no URL is found, we consider this a local only repo (but still require that it is a git repo)
         self.url = cfg.opts("tracks", "%s.url" % self.name, mandatory=False)
         self.remote = self.url is not None and self.url.strip() != ""
         root = cfg.opts("system", "root.dir")
         track_repositories = cfg.opts("benchmarks", "track.repository.dir")
         self.tracks_dir = "%s/%s/%s" % (root, track_repositories, self.name)
-        if self.remote:
+        if self.remote and not self.offline:
             # a normal git repo with a remote
             if not git.is_working_copy(self.tracks_dir):
                 git.clone(src=self.tracks_dir, remote=self.url)
@@ -346,7 +309,7 @@ class TrackRepository:
 
     def _update(self, distribution_version):
         try:
-            if self.remote:
+            if self.remote and not self.offline:
                 branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
                 if branch:
                     logger.info("Rebasing on '%s' in '%s' for distribution version '%s'." % (branch, self.tracks_dir, distribution_version))
@@ -497,32 +460,50 @@ class TrackReader:
         for challenge in self._r(track_spec, "challenges"):
             challenge_name = self._r(challenge, "name", error_ctx="challenges")
             challenge_description = self._r(challenge, "description", error_ctx=challenge_name)
-            benchmarks = {}
+            index_settings = self._r(challenge, "index-settings", error_ctx=challenge_name, mandatory=False)
 
-            operations_per_type = {}
+            schedule = []
+
             for op in self._r(challenge, "schedule", error_ctx=challenge_name):
-                if op not in ops:
-                    self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
-                                "Please add an operation '%s' to the 'operations' block." % (challenge_name, op, op))
+                if "parallel" in op:
+                    task = self.parse_parallel(op["parallel"], ops, challenge_name)
+                else:
+                    task = self.parse_task(op, ops, challenge_name)
+                schedule.append(task)
 
-                benchmark_type, benchmark_spec = ops[op]
-                if benchmark_type in benchmarks:
-                    new_op_name = op
-                    old_op_name = operations_per_type[benchmark_type]
-                    self._error(
-                            "'schedule' for challenge '%s' contains multiple operations of type '%s' which is currently "
-                            "unsupported. Please remove one of these operations: '%s', '%s'" %
-                            (challenge_name, benchmark_type, old_op_name, new_op_name))
-                benchmarks[benchmark_type] = benchmark_spec
-                operations_per_type[benchmark_type] = op
             challenges.append(Challenge(name=challenge_name,
                                         description=challenge_description,
-                                        benchmark=benchmarks))
-
+                                        index_settings=index_settings,
+                                        schedule=schedule))
         return challenges
 
+    def parse_parallel(self, ops_spec, ops, challenge_name):
+        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False)
+        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False)
+        clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
+
+        # now descent to each operation
+        tasks = []
+        for task in self._r(ops_spec, "tasks", error_ctx="parallel"):
+            tasks.append(self.parse_task(task, ops, challenge_name, default_warmup_iterations, default_iterations))
+        return Parallel(tasks, clients)
+
+    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1):
+        op_name = task_spec["operation"]
+        if op_name not in ops:
+            self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
+                        "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
+        return Task(operation=ops[op_name],
+                    warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
+                                              default_value=default_warmup_iterations),
+                    warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False,
+                                               default_value=0),
+                    iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
+                    clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
+                    target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
+
     def _parse_operations(self, ops_specs, indices):
-        # key = name, value = (BenchmarkPhase instance, BenchmarkSettings instance)
+        # key = name, value = operation
         ops = {}
         for op_spec in ops_specs:
             ops_spec_name = self._r(op_spec, "name", error_ctx="operations")
@@ -531,7 +512,7 @@ class TrackReader:
         return ops
 
     def _create_op(self, ops_spec_name, ops_spec, indices):
-        benchmark_type = self._r(ops_spec, "type")
+        benchmark_type = self._r(ops_spec, "operation-type")
         if benchmark_type == "index":
             id_conflicts = self._r(ops_spec, "conflicts", mandatory=False)
             if not id_conflicts:
@@ -543,153 +524,127 @@ class TrackReader:
             else:
                 raise TrackSyntaxError("Unknown conflict type '%s' for operation '%s'" % (id_conflicts, ops_spec))
 
-            return (BenchmarkPhase.index,
-                    IndexBenchmarkSettings(index_settings=self._r(ops_spec, "index-settings", error_ctx=ops_spec_name),
-                                           clients=self._r(ops_spec, ["clients", "count"], error_ctx=ops_spec_name),
-                                           bulk_size=self._r(ops_spec, "bulk-size", error_ctx=ops_spec_name),
-                                           force_merge=self._r(ops_spec, "force-merge", error_ctx=ops_spec_name),
-                                           id_conflicts=id_conflicts))
+            bulk_size = self._r(ops_spec, "bulk-size", error_ctx=ops_spec_name)
+
+            params = {
+                "bulk-size": bulk_size,
+                "id-conflicts": id_conflicts
+            }
+
+            return Operation(name=ops_spec_name,
+                             operation_type=OperationType.Index,
+                             params=params,
+                             granularity_unit="docs/s")
+        elif benchmark_type == "force-merge":
+            return Operation(name=ops_spec_name, operation_type=OperationType.ForceMerge,
+                             params={"indices": [index.name for index in indices]})
         elif benchmark_type == "search":
-            # TODO: Honor clients settings
-            return (BenchmarkPhase.search,
-                    LatencyBenchmarkSettings(
-                            queries=self._create_queries(self._r(ops_spec, "queries", error_ctx=ops_spec_name),
-                                                         indices),
-                            warmup_iteration_count=self._r(ops_spec, "warmup-iterations", error_ctx=ops_spec_name),
-                            iteration_count=self._r(ops_spec, "iterations")))
-        elif benchmark_type == "stats":
-            # TODO: Honor clients settings
-            return (BenchmarkPhase.stats,
-                    LatencyBenchmarkSettings(
-                            warmup_iteration_count=self._r(ops_spec, "warmup-iterations", error_ctx=ops_spec_name),
-                            iteration_count=self._r(ops_spec, "iterations", error_ctx=ops_spec_name)))
+            return self._create_query(ops_spec, ops_spec_name, indices)
+        elif benchmark_type == "index-stats":
+            return Operation(name=ops_spec_name, operation_type=OperationType.IndicesStats)
+        elif benchmark_type == "node-stats":
+            return Operation(name=ops_spec_name, operation_type=OperationType.NodesStats)
         else:
             raise TrackSyntaxError("Unknown benchmark type '%s' for operation '%s'" % (benchmark_type, ops_spec_name))
 
-    def _create_queries(self, queries_spec, indices):
+    def _create_query(self, query_spec, ops_spec_name, indices):
         if len(indices) == 1 and len(indices[0].types) == 1:
             default_index = indices[0].name
             default_type = indices[0].types[0].name
         else:
             default_index = None
             default_type = None
-        queries = []
-        for query_spec in queries_spec:
-            query_name = self._r(query_spec, "name")
-            query_type = self._r(query_spec, "query-type", mandatory=False, default_value="default",
-                                 error_ctx=query_name)
 
-            index_name = self._r(query_spec, "index", mandatory=False, default_value=default_index,
-                                 error_ctx=query_name)
-            type_name = self._r(query_spec, "type", mandatory=False, default_value=default_type, error_ctx=query_name)
+        index_name = self._r(query_spec, "index", mandatory=False, default_value=default_index, error_ctx=ops_spec_name)
+        type_name = self._r(query_spec, "type", mandatory=False, default_value=default_type, error_ctx=ops_spec_name)
+        request_cache = self._r(query_spec, "cache", mandatory=False, default_value=False, error_ctx=ops_spec_name)
 
-            if not index_name or not type_name:
-                raise TrackSyntaxError("Query '%s' requires an index and a type." % query_name)
-            request_cache = self._r(query_spec, "cache", mandatory=False, default_value=False, error_ctx=query_name)
-            if query_type == "default":
-                query_body = self._r(query_spec, "body", error_ctx=query_name)
-                queries.append(DefaultQuery(index=index_name, type=type_name, name=query_name,
-                                            body=query_body, use_request_cache=request_cache))
-            elif query_type == "scroll":
-                query_body = self._r(query_spec, "body", mandatory=False, error_ctx=query_name)
-                pages = self._r(query_spec, "pages", error_ctx=query_name)
-                items_per_page = self._r(query_spec, "results-per-page", error_ctx=query_name)
-                queries.append(ScrollQuery(index=index_name, type=type_name, name=query_name, body=query_body,
-                                           use_request_cache=request_cache, pages=pages, items_per_page=items_per_page))
-            else:
-                raise TrackSyntaxError("Unknown query type '%s' in query '%s'" % (query_type, query_name))
-        return queries
+        query_body = self._r(query_spec, "body", mandatory=False, error_ctx=ops_spec_name)
+        pages = self._r(query_spec, "pages", mandatory=False, error_ctx=ops_spec_name)
+        items_per_page = self._r(query_spec, "results-per-page", mandatory=False, error_ctx=ops_spec_name)
+
+        params = {
+            "index": index_name,
+            "type": type_name,
+            "name": ops_spec_name,
+            "use_request_cache": request_cache,
+            "body": query_body
+        }
+
+        if not index_name or not type_name:
+            raise TrackSyntaxError("Query '%s' requires an index and a type." % ops_spec_name)
+
+        if pages:
+            params["pages"] = pages
+        if items_per_page:
+            params["items_per_page"] = items_per_page
+
+        return Operation(name=ops_spec_name,
+                         operation_type=OperationType.Search,
+                         params=params)
 
 
-class Query:
-    def __init__(self, name, normalization_factor=1):
+class OperationType(Enum):
+    Index = 0,
+    ForceMerge = 1,
+    IndicesStats = 2,
+    NodesStats = 3,
+    Search = 4
+
+
+# Schedule elements
+class Parallel:
+    def __init__(self, tasks, clients=None):
+        self.tasks = tasks
+        self._clients = clients
+
+    @property
+    def clients(self):
+        if self._clients is not None:
+            return self._clients
+        else:
+            num_clients = 0
+            for task in self.tasks:
+                num_clients += task.clients
+            return num_clients
+
+    def __iter__(self):
+        return iter(self.tasks)
+
+    def __repr__(self, *args, **kwargs):
+        return "%d parallel tasks" % len(self.tasks)
+
+
+class Task:
+    def __init__(self, operation, warmup_iterations=0, warmup_time_period=0, iterations=1, clients=1, target_throughput=None):
+        self.operation = operation
+        self.warmup_iterations = warmup_iterations
+        self.warmup_time_period = warmup_time_period
+        self.iterations = iterations
+        self.clients = clients
+        self.target_throughput = target_throughput
+
+    def __iter__(self):
+        return iter([self])
+
+    def __repr__(self, *args, **kwargs):
+        return "Task for [%s]" % self.operation.name
+
+
+class Operation:
+    def __init__(self, name, operation_type, granularity_unit="ops/s", params=None):
+        if params is None:
+            params = {}
         self.name = name
-        self.normalization_factor = normalization_factor
+        self.type = operation_type
+        self.granularity_unit = granularity_unit
+        self.params = params
 
-    def run(self, es):
-        """
-        Runs a query.
+    def __hash__(self):
+        return hash(self.name)
 
-        :param es: Elasticsearch client object
-        """
-        raise NotImplementedError("abstract method")
+    def __eq__(self, other):
+        return self.name == other.name
 
-    def close(self, es):
-        """
-        Subclasses can override this method for any custom cleanup logic
-
-        :param es: Elasticsearch client object
-        """
-        pass
-
-    def __str__(self):
-        return self.name
-
-
-class DefaultQuery:
-    def __init__(self, index, type, name, body, use_request_cache=False):
-        self.name = name
-        self.normalization_factor = 1
-        self.index = index
-        self.type = type
-        self.body = body
-        self.use_request_cache = use_request_cache
-
-    def __enter__(self):
-        return self
-
-    def __call__(self, es):
-        return es.search(index=self.index, doc_type=self.type, request_cache=self.use_request_cache, body=self.body)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        return False
-
-    def __str__(self):
-        return self.name
-
-
-class ScrollQuery:
-    def __init__(self, index, type, name, body, use_request_cache, pages, items_per_page):
-        self.name = name
-        self.normalization_factor = pages
-        self.index = index
-        self.type = type
-        self.pages = pages
-        self.items_per_page = items_per_page
-        self.body = body
-        self.use_request_cache = use_request_cache
-        self.scroll_id = None
-        self.es = None
-
-    def __enter__(self):
-        return self
-
-    def __call__(self, es):
-        self.es = es
-        r = es.search(
-                index=self.index,
-                doc_type=self.type,
-                body=self.body,
-                sort="_doc",
-                scroll="10s",
-                size=self.items_per_page,
-                request_cache=self.use_request_cache)
-        self.scroll_id = r["_scroll_id"]
-        # Note that starting with ES 2.0, the initial call to search() returns already the first result page
-        # so we have to retrieve one page less
-        for i in range(self.pages - 1):
-            hit_count = len(r["hits"]["hits"])
-            if hit_count == 0:
-                # done
-                break
-            r = es.scroll(scroll_id=self.scroll_id, scroll="10s")
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.scroll_id and self.es:
-            self.es.clear_scroll(scroll_id=self.scroll_id)
-            self.scroll_id = None
-            self.es = None
-        return False
-
-    def __str__(self):
+    def __repr__(self, *args, **kwargs):
         return self.name

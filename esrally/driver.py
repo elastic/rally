@@ -1,414 +1,1068 @@
+import concurrent.futures
+import datetime
+import json
 import logging
+import queue
 import random
-import threading
+import socket
+import time
 
-from esrally import time, track, exceptions
+import elasticsearch
+import thespian.actors
+
+from esrally import exceptions, metrics, track, client, PROGRAM_NAME
 from esrally.utils import convert, progress
 
 logger = logging.getLogger("rally.driver")
 
 
-class Driver:
-    BENCHMARKS = {
-        track.BenchmarkPhase.search: lambda: SearchBenchmark,
-        track.BenchmarkPhase.stats: lambda: StatsBenchmark,
-        track.BenchmarkPhase.index: lambda: ThreadedIndexBenchmark
-    }
-
+##################################
+#
+# Messages sent between drivers
+#
+##################################
+class StartBenchmark:
     """
-    Driver runs the benchmark.
+    Starts a benchmark.
+    """
+    def __init__(self, config, track, metrics_meta_info):
+        """
+        :param config: Rally internal configuration object.
+        :param track: The track to use.
+        :param metrics_meta_info: meta info for the metrics store.
+        """
+        self.config = config
+        self.track = track
+        self.metrics_meta_info = metrics_meta_info
+
+
+class StartLoadGenerator:
+    """
+    Starts a load generator.
+    """
+    def __init__(self, client_id, config, indices, tasks):
+        """
+        :param client_id: Client id of the load generator.
+        :param config: Rally internal configuration object.
+        :param indices: Affected indices.
+        :param tasks: Tasks to run.
+        """
+        self.client_id = client_id
+        self.config = config
+        self.indices = indices
+        self.tasks = tasks
+
+
+class Drive:
+    """
+    Tells a load generator to drive (either after a join point or initially).
+    """
+    def __init__(self, client_start_timestamp):
+        self.client_start_timestamp = client_start_timestamp
+
+
+class UpdateSamples:
+    """
+    Used to send samples from a load generator node to the master.
+    """
+    def __init__(self, client_id, samples):
+        self.client_id = client_id
+        self.samples = samples
+
+
+class JoinPointReached:
+    """
+    Tells the master that a load generator has reached a join point. Used for coordination across multiple load generators.
+    """
+    def __init__(self, client_id, task):
+        self.client_id = client_id
+        self.client_local_timestamp = time.perf_counter()
+        self.task = task
+
+
+class BenchmarkComplete:
+    """
+    Indicates that the benchmark is complete.
+    """
+    def __init__(self, metrics):
+        self.metrics = metrics
+
+
+class Driver(thespian.actors.Actor):
+    WAKEUP_INTERVAL_SECONDS = 1
+    """
+    Coordinates all worker drivers.
+    """
+    def __init__(self):
+        super().__init__()
+        self.config = None
+        # Elasticsearch client
+        self.es = None
+        self.metrics_store = None
+        self.raw_samples = []
+        self.currently_completed = 0
+        self.clients_completed_current_step = {}
+        self.current_step = -1
+        self.number_of_steps = 0
+        self.start_sender = None
+        self.allocations = None
+        self.join_points = None
+        self.ops_per_join_point = None
+        self.drivers = []
+        self.progress_reporter = progress.CmdLineProgressReporter()
+        self.progress_counter = 0
+
+    def receiveMessage(self, msg, sender):
+        if isinstance(msg, StartBenchmark):
+            self.start_benchmark(msg, sender)
+        elif isinstance(msg, JoinPointReached):
+            self.joinpoint_reached(msg)
+        elif isinstance(msg, UpdateSamples):
+            self.update_samples(msg)
+        elif isinstance(msg, thespian.actors.WakeupMessage):
+            if not self.finished():
+                self.update_progress_message()
+                self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
+
+    def start_benchmark(self, msg, sender):
+        logger.info("Benchmark is about to start.")
+        self.start_sender = sender
+        self.config = msg.config
+        self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
+        self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info)
+        invocation = self.config.opts("meta", "time.start")
+        track_name = self.config.opts("system", "track")
+        challenge_name = self.config.opts("benchmarks", "challenge")
+        selected_car_name = self.config.opts("benchmarks", "car")
+        self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
+
+        track = msg.track
+        challenge = select_challenge(self.config, track)
+        setup_index(self.es, track, challenge)
+        allocator = Allocator(challenge.schedule)
+        self.allocations = allocator.allocations
+        self.number_of_steps = len(allocator.join_points) - 1
+        self.ops_per_join_point = allocator.operations_per_joinpoint
+
+        logger.info("Benchmark consists of [%d] steps executed by (at most) [%d] clients as specified by the allocation matrix:\n%s" %
+                    (self.number_of_steps, len(self.allocations), self.allocations))
+
+        for client_id in range(allocator.clients):
+            self.drivers.append(self.createActor(LoadGenerator))
+        for client_id, driver in enumerate(self.drivers):
+            self.send(driver, StartLoadGenerator(client_id, self.config, track.indices, self.allocations[client_id]))
+
+        self.update_progress_message()
+        self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
+
+    def joinpoint_reached(self, msg):
+        self.currently_completed += 1
+        self.clients_completed_current_step[msg.client_id] = (msg.client_local_timestamp, time.perf_counter())
+        logger.debug("[%d/%d] drivers reached join point [%d/%d]." %
+                     (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
+        if self.currently_completed == len(self.drivers):
+            logger.info("All drivers completed their operations until join point [%d/%d]." %
+                        (self.current_step + 1, self.number_of_steps))
+            # we can go on to the next step
+            self.currently_completed = 0
+            # make a copy and reset early to avoid any race conditions from clients that reach a join point already while we are sending...
+            clients_curr_step = self.clients_completed_current_step
+            self.clients_completed_current_step = {}
+            self.current_step += 1
+            if self.finished():
+                self.update_progress_message(finished=True)
+                logger.info("All steps completed. Shutting down")
+                # we're done here
+                for driver in self.drivers:
+                    self.send(driver, thespian.actors.ActorExitRequest())
+                self.post_process_samples()
+                self.send(self.start_sender, BenchmarkComplete(self.metrics_store.to_externalizable()))
+                self.metrics_store.close()
+                self.send(self.myAddress, thespian.actors.ActorExitRequest())
+            else:
+                self.update_progress_message()
+                # start the next task in three seconds (relative to master's timestamp)
+                #
+                # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
+                #             (it doesn't matter too much if we're a few ms off).
+                start_next_task = time.perf_counter() + 3.0
+                for client_id, driver in enumerate(self.drivers):
+                    client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
+                    client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
+                    logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])" %
+                                (client_id, client_start_timestamp, start_next_task))
+                    self.send(driver, Drive(client_start_timestamp))
+
+    def finished(self):
+        return self.current_step == self.number_of_steps
+
+    def update_samples(self, msg):
+        self.raw_samples += msg.samples
+
+    def post_process_samples(self):
+        for sample in self.raw_samples:
+            self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.operation.name,
+                                                       operation_type=sample.operation.type, sample_type=sample.sample_type,
+                                                       absolute_time=sample.absolute_time, relative_time=sample.relative_time)
+
+            self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms",
+                                                       operation=sample.operation.name, operation_type=sample.operation.type,
+                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                       relative_time=sample.relative_time)
+
+        aggregates = calculate_global_throughput(self.raw_samples)
+        for op, samples in aggregates.items():
+            for absolute_time, relative_time, sample_type, throughput in moving_average(samples):
+                self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=op.granularity_unit,
+                                                           operation=op.name, operation_type=op.type, sample_type=sample_type,
+                                                           absolute_time=absolute_time, relative_time=relative_time)
+
+    def update_progress_message(self, finished=False):
+        progress_indicator = ["    ", " .  ", " .. ", " ..."]
+        step = self.current_step if not finished else self.current_step - 1
+        ops = ",".join([op.name for op in self.ops_per_join_point[step]])
+
+        self.progress_counter = (self.progress_counter + 1) % len(progress_indicator) if not finished else 0
+        self.progress_reporter.print("Running %s" % ops,
+                                     "[%3d%% done]%s" % (round((self.current_step / self.number_of_steps) * 100),
+                                                         progress_indicator[self.progress_counter]))
+
+        if finished:
+            self.progress_reporter.finish()
+
+
+class LoadGenerator(thespian.actors.Actor):
+    """
+    The actual driver that applies load against the cluster.
+
+    It will also regularly send measurements to the master node so it can consolidate them.
     """
 
-    def __init__(self, config, cluster, track, challenge, clock=time.Clock):
-        self.cfg = config
-        self.cluster = cluster
-        self.track = track
-        self.challenge = challenge
-        self.clock = clock
+    WAKEUP_INTERVAL_SECONDS = 5
 
-    def go(self):
-        self.cluster.on_benchmark_start()
-        # We need to run phases in order - i.e. indexing has to be done before a search can be started
-        for phase in track.BenchmarkPhase:
-            if phase in self.challenge.benchmark:
-                self._run(Driver.BENCHMARKS[phase]())
-        self.cluster.on_benchmark_stop()
+    def __init__(self):
+        super().__init__()
+        self.master = None
+        self.client_id = None
+        self.es = None
+        self.config = None
+        self.indices = None
+        self.tasks = None
+        self.current_task = 0
+        self.start_timestamp = None
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.executor_future = None
+        self.sampler = None
+        self.start_driving = False
 
-    def _run(self, benchmark_class):
-        benchmark = benchmark_class(self.cfg, self.clock, self.track, self.challenge, self.cluster)
-        phase = benchmark.phase
-        logger.info("Starting %s benchmark for track [%s] and challenge [%s]" % (phase.name, self.track.name, self.challenge.name))
-        self.cluster.on_benchmark_start(phase)
-        benchmark.run()
-        self.cluster.on_benchmark_stop(phase)
-        logger.info("Stopped %s benchmark for track [%s] and challenge [%s]" % (phase.name, self.track.name, self.challenge.name))
-
-
-class Benchmark:
-    def __init__(self, cfg, clock, track, challenge, cluster, phase):
-        self.cfg = cfg
-        self.clock = clock
-        self.track = track
-        self.challenge = challenge
-        self.cluster = cluster
-        self.phase = phase
-        self.metrics_store = cluster.metrics_store
-        self.progress = progress.CmdLineProgressReporter()
-        self.quiet_mode = self.cfg.opts("system", "quiet.mode")
-
-
-class LatencyBenchmark(Benchmark):
-    def __init__(self, cfg, clock, track, challenge, cluster, phase, queries, warmup_repetitions=1000, repetitions=1000):
-        Benchmark.__init__(self, cfg, clock, track, challenge, cluster, phase)
-        self.queries = queries
-        self.warmup_repetitions = warmup_repetitions
-        self.repetitions = repetitions
-        self.stop_watch = self.clock.stop_watch()
-
-    def run(self):
-        logger.info("Running warmup iterations")
-        self._run_benchmark("  Benchmarking %s (warmup iteration %d/%d)", self.warmup_repetitions)
-        logger.info("Running measurement iterations")
-        times = self._run_benchmark("  Benchmarking %s (iteration %d/%d)", self.repetitions)
-
-        for q in self.queries:
-            latencies = [t[q.name] for t in times]
-            for latency in latencies:
-                self.metrics_store.put_value_cluster_level("query_latency_%s" % q.name, convert.seconds_to_ms(latency), "ms")
-
-    def _run_benchmark(self, message, repetitions):
-        times = []
-        quiet = self.quiet_mode
-        if not quiet:
-            self._print_progress(message, 0, repetitions)
-        for iteration in range(1, repetitions + 1):
-            if not quiet:
-                self._print_progress(message, iteration, repetitions)
-            times.append(self._run_one_round())
-        self.progress.finish()
-        return times
-
-    def _print_progress(self, message, iteration, repetitions):
-        if repetitions == 0:
-            self.progress.print(message % (self.phase.name, iteration, repetitions), "[100% done]")
+    def receiveMessage(self, msg, sender):
+        if isinstance(msg, StartLoadGenerator):
+            logger.debug("client [%d] is about to start." % msg.client_id)
+            self.master = sender
+            self.client_id = msg.client_id
+            self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
+            self.config = msg.config
+            self.indices = msg.indices
+            self.tasks = msg.tasks
+            self.current_task = 0
+            self.start_timestamp = time.perf_counter()
+            self.drive()
+        elif isinstance(msg, Drive):
+            logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %
+                         (self.client_id, self.current_task, msg.client_start_timestamp))
+            self.master = sender
+            self.start_driving = True
+            self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
+        elif isinstance(msg, thespian.actors.WakeupMessage):
+            logger.debug("client [%d] woke up." % self.client_id)
+            # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
+            if self.start_driving:
+                self.start_driving = False
+                self.drive()
+            else:
+                self.send_samples()
+                if self.executor_future is not None:
+                    if self.executor_future.done():
+                        self.executor_future = None
+                        self.drive()
+                    else:
+                        self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
-            progress_percent = round(100 * iteration / repetitions)
-            if ((100 * iteration) / repetitions) % 5 == 0:
-                self.progress.print(message % (self.phase.name, iteration, repetitions), "[%3d%% done]" % progress_percent)
+            logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
 
-    def _run_one_round(self):
-        d = {}
-        es = self.cluster.client
-        for query in self.queries:
-            self.stop_watch.start()
-            with query:
-                query(es)
-            self.stop_watch.stop()
-            d[query.name] = self.stop_watch.total_time() / query.normalization_factor
-        return d
+    def drive(self):
+        task = None
+        # skip non-tasks in the task list
+        while task is None:
+            task = self.tasks[self.current_task]
+            self.current_task += 1
+
+        if isinstance(task, JoinPoint):
+            logger.info("client [%d] reached join point [%s]." % (self.client_id, task))
+            # clients that don't execute tasks don't need to care about waiting
+            if self.executor_future is not None:
+                self.executor_future.result()
+            self.send_samples()
+            self.executor_future = None
+            self.sampler = None
+            self.send(self.master, JoinPointReached(self.client_id, task))
+        elif isinstance(task, track.Task):
+            logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
+            self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
+            schedule = schedule_for(task, self.client_id, self.indices)
+            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
+            self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
+        else:
+            raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
+
+    def send_samples(self):
+        if self.sampler:
+            samples = self.sampler.samples
+            if len(samples) > 0:
+                self.send(self.master, UpdateSamples(self.client_id, samples))
 
 
-class SearchBenchmark(LatencyBenchmark):
-    def __init__(self, cfg, clock, t, challenge, cluster):
-        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.search,
-                         challenge.benchmark[track.BenchmarkPhase.search].queries,
-                         challenge.benchmark[track.BenchmarkPhase.search].warmup_iteration_count,
-                         challenge.benchmark[track.BenchmarkPhase.search].iteration_count)
+class Sampler:
+    """
+    Encapsulates management of gathered samples.
+    """
+    def __init__(self, client_id, operation, start_timestamp):
+        self.client_id = client_id
+        self.operation = operation
+        self.start_timestamp = start_timestamp
+        self.q = queue.Queue(maxsize=1024)
+
+    def add(self, sample_type, latency_ms, service_time_ms, total_ops, time_period):
+        try:
+            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
+                                     sample_type, latency_ms, service_time_ms, total_ops, time_period))
+        except queue.Full:
+            logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
+
+    @property
+    def samples(self):
+        samples = []
+        try:
+            while True:
+                samples.append(self.q.get_nowait())
+        except queue.Empty:
+            pass
+        return samples
 
 
-class StatsQueryAdapter:
-    def __init__(self, name, op, *args, **kwargs):
-        self.name = name
-        self.op = op
-        self.args = args
-        self.kwargs = kwargs
-        self.normalization_factor = 1
+class Sample:
+    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops, time_period):
+        self.client_id = client_id
+        self.absolute_time = absolute_time
+        self.relative_time = relative_time
+        self.operation = operation
+        self.sample_type = sample_type
+        self.latency_ms = latency_ms
+        self.service_time_ms = service_time_ms
+        self.total_ops = total_ops
+        self.time_period = time_period
 
+
+def select_challenge(config, t):
+    selected_challenge = config.opts("benchmarks", "challenge")
+    for challenge in t.challenges:
+        if challenge.name == selected_challenge:
+            return challenge
+    raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
+                                          "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
+
+
+def setup_index(es, t, challenge):
+    if challenge.index_settings:
+        for index in t.indices:
+            if es.indices.exists(index=index.name):
+                logger.warn("Index [%s] already exists. Deleting it." % index.name)
+                es.indices.delete(index=index.name)
+            logger.info("Creating index [%s]" % index.name)
+            es.indices.create(index=index.name, body=challenge.index_settings)
+            for type in index.types:
+                mappings = open(type.mapping_file).read()
+                logger.info("create mapping for type [%s] in index [%s] with content:\n%s" % (type.name, index.name, mappings))
+                logger.debug(mappings)
+                es.indices.put_mapping(index=index.name,
+                                       doc_type=type.name,
+                                       body=json.loads(mappings))
+    wait_for_status_green(es)
+
+
+EXPECTED_CLUSTER_STATUS = "green"
+
+
+def wait_for_status_green(es):
+    """
+    Synchronously waits until the cluster reaches status green. Upon timeout a LaunchError is thrown.
+    """
+    logger.info("Wait for cluster status [%s]" % EXPECTED_CLUSTER_STATUS)
+    start = time.perf_counter()
+    reached_cluster_status, relocating_shards = _do_wait(es, EXPECTED_CLUSTER_STATUS)
+    stop = time.perf_counter()
+    logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
+    logger.info("Cluster health: [%s]" % str(es.cluster.health()))
+    logger.info("Shards:\n%s" % es.cat.shards(v=True))
+
+
+def _do_wait(es, expected_cluster_status):
+    reached_cluster_status = None
+    for attempt in range(10):
+        try:
+            result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
+        except (socket.timeout, elasticsearch.exceptions.ConnectionError, elasticsearch.exceptions.TransportError):
+            pass
+        else:
+            reached_cluster_status = result["status"]
+            relocating_shards = result["relocating_shards"]
+            logger.info("GOT: %s" % str(result))
+            logger.info("ALLOC:\n%s" % es.cat.allocation(v=True))
+            logger.info("RECOVERY:\n%s" % es.cat.recovery(v=True))
+            logger.info("SHARDS:\n%s" % es.cat.shards(v=True))
+            if reached_cluster_status == expected_cluster_status and relocating_shards == 0:
+                return reached_cluster_status, relocating_shards
+            else:
+                time.sleep(0.5)
+    msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
+    logger.error(msg)
+    raise exceptions.RallyAssertionError(msg)
+
+
+def calculate_global_throughput(samples, bucket_interval_secs=2):
+    """
+    Calculates global throughput based on samples gathered from multiple load generators.
+
+    :param samples: A list containing all samples from all load generators.
+    :param bucket_interval_secs: The bucket interval for aggregations.
+    :return: A global view of throughput samples.
+    """
+    samples_per_op = {}
+    # first we group all warmup / measurement samples by operation.
+    for sample in samples:
+        k = (sample.operation, sample.sample_type)
+        if k not in samples_per_op:
+            samples_per_op[k] = []
+        samples_per_op[k].append(sample)
+
+    global_throughput = {}
+
+    # then we consolidate...
+    for k, v in samples_per_op.items():
+        op, sample_type = k
+        if op not in global_throughput:
+            global_throughput[op] = []
+        # sort all samples by time
+        current_samples = sorted(v, key=lambda s: s.absolute_time)
+
+        next_bucket = bucket_interval_secs
+        total_count = 0
+        reference_time = 0
+        previous_reference_time = 0
+        most_recent_unsaved_record = None
+        start_time = current_samples[0].absolute_time - current_samples[0].time_period
+
+        for sample in current_samples:
+            total_count += sample.total_ops
+            reference_time = sample.absolute_time - start_time
+            # avoid division by zero
+            interval = reference_time - previous_reference_time
+            if interval == 0:
+                continue
+            most_recent_unsaved_record = (sample.absolute_time, sample.relative_time, sample_type, (total_count / interval))
+            if reference_time >= next_bucket:
+                global_throughput[op].append(most_recent_unsaved_record)
+                next_bucket += bucket_interval_secs
+                previous_reference_time = reference_time
+                # we saved it
+                total_count = 0
+                most_recent_unsaved_record = None
+        # also append last record in case we don't align perfectly with the bucket interval
+        if most_recent_unsaved_record:
+            global_throughput[op].append(most_recent_unsaved_record)
+    return global_throughput
+
+
+def moving_average(data, window=3):
+    average_data = []
+    for idx, record in enumerate(data):
+        if idx < window:
+            average_data.append(record)
+        elif idx >= len(data) - window:
+            average_data.append(record)
+        else:
+            sum_in_window = 0
+            # also include upper bound
+            for offset in range(-window, window + 1):
+                _, _, _, v = data[idx + offset]
+                sum_in_window += v
+            absolute_time, relative_time, sample_type, value = record
+            average_data.append((absolute_time, relative_time, sample_type, sum_in_window / (2 * window + 1)))
+    return average_data
+
+
+def execute_schedule(schedule, es, sampler):
+    """
+    Executes tasks according to the schedule for a given operation.
+
+    :param schedule: The schedule for this operation.
+    :param es: Elasticsearch client that will be used to execute the operation.
+    :param sampler: A container to store raw samples.
+    """
+    relative = None
+    previous_sample_type = None
+    total_start = time.perf_counter()
+    for expected_scheduled_time, sample_type_calculator, curr_iteration, total_iterations, runner, params in schedule:
+        sample_type = sample_type_calculator(total_start)
+        # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
+        # the relative time zero which simplifies throughput calculation.
+        #
+        # Assumption: We always get the same operation here, otherwise simply resetting one timer will not work!
+        if sample_type != previous_sample_type:
+            relative = time.perf_counter()
+            previous_sample_type = sample_type
+        # expected_scheduled_time is relative to the start of the first iteration
+        absolute_expected_schedule_time = relative + expected_scheduled_time
+        throughput_throttled = expected_scheduled_time > 0
+        if throughput_throttled:
+            rest = absolute_expected_schedule_time - time.perf_counter()
+            if rest > 0:
+                time.sleep(rest)
+        start = time.perf_counter()
+        with runner:
+            weight = runner(es, params)
+        stop = time.perf_counter()
+
+        service_time = stop - start
+        # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
+        latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
+        sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative))
+
+
+class JoinPoint:
+    def __init__(self, id):
+        self.id = id
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __repr__(self, *args, **kwargs):
+        return "JoinPoint(%s)" % self.id
+
+
+class Allocator:
+    """
+    Decides which operations runs on which client and how to partition them.
+    """
+    def __init__(self, schedule):
+        self.schedule = schedule
+
+    @property
+    def allocations(self):
+        """
+        Calculates an allocation matrix consisting of two dimensions. The first dimension is the client. The second dimension are the task
+         this client needs to run. The matrix shape is rectangular (i.e. it is not ragged). There are three types of entries in the matrix:
+
+          1. Normal tasks: They need to be executed by a client.
+          2. Join points: They are used as global coordination points which all clients need to reach until the benchmark can go on. They
+                          indicate that a client has to wait until the master signals it can go on.
+          3. `None`: These are inserted by the allocator to keep the allocation matrix rectangular. Clients have to skip `None` entries
+                     until one of the other entry types are encountered.
+
+        :return: An allocation matrix with the structure described above.
+        """
+        max_clients = self.clients
+        allocations = [None] * max_clients
+        for client_index in range(max_clients):
+            allocations[client_index] = []
+        join_point_id = 0
+        # start with an artificial join point to allow master to coordinate that all clients start at the same time
+        next_join_point = JoinPoint(join_point_id)
+        for client_index in range(max_clients):
+            allocations[client_index].append(next_join_point)
+        join_point_id += 1
+
+        for task in self.schedule:
+            start_client_index = 0
+            for sub_task in task:
+                for client_index in range(start_client_index, start_client_index + sub_task.clients):
+                    allocations[client_index % max_clients].append(sub_task)
+                start_client_index += sub_task.clients
+
+            # uneven distribution between tasks and clients, e.g. there are 5 (parallel) tasks but only 2 clients. Then, one of them
+            # executes three tasks, the other one only two. So we need to fill in a `None` for the second one.
+            if start_client_index % max_clients > 0:
+                # pin the index range to [0, max_clients). This simplifies the code below.
+                start_client_index = start_client_index % max_clients
+                for client_index in range(start_client_index, max_clients):
+                    allocations[client_index].append(None)
+
+            # let all clients join after each task, then we go on
+            next_join_point = JoinPoint(join_point_id)
+            for client_index in range(max_clients):
+                allocations[client_index].append(next_join_point)
+            join_point_id += 1
+        return allocations
+
+    @property
+    def join_points(self):
+        """
+        :return: A list of all join points for this allocations.
+        """
+        return [allocation for allocation in self.allocations[0] if isinstance(allocation, JoinPoint)]
+
+    @property
+    def operations_per_joinpoint(self):
+        """
+
+        Calculates a flat list of all unique operations that are run in between join points.
+
+        Consider the following schedule (2 clients):
+
+        1. op1 and op2 run by both clients in parallel
+        2. join point
+        3. op3 run by client 1
+        4. join point
+
+        The results in: [{op1, op2}, {op3}]
+
+        :return: A list of sets containing all operations.
+        """
+        ops = []
+        current_ops = set()
+
+        allocs = self.allocations
+        # assumption: the shape of allocs is rectangular (i.e. each client contains the same number of elements)
+        for idx in range(0, len(allocs[0])):
+            for client in range(0, self.clients):
+                task = allocs[client][idx]
+                if isinstance(task, track.Task):
+                    current_ops.add(task.operation)
+                elif isinstance(task, JoinPoint) and len(current_ops) > 0:
+                    ops.append(current_ops)
+                    current_ops = set()
+
+        return ops
+
+    @property
+    def clients(self):
+        """
+        :return: The maximum number of clients involved in executing the given schedule.
+        """
+        max_clients = 1
+        for task in self.schedule:
+            max_clients = max(max_clients, task.clients)
+        return max_clients
+
+
+#######################################
+#
+# Scheduler related stuff
+#
+#######################################
+
+
+# Runs a concrete schedule on one worker client
+# Needs to determine the runners and concrete iterations per client.
+def schedule_for(task, client_index, indices):
+    """
+    Calculates a client's schedule for a given task.
+
+    :param task: The task that should be executed.
+    :param client_index: The current client index.  Must be in the range [0, `task.clients').
+    :param indices: Specification of affected indices.
+    :return: A generator for the operations the given client needs to perform for this task.
+    """
+    op = task.operation
+    num_clients = task.clients
+    target_throughput = task.target_throughput // num_clients if task.target_throughput else None
+
+    if op.type == track.OperationType.Index:
+        runner = BulkIndex()
+        return bulk_data_based(target_throughput, task.warmup_time_period, num_clients, client_index, indices, runner,
+                               op.params["bulk-size"], op.params["id-conflicts"])
+    else:
+        runner = runners[op.type]()
+        # will queries always be iteration based?
+        return iteration_count_based(target_throughput, task.warmup_iterations // num_clients, task.iterations // num_clients, runner,
+                                     op.params)
+
+
+def iteration_count_based(target_throughput, warmup_iterations, iterations, runner, params=None):
+    """
+
+    Calculates the necessary schedule based on a given number of iterations.
+
+    :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
+    :param warmup_iterations: The number of warmup iterations to run. 0 if no warmup should be performed.
+    :param iterations: The number of measurement iterations to run.
+    :param runner: The runner for a given operation.
+    :param params: The parameters for a given operation.
+    :return: A generator for the corresponding parameters.
+    """
+    wait_time = 1 / target_throughput if target_throughput else 0
+    if params is None:
+        params = []
+    for i in range(0, warmup_iterations):
+        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, warmup_iterations, runner, params)
+
+    for i in range(0, iterations):
+        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, iterations, runner, params)
+
+
+def build_conflicting_ids(conflicts, docs_to_index, offset):
+    if conflicts is None or conflicts == track.IndexIdConflict.NoConflicts:
+        return None
+    logger.info("build ids with id conflicts of type [%s]" % conflicts)
+    all_ids = [0] * docs_to_index
+    for i in range(docs_to_index):
+        # always consider the offset as each client will index its own range and we don't want uncontrolled conflicts across clients
+        if conflicts == track.IndexIdConflict.SequentialConflicts:
+            all_ids[i] = "%10d" % (offset + i)
+        elif conflicts == track.IndexIdConflict.RandomConflicts:
+            all_ids[i] = "%10d" % random.randint(offset, docs_to_index)
+        else:
+            raise exceptions.SystemSetupError('Unknown id conflict type %s' % conflicts)
+    return all_ids
+
+
+def chain(*iterables):
+    """
+    Chains the given iterables similar to `itertools.chain` except that it also respects the context manager contract.
+
+    :param iterables: A number of iterable that should be chained.
+    :return: An iterable that will delegate to all provided iterables in turn.
+    """
+    for it in iterables:
+        # execute within a context
+        with it:
+            for element in it:
+                yield element
+
+
+def number_of_bulks(indices, bulk_size, client_index, num_clients):
+    """
+    Determines the number of bulk operations needed to index all documents in the given indices.
+
+    :param indices: Specification of affected indices.
+    :param bulk_size: The size of bulk index operations (number of documents per bulk).
+    :param client_index: The current client index.  Must be in the range [0, `num_clients').
+    :param num_clients: The total number of clients that will run bulk index operations.
+    :return: The number of bulk operations that the given client will issue.
+    """
+    bulks = 0
+    for index in indices:
+        for type in index.types:
+            offset, num_docs = bounds(type.number_of_documents, client_index, num_clients)
+            complete_bulks, rest = (num_docs // bulk_size, num_docs % bulk_size)
+            bulks += complete_bulks
+            if rest > 0:
+                bulks += 1
+    return bulks
+
+
+def create_default_reader(index, type, offset, num_docs, bulk_size, id_conflicts):
+    return IndexDataReader(type.document_file, num_docs,
+                           build_conflicting_ids(id_conflicts, num_docs, offset), index.name, type.name, bulk_size, offset)
+
+
+def bounds(total_docs, client_index, num_clients):
+    """
+
+    Calculates the start offset and number of documents for each client.
+
+    :param total_docs: The total number of documents to index.
+    :param client_index: The current client index.  Must be in the range [0, `num_clients').
+    :param num_clients: The total number of clients that will run bulk index operations.
+    :return: A tuple containing the start offset for the document corpus and the number documents that the client should index.
+    """
+    # last client gets one less if the number is uneven
+    if client_index + 1 == num_clients and total_docs % num_clients > 0:
+        correction = 1
+    else:
+        correction = 0
+    docs_per_client = round(total_docs / num_clients) - correction
+    # don't consider the correction for the other clients because it just applies to the last one
+    offset = client_index * (docs_per_client + correction)
+    return offset, docs_per_client
+
+
+def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_index, indices, runner, bulk_size, id_conflicts,
+                    create_reader=create_default_reader):
+    """
+    Calculates the necessary schedule for bulk operations.
+
+
+    :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
+    :param warmup_time_period: The time period in seconds that is considered for warmup.
+    :param num_clients: The total number of clients that will run the bulk operation.
+    :param client_index: The current client for which we calculated the schedule. Must be in the range [0, `num_clients').
+    :param indices: Specification of affected indices.
+    :param runner: The runner for a given operation.
+    :param bulk_size: The size of bulk index operations (number of documents per bulk).
+    :param id_conflicts: The type of id conflicts to simulate.
+    :param create_reader: A function to create the index reader. By default a file based index reader will be created. This parameter is
+                          intended for testing only.
+    :return: A generator for the bulk operations of the given client.
+    """
+    logger.info(
+        "Creating bulk data based generator for target throughput [%s], client index [%d] of [%d] clients total with bulk size [%d]." %
+        (str(target_throughput), client_index, num_clients, bulk_size))
+
+    bulks = number_of_bulks(indices, bulk_size, client_index, num_clients)
+    wait_time = 1 / target_throughput if target_throughput else 0
+    # determine amount of warmup iterations based on number of records to index. Problem: this assumes we index all data. Depending on the
+    # schedule this may not be true (as we may terminate earlier)
+
+    iterations = bulks
+    readers = []
+    for index in indices:
+        for type in index.types:
+            offset, num_docs = bounds(type.number_of_documents, client_index, num_clients)
+            logger.info("Client [%d] will index [%d] docs starting from offset [%d] for [%s/%s]" %
+                        (client_index, num_docs, offset, index, type))
+            readers.append(create_reader(index, type, offset, num_docs, bulk_size, id_conflicts))
+    reader = chain(*readers)
+    it = 0
+    for bulk in reader:
+        yield (wait_time * it,
+               lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
+               it, iterations, runner, {"body": bulk})
+        it += 1
+
+
+class Runner:
+    """
+    Base class for all operations against Elasticsearch.
+    """
     def __enter__(self):
         return self
 
-    def __call__(self, client):
-        self.op(*self.args, **self.kwargs)
+    def __call__(self, *args):
+        """
+        Runs the actual method that should be benchmarked.
+
+        :param args: All arguments that are needed to call this method.
+        :return: An int indicating the "weight" of this call. This is typically 1 but for bulk operations it should be the actual bulk size.
+        """
+        raise NotImplementedError("abstract operation")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         return False
 
-    def __str__(self):
-        return self.name
+
+class BulkIndex(Runner):
+    """
+    Bulk indexes the given documents.
+
+    It expects the parameter hash to contain a key "body" containing all documents for the current bulk request.
+
+    """
+    def __call__(self, es, params):
+        response = es.bulk(body=params["body"])
+        if response["errors"]:
+            for idx, item in enumerate(response["items"]):
+                if item["index"]["status"] != 201:
+                    msg = "Could not bulk index. "
+                    msg += "Error in line [%d]\n" % (idx + 1)
+                    msg += "Bulk item: [%s]\n" % item
+                    msg += "Buffer size is [%d]\n" % idx
+                    raise exceptions.DataError(msg)
+        # at this point, the bulk will always contain a separate meta data line
+        return len(params["body"]) // 2
 
 
-class StatsBenchmark(LatencyBenchmark):
-    def __init__(self, cfg, clock, t, challenge, cluster):
-        super().__init__(cfg, clock, t, challenge, cluster, track.BenchmarkPhase.stats, [
-            StatsQueryAdapter("indices_stats", cluster.indices_stats, metric="_all", level="shards"),
-            StatsQueryAdapter("node_stats", cluster.nodes_stats, metric="_all", level="shards"),
-        ], challenge.benchmark[track.BenchmarkPhase.stats].warmup_iteration_count,
-                         challenge.benchmark[track.BenchmarkPhase.stats].iteration_count)
-
-
-class IndexedDocumentCountProbe:
-    def __init__(self, cluster, indices=None, expected_doc_count=None):
-        self.cluster = cluster
-        if indices:
-            self.indices = ",".join(indices)
-        else:
-            self.indices = None
-        self.expected_doc_count = expected_doc_count
-
-    def assert_doc_count(self):
-        if self.expected_doc_count is not None:
-            stats = self.cluster.indices_stats(index=self.indices, metric="_all", level="shards")
-            actual_doc_count = stats["_all"]["primaries"]["docs"]["count"]
-            if self.expected_doc_count != actual_doc_count:
-                msg = "Wrong number of documents: expected %s but got %s. If you benchmark against an external cluster be sure to " \
-                      "start with all indices empty." % (self.expected_doc_count, actual_doc_count)
-                logger.error(msg)
-                raise exceptions.RallyAssertionError(msg)
-
-
-class IndexBenchmark(Benchmark):
-    def __init__(self, cfg, clock, t, challenge, cluster):
-        Benchmark.__init__(self, cfg, clock, t, challenge, cluster, track.BenchmarkPhase.index)
-        self.stop_watch = clock.stop_watch()
-        self.bulk_size = challenge.benchmark[track.BenchmarkPhase.index].bulk_size
-        self.processed = 0
-
-    def run(self):
-        logger.info("Use %d docs per bulk request" % self.bulk_size)
-        finished = False
+class ForceMerge(Runner):
+    """
+    Runs a force merge operation against Elasticsearch.
+    """
+    def __call__(self, es, params):
+        indices = ",".join(params["indices"])
+        logger.info("Force merging indices [%s]." % indices)
         try:
-            self.index()
-            finished = True
-        finally:
-            self.progress.finish()
-            logger.info("IndexBenchmark finished successfully: %s" % finished)
-
-    def index(self):
-        index_names = [i.name for i in self.track.indices]
-        # check precondition, indices should be empty
-        IndexedDocumentCountProbe(self.cluster, indices=index_names, expected_doc_count=0).assert_doc_count()
-
-        force_merge = self.challenge.benchmark[self.phase].force_merge
-        docs_to_index = self.track.number_of_documents
-
-        conflicts = self.challenge.benchmark[self.phase].id_conflicts
-        if conflicts == track.IndexIdConflict.NoConflicts:
-            doc_count_probe = IndexedDocumentCountProbe(self.cluster, indices=index_names, expected_doc_count=docs_to_index)
-            ids = None
-        else:
-            # We cannot know how many docs have been updated if we produce id conflicts
-            doc_count_probe = IndexedDocumentCountProbe(self.cluster)
-            ids = self.build_conflicting_ids(conflicts)
-
-        self.index_documents(ids)
-
-        self.cluster.force_flush()
-        if force_merge:
-            self.cluster.force_merge()
-
-        doc_count_probe.assert_doc_count()
-
-    def build_conflicting_ids(self, conflicts):
-        docs_to_index = self.track.number_of_documents
-        logger.info('build ids with id conflicts of type %s' % conflicts)
-
-        all_ids = [0] * docs_to_index
-        for i in range(docs_to_index):
-            if conflicts == track.IndexIdConflict.SequentialConflicts:
-                all_ids[i] = '%10d' % i
-            elif conflicts == track.IndexIdConflict.RandomConflicts:
-                all_ids[i] = '%10d' % random.randint(0, docs_to_index)
+            es.indices.forcemerge(index=indices)
+        except elasticsearch.TransportError as e:
+            # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
+            if e.status_code == 400:
+                es.indices.optimize(index=indices)
             else:
-                raise RuntimeError('Unknown id conflict type %s' % conflicts)
-        return all_ids
-
-    def _print_progress(self, docs_processed):
-        if not self.quiet_mode:
-            # stack-confine asap to keep the reporting error low (this number may be updated by other threads), we don't need to be entirely
-            # accurate here as this is "just" a progress report for the user
-            docs_total = self.track.number_of_documents
-            elapsed = self.stop_watch.split_time()
-            docs_per_second = docs_processed / elapsed
-            self.progress.print(
-                "  Benchmarking indexing at %.1f docs/s" % docs_per_second,
-                "[%3d%% done]" % round(100 * docs_processed / docs_total)
-            )
-            logger.info("Indexer: %d docs: [%.1f docs/s]" % (docs_processed, docs_per_second))
-
-    def index_documents(self, ids):
-        raise NotImplementedError("abstract method")
+                raise e
+        return 1
 
 
-class ThreadedIndexBenchmark(IndexBenchmark):
-    def __init__(self, config, clock, track, challenge, cluster):
-        super().__init__(config, clock, track, challenge, cluster)
-
-    def index_documents(self, ids):
-        num_client_threads = self.challenge.benchmark[track.BenchmarkPhase.index].clients
-        logger.info("Launching %d client bulk indexing threads" % num_client_threads)
-
-        self.stop_watch.start()
-        self._print_progress(self.processed)
-
-        for index in self.track.indices:
-            for type in index.types:
-                if type.document_file:
-                    logger.info("Indexing JSON docs file: [%s]" % type.document_file)
-
-                    start_signal = CountDownLatch(1)
-                    stop_event = threading.Event()
-                    failed_event = threading.Event()
-                    # Isn't this wrong for the bulk iterator? (should be on another level, namely type level)
-                    docs_to_index = self.track.number_of_documents
-
-                    iterator = BulkIterator(index.name, type.name, type.document_file, ids, docs_to_index, self.bulk_size)
-
-                    threads = []
-                    try:
-                        for i in range(num_client_threads):
-                            t = threading.Thread(target=self.bulk_index, args=(start_signal, iterator, failed_event, stop_event))
-                            t.setDaemon(True)
-                            t.start()
-                            threads.append(t)
-
-                        start_signal.count_down()
-                        for t in threads:
-                            t.join()
-
-                    except KeyboardInterrupt:
-                        stop_event.set()
-                        for t in threads:
-                            t.join()
-
-                    if failed_event.isSet():
-                        raise RuntimeError("some indexing threads failed")
-
-        self.stop_watch.stop()
-        self._print_progress(self.processed)
-        docs_per_sec = (self.processed / self.stop_watch.total_time())
-        self.metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
-
-    def bulk_index(self, start_signal, bulk_iterator, failed_event, stop_event):
-        """
-        Runs one (client) bulk index thread.
-        """
-        start_signal.await()
-
-        while not stop_event.isSet():
-            buffer, document_count = bulk_iterator.next_bulk()
-            if document_count == 0:
-                break
-            data = "\n".join(buffer)
-            del buffer[:]
-
-            try:
-                response = self.cluster.client.bulk(body=data, params={'request_timeout': 60000})
-                if response["errors"]:
-                    for idx, item in enumerate(response["items"]):
-                        if item["index"]["status"] != 201:
-                            print("Error in line [%d]" % (idx + 1))
-                            print("Bulk item: [%s]" % item)
-                            print("Buffer size is [%d]" % idx)
-                            print("Source data: [%s]" % data)
-            except BaseException as e:
-                logger.error("Indexing failed: %s" % e)
-                failed_event.set()
-                stop_event.set()
-                raise
-            self.update_bulk_status(document_count)
-
-    def update_bulk_status(self, count):
-        self.processed += count
-        if self.processed % 10000 == 0:
-
-            self._print_progress(self.processed)
-            # use 10% of all documents for warmup before gathering metrics
-            if self.processed > self.track.number_of_documents / 10:
-                elapsed = self.stop_watch.split_time()
-                docs_per_sec = (self.processed / elapsed)
-                self.metrics_store.put_value_cluster_level("indexing_throughput", round(docs_per_sec), "docs/s")
+class IndicesStats(Runner):
+    """
+    Gather index stats for all indices.
+    """
+    def __call__(self, es, params):
+        es.indices.stats(metric="_all", level="shards")
+        return 1
 
 
-class CountDownLatch:
-    def __init__(self, count=1):
-        self.count = count
-        self.lock = threading.Condition()
-
-    def count_down(self):
-        with self.lock:
-            self.count -= 1
-
-            if self.count <= 0:
-                self.lock.notifyAll()
-
-    def await(self):
-        with self.lock:
-            while self.count > 0:
-                self.lock.wait()
+class NodeStats(Runner):
+    """
+    Gather node stats for all nodes.
+    """
+    def __call__(self, es, params):
+        es.nodes.stats(metric="_all", level="shards")
+        return 1
 
 
-class BulkIterator:
-    def __init__(self, index_name, type_name, documents, ids, docs_to_index, bulk_size):
-        self.f = open(documents, 'rt')
-        self.index_name = index_name
-        self.type_name = type_name
-        self.current_bulk = 0
-        self.id_up_to = 0
-        self.ids = ids
-        self.file_lock = threading.Lock()
-        self.docs_to_index = docs_to_index
-        self.rand = random.Random(17)
-        self.bulk_size = bulk_size
-        self.indexed_document_count = 0
+class Query(Runner):
+    """
+    Runs a request body search against Elasticsearch.
+
+    It expects at least the following keys in the `params` hash:
+
+    * `index`: The index or indices against which to issue the query.
+    * `type`: See `index`
+    * `use_request_cache`: True iff the request cache should be used.
+    * `body`: Query body
+
+    If the following parameters are present in addition, a scroll query will be issued:
+
+    * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
+               pages we will terminate earlier.
+    * `items_per_page`: Number of items to retrieve per page.
+
+    """
+    def __init__(self):
+        self.scroll_id = None
+        self.es = None
+
+    def __call__(self, es, params):
+        if "pages" in params and "items_per_page" in params:
+            return self.scroll_query(es, params)
+        else:
+            return self.request_body_query(es, params)
+
+    def request_body_query(self, es, params):
+        es.search(index=params["index"], doc_type=params["type"], request_cache=params["use_request_cache"], body=params["body"])
+        return 1
+
+    def scroll_query(self, es, params):
+        self.es = es
+        r = es.search(
+            index=params["index"],
+            doc_type=params["type"],
+            body=params["body"],
+            sort="_doc",
+            scroll="10s",
+            size=params["items_per_page"],
+            request_cache=params["use_request_cache"])
+        self.scroll_id = r["_scroll_id"]
+        total_pages = params["pages"]
+        # Note that starting with ES 2.0, the initial call to search() returns already the first result page
+        # so we have to retrieve one page less
+        for page in range(total_pages - 1):
+            hit_count = len(r["hits"]["hits"])
+            if hit_count == 0:
+                # We're done prematurely. Even if we are on page index zero, we still made one call.
+                return page + 1
+            r = es.scroll(scroll_id=self.scroll_id, scroll="10s")
+        return total_pages
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.scroll_id and self.es:
+            self.es.clear_scroll(scroll_id=self.scroll_id)
+            self.scroll_id = None
+            self.es = None
+        return False
+
+
+runners = {
+    track.OperationType.Search: Query,
+    track.OperationType.ForceMerge: ForceMerge,
+    track.OperationType.Index: BulkIndex,
+    track.OperationType.IndicesStats: IndicesStats,
+    track.OperationType.NodesStats: NodeStats,
+}
+
+
+class FileSource:
+    @staticmethod
+    def open(file_name, mode):
+        return FileSource(file_name, mode)
+
+    def __init__(self, file_name, mode):
+        self.f = open(file_name, mode)
+
+    def readline(self):
+        return self.f.readline()
 
     def close(self):
-        if self.f:
-            self.f.close()
-            self.f = None
+        self.f.close()
+        self.f = None
 
-    def next_bulk(self):
 
+class IndexDataReader:
+    """
+    Reads an index file in bulks into an array and also adds the necessary meta-data line before each document.
+    """
+
+    def __init__(self, data_file, docs_to_index, conflicting_ids, index_name, type_name, bulk_size, offset=0, file_source=FileSource):
+        self.data_file = data_file
+        self.docs_to_index = docs_to_index
+        self.conflicting_ids = conflicting_ids
+        self.index_name = index_name
+        self.type_name = type_name
+        self.bulk_size = bulk_size
+        self.id_up_to = 0
+        self.current_bulk = 0
+        self.offset = offset
+        self.file_source = file_source
+        self.f = None
+
+    def __enter__(self):
+        self.f = self.file_source.open(self.data_file, 'rt')
+        # skip offset number of lines
+        logger.info("Skipping %d lines in [%s]." % (self.offset, self.data_file))
+        for line in range(self.offset):
+            self.f.readline()
+        return self
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
         """
         Returns lines for one bulk request.
         """
-
         buffer = []
         try:
-            with self.file_lock:
-                docs_left = self.docs_to_index - (self.current_bulk * self.bulk_size)
-                if self.f is None or docs_left <= 0:
-                    return [], 0
+            docs_indexed = 0
+            docs_left = self.docs_to_index - (self.current_bulk * self.bulk_size)
+            if self.f is None or docs_left <= 0:
+                raise StopIteration()
 
-                self.current_bulk += 1
-                limit = 2 * min(self.bulk_size, docs_left)
-
-                while True:
-                    line = self.f.readline()
-                    if len(line) == 0:
-                        self.close()
-                        break
-                    line = line.strip()
-
-                    if self.ids is not None:
-                        # 25% of the time we replace a doc:
-                        if self.id_up_to > 0 and self.rand.randint(0, 3) == 3:
-                            id = self.ids[self.rand.randint(0, self.id_up_to - 1)]
-                        else:
-                            id = self.ids[self.id_up_to]
-                            self.id_up_to += 1
-                        cmd = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, id)
+            while docs_indexed < self.bulk_size:
+                line = self.f.readline()
+                if len(line) == 0:
+                    break
+                line = line.strip()
+                if self.conflicting_ids is not None:
+                    # 25% of the time we replace a doc:
+                    if self.id_up_to > 0 and random.randint(0, 3) == 3:
+                        doc_id = self.conflicting_ids[random.randint(0, self.id_up_to - 1)]
                     else:
-                        cmd = '{"index": {"_index": "%s", "_type": "%s"}}' % (self.index_name, self.type_name)
+                        doc_id = self.conflicting_ids[self.id_up_to]
+                        self.id_up_to += 1
+                    cmd = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
+                else:
+                    cmd = '{"index": {"_index": "%s", "_type": "%s"}}' % (self.index_name, self.type_name)
 
-                    buffer.append(cmd)
-                    buffer.append(line)
+                buffer.append(cmd)
+                buffer.append(line)
 
-                    if len(buffer) >= limit:
-                        break
+                docs_indexed += 1
 
-            # contains index commands and data (in bulk format), hence 2 lines per record
-            document_count = len(buffer) / 2
-            self.indexed_document_count += document_count
-            return buffer, document_count
-        except BaseException as e:
-            logger.exception("Could not read")
+            self.current_bulk += 1
+            return buffer
+        except IOError:
+            logger.exception("Could not read [%s]" % self.data_file)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.f:
+            self.f.close()
+            self.f = None
+        return False

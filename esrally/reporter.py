@@ -5,7 +5,7 @@ import logging
 
 import tabulate
 
-from esrally import metrics, track, exceptions
+from esrally import metrics, exceptions
 from esrally.utils import convert, format, io as rio
 
 logger = logging.getLogger("rally.reporting")
@@ -35,8 +35,16 @@ def print_header(message):
 
 
 class Stats:
-    def __init__(self, store, stats_sample_size, queries, search_sample_size):
-        self.indexing_throughput = self.summary_stats(store, "indexing_throughput")
+    def __init__(self, store, challenge):
+        self.op_metrics = collections.OrderedDict()
+        for tasks in challenge.schedule:
+            for task in tasks:
+                op = task.operation.name
+                self.op_metrics[op] = {}
+                self.op_metrics[op]["throughput"] = self.summary_stats(store, "throughput", op)
+                self.op_metrics[op]["latency"] = self.single_latency(store, op)
+                self.op_metrics[op]["service_time"] = self.single_latency(store, op, metric_name="service_time")
+
         self.total_time = store.get_one("indexing_total_time")
         self.merge_time = store.get_one("merges_total_time")
         self.refresh_time = store.get_one("refresh_total_time")
@@ -50,18 +58,10 @@ class Stats:
         self.merge_part_time_vectors = store.get_one("merge_parts_total_time_vectors")
         self.merge_part_time_points = store.get_one("merge_parts_total_time_points")
         self.query_latencies = collections.OrderedDict()
-        if search_sample_size and search_sample_size > 0:
-            for query in queries:
-                self.query_latencies[query] = self.single_latency(store, query, search_sample_size)
-        self.median_cpu_usage = {}
-        for phase in track.BenchmarkPhase:
-            m = self.median(store, "cpu_utilization_1s_%s" % phase.name)
-            if m:
-                self.median_cpu_usage[phase.name] = m
+
+        self.median_cpu_usage = self.median(store, "cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
         self.young_gc_time = store.get_one("node_total_young_gen_gc_time")
         self.old_gc_time = store.get_one("node_total_old_gen_gc_time")
-        self.index_size = store.get_one("final_index_size_bytes")
-        self.bytes_written = store.get_one("disk_io_write_bytes_%s" % track.BenchmarkPhase.index.name)
 
         self.memory_segments = store.get_one("segments_memory_in_bytes")
         self.memory_doc_values = store.get_one("segments_doc_values_memory_in_bytes")
@@ -71,26 +71,21 @@ class Stats:
         self.memory_stored_fields = store.get_one("segments_stored_fields_memory_in_bytes")
 
         self.index_size = store.get_one("final_index_size_bytes")
-        self.bytes_written = store.get_one("disk_io_write_bytes_%s" % track.BenchmarkPhase.index.name)
+        self.bytes_written = store.get_one("disk_io_write_bytes")
 
         self.segment_count = store.get_one("segments_count")
-        if stats_sample_size and stats_sample_size > 0:
-            self.indices_stats_latency = self.single_latency(store, "indices_stats", stats_sample_size)
-            self.node_stats_latency = self.single_latency(store, "node_stats", stats_sample_size)
-        else:
-            self.indices_stats_latency = None
-            self.node_stats_latency = None
 
-    def summary_stats(self, store, metric_name):
-        percentiles = store.get_percentiles(metric_name, percentiles=[MEDIAN])
-        stats = store.get_stats(metric_name)
+    def summary_stats(self, store, metric_name, operation_name):
+        percentiles = store.get_percentiles(metric_name,
+                                            operation=operation_name,
+                                            sample_type=metrics.SampleType.Normal,
+                                            percentiles=[MEDIAN])
+        unit = store.get_unit(metric_name, operation=operation_name)
+        stats = store.get_stats(metric_name, operation=operation_name, sample_type=metrics.SampleType.Normal)
         if percentiles and stats:
-            return stats["min"], percentiles[MEDIAN], stats["max"]
+            return stats["min"], percentiles[MEDIAN], stats["max"], unit
         else:
-            return None
-
-    def has_indexing_times(self):
-        return self.total_time and self.merge_time and self.refresh_time and self.flush_time and self.merge_throttle_time
+            return None, None, None, unit
 
     def has_merge_part_stats(self):
         return self.merge_part_time_postings or \
@@ -101,29 +96,41 @@ class Stats:
                self.merge_part_time_points
 
     def has_memory_stats(self):
-        return self.memory_segments and \
-               self.memory_doc_values and \
-               self.memory_terms and \
-               self.memory_norms and \
-               self.memory_points and \
-               self.memory_stored_fields
+        return self.memory_segments is not None and \
+               self.memory_doc_values is not None and \
+               self.memory_terms is not None and \
+               self.memory_norms is not None and \
+               self.memory_points is not None and \
+               self.memory_stored_fields is not None
 
     def has_disk_usage_stats(self):
         return self.index_size and self.bytes_written
 
-    def median(self, store, metric_name):
-        percentiles = store.get_percentiles(metric_name, percentiles=[MEDIAN])
+    def median(self, store, metric_name, operation_name=None, operation_type=None, sample_type=None):
+        percentiles = store.get_percentiles(metric_name,
+                                            operation=operation_name,
+                                            operation_type=operation_type,
+                                            sample_type=sample_type,
+                                            percentiles=[MEDIAN])
         if percentiles:
             return percentiles[MEDIAN]
         else:
             return None
 
-    def single_latency(self, store, q, sample_size):
-        return store.get_percentiles("query_latency_%s" % q, percentiles=self.percentiles_for_sample_size(sample_size))
+    def single_latency(self, store, operation, metric_name="latency"):
+        sample_type = metrics.SampleType.Normal
+        sample_size = store.get_count(metric_name, operation=operation, sample_type=sample_type)
+        if sample_size > 0:
+            return store.get_percentiles(metric_name,
+                                         operation=operation,
+                                         sample_type=sample_type,
+                                         percentiles=self.percentiles_for_sample_size(sample_size))
+        else:
+            return {}
 
     def percentiles_for_sample_size(self, sample_size):
         # if needed we can come up with something smarter but it'll do for now
-        if sample_size <= 1:
+        if sample_size < 1:
             raise AssertionError("Percentiles require at least one sample")
         elif sample_size == 1:
             return [100]
@@ -133,8 +140,10 @@ class Stats:
             return [50.0, 90.0, 100]
         elif 100 <= sample_size < 1000:
             return [90.0, 99.0, 100]
-        else:
+        elif 1000 <= sample_size < 10000:
             return [90.0, 99.0, 99.9, 100]
+        else:
+            return [90.0, 99.0, 99.9, 99.99, 100]
 
 
 class SummaryReporter:
@@ -142,6 +151,7 @@ class SummaryReporter:
         self._config = config
 
     def report(self, t):
+        print_internal("")
         print_header("------------------------------------------------------")
         print_header("    _______             __   _____                    ")
         print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
@@ -149,6 +159,7 @@ class SummaryReporter:
         print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
         print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
         print_header("------------------------------------------------------")
+        print_internal("")
 
         selected_challenge = self._config.opts("benchmarks", "challenge")
         selected_car = self._config.opts("benchmarks", "car")
@@ -160,20 +171,12 @@ class SummaryReporter:
                 store = metrics.metrics_store(self._config)
                 store.open(invocation, t.name, challenge.name, selected_car)
 
-                stats = Stats(store,
-                              self.guarded(lambda: challenge.benchmark[track.BenchmarkPhase.stats].iteration_count),
-                              self.guarded(lambda: challenge.benchmark[track.BenchmarkPhase.search].queries),
-                              self.guarded(lambda: challenge.benchmark[track.BenchmarkPhase.search].iteration_count))
+                stats = Stats(store, challenge)
 
                 metrics_table = []
                 meta_info_table = []
-                if track.BenchmarkPhase.index in challenge.benchmark:
-                    metrics_table += self.report_index_throughput(stats)
-                    metrics_table += self.report_total_times(stats)
-                    metrics_table += self.report_merge_part_times(stats)
-
-                if track.BenchmarkPhase.search in challenge.benchmark:
-                    metrics_table += self.report_search_latency(stats)
+                metrics_table += self.report_total_times(stats)
+                metrics_table += self.report_merge_part_times(stats)
 
                 metrics_table += self.report_cpu_usage(stats)
                 metrics_table += self.report_gc_times(stats)
@@ -182,8 +185,11 @@ class SummaryReporter:
                 metrics_table += self.report_segment_memory(stats)
                 metrics_table += self.report_segment_counts(stats)
 
-                if track.BenchmarkPhase.stats in challenge.benchmark:
-                    metrics_table += self.report_stats_latency(stats)
+                for tasks in challenge.schedule:
+                    for task in tasks:
+                        metrics_table += self.report_throughput(stats, task.operation)
+                        metrics_table += self.report_latency(stats, task.operation)
+                        metrics_table += self.report_service_time(stats, task.operation)
 
                 meta_info_table += self.report_meta_info()
 
@@ -198,11 +204,11 @@ class SummaryReporter:
         else:
             meta_info_file = report_file
 
-        self.write_single_report(report_format, report_file, headers=["Metric", "Value"], data=metrics_table, verbose=True)
-        print_header("\n\nRace Meta Info:")
-        self.write_single_report(report_format, meta_info_file, headers=["Name", "Value"], data=meta_info_table, verbose=False)
+        self.write_single_report(report_format, report_file, headers=["Metric", "Operation", "Value", "Unit"], data=metrics_table)
+        self.write_single_report(report_format, meta_info_file, headers=["Name", "Value"], data=meta_info_table,
+                                 force_cmd_line_output=False)
 
-    def write_single_report(self, report_format, report_file, headers, data, verbose):
+    def write_single_report(self, report_format, report_file, headers, data, force_cmd_line_output=True):
         if report_format == "markdown":
             report = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
         elif report_format == "csv":
@@ -215,118 +221,106 @@ class SummaryReporter:
         else:
             raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
 
-        print_internal(report)
+        if force_cmd_line_output:
+            print_internal(report)
         if len(report_file) > 0:
             normalized_report_file = rio.normalize_path(report_file)
             logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
                         (normalized_report_file, report_file, report_format))
-            if verbose:
+            if force_cmd_line_output:
                 print("\nWriting report also to '%s'" % normalized_report_file)
             # ensure that the parent folder already exists when we try to write the file...
             rio.ensure_dir(rio.dirname(normalized_report_file))
             with open(normalized_report_file, mode="w", encoding="UTF-8") as f:
                 f.writelines(report)
 
-    def guarded(self, op):
-        try:
-            return op()
-        except KeyError:
-            return None
+    def report_throughput(self, stats, operation):
+        min, median, max, unit = stats.op_metrics[operation.name]["throughput"]
+        return [
+            ["Min Throughput", operation.name, min, unit],
+            ["Median Throughput", operation.name, median, unit],
+            ["Max Throughput", operation.name, max, unit]
+        ]
 
-    def report_index_throughput(self, stats):
-        if stats.indexing_throughput:
-            min, median, max = stats.indexing_throughput
-            return [
-                ["Min Indexing Throughput [docs/s]", min],
-                ["Median Indexing Throughput [docs/s]", median],
-                ["Max Indexing Throughput [docs/s]", max]
-            ]
-        else:
-            return []
-
-    def report_search_latency(self, stats):
+    def report_latency(self, stats, operation):
         lines = []
-        for query, latency in stats.query_latencies.items():
-            for percentile, value in latency.items():
-                lines.append(["Query latency %s (%s percentile) [ms]" % (query, percentile), value])
+        latency = stats.op_metrics[operation.name]["latency"]
+        for percentile, value in latency.items():
+            lines.append(["%sth percentile latency" % percentile, operation.name, value, "ms"])
+        return lines
+
+    def report_service_time(self, stats, operation):
+        lines = []
+        service_time = stats.op_metrics[operation.name]["service_time"]
+        for percentile, value in service_time.items():
+            lines.append(["%sth percentile service time" % percentile, operation.name, value, "ms"])
         return lines
 
     def report_total_times(self, stats):
         total_times = []
-        self.append_if_present(total_times, "Indexing time [min]", stats.total_time, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Merge time [min]", stats.merge_time, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Refresh time [min]", stats.refresh_time, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Flush time [min]", stats.flush_time, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Merge throttle time [min]", stats.merge_throttle_time, convert.ms_to_minutes)
+        unit = "min"
+        self.append_if_present(total_times, "Indexing time", "", stats.total_time, unit, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Merge time", "", stats.merge_time, unit, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Refresh time", "", stats.refresh_time, unit, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Flush time", "", stats.flush_time, unit, convert.ms_to_minutes)
+        self.append_if_present(total_times, "Merge throttle time", "", stats.merge_throttle_time, unit, convert.ms_to_minutes)
 
         return total_times
 
-    def append_if_present(self, l, k, v, converter=lambda x: x):
+    def append_if_present(self, l, k, operation, v, unit, converter=lambda x: x):
         if v:
-            l.append([k, converter(v)])
+            l.append([k, operation, converter(v), unit])
 
     def report_merge_part_times(self, stats):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
         merge_part_times = []
-        if stats.has_merge_part_stats():
-            self.append_if_present(merge_part_times, "Merge time (postings) [min]", stats.merge_part_time_postings, convert.ms_to_minutes)
-            self.append_if_present(merge_part_times, "Merge time (stored fields) [min]", stats.merge_part_time_stored_fields,
-                                   convert.ms_to_minutes)
-            self.append_if_present(merge_part_times, "Merge time (doc values) [min]", stats.merge_part_time_doc_values,
-                                   convert.ms_to_minutes)
-            self.append_if_present(merge_part_times, "Merge time (norms) [min]", stats.merge_part_time_norms, convert.ms_to_minutes)
-            self.append_if_present(merge_part_times, "Merge time (vectors) [min]", stats.merge_part_time_vectors, convert.ms_to_minutes)
-            self.append_if_present(merge_part_times, "Merge time (points) [min]", stats.merge_part_time_points, convert.ms_to_minutes)
+        unit = "min"
+        self.append_if_present(merge_part_times, "Merge time (postings)", "", stats.merge_part_time_postings, unit, convert.ms_to_minutes)
+        self.append_if_present(merge_part_times, "Merge time (stored fields)", "", stats.merge_part_time_stored_fields, unit,
+                               convert.ms_to_minutes)
+        self.append_if_present(merge_part_times, "Merge time (doc values)", "", stats.merge_part_time_doc_values, unit,
+                               convert.ms_to_minutes)
+        self.append_if_present(merge_part_times, "Merge time (norms)", "", stats.merge_part_time_norms, unit, convert.ms_to_minutes)
+        self.append_if_present(merge_part_times, "Merge time (vectors)", "", stats.merge_part_time_vectors, unit, convert.ms_to_minutes)
+        self.append_if_present(merge_part_times, "Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
         return merge_part_times
 
     def report_cpu_usage(self, stats):
         cpu_usage = []
-        for phase in track.BenchmarkPhase:
-            if phase.name in stats.median_cpu_usage:
-                cpu_usage.append(["Median CPU usage (%s) [%%]" % phase.name, stats.median_cpu_usage[phase.name]])
+        self.append_if_present(cpu_usage, "Median CPU usage", "", stats.median_cpu_usage, "%")
         return cpu_usage
 
     def report_gc_times(self, stats):
         return [
-            ["Total Young Gen GC [s]", convert.ms_to_seconds(stats.young_gc_time)],
-            ["Total Old Gen GC [s]", convert.ms_to_seconds(stats.old_gc_time)]
+            ["Total Young Gen GC", "", convert.ms_to_seconds(stats.young_gc_time), "s"],
+            ["Total Old Gen GC", "", convert.ms_to_seconds(stats.old_gc_time), "s"]
         ]
 
     def report_disk_usage(self, stats):
         if stats.has_disk_usage_stats():
             return [
-                ["Index size [GB]", convert.bytes_to_gb(stats.index_size)],
-                ["Totally written [GB]", convert.bytes_to_gb(stats.bytes_written)]
+                ["Index size", "", convert.bytes_to_gb(stats.index_size), "GB"],
+                ["Totally written", "", convert.bytes_to_gb(stats.bytes_written), "GB"]
             ]
         else:
             return []
 
     def report_segment_memory(self, stats):
         memory_stats = []
-        self.append_if_present(memory_stats, "Heap used for segments [MB]", stats.memory_segments, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for doc values [MB]", stats.memory_doc_values, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for terms [MB]", stats.memory_terms, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for norms [MB]", stats.memory_norms, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for points [MB]", stats.memory_points, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for stored fields [MB]", stats.memory_stored_fields, convert.bytes_to_mb)
+        unit = "MB"
+        self.append_if_present(memory_stats, "Heap used for segments", "", stats.memory_segments, unit, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for doc values", "", stats.memory_doc_values, unit, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for terms", "", stats.memory_terms, unit, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for norms", "", stats.memory_norms, unit, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for points", "", stats.memory_points, unit, convert.bytes_to_mb)
+        self.append_if_present(memory_stats, "Heap used for stored fields", "", stats.memory_stored_fields, unit, convert.bytes_to_mb)
         return memory_stats
 
     def report_segment_counts(self, stats):
         if stats.segment_count:
-            return [["Segment count", stats.segment_count]]
+            return [["Segment count", "", stats.segment_count, ""]]
         else:
             return []
-
-    def report_stats_latency(self, stats):
-        lines = []
-        if stats.indices_stats_latency:
-            for percentile, value in stats.indices_stats_latency.items():
-                lines.append(["Indices Stats(%s percentile) [ms]" % percentile, value])
-
-        if stats.node_stats_latency:
-            for percentile, value in stats.node_stats_latency.items():
-                lines.append(["Nodes Stats(%s percentile) [ms]" % percentile, value])
-        return lines
 
     def report_meta_info(self):
         return [
@@ -346,17 +340,11 @@ class ComparisonReporter:
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
         baseline_store = metrics.metrics_store(self._config)
         baseline_store.open(r1.trial_timestamp, r1.track, r1.challenge.name, r1.car)
-        baseline_stats = Stats(baseline_store,
-                               stats_sample_size=r1.challenge.stats_sample_size,
-                               queries=r1.challenge.queries,
-                               search_sample_size=r1.challenge.search_sample_size)
+        baseline_stats = Stats(baseline_store, r1.challenge)
 
         contender_store = metrics.metrics_store(self._config)
         contender_store.open(r2.trial_timestamp, r2.track, r2.challenge.name, r2.car)
-        contender_stats = Stats(contender_store,
-                                stats_sample_size=r2.challenge.stats_sample_size,
-                                queries=r2.challenge.queries,
-                                search_sample_size=r2.challenge.search_sample_size)
+        contender_stats = Stats(contender_store, r2.challenge)
 
         print_internal("")
         print_internal("Comparing baseline")
@@ -376,61 +364,90 @@ class ComparisonReporter:
         print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
         print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
         print_header("------------------------------------------------------")
+        print_internal("")
 
         metrics_table = []
-
-        metrics_table += self.report_index_throughput(baseline_stats, contender_stats)
-        metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
         metrics_table += self.report_total_times(baseline_stats, contender_stats)
-        metrics_table += self.report_search_latency(baseline_stats, contender_stats)
-        metrics_table += self.report_cpu_usage(baseline_stats, contender_stats)
+        metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
+
+        #metrics_table += self.report_cpu_usage(baseline_stats, contender_stats)
         metrics_table += self.report_gc_times(baseline_stats, contender_stats)
+
         metrics_table += self.report_disk_usage(baseline_stats, contender_stats)
         metrics_table += self.report_segment_memory(baseline_stats, contender_stats)
         metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
-        metrics_table += self.report_stats_latency(baseline_stats, contender_stats)
 
-        print_internal(
-            tabulate.tabulate(metrics_table, headers=["Metric", "Baseline", "Contender", "Diff"], numalign="right", stralign="right"))
+        for t1 in r1.challenge.schedule:
+            for t2 in r2.challenge.schedule:
+                # only report matching metrics
+                if t1.operation.name == t2.operation.name:
+                    metrics_table += self.report_throughput(baseline_stats, contender_stats, t1.operation)
+                    metrics_table += self.report_latency(baseline_stats, contender_stats, t1.operation)
+                    metrics_table += self.report_service_time(baseline_stats, contender_stats, t1.operation)
 
-    def report_index_throughput(self, baseline_stats, contender_stats):
-        if baseline_stats.indexing_throughput and contender_stats.indexing_throughput:
-            b_min, b_median, b_max = baseline_stats.indexing_throughput
-            c_min, c_median, c_max = contender_stats.indexing_throughput
-            return [
-                self.line("Min Indexing Throughput [docs/s]", b_min, c_min, treat_increase_as_improvement=True),
-                self.line("Median Indexing Throughput [docs/s]", b_median, c_median, treat_increase_as_improvement=True),
-                self.line("Max Indexing Throughput [docs/s]", b_max, c_max, treat_increase_as_improvement=True)
-            ]
-        else:
-            return []
+        print_internal(tabulate.tabulate(metrics_table,
+                                         headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
+                                         numalign="right", stralign="right"))
+
+    def report_throughput(self, baseline_stats, contender_stats, operation):
+        b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation.name]["throughput"]
+        c_min, c_median, c_max, c_unit = contender_stats.op_metrics[operation.name]["throughput"]
+        return [
+            self.line("Min Throughput", b_min, c_min, operation, b_unit, treat_increase_as_improvement=True),
+            self.line("Median Throughput", b_median, c_median, operation, b_unit, treat_increase_as_improvement=True),
+            self.line("Max Throughput", b_max, c_max, operation, b_unit, treat_increase_as_improvement=True)
+        ]
+
+    def report_latency(self, baseline_stats, contender_stats, operation):
+        lines = []
+
+        baseline_latency = baseline_stats.op_metrics[operation.name]["latency"]
+        contender_latency = contender_stats.op_metrics[operation.name]["latency"]
+
+        for percentile, baseline_value in baseline_latency.items():
+            if percentile in contender_latency:
+                contender_value = contender_latency[percentile]
+                lines.append(self.line("%sth percentile latency" % percentile, baseline_value, contender_value,
+                                       operation, "ms", treat_increase_as_improvement=False))
+        return lines
+
+    def report_service_time(self, baseline_stats, contender_stats, operation):
+        lines = []
+
+        baseline_service_time = baseline_stats.op_metrics[operation.name]["service_time"]
+        contender_service_time = contender_stats.op_metrics[operation.name]["service_time"]
+
+        for percentile, baseline_value in baseline_service_time.items():
+            if percentile in contender_service_time:
+                contender_value = contender_service_time[percentile]
+                lines.append(self.line("%sth percentile service time" % percentile, baseline_value, contender_value,
+                                       operation, "ms", treat_increase_as_improvement=False))
+        return lines
 
     def report_merge_part_times(self, baseline_stats, contender_stats):
+        lines = []
         if baseline_stats.has_merge_part_stats() and contender_stats.has_merge_part_stats():
-            res = []
-            self.append_if_present(res,
-                                   self.line("Merge time (postings) [min]", baseline_stats.merge_part_time_postings,
+            self.append_if_present(lines,
+                                   self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
                                              contender_stats.merge_part_time_postings,
-                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(res,
-                                   self.line("Merge time (stored fields) [min]", baseline_stats.merge_part_time_stored_fields,
+                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(lines,
+                                   self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
                                              contender_stats.merge_part_time_stored_fields,
-                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(res,
-                                   self.line("Merge time (doc values) [min]", baseline_stats.merge_part_time_doc_values,
+                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(lines,
+                                   self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
                                              contender_stats.merge_part_time_doc_values,
-                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(res,
-                                   self.line("Merge time (norms) [min]", baseline_stats.merge_part_time_norms,
+                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(lines,
+                                   self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
                                              contender_stats.merge_part_time_norms,
-                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(res,
-                                   self.line("Merge time (vectors) [min]", baseline_stats.merge_part_time_vectors,
+                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+            self.append_if_present(lines,
+                                   self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
                                              contender_stats.merge_part_time_vectors,
-                                             treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            return res
-        else:
-            return []
+                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
+        return lines
 
     def append_if_present(self, l, v):
         if v and len(v) > 0:
@@ -438,52 +455,40 @@ class ComparisonReporter:
 
     def report_total_times(self, baseline_stats, contender_stats):
         return [
-            self.line("Indexing time [min]", baseline_stats.total_time, contender_stats.total_time,
+            self.line("Indexing time", baseline_stats.total_time, contender_stats.total_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time [min]", baseline_stats.merge_time, contender_stats.merge_time,
+            self.line("Merge time", baseline_stats.merge_time, contender_stats.merge_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Refresh time [min]", baseline_stats.refresh_time, contender_stats.refresh_time,
+            self.line("Refresh time", baseline_stats.refresh_time, contender_stats.refresh_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Flush time [min]", baseline_stats.flush_time, contender_stats.flush_time,
+            self.line("Flush time", baseline_stats.flush_time, contender_stats.flush_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge throttle time [min]", baseline_stats.merge_throttle_time, contender_stats.merge_throttle_time,
+            self.line("Merge throttle time", baseline_stats.merge_throttle_time, contender_stats.merge_throttle_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
         ]
 
-    def report_search_latency(self, baseline_stats, contender_stats):
-        lines = []
-        for query, latency in baseline_stats.query_latencies.items():
-            if query in contender_stats.query_latencies:
-                for percentile, baseline_value in latency.items():
-                    if percentile in contender_stats.query_latencies[query]:
-                        contender_value = contender_stats.query_latencies[query][percentile]
-                        lines.append(self.line("Query latency %s (%s percentile) [ms]" % (query, percentile),
-                                               baseline_value, contender_value, treat_increase_as_improvement=False))
-        return lines
-
-    def report_cpu_usage(self, baseline_stats, contender_stats):
-        cpu_usage = []
-        for phase in track.BenchmarkPhase:
-            if phase.name in baseline_stats.median_cpu_usage and phase.name in contender_stats.median_cpu_usage:
-                cpu_usage.append(self.line("Median CPU usage (%s) [%%]" % phase.name,
-                                           baseline_stats.median_cpu_usage[phase.name], contender_stats.median_cpu_usage[phase.name],
-                                           treat_increase_as_improvement=True))
-        return cpu_usage
+    # def report_cpu_usage(self, baseline_stats, contender_stats):
+    #     cpu_usage = []
+    #     for op, v in baseline_stats.median_cpu_usage.items():
+    #         if op in contender_stats.median_cpu_usage:
+    #             cpu_usage.append(self.line("Median CPU usage", baseline_stats.median_cpu_usage[op], contender_stats.median_cpu_usage[op],
+    #                                        op, "%", treat_increase_as_improvement=True))
+    #     return cpu_usage
 
     def report_gc_times(self, baseline_stats, contender_stats):
         return [
-            self.line("Total Young Gen GC [s]", baseline_stats.young_gc_time, contender_stats.young_gc_time,
+            self.line("Total Young Gen GC", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
-            self.line("Total Old Gen GC [s]", baseline_stats.old_gc_time, contender_stats.old_gc_time,
+            self.line("Total Old Gen GC", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds)
         ]
 
     def report_disk_usage(self, baseline_stats, contender_stats):
         if baseline_stats.has_disk_usage_stats() and contender_stats.has_disk_usage_stats():
             return [
-                self.line("Index size [GB]", baseline_stats.index_size, contender_stats.index_size,
+                self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-                self.line("Totally written [GB]", baseline_stats.bytes_written, contender_stats.bytes_written,
+                self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             ]
         else:
@@ -492,17 +497,17 @@ class ComparisonReporter:
     def report_segment_memory(self, baseline_stats, contender_stats):
         if baseline_stats.has_memory_stats() and contender_stats.has_memory_stats():
             return [
-                self.line("Heap used for segments [MB]", baseline_stats.memory_segments, contender_stats.memory_segments,
+                self.line("Heap used for segments", baseline_stats.memory_segments, contender_stats.memory_segments, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for doc values [MB]", baseline_stats.memory_doc_values, contender_stats.memory_doc_values,
+                self.line("Heap used for doc values", baseline_stats.memory_doc_values, contender_stats.memory_doc_values, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for terms [MB]", baseline_stats.memory_terms, contender_stats.memory_terms,
+                self.line("Heap used for terms", baseline_stats.memory_terms, contender_stats.memory_terms, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for norms [MB]", baseline_stats.memory_norms, contender_stats.memory_norms,
+                self.line("Heap used for norms", baseline_stats.memory_norms, contender_stats.memory_norms, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for points [MB]", baseline_stats.memory_points, contender_stats.memory_points,
+                self.line("Heap used for points", baseline_stats.memory_points, contender_stats.memory_points, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for points [MB]", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields,
+                self.line("Heap used for points", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
             ]
         else:
@@ -511,32 +516,16 @@ class ComparisonReporter:
     def report_segment_counts(self, baseline_stats, contender_stats):
         if baseline_stats.segment_count and contender_stats.segment_count:
             return [
-                self.line("Segment count", baseline_stats.segment_count, contender_stats.segment_count, treat_increase_as_improvement=False)
+                self.line("Segment count", baseline_stats.segment_count, contender_stats.segment_count,
+                          "", "", treat_increase_as_improvement=False)
             ]
         else:
             return []
 
-    def report_stats_latency(self, baseline_stats, contender_stats):
-        lines = []
-        if baseline_stats.indices_stats_latency and contender_stats.indices_stats_latency:
-            for percentile, baseline_value in baseline_stats.indices_stats_latency.items():
-                if percentile in contender_stats.indices_stats_latency:
-                    contender_value = contender_stats.indices_stats_latency[percentile]
-                    lines.append(self.line("Indices Stats(%s percentile) [ms]" % percentile, baseline_value, contender_value,
-                                           treat_increase_as_improvement=False))
-
-        if baseline_stats.node_stats_latency and contender_stats.node_stats_latency:
-            for percentile, baseline_value in baseline_stats.node_stats_latency.items():
-                if percentile in contender_stats.node_stats_latency:
-                    contender_value = contender_stats.node_stats_latency[percentile]
-                    lines.append(self.line("Nodes Stats(%s percentile) [ms]" % percentile, baseline_value, contender_value,
-                                           treat_increase_as_improvement=False))
-        return lines
-
-    def line(self, metric, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
+    def line(self, metric, baseline, contender, operation, unit, treat_increase_as_improvement, formatter=lambda x: x):
         if baseline is not None and contender is not None:
-            return [metric, formatter(baseline), formatter(contender),
-                    self.diff(baseline, contender, treat_increase_as_improvement, formatter)]
+            return [metric, str(operation), formatter(baseline), formatter(contender),
+                    self.diff(baseline, contender, treat_increase_as_improvement, formatter), unit]
         else:
             return []
 

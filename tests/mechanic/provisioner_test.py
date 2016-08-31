@@ -75,6 +75,6 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "provisioning", "datapaths", [])
 
         p = provisioner.Provisioner(cfg)
-        p.prepare(car.Car(name="test-car"))
+        p.prepare(car.Car(name="test-car"), 39200)
 
         self.assertEqual(cfg.opts("provisioning", "local.binary.path"), "/install/elasticsearch-5.0.0-SNAPSHOT")

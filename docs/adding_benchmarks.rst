@@ -105,44 +105,48 @@ The track repository is managed by git, so ensure that you are on the ``master``
       ],
       "operations": [
         {
-          "name": "index-append-default-settings",
+          "name": "index",
           "type": "index",
-          "index-settings": {
-            "index.number_of_replicas": 0
-          },
-          "bulk-size": 5000,
-          "force-merge": true,
-          "clients": {
-            "count": 8
-          }
+          "bulk-size": 5000
         },
         {
-          "name": "search",
-          "type": "search",
-          "warmup-iterations": 1000,
-          "iterations": 1000,
-          "clients": {
-            "count": 1
-          },
-          "queries": [
-            {
-              "name": "default",
-              "body": {
-                "query": {
-                  "match_all": {}
-                }
-              }
+          "name": "force-merge",
+          "type": "force-merge"
+        },
+        {
+          "name": "query-match-all",
+          "operation-type": "search",
+          "body": {
+            "query": {
+              "match_all": {}
             }
-          ]
-        }
+          }
+        },
       ],
       "challenges": [
         {
           "name": "append-no-conflicts",
           "description": "",
+          "index-settings": {
+            "index.number_of_replicas": 0
+          },
           "schedule": [
-            "index-append-default-settings",
-            "search"
+            {
+              "operation": "index",
+              "warmup-time-period": 120,
+              "clients": 8
+            },
+            {
+              "operation": "force-merge",
+              "clients": 1
+            },
+            {
+              "operation": "query-match-all",
+              "clients": 8,
+              "warmup-iterations": 1000,
+              "iterations": 1000,
+              "target-throughput": 100
+            }
           ]
         }
       ]
@@ -208,7 +212,7 @@ Rally also provides a few extension points to Jinja2:
 * ``now``: This is a global variable that represents the current date and time when the template is evaluated by Rally.
 * ``days_ago()``: This is a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
-You can find an examle in the logging track::
+You can find an example in the logging track::
 
     {
       "name": "range",
@@ -228,6 +232,111 @@ You can find an examle in the logging track::
     }
 
 The data set that is used in the logging track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
+
+Running tasks in parallel
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally supports running tasks in parallel with the ``parallel`` element. Below you find a few examples that show how it should be used:
+
+In the simplest case, you let Rally decide the number of clients needed to run the parallel tasks::
+
+
+        {
+          "parallel": {
+            "warmup-iterations": 1000,
+            "iterations": 1000,
+            "tasks": [
+              {
+                "operation": "default",
+                "target-throughput": 50
+              },
+              {
+                "operation": "term",
+                "target-throughput": 200
+              },
+              {
+                "operation": "phrase",
+                "target-throughput": 200
+              },
+              {
+                "operation": "country_agg_uncached",
+                "target-throughput": 50
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+Rally will determine that four clients are needed to run each task in a dedicated client.
+
+However, you can also explicitly limit the number of clients::
+
+        {
+          "parallel": {
+            "clients": 2
+            "warmup-iterations": 1000,
+            "iterations": 1000,
+            "tasks": [
+              {
+                "operation": "default",
+                "target-throughput": 50
+              },
+              {
+                "operation": "term",
+                "target-throughput": 200
+              },
+              {
+                "operation": "phrase",
+                "target-throughput": 200
+              },
+              {
+                "operation": "country_agg_uncached",
+                "target-throughput": 50
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+This will run the four tasks with just two clients. You could also specify more clients than there are tasks but these will then just idle.
+
+You can also specify a number of clients on sub tasks explicitly (by default, one client is assumed per subtask). This allows to define a weight for each client operation. Note that you need to define the number of clients also on the ``parallel`` parent element, otherwise Rally would determine the number of totally needed clients again on its own::
+
+        {
+          "parallel": {
+            "clients": 3
+            "warmup-iterations": 1000,
+            "iterations": 1000,
+            "tasks": [
+              {
+                "operation": "default",
+                "target-throughput": 50
+              },
+              {
+                "operation": "term",
+                "target-throughput": 200
+              },
+              {
+                "operation": "phrase",
+                "target-throughput": 200,
+                "clients": 2
+              },
+              {
+                "operation": "country_agg_uncached",
+                "target-throughput": 50
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+This will ensure that the phrase query will be executed by two clients. All other ones are executed by one client.
+
+.. warning::
+    You cannot nest parallel tasks.
 
 Custom Track Repositories
 ^^^^^^^^^^^^^^^^^^^^^^^^^
