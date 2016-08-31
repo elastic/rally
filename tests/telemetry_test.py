@@ -257,6 +257,57 @@ class ExternalEnvironmentInfoTests(TestCase):
         ]
         metrics_store_add_meta_info.assert_has_calls(calls)
 
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_fallback_when_host_not_available(self, metrics_store_add_meta_info):
+        nodes_stats = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                }
+            }
+        }
+
+        nodes_info = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "os": {
+                        "name": "Mac OS X",
+                        "version": "10.11.4",
+                        "available_processors": 8
+                    },
+                    "jvm": {
+                        "version": "1.8.0_74",
+                        "vm_vendor": "Oracle Corporation"
+                    }
+                }
+            }
+        }
+        cluster_info = {
+            "version":
+                {
+                    "build_hash": "abc123"
+                }
+        }
+        client = Client(SubClient(nodes_stats), SubClient(nodes_info), cluster_info)
+        cfg = self.create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ExternalEnvironmentInfo(cfg, client, metrics_store)
+        t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
+        t.attach_to_cluster(cluster.Cluster([], t))
+
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "unknown"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Mac OS X"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "os_version", "10.11.4"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_logical_cores", 8),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74")
+        ]
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
     def create_config(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
