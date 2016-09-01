@@ -113,6 +113,7 @@ class Driver(thespian.actors.Actor):
         self.drivers = []
         self.progress_reporter = progress.CmdLineProgressReporter()
         self.progress_counter = 0
+        self.quiet = False
 
     def receiveMessage(self, msg, sender):
         if isinstance(msg, StartBenchmark):
@@ -130,6 +131,7 @@ class Driver(thespian.actors.Actor):
         logger.info("Benchmark is about to start.")
         self.start_sender = sender
         self.config = msg.config
+        self.quiet = msg.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
         self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info)
         invocation = self.config.opts("meta", "time.start")
@@ -220,17 +222,17 @@ class Driver(thespian.actors.Actor):
                                                            absolute_time=absolute_time, relative_time=relative_time)
 
     def update_progress_message(self, finished=False):
-        progress_indicator = ["    ", " .  ", " .. ", " ..."]
-        step = self.current_step if not finished else self.current_step - 1
-        ops = ",".join([op.name for op in self.ops_per_join_point[step]])
+        if not self.quiet:
+            progress_indicator = ["    ", " .  ", " .. ", " ..."]
+            step = self.current_step if not finished else self.current_step - 1
+            ops = ",".join([op.name for op in self.ops_per_join_point[step]])
 
-        self.progress_counter = (self.progress_counter + 1) % len(progress_indicator) if not finished else 0
-        self.progress_reporter.print("Running %s" % ops,
-                                     "[%3d%% done]%s" % (round((self.current_step / self.number_of_steps) * 100),
-                                                         progress_indicator[self.progress_counter]))
-
-        if finished:
-            self.progress_reporter.finish()
+            self.progress_counter = (self.progress_counter + 1) % len(progress_indicator) if not finished else 0
+            self.progress_reporter.print("Running %s" % ops,
+                                         "[%3d%% done]%s" % (round((self.current_step / self.number_of_steps) * 100),
+                                                             progress_indicator[self.progress_counter]))
+            if finished:
+                self.progress_reporter.finish()
 
 
 class LoadGenerator(thespian.actors.Actor):
