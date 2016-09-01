@@ -281,39 +281,42 @@ class IndexDataReaderTests(TestCase):
                 bulk_index += 1
 
 
-class TestIndexReader:
-    def __init__(self, data):
-        self.enter_count = 0
-        self.exit_count = 0
-        self.data = data
-
-    def __enter__(self):
-        self.enter_count += 1
-        return self
-
-    def __iter__(self):
-        return iter(self.data)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.exit_count += 1
-        return False
-
-
-class TestIndex:
-    def __init__(self, name, types):
-        self.name = name
-        self.types = types
-
-
-class TestType:
-    def __init__(self, number_of_documents):
-        self.number_of_documents = number_of_documents
-
-
 class InvocationGeneratorTests(ScheduleTestCase):
+    class TestIndexReader:
+        def __init__(self, data):
+            self.enter_count = 0
+            self.exit_count = 0
+            self.data = data
+
+        def __enter__(self):
+            self.enter_count += 1
+            return self
+
+        def __iter__(self):
+            return iter(self.data)
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.exit_count += 1
+            return False
+
+    class TestIndex:
+        def __init__(self, name, types):
+            self.name = name
+            self.types = types
+
+    class TestType:
+        def __init__(self, number_of_documents):
+            self.number_of_documents = number_of_documents
+
+    def idx(self, *args, **kwargs):
+        return InvocationGeneratorTests.TestIndex(*args, **kwargs)
+
+    def t(self, *args, **kwargs):
+        return InvocationGeneratorTests.TestType(*args, **kwargs)
+
     def test_iterator_chaining_respects_context_manager(self):
-        i0 = TestIndexReader([1, 2, 3])
-        i1 = TestIndexReader([4, 5, 6])
+        i0 = InvocationGeneratorTests.TestIndexReader([1, 2, 3])
+        i1 = InvocationGeneratorTests.TestIndexReader([4, 5, 6])
 
         self.assertEqual([1, 2, 3, 4, 5, 6], list(driver.chain(i0, i1)))
         self.assertEqual(1, i0.enter_count)
@@ -334,47 +337,53 @@ class InvocationGeneratorTests(ScheduleTestCase):
     def test_calculate_bounds(self):
         self.assertEqual((0, 1000), driver.bounds(1000, 0, 1))
 
-        self.assertEqual((0, 500),   driver.bounds(1000, 0, 2))
+        self.assertEqual((0, 500), driver.bounds(1000, 0, 2))
         self.assertEqual((500, 500), driver.bounds(1000, 1, 2))
 
-        self.assertEqual((0, 400),   driver.bounds(800, 0, 2))
+        self.assertEqual((0, 400), driver.bounds(800, 0, 2))
         self.assertEqual((400, 400), driver.bounds(800, 1, 2))
 
-        self.assertEqual((0, 267),   driver.bounds(800, 0, 3))
+        self.assertEqual((0, 267), driver.bounds(800, 0, 3))
         self.assertEqual((267, 267), driver.bounds(800, 1, 3))
         self.assertEqual((534, 266), driver.bounds(800, 2, 3))
 
     def test_calculate_number_of_bulks(self):
-        t1 = TestType(1)
-        t2 = TestType(2)
+        t1 = self.t(1)
+        t2 = self.t(2)
 
-        self.assertEqual(1, driver.number_of_bulks([TestIndex("a", [t1])], 1, 0, 1))
-        self.assertEqual(1, driver.number_of_bulks([TestIndex("a", [t1])], 2, 0, 1))
+        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [t1])], 1, 0, 1))
+        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [t1])], 2, 0, 1))
         self.assertEqual(20, driver.number_of_bulks(
-            [TestIndex("a", [t2, t2, t2, t2, t1]), TestIndex("b", [t2, t2, t2, t2, t2, t1])], 1, 0, 1))
+            [self.idx("a", [t2, t2, t2, t2, t1]),
+             self.idx("b", [t2, t2, t2, t2, t2, t1])], 1, 0, 1))
         self.assertEqual(11, driver.number_of_bulks(
-            [TestIndex("a", [t2, t2, t2, t2, t1]), TestIndex("b", [t2, t2, t2, t2, t2, t1])], 2, 0, 1))
+            [self.idx("a", [t2, t2, t2, t2, t1]),
+             self.idx("b", [t2, t2, t2, t2, t2, t1])], 2, 0, 1))
         self.assertEqual(11, driver.number_of_bulks(
-            [TestIndex("a", [t2, t2, t2, t2, t1]), TestIndex("b", [t2, t2, t2, t2, t2, t1])], 3, 0, 1))
+            [self.idx("a", [t2, t2, t2, t2, t1]),
+             self.idx("b", [t2, t2, t2, t2, t2, t1])], 3, 0, 1))
         self.assertEqual(11, driver.number_of_bulks(
-            [TestIndex("a", [t2, t2, t2, t2, t1]), TestIndex("b", [t2, t2, t2, t2, t2, t1])], 100, 0, 1))
+            [self.idx("a", [t2, t2, t2, t2, t1]),
+             self.idx("b", [t2, t2, t2, t2, t2, t1])], 100, 0, 1))
 
-        self.assertEqual(2, driver.number_of_bulks([TestIndex("a", [TestType(800)])], 250, 0, 3))
-        self.assertEqual(1, driver.number_of_bulks([TestIndex("a", [TestType(800)])], 267, 0, 3))
-        self.assertEqual(1, driver.number_of_bulks([TestIndex("a", [TestType(80)])], 267, 0, 3))
+        self.assertEqual(2,
+                         driver.number_of_bulks([self.idx("a", [self.t(800)])], 250, 0,
+                                                3))
+        self.assertEqual(1,
+                         driver.number_of_bulks([self.idx("a", [self.t(800)])], 267, 0, 3))
+        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [self.t(80)])], 267, 0, 3))
         # this looks odd at first but we are prioritizing number of clients above bulk size
-        self.assertEqual(1, driver.number_of_bulks([TestIndex("a", [TestType(80)])], 267, 1, 3))
-        self.assertEqual(1, driver.number_of_bulks([TestIndex("a", [TestType(80)])], 267, 2, 3))
+        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [self.t(80)])], 267, 1, 3))
+        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [self.t(80)])], 267, 2, 3))
 
     def test_bulk_data_based(self):
-        t1 = TestType(1)
-        t2 = TestType(2)
+        t1 = self.t(1)
+        t2 = self.t(2)
 
-        invocations = driver.bulk_data_based(1, 0, 1, 0,
-                                             [TestIndex("a", [t2, t2, t2, t2, t1]), TestIndex("b", [t2, t2, t2, t2, t2, t1])], "runner", 2,
-                                             track.IndexIdConflict.NoConflicts,
-                                             create_reader=lambda index, type, offset, num_docs, bulk_size, id_conflicts: TestIndexReader(
-                                                 [[index.name] * type.number_of_documents])
+        invocations = driver.bulk_data_based(1, 0, 1, 0, [self.idx("a", [t2, t2, t2, t2, t1]), self.idx("b", [t2, t2, t2, t2, t2, t1])],
+                                             "runner", 2, track.IndexIdConflict.NoConflicts,
+                                             create_reader=lambda index, type, offset, num_docs, bulk_size, id_conflicts:
+                                             InvocationGeneratorTests.TestIndexReader([[index.name] * type.number_of_documents])
                                              )
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 0, 11, "runner", {"body": ["a", "a"]}),

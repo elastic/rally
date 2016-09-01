@@ -4,37 +4,37 @@ from unittest import TestCase
 from esrally.utils import process
 
 
-class TestProcess:
-    def __init__(self, pid, name, cmdline):
-        self.pid = pid
-        self._name = name
-        self._cmdline = cmdline
-        self.killed = False
-
-    def name(self):
-        return self._name
-
-    def cmdline(self):
-        return self._cmdline
-
-    def kill(self):
-        self.killed = True
-
-
 class ProcessTests(TestCase):
+    class Process:
+        def __init__(self, pid, name, cmdline):
+            self.pid = pid
+            self._name = name
+            self._cmdline = cmdline
+            self.killed = False
+
+        def name(self):
+            return self._name
+
+        def cmdline(self):
+            return self._cmdline
+
+        def kill(self):
+            self.killed = True
+
     @mock.patch("psutil.process_iter")
     def test_kills_only_rally_es_processes(self, process_iter):
-        rally_es_5_process = TestProcess(100, "java",
-                                         ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
-                                          "org.elasticsearch.bootstrap.Elasticsearch"])
-        rally_es_1_process = TestProcess(101, "java",
-                                         ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Des.node.name=rally-node0",
-                                          "org.elasticsearch.bootstrap.Elasticsearch"])
-        metrics_store_process = TestProcess(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
-                                                          "-Des.path.home=~/rally/metrics/", "org.elasticsearch.bootstrap.Elasticsearch"])
-        random_java = TestProcess(103, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "jenkins.main"])
-        other_process = TestProcess(104, "init", ["/usr/sbin/init"])
-        rally_process = TestProcess(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_es_5_process = ProcessTests.Process(100, "java",
+                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
+                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        rally_es_1_process = ProcessTests.Process(101, "java",
+                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Des.node.name=rally-node0",
+                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        metrics_store_process = ProcessTests.Process(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
+                                                                   "-Des.path.home=~/rally/metrics/",
+                                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        random_java = ProcessTests.Process(103, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "jenkins.main"])
+        other_process = ProcessTests.Process(104, "init", ["/usr/sbin/init"])
+        rally_process = ProcessTests.Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
 
         process_iter.return_value = [
             rally_es_1_process,
