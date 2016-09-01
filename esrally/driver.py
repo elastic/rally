@@ -10,6 +10,8 @@ import time
 import elasticsearch
 import thespian.actors
 
+from elasticsearch.client import utils as es_utils
+
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
 from esrally.utils import convert, progress
 
@@ -408,11 +410,24 @@ def wait_for_status_green(es):
 
 def _do_wait(es, expected_cluster_status):
     reached_cluster_status = None
+    use_wait_for_no_relocating_shards = False
     for attempt in range(10):
         try:
-            result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
-        except (socket.timeout, elasticsearch.exceptions.ConnectionError, elasticsearch.exceptions.TransportError):
+            if use_wait_for_no_relocating_shards:
+                result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
+            else:
+                _, result = es.transport.perform_request('GET', es_utils._make_path('_cluster', 'health'), params={
+                    "wait_for_status": expected_cluster_status,
+                    "wait_for_no_relocating_shards": True,
+                    "timeout": "3s"
+                })
+
+        except (socket.timeout, elasticsearch.exceptions.ConnectionError):
             pass
+        except elasticsearch.exceptions.TransportError as e:
+            if 400 <= e.status_code < 500:
+                logger.exception("Client error in health API. Using 'wait_for_no_relocating_shards'.")
+                use_wait_for_no_relocating_shards = True
         else:
             reached_cluster_status = result["status"]
             relocating_shards = result["relocating_shards"]
