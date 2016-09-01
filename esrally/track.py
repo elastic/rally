@@ -290,7 +290,7 @@ class TrackRepository:
             if not git.is_working_copy(self.tracks_dir):
                 git.clone(src=self.tracks_dir, remote=self.url)
             else:
-                git.fetch(src=self.tracks_dir, remote=self.url)
+                git.fetch(src=self.tracks_dir)
         else:
             if not git.is_working_copy(self.tracks_dir):
                 raise exceptions.SystemSetupError("'{src}' must be a git repository.\n\nPlease run:\ngit -C {src} init"
