@@ -9,9 +9,6 @@ import time
 
 import elasticsearch
 import thespian.actors
-
-from elasticsearch.client import utils as es_utils
-
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
 from esrally.utils import convert, progress
 
@@ -27,6 +24,7 @@ class StartBenchmark:
     """
     Starts a benchmark.
     """
+
     def __init__(self, config, track, metrics_meta_info):
         """
         :param config: Rally internal configuration object.
@@ -42,6 +40,7 @@ class StartLoadGenerator:
     """
     Starts a load generator.
     """
+
     def __init__(self, client_id, config, indices, tasks):
         """
         :param client_id: Client id of the load generator.
@@ -59,6 +58,7 @@ class Drive:
     """
     Tells a load generator to drive (either after a join point or initially).
     """
+
     def __init__(self, client_start_timestamp):
         self.client_start_timestamp = client_start_timestamp
 
@@ -67,6 +67,7 @@ class UpdateSamples:
     """
     Used to send samples from a load generator node to the master.
     """
+
     def __init__(self, client_id, samples):
         self.client_id = client_id
         self.samples = samples
@@ -76,6 +77,7 @@ class JoinPointReached:
     """
     Tells the master that a load generator has reached a join point. Used for coordination across multiple load generators.
     """
+
     def __init__(self, client_id, task):
         self.client_id = client_id
         self.client_local_timestamp = time.perf_counter()
@@ -86,6 +88,7 @@ class BenchmarkComplete:
     """
     Indicates that the benchmark is complete.
     """
+
     def __init__(self, metrics):
         self.metrics = metrics
 
@@ -95,6 +98,7 @@ class Driver(thespian.actors.Actor):
     """
     Coordinates all worker drivers.
     """
+
     def __init__(self):
         super().__init__()
         self.config = None
@@ -330,6 +334,7 @@ class Sampler:
     """
     Encapsulates management of gathered samples.
     """
+
     def __init__(self, client_id, operation, start_timestamp):
         self.client_id = client_id
         self.operation = operation
@@ -355,7 +360,8 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops, time_period):
+    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops,
+                 time_period):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
@@ -418,11 +424,8 @@ def _do_wait(es, expected_cluster_status):
             if use_wait_for_no_relocating_shards:
                 result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
             else:
-                _, result = es.transport.perform_request('GET', es_utils._make_path('_cluster', 'health'), params={
-                    "wait_for_status": expected_cluster_status,
-                    "wait_for_no_relocating_shards": True,
-                    "timeout": "3s"
-                })
+                result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s",
+                                           params={"wait_for_no_relocating_shards": True})
 
         except (socket.timeout, elasticsearch.exceptions.ConnectionError):
             pass
@@ -571,6 +574,7 @@ class Allocator:
     """
     Decides which operations runs on which client and how to partition them.
     """
+
     def __init__(self, schedule):
         self.schedule = schedule
 
@@ -852,6 +856,7 @@ class Runner:
     """
     Base class for all operations against Elasticsearch.
     """
+
     def __enter__(self):
         return self
 
@@ -875,6 +880,7 @@ class BulkIndex(Runner):
     It expects the parameter hash to contain a key "body" containing all documents for the current bulk request.
 
     """
+
     def __call__(self, es, params):
         response = es.bulk(body=params["body"])
         if response["errors"]:
@@ -893,6 +899,7 @@ class ForceMerge(Runner):
     """
     Runs a force merge operation against Elasticsearch.
     """
+
     def __call__(self, es, params):
         indices = ",".join(params["indices"])
         logger.info("Force merging indices [%s]." % indices)
@@ -911,6 +918,7 @@ class IndicesStats(Runner):
     """
     Gather index stats for all indices.
     """
+
     def __call__(self, es, params):
         es.indices.stats(metric="_all", level="shards")
         return 1
@@ -920,6 +928,7 @@ class NodeStats(Runner):
     """
     Gather node stats for all nodes.
     """
+
     def __call__(self, es, params):
         es.nodes.stats(metric="_all", level="shards")
         return 1
@@ -943,6 +952,7 @@ class Query(Runner):
     * `items_per_page`: Number of items to retrieve per page.
 
     """
+
     def __init__(self):
         self.scroll_id = None
         self.es = None
