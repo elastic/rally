@@ -11,7 +11,7 @@ class CmdLineProgressReporter:
         self._width = width
         self._first_print = True
         self._plain_output = plain_output
-        if (os.environ.get('TERM') == 'dumb'):
+        if os.environ.get('TERM') == 'dumb':
             self._plain_output = True
 
     def print(self, message, progress):
@@ -32,7 +32,7 @@ class CmdLineProgressReporter:
         final_message = self._truncate(message, self._width - len(progress))
 
         formatted_progress = progress.rjust(w - len(final_message))
-        if (self._plain_output):
+        if self._plain_output:
             print("\n{0}{1}".format(final_message, formatted_progress), end="")
         else:
             print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")

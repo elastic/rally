@@ -118,6 +118,7 @@ class Driver(thespian.actors.Actor):
         self.progress_reporter = progress.CmdLineProgressReporter()
         self.progress_counter = 0
         self.quiet = False
+        self.most_recent_sample_per_client = {}
 
     def receiveMessage(self, msg, sender):
         if isinstance(msg, StartBenchmark):
@@ -176,9 +177,12 @@ class Driver(thespian.actors.Actor):
             # make a copy and reset early to avoid any race conditions from clients that reach a join point already while we are sending...
             clients_curr_step = self.clients_completed_current_step
             self.clients_completed_current_step = {}
+            self.update_progress_message(task_finished=True)
+            # clear per step
+            self.most_recent_sample_per_client = {}
             self.current_step += 1
             if self.finished():
-                self.update_progress_message(finished=True)
+                self.update_progress_message(task_finished=True, all_finished=True)
                 logger.info("All steps completed. Shutting down")
                 # we're done here
                 for driver in self.drivers:
@@ -188,7 +192,6 @@ class Driver(thespian.actors.Actor):
                 self.metrics_store.close()
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
-                self.update_progress_message()
                 # start the next task in three seconds (relative to master's timestamp)
                 #
                 # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
@@ -206,6 +209,9 @@ class Driver(thespian.actors.Actor):
 
     def update_samples(self, msg):
         self.raw_samples += msg.samples
+        if len(msg.samples) > 0:
+            most_recent = msg.samples[-1]
+            self.most_recent_sample_per_client[most_recent.client_id] = most_recent
 
     def post_process_samples(self):
         for sample in self.raw_samples:
@@ -225,17 +231,20 @@ class Driver(thespian.actors.Actor):
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time)
 
-    def update_progress_message(self, finished=False):
+    def update_progress_message(self, task_finished=False, all_finished=False):
         if not self.quiet:
-            progress_indicator = ["    ", " .  ", " .. ", " ..."]
-            step = self.current_step if not finished else self.current_step - 1
+            step = self.current_step if not all_finished else self.current_step - 1
+            if step < 0:
+                return
             ops = ",".join([op.name for op in self.ops_per_join_point[step]])
 
-            self.progress_counter = (self.progress_counter + 1) % len(progress_indicator) if not finished else 0
-            self.progress_reporter.print("Running %s" % ops,
-                                         "[%3d%% done]%s" % (round((self.current_step / self.number_of_steps) * 100),
-                                                             progress_indicator[self.progress_counter]))
-            if finished:
+            if task_finished:
+                total_progress = 1.0
+            else:
+                num_clients = max(len(self.most_recent_sample_per_client), 1)
+                total_progress = sum([s.percent_completed for s in self.most_recent_sample_per_client.values()]) / num_clients
+            self.progress_reporter.print("Running %s" % ops, "[%3d%% done]" % (round(total_progress * 100)))
+            if task_finished:
                 self.progress_reporter.finish()
 
 
@@ -318,7 +327,7 @@ class LoadGenerator(thespian.actors.Actor):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
             schedule = schedule_for(task, self.client_id, self.indices)
-            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
+            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler, task.operation)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
@@ -341,10 +350,10 @@ class Sampler:
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=1024)
 
-    def add(self, sample_type, latency_ms, service_time_ms, total_ops, time_period):
+    def add(self, sample_type, latency_ms, service_time_ms, total_ops, time_period, curr_iteration, total_iterations):
         try:
             self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
-                                     sample_type, latency_ms, service_time_ms, total_ops, time_period))
+                                     sample_type, latency_ms, service_time_ms, total_ops, time_period, curr_iteration, total_iterations))
         except queue.Full:
             logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
 
@@ -361,7 +370,7 @@ class Sampler:
 
 class Sample:
     def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops,
-                 time_period):
+                 time_period, curr_iteration, total_iterations):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
@@ -371,6 +380,12 @@ class Sample:
         self.service_time_ms = service_time_ms
         self.total_ops = total_ops
         self.time_period = time_period
+        self.curr_iteration = curr_iteration
+        self.total_iterations = total_iterations
+
+    @property
+    def percent_completed(self):
+        return self.curr_iteration / self.total_iterations
 
 
 def select_challenge(config, t):
@@ -521,7 +536,7 @@ def moving_average(data, window=3):
     return average_data
 
 
-def execute_schedule(schedule, es, sampler):
+def execute_schedule(schedule, es, sampler, operation):
     """
     Executes tasks according to the schedule for a given operation.
 
@@ -532,7 +547,8 @@ def execute_schedule(schedule, es, sampler):
     relative = None
     previous_sample_type = None
     total_start = time.perf_counter()
-    for expected_scheduled_time, sample_type_calculator, curr_iteration, total_iterations, runner, params in schedule:
+    curr_total_it = 1
+    for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_sample_type, total_it_for_task, runner, params in schedule:
         sample_type = sample_type_calculator(total_start)
         # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
         # the relative time zero which simplifies throughput calculation.
@@ -556,7 +572,9 @@ def execute_schedule(schedule, es, sampler):
         service_time = stop - start
         # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
         latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
-        sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative))
+        sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative),
+                    curr_total_it, total_it_for_task)
+        curr_total_it += 1
 
 
 class JoinPoint:
@@ -722,13 +740,14 @@ def iteration_count_based(target_throughput, warmup_iterations, iterations, runn
     :return: A generator for the corresponding parameters.
     """
     wait_time = 1 / target_throughput if target_throughput else 0
+    total_iterations = warmup_iterations + iterations
     if params is None:
         params = []
     for i in range(0, warmup_iterations):
-        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, warmup_iterations, runner, params)
+        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, warmup_iterations, total_iterations, runner, params)
 
     for i in range(0, iterations):
-        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, iterations, runner, params)
+        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, iterations, total_iterations, runner, params)
 
 
 def build_conflicting_ids(conflicts, docs_to_index, offset):
@@ -848,7 +867,7 @@ def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_i
     for bulk in reader:
         yield (wait_time * it,
                lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
-               it, iterations, runner, {"body": bulk})
+               it, iterations, iterations, runner, {"body": bulk})
         it += 1
 
 
