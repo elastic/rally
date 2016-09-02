@@ -65,7 +65,7 @@ class ProcessTests(TestCase):
         self.assertFalse(rally_process_mac.killed)
 
     @mock.patch("psutil.process_iter")
-    def test_kills_only_rally_es_processes(self, process_iter):
+    def test_kills_only_rally_processes(self, process_iter):
         rally_es_5_process = ProcessTests.Process(100, "java",
                                                   ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
                                                    "org.elasticsearch.bootstrap.Elasticsearch"])
@@ -83,6 +83,7 @@ class ProcessTests(TestCase):
         rally_process_mac = ProcessTests.Process(108, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
         # fake own process by determining our pid
         own_rally_process = ProcessTests.Process(os.getpid(), "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
+        night_rally_process = ProcessTests.Process(110, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/night_rally"])
 
         process_iter.return_value = [
             rally_es_1_process,
@@ -94,7 +95,8 @@ class ProcessTests(TestCase):
             rally_process_r,
             rally_process_e,
             rally_process_mac,
-            own_rally_process
+            own_rally_process,
+            night_rally_process,
         ]
 
         process.kill_running_rally_instances()
@@ -109,3 +111,4 @@ class ProcessTests(TestCase):
         self.assertTrue(rally_process_e.killed)
         self.assertTrue(rally_process_mac.killed)
         self.assertFalse(own_rally_process.killed)
+        self.assertFalse(night_rally_process.killed)
