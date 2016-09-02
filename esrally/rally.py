@@ -528,6 +528,8 @@ def main():
         cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
     configure_logging(cfg)
+    logger.info("Rally version [%s]" % version())
+    logger.info("Command line arguments: %s" % args)
 
     # Kill any lingering Rally processes before attempting to continue - the actor system needs to a singleton on this machine
     try:
@@ -548,8 +550,6 @@ def main():
         print_help_on_errors(cfg)
         sys.exit(70)
 
-    logger.info("Rally version [%s]" % version())
-    logger.info("Command line arguments: %s" % args)
     success = False
     try:
         success = dispatch_sub_command(cfg, sub_command)

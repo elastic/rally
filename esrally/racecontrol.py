@@ -362,6 +362,9 @@ def run(cfg):
             "Unknown pipeline [%s]. You can list the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
     try:
         pipeline()
+    except exceptions.RallyError as e:
+        # just pass on our own errors. It should be treated differently on top-level
+        raise e
     except BaseException:
         tb = sys.exc_info()[2]
         raise exceptions.RallyError("This race ended early with a fatal crash. For details please see the logs.").with_traceback(tb)

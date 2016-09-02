@@ -30,7 +30,7 @@ class Builder:
         try:
             binary = glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % src_dir)[0]
         except IndexError:
-            raise ImproperlyConfigured("Couldn't find a tar.gz distribution.")
+            raise ImproperlyConfigured("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
         self._config.add(config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
     def _exec(self, task_key):
