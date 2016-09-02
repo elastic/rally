@@ -55,14 +55,33 @@ def kill_running_es_instances(node_prefix):
 
     :param node_prefix a prefix of the node names that should be killed.
     """
+    def elasticsearch_process(p):
+        return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any("node.name=rally" in e for e in p.cmdline())
+
     logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % node_prefix)
+    kill_all(elasticsearch_process)
+
+
+def kill_running_rally_instances():
+    def rally_process(p):
+        return p.name() == "esrally" or \
+               p.name() == "rally" or \
+               (p.name().lower().startswith("python") and any("rally" in e for e in p.cmdline()))
+
+    kill_all(rally_process)
+
+
+def kill_all(predicate):
+    # no harakiri please
+    my_pid = os.getpid()
     for p in psutil.process_iter():
         try:
-            if p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any("node.name=rally" in e for e in p.cmdline()):
-                # check if command line contains elasticsearch and rally
-                logger.info("Killing lingering ES benchmark instance with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
+            if p.pid == my_pid:
+                logger.info("Skipping myself (PID [%s])." % p.pid)
+            elif predicate(p):
+                logger.info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
                 p.kill()
             else:
                 logger.debug("Skipping [%s]" % p.cmdline())
-        except (psutil.ZombieProcess, psutil.AccessDenied):
-            pass
+        except (psutil.ZombieProcess, psutil.AccessDenied) as e:
+            logger.debug("Skipping process: [%s]" % str(e))

@@ -10,7 +10,7 @@ import pkg_resources
 import thespian.actors
 
 from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
-from esrally.utils import io, format, convert, git
+from esrally.utils import io, format, convert, git, process
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -528,6 +528,12 @@ def main():
         cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
     configure_logging(cfg)
+
+    # Kill any lingering Rally processes before attempting to continue - the actor system needs to a singleton on this machine
+    try:
+        process.kill_running_rally_instances()
+    except BaseException:
+        logger.exception("Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
 
     # bootstrap Rally's Actor system
     try:
