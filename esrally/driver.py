@@ -1081,7 +1081,8 @@ class IndexDataReader:
             if self.f is None or docs_left <= 0:
                 raise StopIteration()
 
-            while docs_indexed < self.bulk_size:
+            this_bulk_size = min(self.bulk_size, docs_left)
+            while docs_indexed < this_bulk_size:
                 line = self.f.readline()
                 if len(line) == 0:
                     break

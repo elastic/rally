@@ -281,6 +281,29 @@ class IndexDataReaderTests(TestCase):
                 self.assertEqual(expected_bulk_lengths[bulk_index], len(bulk))
                 bulk_index += 1
 
+    def test_read_bulk_smaller_than_number_of_docs_and_multiple_clients(self):
+        data = [
+            '{"key": "value1"}',
+            '{"key": "value2"}',
+            '{"key": "value3"}',
+            '{"key": "value4"}',
+            '{"key": "value5"}',
+            '{"key": "value6"}',
+            '{"key": "value7"}',
+        ]
+        bulk_size = 3
+
+        reader = driver.IndexDataReader(data, docs_to_index=5, conflicting_ids=None, index_name="test_index", type_name="test_type",
+                                        bulk_size=bulk_size, file_source=StringAsFileSource)
+
+        # always double the amount as one line contains the data and one line contains the index command
+        expected_bulk_lengths = [6, 4]
+        with reader:
+            bulk_index = 0
+            for bulk in reader:
+                self.assertEqual(expected_bulk_lengths[bulk_index], len(bulk))
+                bulk_index += 1
+
 
 class InvocationGeneratorTests(ScheduleTestCase):
     class TestIndexReader:
@@ -347,6 +370,15 @@ class InvocationGeneratorTests(ScheduleTestCase):
         self.assertEqual((0, 267), driver.bounds(800, 0, 3))
         self.assertEqual((267, 267), driver.bounds(800, 1, 3))
         self.assertEqual((534, 266), driver.bounds(800, 2, 3))
+
+        self.assertEqual((0, 250), driver.bounds(2000, 0, 8))
+        self.assertEqual((250, 250), driver.bounds(2000, 1, 8))
+        self.assertEqual((500, 250), driver.bounds(2000, 2, 8))
+        self.assertEqual((750, 250), driver.bounds(2000, 3, 8))
+        self.assertEqual((1000, 250), driver.bounds(2000, 4, 8))
+        self.assertEqual((1250, 250), driver.bounds(2000, 5, 8))
+        self.assertEqual((1500, 250), driver.bounds(2000, 6, 8))
+        self.assertEqual((1750, 250), driver.bounds(2000, 7, 8))
 
     def test_calculate_number_of_bulks(self):
         t1 = self.t(1)
