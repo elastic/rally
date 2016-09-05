@@ -3,7 +3,7 @@ import glob
 import shutil
 import logging
 
-from esrally import config
+from esrally import config, exceptions
 from esrally.utils import io, versions
 
 logger = logging.getLogger("rally.provisioner")
@@ -60,9 +60,23 @@ class Provisioner:
     def _configure_logging(self, car):
         log_cfg = car.custom_logging_config
         if log_cfg:
-            logger.info("Replacing pre-bundled ES log configuration with custom config: [%s]" % log_cfg)
-            binary_path = self._config.opts("provisioning", "local.binary.path")
-            open("%s/config/logging.yml" % binary_path, "w").write(log_cfg)
+            log_config_type, log_config_path = self._es_log_config()
+            logger.info("Replacing pre-bundled ES log configuration at [%s] with custom config: [%s]" %
+                        (log_config_path, log_cfg[log_config_type]))
+            with open(log_config_path, "w") as log_config:
+                log_config.write(log_cfg[log_config_type])
+
+    def _es_log_config(self):
+        binary_path = self._config.opts("provisioning", "local.binary.path")
+        logging_yml_path = "%s/config/logging.yml" % binary_path
+        log4j2_properties_path = "%s/config/log4j2.properties" % binary_path
+
+        if os.path.isfile(logging_yml_path):
+            return "logging.yml", logging_yml_path
+        elif os.path.isfile(log4j2_properties_path):
+            return "log4j2.properties", log4j2_properties_path
+        else:
+            raise exceptions.SystemSetupError("Unrecognized Elasticsearch log config file format")
 
     def _configure_cluster(self, car, http_port):
         binary_path = self._config.opts("provisioning", "local.binary.path")
