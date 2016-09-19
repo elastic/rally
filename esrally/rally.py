@@ -234,11 +234,6 @@ def parse_args():
             help="Selects a specific pipeline to run. A pipeline defines the steps that are executed (default: from-sources-complete).",
             default="from-sources-complete")
         p.add_argument(
-            "--offline",
-            help="Assume that Rally has no connection to the Internet (default: false)",
-            default=False,
-            action="store_true")
-        p.add_argument(
             "--preserve-install",
             help="preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk "
                  "space! (default: %s)" % str(preserve_install).lower(),
@@ -345,6 +340,12 @@ def parse_args():
                 "--track-repository",
                 help="defines the repository from where Rally will load tracks (default: default).",
                 default="default")
+        p.add_argument(
+            "--offline",
+            help="Assume that Rally has no connection to the Internet (default: false)",
+            default=False,
+            action="store_true")
+
 
     return parser.parse_args()
 
