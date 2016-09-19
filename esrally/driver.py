@@ -714,7 +714,7 @@ def schedule_for(task, client_index, indices):
     """
     op = task.operation
     num_clients = task.clients
-    target_throughput = task.target_throughput // num_clients if task.target_throughput else None
+    target_throughput = task.target_throughput / num_clients if task.target_throughput else None
 
     if op.type == track.OperationType.Index:
         runner = BulkIndex()

@@ -252,9 +252,8 @@
                             "minimum": 1
                           },
                           "target-throughput": {
-                            "#COMMENT": "This should probably a double instead in order to allow throughputs < 1 / second",
-                            "type": "integer",
-                            "minimum": 1
+                            "type": "number",
+                            "minimum": 0
                           }
                         },
                         "required": ["operation"]
@@ -280,9 +279,8 @@
                   "minimum": 1
                 },
                 "target-throughput": {
-                  "#COMMENT": "This should probably a double instead in order to allow throughputs < 1 / second",
-                  "type": "integer",
-                  "minimum": 1
+                  "type": "number",
+                  "minimum": 0
                 }
               }
             }
