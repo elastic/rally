@@ -327,7 +327,7 @@ class LoadGenerator(thespian.actors.Actor):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
             schedule = schedule_for(task, self.client_id, self.indices)
-            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler, task.operation)
+            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
@@ -464,7 +464,7 @@ def _do_wait(es, expected_cluster_status):
     raise exceptions.RallyAssertionError(msg)
 
 
-def calculate_global_throughput(samples, bucket_interval_secs=2):
+def calculate_global_throughput(samples, bucket_interval_secs=1):
     """
     Calculates global throughput based on samples gathered from multiple load generators.
 
@@ -475,46 +475,52 @@ def calculate_global_throughput(samples, bucket_interval_secs=2):
     samples_per_op = {}
     # first we group all warmup / measurement samples by operation.
     for sample in samples:
-        k = (sample.operation, sample.sample_type)
+        k = sample.operation
         if k not in samples_per_op:
             samples_per_op[k] = []
         samples_per_op[k].append(sample)
 
     global_throughput = {}
 
-    # then we consolidate...
     for k, v in samples_per_op.items():
-        op, sample_type = k
+        op = k
         if op not in global_throughput:
             global_throughput[op] = []
         # sort all samples by time
         current_samples = sorted(v, key=lambda s: s.absolute_time)
 
-        next_bucket = bucket_interval_secs
         total_count = 0
-        reference_time = 0
-        previous_reference_time = 0
-        most_recent_unsaved_record = None
+        interval = 0
+        current_bucket = 0
+        current_sample_type = current_samples[0].sample_type
         start_time = current_samples[0].absolute_time - current_samples[0].time_period
+        skip_buckets = False
+        last_throughput = 0
 
         for sample in current_samples:
-            total_count += sample.total_ops
-            reference_time = sample.absolute_time - start_time
-            # avoid division by zero
-            interval = reference_time - previous_reference_time
-            if interval == 0:
-                continue
-            most_recent_unsaved_record = (sample.absolute_time, sample.relative_time, sample_type, (total_count / interval))
-            if reference_time >= next_bucket:
-                global_throughput[op].append(most_recent_unsaved_record)
-                next_bucket += bucket_interval_secs
-                previous_reference_time = reference_time
-                # we saved it
+            # once we have seen a new sample type, we stick to it.
+            if current_sample_type < sample.sample_type:
+                current_sample_type = sample.sample_type
                 total_count = 0
-                most_recent_unsaved_record = None
-        # also append last record in case we don't align perfectly with the bucket interval
-        if most_recent_unsaved_record:
-            global_throughput[op].append(most_recent_unsaved_record)
+                interval = 0
+                current_bucket = 0
+                start_time = sample.absolute_time - sample.time_period
+                # skip the next few buckets as the system needs time to stabilize again after the sample type has changed
+                skip_buckets = True
+
+            total_count += sample.total_ops
+            interval = max(sample.absolute_time - start_time, interval)
+
+            # avoid division by zero
+            if interval > 0 and interval >= current_bucket:
+                current_bucket = int(interval) + bucket_interval_secs
+                throughput = (total_count / interval)
+                # skip buckets until throughput catches up. This avoids artifacts introduced by resetting calculation parameters after
+                # the sample type has changed
+                if not skip_buckets or throughput > last_throughput:
+                    skip_buckets = False
+                    last_throughput = throughput
+                    global_throughput[op].append((sample.absolute_time, sample.relative_time, current_sample_type, throughput))
     return global_throughput
 
 
@@ -536,7 +542,7 @@ def moving_average(data, window=3):
     return average_data
 
 
-def execute_schedule(schedule, es, sampler, operation):
+def execute_schedule(schedule, es, sampler):
     """
     Executes tasks according to the schedule for a given operation.
 
@@ -1064,6 +1070,7 @@ class IndexDataReader:
         # skip offset number of lines
         logger.info("Skipping %d lines in [%s]." % (self.offset, self.data_file))
         for line in range(self.offset):
+            # TODO dm: Takes a significant amount of time for larger files and is the main reason why clients do not start at the same time.
             self.f.readline()
         return self
 

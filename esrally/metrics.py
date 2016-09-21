@@ -3,7 +3,7 @@ import datetime
 import logging
 import math
 import statistics
-from enum import Enum
+from enum import Enum, IntEnum
 
 import certifi
 import elasticsearch
@@ -129,7 +129,7 @@ def metrics_store(config):
         return InMemoryMetricsStore(config)
 
 
-class SampleType(Enum):
+class SampleType(IntEnum):
     Warmup = 0,
     Normal = 1
 

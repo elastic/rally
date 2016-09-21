@@ -154,21 +154,21 @@ class MetricsAggregationTests(TestCase):
             driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, -1, -1, 5000, 6.5, 1, 9)
         ]
 
-        aggregated = driver.calculate_global_throughput(samples, bucket_interval_secs=1)
+        aggregated = driver.calculate_global_throughput(samples)
 
         self.assertIn(op, aggregated)
         self.assertEqual(1, len(aggregated))
 
         throughput = aggregated[op]
         print(throughput)
-        self.assertEqual(7, len(throughput))
+        self.assertEqual(6, len(throughput))
         self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000), throughput[0])
         self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000), throughput[1])
         self.assertEqual((1470838597, 23, metrics.SampleType.Normal, 5000), throughput[2])
         self.assertEqual((1470838598, 24, metrics.SampleType.Normal, 5000), throughput[3])
-        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 10000), throughput[4])
-        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 10000), throughput[5])
-        self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
+        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 6000), throughput[4])
+        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 6666.666666666667), throughput[5])
+        #self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
 
 
 class SchedulerTests(ScheduleTestCase):
