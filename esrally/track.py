@@ -222,9 +222,10 @@ def prepare_track(track, cfg):
         offline = cfg.opts("system", "offline.mode")
         file_exists = os.path.isfile(local_path)
 
-        if file_exists:
+        # ensure we only skip the download if the file size also matches our expectation
+        if file_exists and os.path.getsize(local_path) == size_in_bytes:
             logger.info("[%s] already exists locally. Skipping download." % local_path)
-            return
+            return False
 
         if not offline:
             logger.info("Downloading from [%s] to [%s]." % (url, local_path))
@@ -248,11 +249,20 @@ def prepare_track(track, cfg):
                     "Could not download from %s to %s. Please verify that data are available at %s and "
                     "check your internet connection." % (url, local_path, url))
 
+        actual_size = os.path.getsize(local_path)
+        if actual_size != size_in_bytes:
+            raise exceptions.DataError("[%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected." %
+                                       (local_path, actual_size, size_in_bytes))
+
+        return True
+
     def decompress(data_set_path, expected_size_in_bytes):
         # we assume that track data are always compressed and try to decompress them before running the benchmark
         basename, extension = io.splitext(data_set_path)
+        decompressed = False
         if not os.path.isfile(basename) or os.path.getsize(basename) != expected_size_in_bytes:
-            logger.info("Unzipping track data from [%s] to [%s]." % (data_set_path, basename))
+            decompressed = True
+            logger.info("Decompressing track data from [%s] to [%s]." % (data_set_path, basename))
             print("Decompressing %s (resulting size: %.2f GB) ... " %
                   (type.document_archive, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True)
             io.decompress(data_set_path, io.dirname(data_set_path))
@@ -261,13 +271,16 @@ def prepare_track(track, cfg):
             if extracted_bytes != expected_size_in_bytes:
                 raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
                                            (basename, extracted_bytes, expected_size_in_bytes))
+        return basename, decompressed
 
     for index in track.indices:
         for type in index.types:
             if type.document_archive:
                 data_url = "%s/%s" % (track.source_root_url, os.path.basename(type.document_archive))
                 download(cfg, data_url, type.document_archive, type.compressed_size_in_bytes)
-                decompress(type.document_archive, type.uncompressed_size_in_bytes)
+                decompressed_file_path, was_decompressed = decompress(type.document_archive, type.uncompressed_size_in_bytes)
+                # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
+                io.prepare_file_offset_table(decompressed_file_path)
 
 
 class TrackRepository:

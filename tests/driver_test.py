@@ -214,6 +214,10 @@ class StringAsFileSource:
         self.contents = contents
         self.current_index = 0
 
+    def seek(self, offset):
+        if offset != 0:
+            raise AssertionError("StringAsFileSource does not support random seeks")
+
     def readline(self):
         if self.current_index >= len(self.contents):
             return ""

@@ -6,6 +6,9 @@ import bz2
 import gzip
 import zipfile
 import tarfile
+import logging
+
+logger = logging.getLogger("rally.utils.io")
 
 
 def ensure_dir(directory):
@@ -109,6 +112,62 @@ def splitext(file_name):
         return file_name[0:-8], file_name[-8:]
     else:
         return os.path.splitext(file_name)
+
+
+def prepare_file_offset_table(data_file_path):
+    """
+    Creates a file that contains a mapping from line numbers to file offsets for the provided path. This file is used internally by
+    #skip_lines(data_file_path, data_file) to speed up line skipping.
+
+    :param data_file_path: The path to a text file that is readable by this process.
+    """
+    offset_file_path = "%s.offset" % data_file_path
+    # recreate only if necessary as this can be time-consuming
+    if not os.path.exists(offset_file_path) or os.path.getmtime(offset_file_path) < os.path.getmtime(data_file_path):
+        logger.info("Preparing file offset table for [%s]." % data_file_path)
+        print("Preparing file offset table for %s ... " % data_file_path, end="", flush=True)
+        line_number = 0
+        with open(offset_file_path, mode="w") as offset_file:
+            with open(data_file_path, mode="rt") as data_file:
+                while True:
+                    line = data_file.readline()
+                    if len(line) == 0:
+                        break
+                    line_number += 1
+                    if line_number % 50000 == 0:
+                        print("%d;%d" % (line_number, data_file.tell()), file=offset_file)
+        print("Done")
+    else:
+        logger.info("Skipping creation of file offset table at [%s] as it is still valid." % offset_file_path)
+
+
+def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
+    """
+    Skips the first `number_of_lines_to_skip` lines in `data_file` as a side effect.
+
+    :param data_file_path: The full path to the data file.
+    :param data_file: The data file. It is assumed that this file is already open for reading and its file pointer is at position zero.
+    :param number_of_lines_to_skip: A non-negative number of lines that should be skipped.
+    """
+    offset_file_path = "%s.offset" % data_file_path
+    offset = 0
+    remaining_lines = number_of_lines_to_skip
+    # can we fast forward?
+    if os.path.exists(offset_file_path):
+        with open(offset_file_path) as offsets:
+            for line in offsets:
+                line_number, offset_in_bytes = [int(i) for i in line.strip().split(";")]
+                if line_number <= number_of_lines_to_skip:
+                    offset = offset_in_bytes
+                    remaining_lines = number_of_lines_to_skip - line_number
+                else:
+                    break
+    # fast forward to the last known file offset
+    data_file.seek(offset)
+    # forward the last remaining lines if needed
+    if remaining_lines > 0:
+        for line in range(remaining_lines):
+            data_file.readline()
 
 
 def get_size(start_path="."):

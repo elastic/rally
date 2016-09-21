@@ -10,7 +10,7 @@ import time
 import elasticsearch
 import thespian.actors
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
-from esrally.utils import convert, progress
+from esrally.utils import convert, progress, io
 
 logger = logging.getLogger("rally.driver")
 
@@ -481,7 +481,8 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
         samples_per_op[k].append(sample)
 
     global_throughput = {}
-
+    # with open("raw_samples.csv", "w") as sample_log:
+    #    print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
     for k, v in samples_per_op.items():
         op = k
         if op not in global_throughput:
@@ -498,6 +499,10 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
         last_throughput = 0
 
         for sample in current_samples:
+            # print("%d,%f,%f,%s,%s,%d,%f" %
+            # (sample.client_id, sample.absolute_time, sample.relative_time, sample.operation, sample.sample_type,
+            #  sample.total_ops, sample.time_period), file=sample_log)
+
             # once we have seen a new sample type, we stick to it.
             if current_sample_type < sample.sample_type:
                 current_sample_type = sample.sample_type
@@ -1039,6 +1044,9 @@ class FileSource:
     def __init__(self, file_name, mode):
         self.f = open(file_name, mode)
 
+    def seek(self, offset):
+        self.f.seek(offset)
+
     def readline(self):
         return self.f.readline()
 
@@ -1069,9 +1077,10 @@ class IndexDataReader:
         self.f = self.file_source.open(self.data_file, 'rt')
         # skip offset number of lines
         logger.info("Skipping %d lines in [%s]." % (self.offset, self.data_file))
-        for line in range(self.offset):
-            # TODO dm: Takes a significant amount of time for larger files and is the main reason why clients do not start at the same time.
-            self.f.readline()
+        start = time.perf_counter()
+        io.skip_lines(self.data_file, self.f, self.offset)
+        end = time.perf_counter()
+        logger.info("Skipping %d lines took %f s." % (self.offset, end - start))
         return self
 
     def __iter__(self):
