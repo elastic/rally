@@ -511,7 +511,8 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
                 current_bucket = 0
                 start_time = sample.absolute_time - sample.time_period
                 # skip the next few buckets as the system needs time to stabilize again after the sample type has changed
-                skip_buckets = True
+                # TODO dm: Redo
+                # skip_buckets = True
 
             total_count += sample.total_ops
             interval = max(sample.absolute_time - start_time, interval)
