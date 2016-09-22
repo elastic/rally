@@ -38,6 +38,7 @@ class Builder:
         logger.info("Building Elasticsearch from sources in [%s]." % src_dir)
         gradle = self._config.opts("build", "gradle.bin")
         task = self._config.opts("build", task_key)
+        java_home = self._config.opts("runtime", "java8.home")
 
         log_root = self._config.opts("system", "log.dir")
         build_log_dir = self._config.opts("build", "log.dir")
@@ -48,7 +49,8 @@ class Builder:
         log_file = "%s/build.%s.log" % (log_dir, task_key)
 
         # we capture all output to a dedicated build log file
-        if process.run_subprocess("cd %s; %s %s > %s 2>&1" % (src_dir, gradle, task, log_file)):
+
+        if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s > %s 2>&1" % (java_home, src_dir, gradle, task, log_file)):
             msg = "Executing '%s %s' failed. Here are the last 20 lines in the build log file:\n" % (gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:
