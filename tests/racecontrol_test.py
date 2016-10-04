@@ -86,7 +86,13 @@ class SnapshotDistributionRepositoryTests(TestCase):
 
 
 class ReleaseDistributionRepositoryTests(TestCase):
-    def test_download_url_for_recent_valid_versions(self):
+    def test_download_url_for_5_0_beta_or_later_valid_versions(self):
+        root_url = "https://artifacts.elastic.co/downloads/elasticsearch"
+        repo = racecontrol.ReleaseDistributionRepo()
+        self.assertEqual("%s/elasticsearch-5.0.0-beta1.tar.gz" % root_url, repo.download_url("5.0.0-beta1"))
+        self.assertEqual("%s/elasticsearch-6.0.0-alpha1.tar.gz" % root_url, repo.download_url("6.0.0-alpha1"))
+
+    def test_download_url_for_2_until_5_0_alpha_valid_versions(self):
         root_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch"
         repo = racecontrol.ReleaseDistributionRepo()
         self.assertEqual("%s/5.0.0-alpha1/elasticsearch-5.0.0-alpha1.tar.gz" % root_url, repo.download_url("5.0.0-alpha1"))

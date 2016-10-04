@@ -231,14 +231,27 @@ class ReleaseDistributionRepo:
 
     def download_url(self, version):
         major_version = int(versions.components(version)["major"])
-        if major_version > 1:
+        if major_version > 1 and not self.on_or_after_5_0_0_beta1(version):
             download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
                            "elasticsearch-%s.tar.gz" % (version, version)
+        elif self.on_or_after_5_0_0_beta1(version):
+            download_url = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-%s.tar.gz" % version
         else:
             download_url = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-%s.tar.gz" % version
-
         return download_url
 
+    def on_or_after_5_0_0_beta1(self, version):
+        components = versions.components(version)
+        major_version = int(components["major"])
+        minor_version = int(components["minor"])
+        patch_version = int(components["patch"])
+        suffix = components["suffix"] if "suffix" in components else None
+
+        if major_version < 5:
+            return False
+        elif major_version == 5 and minor_version == 0 and patch_version == 0 and suffix and suffix.startswith("alpha"):
+            return False
+        return True
 
 class SnapshotDistributionRepo:
     def __init__(self):
