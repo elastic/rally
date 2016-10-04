@@ -85,10 +85,10 @@ rootLogger.level = info
 rootLogger.appenderRef.console.ref = console
 rootLogger.appenderRef.rolling.ref = rolling
 
-logger.verbose_iw.name = index.engine.lucene.iw
+logger.verbose_iw.name = org.elasticsearch.index.engine.Engine.SM
 logger.verbose_iw.level = trace
-logger.verbose_iw.appenderRef.verbose_iw.ref = console
-logger.verbose_iw.appenderRef.verbose_iw.ref = rolling
+logger.verbose_iw.appenderRef.console.ref = console
+logger.verbose_iw.appenderRef.rolling.ref = rolling
 logger.verbose_iw.additivity = false
 
 appender.deprecation_rolling.type = RollingFile
