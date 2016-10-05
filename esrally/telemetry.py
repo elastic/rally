@@ -486,7 +486,7 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
 
-        stats = self.client.nodes.stats(metric="_all", level="shards")
+        stats = self.client.nodes.stats(metric="_all")
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
@@ -530,7 +530,7 @@ class NodeStats(InternalTelemetryDevice):
 
     def on_benchmark_stop(self):
         logger.info("Gathering nodes stats")
-        stats = self.client.nodes.stats(metric="_all", level="shards")
+        stats = self.client.nodes.stats(metric="_all")
         total_old_gen_collection_time = 0
         total_young_gen_collection_time = 0
         nodes = stats["nodes"]

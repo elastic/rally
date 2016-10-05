@@ -951,7 +951,7 @@ class IndicesStats(Runner):
     """
 
     def __call__(self, es, params):
-        es.indices.stats(metric="_all", level="shards")
+        es.indices.stats(metric="_all")
         return 1
 
 
@@ -961,7 +961,7 @@ class NodeStats(Runner):
     """
 
     def __call__(self, es, params):
-        es.nodes.stats(metric="_all", level="shards")
+        es.nodes.stats(metric="_all")
         return 1
 
 
