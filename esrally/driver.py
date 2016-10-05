@@ -437,10 +437,10 @@ def _do_wait(es, expected_cluster_status):
     for attempt in range(10):
         try:
             if use_wait_for_no_relocating_shards:
-                result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
-            else:
                 result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s",
                                            params={"wait_for_no_relocating_shards": True})
+            else:
+                result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
 
         except (socket.timeout, elasticsearch.exceptions.ConnectionError):
             pass
