@@ -15,6 +15,7 @@ class BuilderTests(TestCase):
 
         cfg = config.Config()
         cfg.add(config.Scope.application, "source", "local.src.dir", "/src")
+        cfg.add(config.Scope.application, "runtime", "java8.home", "/opt/jdk8")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/usr/local/gradle")
         cfg.add(config.Scope.application, "build", "gradle.tasks.clean", "clean")
         cfg.add(config.Scope.application, "build", "gradle.tasks.package", "assemble")
@@ -26,9 +27,9 @@ class BuilderTests(TestCase):
 
         calls = [
             # Actual call
-            mock.call("cd /src; /usr/local/gradle clean > logs/build/build.gradle.tasks.clean.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle clean > logs/build/build.gradle.tasks.clean.log 2>&1"),
             # Return value check
-            mock.call("cd /src; /usr/local/gradle assemble > logs/build/build.gradle.tasks.package.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle assemble > logs/build/build.gradle.tasks.package.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
