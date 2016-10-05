@@ -420,6 +420,23 @@ class SampleCpuUsage(threading.Thread):
             logger.exception("Could not determine CPU utilization")
 
 
+def store_node_attribute_metadata(metrics_store, nodes_info):
+    # push up all node level attributes to cluster level iff the values are identical for all nodes
+    pseudo_cluster_attributes = {}
+    for node in nodes_info:
+        if "attributes" in node:
+            for k, v in node["attributes"].items():
+                attribute_key = "attribute_%s" % str(k)
+                metrics_store.add_meta_info(metrics.MetaInfoScope.node, node["name"], attribute_key, v)
+                if attribute_key not in pseudo_cluster_attributes:
+                    pseudo_cluster_attributes[attribute_key] = set()
+                pseudo_cluster_attributes[attribute_key].add(v)
+
+    for k, v in pseudo_cluster_attributes.items():
+        if len(v) == 1:
+            metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, k, next(iter(v)))
+
+
 class EnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
@@ -434,10 +451,13 @@ class EnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
         info = self.client.nodes.info(node_id="_all")
-        for node in info["nodes"].values():
+        nodes_info = info["nodes"].values()
+        for node in nodes_info:
             node_name = node["name"]
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
+
+        store_node_attribute_metadata(self.metrics_store, nodes_info)
 
     def attach_to_node(self, node):
         # we gather also host level metrics here although they will just be overridden for multiple nodes on the same node (which is no
@@ -478,12 +498,15 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host)
 
         info = self.client.nodes.info(node_id="_all")
-        for node in info["nodes"].values():
+        nodes_info = info["nodes"].values()
+        for node in nodes_info:
             self.try_store_node_info(node, "os_name", ["os", "name"])
             self.try_store_node_info(node, "os_version", ["os", "version"])
             self.try_store_node_info(node, "cpu_logical_cores", ["os", "available_processors"])
             self.try_store_node_info(node, "jvm_vendor", ["jvm", "vm_vendor"])
             self.try_store_node_info(node, "jvm_version", ["jvm", "version"])
+
+        store_node_attribute_metadata(self.metrics_store, nodes_info)
 
     def try_store_node_info(self, node, metric_key, path):
         node_name = node["name"]

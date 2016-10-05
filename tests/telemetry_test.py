@@ -1,3 +1,4 @@
+import collections
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -119,23 +120,40 @@ class SubClient:
 class EnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
-        nodes_info = {
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "rally0",
-                    "host": "127.0.0.1",
-                    "os": {
-                        "name": "Mac OS X",
-                        "version": "10.11.4",
-                        "available_processors": 8
-                    },
-                    "jvm": {
-                        "version": "1.8.0_74",
-                        "vm_vendor": "Oracle Corporation"
-                    }
-                }
+        nodes_info = {"nodes": collections.OrderedDict()}
+        nodes_info["nodes"]["FCFjozkeTiOpN-SI88YEcg"] = {
+            "name": "rally0",
+            "host": "127.0.0.1",
+            "attributes": {
+                "group": "cold_nodes"
+            },
+            "os": {
+                "name": "Mac OS X",
+                "version": "10.11.4",
+                "available_processors": 8
+            },
+            "jvm": {
+                "version": "1.8.0_74",
+                "vm_vendor": "Oracle Corporation"
             }
         }
+        nodes_info["nodes"]["EEEjozkeTiOpN-SI88YEcg"] = {
+            "name": "rally1",
+            "host": "127.0.0.1",
+            "attributes": {
+                "group": "hot_nodes"
+            },
+            "os": {
+                "name": "Mac OS X",
+                "version": "10.11.5",
+                "available_processors": 8
+            },
+            "jvm": {
+                "version": "1.8.0_102",
+                "vm_vendor": "Oracle Corporation"
+            }
+        }
+
         cluster_info = {
             "version":
                 {
@@ -150,12 +168,16 @@ class EnvironmentInfoTests(TestCase):
         env_device = telemetry.EnvironmentInfo(cfg, client, metrics_store)
         t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
-
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74")
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
+            mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_vendor", "Oracle Corporation"),
+            mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_version", "1.8.0_102"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_group", "cold_nodes"),
+            mock.call(metrics.MetaInfoScope.node, "rally1", "attribute_group", "hot_nodes")
         ]
+
         metrics_store_add_meta_info.assert_has_calls(calls)
 
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
@@ -220,6 +242,9 @@ class ExternalEnvironmentInfoTests(TestCase):
                 "FCFjozkeTiOpN-SI88YEcg": {
                     "name": "rally0",
                     "host": "127.0.0.1",
+                    "attributes": {
+                        "az": "us_east1"
+                    },
                     "os": {
                         "name": "Mac OS X",
                         "version": "10.11.4",
@@ -253,7 +278,9 @@ class ExternalEnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "os_version", "10.11.4"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_logical_cores", 8),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74")
+            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_az", "us_east1"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "attribute_az", "us_east1")
         ]
         metrics_store_add_meta_info.assert_has_calls(calls)
 
