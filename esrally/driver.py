@@ -93,6 +93,16 @@ class BenchmarkComplete:
         self.metrics = metrics
 
 
+# Workaround for https://github.com/godaddy/Thespian/issues/22
+class BenchmarkFailure:
+    """
+    Indicates a failure in the benchmark execution due to an exception
+    """
+    def __init__(self, message, cause):
+        self.message = message
+        self.cause = cause
+
+
 class Driver(thespian.actors.Actor):
     WAKEUP_INTERVAL_SECONDS = 1
     """
@@ -121,16 +131,31 @@ class Driver(thespian.actors.Actor):
         self.most_recent_sample_per_client = {}
 
     def receiveMessage(self, msg, sender):
-        if isinstance(msg, StartBenchmark):
-            self.start_benchmark(msg, sender)
-        elif isinstance(msg, JoinPointReached):
-            self.joinpoint_reached(msg)
-        elif isinstance(msg, UpdateSamples):
-            self.update_samples(msg)
-        elif isinstance(msg, thespian.actors.WakeupMessage):
-            if not self.finished():
-                self.update_progress_message()
-                self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
+        try:
+            if isinstance(msg, StartBenchmark):
+                self.start_benchmark(msg, sender)
+            elif isinstance(msg, JoinPointReached):
+                self.joinpoint_reached(msg)
+            elif isinstance(msg, UpdateSamples):
+                self.update_samples(msg)
+            elif isinstance(msg, thespian.actors.WakeupMessage):
+                if not self.finished():
+                    self.update_progress_message()
+                    self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
+            elif isinstance(msg, BenchmarkFailure):
+                logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
+                self.metrics_store.close()
+                for driver in self.drivers:
+                    self.send(driver, thespian.actors.ActorExitRequest())
+                self.send(self.start_sender, msg)
+                self.send(self.myAddress, thespian.actors.ActorExitRequest())
+        except Exception as e:
+            logger.exception("Main driver encountered a fatal exception. Shutting down.")
+            self.metrics_store.close()
+            for driver in self.drivers:
+                self.send(driver, thespian.actors.ActorExitRequest())
+            self.send(self.start_sender, BenchmarkFailure("Could not execute benchmark", e))
+            self.send(self.myAddress, thespian.actors.ActorExitRequest())
 
     def start_benchmark(self, msg, sender):
         logger.info("Benchmark is about to start.")
@@ -274,39 +299,42 @@ class LoadGenerator(thespian.actors.Actor):
         self.start_driving = False
 
     def receiveMessage(self, msg, sender):
-        if isinstance(msg, StartLoadGenerator):
-            logger.debug("client [%d] is about to start." % msg.client_id)
-            self.master = sender
-            self.client_id = msg.client_id
-            self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
-            self.config = msg.config
-            self.indices = msg.indices
-            self.tasks = msg.tasks
-            self.current_task = 0
-            self.start_timestamp = time.perf_counter()
-            self.drive()
-        elif isinstance(msg, Drive):
-            logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %
-                         (self.client_id, self.current_task, msg.client_start_timestamp))
-            self.master = sender
-            self.start_driving = True
-            self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
-        elif isinstance(msg, thespian.actors.WakeupMessage):
-            logger.debug("client [%d] woke up." % self.client_id)
-            # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
-            if self.start_driving:
-                self.start_driving = False
+        try:
+            if isinstance(msg, StartLoadGenerator):
+                logger.debug("client [%d] is about to start." % msg.client_id)
+                self.master = sender
+                self.client_id = msg.client_id
+                self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
+                self.config = msg.config
+                self.indices = msg.indices
+                self.tasks = msg.tasks
+                self.current_task = 0
+                self.start_timestamp = time.perf_counter()
                 self.drive()
+            elif isinstance(msg, Drive):
+                logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %
+                             (self.client_id, self.current_task, msg.client_start_timestamp))
+                self.master = sender
+                self.start_driving = True
+                self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
+            elif isinstance(msg, thespian.actors.WakeupMessage):
+                logger.debug("client [%d] woke up." % self.client_id)
+                # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
+                if self.start_driving:
+                    self.start_driving = False
+                    self.drive()
+                else:
+                    self.send_samples()
+                    if self.executor_future is not None:
+                        if self.executor_future.done():
+                            self.executor_future = None
+                            self.drive()
+                        else:
+                            self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
             else:
-                self.send_samples()
-                if self.executor_future is not None:
-                    if self.executor_future.done():
-                        self.executor_future = None
-                        self.drive()
-                    else:
-                        self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
-        else:
-            logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
+                logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
+        except Exception as e:
+            self.send(self.master, BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
 
     def drive(self):
         task = None

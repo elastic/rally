@@ -137,15 +137,17 @@ def benchmark_internal(ctx):
     metrics_store = ctx.mechanic._metrics_store
 
     cluster.on_benchmark_start()
-    completed = actors.ask(main_driver, driver.StartBenchmark(ctx.config, ctx.track, metrics_store.meta_info))
-    cluster.on_benchmark_stop()
-    if not hasattr(completed, "metrics"):
-        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(completed))
-    metrics_store.bulk_add(completed.metrics)
-
-    ctx.mechanic.stop_engine(cluster)
-    ctx.mechanic.revise_candidate()
-    ctx.mechanic.stop_metrics()
+    result = actors.ask(main_driver, driver.StartBenchmark(ctx.config, ctx.track, metrics_store.meta_info))
+    if isinstance(result, driver.BenchmarkComplete):
+        cluster.on_benchmark_stop()
+        metrics_store.bulk_add(result.metrics)
+        ctx.mechanic.stop_engine(cluster)
+        ctx.mechanic.revise_candidate()
+        ctx.mechanic.stop_metrics()
+    elif isinstance(result, driver.BenchmarkFailure):
+        raise exceptions.RallyError(result.message, result.cause)
+    else:
+        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
 
 
 # TODO dm module refactoring: mechanic
@@ -180,12 +182,15 @@ def benchmark_external(ctx):
     metrics_store = ctx.mechanic._metrics_store
 
     ctx.cluster.on_benchmark_start()
-    completed = actors.ask(main_driver, driver.StartBenchmark(ctx.config, ctx.track, metrics_store.meta_info))
-    ctx.cluster.on_benchmark_stop()
-    if not hasattr(completed, "metrics"):
-        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(completed))
-    metrics_store.bulk_add(completed.metrics)
-    ctx.mechanic.stop_metrics()
+    result = actors.ask(main_driver, driver.StartBenchmark(ctx.config, ctx.track, metrics_store.meta_info))
+    if isinstance(result, driver.BenchmarkComplete):
+        ctx.cluster.on_benchmark_stop()
+        metrics_store.bulk_add(result.metrics)
+        ctx.mechanic.stop_metrics()
+    elif isinstance(result, driver.BenchmarkFailure):
+        raise exceptions.RallyError(result.message, result.cause)
+    else:
+        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
 
 
 # TODO dm module refactoring: mechanic

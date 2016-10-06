@@ -586,8 +586,10 @@ def main():
         times_interrupted = 0
         while not shutdown_complete and times_interrupted < 2:
             try:
+                logger.info("Attempting to shutdown internal actor system.")
                 actors.shutdown()
                 shutdown_complete = True
+                logger.info("Shutdown completed.")
             except KeyboardInterrupt:
                 times_interrupted += 1
                 logger.warn("User interrupted shutdown of internal actor system.")
