@@ -14,9 +14,9 @@ logger = logging.getLogger("rally.telemetry")
 
 
 def list_telemetry(cfg):
-    print("Available telemetry devices:\n")
-    print(tabulate.tabulate(Telemetry(cfg).list(), ["Command", "Name", "Description"]))
-    print("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
+    console.println("Available telemetry devices:\n")
+    console.println(tabulate.tabulate(Telemetry(cfg).list(), ["Command", "Name", "Description"]))
+    console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
 
 class Telemetry:

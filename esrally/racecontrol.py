@@ -2,12 +2,10 @@ import logging
 import os
 import sys
 import urllib.error
-# Sorry, but Maven relies on XML...
 import xml.etree.ElementTree
 
 import tabulate
 import thespian.actors
-
 from esrally import config, driver, exceptions, sweeper, track, reporter, metrics, car, client, PROGRAM_NAME
 from esrally.mechanic import mechanic
 from esrally.utils import process, net, io, versions, console
@@ -360,9 +358,9 @@ pipelines = {
 
 
 def list_pipelines():
-    print("Available pipelines:\n")
-    print(tabulate.tabulate([[pipeline().name, pipeline().description] for pipeline in pipelines.values()],
-                            headers=["Name", "Description"]))
+    console.println("Available pipelines:\n")
+    console.println(
+        tabulate.tabulate([[pipeline().name, pipeline().description] for pipeline in pipelines.values()], headers=["Name", "Description"]))
 
 
 def run(cfg):

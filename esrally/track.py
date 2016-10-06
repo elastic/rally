@@ -187,8 +187,8 @@ def tracks(cfg):
 
 
 def list_tracks(cfg):
-    print("Available tracks:\n")
-    print(tabulate.tabulate(
+    console.println("Available tracks:\n")
+    console.println(tabulate.tabulate(
         tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in tracks(cfg)],
         headers=["Name", "Description", "Challenges"]))
 

@@ -11,6 +11,7 @@ import elasticsearch.helpers
 import tabulate
 
 from esrally import time, exceptions
+from esrally.utils import console
 
 logger = logging.getLogger("rally.metrics")
 
@@ -718,12 +719,12 @@ def race_store(config):
 
 
 def list_races(cfg):
-    print("Recent races:\n")
+    console.println("Recent races:\n")
     races = []
     for race in race_store(cfg).list():
         races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car, race.user_tag])
 
-    print(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
+    console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
 
 
 class InMemoryRaceStore:
