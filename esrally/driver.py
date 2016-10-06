@@ -140,6 +140,7 @@ class Driver(thespian.actors.Actor):
         self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
         self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info)
         invocation = self.config.opts("meta", "time.start")
+        expected_cluster_health = msg.config.opts("benchmarks", "cluster.health")
         track_name = self.config.opts("system", "track")
         challenge_name = self.config.opts("benchmarks", "challenge")
         selected_car_name = self.config.opts("benchmarks", "car")
@@ -147,7 +148,7 @@ class Driver(thespian.actors.Actor):
 
         track = msg.track
         challenge = select_challenge(self.config, track)
-        setup_index(self.es, track, challenge)
+        setup_index(self.es, track, challenge, expected_cluster_health)
         allocator = Allocator(challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -397,7 +398,7 @@ def select_challenge(config, t):
                                           "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
 
 
-def setup_index(es, t, challenge):
+def setup_index(es, t, challenge, expected_cluster_health):
     if challenge.index_settings:
         for index in t.indices:
             if es.indices.exists(index=index.name):
@@ -412,20 +413,19 @@ def setup_index(es, t, challenge):
                 es.indices.put_mapping(index=index.name,
                                        doc_type=type.name,
                                        body=json.loads(mappings))
-    wait_for_status_green(es)
+    wait_for_status(es, expected_cluster_health)
 
 
-# TODO dm: Some cluster just are not green -> allow users to override that
-EXPECTED_CLUSTER_STATUS = "green"
-
-
-def wait_for_status_green(es):
+def wait_for_status(es, expected_cluster_status):
     """
-    Synchronously waits until the cluster reaches status green. Upon timeout a LaunchError is thrown.
+    Synchronously waits until the cluster reaches the provided status. Upon timeout a LaunchError is thrown.
+
+    :param es Elasticsearch client
+    :param expected_cluster_status the cluster status that should be reached.
     """
-    logger.info("Wait for cluster status [%s]" % EXPECTED_CLUSTER_STATUS)
+    logger.info("Wait for cluster status [%s]" % expected_cluster_status)
     start = time.perf_counter()
-    reached_cluster_status, relocating_shards = _do_wait(es, EXPECTED_CLUSTER_STATUS)
+    reached_cluster_status, relocating_shards = _do_wait(es, expected_cluster_status)
     stop = time.perf_counter()
     logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
     logger.info("Cluster health: [%s]" % str(es.cluster.health()))
