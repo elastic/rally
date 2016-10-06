@@ -389,6 +389,7 @@ class CpuUsage(InternalTelemetryDevice):
     def on_benchmark_start(self):
         if self.node:
             self.sampler = SampleCpuUsage(self.node, self._metrics_store)
+            self.sampler.daemon = True
             self.sampler.start()
 
     def on_benchmark_stop(self):
