@@ -85,27 +85,33 @@ def log_file_path(cfg):
 
 
 def configure_logging(cfg):
+    # Even if we don't log to a file, other parts of the application rely on this path to exist -> enforce
     log_file = log_file_path(cfg)
     log_dir = os.path.dirname(log_file)
     io.ensure_dir(log_dir)
     cfg.add(config.Scope.application, "system", "log.dir", log_dir)
 
-    console.println("\nWriting additional logs to %s\n" % log_file)
-    # there is an old log file lying around -> backup
-    if os.path.exists(log_file):
-        os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
+    logging_output = cfg.opts("system", "logging.output")
+
+    if logging_output == "file":
+        console.println("\nWriting additional logs to %s\n" % log_file)
+        # there is an old log file lying around -> backup
+        if os.path.exists(log_file):
+            os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
+        ch = logging.FileHandler(filename=log_file, mode="a")
+    else:
+        ch = logging.StreamHandler(stream=sys.stdout)
+
+    log_level = logging.INFO
+    ch.setLevel(log_level)
+    formatter = logging.Formatter("%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter.converter = time.gmtime
+    ch.setFormatter(formatter)
 
     # Remove all handlers associated with the root logger object so we can start over with an entirely fresh log configuration
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
-    log_level = logging.INFO
-    ch = logging.FileHandler(filename=log_file, mode="a")
-    # ch = logging.StreamHandler(stream=sys.stdout)
-    ch.setLevel(log_level)
-    formatter = logging.Formatter("%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    formatter.converter = time.gmtime
-    ch.setFormatter(formatter)
     logging.root.addHandler(ch)
     logging.getLogger("elasticsearch").setLevel(logging.WARN)
 
@@ -120,6 +126,23 @@ def configure_actor_logging(cfg):
             return "actorAddress" not in logrecord.__dict__
 
     log_dir = paths.Paths(cfg).log_root()
+
+    logging_output = cfg.opts("system", "logging.output")
+
+    if logging_output == "file":
+        actor_log_handler = {"class": "logging.FileHandler", "filename": "%s/rally-actors.log" % log_dir}
+        actor_messages_handler = {"class": "logging.FileHandler", "filename": "%s/rally-actor-messages.log" % log_dir}
+    else:
+        actor_log_handler = {"class": "logging.StreamHandler", "stream": sys.stdout}
+        actor_messages_handler = {"class": "logging.StreamHandler", "stream": sys.stdout}
+
+    actor_log_handler["formatter"] = "normal"
+    actor_log_handler["filters"] = ["notActorLog"]
+    actor_log_handler["level"] = logging.INFO
+
+    actor_messages_handler["formatter"] = "actor"
+    actor_messages_handler["filters"] = ["isActorLog"]
+    actor_messages_handler["level"] = logging.INFO
 
     return {
         "version": 1,
@@ -140,19 +163,8 @@ def configure_actor_logging(cfg):
             }
         },
         "handlers": {
-            "h1": {
-                "class": "logging.FileHandler",
-                "filename": "%s/rally-actors.log" % log_dir,
-                "formatter": "normal",
-                "filters": ["notActorLog"],
-                "level": logging.INFO
-            },
-            "h2": {
-                "class": "logging.FileHandler",
-                "filename": "%s/rally-actor-messages.log" % log_dir,
-                "formatter": "actor",
-                "filters": ["isActorLog"],
-                "level": logging.INFO},
+            "h1": actor_log_handler,
+            "h2": actor_messages_handler
         },
         "loggers": {
             "": {
@@ -323,6 +335,12 @@ def parse_args():
             "--configuration-name",
             help=argparse.SUPPRESS,
             default=None)
+        p.add_argument(
+            "--logging",
+            choices=["file", "console"],
+            help=argparse.SUPPRESS,
+            default="file"
+        )
 
     for p in [parser, list_parser, race_parser]:
         p.add_argument(
@@ -344,7 +362,6 @@ def parse_args():
             help="Assume that Rally has no connection to the Internet (default: false)",
             default=False,
             action="store_true")
-
 
     return parser.parse_args()
 
@@ -397,7 +414,7 @@ def print_help_on_errors(cfg):
     console.println("Please check the log file [%s] for further details first." % log_file_path(cfg))
     console.println("")
     console.println("If you need further help, please check Rally's docs at %s or ask a question in the forum at %s."
-          % (console.format.link("https://esrally.readthedocs.io"), console.format.link("https://discuss.elastic.co/c/rally")))
+                    % (console.format.link("https://esrally.readthedocs.io"), console.format.link("https://discuss.elastic.co/c/rally")))
     console.println("")
     console.println("If you think this is a bug, please file a report at %s and include the log file for this race (%s)." %
                     (console.format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
@@ -512,6 +529,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
     cfg.add(config.Scope.applicationOverride, "system", "user.tag", args.user_tag)
+    cfg.add(config.Scope.applicationOverride, "system", "logging.output", args.logging)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
