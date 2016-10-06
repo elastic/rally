@@ -583,8 +583,8 @@ class TrackReader:
             "body": query_body
         }
 
-        if not index_name or not type_name:
-            raise TrackSyntaxError("Query '%s' requires an index and a type." % ops_spec_name)
+        if not index_name:
+            raise TrackSyntaxError("Query '%s' requires an index." % ops_spec_name)
 
         if pages:
             params["pages"] = pages
