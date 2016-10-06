@@ -85,6 +85,11 @@ class TrackReaderTests(TestCase):
                     "name": "index-append",
                     "operation-type": "index",
                     "bulk-size": 5000,
+                },
+                {
+                    "name": "search",
+                    "operation-type": "search",
+                    "index": "index-historical"
                 }
             ],
             "challenges": [
@@ -96,6 +101,10 @@ class TrackReaderTests(TestCase):
                             "index-settings": {},
                             "clients": 8,
                             "operation": "index-append"
+                        },
+                        {
+                            "clients": 1,
+                            "operation": "search"
                         }
                     ]
                 }
