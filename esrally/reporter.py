@@ -6,7 +6,7 @@ import logging
 import tabulate
 
 from esrally import metrics, exceptions
-from esrally.utils import convert, format, io as rio
+from esrally.utils import convert, io as rio, console
 
 logger = logging.getLogger("rally.reporting")
 
@@ -25,13 +25,14 @@ def compare(cfg):
         race_store.find_by_timestamp(contender_ts))
 
 
+# TODO dm: Inline?
 def print_internal(message):
-    print(message)
-    logger.info(message)
+    console.println(message, logger=logger.info)
 
 
+# TODO dm: Inline?
 def print_header(message):
-    print_internal("\033[1m%s\033[0m" % message)
+    print_internal(console.format.bold(message))
 
 
 class Stats:
@@ -370,7 +371,7 @@ class ComparisonReporter:
         metrics_table += self.report_total_times(baseline_stats, contender_stats)
         metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
 
-        #metrics_table += self.report_cpu_usage(baseline_stats, contender_stats)
+        # metrics_table += self.report_cpu_usage(baseline_stats, contender_stats)
         metrics_table += self.report_gc_times(baseline_stats, contender_stats)
 
         metrics_table += self.report_disk_usage(baseline_stats, contender_stats)
@@ -532,11 +533,11 @@ class ComparisonReporter:
     def diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
         diff = formatter(contender - baseline)
         if treat_increase_as_improvement:
-            color_greater = format.green
-            color_smaller = format.red
+            color_greater = console.format.green
+            color_smaller = console.format.red
         else:
-            color_greater = format.red
-            color_smaller = format.green
+            color_greater = console.format.red
+            color_smaller = console.format.green
 
         if diff > 0:
             return color_greater("+%.5f" % diff)
@@ -544,4 +545,4 @@ class ComparisonReporter:
             return color_smaller("%.5f" % diff)
         else:
             # tabulate needs this to align all values correctly
-            return format.neutral("%.5f" % diff)
+            return console.format.neutral("%.5f" % diff)

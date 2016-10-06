@@ -10,7 +10,7 @@ import thespian.actors
 
 from esrally import config, driver, exceptions, sweeper, track, reporter, metrics, car, client, PROGRAM_NAME
 from esrally.mechanic import mechanic
-from esrally.utils import process, net, io, versions
+from esrally.utils import process, net, io, versions, console
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -109,7 +109,7 @@ def benchmark_internal(ctx):
     challenge_name = ctx.config.opts("benchmarks", "challenge")
     selected_car_name = ctx.config.opts("benchmarks", "car")
 
-    print("Racing on track [%s] and challenge [%s] with car [%s]" % (track_name, challenge_name, selected_car_name))
+    console.println("Racing on track [%s] and challenge [%s] with car [%s]" % (track_name, challenge_name, selected_car_name))
     # TODO dm module refactoring: mechanic
     selected_car = None
     for c in car.cars:
@@ -175,7 +175,7 @@ def benchmark_external(ctx):
     # TODO dm module refactoring: we can just inline prepare_benchmark_external and simplify this code a bit
     track_name = ctx.config.opts("system", "track")
     challenge_name = ctx.config.opts("benchmarks", "challenge")
-    print("Racing on track [%s] and challenge [%s]" % (track_name, challenge_name))
+    console.println("Racing on track [%s] and challenge [%s]" % (track_name, challenge_name))
     actors = thespian.actors.ActorSystem()
     main_driver = actors.createActor(driver.Driver)
     #TODO dm: Retrieving the metrics store here is *dirty*...
@@ -211,9 +211,8 @@ def download_benchmark_candidate(ctx):
     download_url = repo.download_url(version)
     logger.info("Resolved download URL [%s] for version [%s]" % (download_url, version))
     if not os.path.isfile(distribution_path) or repo.must_download:
-        logger.info("Downloading distribution for version [%s]." % version)
         try:
-            print("Downloading Elasticsearch %s ..." % version)
+            console.println("Downloading Elasticsearch %s ..." % version, logger=logger.info)
             net.download(download_url, distribution_path)
         except urllib.error.HTTPError:
             logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (version, download_url))
@@ -347,7 +346,7 @@ pipelines = {
     "benchmark-only":
         lambda ctx=None: Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results",
                              [
-                                 PipelineStep("warn-bogus", ctx, lambda ctx: print(bogus_results_warning)),
+                                 PipelineStep("warn-bogus", ctx, lambda ctx: console.println(bogus_results_warning)),
                                  PipelineStep("prepare-track", ctx, prepare_track),
                                  PipelineStep("prepare-benchmark-external", ctx, prepare_benchmark_external),
                                  PipelineStep("store-race", ctx, store_race),

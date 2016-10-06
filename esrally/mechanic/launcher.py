@@ -7,7 +7,7 @@ import threading
 
 from esrally import config, cluster, telemetry, time, exceptions
 from esrally.mechanic import gear
-from esrally.utils import versions, format
+from esrally.utils import versions, console
 
 logger = logging.getLogger("rally.launcher")
 
@@ -29,9 +29,9 @@ class ExternalLauncher:
             logger.info("Distribution version was not specified by user. Rally-determined version is [%s]" % distribution_version)
             self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
         elif user_defined_version != distribution_version:
-            logger.warn("User specified version [%s] but cluster reports version [%s]." % (user_defined_version, distribution_version))
-            print("Warning: Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
-                  (user_defined_version, distribution_version))
+            console.println(
+                "Warning: Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
+                (user_defined_version, distribution_version), logger=logger.warn)
         t.attach_to_cluster(c)
         return c
 
@@ -148,7 +148,8 @@ class InProcessLauncher:
             return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION[best_version][key]
         else:
             raise exceptions.LaunchError("Cannot start cluster. Unsupported distribution version %s. "
-                                         "Please raise a bug at %s." % (distribution_version, format.link("https://github.com/elastic/rally")))
+                                         "Please raise a bug at %s." %
+                                         (distribution_version, console.format.link("https://github.com/elastic/rally")))
 
     def _start_process(self, cmd, env, node_name):
         install_dir = self.cfg.opts("provisioning", "local.binary.path")

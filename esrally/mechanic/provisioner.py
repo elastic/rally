@@ -4,7 +4,7 @@ import shutil
 import logging
 
 from esrally import config, exceptions
-from esrally.utils import io, versions
+from esrally.utils import io, versions, console
 
 logger = logging.getLogger("rally.provisioner")
 
@@ -28,8 +28,8 @@ class Provisioner:
         install_dir = self._install_dir()
         if self.preserve:
             logger.info("Preserving benchmark candidate installation at [%s]." % install_dir)
-            print("\nRally will keep the benchmark candidate including all data at [%s].\nRemember to delete it when you don't need it "
-                  "anymore as it will take up a significant amount of disk space." % install_dir)
+            console.println("\nRally will keep the benchmark candidate including all data at [%s]." % install_dir)
+            console.println("Remember to delete it when you don't need it anymore as it will take up a significant amount of disk space.")
         else:
             logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
             if os.path.exists(install_dir):
@@ -46,7 +46,7 @@ class Provisioner:
         logger.info("Preparing candidate locally in %s." % install_dir)
         io.ensure_dir(install_dir)
         if not self.preserve:
-            print("Rally will wipe the benchmark candidate directory [%s] after the benchmark.\n" % install_dir)
+            console.println("Rally will wipe the benchmark candidate directory [%s] after the benchmark.\n" % install_dir)
 
         logger.info("Unzipping %s to %s" % (binary, install_dir))
         io.decompress(binary, install_dir)

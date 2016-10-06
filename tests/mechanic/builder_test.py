@@ -7,10 +7,8 @@ from esrally.mechanic import builder
 
 class BuilderTests(TestCase):
 
-    @mock.patch("esrally.utils.io.ensure_dir")
-    @mock.patch("os.rename")
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_build(self, mock_run_subprocess, mock_rename, mock_ensure_dir):
+    def test_build(self, mock_run_subprocess):
         mock_run_subprocess.return_value = False
 
         cfg = config.Config()

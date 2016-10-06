@@ -1,9 +1,8 @@
-import os
 import glob
 import logging
 
 from esrally import config
-from esrally.utils import io, process
+from esrally.utils import io, process, console
 from esrally.exceptions import ImproperlyConfigured, BuildError
 
 logger = logging.getLogger("rally.builder")
@@ -22,7 +21,7 @@ class Builder:
     def build(self):
         # just Gradle is supported for now
         self._exec("gradle.tasks.clean")
-        print("  Building from sources ...")
+        console.println("  Building from sources ...")
         self._exec("gradle.tasks.package")
 
     def add_binary_to_config(self):

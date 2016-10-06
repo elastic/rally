@@ -8,7 +8,7 @@ import threading
 import tabulate
 
 from esrally import metrics, config
-from esrally.utils import io, sysstats, process
+from esrally.utils import io, sysstats, process, console
 
 logger = logging.getLogger("rally.telemetry")
 
@@ -199,8 +199,7 @@ class FlightRecorder(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jfr" % (log_root, car.name, candidate_id)
 
-        logger.info("%s profiler: Writing telemetry data to [%s]." % (self.human_name, log_file))
-        print("%s: Writing flight recording to %s" % (self.human_name, log_file))
+        console.println("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger.info)
         # this is more robust in case we want to use custom settings
         # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
         #
@@ -235,8 +234,7 @@ class JitCompiler(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jit.log" % (log_root, car.name, candidate_id)
 
-        logger.info("%s: Writing JIT compiler logs to [%s]." % (self.human_name, log_file))
-        print("%s: Writing JIT compiler log to %s" % (self.human_name, log_file))
+        console.println("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger.info)
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
 
@@ -269,8 +267,7 @@ class PerfStat(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s.perf.log" % (log_root, node.node_name)
 
-        logger.info("%s: Writing perf logs to [%s]." % (self.human_name, log_file))
-        print("%s: Writing perf logs to %s" % (self.human_name, log_file))
+        console.println("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=logger.info)
 
         self.log = open(log_file, "wb")
 

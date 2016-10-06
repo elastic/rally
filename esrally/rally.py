@@ -8,9 +8,8 @@ import time
 
 import pkg_resources
 import thespian.actors
-
 from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
-from esrally.utils import io, format, convert, git, process
+from esrally.utils import io, convert, git, process, console
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -91,7 +90,7 @@ def configure_logging(cfg):
     io.ensure_dir(log_dir)
     cfg.add(config.Scope.application, "system", "log.dir", log_dir)
 
-    print("\nWriting additional logs to %s\n" % log_file)
+    console.println("\nWriting additional logs to %s\n" % log_file)
     # there is an old log file lying around -> backup
     if os.path.exists(log_file):
         os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
@@ -186,7 +185,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at %s" % format.link("https://esrally.readthedocs.io"),
+                                     epilog="Find out more about Rally at %s" % console.format.link("https://esrally.readthedocs.io"),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + version())
 
@@ -240,8 +239,8 @@ def parse_args():
             default=preserve_install)
         p.add_argument(
             "--telemetry",
-            help="Rally will enable all of the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
-                 "provided as a comma-separated list.",
+            help="enables the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
+                 "provided as a comma-separated list. List possible telemetry devices with `%s list telemetry`" % PROGRAM_NAME,
             default="")
         p.add_argument(
             "--revision",
@@ -306,7 +305,7 @@ def parse_args():
         p.add_argument(
             "--effective-start-date",
             help=argparse.SUPPRESS,
-            type=lambda s: datetime.datetime.strptime(s, format.CMD_LINE_TIMESTAMP_FORMAT),
+            type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
             default=datetime.datetime.utcnow())
         # This is a highly experimental option and will likely be removed
         p.add_argument(
@@ -374,7 +373,7 @@ def ensure_configuration_present(cfg, args, sub_command):
                 # Reload config after upgrading
                 cfg.load_config()
         else:
-            print("Error: No config present. Please run '%s configure' first." % PROGRAM_NAME)
+            console.println("Error: No config present. Please run '%s configure' first." % PROGRAM_NAME)
             exit(64)
 
 
@@ -395,13 +394,13 @@ def list(cfg):
 
 
 def print_help_on_errors(cfg):
-    print("Please check the log file [%s] for further details first." % log_file_path(cfg))
-    print("")
-    print("If you need further help, please check Rally's docs at %s or ask a question in the forum at %s."
-          % (format.link("https://esrally.readthedocs.io"), format.link("https://discuss.elastic.co/c/rally")))
-    print("")
-    print("If you think this is a bug, please file a report at %s and include the log file for this race (%s)." %
-          (format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
+    console.println("Please check the log file [%s] for further details first." % log_file_path(cfg))
+    console.println("")
+    console.println("If you need further help, please check Rally's docs at %s or ask a question in the forum at %s."
+          % (console.format.link("https://esrally.readthedocs.io"), console.format.link("https://discuss.elastic.co/c/rally")))
+    console.println("")
+    console.println("If you think this is a bug, please file a report at %s and include the log file for this race (%s)." %
+                    (console.format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
 
 
 def dispatch_sub_command(cfg, sub_command):
@@ -417,14 +416,14 @@ def dispatch_sub_command(cfg, sub_command):
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
-        print("\nERROR: Cannot %s\n\nReason: %s" % (sub_command, e))
-        print("")
+        console.println("\nERROR: Cannot %s\n\nReason: %s" % (sub_command, e))
+        console.println("")
         print_help_on_errors(cfg)
         return False
     except BaseException as e:
         logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
-        print("\nFATAL: Cannot %s\n\nReason: %s" % (sub_command, e))
-        print("")
+        console.println("\nFATAL: Cannot %s\n\nReason: %s" % (sub_command, e))
+        console.println("")
         print_help_on_errors(cfg)
         return False
 
@@ -487,10 +486,14 @@ def convert_hosts(configured_host_list):
 
 
 def main():
+    # Early init of console output so we start to show everything consistently.
+    console.init(quiet=False)
+
     pre_configure_logging()
     args = parse_args()
-    if not args.quiet:
-        print(BANNER)
+
+    console.init(quiet=args.quiet)
+    console.println(BANNER)
 
     cfg = config.Config(config_name=args.configuration_name)
     sub_command = derive_sub_command(args, cfg)
@@ -543,11 +546,11 @@ def main():
         actors = thespian.actors.ActorSystem("multiprocTCPBase", logDefs=configure_actor_logging(cfg))
     except thespian.actors.ActorSystemException:
         logger.exception("Could not initialize internal actor system. Terminating.")
-        print("ERROR: Could not initialize successfully.")
-        print("")
-        print("The most likely cause is that there are still processes running from a previous race.")
-        print("Please check for running Python processes and terminate them before running Rally again.")
-        print("")
+        console.println("ERROR: Could not initialize successfully.")
+        console.println("")
+        console.println("The most likely cause is that there are still processes running from a previous race.")
+        console.println("Please check for running Python processes and terminate them before running Rally again.")
+        console.println("")
         print_help_on_errors(cfg)
         sys.exit(70)
 
@@ -564,18 +567,18 @@ def main():
             except KeyboardInterrupt:
                 times_interrupted += 1
                 logger.warn("User interrupted shutdown of internal actor system.")
-                print("Please wait a moment for Rally's internal components to shutdown.")
+                console.println("Please wait a moment for Rally's internal components to shutdown.")
         if not shutdown_complete and times_interrupted > 0:
             logger.warn("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
-            print("**********************************************************************")
-            print("")
-            print("WARN: Terminating now at the risk of leaving child processes behind.")
-            print("")
-            print("The next race may fail due to an unclean shutdown.")
-            print("")
-            print(SKULL)
-            print("")
-            print("**********************************************************************")
+            console.println("**********************************************************************")
+            console.println("")
+            console.println("WARN: Terminating now at the risk of leaving child processes behind.")
+            console.println("")
+            console.println("The next race may fail due to an unclean shutdown.")
+            console.println("")
+            console.println(SKULL)
+            console.println("")
+            console.println("**********************************************************************")
 
     if not success:
         sys.exit(64)

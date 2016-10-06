@@ -11,7 +11,7 @@ import jsonschema
 import tabulate
 
 from esrally import exceptions, time
-from esrally.utils import io, convert, net, git, versions
+from esrally.utils import io, convert, net, git, versions, console
 
 logger = logging.getLogger("rally.track")
 
@@ -228,14 +228,14 @@ def prepare_track(track, cfg):
             return False
 
         if not offline:
-            logger.info("Downloading from [%s] to [%s]." % (url, local_path))
             try:
                 io.ensure_dir(os.path.dirname(local_path))
                 size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
                 # ensure output appears immediately
-                print("Downloading data from %s (%s MB) ... " % (url, size_in_mb), end='', flush=True)
+                console.println("Downloading data from [%s] (%s MB) to [%s] ... "
+                                % (url, size_in_mb, local_path), end='', flush=True, logger=logger.info)
                 net.download(url, local_path, size_in_bytes)
-                print("Done")
+                console.println("Done")
             except urllib.error.URLError:
                 logger.exception("Could not download [%s] to [%s]." % (url, local_path))
 
@@ -262,11 +262,10 @@ def prepare_track(track, cfg):
         decompressed = False
         if not os.path.isfile(basename) or os.path.getsize(basename) != expected_size_in_bytes:
             decompressed = True
-            logger.info("Decompressing track data from [%s] to [%s]." % (data_set_path, basename))
-            print("Decompressing %s (resulting size: %.2f GB) ... " %
-                  (type.document_archive, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True)
+            console.println("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
+                  (data_set_path, basename, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True, logger=logger.info)
             io.decompress(data_set_path, io.dirname(data_set_path))
-            print("Done")
+            console.println("Done")
             extracted_bytes = os.path.getsize(basename)
             if extracted_bytes != expected_size_in_bytes:
                 raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
@@ -306,7 +305,7 @@ class TrackRepository:
                 git.fetch(src=self.tracks_dir)
         else:
             if not git.is_working_copy(self.tracks_dir):
-                raise exceptions.SystemSetupError("'{src}' must be a git repository.\n\nPlease run:\ngit -C {src} init"
+                raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
                                                   .format(src=self.tracks_dir))
 
     def track_names(self, distribution_version):

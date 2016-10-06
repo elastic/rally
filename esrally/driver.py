@@ -10,7 +10,7 @@ import time
 import elasticsearch
 import thespian.actors
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
-from esrally.utils import convert, progress, io
+from esrally.utils import convert, console, io
 
 logger = logging.getLogger("rally.driver")
 
@@ -115,7 +115,7 @@ class Driver(thespian.actors.Actor):
         self.join_points = None
         self.ops_per_join_point = None
         self.drivers = []
-        self.progress_reporter = progress.CmdLineProgressReporter()
+        self.progress_reporter = console.progress()
         self.progress_counter = 0
         self.quiet = False
         self.most_recent_sample_per_client = {}
@@ -415,6 +415,7 @@ def setup_index(es, t, challenge):
     wait_for_status_green(es)
 
 
+# TODO dm: Some cluster just are not green -> allow users to override that
 EXPECTED_CLUSTER_STATUS = "green"
 
 

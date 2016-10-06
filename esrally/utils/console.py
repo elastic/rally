@@ -1,5 +1,85 @@
-import sys
 import os
+import sys
+
+QUIET = False
+PLAIN = False
+
+
+class PlainFormat:
+    @classmethod
+    def bold(cls, message):
+        return message
+
+    @classmethod
+    def link(cls, href):
+        return href
+
+    @classmethod
+    def red(cls, message):
+        return message
+
+    @classmethod
+    def green(cls, message):
+        return message
+
+    @classmethod
+    def yellow(cls, message):
+        return message
+
+    @classmethod
+    def neutral(cls, message):
+        return message
+
+
+class RichFormat:
+    @classmethod
+    def bold(cls, message):
+        return "\033[1m%s\033[0m" % message
+
+    @classmethod
+    def link(cls, href):
+        return "\033[4m%s\033[0m" % href
+
+    @classmethod
+    def red(cls, message):
+        return "\033[31;1m%s\033[0m" % message
+
+    @classmethod
+    def green(cls, message):
+        return "\033[32;1m%s\033[0m" % message
+
+    @classmethod
+    def yellow(cls, message):
+        return "\033[33;1m%s\033[0m" % message
+
+    @classmethod
+    def neutral(cls, message):
+        return "\033[39;1m%s\033[0m" % message
+
+
+format = PlainFormat
+
+
+def init(quiet=False):
+    global QUIET, PLAIN, format
+
+    QUIET = quiet
+    if os.environ.get("TERM") == "dumb":
+        PLAIN = True
+        format = PlainFormat
+    else:
+        PLAIN = False
+        format = RichFormat
+
+
+def println(msg, end="\n", flush=False, logger=lambda m: m):
+    if not QUIET:
+        print(msg, end=end, flush=flush)
+    logger(msg)
+
+
+def progress(width=90):
+    return CmdLineProgressReporter(width, plain_output=PLAIN)
 
 
 class CmdLineProgressReporter:
@@ -7,12 +87,10 @@ class CmdLineProgressReporter:
     CmdLineProgressReporter supports displaying an updating progress indication together with an information message.
     """
 
-    def __init__(self, width=90, plain_output=False):
+    def __init__(self, width, plain_output=False):
         self._width = width
         self._first_print = True
         self._plain_output = plain_output
-        if os.environ.get('TERM') == 'dumb':
-            self._plain_output = True
 
     def print(self, message, progress):
         """

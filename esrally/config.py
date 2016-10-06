@@ -7,7 +7,7 @@ import shutil
 from enum import Enum
 
 from esrally import time, PROGRAM_NAME
-from esrally.utils import io, git, format, convert
+from esrally.utils import io, git, console, convert
 
 logger = logging.getLogger("rally.config")
 
@@ -182,7 +182,7 @@ class ConfigFactory:
 
     BOOLEAN_PATTERN = re.compile("^(True|true|Yes|yes|t|y|False|false|f|No|no|n)$")
 
-    def __init__(self, i=input, sec_i=getpass.getpass, o=print):
+    def __init__(self, i=input, sec_i=getpass.getpass, o=console.println):
         self.i = i
         self.sec_i = sec_i
         self.o = o
@@ -197,7 +197,7 @@ class ConfigFactory:
         if advanced_config:
             self.o("Running advanced configuration. You can get additional help at:")
             self.o("")
-            self.o("  %s" % format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
+            self.o("  %s" % console.format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
             self.o("")
 
             logger.debug("Running advanced configuration routine.")
@@ -241,7 +241,7 @@ class ConfigFactory:
             self.o("")
             self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha5" % PROGRAM_NAME)
             self.o("")
-            self.o("See %s" % format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
+            self.o("See %s" % console.format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
             self.o("**********************************************************************************")
             self.o("")
 
@@ -339,7 +339,7 @@ class ConfigFactory:
 
         self.o()
         self.o("For help, type %s --help or see the user documentation at %s"
-               % (PROGRAM_NAME, format.link("https://esrally.readthedocs.io")))
+               % (PROGRAM_NAME, console.format.link("https://esrally.readthedocs.io")))
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
         logger.debug("Autodetected %s at [%s]" % (what, result))
@@ -349,11 +349,11 @@ class ConfigFactory:
             message = ""
 
         if result:
-            self.o("  %s: [%s]" % (what, format.green("✓")))
+            self.o("  %s: [%s]" % (what, console.format.green("✓")))
         elif warn_if_missing:
-            self.o("  %s: [%s]%s" % (what, format.yellow("✕"), message))
+            self.o("  %s: [%s]%s" % (what, console.format.yellow("✕"), message))
         else:
-            self.o("  %s: [%s]%s" % (what, format.red("✕"), message))
+            self.o("  %s: [%s]%s" % (what, console.format.red("✕"), message))
 
     def _guess_es_src_dir(self):
         current_dir = os.getcwd()
@@ -478,7 +478,7 @@ def migrate(config_file, current_version, target_version, out=print):
         out("")
         out("You might want to clean up this directory also.")
         out()
-        out("For more details please see %s" % format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
+        out("For more details please see %s" % console.format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
         out("")
         out("*****************************************************************************************")
         out("")

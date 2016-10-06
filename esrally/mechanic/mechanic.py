@@ -1,6 +1,7 @@
 import logging
 
 from esrally import metrics, paths, config
+from esrally.utils import console
 from esrally.mechanic import builder, supplier, provisioner, launcher
 
 logger = logging.getLogger("rally.mechanic")
@@ -33,7 +34,7 @@ class Mechanic:
 
     # This is the one-time setup the mechanic performs (once for all benchmarks run)
     def prepare_candidate(self):
-        print("Preparing for race (might take a few moments) ...")
+        console.println("Preparing for race (might take a few moments) ...")
         self._supplier.fetch()
         self._builder.build()
 

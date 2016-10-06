@@ -1,6 +1,6 @@
 import logging
 
-from esrally.utils import git
+from esrally.utils import git, console
 
 logger = logging.getLogger("rally.supplier")
 
@@ -20,7 +20,7 @@ class Supplier:
 
     def _try_init(self):
         if not git.is_working_copy(self.src_dir):
-            print("Downloading sources from %s to %s." % (self.remote_url, self.src_dir))
+            console.println("Downloading sources from %s to %s." % (self.remote_url, self.src_dir))
             git.clone(self.src_dir, self.remote_url)
 
     def _update(self):

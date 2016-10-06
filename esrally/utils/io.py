@@ -8,6 +8,8 @@ import zipfile
 import tarfile
 import logging
 
+from esrally.utils import console
+
 logger = logging.getLogger("rally.utils.io")
 
 
@@ -124,8 +126,7 @@ def prepare_file_offset_table(data_file_path):
     offset_file_path = "%s.offset" % data_file_path
     # recreate only if necessary as this can be time-consuming
     if not os.path.exists(offset_file_path) or os.path.getmtime(offset_file_path) < os.path.getmtime(data_file_path):
-        logger.info("Preparing file offset table for [%s]." % data_file_path)
-        print("Preparing file offset table for %s ... " % data_file_path, end="", flush=True)
+        console.println("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True, logger=logger.info)
         line_number = 0
         with open(offset_file_path, mode="w") as offset_file:
             with open(data_file_path, mode="rt") as data_file:
@@ -136,7 +137,7 @@ def prepare_file_offset_table(data_file_path):
                     line_number += 1
                     if line_number % 50000 == 0:
                         print("%d;%d" % (line_number, data_file.tell()), file=offset_file)
-        print("Done")
+        console.println("Done")
     else:
         logger.info("Skipping creation of file offset table at [%s] as it is still valid." % offset_file_path)
 
