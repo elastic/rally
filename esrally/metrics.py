@@ -116,18 +116,28 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(config):
+def metrics_store(config, read_only=True, invocation=None, track=None, challenge=None, car=None):
     """
     Creates a proper metrics store based on the current configuration.
-    :param config: Config object. Mandatory.
+
+    :param config: Config object.
+    :param read_only: Whether to open the metrics store only for reading (Default: True).
     :return: A metrics store implementation.
     """
     if config.opts("reporting", "datastore.type") == "elasticsearch":
         logger.info("Creating ES metrics store")
-        return EsMetricsStore(config)
+        store = EsMetricsStore(config)
     else:
         logger.info("Creating in-memory metrics store")
-        return InMemoryMetricsStore(config)
+        store = InMemoryMetricsStore(config)
+
+    selected_invocation = config.opts("meta", "time.start") if invocation is None else invocation
+    selected_track = config.opts("benchmarks", "track") if track is None else track
+    selected_challenge = config.opts("benchmarks", "challenge") if challenge is None else challenge
+    selected_car = config.opts("benchmarks", "car") if car is None else car
+
+    store.open(selected_invocation, selected_track, selected_challenge, selected_car, create=not read_only)
+    return store
 
 
 class SampleType(IntEnum):
@@ -218,7 +228,7 @@ class MetricsStore:
                 self._meta_info[MetaInfoScope.node][scope_key] = {}
             self._meta_info[MetaInfoScope.node][scope_key][key] = value
         else:
-            raise exceptions.ImproperlyConfigured("Unknown meta info scope [%s]" % scope)
+            raise exceptions.SystemSetupError("Unknown meta info scope [%s]" % scope)
 
     @property
     def meta_info(self):
@@ -309,7 +319,7 @@ class MetricsStore:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
             meta.update(self._meta_info[MetaInfoScope.node][level_key])
         else:
-            raise exceptions.ImproperlyConfigured("Unknown meta info level [%s] for metric [%s]" % (level, name))
+            raise exceptions.SystemSetupError("Unknown meta info level [%s] for metric [%s]" % (level, name))
         if absolute_time is None:
             absolute_time = self._clock.now()
         if relative_time is None:

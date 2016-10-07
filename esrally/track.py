@@ -10,7 +10,7 @@ import jinja2.exceptions
 import jsonschema
 import tabulate
 
-from esrally import exceptions, time
+from esrally import exceptions, time, PROGRAM_NAME
 from esrally.utils import io, convert, net, git, versions, console
 
 logger = logging.getLogger("rally.track")
@@ -193,21 +193,26 @@ def list_tracks(cfg):
         headers=["Name", "Description", "Challenges"]))
 
 
-def load_track(cfg, track_name):
+def load_track(cfg):
     """
 
-    Loads a track with the given name.
+    Loads a track
 
-    :param cfg: The config object.
-    :param track_name: The name of a track to load.
+    :param cfg: The config object. It contains the name of the track to load.
     :return: The loaded track.
     """
-    repo = TrackRepository(cfg)
-    reader = TrackFileReader(cfg)
-    distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
-    data_root = cfg.opts("benchmarks", "local.dataset.cache")
-    return reader.read(track_name, repo.track_file(distribution_version, track_name), repo.track_dir(track_name),
-                       "%s/%s" % (data_root, track_name.lower()))
+    track_name = cfg.opts("benchmarks", "track")
+    try:
+        repo = TrackRepository(cfg)
+        reader = TrackFileReader(cfg)
+        distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
+        data_root = cfg.opts("benchmarks", "local.dataset.cache")
+        return reader.read(track_name, repo.track_file(distribution_version, track_name), repo.track_dir(track_name),
+                           "%s/%s" % (data_root, track_name.lower()))
+    except FileNotFoundError:
+        logger.exception("Cannot load track [%s]" % track_name)
+        raise exceptions.SystemSetupError("Cannot load track %s. You can list the available tracks with %s list tracks." %
+                                          (track_name, PROGRAM_NAME))
 
 
 def prepare_track(track, cfg):

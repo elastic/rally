@@ -158,22 +158,27 @@ class Driver(thespian.actors.Actor):
             self.send(self.myAddress, thespian.actors.ActorExitRequest())
 
     def start_benchmark(self, msg, sender):
-        logger.info("Benchmark is about to start.")
         self.start_sender = sender
         self.config = msg.config
+        current_track = msg.track
+
+        logger.info("Preparing track")
+        # TODO #71: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
+        track.prepare_track(current_track, self.config)
+
+        logger.info("Benchmark is about to start.")
         self.quiet = msg.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
         self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info)
         invocation = self.config.opts("meta", "time.start")
         expected_cluster_health = msg.config.opts("benchmarks", "cluster.health")
-        track_name = self.config.opts("system", "track")
+        track_name = self.config.opts("benchmarks", "track")
         challenge_name = self.config.opts("benchmarks", "challenge")
         selected_car_name = self.config.opts("benchmarks", "car")
         self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
 
-        track = msg.track
-        challenge = select_challenge(self.config, track)
-        setup_index(self.es, track, challenge, expected_cluster_health)
+        challenge = select_challenge(self.config, current_track)
+        setup_index(self.es, current_track, challenge, expected_cluster_health)
         allocator = Allocator(challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -185,7 +190,7 @@ class Driver(thespian.actors.Actor):
         for client_id in range(allocator.clients):
             self.drivers.append(self.createActor(LoadGenerator))
         for client_id, driver in enumerate(self.drivers):
-            self.send(driver, StartLoadGenerator(client_id, self.config, track.indices, self.allocations[client_id]))
+            self.send(driver, StartLoadGenerator(client_id, self.config, current_track.indices, self.allocations[client_id]))
 
         self.update_progress_message()
         self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
@@ -422,8 +427,8 @@ def select_challenge(config, t):
     for challenge in t.challenges:
         if challenge.name == selected_challenge:
             return challenge
-    raise exceptions.ImproperlyConfigured("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
-                                          "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
+    raise exceptions.SystemSetupError("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
+                                      "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
 
 
 def setup_index(es, t, challenge, expected_cluster_health):

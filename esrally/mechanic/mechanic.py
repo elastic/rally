@@ -1,10 +1,28 @@
 import logging
 
-from esrally import metrics, paths, config
-from esrally.utils import console
-from esrally.mechanic import builder, supplier, provisioner, launcher
+from esrally import paths, config
+from esrally.mechanic import supplier, provisioner, launcher
 
 logger = logging.getLogger("rally.mechanic")
+
+
+def create(cfg, metrics_store, sources=False, build=False, distribution=False, external=False):
+    if sources:
+        s = lambda: supplier.from_sources(cfg, build)
+        p = provisioner.local_provisioner(cfg)
+        l = launcher.InProcessLauncher(cfg, metrics_store)
+    elif distribution:
+        s = lambda: supplier.from_distribution(cfg)
+        p = provisioner.local_provisioner(cfg)
+        l = launcher.InProcessLauncher(cfg, metrics_store)
+    elif external:
+        s = lambda: None
+        p = provisioner.no_op_provisioner()
+        l = launcher.ExternalLauncher(cfg, metrics_store)
+    else:
+        raise RuntimeError("One of sources, distribution or external must be True")
+
+    return Mechanic(cfg, s, p, l)
 
 
 class Mechanic:
@@ -13,53 +31,29 @@ class Mechanic:
     running the benchmark).
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, s, p, l):
         self._config = cfg
-        self._supplier = supplier.Supplier(cfg)
-        self._builder = builder.Builder(cfg)
-        self._provisioner = provisioner.Provisioner(cfg)
-        self._launcher = launcher.InProcessLauncher(cfg)
-        self._metrics_store = None
+        self.supplier = s
+        self.provisioner = p
+        self.launcher = l
 
-        # TODO dm module refactoring: just moved it to the right place. Simplify (this should actually not be needed at all. It's just there
-        # to ensure we don't mix ES installs)
-        track_name = self._config.opts("system", "track")
+        # TODO dm: Check whether we can remove this completely
+        # ensure we don't mix ES installs
+        track_name = self._config.opts("benchmarks", "track")
         challenge_name = self._config.opts("benchmarks", "challenge")
         race_paths = paths.Paths(self._config)
         self._config.add(config.Scope.challenge, "system", "challenge.root.dir",
                          race_paths.challenge_root(track_name, challenge_name))
         self._config.add(config.Scope.challenge, "system", "challenge.log.dir",
-                                race_paths.challenge_logs(track_name, challenge_name))
+                         race_paths.challenge_logs(track_name, challenge_name))
 
-
-    # This is the one-time setup the mechanic performs (once for all benchmarks run)
     def prepare_candidate(self):
-        console.println("Preparing for race (might take a few moments) ...")
-        self._supplier.fetch()
-        self._builder.build()
+        self.supplier()
 
-    def find_candidate(self):
-        self._builder.add_binary_to_config()
-
-    def start_metrics(self, track, challenge, car):
-        invocation = self._config.opts("meta", "time.start")
-        self._metrics_store = metrics.metrics_store(self._config)
-        self._metrics_store.open(invocation, track, challenge, car, create=True)
-
-    def start_engine(self, car, client, http_port):
-        self._provisioner.prepare(car, http_port)
-        return self._launcher.start(car, client, self._metrics_store)
-
-    def start_engine_external(self, client):
-        external_launcher = launcher.ExternalLauncher(self._config)
-        return external_launcher.start(client, self._metrics_store)
+    def start_engine(self):
+        selected_car = self.provisioner.prepare()
+        return self.launcher.start(selected_car)
 
     def stop_engine(self, cluster):
-        self._launcher.stop(cluster)
-
-    def stop_metrics(self):
-        self._metrics_store.close()
-
-    def revise_candidate(self):
-        self._provisioner.cleanup()
-
+        self.launcher.stop(cluster)
+        self.provisioner.cleanup()

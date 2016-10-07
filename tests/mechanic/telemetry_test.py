@@ -2,7 +2,8 @@ import collections
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import config, metrics, telemetry, cluster, car
+from esrally import config, metrics
+from esrally.mechanic import telemetry, car, cluster
 
 
 class MockTelemetryDevice(telemetry.InternalTelemetryDevice):

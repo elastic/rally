@@ -8,8 +8,9 @@ import time
 
 import pkg_resources
 import thespian.actors
-from esrally import config, paths, racecontrol, reporter, metrics, telemetry, track, car, exceptions, PROGRAM_NAME
+from esrally import config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME
 from esrally.utils import io, convert, git, process, console
+from esrally.mechanic import car, telemetry
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -189,6 +190,7 @@ def parse_args():
     try:
         int(os.environ["COLUMNS"])
     except (KeyError, ValueError):
+        # noinspection PyBroadException
         try:
             os.environ['COLUMNS'] = str(shutil.get_terminal_size().columns)
         except BaseException:
@@ -412,7 +414,7 @@ def list(cfg):
     elif what == "cars":
         car.list_cars()
     else:
-        raise exceptions.ImproperlyConfigured("Cannot list unknown configuration option [%s]" % what)
+        raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
 def print_help_on_errors(cfg):
@@ -434,7 +436,7 @@ def dispatch_sub_command(cfg, sub_command):
         elif sub_command == "race":
             racecontrol.run(cfg)
         else:
-            raise exceptions.ImproperlyConfigured("Unknown subcommand [%s]" % sub_command)
+            raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
@@ -530,12 +532,12 @@ def main():
     cfg.add(config.Scope.applicationOverride, "source", "distribution.repository", args.distribution_repository)
     cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "system", "track.repository", args.track_repository)
-    cfg.add(config.Scope.applicationOverride, "system", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
     cfg.add(config.Scope.applicationOverride, "system", "user.tag", args.user_tag)
     cfg.add(config.Scope.applicationOverride, "system", "logging.output", args.logging)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "track", args.track)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
@@ -560,6 +562,7 @@ def main():
     logger.info("Command line arguments: %s" % args)
 
     # Kill any lingering Rally processes before attempting to continue - the actor system needs to a singleton on this machine
+    # noinspection PyBroadException
     try:
         process.kill_running_rally_instances()
     except BaseException:

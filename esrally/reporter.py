@@ -13,24 +13,26 @@ logger = logging.getLogger("rally.reporting")
 MEDIAN = "50.0"
 
 
+def summarize(cfg, track):
+    SummaryReporter(cfg).report(track)
+
+
 def compare(cfg):
     baseline_ts = cfg.opts("report", "comparison.baseline.timestamp")
     contender_ts = cfg.opts("report", "comparison.contender.timestamp")
 
     if not baseline_ts or not contender_ts:
-        raise exceptions.ImproperlyConfigured("compare needs baseline and a contender")
+        raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
     ComparisonReporter(cfg).report(
         race_store.find_by_timestamp(baseline_ts),
         race_store.find_by_timestamp(contender_ts))
 
 
-# TODO dm: Inline?
 def print_internal(message):
     console.println(message, logger=logger.info)
 
 
-# TODO dm: Inline?
 def print_header(message):
     print_internal(console.format.bold(message))
 
@@ -163,15 +165,9 @@ class SummaryReporter:
         print_internal("")
 
         selected_challenge = self._config.opts("benchmarks", "challenge")
-        selected_car = self._config.opts("benchmarks", "car")
-        invocation = self._config.opts("meta", "time.start")
-        logger.info("Generating summary report for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
-                    (invocation, t.name, selected_challenge, selected_car))
         for challenge in t.challenges:
             if challenge.name == selected_challenge:
                 store = metrics.metrics_store(self._config)
-                store.open(invocation, t.name, challenge.name, selected_car)
-
                 stats = Stats(store, challenge)
 
                 metrics_table = []
@@ -339,12 +335,12 @@ class ComparisonReporter:
                     (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
                      r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_store = metrics.metrics_store(self._config)
-        baseline_store.open(r1.trial_timestamp, r1.track, r1.challenge.name, r1.car)
+        baseline_store = metrics.metrics_store(self._config,
+                                               invocation=r1.trial_timestamp, track=r1.track, challenge=r1.challenge.name, car=r1.car)
         baseline_stats = Stats(baseline_store, r1.challenge)
 
-        contender_store = metrics.metrics_store(self._config)
-        contender_store.open(r2.trial_timestamp, r2.track, r2.challenge.name, r2.car)
+        contender_store = metrics.metrics_store(self._config,
+                                                invocation=r2.trial_timestamp, track=r2.track, challenge=r2.challenge.name, car=r2.car)
         contender_stats = Stats(contender_store, r2.challenge)
 
         print_internal("")

@@ -1,11 +1,20 @@
 import tabulate
 
+from esrally import exceptions, PROGRAM_NAME
 from esrally.utils import sysstats, console
 
 
 def list_cars():
     console.println("Available cars:\n")
     console.println(tabulate.tabulate([[c.name] for c in cars], headers=["Name"]))
+
+
+def select_car(cfg):
+    name = cfg.opts("benchmarks", "car")
+    for c in cars:
+        if c.name == name:
+            return c
+    raise exceptions.SystemSetupError("Unknown car [%s]. You can list the available cars with %s list cars." % (name, PROGRAM_NAME))
 
 
 mergePartsLogYmlConfig = '''

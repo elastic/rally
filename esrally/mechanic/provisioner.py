@@ -4,9 +4,18 @@ import shutil
 import logging
 
 from esrally import config, exceptions
+from esrally.mechanic import car
 from esrally.utils import io, versions, console
 
 logger = logging.getLogger("rally.provisioner")
+
+
+def local_provisioner(cfg):
+    return Provisioner(cfg)
+
+
+def no_op_provisioner():
+    return NoOpProvisioner()
 
 
 class Provisioner:
@@ -19,10 +28,12 @@ class Provisioner:
         self._config = cfg
         self.preserve = self._config.opts("provisioning", "install.preserve")
 
-    # TODO #71: This should be split into an environment independent configuration (car) and environment dependent configuration (http_port)
-    def prepare(self, car, http_port):
+    def prepare(self):
+        selected_car = car.select_car(self._config)
+        http_port = self._config.opts("provisioning", "node.http.port")
         self._install_binary()
-        self._configure(car, http_port)
+        self._configure(selected_car, http_port)
+        return selected_car
 
     def cleanup(self):
         install_dir = self._install_dir()
@@ -121,3 +132,11 @@ class Provisioner:
         root = self._config.opts("system", "challenge.root.dir")
         install = self._config.opts("provisioning", "local.install.dir")
         return "%s/%s" % (root, install)
+
+
+class NoOpProvisioner:
+    def prepare(self):
+        pass
+
+    def cleanup(self):
+        pass

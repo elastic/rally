@@ -5,26 +5,58 @@ import socket
 import subprocess
 import threading
 
-from esrally import config, cluster, telemetry, time, exceptions
-from esrally.mechanic import gear
-from esrally.utils import versions, console
+from esrally import config, time, exceptions, client
+from esrally.mechanic import gear, telemetry, cluster
+from esrally.utils import versions, console, process
 
 logger = logging.getLogger("rally.launcher")
 
 
 class ExternalLauncher:
-    def __init__(self, cfg):
-        self.cfg = cfg
+    # benchmarks with external candidates are really scary and we should warn users.
+    BOGUS_RESULTS_WARNING = """
+************************************************************************
+************** WARNING: A dark dungeon lies ahead of you  **************
+************************************************************************
 
-    def start(self, client, metrics_store):
-        t = telemetry.Telemetry(self.cfg, client=client, metrics_store=metrics_store, devices=[
-            telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store),
-            telemetry.NodeStats(self.cfg, client, metrics_store),
-            telemetry.IndexStats(self.cfg, client, metrics_store)
+Rally does not have control over the configuration of the benchmarked
+Elasticsearch cluster.
+
+Be aware that results may be misleading due to problems with the setup.
+Rally is also not able to gather lots of metrics at all (like CPU usage
+of the benchmarked cluster) or may even produce misleading metrics (like
+the index size).
+
+************************************************************************
+****** Use this pipeline only if you are aware of the tradeoffs.  ******
+*************************** Watch your step! ***************************
+************************************************************************
+"""
+
+    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
+        self.cfg = cfg
+        self.metrics_store = metrics_store
+        self.client_factory = client_factory_class
+
+    def start(self, car=None):
+        console.println(ExternalLauncher.BOGUS_RESULTS_WARNING)
+
+        hosts = self.cfg.opts("launcher", "external.target.hosts")
+        client_options = self.cfg.opts("launcher", "client.options")
+        # unified client config
+        self.cfg.add(config.Scope.benchmark, "client", "hosts", hosts)
+        self.cfg.add(config.Scope.benchmark, "client", "options", client_options)
+
+        es = self.client_factory(hosts, client_options).create()
+
+        t = telemetry.Telemetry(self.cfg, client=es, metrics_store=self.metrics_store, devices=[
+            telemetry.ExternalEnvironmentInfo(self.cfg, es, self.metrics_store),
+            telemetry.NodeStats(self.cfg, es, self.metrics_store),
+            telemetry.IndexStats(self.cfg, es, self.metrics_store)
         ])
         c = cluster.Cluster([], t)
         user_defined_version = self.cfg.opts("source", "distribution.version", mandatory=False)
-        distribution_version = client.info()["version"]["number"]
+        distribution_version = es.info()["version"]["number"]
         if not user_defined_version or user_defined_version.strip() == "":
             logger.info("Distribution version was not specified by user. Rally-determined version is [%s]" % distribution_version)
             self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
@@ -34,6 +66,9 @@ class ExternalLauncher:
                 (user_defined_version, distribution_version), logger=logger.warn)
         t.attach_to_cluster(c)
         return c
+
+    def stop(self, cluster):
+        pass
 
 
 class InProcessLauncher:
@@ -68,18 +103,30 @@ class InProcessLauncher:
         }
     }
 
-    def __init__(self, cfg, clock=time.Clock):
+    def __init__(self, cfg, metrics_store, clock=time.Clock):
         self.cfg = cfg
+        self.metrics_store = metrics_store
         self._clock = clock
         self._servers = []
 
-    def start(self, car, client, metrics_store):
-        if self._servers:
-            logger.warn("There are still referenced servers on startup. Did the previous shutdown succeed?")
+    def start(self, car):
+        port = self.cfg.opts("provisioning", "node.http.port")
+        hosts = [{"host": "localhost", "port": port}]
+        client_options = self.cfg.opts("launcher", "client.options")
+        # unified client config
+        self.cfg.add(config.Scope.benchmark, "client", "hosts", hosts)
+        self.cfg.add(config.Scope.benchmark, "client", "options", client_options)
+
+        es = client.EsClientFactory(hosts, client_options).create()
+
+        # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
+        node_prefix = self.cfg.opts("provisioning", "node.name.prefix")
+        process.kill_running_es_instances(node_prefix)
+
         logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
 
-        t = telemetry.Telemetry(self.cfg, client, metrics_store)
-        c = cluster.Cluster([self._start_node(node, car, client, metrics_store) for node in range(car.nodes)], t)
+        t = telemetry.Telemetry(self.cfg, es, self.metrics_store)
+        c = cluster.Cluster([self._start_node(node, car, es, self.metrics_store) for node in range(car.nodes)], t)
         t.attach_to_cluster(c)
         return c
 

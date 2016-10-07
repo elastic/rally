@@ -5,13 +5,6 @@ class RallyError(Exception):
     pass
 
 
-class ImproperlyConfigured(RallyError):
-    """
-    Thrown on configuration errors.
-    """
-    pass
-
-
 class LaunchError(RallyError):
     """
     Thrown whenever there was a problem launching the benchmark candidate
