@@ -51,7 +51,7 @@ def from_distribution(cfg):
     else:
         logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (version, distribution_path))
 
-    cfg.add(cfg.Scope.invocation, "builder", "candidate.bin.path", distribution_path)
+    cfg.add(config.Scope.invocation, "builder", "candidate.bin.path", distribution_path)
 
 
 class SourceRepository:
