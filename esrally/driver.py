@@ -213,7 +213,6 @@ class Driver(thespian.actors.Actor):
             self.most_recent_sample_per_client = {}
             self.current_step += 1
             if self.finished():
-                self.update_progress_message(task_finished=True, all_finished=True)
                 logger.info("All steps completed. Shutting down")
                 # we're done here
                 for driver in self.drivers:
@@ -262,12 +261,9 @@ class Driver(thespian.actors.Actor):
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time)
 
-    def update_progress_message(self, task_finished=False, all_finished=False):
-        if not self.quiet:
-            step = self.current_step if not all_finished else self.current_step - 1
-            if step < 0:
-                return
-            ops = ",".join([op.name for op in self.ops_per_join_point[step]])
+    def update_progress_message(self, task_finished=False):
+        if not self.quiet and self.current_step >= 0:
+            ops = ",".join([op.name for op in self.ops_per_join_point[self.current_step]])
 
             if task_finished:
                 total_progress = 1.0
