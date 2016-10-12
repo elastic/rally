@@ -463,21 +463,21 @@ def wait_for_status(es, expected_cluster_status):
 
 def _do_wait(es, expected_cluster_status):
     reached_cluster_status = None
-    use_wait_for_no_relocating_shards = False
+    # TODO dm: Remove probing code after release of ES 5.0.
+    use_wait_for_relocating_shards = False
     for attempt in range(10):
         try:
-            if use_wait_for_no_relocating_shards:
+            if use_wait_for_relocating_shards:
+                result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
+            else:
                 result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s",
                                            params={"wait_for_no_relocating_shards": True})
-            else:
-                result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
-
         except (socket.timeout, elasticsearch.exceptions.ConnectionError):
             pass
         except elasticsearch.exceptions.TransportError as e:
             if 400 <= e.status_code < 500:
-                logger.exception("Client error in health API. Using 'wait_for_no_relocating_shards'.")
-                use_wait_for_no_relocating_shards = True
+                logger.info("Probing cluster health API. Using 'wait_for_relocating_shards=0'.")
+                use_wait_for_relocating_shards = True
         else:
             reached_cluster_status = result["status"]
             relocating_shards = result["relocating_shards"]
