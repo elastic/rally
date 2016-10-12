@@ -142,11 +142,11 @@ class Stats:
         elif 10 <= sample_size < 100:
             return [50.0, 90.0, 100]
         elif 100 <= sample_size < 1000:
-            return [90.0, 99.0, 100]
+            return [50.0, 90.0, 99.0, 100]
         elif 1000 <= sample_size < 10000:
-            return [90.0, 99.0, 99.9, 100]
+            return [50.0, 90.0, 99.0, 99.9, 100]
         else:
-            return [90.0, 99.0, 99.9, 99.99, 100]
+            return [50.0, 90.0, 99.0, 99.9, 99.99, 100]
 
 
 class SummaryReporter:
