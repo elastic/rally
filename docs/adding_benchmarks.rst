@@ -274,7 +274,7 @@ However, you can also explicitly limit the number of clients::
 
         {
           "parallel": {
-            "clients": 2
+            "clients": 2,
             "warmup-iterations": 1000,
             "iterations": 1000,
             "tasks": [
@@ -297,8 +297,6 @@ However, you can also explicitly limit the number of clients::
             ]
           }
         }
-      ]
-    }
 
 This will run the four tasks with just two clients. You could also specify more clients than there are tasks but these will then just idle.
 
@@ -306,7 +304,7 @@ You can also specify a number of clients on sub tasks explicitly (by default, on
 
         {
           "parallel": {
-            "clients": 3
+            "clients": 3,
             "warmup-iterations": 1000,
             "iterations": 1000,
             "tasks": [
@@ -330,8 +328,6 @@ You can also specify a number of clients on sub tasks explicitly (by default, on
             ]
           }
         }
-      ]
-    }
 
 This will ensure that the phrase query will be executed by two clients. All other ones are executed by one client.
 
