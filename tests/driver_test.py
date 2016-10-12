@@ -418,7 +418,7 @@ class InvocationGeneratorTests(ScheduleTestCase):
         t2 = self.t(2)
 
         invocations = driver.bulk_data_based(1, 0, 1, 0, [self.idx("a", [t2, t2, t2, t2, t1]), self.idx("b", [t2, t2, t2, t2, t2, t1])],
-                                             "runner", 2, track.IndexIdConflict.NoConflicts,
+                                             "runner", 2, track.IndexIdConflict.NoConflicts, None,
                                              create_reader=lambda index, type, offset, num_docs, bulk_size, id_conflicts:
                                              InvocationGeneratorTests.TestIndexReader([[index.name] * type.number_of_documents])
                                              )

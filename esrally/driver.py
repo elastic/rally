@@ -761,7 +761,7 @@ def schedule_for(task, client_index, indices):
     if op.type == track.OperationType.Index:
         runner = BulkIndex()
         return bulk_data_based(target_throughput, task.warmup_time_period, num_clients, client_index, indices, runner,
-                               op.params["bulk-size"], op.params["id-conflicts"])
+                               op.params["bulk-size"], op.params["id-conflicts"], op.params["pipeline"])
     else:
         runner = runners[op.type]()
         # will queries always be iteration based?
@@ -869,7 +869,7 @@ def bounds(total_docs, client_index, num_clients):
     return offset, docs_per_client
 
 
-def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_index, indices, runner, bulk_size, id_conflicts,
+def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_index, indices, runner, bulk_size, id_conflicts, pipeline,
                     create_reader=create_default_reader):
     """
     Calculates the necessary schedule for bulk operations.
@@ -883,6 +883,7 @@ def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_i
     :param runner: The runner for a given operation.
     :param bulk_size: The size of bulk index operations (number of documents per bulk).
     :param id_conflicts: The type of id conflicts to simulate.
+    :param pipeline: Name of the ingest pipeline to use. May be None.
     :param create_reader: A function to create the index reader. By default a file based index reader will be created. This parameter is
                           intended for testing only.
     :return: A generator for the bulk operations of the given client.
@@ -907,9 +908,12 @@ def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_i
     reader = chain(*readers)
     it = 0
     for bulk in reader:
+        params = {"body": bulk}
+        if pipeline:
+            params["pipeline"] = pipeline
         yield (wait_time * it,
                lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
-               it, iterations, iterations, runner, {"body": bulk})
+               it, iterations, iterations, runner, params)
         it += 1
 
 
@@ -943,7 +947,11 @@ class BulkIndex(Runner):
     """
 
     def __call__(self, es, params):
-        response = es.bulk(body=params["body"])
+        bulk_params = {}
+        if "pipeline" in params:
+            bulk_params["pipeline"] = params["pipeline"]
+
+        response = es.bulk(body=params["body"], params=bulk_params)
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
                 if item["index"]["status"] != 201:

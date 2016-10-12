@@ -111,6 +111,10 @@
             "minimum": 1,
             "description": "[Only for type == 'index']: Defines the bulk size."
           },
+          "pipeline": {
+            "type": "string",
+            "description": "[Only for type == 'index']: Defines the name of the ingest node pipeline to use (only supported from Elasticsearch 5.0)."
+          },
           "conflicts": {
             "type": "string",
             "enum": ["sequential", "random"],

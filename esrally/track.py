@@ -542,10 +542,12 @@ class TrackReader:
                 raise TrackSyntaxError("Unknown conflict type '%s' for operation '%s'" % (id_conflicts, ops_spec))
 
             bulk_size = self._r(ops_spec, "bulk-size", error_ctx=ops_spec_name)
+            pipeline = self._r(ops_spec, "pipeline", error_ctx=ops_spec_name, mandatory=False)
 
             params = {
                 "bulk-size": bulk_size,
-                "id-conflicts": id_conflicts
+                "id-conflicts": id_conflicts,
+                "pipeline": pipeline
             }
 
             return Operation(name=ops_spec_name,
