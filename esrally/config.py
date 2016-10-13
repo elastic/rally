@@ -337,7 +337,7 @@ class ConfigFactory:
             self.o("")
             self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
 
-        self.o()
+        self.o("")
         self.o("For help, type %s --help or see the user documentation at %s"
                % (PROGRAM_NAME, console.format.link("https://esrally.readthedocs.io")))
 

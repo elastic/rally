@@ -9,7 +9,7 @@ import time
 import pkg_resources
 import thespian.actors
 from esrally import config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME
-from esrally.utils import io, convert, git, process, console
+from esrally.utils import io, convert, git, process, console, net
 from esrally.mechanic import car, telemetry
 
 __version__ = pkg_resources.require("esrally")[0].version
@@ -226,18 +226,18 @@ def parse_args():
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
         "--baseline",
-        help="defines the race timestamp of the baseline for the comparison (see output %s list races)" % PROGRAM_NAME,
+        help="Race timestamp of the baseline (see %s list races)" % PROGRAM_NAME,
         default="")
     compare_parser.add_argument(
         "--contender",
-        help="defines the race timestamp of the contender for the comparison (see output %s list races)" % PROGRAM_NAME,
+        help="Race timestamp of the contender (see %s list races)" % PROGRAM_NAME,
         default="")
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
     for p in [parser, config_parser]:
         p.add_argument(
             "--advanced-config",
-            help="show additional configuration options when creating the config file (default: false)",
+            help="show additional configuration options (default: false)",
             default=False,
             action="store_true")
 
@@ -308,6 +308,27 @@ def parse_args():
             default=False,
             action="store_true")
 
+    for p in [parser, list_parser, race_parser]:
+        p.add_argument(
+            "--distribution-version",
+            help="defines the version of the Elasticsearch distribution to download. "
+                 "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+            default="")
+        p.add_argument(
+            "--distribution-repository",
+            help="defines the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+            choices=["snapshot", "release"],
+            default="release")
+        p.add_argument(
+            "--track-repository",
+            help="defines the repository from where Rally will load tracks (default: default).",
+            default="default")
+        p.add_argument(
+            "--offline",
+            help="Assume that Rally has no connection to the Internet (default: false)",
+            default=False,
+            action="store_true")
+
     ###############################################################################
     #
     # The options below are undocumented and can be removed or changed at any time.
@@ -348,27 +369,6 @@ def parse_args():
             help=argparse.SUPPRESS,
             default="file"
         )
-
-    for p in [parser, list_parser, race_parser]:
-        p.add_argument(
-                "--distribution-version",
-                help="defines the version of the Elasticsearch distribution to download. "
-                     "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
-                default="")
-        p.add_argument(
-                "--distribution-repository",
-                help="defines the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-                choices=["snapshot", "release"],
-                default="release")
-        p.add_argument(
-                "--track-repository",
-                help="defines the repository from where Rally will load tracks (default: default).",
-                default="default")
-        p.add_argument(
-            "--offline",
-            help="Assume that Rally has no connection to the Internet (default: false)",
-            default=False,
-            action="store_true")
 
     return parser.parse_args()
 
@@ -560,6 +560,8 @@ def main():
     configure_logging(cfg)
     logger.info("Rally version [%s]" % version())
     logger.info("Command line arguments: %s" % args)
+    # Configure networking
+    net.init()
 
     # Kill any lingering Rally processes before attempting to continue - the actor system needs to a singleton on this machine
     # noinspection PyBroadException

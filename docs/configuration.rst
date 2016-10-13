@@ -129,5 +129,39 @@ Rally will ask you a few more things in the advanced setup:
 * metrics store settings: Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. There is currently no support for choosing the in-memory metrics store when you run the advanced configuration. If you really need it, please raise an issue on Github.
 * whether or not Rally should keep the Elasticsearch benchmark candidate installation including all data by default. This will use lots of disk space so you should wipe ``~/.rally/benchmarks/races`` regularly.
 
+Proxy Configuration
+-------------------
+
+Rally downloads all necessary data automatically for you:
+
+* Elasticsearch distributions from elastic.co if you specify ``--pipeline=from-distribution``
+* Elasticsearch source code from Github if you specify ``--pipeline=from-sources``
+* Track meta-data from Github
+* Track data from an S3 bucket
+
+Hence, it needs to connect via http(s) to the outside world. If you are behind a corporate proxy you need to configure Rally and git. As many other Unix programs, Rally relies that the HTTP proxy URL is available in the environment variable ``http_proxy`` (note that this is in lower-case). Hence, you should add this line to your shell profile, e.g. ``~/.bash_profile``::
+
+    export http_proxy=http://proxy.acme.org:8888/
+
+Afterwards, source the shell profile with ``source ~/.bash_profile`` and verify that the proxy URL is correctly set with ``echo $http_proxy``.
+
+Finally, you can set up git::
+
+    git config --global http.proxy $http_proxy
+
+For details, please refer to the `Git config documentation <https://git-scm.com/docs/git-config>`_.
+
+Please verify that the proxy setup for git works correctly by cloning any repository, e.g. the ``rally-tracks`` repository::
+
+    git clone https://github.com/elastic/rally-tracks.git
+
+If the configuration is correct, git will clone this repository. You can delete the folder ``rally-tracks`` after this verification step.
+
+To verify that Rally will connect via the proxy server you can check the log file. If the proxy server is configured successfully, Rally will log the following line on startup::
+
+    Rally connects via proxy URL [http://proxy.acme.org:3128/] to the Internet (picked up from the environment variable [http_proxy]).
 
 
+.. note::
+
+   Rally will use this proxy server only for downloading benchmark-related data. It will not use this proxy for the actual benchmark.
