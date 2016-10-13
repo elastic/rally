@@ -8,14 +8,17 @@ logger = logging.getLogger("rally.process")
 
 
 def run_subprocess(command_line):
+    logger.debug("Running subprocess [%s]" % command_line)
     return os.system(command_line)
 
 
 def run_subprocess_with_output(command_line):
+    logger.debug("Running subprocess [%s] with output." % command_line)
     return os.popen(command_line).readlines()
 
 
-def run_subprocess_with_logging(command_line, header=None):
+def run_subprocess_with_logging(command_line, header=None, level=logging.INFO):
+    logger.debug("Running subprocess [%s] with logging." % command_line)
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
 
@@ -37,16 +40,15 @@ def run_subprocess_with_logging(command_line, header=None):
         while has_output:
             line = command_line_process.stdout.readline()
             if line:
-                logger.info(line)
+                logger.log(level=level, msg=line)
             else:
                 has_output = False
-    except OSError as exception:
-        logger.warn("Exception occurred when running '%s': '%s'" % (command_line, str(exception)))
+        command_line_process.wait(timeout=5)
+        logger.debug("Subprocess [%s] finished with return code [%s]." % (command_line, str(command_line_process.returncode)))
+        return command_line_process.returncode == 0 or command_line_process.returncode is None
+    except OSError:
+        logger.exception("Exception occurred when running [%s]." % command_line)
         return False
-    else:
-        logger.debug("Subprocess '%s' finished" % command_line)
-
-    return True
 
 
 def kill_running_es_instances(node_prefix):

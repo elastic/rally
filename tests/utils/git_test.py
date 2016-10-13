@@ -1,4 +1,5 @@
 import os
+import logging
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -13,9 +14,22 @@ class GitTests(TestCase):
         self.assertFalse(git.is_working_copy(test_dir))
         self.assertTrue(git.is_working_copy(os.path.dirname(test_dir)))
 
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_git_version_too_old(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = False
+        run_subprocess.return_value = "1.0.0"
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            git.head_revision("/src")
+        self.assertEqual("Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git.", ctx.exception.args[0])
+        run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
+
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_clone_successful(self, run_subprocess, ensure_dir):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_clone_successful(self, run_subprocess_with_logging, run_subprocess, ensure_dir):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         src = "/src"
         remote = "http://github.com/some/project"
@@ -23,11 +37,14 @@ class GitTests(TestCase):
         git.clone(src, remote)
 
         ensure_dir.assert_called_with(src)
+        run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
         run_subprocess.assert_called_with("git clone http://github.com/some/project /src")
 
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_clone_with_error(self, run_subprocess, ensure_dir):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_clone_with_error(self, run_subprocess_with_logging, run_subprocess, ensure_dir):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = True
         src = "/src"
         remote = "http://github.com/some/project"
@@ -40,13 +57,17 @@ class GitTests(TestCase):
         run_subprocess.assert_called_with("git clone http://github.com/some/project /src")
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_fetch_successful(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_fetch_successful(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.fetch("/src", remote="my-origin")
         run_subprocess.assert_called_with("git -C /src fetch --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_fetch_with_error(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_fetch_with_error(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = True
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.fetch("/src", remote="my-origin")
@@ -54,13 +75,17 @@ class GitTests(TestCase):
         run_subprocess.assert_called_with("git -C /src fetch --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_checkout_successful(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_checkout_successful(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.checkout("/src", "feature-branch")
         run_subprocess.assert_called_with("git -C /src checkout --quiet feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_checkout_with_error(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_checkout_with_error(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = True
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.checkout("/src", "feature-branch")
@@ -68,7 +93,9 @@ class GitTests(TestCase):
         run_subprocess.assert_called_with("git -C /src checkout --quiet feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_rebase(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_rebase(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.rebase("/src", remote="my-origin", branch="feature-branch")
         calls = [
@@ -78,7 +105,9 @@ class GitTests(TestCase):
         run_subprocess.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_pull(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_pull(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.pull("/src", remote="my-origin", branch="feature-branch")
         calls = [
@@ -89,7 +118,9 @@ class GitTests(TestCase):
         run_subprocess.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_pull_ts(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_pull_ts(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.pull_ts("/src", "20160101T110000Z")
         run_subprocess.assert_called_with(
@@ -97,19 +128,25 @@ class GitTests(TestCase):
                 "--quiet `git -C /src rev-list -n 1 --before=\"20160101T110000Z\" --date=iso8601 origin/master`")
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_pull_revision(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_pull_revision(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.pull_revision("/src", "3694a07")
         run_subprocess.assert_called_with("git -C /src fetch --quiet origin && git -C /src checkout --quiet 3694a07")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    def test_head_revision(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_head_revision(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = ["3694a07"]
         self.assertEqual("3694a07", git.head_revision("/src"))
         run_subprocess.assert_called_with("git -C /src rev-parse --short HEAD")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    def test_list_remote_branches(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_list_remote_branches(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = ["  origin/HEAD",
                                        "  origin/master",
                                        "  origin/5.0.0-alpha1",
@@ -118,7 +155,9 @@ class GitTests(TestCase):
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/remotes/ --format='%(refname:short)'")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    def test_list_local_branches(self, run_subprocess):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_list_local_branches(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = ["  HEAD",
                                        "  master",
                                        "  5.0.0-alpha1",
