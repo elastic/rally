@@ -328,8 +328,12 @@ class LoadGenerator(thespian.actors.Actor):
                     self.send_samples()
                     if self.executor_future is not None:
                         if self.executor_future.done():
-                            self.executor_future = None
-                            self.drive()
+                            e = self.executor_future.exception(timeout=0)
+                            if e:
+                                self.send(self.master, BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
+                            else:
+                                self.executor_future = None
+                                self.drive()
                         else:
                             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
             else:
