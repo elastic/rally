@@ -16,7 +16,7 @@ logger = logging.getLogger("rally.net")
 def init():
     global HTTP
     proxy_url = os.getenv("http_proxy")
-    if len(proxy_url) > 0:
+    if proxy_url and len(proxy_url) > 0:
         logger.info("Rally connects via proxy URL [%s] to the Internet (picked up from the environment variable [http_proxy])." % proxy_url)
         HTTP = urllib3.ProxyManager(proxy_url, cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
     else:
