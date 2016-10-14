@@ -594,33 +594,38 @@ def execute_schedule(schedule, es, sampler):
     previous_sample_type = None
     total_start = time.perf_counter()
     curr_total_it = 1
-    for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_sample_type, total_it_for_task, runner, params in schedule:
-        sample_type = sample_type_calculator(total_start)
-        # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
-        # the relative time zero which simplifies throughput calculation.
-        #
-        # Assumption: We always get the same operation here, otherwise simply resetting one timer will not work!
-        if sample_type != previous_sample_type:
-            relative = time.perf_counter()
-            previous_sample_type = sample_type
-        # expected_scheduled_time is relative to the start of the first iteration
-        absolute_expected_schedule_time = relative + expected_scheduled_time
-        throughput_throttled = expected_scheduled_time > 0
-        if throughput_throttled:
-            rest = absolute_expected_schedule_time - time.perf_counter()
-            if rest > 0:
-                time.sleep(rest)
-        start = time.perf_counter()
-        with runner:
-            weight = runner(es, params)
-        stop = time.perf_counter()
+    # noinspection PyBroadException
+    try:
+        for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_sample_type, total_it_for_task, runner, params in schedule:
+            sample_type = sample_type_calculator(total_start)
+            # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
+            # the relative time zero which simplifies throughput calculation.
+            #
+            # Assumption: We always get the same operation here, otherwise simply resetting one timer will not work!
+            if sample_type != previous_sample_type:
+                relative = time.perf_counter()
+                previous_sample_type = sample_type
+            # expected_scheduled_time is relative to the start of the first iteration
+            absolute_expected_schedule_time = relative + expected_scheduled_time
+            throughput_throttled = expected_scheduled_time > 0
+            if throughput_throttled:
+                rest = absolute_expected_schedule_time - time.perf_counter()
+                if rest > 0:
+                    time.sleep(rest)
+            start = time.perf_counter()
+            with runner:
+                weight = runner(es, params)
+            stop = time.perf_counter()
 
-        service_time = stop - start
-        # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
-        latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
-        sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative),
-                    curr_total_it, total_it_for_task)
-        curr_total_it += 1
+            service_time = stop - start
+            # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
+            latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
+            sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative),
+                        curr_total_it, total_it_for_task)
+            curr_total_it += 1
+    except BaseException:
+        logger.exception("Could not execute schedule")
+        raise
 
 
 class JoinPoint:
