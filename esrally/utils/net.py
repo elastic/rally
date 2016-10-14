@@ -20,7 +20,7 @@ def init():
         logger.info("Rally connects via proxy URL [%s] to the Internet (picked up from the environment variable [http_proxy])." % proxy_url)
         HTTP = urllib3.ProxyManager(proxy_url, cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
     else:
-        logger.info("Rally connects directly to the Internet (no proxy support)." % proxy_url)
+        logger.info("Rally connects directly to the Internet (no proxy support).")
         HTTP = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
 
 
