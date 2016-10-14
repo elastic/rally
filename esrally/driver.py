@@ -811,7 +811,7 @@ def build_conflicting_ids(conflicts, docs_to_index, offset):
         if conflicts == track.IndexIdConflict.SequentialConflicts:
             all_ids[i] = "%10d" % (offset + i)
         elif conflicts == track.IndexIdConflict.RandomConflicts:
-            all_ids[i] = "%10d" % random.randint(offset, docs_to_index)
+            all_ids[i] = "%10d" % random.randint(offset, offset + docs_to_index)
         else:
             raise exceptions.SystemSetupError('Unknown id conflict type %s' % conflicts)
     return all_ids
