@@ -4,26 +4,39 @@ from esrally import exceptions
 
 VERSIONS = re.compile("^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$")
 
-
-def is_version_identifier(text):
-    return text is not None and VERSIONS.match(text) is not None
+VERSIONS_OPTIONAL = re.compile("^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-(.+))?$")
 
 
-def components(version):
+def _versions_pattern(strict):
+    return VERSIONS if strict else VERSIONS_OPTIONAL
+
+
+def is_version_identifier(text, strict=True):
+    return text is not None and _versions_pattern(strict).match(text) is not None
+
+
+def components(version, strict=True):
     """
     Determines components of a version string.
 
     :param version: A version string in the format major.minor.path-suffix (suffix is optional)
-    :return: A dict with the keys "major", "minor", "patch" and optionally "suffix".
+    :param strict: Determines whether versions need to have at least "major", "minor" and "patch" defined. Default: True
+    :return: A tuple with four components determining "major", "minor", "patch" and "suffix" (any part except "major" may be `None`)
     """
-    matches = VERSIONS.match(version)
+    versions_pattern = _versions_pattern(strict)
+    matches = versions_pattern.match(version)
     if matches:
-        version_components = {"major": matches.group(1), "minor": matches.group(2), "patch": matches.group(3)}
         if matches.start(4) > 0:
-            version_components["suffix"] = matches.group(4)
-        return version_components
-    else:
-        raise exceptions.InvalidSyntax("version string '%s' does not conform to pattern '%s'" % (version, VERSIONS.pattern))
+            return int(matches.group(1)), int(matches.group(2)), int(matches.group(3)), matches.group(4)
+        elif matches.start(3) > 0:
+            return int(matches.group(1)), int(matches.group(2)), int(matches.group(3)), None
+        elif matches.start(2) > 0:
+            return int(matches.group(1)), int(matches.group(2)), None, None
+        elif matches.start(1) > 0:
+            return int(matches.group(1)), None, None, None
+        else:
+            return int(version), None, None, None
+    raise exceptions.InvalidSyntax("version string '%s' does not conform to pattern '%s'" % (version, versions_pattern.pattern))
 
 
 def versions(version):
@@ -38,13 +51,13 @@ def versions(version):
     :return: a list of version variations ordered from most specific to most generic variation.
     """
     v = []
-    c = components(version)
+    major, minor, patch, suffix = components(version)
 
-    if "suffix" in c:
-        v.append("%s.%s.%s-%s" % (c["major"], c["minor"], c["patch"], c["suffix"]))
-    v.append("%s.%s.%s" % (c["major"], c["minor"], c["patch"]))
-    v.append("%s.%s" % (c["major"], c["minor"]))
-    v.append("%s" % c["major"])
+    if suffix:
+        v.append("%d.%d.%d-%s" % (major, minor, patch, suffix))
+    v.append("%d.%d.%d" % (major, minor, patch))
+    v.append("%d.%d" % (major, minor))
+    v.append("%d" % major)
     return v
 
 
@@ -61,10 +74,23 @@ def best_match(available_alternatives, distribution_version):
     :param distribution_version: An Elasticsearch distribution version.
     :return: The most specific alternative that is available (most components of the version match) or None.
     """
-    if distribution_version and len(distribution_version.strip()) > 0:
+    if is_version_identifier(distribution_version):
         for version in versions(distribution_version):
             if version in available_alternatives:
                 return version
-        return None
-    else:
+        # not found in the available alternatives, it could still be a master version
+        major, _, _, _ = components(distribution_version)
+        if major > _latest_major(available_alternatives):
+            return "master"
+    elif not distribution_version:
         return "master"
+    return None
+
+
+def _latest_major(alternatives):
+    max_major = -1
+    for a in alternatives:
+        if is_version_identifier(a, strict=False):
+            major, _, _, _ = components(a, strict=False)
+            max_major = max(major, max_major)
+    return max_major

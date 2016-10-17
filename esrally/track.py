@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 
 import urllib.error
 from enum import Enum
@@ -329,21 +330,23 @@ class TrackRepository:
             if self.remote and not self.offline:
                 branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
                 if branch:
-                    logger.info("Rebasing on '%s' in '%s' for distribution version '%s'." % (branch, self.tracks_dir, distribution_version))
+                    logger.info("Rebasing on [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
                     git.rebase(self.tracks_dir, branch=branch)
                     return
                 else:
-                    msg = "Could not find track data remotely for distribution version %s. " \
+                    # TODO dm: Check if we should use master
+                    msg = "Could not find track data remotely for distribution version [%s]. " \
                           "Trying to find track data locally." % distribution_version
                     logger.warn(msg)
             branch = versions.best_match(git.branches(self.tracks_dir, remote=False), distribution_version)
             if branch:
-                logger.info("Checking out '%s' in '%s' for distribution version '%s'." % (branch, self.tracks_dir, distribution_version))
+                logger.info("Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
                 git.checkout(self.tracks_dir, branch=branch)
             else:
                 raise exceptions.SystemSetupError("Cannot find track data for distribution version %s" % distribution_version)
-        except exceptions.SupplyError as e:
-            raise exceptions.DataError("Cannot update track data in '%s': %s" % (self.tracks_dir, e))
+        except exceptions.SupplyError:
+            tb = sys.exc_info()[2]
+            raise exceptions.DataError("Cannot update track data in [%s]." % self.tracks_dir).with_traceback(tb)
 
 
 def render_template(loader, template_name, clock=time.Clock):

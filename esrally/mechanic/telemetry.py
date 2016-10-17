@@ -446,8 +446,10 @@ class EnvironmentInfo(InternalTelemetryDevice):
 
     def attach_to_cluster(self, cluster):
         revision = self.client.info()["version"]["build_hash"]
+        distribution_version = self.client.info()["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
+        self.config.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
         for node in nodes_info:

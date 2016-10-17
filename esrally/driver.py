@@ -10,7 +10,7 @@ import time
 import elasticsearch
 import thespian.actors
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
-from esrally.utils import convert, console, io
+from esrally.utils import convert, console, io, versions
 
 logger = logging.getLogger("rally.driver")
 
@@ -167,18 +167,19 @@ class Driver(thespian.actors.Actor):
         track.prepare_track(current_track, self.config)
 
         logger.info("Benchmark is about to start.")
-        self.quiet = msg.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
-        self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
+        self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
+        self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
         self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info)
         invocation = self.config.opts("meta", "time.start")
-        expected_cluster_health = msg.config.opts("benchmarks", "cluster.health")
+        expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
         track_name = self.config.opts("benchmarks", "track")
         challenge_name = self.config.opts("benchmarks", "challenge")
         selected_car_name = self.config.opts("benchmarks", "car")
         self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
 
         challenge = select_challenge(self.config, current_track)
-        setup_index(self.es, current_track, challenge, expected_cluster_health)
+        es_version = self.config.opts("source", "distribution.version")
+        setup_index(self.es, current_track, challenge, es_version, expected_cluster_health)
         allocator = Allocator(challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -431,7 +432,7 @@ def select_challenge(config, t):
                                       "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
 
 
-def setup_index(es, t, challenge, expected_cluster_health):
+def setup_index(es, t, challenge, es_version, expected_cluster_health):
     if challenge.index_settings:
         for index in t.indices:
             if es.indices.exists(index=index.name):
@@ -446,29 +447,36 @@ def setup_index(es, t, challenge, expected_cluster_health):
                 es.indices.put_mapping(index=index.name,
                                        doc_type=type.name,
                                        body=json.loads(mappings))
-    wait_for_status(es, expected_cluster_health)
+    wait_for_status(es, es_version, expected_cluster_health)
 
 
-def wait_for_status(es, expected_cluster_status):
+def wait_for_status(es, es_version, expected_cluster_status):
     """
     Synchronously waits until the cluster reaches the provided status. Upon timeout a LaunchError is thrown.
 
     :param es Elasticsearch client
+    :param es_version Elasticsearch version string.
     :param expected_cluster_status the cluster status that should be reached.
     """
     logger.info("Wait for cluster status [%s]" % expected_cluster_status)
     start = time.perf_counter()
-    reached_cluster_status, relocating_shards = _do_wait(es, expected_cluster_status)
+    reached_cluster_status, relocating_shards = _do_wait(es, es_version, expected_cluster_status)
     stop = time.perf_counter()
     logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
     logger.info("Cluster health: [%s]" % str(es.cluster.health()))
     logger.info("Shards:\n%s" % es.cat.shards(v=True))
 
 
-def _do_wait(es, expected_cluster_status):
+def _do_wait(es, es_version, expected_cluster_status):
     reached_cluster_status = None
-    # TODO dm: Remove probing code after release of ES 5.0.
-    use_wait_for_relocating_shards = False
+    major, minor, patch, suffix = versions.components(es_version)
+    if major < 5:
+        use_wait_for_relocating_shards = True
+    elif major == 5 and minor == 0 and patch == 0 and suffix and suffix.startswith("alpha"):
+        use_wait_for_relocating_shards = True
+    else:
+        use_wait_for_relocating_shards = False
+
     for attempt in range(10):
         try:
             if use_wait_for_relocating_shards:
@@ -479,9 +487,11 @@ def _do_wait(es, expected_cluster_status):
         except (socket.timeout, elasticsearch.exceptions.ConnectionError):
             pass
         except elasticsearch.exceptions.TransportError as e:
-            if 400 <= e.status_code < 500:
-                logger.info("Probing cluster health API. Using 'wait_for_relocating_shards=0'.")
-                use_wait_for_relocating_shards = True
+            if e.status_code == 408:
+                logger.info("Timed out waiting for cluster health status. Retrying shortly...")
+                time.sleep(0.5)
+            else:
+                raise e
         else:
             reached_cluster_status = result["status"]
             relocating_shards = result["relocating_shards"]

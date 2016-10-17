@@ -158,7 +158,8 @@ class EnvironmentInfoTests(TestCase):
         cluster_info = {
             "version":
                 {
-                    "build_hash": "abc123"
+                    "build_hash": "abc123",
+                    "number": "6.0.0-alpha1"
                 }
         }
 

@@ -111,8 +111,8 @@ class Provisioner:
         distribution_version = self._config.opts("source", "distribution.version", mandatory=False)
         configure = False
         if versions.is_version_identifier(distribution_version):
-            major_version = int(versions.components(distribution_version)["major"])
-            if major_version >= 2:
+            major, _, _, _ = versions.components(distribution_version)
+            if major >= 2:
                 configure = True
         else:
             # we're very likely benchmarking from sources which is ES 5+
