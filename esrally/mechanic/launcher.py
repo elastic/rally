@@ -146,11 +146,24 @@ class InProcessLauncher:
     def _prepare_env(self, car, node_name, t):
         env = {}
         env.update(os.environ)
+        java_home = gear.Gear(self.cfg).capability(gear.Capability.java)
+        # Unix specific!:
+        self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
+        # Don't merge here!
+        env["JAVA_HOME"] = java_home
+
         # we just blindly trust telemetry here...
         for k, v in t.instrument_candidate_env(car, node_name).items():
             self._set_env(env, k, v)
 
-        java_opts = ""
+        # probe if this JVM supports +ExitOnOutOfMemoryError
+        if process.run_subprocess_with_logging("%s/bin/java -XX:+ExitOnOutOfMemoryError -version" % java_home):
+            logger.info("JVM supports +ExitOnOutOfMemoryError. Setting this option to detect out of memory errors during the benchmark.")
+            java_opts = "-XX:+ExitOnOutOfMemoryError "
+        else:
+            logger.info("JVM does not support +ExitOnOutOfMemoryError. Cannot detect out of memory errors. Please consider a JDK upgrade.")
+            java_opts = ""
+
         if car.heap:
             java_opts += "-Xms%s -Xmx%s " % (car.heap, car.heap)
         if car.java_opts:
@@ -159,11 +172,6 @@ class InProcessLauncher:
             self._set_env(env, "ES_JAVA_OPTS", java_opts)
         self._set_env(env, "ES_GC_OPTS", car.gc_opts)
 
-        java_home = gear.Gear(self.cfg).capability(gear.Capability.java)
-        # Unix specific!:
-        self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
-        # Don't merge here!
-        env["JAVA_HOME"] = java_home
         logger.info("ENV: %s" % str(env))
         return env
 
