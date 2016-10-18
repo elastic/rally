@@ -14,8 +14,8 @@ def local_provisioner(cfg):
     return Provisioner(cfg)
 
 
-def no_op_provisioner():
-    return NoOpProvisioner()
+def no_op_provisioner(cfg):
+    return NoOpProvisioner(cfg)
 
 
 class Provisioner:
@@ -135,8 +135,14 @@ class Provisioner:
 
 
 class NoOpProvisioner:
+    def __init__(self, cfg):
+        self.cfg = cfg
+
     def prepare(self):
-        pass
+        try:
+            return car.select_car(self.cfg)
+        except exceptions.SystemSetupError:
+            return None
 
     def cleanup(self):
         pass

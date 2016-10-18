@@ -4,12 +4,142 @@ import signal
 import socket
 import subprocess
 import threading
+import shlex
+
+import jinja2
+import psutil
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import gear, telemetry, cluster
-from esrally.utils import versions, console, process
+from esrally.utils import versions, console, process, io, convert
 
 logger = logging.getLogger("rally.launcher")
+
+
+class DockerLauncher:
+    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
+        self.cfg = cfg
+        self.metrics_store = metrics_store
+        self.client_factory = client_factory_class
+
+    def start(self, car):
+        # hardcoded for the moment, should actually be identical to internal launcher
+        # Only needed on Mac:
+        # hosts = [{"host": process.run_subprocess_with_output("docker-machine ip default")[0].strip(), "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
+        client_options = self.cfg.opts("launcher", "client.options")
+        # unified client config
+        self.cfg.add(config.Scope.benchmark, "client", "hosts", hosts)
+        self.cfg.add(config.Scope.benchmark, "client", "options", client_options)
+
+        es = self.client_factory(hosts, client_options).create()
+
+        t = telemetry.Telemetry(self.cfg, client=es, metrics_store=self.metrics_store, devices=[
+            telemetry.ExternalEnvironmentInfo(self.cfg, es, self.metrics_store),
+            telemetry.NodeStats(self.cfg, es, self.metrics_store),
+            telemetry.IndexStats(self.cfg, es, self.metrics_store)
+        ])
+
+        distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+
+        install_dir = self._install_dir()
+        io.ensure_dir(install_dir)
+
+        java_opts = ""
+        if car.heap:
+            java_opts += "-Xms%s -Xmx%s " % (car.heap, car.heap)
+        if car.java_opts:
+            java_opts += car.java_opts
+
+        vars = {
+            "es_java_opts": java_opts,
+            "container_memory_gb": "%dg" % (convert.bytes_to_gb(psutil.virtual_memory().total) // 2),
+            "es_data_dir": "%s/data" % install_dir,
+            "es_version": distribution_version
+        }
+
+        docker_cfg = self._render_template_from_file(vars)
+        logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
+        docker_cfg_path = self._docker_cfg_path()
+        with open(docker_cfg_path, "wt") as f:
+            f.write(docker_cfg)
+
+        c = cluster.Cluster([], t)
+
+        self._start_process(cmd="docker-compose -f %s up" % docker_cfg_path, node_name="rally0")
+        # Wait for a little while: Plugins may still be initializing although the node has already started.
+        time.sleep(10)
+
+        t.attach_to_cluster(c)
+        logger.info("Successfully started Docker container")
+        return c
+
+    def _start_process(self, cmd, node_name):
+        startup_event = threading.Event()
+        p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        t = threading.Thread(target=self._read_output, args=(node_name, p, startup_event))
+        t.setDaemon(True)
+        t.start()
+        if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
+            logger.info("Started node=%s with pid=%s" % (node_name, p.pid))
+            return p
+        else:
+            log_dir = self.cfg.opts("system", "log.dir")
+            msg = "Could not start node '%s' within timeout period of %s seconds." % (
+                node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
+            logger.error(msg)
+            raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
+
+    def _node_name(self, node):
+        prefix = self.cfg.opts("provisioning", "node.name.prefix")
+        return "%s%d" % (prefix, node)
+
+    def _read_output(self, node_name, server, startup_event):
+        """
+        Reads the output from the ES (node) subprocess.
+        """
+        while True:
+            l = server.stdout.readline().decode("utf-8")
+            if len(l) == 0:
+                break
+            l = l.rstrip()
+
+            if l.find("Initialization Failed") != -1:
+                logger.warn("[%s] has started with initialization errors." % node_name)
+                startup_event.set()
+
+            logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+            if l.endswith("] started") and not startup_event.isSet():
+                startup_event.set()
+                logger.info("[%s] has successfully started." % node_name)
+
+    def stop(self, cluster):
+        logger.info("Stopping Docker container")
+        docker_cfg_path = self._docker_cfg_path()
+        process.run_subprocess_with_logging("docker-compose down -v -f %s" % docker_cfg_path)
+
+    def _docker_cfg_path(self):
+        install_dir = self._install_dir()
+        return "%s/docker-compose.yml" % install_dir
+
+    def _render_template(self, loader, template_name, variables):
+        env = jinja2.Environment(loader=loader)
+        for k, v in variables.items():
+            env.globals[k] = v
+        template = env.get_template(template_name)
+
+        return template.render()
+
+    def _render_template_from_file(self, variables):
+        compose_file = "%s/resources/docker-compose.yml" % (self.cfg.opts("system", "rally.root"))
+        return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
+                                     template_name=io.basename(compose_file),
+                                     variables=variables)
+
+    def _install_dir(self):
+        root = self.cfg.opts("system", "challenge.root.dir")
+        install = self.cfg.opts("provisioning", "local.install.dir")
+        return "%s/%s" % (root, install)
 
 
 class ExternalLauncher:

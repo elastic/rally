@@ -24,17 +24,19 @@ class Pipeline:
     * Report results
     """
 
-    def __init__(self, name, description, target):
+    def __init__(self, name, description, target, stable=True):
         """
         Creates a new pipeline.
 
         :param name: A short name of the pipeline. This name will be used to reference it from the command line.
         :param description: A human-readable description what the pipeline does.
         :param target: A function that implements this pipeline
+        :param stable True iff the pipeline is considered production quality.
         """
         self.name = name
         self.description = description
         self.target = target
+        self.stable = stable
         pipelines[name] = self
 
     def __call__(self, cfg):
@@ -108,6 +110,11 @@ def benchmark_only(cfg):
     return benchmark(cfg, mechanic.create(cfg, metrics_store, external=True), metrics_store)
 
 
+def docker(cfg):
+    metrics_store = metrics.metrics_store(cfg, read_only=False)
+    return benchmark(cfg, mechanic.create(cfg, metrics_store, docker=True), metrics_store)
+
+
 Pipeline("from-sources-complete",
          "Builds and provisions Elasticsearch, runs a benchmark and reports results.", from_sources_complete)
 
@@ -120,11 +127,15 @@ Pipeline("from-distribution",
 Pipeline("benchmark-only",
          "Assumes an already running Elasticsearch instance, runs a benchmark and reports results", benchmark_only)
 
+# Very experimental Docker pipeline. Should only be used with great care and is also not supported on all platforms.
+Pipeline("docker",
+         "Runs a benchmark against the official Elasticsearch Docker container and reports results", docker, stable=False)
+
 
 def list_pipelines():
     console.println("Available pipelines:\n")
     console.println(
-        tabulate.tabulate([[pipeline.name, pipeline.description] for pipeline in pipelines.values()], headers=["Name", "Description"]))
+        tabulate.tabulate([[pipeline.name, pipeline.description] for pipeline in pipelines.values() if pipeline.stable], headers=["Name", "Description"]))
 
 
 def run(cfg):

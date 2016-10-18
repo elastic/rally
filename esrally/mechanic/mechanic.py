@@ -6,7 +6,7 @@ from esrally.mechanic import supplier, provisioner, launcher
 logger = logging.getLogger("rally.mechanic")
 
 
-def create(cfg, metrics_store, sources=False, build=False, distribution=False, external=False):
+def create(cfg, metrics_store, sources=False, build=False, distribution=False, external=False, docker=False):
     if sources:
         s = lambda: supplier.from_sources(cfg, build)
         p = provisioner.local_provisioner(cfg)
@@ -17,10 +17,14 @@ def create(cfg, metrics_store, sources=False, build=False, distribution=False, e
         l = launcher.InProcessLauncher(cfg, metrics_store)
     elif external:
         s = lambda: None
-        p = provisioner.no_op_provisioner()
+        p = provisioner.no_op_provisioner(cfg)
         l = launcher.ExternalLauncher(cfg, metrics_store)
+    elif docker:
+        s = lambda: None
+        p = provisioner.no_op_provisioner(cfg)
+        l = launcher.DockerLauncher(cfg, metrics_store)
     else:
-        raise RuntimeError("One of sources, distribution or external must be True")
+        raise RuntimeError("One of sources, distribution, docker or external must be True")
 
     return Mechanic(cfg, s, p, l)
 
