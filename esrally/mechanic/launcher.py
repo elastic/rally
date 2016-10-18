@@ -17,6 +17,9 @@ logger = logging.getLogger("rally.launcher")
 
 
 class DockerLauncher:
+    # May download a Docker image and that can take some time
+    PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
+
     def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
         self.cfg = cfg
         self.metrics_store = metrics_store
@@ -80,7 +83,7 @@ class DockerLauncher:
         t = threading.Thread(target=self._read_output, args=(node_name, p, startup_event))
         t.setDaemon(True)
         t.start()
-        if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
+        if startup_event.wait(timeout=DockerLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
             logger.info("Started node=%s with pid=%s" % (node_name, p.pid))
             return p
         else:
