@@ -503,9 +503,15 @@ def _do_wait(es, es_version, expected_cluster_status):
                 return reached_cluster_status, relocating_shards
             else:
                 time.sleep(0.5)
-    msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
+    if reached_cluster_status != expected_cluster_status:
+        msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
+    else:
+        msg = "Cluster reached expected status [%s] but there were [%d] relocating shards and we require zero relocating shards " \
+              "(Use the /_cat/shards API to check which shards are relocating.)" % (reached_cluster_status, relocating_shards)
     logger.error(msg)
     raise exceptions.RallyAssertionError(msg)
+
+
 
 
 def calculate_global_throughput(samples, bucket_interval_secs=1):
