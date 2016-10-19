@@ -136,7 +136,7 @@ By default, the command line reporter will print the results only on standard ou
 
  ::
 
-   esrally --result-format=csv --result-file=~/benchmarks/result.csv
+   esrally --report-format=csv --report-file=~/benchmarks/result.csv
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
