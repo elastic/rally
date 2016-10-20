@@ -512,8 +512,6 @@ def _do_wait(es, es_version, expected_cluster_status):
     raise exceptions.RallyAssertionError(msg)
 
 
-
-
 def calculate_global_throughput(samples, bucket_interval_secs=1):
     """
     Calculates global throughput based on samples gathered from multiple load generators.
