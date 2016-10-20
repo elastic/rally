@@ -780,13 +780,12 @@ def schedule_for(task, client_index, indices):
     op = task.operation
     num_clients = task.clients
     target_throughput = task.target_throughput / num_clients if task.target_throughput else None
+    runner = runners[op.type]()
 
     if op.type == track.OperationType.Index:
-        runner = BulkIndex()
         return bulk_data_based(target_throughput, task.warmup_time_period, num_clients, client_index, indices, runner,
                                op.params["bulk-size"], op.params["id-conflicts"], op.params["pipeline"])
     else:
-        runner = runners[op.type]()
         # will queries always be iteration based?
         return iteration_count_based(target_throughput, task.warmup_iterations // num_clients, task.iterations // num_clients, runner,
                                      op.params)
@@ -925,9 +924,12 @@ def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_i
     for index in indices:
         for type in index.types:
             offset, num_docs = bounds(type.number_of_documents, client_index, num_clients)
-            logger.info("Client [%d] will index [%d] docs starting from offset [%d] for [%s/%s]" %
-                        (client_index, num_docs, offset, index, type))
-            readers.append(create_reader(index, type, offset, num_docs, bulk_size, id_conflicts))
+            if num_docs > 0:
+                logger.info("Client [%d] will index [%d] docs starting from offset [%d] for [%s/%s]" %
+                            (client_index, num_docs, offset, index, type))
+                readers.append(create_reader(index, type, offset, num_docs, bulk_size, id_conflicts))
+            else:
+                logger.info("Client [%d] skips [%s/%s] (no documents to read)." % (client_index, index, type))
     reader = chain(*readers)
     it = 0
     for bulk in reader:
