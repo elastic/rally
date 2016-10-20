@@ -41,8 +41,8 @@ This subcommand is needed to :doc:`configure </configuration>` Rally. It is impl
 Command Line Flags
 ------------------
 
-``track``
-~~~~~~~~~
+``track-repository``
+~~~~~~~~~~~~~~~~~~~~
 
 Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available on `Github <https://github.com/elastic/rally-tracks>`_. See :doc:`adding benchmarks </adding_benchmarks>` on how to add your own track repositories.
 
@@ -65,6 +65,11 @@ A car defines the Elasticsearch configuration that will be used for the benchmar
 ~~~~~~~~~~~~
 
 Selects the :doc:`pipeline </pipelines>` that Rally should run.
+
+``iterations``
+~~~~~~~~~~~~~~
+
+Allows to run the benchmark for multiple iterations (defaults to 1 iteration). Note that the benchmark candidate is not restarted between iterations.
 
 ``telemetry``
 ~~~~~~~~~~~~~

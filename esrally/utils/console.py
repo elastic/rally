@@ -30,6 +30,10 @@ class PlainFormat:
     def neutral(cls, message):
         return message
 
+    @classmethod
+    def underline_for(cls, message):
+        return "*" * len(message)
+
 
 class RichFormat:
     @classmethod
@@ -55,6 +59,10 @@ class RichFormat:
     @classmethod
     def neutral(cls, message):
         return "\033[39;1m%s\033[0m" % message
+
+    @classmethod
+    def underline_for(cls, message):
+        return "*" * len(message)
 
 
 format = PlainFormat

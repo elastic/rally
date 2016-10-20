@@ -60,6 +60,7 @@ def benchmark(cfg, mechanic, metrics_store):
     track_name = cfg.opts("benchmarks", "track")
     challenge_name = cfg.opts("benchmarks", "challenge")
     selected_car_name = cfg.opts("benchmarks", "car")
+    iterations = cfg.opts("benchmarks", "iterations")
 
     console.println("Racing on track [%s] and challenge [%s] with car [%s]" % (track_name, challenge_name, selected_car_name))
 
@@ -70,21 +71,26 @@ def benchmark(cfg, mechanic, metrics_store):
     metrics.race_store(cfg).store_race(t)
 
     actors = thespian.actors.ActorSystem()
-    main_driver = actors.createActor(driver.Driver)
+    for iteration in range(0, iterations):
+        if iterations > 1:
+            msg = "Iteration [%d/%d]" % (iteration + 1, iterations)
+            console.println(console.format.bold(msg), logger=logger.info)
+            console.println(console.format.underline_for(msg))
+        main_driver = actors.createActor(driver.Driver)
+        cluster.on_benchmark_start()
+        result = actors.ask(main_driver, driver.StartBenchmark(cfg, t, metrics_store.meta_info))
+        if isinstance(result, driver.BenchmarkComplete):
+            cluster.on_benchmark_stop()
+            metrics_store.bulk_add(result.metrics)
+        elif isinstance(result, driver.BenchmarkFailure):
+            raise exceptions.RallyError(result.message, result.cause)
+        else:
+            raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
 
-    cluster.on_benchmark_start()
-    result = actors.ask(main_driver, driver.StartBenchmark(cfg, t, metrics_store.meta_info))
-    if isinstance(result, driver.BenchmarkComplete):
-        cluster.on_benchmark_stop()
-        metrics_store.bulk_add(result.metrics)
-        mechanic.stop_engine(cluster)
-        metrics_store.close()
-        reporter.summarize(cfg, t)
-        sweep(cfg)
-    elif isinstance(result, driver.BenchmarkFailure):
-        raise exceptions.RallyError(result.message, result.cause)
-    else:
-        raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
+    mechanic.stop_engine(cluster)
+    metrics_store.close()
+    reporter.summarize(cfg, t)
+    sweep(cfg)
 
 
 # Poor man's curry
