@@ -30,7 +30,6 @@ Please ensure that the following packages are installed before installing Rally:
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 
-### :information_source: Info
 > If you use RHEL, please ensure to install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
 
 Installing Rally
