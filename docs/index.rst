@@ -21,7 +21,7 @@ Prerequisites
 
 Please ensure that the following packages are installed before installing Rally:
 
-* Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` or higher)
+* Python 3.4 or better available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` or higher)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8
 * git 1.9 or better

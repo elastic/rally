@@ -23,12 +23,14 @@ Prerequisites
 
 Please ensure that the following packages are installed before installing Rally:
 
-* Python 3.4+ available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
+* Python 3.4 or better available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
 * ``pip3`` available on the path (verify with ``pip3 --version``)
-* JDK 8+
-* git
+* JDK 8
+* git 1.9 or better
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
+
+> :information_source: If you use RHEL, please ensure to install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
 
 Installing Rally
 ~~~~~~~~~~~~~~~~
@@ -56,7 +58,7 @@ Configuring Rally
 
 Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
 
-For more information see :doc:`configuration help page </configuration>`.
+For more information see the `configuration help page <http://esrally.readthedocs.io/en/latest/configuration.html>`_.
 
 Running the first benchmark
 ---------------------------
@@ -130,12 +132,15 @@ Also be very careful and get a deep understanding of the measurement approaches 
 Other command line flags
 ------------------------
 
-Rally supports more command line flags, just run ``esrally --help`` to see what's possible. For more details, please refer to `Rally's user guide <https://esrally.readthedocs.io/>`_.
+Rally supports more command line flags, just run ``esrally --help`` to see what's possible. For more details, please refer to the `command line reference <http://esrally.readthedocs.io/en/latest/command_line_reference.html>`_.
 
 Getting help
 ------------
- 
-Please ask questions about Rally in the `Rally Discuss forum <https://discuss.elastic.co/c/rally>`_.
+
+* Quick help: ``esrally --help``
+* Look in `Rally's user guide <https://esrally.readthedocs.io/>`_ for more information
+* Ask questions about Rally in the `Rally Discuss forum <https://discuss.elastic.co/c/rally>`_.
+* File improvements or bug reports in our `Github repo <https://github.com/elastic/rally/issues>`_.
 
 How to Contribute
 -----------------
