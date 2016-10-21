@@ -48,18 +48,18 @@ class Stats:
                 self.op_metrics[op]["latency"] = self.single_latency(store, op)
                 self.op_metrics[op]["service_time"] = self.single_latency(store, op, metric_name="service_time")
 
-        self.total_time = store.get_one("indexing_total_time")
-        self.merge_time = store.get_one("merges_total_time")
-        self.refresh_time = store.get_one("refresh_total_time")
-        self.flush_time = store.get_one("flush_total_time")
-        self.merge_throttle_time = store.get_one("merges_total_throttled_time")
+        self.total_time = self.sum(store, "indexing_total_time")
+        self.merge_time = self.sum(store, "merges_total_time")
+        self.refresh_time = self.sum(store, "refresh_total_time")
+        self.flush_time = self.sum(store, "flush_total_time")
+        self.merge_throttle_time = self.sum(store, "merges_total_throttled_time")
 
-        self.merge_part_time_postings = store.get_one("merge_parts_total_time_postings")
-        self.merge_part_time_stored_fields = store.get_one("merge_parts_total_time_stored_fields")
-        self.merge_part_time_doc_values = store.get_one("merge_parts_total_time_doc_values")
-        self.merge_part_time_norms = store.get_one("merge_parts_total_time_norms")
-        self.merge_part_time_vectors = store.get_one("merge_parts_total_time_vectors")
-        self.merge_part_time_points = store.get_one("merge_parts_total_time_points")
+        self.merge_part_time_postings = self.sum(store, "merge_parts_total_time_postings")
+        self.merge_part_time_stored_fields = self.sum(store, "merge_parts_total_time_stored_fields")
+        self.merge_part_time_doc_values = self.sum(store, "merge_parts_total_time_doc_values")
+        self.merge_part_time_norms = self.sum(store, "merge_parts_total_time_norms")
+        self.merge_part_time_vectors = self.sum(store, "merge_parts_total_time_vectors")
+        self.merge_part_time_points = self.sum(store, "merge_parts_total_time_points")
         self.query_latencies = collections.OrderedDict()
 
         self.median_cpu_usage = self.median(store, "cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
@@ -74,9 +74,16 @@ class Stats:
         self.memory_stored_fields = store.get_one("segments_stored_fields_memory_in_bytes")
 
         self.index_size = store.get_one("final_index_size_bytes")
-        self.bytes_written = store.get_one("disk_io_write_bytes")
+        self.bytes_written = self.sum(store, "disk_io_write_bytes")
 
         self.segment_count = store.get_one("segments_count")
+
+    def sum(self, store, metric_name):
+        values = store.get(metric_name)
+        if values:
+            return sum(values)
+        else:
+            return None
 
     def summary_stats(self, store, metric_name, operation_name):
         percentiles = store.get_percentiles(metric_name,

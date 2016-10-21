@@ -157,6 +157,7 @@ class EsMetricsTests(TestCase):
                 "hits": [
                     {
                         "_source": {
+                            "@timestamp": StaticClock.NOW * 1000,
                             "value": throughput
                         }
                     }

@@ -258,15 +258,35 @@ class InProcessLauncher:
 
         logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
 
-        t = telemetry.Telemetry(self.cfg, es, self.metrics_store)
+        cluster_telemetry = [
+            # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
+            telemetry.MergeParts(self.cfg, self.metrics_store),
+            telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
+            telemetry.NodeStats(self.cfg, es, self.metrics_store),
+            telemetry.IndexStats(self.cfg, es, self.metrics_store),
+            # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
+            telemetry.IndexSize(self.cfg, self.metrics_store)
+        ]
+
+        t = telemetry.Telemetry(self.cfg, es, self.metrics_store, devices=cluster_telemetry)
         c = cluster.Cluster([self._start_node(node, car, es, self.metrics_store) for node in range(car.nodes)], t)
         t.attach_to_cluster(c)
         return c
 
-    def _start_node(self, node, car, client, metrics_store):
+    def _start_node(self, node, car, es, metrics_store):
         node_name = self._node_name(node)
         host_name = socket.gethostname()
-        t = telemetry.Telemetry(self.cfg, client, metrics_store)
+
+        node_telemetry = [
+            telemetry.FlightRecorder(self.cfg, self.metrics_store),
+            telemetry.JitCompiler(self.cfg, self.metrics_store),
+            telemetry.PerfStat(self.cfg, self.metrics_store),
+            telemetry.DiskIo(self.cfg, self.metrics_store),
+            telemetry.CpuUsage(self.cfg, self.metrics_store),
+            telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
+        ]
+
+        t = telemetry.Telemetry(self.cfg, es, metrics_store, devices=node_telemetry)
 
         env = self._prepare_env(car, node_name, t)
         cmd = self.prepare_cmd(car, node_name)
