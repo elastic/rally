@@ -15,7 +15,12 @@ logger = logging.getLogger("rally.telemetry")
 
 def list_telemetry(cfg):
     console.println("Available telemetry devices:\n")
-    console.println(tabulate.tabulate(Telemetry(cfg).list(), ["Command", "Name", "Description"]))
+    console.println(tabulate.tabulate(Telemetry(cfg, devices=[
+        JitCompiler(cfg, None),
+        Gc(cfg, None),
+        FlightRecorder(cfg, None),
+        PerfStat(cfg,  None)
+    ]).list(), ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
 
@@ -177,7 +182,7 @@ class FlightRecorder(TelemetryDevice):
 
     @property
     def help(self):
-        return "Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)"
+        return "Enables Java Flight Recorder (requires an Oracle JDK)"
 
     def instrument_env(self, car, candidate_id):
         log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
@@ -224,6 +229,38 @@ class JitCompiler(TelemetryDevice):
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
 
 
+class Gc(TelemetryDevice):
+    def __init__(self, config, metrics_store):
+        super().__init__(config, metrics_store)
+
+    @property
+    def internal(self):
+        return False
+
+    @property
+    def command(self):
+        return "gc"
+
+    @property
+    def human_name(self):
+        return "GC log"
+
+    @property
+    def help(self):
+        return "Enables GC logs."
+
+    def instrument_env(self, car, candidate_id):
+        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        io.ensure_dir(log_root)
+        log_file = "%s/%s-%s.gc.log" % (log_root, car.name, candidate_id)
+
+        console.println("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger.info)
+        # TODO dm: These options change in JDK 9!
+        return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps  "
+                                "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime  -XX:+PrintTenuringDistribution"
+                                % log_file}
+
+
 class PerfStat(TelemetryDevice):
     def __init__(self, config, metrics_store):
         super().__init__(config, metrics_store)
@@ -245,7 +282,7 @@ class PerfStat(TelemetryDevice):
 
     @property
     def help(self):
-        return "Reads CPU PMU counters (beta, only on Linux, requires perf)"
+        return "Reads CPU PMU counters (requires Linux and perf)"
 
     def attach_to_node(self, node):
         log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))

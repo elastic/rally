@@ -4,23 +4,27 @@ Telemetry Devices
 You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally. If you invoke
 ``esrally list telemetry``, it will show which telemetry devices are available::
 
-    dm@io:~ $ esrally list telemetry
-    
-        ____        ____
-       / __ \____ _/ / /_  __
-      / /_/ / __ `/ / / / / /
-     / _, _/ /_/ / / / /_/ /
-    /_/ |_|\__,_/_/_/\__, /
-                    /____/
-    Available telemetry devices:
+   dm@io:Projects/rally ‹master*›$ esrally list telemetry
 
-    Command    Name                   Description
-    ---------  ---------------------  --------------------------------------------------------------------------------------
-    jfr        Flight Recorder        Enables Java Flight Recorder on the benchmark candidate (will only work on Oracle JDK)
-    jit        JIT Compiler Profiler  Enables JIT compiler logs.
-    perf       perf stat              Reads CPU PMU counters (beta, only on Linux, requires perf)
+       ____        ____
+      / __ \____ _/ / /_  __
+     / /_/ / __ `/ / / / / /
+    / _, _/ /_/ / / / /_/ /
+   /_/ |_|\__,_/_/_/\__, /
+                   /____/
 
-    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
+
+   Available telemetry devices:
+
+   Command    Name                   Description
+   ---------  ---------------------  -----------------------------------------------------
+   jit        JIT Compiler Profiler  Enables JIT compiler logs.
+   gc         GC log                 Enables GC logs.
+   jfr        Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK)
+   perf       perf stat              Reads CPU PMU counters (requires Linux and perf)
+
+   Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
+
 
 jfr
 ---
@@ -42,6 +46,11 @@ jit
 The ``jit`` telemetry device enables JIT compiler logs for the benchmark candidate. If the HotSpot disassembler library is available, the logs will also contain the disassembled JIT compiler output which can be used for low-level analysis. We recommend to use `JITWatch <https://github.com/AdoptOpenJDK/jitwatch>`_ for analysis.
 
 The JITWatch wiki contains `build instructions for hsdis <https://github.com/AdoptOpenJDK/jitwatch/wiki/Building-hsdis>`_.
+
+gc
+--
+
+The ``gc`` telemetry device enables GC logs for the benchmark candidate. You can use tools like `GCViewer <https://github.com/chewiebug/GCViewer>`_ to analyze the GC logs.
 
 perf
 ----

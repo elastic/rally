@@ -280,6 +280,7 @@ class InProcessLauncher:
         node_telemetry = [
             telemetry.FlightRecorder(self.cfg, self.metrics_store),
             telemetry.JitCompiler(self.cfg, self.metrics_store),
+            telemetry.Gc(self.cfg, self.metrics_store),
             telemetry.PerfStat(self.cfg, self.metrics_store),
             telemetry.DiskIo(self.cfg, self.metrics_store),
             telemetry.CpuUsage(self.cfg, self.metrics_store),
