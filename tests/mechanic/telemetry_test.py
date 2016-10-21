@@ -31,13 +31,12 @@ class TelemetryTests(TestCase):
             MockTelemetryDevice(cfg, metrics_store, {"ES_NET_HOST": "127.0.0.1"})
         ]
 
-        t = telemetry.Telemetry(config=cfg, metrics_store=metrics_store, devices=devices)
+        t = telemetry.Telemetry(config=cfg, devices=devices)
 
         default_car = car.Car(name="default-car")
         opts = t.instrument_candidate_env(default_car, "default-node")
 
         self.assertTrue(opts)
-        print(opts)
         self.assertEqual(len(opts), 2)
         self.assertEqual("-Xms256M -Xmx512M", opts["ES_JAVA_OPTS"])
         self.assertEqual("127.0.0.1", opts["ES_NET_HOST"])
@@ -168,7 +167,7 @@ class EnvironmentInfoTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.EnvironmentInfo(cfg, client, metrics_store)
-        t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
+        t = telemetry.Telemetry(cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
@@ -269,7 +268,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.ExternalEnvironmentInfo(cfg, client, metrics_store)
-        t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
+        t = telemetry.Telemetry(cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
@@ -322,7 +321,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         cfg = self.create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.ExternalEnvironmentInfo(cfg, client, metrics_store)
-        t = telemetry.Telemetry(cfg, metrics_store, devices=[env_device])
+        t = telemetry.Telemetry(cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [

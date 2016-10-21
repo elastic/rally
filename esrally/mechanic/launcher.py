@@ -37,7 +37,7 @@ class DockerLauncher:
 
         es = self.client_factory(hosts, client_options).create()
 
-        t = telemetry.Telemetry(self.cfg, client=es, metrics_store=self.metrics_store, devices=[
+        t = telemetry.Telemetry(self.cfg, devices=[
             telemetry.ExternalEnvironmentInfo(self.cfg, es, self.metrics_store),
             telemetry.NodeStats(self.cfg, es, self.metrics_store),
             telemetry.IndexStats(self.cfg, es, self.metrics_store)
@@ -182,7 +182,7 @@ the index size).
 
         es = self.client_factory(hosts, client_options).create()
 
-        t = telemetry.Telemetry(self.cfg, client=es, metrics_store=self.metrics_store, devices=[
+        t = telemetry.Telemetry(self.cfg, devices=[
             telemetry.ExternalEnvironmentInfo(self.cfg, es, self.metrics_store),
             telemetry.NodeStats(self.cfg, es, self.metrics_store),
             telemetry.IndexStats(self.cfg, es, self.metrics_store)
@@ -268,12 +268,12 @@ class InProcessLauncher:
             telemetry.IndexSize(self.cfg, self.metrics_store)
         ]
 
-        t = telemetry.Telemetry(self.cfg, es, self.metrics_store, devices=cluster_telemetry)
-        c = cluster.Cluster([self._start_node(node, car, es, self.metrics_store) for node in range(car.nodes)], t)
+        t = telemetry.Telemetry(self.cfg, devices=cluster_telemetry)
+        c = cluster.Cluster([self._start_node(node, car, es) for node in range(car.nodes)], t)
         t.attach_to_cluster(c)
         return c
 
-    def _start_node(self, node, car, es, metrics_store):
+    def _start_node(self, node, car, es):
         node_name = self._node_name(node)
         host_name = socket.gethostname()
 
@@ -286,7 +286,7 @@ class InProcessLauncher:
             telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
         ]
 
-        t = telemetry.Telemetry(self.cfg, es, metrics_store, devices=node_telemetry)
+        t = telemetry.Telemetry(self.cfg, devices=node_telemetry)
 
         env = self._prepare_env(car, node_name, t)
         cmd = self.prepare_cmd(car, node_name)

@@ -20,24 +20,9 @@ def list_telemetry(cfg):
 
 
 class Telemetry:
-    def __init__(self, config, client=None, metrics_store=None, devices=None):
+    def __init__(self, config, devices):
         self._config = config
-        if devices is None:
-            self._devices = [
-                FlightRecorder(config, metrics_store),
-                JitCompiler(config, metrics_store),
-                PerfStat(config, metrics_store),
-                DiskIo(config, metrics_store),
-                CpuUsage(config, metrics_store),
-                MergeParts(config, metrics_store),
-                EnvironmentInfo(config, client, metrics_store),
-                NodeStats(config, client, metrics_store),
-                IndexStats(config, client, metrics_store),
-                IndexSize(config, metrics_store)
-                # We do not include the ExternalEnvironmentInfo here by intention as it should only be used for externally launched clusters
-            ]
-        else:
-            self._devices = devices
+        self._devices = devices
         self._enabled_devices = self._config.opts("telemetry", "devices")
 
     def list(self):
