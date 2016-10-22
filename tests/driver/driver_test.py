@@ -1,6 +1,7 @@
 from unittest import TestCase
 
-from esrally import driver, track, metrics
+from esrally import track, metrics
+from esrally.driver import driver
 
 
 class ScheduleTestCase(TestCase):
@@ -160,7 +161,6 @@ class MetricsAggregationTests(TestCase):
         self.assertEqual(1, len(aggregated))
 
         throughput = aggregated[op]
-        print(throughput)
         self.assertEqual(6, len(throughput))
         self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000), throughput[0])
         self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000), throughput[1])
