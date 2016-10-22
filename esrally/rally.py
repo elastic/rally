@@ -308,11 +308,11 @@ def parse_args():
             default=False,
             action="store_true")
         p.add_argument(
-            "--iterations",
+            "--rounds",
             type=int,
-            # There is really no point in specifying a gazillion iterations
+            # There is really no point in specifying a gazillion rounds
             choices=range(1, 1000),
-            help="Number of iterations that the benchmark should run. The benchmark candidate is not restarted in between. (default: 1)",
+            help="Number of rounds that the benchmark should run. The benchmark candidate is not restarted in between. (default: 1)",
             default=1)
 
     for p in [parser, list_parser, race_parser]:
@@ -548,7 +548,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "iterations", args.iterations)
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "rounds", args.rounds)
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", convert_hosts(csv_to_list(args.target_hosts)))

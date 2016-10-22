@@ -61,7 +61,7 @@ def benchmark(cfg, mechanic, metrics_store):
     track_name = cfg.opts("benchmarks", "track")
     challenge_name = cfg.opts("benchmarks", "challenge")
     selected_car_name = cfg.opts("benchmarks", "car")
-    iterations = cfg.opts("benchmarks", "iterations")
+    rounds = cfg.opts("benchmarks", "rounds")
 
     console.println("Racing on track [%s] and challenge [%s] with car [%s]" % (track_name, challenge_name, selected_car_name))
 
@@ -72,9 +72,9 @@ def benchmark(cfg, mechanic, metrics_store):
     metrics.race_store(cfg).store_race(t)
 
     actors = thespian.actors.ActorSystem()
-    for iteration in range(0, iterations):
-        if iterations > 1:
-            msg = "Iteration [%d/%d]" % (iteration + 1, iterations)
+    for round in range(0, rounds):
+        if rounds > 1:
+            msg = "Round [%d/%d]" % (round + 1, rounds)
             console.println(console.format.bold(msg), logger=logger.info)
             console.println(console.format.underline_for(msg))
         main_driver = actors.createActor(driver.Driver)

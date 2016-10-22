@@ -66,10 +66,10 @@ A car defines the Elasticsearch configuration that will be used for the benchmar
 
 Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
-``iterations``
-~~~~~~~~~~~~~~
+``rounds``
+~~~~~~~~~~
 
-Allows to run the benchmark for multiple iterations (defaults to 1 iteration). Note that the benchmark candidate is not restarted between iterations.
+Allows to run the benchmark for multiple rounds (defaults to 1 round). Note that the benchmark candidate is not restarted between rounds.
 
 ``telemetry``
 ~~~~~~~~~~~~~
