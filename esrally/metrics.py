@@ -729,12 +729,16 @@ def race_store(config):
 
 
 def list_races(cfg):
-    console.println("Recent races:\n")
     races = []
     for race in race_store(cfg).list():
         races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car, race.user_tag])
 
-    console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
+    if len(races) > 0:
+        console.println("\nRecent races:\n")
+        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
+    else:
+        console.println("")
+        console.println("No recent races found.")
 
 
 class InMemoryRaceStore:

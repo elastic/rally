@@ -14,6 +14,13 @@ def seconds_to_ms(s):
     return s * 1000
 
 
+def seconds_to_hour_minute_seconds(s):
+    hours = s // 3600
+    minutes = (s - 3600 * hours) // 60
+    seconds = s - 3600 * hours - 60 * minutes
+    return hours, minutes, seconds
+
+
 def ms_to_seconds(ms):
     return ms / 1000.0
 

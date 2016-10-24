@@ -95,7 +95,7 @@ def configure_logging(cfg):
     logging_output = cfg.opts("system", "logging.output")
 
     if logging_output == "file":
-        console.println("\nWriting additional logs to %s\n" % log_file)
+        console.info("Writing logs to %s" % log_file)
         # there is an old log file lying around -> backup
         if os.path.exists(log_file):
             os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
@@ -176,6 +176,12 @@ def configure_actor_logging(cfg):
 
 
 def parse_args():
+    def positive_number(v):
+        value = int(v)
+        if value <= 0:
+            raise argparse.ArgumentTypeError("must be positive but was %s" % value)
+        return value
+
     # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
     cfg = config.Config()
     if cfg.config_present():
@@ -244,95 +250,91 @@ def parse_args():
     for p in [parser, race_parser]:
         p.add_argument(
             "--pipeline",
-            help="Selects a specific pipeline to run. A pipeline defines the steps that are executed (default: from-sources-complete).",
+            help="select the pipeline to run (default: from-sources-complete).",
             default="from-sources-complete")
         p.add_argument(
             "--preserve-install",
-            help="preserves the Elasticsearch benchmark candidate installation including all data. Caution: This will take lots of disk "
-                 "space! (default: %s)" % str(preserve_install).lower(),
+            help="keep the benchmark candidate and its index. (default: %s)" % str(preserve_install).lower(),
             default=preserve_install)
         p.add_argument(
             "--telemetry",
-            help="enables the provided telemetry devices (i.e. profilers). Multiple telemetry devices have to be "
-                 "provided as a comma-separated list. List possible telemetry devices with `%s list telemetry`" % PROGRAM_NAME,
+            help="enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
+                 "with `%s list telemetry`" % PROGRAM_NAME,
             default="")
         p.add_argument(
             "--revision",
-            help="defines which sources to use when building the benchmark candidate. 'current' uses the source tree as is,"
+            help="define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
                  " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
                  " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
                  "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
             "--track",
-            help="defines which track should be run. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME,
+            help="define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME,
             default="geonames")
         p.add_argument(
             "--challenge",
-            help="defines which challenge should be run. List possible challenges for tracks with `%s list tracks`"
+            help="define the challenge to use. List possible challenges for tracks with `%s list tracks`"
                  " (default: append-no-conflicts)." % PROGRAM_NAME,
             default="append-no-conflicts")  # optimized for local usage
         p.add_argument(
             "--car",
-            help="defines which car should drive on a track. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+            help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
 
         p.add_argument(
             "--target-hosts",
-            help="defines a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
+            help="define a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
                  "(default: localhost:9200).",
             default="localhost:9200")
         p.add_argument(
             "--client-options",
-            help="defines a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
+            help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
                  "(default: timeout:60000,request_timeout:60000).",
             default="timeout:60000,request_timeout:60000")
         p.add_argument(
             "--user-tag",
-            help="defines a user-specific key-value pair that is separated by a ':' and added to each metric record as meta info. "
+            help="define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
                  "Example: intention:baseline-ticket-12345",
             default="")
         p.add_argument(
             "--report-format",
-            help="The output format for the command line report. Possible values are: markdown, csv (default: markdown)",
+            help="define the output format for the command line report (default: markdown).",
             choices=["markdown", "csv"],
             default="markdown")
         p.add_argument(
             "--report-file",
-            help="If provided, Rally writes the report also to this file (default: only write to stdout)",
+            help="write the command line report also to the provided file",
             default="")
         p.add_argument(
             "--quiet",
-            help="Suppresses as much as output as possible. Activate it unless you want to see what's happening during the "
-                 "benchmark (default: false)",
+            help="suppress as much as output as possible (default: false).",
             default=False,
             action="store_true")
         p.add_argument(
             "--rounds",
-            type=int,
-            # There is really no point in specifying a gazillion rounds
-            choices=range(1, 1000),
-            help="Number of rounds that the benchmark should run. The benchmark candidate is not restarted in between. (default: 1)",
+            type=positive_number,
+            help="number of rounds that the benchmark should run (default: 1).",
             default=1)
 
     for p in [parser, list_parser, race_parser]:
         p.add_argument(
             "--distribution-version",
-            help="defines the version of the Elasticsearch distribution to download. "
+            help="define the version of the Elasticsearch distribution to download. "
                  "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
             default="")
         p.add_argument(
             "--distribution-repository",
-            help="defines the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+            help="define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
             choices=["snapshot", "release"],
             default="release")
         p.add_argument(
             "--track-repository",
-            help="defines the repository from where Rally will load tracks (default: default).",
+            help="define the repository from where Rally will load tracks (default: default).",
             default="default")
         p.add_argument(
             "--offline",
-            help="Assume that Rally has no connection to the Internet (default: false)",
+            help="assume that Rally has no connection to the Internet (default: false)",
             default=False,
             action="store_true")
 
@@ -404,7 +406,7 @@ def ensure_configuration_present(cfg, args, sub_command):
                 # Reload config after upgrading
                 cfg.load_config()
         else:
-            console.println("Error: No config present. Please run '%s configure' first." % PROGRAM_NAME)
+            console.error("No config present. Please run '%s configure' first." % PROGRAM_NAME)
             exit(64)
 
 
@@ -425,12 +427,13 @@ def list(cfg):
 
 
 def print_help_on_errors(cfg):
-    console.println("Please check the log file [%s] for further details first." % log_file_path(cfg))
-    console.println("")
-    console.println("If you need further help, please check Rally's docs at %s or ask a question in the forum at %s."
-                    % (console.format.link("https://esrally.readthedocs.io"), console.format.link("https://discuss.elastic.co/c/rally")))
-    console.println("")
-    console.println("If you think this is a bug, please file a report at %s and include the log file for this race (%s)." %
+    heading = "Getting further help:"
+    console.println(console.format.bold(heading))
+    console.println(console.format.underline_for(heading))
+    console.println("* Check the log file at %s for errors." % log_file_path(cfg))
+    console.println("* Read the documentation at %s" % console.format.link("https://esrally.readthedocs.io"))
+    console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/rally"))
+    console.println("* Raise an issue at %s and include the log file in %s." %
                     (console.format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
 
 
@@ -447,13 +450,13 @@ def dispatch_sub_command(cfg, sub_command):
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
-        console.println("\nERROR: Cannot %s\n\nReason: %s" % (sub_command, e))
+        console.error("Cannot %s %s." % (sub_command, e))
         console.println("")
         print_help_on_errors(cfg)
         return False
     except BaseException as e:
         logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
-        console.println("\nFATAL: Cannot %s\n\nReason: %s" % (sub_command, e))
+        console.error("Cannot %s %s." % (sub_command, e))
         console.println("")
         print_help_on_errors(cfg)
         return False
@@ -510,13 +513,13 @@ def convert_hosts(configured_host_list):
             hosts.append({"host": host, "port": port})
         return hosts
     except ValueError:
-        msg = "Could not convert hosts. Invalid format for %s. Expected a comma-separated list of host:port pairs, " \
-              "e.g. host1:9200,host2:9200." % configured_host_list
+        msg = "Could not convert hosts [%s] (expected a list of host:port pairs e.g. host1:9200,host2:9200)." % configured_host_list
         logger.exception(msg)
         raise exceptions.SystemSetupError(msg)
 
 
 def main():
+    start = time.time()
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
 
@@ -583,11 +586,9 @@ def main():
         actors = thespian.actors.ActorSystem("multiprocTCPBase", logDefs=configure_actor_logging(cfg))
     except thespian.actors.ActorSystemException:
         logger.exception("Could not initialize internal actor system. Terminating.")
-        console.println("ERROR: Could not initialize successfully.")
-        console.println("")
-        console.println("The most likely cause is that there are still processes running from a previous race.")
-        console.println("Please check for running Python processes and terminate them before running Rally again.")
-        console.println("")
+        console.error("Could not initialize successfully.\n")
+        console.error("Are there are still processes from a previous race?")
+        console.error("Please check and terminate related Python processes before running Rally again.\n")
         print_help_on_errors(cfg)
         sys.exit(70)
 
@@ -606,20 +607,24 @@ def main():
             except KeyboardInterrupt:
                 times_interrupted += 1
                 logger.warn("User interrupted shutdown of internal actor system.")
-                console.println("Please wait a moment for Rally's internal components to shutdown.")
+                console.info("Please wait a moment for Rally's internal components to shutdown.")
         if not shutdown_complete and times_interrupted > 0:
             logger.warn("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
-            console.println("**********************************************************************")
             console.println("")
-            console.println("WARN: Terminating now at the risk of leaving child processes behind.")
+            console.warn("Terminating now at the risk of leaving child processes behind.")
             console.println("")
-            console.println("The next race may fail due to an unclean shutdown.")
+            console.warn("The next race may fail due to an unclean shutdown.")
             console.println("")
             console.println(SKULL)
             console.println("")
-            console.println("**********************************************************************")
 
-    if not success:
+    end = time.time()
+    if success:
+        console.println("")
+        console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
+    else:
+        console.println("")
+        console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
         sys.exit(64)
 
 

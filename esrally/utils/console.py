@@ -31,8 +31,8 @@ class PlainFormat:
         return message
 
     @classmethod
-    def underline_for(cls, message):
-        return "*" * len(message)
+    def underline_for(cls, message, underline_symbol="*"):
+        return underline_symbol * len(message)
 
 
 class RichFormat:
@@ -61,8 +61,8 @@ class RichFormat:
         return "\033[39;1m%s\033[0m" % message
 
     @classmethod
-    def underline_for(cls, message):
-        return "*" * len(message)
+    def underline_for(cls, message, underline_symbol="*"):
+        return underline_symbol * len(message)
 
 
 format = PlainFormat
@@ -80,10 +80,34 @@ def init(quiet=False):
         format = RichFormat
 
 
-def println(msg, end="\n", flush=False, logger=lambda m: m):
+def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
     if not QUIET:
-        print(msg, end=end, flush=flush)
-    logger(msg)
+        println(msg, console_prefix="[INFO]", end=end, flush=flush, overline=overline, underline=underline,
+                logger=logger.info if logger else None)
+
+
+def warn(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
+    if not QUIET:
+        println(msg, console_prefix="[WARNING]", end=end, flush=flush, overline=overline, underline=underline
+                , logger=logger.warn if logger else None)
+
+
+def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
+    if not QUIET:
+        println(msg, console_prefix="[ERROR]", end=end, flush=flush, overline=overline, underline=underline
+                , logger=logger.error if logger else None)
+
+
+def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
+    if not QUIET:
+        complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
+        if overline:
+            print(format.underline_for(complete_msg, underline_symbol=overline), flush=flush)
+        print(complete_msg, end=end, flush=flush)
+        if underline:
+            print(format.underline_for(complete_msg, underline_symbol=underline), flush=flush)
+    if logger:
+        logger(msg)
 
 
 def progress(width=90):

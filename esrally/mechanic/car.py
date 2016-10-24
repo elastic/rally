@@ -14,7 +14,7 @@ def select_car(cfg):
     for c in cars:
         if c.name == name:
             return c
-    raise exceptions.SystemSetupError("Unknown car [%s]. You can list the available cars with %s list cars." % (name, PROGRAM_NAME))
+    raise exceptions.SystemSetupError("Unknown car [%s]. List the available cars with %s list cars." % (name, PROGRAM_NAME))
 
 
 mergePartsLogYmlConfig = '''

@@ -189,7 +189,7 @@ class FlightRecorder(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jfr" % (log_root, car.name, candidate_id)
 
-        console.println("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger.info)
+        console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger)
         # this is more robust in case we want to use custom settings
         # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
         #
@@ -224,7 +224,7 @@ class JitCompiler(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jit.log" % (log_root, car.name, candidate_id)
 
-        console.println("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger.info)
+        console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger)
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
 
@@ -254,7 +254,7 @@ class Gc(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.gc.log" % (log_root, car.name, candidate_id)
 
-        console.println("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger.info)
+        console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger)
         # TODO dm: These options change in JDK 9!
         return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps  "
                                 "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime  -XX:+PrintTenuringDistribution"
@@ -289,7 +289,7 @@ class PerfStat(TelemetryDevice):
         io.ensure_dir(log_root)
         log_file = "%s/%s.perf.log" % (log_root, node.node_name)
 
-        console.println("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=logger.info)
+        console.info("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=logger)
 
         self.log = open(log_file, "wb")
 

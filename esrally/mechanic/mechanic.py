@@ -1,6 +1,7 @@
 import logging
 
 from esrally import paths, config
+from esrally.utils import console
 from esrally.mechanic import supplier, provisioner, launcher
 
 logger = logging.getLogger("rally.mechanic")
@@ -24,6 +25,7 @@ def create(cfg, metrics_store, sources=False, build=False, distribution=False, e
         p = provisioner.no_op_provisioner(cfg)
         l = launcher.DockerLauncher(cfg, metrics_store)
     else:
+        # It is a programmer error (and not a user error) if this function is called with wrong parameters
         raise RuntimeError("One of sources, distribution, docker or external must be True")
 
     return Mechanic(cfg, s, p, l)

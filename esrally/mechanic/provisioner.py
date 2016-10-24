@@ -39,8 +39,7 @@ class Provisioner:
         install_dir = self._install_dir()
         if self.preserve:
             logger.info("Preserving benchmark candidate installation at [%s]." % install_dir)
-            console.println("\nRally will keep the benchmark candidate including all data at [%s]." % install_dir)
-            console.println("Remember to delete it when you don't need it anymore as it will take up a significant amount of disk space.")
+            console.info("Keeping benchmark candidate including index at [%s] (will need several GB)." % install_dir)
         else:
             logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
             if os.path.exists(install_dir):
@@ -54,10 +53,10 @@ class Provisioner:
     def _install_binary(self):
         binary = self._config.opts("builder", "candidate.bin.path")
         install_dir = self._install_dir()
-        logger.info("Preparing candidate locally in %s." % install_dir)
+        logger.info("Preparing candidate locally in [%s]." % install_dir)
         io.ensure_dir(install_dir)
         if not self.preserve:
-            console.println("Rally will wipe the benchmark candidate directory [%s] after the benchmark.\n" % install_dir)
+            console.info("Rally will delete the benchmark candidate after the benchmark")
 
         logger.info("Unzipping %s to %s" % (binary, install_dir))
         io.decompress(binary, install_dir)

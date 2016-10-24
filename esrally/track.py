@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import sys
-
 import urllib.error
 from enum import Enum
 
@@ -10,7 +9,6 @@ import jinja2
 import jinja2.exceptions
 import jsonschema
 import tabulate
-
 from esrally import exceptions, time, PROGRAM_NAME
 from esrally.utils import io, convert, net, git, versions, console
 
@@ -212,7 +210,7 @@ def load_track(cfg):
                            "%s/%s" % (data_root, track_name.lower()))
     except FileNotFoundError:
         logger.exception("Cannot load track [%s]" % track_name)
-        raise exceptions.SystemSetupError("Cannot load track %s. You can list the available tracks with %s list tracks." %
+        raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
                                           (track_name, PROGRAM_NAME))
 
 
@@ -238,10 +236,10 @@ def prepare_track(track, cfg):
                 io.ensure_dir(os.path.dirname(local_path))
                 size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
                 # ensure output appears immediately
-                console.println("Downloading data from [%s] (%s MB) to [%s] ... "
-                                % (url, size_in_mb, local_path), end='', flush=True, logger=logger.info)
+                console.info("Downloading data from [%s] (%s MB) to [%s] ... " % (url, size_in_mb, local_path),
+                             end='', flush=True, logger=logger)
                 net.download(url, local_path, size_in_bytes)
-                console.println("Done")
+                console.println("[OK]")
             except urllib.error.URLError:
                 logger.exception("Could not download [%s] to [%s]." % (url, local_path))
 
@@ -252,7 +250,7 @@ def prepare_track(track, cfg):
                     "Cannot find %s. Please disable offline mode and retry again." % local_path)
             else:
                 raise exceptions.SystemSetupError(
-                    "Could not download from %s to %s. Please verify that data are available at %s and "
+                    "Cannot download from %s to %s. Please verify that data are available at %s and "
                     "check your internet connection." % (url, local_path, url))
 
         actual_size = os.path.getsize(local_path)
@@ -268,10 +266,10 @@ def prepare_track(track, cfg):
         decompressed = False
         if not os.path.isfile(basename) or os.path.getsize(basename) != expected_size_in_bytes:
             decompressed = True
-            console.println("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
-                  (data_set_path, basename, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True, logger=logger.info)
+            console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
+                         (data_set_path, basename, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True, logger=logger)
             io.decompress(data_set_path, io.dirname(data_set_path))
-            console.println("Done")
+            console.println("[OK]")
             extracted_bytes = os.path.getsize(basename)
             if extracted_bytes != expected_size_in_bytes:
                 raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %

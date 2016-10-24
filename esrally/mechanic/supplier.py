@@ -12,13 +12,21 @@ logger = logging.getLogger("rally.supplier")
 
 
 def from_sources(cfg, build=True):
-    console.println("Preparing for race (might take a few moments) ...")
-    builder = Builder(cfg)
-    SourceRepository(cfg).fetch()
-
     if build:
-        builder.build()
-    builder.add_binary_to_config()
+        console.info("Preparing for race ...", end="", flush=True)
+    try:
+        builder = Builder(cfg)
+        SourceRepository(cfg).fetch()
+
+        if build:
+            builder.build()
+        builder.add_binary_to_config()
+        if build:
+            console.println(" [OK]")
+    except BaseException:
+        if build:
+            console.println(" [FAILED]")
+        raise
 
 
 def from_distribution(cfg):
@@ -42,9 +50,11 @@ def from_distribution(cfg):
     logger.info("Resolved download URL [%s] for version [%s]" % (download_url, version))
     if not os.path.isfile(distribution_path) or repo.must_download:
         try:
-            console.println("Downloading Elasticsearch %s ..." % version, logger=logger.info)
+            console.info("Downloading Elasticsearch %s ... " % version, logger=logger, flush=True, end="")
             net.download(download_url, distribution_path)
+            console.println("[OK]")
         except urllib.error.HTTPError:
+            console.println("[FAILED]")
             logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (version, download_url))
             raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
                                               "version [%s] is correct." % (download_url, version))
@@ -109,7 +119,6 @@ class Builder:
 
     def build(self):
         self._exec("gradle.tasks.clean")
-        console.println("  Building from sources ...")
         self._exec("gradle.tasks.package")
 
     def add_binary_to_config(self):
@@ -144,7 +153,7 @@ class Builder:
         # we capture all output to a dedicated build log file
 
         if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s > %s 2>&1" % (java_home, src_dir, gradle, task, log_file)):
-            msg = "Executing '%s %s' failed. Here are the last 20 lines in the build log file:\n" % (gradle, task)
+            msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:
                 msg += "\t"

@@ -4,10 +4,10 @@ import sys
 
 import tabulate
 import thespian.actors
-from esrally import config, exceptions, paths, track, reporter, metrics, PROGRAM_NAME
+from esrally import config, exceptions, paths, track, reporter, metrics, time, PROGRAM_NAME
 from esrally.mechanic import mechanic
 from esrally.driver import driver
-from esrally.utils import console, io
+from esrally.utils import console, io, convert
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -53,7 +53,8 @@ def sweep(cfg):
     log_root = paths.Paths(cfg).log_root()
     archive_path = "%s/logs-%s-%s-%s.zip" % (invocation_root, track_name, challenge_name, car_name)
     io.compress(log_root, archive_path)
-    console.println("\nLogs for this race are archived in %s" % archive_path)
+    console.println("")
+    console.info("Archiving logs in %s" % archive_path)
     shutil.rmtree(log_root)
 
 
@@ -63,7 +64,7 @@ def benchmark(cfg, mechanic, metrics_store):
     selected_car_name = cfg.opts("benchmarks", "car")
     rounds = cfg.opts("benchmarks", "rounds")
 
-    console.println("Racing on track [%s] and challenge [%s] with car [%s]" % (track_name, challenge_name, selected_car_name))
+    console.info("Racing on track [%s], challenge [%s] and car [%s]" % (track_name, challenge_name, selected_car_name))
 
     mechanic.prepare_candidate()
     cluster = mechanic.start_engine()
@@ -72,6 +73,11 @@ def benchmark(cfg, mechanic, metrics_store):
     metrics.race_store(cfg).store_race(t)
 
     actors = thespian.actors.ActorSystem()
+    # just ensure it is optically separated
+    console.println("")
+    lap_timer = time.Clock.stop_watch()
+    lap_timer.start()
+    lap_times = 0
     for round in range(0, rounds):
         if rounds > 1:
             msg = "Round [%d/%d]" % (round + 1, rounds)
@@ -87,6 +93,18 @@ def benchmark(cfg, mechanic, metrics_store):
             raise exceptions.RallyError(result.message, result.cause)
         else:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
+        if rounds > 1:
+            lap_time = lap_timer.split_time() - lap_times
+            lap_times += lap_time
+            hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
+            console.println("")
+            if round + 1 < rounds:
+                remaining = (rounds - round - 1) * lap_times / (round + 1)
+                hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
+                console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=logger)
+            else:
+                console.info("Lap time %02d:%02d:%02d" % (hl, ml, sl), logger=logger)
+            console.println("")
 
     mechanic.stop_engine(cluster)
     metrics_store.close()
@@ -141,8 +159,8 @@ Pipeline("docker",
 
 def list_pipelines():
     console.println("Available pipelines:\n")
-    console.println(
-        tabulate.tabulate([[pipeline.name, pipeline.description] for pipeline in pipelines.values() if pipeline.stable], headers=["Name", "Description"]))
+    console.println(tabulate.tabulate([[pipeline.name, pipeline.description] for pipeline in pipelines.values() if pipeline.stable],
+                    headers=["Name", "Description"]))
 
 
 def run(cfg):
@@ -151,7 +169,7 @@ def run(cfg):
         pipeline = pipelines[name]
     except KeyError:
         raise exceptions.SystemSetupError(
-            "Unknown pipeline [%s]. You can list the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
+            "Unknown pipeline [%s]. List the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
     try:
         pipeline(cfg)
     except exceptions.RallyError as e:
@@ -159,4 +177,4 @@ def run(cfg):
         raise e
     except BaseException:
         tb = sys.exc_info()[2]
-        raise exceptions.RallyError("This race ended early with a fatal crash. For details please see the logs.").with_traceback(tb)
+        raise exceptions.RallyError("This race ended with a fatal crash.").with_traceback(tb)

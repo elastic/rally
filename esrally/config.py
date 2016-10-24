@@ -200,14 +200,14 @@ class ConfigFactory:
             self.o("  %s" % console.format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
             self.o("")
 
-            logger.debug("Running advanced configuration routine.")
+            logger.info("Running advanced configuration routine.")
             self.o("")
         else:
-            self.o("Running simple configuration. You can run the advanced configuration with:")
+            self.o("Running simple configuration. Run the advanced configuration with:")
             self.o("")
             self.o("  %s configure --advanced-config" % PROGRAM_NAME)
             self.o("")
-            logger.debug("Running simple configuration routine.")
+            logger.info("Running simple configuration routine.")
 
         if config_file.present:
             self.o("\nWARNING: Will overwrite existing config file at [%s]\n" % config_file.location)
@@ -239,7 +239,7 @@ class ConfigFactory:
             self.o("")
             self.o("You can still benchmark binary distributions with e.g.:")
             self.o("")
-            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha5" % PROGRAM_NAME)
+            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-rc1" % PROGRAM_NAME)
             self.o("")
             self.o("See %s" % console.format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
             self.o("**********************************************************************************")
@@ -275,7 +275,7 @@ class ConfigFactory:
             data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
 
             preserve_install = convert.to_bool(self._ask_property("Do you want Rally to keep the Elasticsearch benchmark candidate "
-                                                                  "installation including all data (will use lots of disk space)",
+                                                                  "installation including the index (will use lots of disk space)?",
                                                                   default_value=False))
         else:
             # Does not matter too much for an in-memory store
@@ -329,13 +329,13 @@ class ConfigFactory:
         self.o("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % config_file.location)
         self.o("")
         if benchmark_from_sources:
-            self.o("To benchmark the currently checked out version of Elasticsearch with the default benchmark run:")
+            self.o("To benchmark Elasticsearch with the default benchmark run:")
             self.o("")
             self.o("  %s" % PROGRAM_NAME)
         else:
-            self.o("To benchmark Elasticsearch 5.0.0-alpha2 with the default benchmark run:")
+            self.o("To benchmark Elasticsearch 5.0.0-rc1 with the default benchmark run:")
             self.o("")
-            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-alpha2" % PROGRAM_NAME)
+            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0-rc1" % PROGRAM_NAME)
 
         self.o("")
         self.o("For help, type %s --help or see the user documentation at %s"
