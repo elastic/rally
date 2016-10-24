@@ -242,8 +242,8 @@ class EsRaceStoreTests(TestCase):
         type = "test-type"
 
         schedule = [
-            track.Task(track.Operation("index", track.OperationType.Index)),
-            track.Task(track.Operation("search-all", track.OperationType.Search)),
+            track.Task(track.Operation("index", track.OperationType.Index, None)),
+            track.Task(track.Operation("search-all", track.OperationType.Search, None)),
         ]
 
         t = track.Track(name="unittest", short_description="unittest track", description="unittest track",

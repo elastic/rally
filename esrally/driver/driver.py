@@ -3,15 +3,14 @@ import datetime
 import json
 import logging
 import queue
-import random
 import socket
 import time
 
 import elasticsearch
 import thespian.actors
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
-from esrally.utils import convert, console, io, versions
 from esrally.driver import runner
+from esrally.utils import convert, console, versions
 
 logger = logging.getLogger("rally.driver")
 
@@ -42,16 +41,14 @@ class StartLoadGenerator:
     Starts a load generator.
     """
 
-    def __init__(self, client_id, config, indices, tasks):
+    def __init__(self, client_id, config, tasks):
         """
         :param client_id: Client id of the load generator.
         :param config: Rally internal configuration object.
-        :param indices: Affected indices.
         :param tasks: Tasks to run.
         """
         self.client_id = client_id
         self.config = config
-        self.indices = indices
         self.tasks = tasks
 
 
@@ -192,7 +189,7 @@ class Driver(thespian.actors.Actor):
         for client_id in range(allocator.clients):
             self.drivers.append(self.createActor(LoadGenerator))
         for client_id, driver in enumerate(self.drivers):
-            self.send(driver, StartLoadGenerator(client_id, self.config, current_track.indices, self.allocations[client_id]))
+            self.send(driver, StartLoadGenerator(client_id, self.config, self.allocations[client_id]))
 
         self.update_progress_message()
         self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
@@ -258,8 +255,8 @@ class Driver(thespian.actors.Actor):
 
         aggregates = calculate_global_throughput(self.raw_samples)
         for op, samples in aggregates.items():
-            for absolute_time, relative_time, sample_type, throughput in moving_average(samples):
-                self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=op.granularity_unit,
+            for absolute_time, relative_time, sample_type, throughput, throughput_unit in moving_average(samples):
+                self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time)
 
@@ -292,7 +289,6 @@ class LoadGenerator(thespian.actors.Actor):
         self.client_id = None
         self.es = None
         self.config = None
-        self.indices = None
         self.tasks = None
         self.current_task = 0
         self.start_timestamp = None
@@ -309,7 +305,6 @@ class LoadGenerator(thespian.actors.Actor):
                 self.client_id = msg.client_id
                 self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
                 self.config = msg.config
-                self.indices = msg.indices
                 self.tasks = msg.tasks
                 self.current_task = 0
                 self.start_timestamp = time.perf_counter()
@@ -362,7 +357,7 @@ class LoadGenerator(thespian.actors.Actor):
         elif isinstance(task, track.Task):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
-            schedule = schedule_for(task, self.client_id, self.indices)
+            schedule = schedule_for(task, self.client_id)
             self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
@@ -386,10 +381,11 @@ class Sampler:
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=1024)
 
-    def add(self, sample_type, latency_ms, service_time_ms, total_ops, time_period, curr_iteration, total_iterations):
+    def add(self, sample_type, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration, total_iterations):
         try:
             self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
-                                     sample_type, latency_ms, service_time_ms, total_ops, time_period, curr_iteration, total_iterations))
+                                     sample_type, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration,
+                                     total_iterations))
         except queue.Full:
             logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
 
@@ -406,7 +402,7 @@ class Sampler:
 
 class Sample:
     def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops,
-                 time_period, curr_iteration, total_iterations):
+                 total_ops_unit, time_period, curr_iteration, total_iterations):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
@@ -415,6 +411,7 @@ class Sample:
         self.latency_ms = latency_ms
         self.service_time_ms = service_time_ms
         self.total_ops = total_ops
+        self.total_ops_unit = total_ops_unit
         self.time_period = time_period
         self.curr_iteration = curr_iteration
         self.total_iterations = total_iterations
@@ -575,7 +572,9 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
                 if not skip_buckets or throughput > last_throughput:
                     skip_buckets = False
                     last_throughput = throughput
-                    global_throughput[op].append((sample.absolute_time, sample.relative_time, current_sample_type, throughput))
+                    global_throughput[op].append(
+                        # we calculate throughput per second
+                        (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
     return global_throughput
 
 
@@ -590,10 +589,10 @@ def moving_average(data, window=3):
             sum_in_window = 0
             # also include upper bound
             for offset in range(-window, window + 1):
-                _, _, _, v = data[idx + offset]
+                _, _, _, v, _ = data[idx + offset]
                 sum_in_window += v
-            absolute_time, relative_time, sample_type, value = record
-            average_data.append((absolute_time, relative_time, sample_type, sum_in_window / (2 * window + 1)))
+            absolute_time, relative_time, sample_type, value, unit = record
+            average_data.append((absolute_time, relative_time, sample_type, sum_in_window / (2 * window + 1), unit))
     return average_data
 
 
@@ -611,7 +610,12 @@ def execute_schedule(schedule, es, sampler):
     curr_total_it = 1
     # noinspection PyBroadException
     try:
-        for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_sample_type, total_it_for_task, runner, params in schedule:
+
+        # yield (wait_time * it,
+        #        lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
+        #        it, iterations, iterations, runner, p)
+
+        for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_task, runner, params in schedule:
             sample_type = sample_type_calculator(total_start)
             # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
             # the relative time zero which simplifies throughput calculation.
@@ -629,14 +633,14 @@ def execute_schedule(schedule, es, sampler):
                     time.sleep(rest)
             start = time.perf_counter()
             with runner:
-                weight = runner(es, params)
+                total_ops, total_ops_unit = runner(es, params)
             stop = time.perf_counter()
 
             service_time = stop - start
             # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
             latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
-            sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), weight, (stop - relative),
-                        curr_total_it, total_it_for_task)
+            sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops, total_ops_unit,
+                        (stop - relative), curr_total_it, total_it_for_task)
             curr_total_it += 1
     except BaseException:
         logger.exception("Could not execute schedule")
@@ -769,270 +773,64 @@ class Allocator:
 
 # Runs a concrete schedule on one worker client
 # Needs to determine the runners and concrete iterations per client.
-def schedule_for(task, client_index, indices):
+def schedule_for(task, client_index):
     """
     Calculates a client's schedule for a given task.
 
     :param task: The task that should be executed.
     :param client_index: The current client index.  Must be in the range [0, `task.clients').
-    :param indices: Specification of affected indices.
     :return: A generator for the operations the given client needs to perform for this task.
     """
     op = task.operation
     num_clients = task.clients
     target_throughput = task.target_throughput / num_clients if task.target_throughput else None
-    runner_for_operation = runner.runner_for(op.type)
+    runner_for_op = runner.runner_for(op.type)
 
-    if op.type == track.OperationType.Index:
-        return bulk_data_based(target_throughput, task.warmup_time_period, num_clients, client_index, indices, runner_for_operation,
-                               op.params["bulk-size"], op.params["id-conflicts"], op.params["pipeline"])
+    if task.warmup_time_period is not None:
+        logger.info("Creating time period based schedule for [%s] with a warmup period of [%d] seconds." % (op, task.warmup_time_period))
+        return time_period_based(target_throughput, task.warmup_time_period, runner_for_op, op.params.partition(client_index, num_clients))
     else:
-        # will queries always be iteration based?
+        logger.info("Creating iteration-count based schedule for [%s] with [%d] warmup iterations and [%d] iterations." %
+                    (op, task.warmup_iterations, task.iterations))
         return iteration_count_based(target_throughput, task.warmup_iterations // num_clients, task.iterations // num_clients,
-                                     runner_for_operation, op.params)
+                                     runner_for_op, op.params.partition(client_index, num_clients))
 
 
-def iteration_count_based(target_throughput, warmup_iterations, iterations, runner, params=None):
+def time_period_based(target_throughput, warmup_time_period, runner, params):
     """
+    Calculates the necessary schedule for time period based operations.
 
+    :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
+    :param warmup_time_period: The time period in seconds that is considered for warmup.
+    :param runner: The runner for a given operation.
+    :param params: The parameter source for a given operation.
+    :return: A generator for the corresponding parameters.
+    """
+    wait_time = 1 / target_throughput if target_throughput else 0
+    iterations = params.variation_count()
+    for it in range(0, iterations):
+        yield (wait_time * it,
+               lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
+               it, iterations, runner, params.params())
+
+
+def iteration_count_based(target_throughput, warmup_iterations, iterations, runner, params):
+    """
     Calculates the necessary schedule based on a given number of iterations.
 
     :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
     :param warmup_iterations: The number of warmup iterations to run. 0 if no warmup should be performed.
     :param iterations: The number of measurement iterations to run.
     :param runner: The runner for a given operation.
-    :param params: The parameters for a given operation.
+    :param params: The parameter source for a given operation.
     :return: A generator for the corresponding parameters.
     """
     wait_time = 1 / target_throughput if target_throughput else 0
     total_iterations = warmup_iterations + iterations
-    if params is None:
-        params = []
+    if total_iterations == 0:
+        raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
     for i in range(0, warmup_iterations):
-        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, warmup_iterations, total_iterations, runner, params)
+        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, total_iterations, runner, params.params())
 
     for i in range(0, iterations):
-        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, iterations, total_iterations, runner, params)
-
-
-def build_conflicting_ids(conflicts, docs_to_index, offset):
-    if conflicts is None or conflicts == track.IndexIdConflict.NoConflicts:
-        return None
-    logger.info("build ids with id conflicts of type [%s]" % conflicts)
-    all_ids = [0] * docs_to_index
-    for i in range(docs_to_index):
-        # always consider the offset as each client will index its own range and we don't want uncontrolled conflicts across clients
-        if conflicts == track.IndexIdConflict.SequentialConflicts:
-            all_ids[i] = "%10d" % (offset + i)
-        elif conflicts == track.IndexIdConflict.RandomConflicts:
-            all_ids[i] = "%10d" % random.randint(offset, offset + docs_to_index)
-        else:
-            raise exceptions.SystemSetupError('Unknown id conflict type %s' % conflicts)
-    return all_ids
-
-
-def chain(*iterables):
-    """
-    Chains the given iterables similar to `itertools.chain` except that it also respects the context manager contract.
-
-    :param iterables: A number of iterable that should be chained.
-    :return: An iterable that will delegate to all provided iterables in turn.
-    """
-    for it in iterables:
-        # execute within a context
-        with it:
-            for element in it:
-                yield element
-
-
-def number_of_bulks(indices, bulk_size, client_index, num_clients):
-    """
-    Determines the number of bulk operations needed to index all documents in the given indices.
-
-    :param indices: Specification of affected indices.
-    :param bulk_size: The size of bulk index operations (number of documents per bulk).
-    :param client_index: The current client index.  Must be in the range [0, `num_clients').
-    :param num_clients: The total number of clients that will run bulk index operations.
-    :return: The number of bulk operations that the given client will issue.
-    """
-    bulks = 0
-    for index in indices:
-        for type in index.types:
-            offset, num_docs = bounds(type.number_of_documents, client_index, num_clients)
-            complete_bulks, rest = (num_docs // bulk_size, num_docs % bulk_size)
-            bulks += complete_bulks
-            if rest > 0:
-                bulks += 1
-    return bulks
-
-
-def create_default_reader(index, type, offset, num_docs, bulk_size, id_conflicts):
-    return IndexDataReader(type.document_file, num_docs,
-                           build_conflicting_ids(id_conflicts, num_docs, offset), index.name, type.name, bulk_size, offset)
-
-
-def bounds(total_docs, client_index, num_clients):
-    """
-
-    Calculates the start offset and number of documents for each client.
-
-    :param total_docs: The total number of documents to index.
-    :param client_index: The current client index.  Must be in the range [0, `num_clients').
-    :param num_clients: The total number of clients that will run bulk index operations.
-    :return: A tuple containing the start offset for the document corpus and the number documents that the client should index.
-    """
-    # last client gets one less if the number is uneven
-    if client_index + 1 == num_clients and total_docs % num_clients > 0:
-        correction = 1
-    else:
-        correction = 0
-    docs_per_client = round(total_docs / num_clients) - correction
-    # don't consider the correction for the other clients because it just applies to the last one
-    offset = client_index * (docs_per_client + correction)
-    return offset, docs_per_client
-
-
-def bulk_data_based(target_throughput, warmup_time_period, num_clients, client_index, indices, runner, bulk_size, id_conflicts, pipeline,
-                    create_reader=create_default_reader):
-    """
-    Calculates the necessary schedule for bulk operations.
-
-
-    :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
-    :param warmup_time_period: The time period in seconds that is considered for warmup.
-    :param num_clients: The total number of clients that will run the bulk operation.
-    :param client_index: The current client for which we calculated the schedule. Must be in the range [0, `num_clients').
-    :param indices: Specification of affected indices.
-    :param runner: The runner for a given operation.
-    :param bulk_size: The size of bulk index operations (number of documents per bulk).
-    :param id_conflicts: The type of id conflicts to simulate.
-    :param pipeline: Name of the ingest pipeline to use. May be None.
-    :param create_reader: A function to create the index reader. By default a file based index reader will be created. This parameter is
-                          intended for testing only.
-    :return: A generator for the bulk operations of the given client.
-    """
-    logger.info(
-        "Creating bulk data based generator for target throughput [%s], client index [%d] of [%d] clients total with bulk size [%d]." %
-        (str(target_throughput), client_index, num_clients, bulk_size))
-
-    bulks = number_of_bulks(indices, bulk_size, client_index, num_clients)
-    wait_time = 1 / target_throughput if target_throughput else 0
-    # determine amount of warmup iterations based on number of records to index. Problem: this assumes we index all data. Depending on the
-    # schedule this may not be true (as we may terminate earlier)
-
-    iterations = bulks
-    readers = []
-    for index in indices:
-        for type in index.types:
-            offset, num_docs = bounds(type.number_of_documents, client_index, num_clients)
-            if num_docs > 0:
-                logger.info("Client [%d] will index [%d] docs starting from offset [%d] for [%s/%s]" %
-                            (client_index, num_docs, offset, index, type))
-                readers.append(create_reader(index, type, offset, num_docs, bulk_size, id_conflicts))
-            else:
-                logger.info("Client [%d] skips [%s/%s] (no documents to read)." % (client_index, index, type))
-    reader = chain(*readers)
-    it = 0
-    for bulk in reader:
-        params = {"body": bulk}
-        if pipeline:
-            params["pipeline"] = pipeline
-        yield (wait_time * it,
-               lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
-               it, iterations, iterations, runner, params)
-        it += 1
-
-
-class FileSource:
-    @staticmethod
-    def open(file_name, mode):
-        return FileSource(file_name, mode)
-
-    def __init__(self, file_name, mode):
-        self.f = open(file_name, mode)
-
-    def seek(self, offset):
-        self.f.seek(offset)
-
-    def readline(self):
-        return self.f.readline()
-
-    def close(self):
-        self.f.close()
-        self.f = None
-
-
-class IndexDataReader:
-    """
-    Reads an index file in bulks into an array and also adds the necessary meta-data line before each document.
-    """
-
-    def __init__(self, data_file, docs_to_index, conflicting_ids, index_name, type_name, bulk_size, offset=0, file_source=FileSource):
-        self.data_file = data_file
-        self.docs_to_index = docs_to_index
-        self.conflicting_ids = conflicting_ids
-        self.index_name = index_name
-        self.type_name = type_name
-        self.bulk_size = bulk_size
-        self.id_up_to = 0
-        self.current_bulk = 0
-        self.offset = offset
-        self.file_source = file_source
-        self.f = None
-
-    def __enter__(self):
-        self.f = self.file_source.open(self.data_file, 'rt')
-        # skip offset number of lines
-        logger.info("Skipping %d lines in [%s]." % (self.offset, self.data_file))
-        start = time.perf_counter()
-        io.skip_lines(self.data_file, self.f, self.offset)
-        end = time.perf_counter()
-        logger.info("Skipping %d lines took %f s." % (self.offset, end - start))
-        return self
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        """
-        Returns lines for one bulk request.
-        """
-        buffer = []
-        try:
-            docs_indexed = 0
-            docs_left = self.docs_to_index - (self.current_bulk * self.bulk_size)
-            if self.f is None or docs_left <= 0:
-                raise StopIteration()
-
-            this_bulk_size = min(self.bulk_size, docs_left)
-            while docs_indexed < this_bulk_size:
-                line = self.f.readline()
-                if len(line) == 0:
-                    break
-                line = line.strip()
-                if self.conflicting_ids is not None:
-                    # 25% of the time we replace a doc:
-                    if self.id_up_to > 0 and random.randint(0, 3) == 3:
-                        doc_id = self.conflicting_ids[random.randint(0, self.id_up_to - 1)]
-                    else:
-                        doc_id = self.conflicting_ids[self.id_up_to]
-                        self.id_up_to += 1
-                    cmd = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
-                else:
-                    cmd = '{"index": {"_index": "%s", "_type": "%s"}}' % (self.index_name, self.type_name)
-
-                buffer.append(cmd)
-                buffer.append(line)
-
-                docs_indexed += 1
-
-            self.current_bulk += 1
-            return buffer
-        except IOError:
-            logger.exception("Could not read [%s]" % self.data_file)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.f:
-            self.f.close()
-            self.f = None
-        return False
+        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, total_iterations, runner, params.params())

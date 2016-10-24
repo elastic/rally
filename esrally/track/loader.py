@@ -3,158 +3,16 @@ import logging
 import os
 import sys
 import urllib.error
-from enum import Enum
 
 import jinja2
 import jinja2.exceptions
 import jsonschema
 import tabulate
 from esrally import exceptions, time, PROGRAM_NAME
+from esrally.track import params, track
 from esrally.utils import io, convert, net, git, versions, console
 
 logger = logging.getLogger("rally.track")
-
-
-class Index:
-    """
-    Defines an index in Elasticsearch.
-    """
-
-    def __init__(self, name, types):
-        """
-
-        Creates a new index.
-
-        :param name: The index name. Mandatory.
-        :param types: A list of types. Should contain at least one type.
-        """
-        self.name = name
-        self.types = types
-
-    @property
-    def number_of_documents(self):
-        num_docs = 0
-        for t in self.types:
-            num_docs += t.number_of_documents
-        return num_docs
-
-    def __str__(self, *args, **kwargs):
-        return self.name
-
-
-class Type:
-    """
-    Defines a type in Elasticsearch.
-    """
-
-    def __init__(self, name, mapping_file, document_file=None, document_archive=None, number_of_documents=0,
-                 compressed_size_in_bytes=0,
-                 uncompressed_size_in_bytes=0):
-        """
-
-        Creates a new type. Mappings are mandatory but the document_archive (and associated properties) are optional.
-
-        :param name: The name of this type. Mandatory.
-        :param mapping_file: The file name of the mapping file on the remote server. Mandatory.
-        :param document_file: The file name of benchmark documents after decompression. Optional (e.g. for percolation we
-        just need a mapping but no documents)
-        :param document_file: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for percolation we
-        just need a mapping but no documents)
-        :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
-         a document_archive is given.
-        :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
-         user reporting. Only needed if a document_archive is given.
-        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only needed if a
-        document_archive is given.
-        """
-        self.name = name
-        self.mapping_file = mapping_file
-        self.document_file = document_file
-        self.document_archive = document_archive
-        self.number_of_documents = number_of_documents
-        self.compressed_size_in_bytes = compressed_size_in_bytes
-        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
-
-    def has_valid_document_data(self):
-        return self.document_file is not None and \
-               self.number_of_documents > 0 and \
-               self.compressed_size_in_bytes > 0 and \
-               self.uncompressed_size_in_bytes > 0
-
-    def __str__(self, *args, **kwargs):
-        return self.name
-
-
-class Track:
-    """
-    A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
-    """
-
-    def __init__(self, name, short_description, description, source_root_url, challenges, indices=None):
-        """
-
-        Creates a new track.
-
-        :param name: A short, descriptive name for this track. As per convention, this name should be in lower-case without spaces.
-        :param short_description: A short description for this track (should be less than 80 characters).
-        :param description: A longer description for this track.
-        :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
-        below this URL the benchmark document files have to be located.
-        :param challenges: A list of one or more challenges to use.
-        :param indices: A list of indices for this track.
-        """
-        self.name = name
-        self.short_description = short_description
-        self.description = description
-        self.source_root_url = source_root_url
-        self.challenges = challenges
-        self.indices = indices
-
-    @property
-    def number_of_documents(self):
-        num_docs = 0
-        for index in self.indices:
-            num_docs += index.number_of_documents
-        return num_docs
-
-    def __str__(self):
-        return self.name
-
-
-class IndexIdConflict(Enum):
-    """
-    Determines which id conflicts to simulate during indexing.
-
-    * NoConflicts: Produce no id conflicts
-    * SequentialConflicts: A document id is replaced with a document id with a sequentially increasing id
-    * RandomConflicts: A document id is replaced with a document id with a random other id
-
-    Note that this assumes that each document in the benchmark corpus has an id between [1, size_of(corpus)]
-    """
-    NoConflicts = 0,
-    SequentialConflicts = 1,
-    RandomConflicts = 2
-
-
-class Challenge:
-    """
-    A challenge defines the concrete operations that will be done.
-    """
-
-    def __init__(self,
-                 name,
-                 description,
-                 index_settings,
-                 schedule=None):
-        if schedule is None:
-            schedule = {}
-        self.name = name
-        self.description = description
-        self.index_settings = index_settings
-        self.schedule = schedule
-
-    def __str__(self):
-        return self.name
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -328,11 +186,19 @@ class TrackRepository:
             if self.remote and not self.offline:
                 branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
                 if branch:
+                    # Allow uncommitted changes iff we do not have to change the branch
+                    logger.info(
+                        "Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
+                    git.checkout(self.tracks_dir, branch=branch)
                     logger.info("Rebasing on [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
-                    git.rebase(self.tracks_dir, branch=branch)
+                    try:
+                        git.rebase(self.tracks_dir, branch=branch)
+                    except exceptions.SupplyError:
+                        logger.exception("Cannot rebase due to local changes in [%s]" % self.tracks_dir)
+                        console.warn(
+                            "Local changes in [%s] prevent track update from remote. Please commit your changes." % self.tracks_dir)
                     return
                 else:
-                    # TODO dm: Check if we should use master
                     msg = "Could not find track data remotely for distribution version [%s]. " \
                           "Trying to find track data locally." % distribution_version
                     logger.warn(msg)
@@ -416,9 +282,9 @@ class TrackReader:
         indices = [self._create_index(idx, mapping_dir, data_dir) for idx in self._r(track_specification, "indices")]
         challenges = self._create_challenges(track_specification, indices)
 
-        return Track(name=self.name, short_description=short_description, description=description,
-                     source_root_url=source_root_url,
-                     challenges=challenges, indices=indices)
+        return track.Track(name=self.name, short_description=short_description, description=description,
+                           source_root_url=source_root_url,
+                           challenges=challenges, indices=indices)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -452,7 +318,7 @@ class TrackReader:
         if not valid_document_data:
             self._error("Index '%s' is invalid. At least one of its types needs to define documents." % index_name)
 
-        return Index(name=index_name, types=types)
+        return track.Index(name=index_name, types=types)
 
     def _create_type(self, type_spec, mapping_dir, data_dir):
         compressed_docs = self._r(type_spec, "documents", mandatory=False)
@@ -463,14 +329,14 @@ class TrackReader:
             document_archive = None
             document_file = None
 
-        return Type(name=self._r(type_spec, "name"),
-                    mapping_file="%s/%s" % (mapping_dir, self._r(type_spec, "mapping")),
-                    document_file=document_file,
-                    document_archive=document_archive,
-                    number_of_documents=self._r(type_spec, "document-count", mandatory=False, default_value=0),
-                    compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", mandatory=False),
-                    uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", mandatory=False)
-                    )
+        return track.Type(name=self._r(type_spec, "name"),
+                          mapping_file="%s/%s" % (mapping_dir, self._r(type_spec, "mapping")),
+                          document_file=document_file,
+                          document_archive=document_archive,
+                          number_of_documents=self._r(type_spec, "document-count", mandatory=False, default_value=0),
+                          compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", mandatory=False),
+                          uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", mandatory=False)
+                          )
 
     def _create_challenges(self, track_spec, indices):
         ops = self._parse_operations(self._r(track_spec, "operations"), indices)
@@ -489,10 +355,10 @@ class TrackReader:
                     task = self.parse_task(op, ops, challenge_name)
                 schedule.append(task)
 
-            challenges.append(Challenge(name=challenge_name,
-                                        description=challenge_description,
-                                        index_settings=index_settings,
-                                        schedule=schedule))
+            challenges.append(track.Challenge(name=challenge_name,
+                                              description=challenge_description,
+                                              index_settings=index_settings,
+                                              schedule=schedule))
         return challenges
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
@@ -504,167 +370,31 @@ class TrackReader:
         tasks = []
         for task in self._r(ops_spec, "tasks", error_ctx="parallel"):
             tasks.append(self.parse_task(task, ops, challenge_name, default_warmup_iterations, default_iterations))
-        return Parallel(tasks, clients)
+        return track.Parallel(tasks, clients)
 
     def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1):
         op_name = task_spec["operation"]
         if op_name not in ops:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
                         "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
-        return Task(operation=ops[op_name],
-                    warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
-                                              default_value=default_warmup_iterations),
-                    warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False,
-                                               default_value=0),
-                    iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
-                    clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
-                    target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
+        return track.Task(operation=ops[op_name],
+                          warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
+                                                    default_value=default_warmup_iterations),
+                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False),
+                          iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
+                          clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
+                          target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
 
     def _parse_operations(self, ops_specs, indices):
         # key = name, value = operation
         ops = {}
         for op_spec in ops_specs:
-            ops_spec_name = self._r(op_spec, "name", error_ctx="operations")
-            ops[ops_spec_name] = self._create_op(ops_spec_name, op_spec, indices)
-
+            op_name = self._r(op_spec, "name", error_ctx="operations")
+            # TODO dm: If we want to allow custom operations, we need to catch KeyError here and just pass on the string instead of the enum
+            # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
+            op_type = track.OperationType.from_hyphenated_string(self._r(op_spec, "operation-type", error_ctx="operations"))
+            try:
+                ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=params.param_source(op_type, indices, op_spec))
+            except exceptions.InvalidSyntax as e:
+                raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
         return ops
-
-    def _create_op(self, ops_spec_name, ops_spec, indices):
-        benchmark_type = self._r(ops_spec, "operation-type")
-        if benchmark_type == "index":
-            id_conflicts = self._r(ops_spec, "conflicts", mandatory=False)
-            if not id_conflicts:
-                id_conflicts = IndexIdConflict.NoConflicts
-            elif id_conflicts == "sequential":
-                id_conflicts = IndexIdConflict.SequentialConflicts
-            elif id_conflicts == "random":
-                id_conflicts = IndexIdConflict.RandomConflicts
-            else:
-                raise TrackSyntaxError("Unknown conflict type '%s' for operation '%s'" % (id_conflicts, ops_spec))
-
-            bulk_size = self._r(ops_spec, "bulk-size", error_ctx=ops_spec_name)
-            pipeline = self._r(ops_spec, "pipeline", error_ctx=ops_spec_name, mandatory=False)
-
-            params = {
-                "bulk-size": bulk_size,
-                "id-conflicts": id_conflicts,
-                "pipeline": pipeline
-            }
-
-            return Operation(name=ops_spec_name,
-                             operation_type=OperationType.Index,
-                             params=params,
-                             granularity_unit="docs/s")
-        elif benchmark_type == "force-merge":
-            return Operation(name=ops_spec_name, operation_type=OperationType.ForceMerge,
-                             params={"indices": [index.name for index in indices]})
-        elif benchmark_type == "search":
-            return self._create_query(ops_spec, ops_spec_name, indices)
-        elif benchmark_type == "index-stats":
-            return Operation(name=ops_spec_name, operation_type=OperationType.IndicesStats)
-        elif benchmark_type == "node-stats":
-            return Operation(name=ops_spec_name, operation_type=OperationType.NodesStats)
-        else:
-            raise TrackSyntaxError("Unknown benchmark type '%s' for operation '%s'" % (benchmark_type, ops_spec_name))
-
-    def _create_query(self, query_spec, ops_spec_name, indices):
-        if len(indices) == 1 and len(indices[0].types) == 1:
-            default_index = indices[0].name
-            default_type = indices[0].types[0].name
-        else:
-            default_index = None
-            default_type = None
-
-        index_name = self._r(query_spec, "index", mandatory=False, default_value=default_index, error_ctx=ops_spec_name)
-        type_name = self._r(query_spec, "type", mandatory=False, default_value=default_type, error_ctx=ops_spec_name)
-        request_cache = self._r(query_spec, "cache", mandatory=False, default_value=False, error_ctx=ops_spec_name)
-
-        query_body = self._r(query_spec, "body", mandatory=False, error_ctx=ops_spec_name)
-        pages = self._r(query_spec, "pages", mandatory=False, error_ctx=ops_spec_name)
-        items_per_page = self._r(query_spec, "results-per-page", mandatory=False, error_ctx=ops_spec_name)
-
-        params = {
-            "index": index_name,
-            "type": type_name,
-            "name": ops_spec_name,
-            "use_request_cache": request_cache,
-            "body": query_body
-        }
-
-        if not index_name:
-            raise TrackSyntaxError("Query '%s' requires an index." % ops_spec_name)
-
-        if pages:
-            params["pages"] = pages
-        if items_per_page:
-            params["items_per_page"] = items_per_page
-
-        return Operation(name=ops_spec_name,
-                         operation_type=OperationType.Search,
-                         params=params)
-
-
-class OperationType(Enum):
-    Index = 0,
-    ForceMerge = 1,
-    IndicesStats = 2,
-    NodesStats = 3,
-    Search = 4
-
-
-# Schedule elements
-class Parallel:
-    def __init__(self, tasks, clients=None):
-        self.tasks = tasks
-        self._clients = clients
-
-    @property
-    def clients(self):
-        if self._clients is not None:
-            return self._clients
-        else:
-            num_clients = 0
-            for task in self.tasks:
-                num_clients += task.clients
-            return num_clients
-
-    def __iter__(self):
-        return iter(self.tasks)
-
-    def __repr__(self, *args, **kwargs):
-        return "%d parallel tasks" % len(self.tasks)
-
-
-class Task:
-    def __init__(self, operation, warmup_iterations=0, warmup_time_period=0, iterations=1, clients=1, target_throughput=None):
-        self.operation = operation
-        self.warmup_iterations = warmup_iterations
-        self.warmup_time_period = warmup_time_period
-        self.iterations = iterations
-        self.clients = clients
-        self.target_throughput = target_throughput
-
-    def __iter__(self):
-        return iter([self])
-
-    def __repr__(self, *args, **kwargs):
-        return "Task for [%s]" % self.operation.name
-
-
-class Operation:
-    def __init__(self, name, operation_type, granularity_unit="ops/s", params=None):
-        if params is None:
-            params = {}
-        self.name = name
-        self.type = operation_type
-        self.granularity_unit = granularity_unit
-        self.params = params
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, other):
-        return self.name == other.name
-
-    def __repr__(self, *args, **kwargs):
-        return self.name

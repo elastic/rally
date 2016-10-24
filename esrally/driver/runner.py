@@ -2,7 +2,7 @@ import logging
 
 import elasticsearch
 
-from esrally import track, exceptions
+from esrally import exceptions, track
 
 logger = logging.getLogger("rally.driver")
 
@@ -35,7 +35,10 @@ class Runner:
         Runs the actual method that should be benchmarked.
 
         :param args: All arguments that are needed to call this method.
-        :return: An int indicating the "weight" of this call. This is typically 1 but for bulk operations it should be the actual bulk size.
+        :return: A pair of (int, String). The first component indicates the "weight" of this call. it is typically 1 but for bulk operations
+                 it should be the actual bulk size. The second component is the "unit" of weight which should be "ops" (short for
+                 "operations") by default. If applicable, the unit should always be in plural form. It is used in metrics records
+                 for throughput and reports. A value will then be shown as e.g. "111 ops/s".
         """
         raise NotImplementedError("abstract operation")
 
@@ -68,7 +71,7 @@ class BulkIndex(Runner):
                     msg += "Buffer size is [%d]\n" % idx
                     raise exceptions.DataError(msg)
         # at this point, the bulk will always contain a separate meta data line
-        return len(params["body"]) // 2
+        return len(params["body"]) // 2, "docs"
 
 
 class ForceMerge(Runner):
@@ -79,17 +82,16 @@ class ForceMerge(Runner):
         super().__init__(track.OperationType.ForceMerge)
 
     def __call__(self, es, params):
-        indices = ",".join(params["indices"])
-        logger.info("Force merging indices [%s]." % indices)
+        logger.info("Force merging all indices.")
         try:
-            es.indices.forcemerge(index=indices)
+            es.indices.forcemerge(index="_all")
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                es.indices.optimize(index=indices)
+                es.indices.optimize(index="_all")
             else:
                 raise e
-        return 1
+        return 1, "ops"
 
 
 class IndicesStats(Runner):
@@ -101,7 +103,7 @@ class IndicesStats(Runner):
 
     def __call__(self, es, params):
         es.indices.stats(metric="_all")
-        return 1
+        return 1, "ops"
 
 
 class NodeStats(Runner):
@@ -113,7 +115,7 @@ class NodeStats(Runner):
 
     def __call__(self, es, params):
         es.nodes.stats(metric="_all")
-        return 1
+        return 1, "ops"
 
 
 class Query(Runner):
@@ -148,7 +150,7 @@ class Query(Runner):
 
     def request_body_query(self, es, params):
         es.search(index=params["index"], doc_type=params["type"], request_cache=params["use_request_cache"], body=params["body"])
-        return 1
+        return 1, "ops"
 
     def scroll_query(self, es, params):
         self.es = es
@@ -168,9 +170,9 @@ class Query(Runner):
             hit_count = len(r["hits"]["hits"])
             if hit_count == 0:
                 # We're done prematurely. Even if we are on page index zero, we still made one call.
-                return page + 1
+                return page + 1, "ops"
             r = es.scroll(scroll_id=self.scroll_id, scroll="10s")
-        return total_pages
+        return total_pages, "ops"
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:

@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import jinja2
 
-from esrally import track
+from esrally.track import loader
 
 
 class StaticClock:
@@ -26,7 +26,7 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = track.render_template(loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
+        rendered = loader.render_template(loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
 
         expected = """
         {
@@ -44,8 +44,8 @@ class TrackReaderTests(TestCase):
                 "description": "unittest track"
             }
         }
-        reader = track.TrackReader()
-        with self.assertRaises(track.TrackSyntaxError) as ctx:
+        reader = loader.TrackReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
 
@@ -111,7 +111,7 @@ class TrackReaderTests(TestCase):
 
             ]
         }
-        reader = track.TrackReader()
+        reader = loader.TrackReader()
         resulting_track = reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)

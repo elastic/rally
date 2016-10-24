@@ -450,13 +450,13 @@ def dispatch_sub_command(cfg, sub_command):
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
-        console.error("Cannot %s %s." % (sub_command, e))
+        console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors(cfg)
         return False
     except BaseException as e:
         logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
-        console.error("Cannot %s %s." % (sub_command, e))
+        console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors(cfg)
         return False

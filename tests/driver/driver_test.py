@@ -1,18 +1,36 @@
 from unittest import TestCase
 
-from esrally import track, metrics
+from esrally import metrics
 from esrally.driver import driver
+from esrally.track import track
+
+
+class DriverTestParamSource:
+    def __init__(self, indices=None, params=None, variation_count=1):
+        if params is None:
+            params = {}
+        self.indices = indices
+        self._params = params
+        self._variation_count = variation_count
+
+    def partition(self, partition_index, total_partitions):
+        return self
+
+    def variation_count(self):
+        return self._variation_count
+
+    def params(self):
+        return self._params
 
 
 class ScheduleTestCase(TestCase):
     def assert_schedule(self, expected_schedule, schedule):
         idx = 0
-        for invocation_time, sample_type_calculator, current_it, total_it_phase, total_it, runner, params in schedule:
-            exp_invocation_time, exp_sample_type, exp_current_it, exp_it_phase, exp_total_it, exp_runner, exp_params = expected_schedule[idx]
+        for invocation_time, sample_type_calculator, current_it, total_it, runner, params in schedule:
+            exp_invocation_time, exp_sample_type, exp_current_it, exp_total_it, exp_runner, exp_params = expected_schedule[idx]
             self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Expected invocation time does not match")
             self.assertEqual(exp_sample_type, sample_type_calculator(0), "Sample type does not match")
             self.assertEqual(exp_current_it, current_it, "Current iteration does not match")
-            self.assertEqual(exp_it_phase, total_it_phase, "Number of iterations does not match")
             self.assertEqual(exp_total_it, total_it, "Number of iterations does not match")
             self.assertIsNotNone(runner, "runner must be defined")
             self.assertEqual(exp_params, params, "Parameters do not match")
@@ -21,7 +39,7 @@ class ScheduleTestCase(TestCase):
 
 class AllocatorTests(TestCase):
     def test_allocates_one_task(self):
-        op = track.Operation("index", track.OperationType.Index)
+        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
         task = track.Task(op)
 
         allocator = driver.Allocator([task])
@@ -32,7 +50,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
 
     def test_allocates_two_serial_tasks(self):
-        op = track.Operation("index", track.OperationType.Index)
+        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
         task = track.Task(op)
 
         allocator = driver.Allocator([task, task])
@@ -44,7 +62,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op}, {op}], allocator.operations_per_joinpoint)
 
     def test_allocates_two_parallel_tasks(self):
-        op = track.Operation("index", track.OperationType.Index)
+        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
         task = track.Task(op)
 
         allocator = driver.Allocator([track.Parallel([task, task])])
@@ -56,9 +74,9 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
 
     def test_allocates_mixed_tasks(self):
-        op1 = track.Operation("index", track.OperationType.Index)
-        op2 = track.Operation("stats", track.OperationType.IndicesStats)
-        op3 = track.Operation("search", track.OperationType.Search)
+        op1 = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
+        op2 = track.Operation("stats", track.OperationType.IndicesStats, DriverTestParamSource())
+        op3 = track.Operation("search", track.OperationType.Search, DriverTestParamSource())
 
         index = track.Task(op1)
         stats = track.Task(op2)
@@ -80,11 +98,11 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op1}, {op1, op2}, {op1}, {op1}, {op3}], allocator.operations_per_joinpoint)
 
     def test_allocates_more_tasks_than_clients(self):
-        op1 = track.Operation("index-a", track.OperationType.Index)
-        op2 = track.Operation("index-b", track.OperationType.Index)
-        op3 = track.Operation("index-c", track.OperationType.Index)
-        op4 = track.Operation("index-d", track.OperationType.Index)
-        op5 = track.Operation("index-e", track.OperationType.Index)
+        op1 = track.Operation("index-a", track.OperationType.Index, DriverTestParamSource())
+        op2 = track.Operation("index-b", track.OperationType.Index, DriverTestParamSource())
+        op3 = track.Operation("index-c", track.OperationType.Index, DriverTestParamSource())
+        op4 = track.Operation("index-d", track.OperationType.Index, DriverTestParamSource())
+        op5 = track.Operation("index-e", track.OperationType.Index, DriverTestParamSource())
 
         index_a = track.Task(op1)
         index_b = track.Task(op2)
@@ -110,9 +128,9 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op1, op2, op3, op4, op5}], allocator.operations_per_joinpoint)
 
     def test_considers_number_of_clients_per_subtask(self):
-        op1 = track.Operation("index-a", track.OperationType.Index)
-        op2 = track.Operation("index-b", track.OperationType.Index)
-        op3 = track.Operation("index-c", track.OperationType.Index)
+        op1 = track.Operation("index-a", track.OperationType.Index, DriverTestParamSource())
+        op2 = track.Operation("index-b", track.OperationType.Index, DriverTestParamSource())
+        op3 = track.Operation("index-c", track.OperationType.Index, DriverTestParamSource())
 
         index_a = track.Task(op1)
         index_b = track.Task(op2)
@@ -141,18 +159,18 @@ class AllocatorTests(TestCase):
 
 class MetricsAggregationTests(TestCase):
     def test_single_metrics_aggregation(self):
-        op = track.Operation("index", track.OperationType.Index)
+        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, -1, -1, 5000, 1, 1, 9),
-            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, -1, -1, 5000, 2, 1, 9),
-            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, -1, -1, 5000, 3, 1, 9),
-            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, -1, -1, 5000, 4, 1, 9),
-            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, -1, -1, 5000, 5, 1, 9),
-            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, -1, -1, 5000, 6, 1, 9),
-            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, -1, -1, 5000, 4.5, 1, 9),
-            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, -1, -1, 5000, 5.5, 1, 9),
-            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, -1, -1, 5000, 6.5, 1, 9)
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 1, 1, 9),
+            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 2, 1, 9),
+            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 3, 1, 9),
+            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 4, 1, 9),
+            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 5, 1, 9),
+            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 6, 1, 9),
+            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 4.5, 1, 9),
+            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 5.5, 1, 9),
+            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 6.5, 1, 9)
         ]
 
         aggregated = driver.calculate_global_throughput(samples)
@@ -162,283 +180,65 @@ class MetricsAggregationTests(TestCase):
 
         throughput = aggregated[op]
         self.assertEqual(6, len(throughput))
-        self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000), throughput[0])
-        self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000), throughput[1])
-        self.assertEqual((1470838597, 23, metrics.SampleType.Normal, 5000), throughput[2])
-        self.assertEqual((1470838598, 24, metrics.SampleType.Normal, 5000), throughput[3])
-        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 6000), throughput[4])
-        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 6666.666666666667), throughput[5])
-        #self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
+        self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000, "docs/s"), throughput[0])
+        self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000, "docs/s"), throughput[1])
+        self.assertEqual((1470838597, 23, metrics.SampleType.Normal, 5000, "docs/s"), throughput[2])
+        self.assertEqual((1470838598, 24, metrics.SampleType.Normal, 5000, "docs/s"), throughput[3])
+        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
+        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
+        # self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
 
 
 class SchedulerTests(ScheduleTestCase):
     def test_search_task_one_client(self):
-        task = track.Task(track.Operation("search", track.OperationType.Search),
+        task = track.Task(track.Operation("search", track.OperationType.Search, params=DriverTestParamSource()),
                           warmup_iterations=3, iterations=5, clients=1, target_throughput=10)
-        schedule = driver.schedule_for(task, 0, [])
+        schedule = driver.schedule_for(task, 0)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup, 0, 3, 8, None, {}),
-            (0.1, metrics.SampleType.Warmup, 1, 3, 8, None, {}),
-            (0.2, metrics.SampleType.Warmup, 2, 3, 8, None, {}),
-            (0, metrics.SampleType.Normal, 0, 5, 8, None, {}),
-            (0.1, metrics.SampleType.Normal, 1, 5, 8, None, {}),
-            (0.2, metrics.SampleType.Normal, 2, 5, 8, None, {}),
-            (0.3, metrics.SampleType.Normal, 3, 5, 8, None, {}),
-            (0.4, metrics.SampleType.Normal, 4, 5, 8, None, {}),
+            (0, metrics.SampleType.Warmup, 0, 8, None, {}),
+            (0.1, metrics.SampleType.Warmup, 1, 8, None, {}),
+            (0.2, metrics.SampleType.Warmup, 2, 8, None, {}),
+            (0, metrics.SampleType.Normal, 0, 8, None, {}),
+            (0.1, metrics.SampleType.Normal, 1, 8, None, {}),
+            (0.2, metrics.SampleType.Normal, 2, 8, None, {}),
+            (0.3, metrics.SampleType.Normal, 3, 8, None, {}),
+            (0.4, metrics.SampleType.Normal, 4, 8, None, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
     def test_search_task_two_clients(self):
-        task = track.Task(track.Operation("search", track.OperationType.Search),
+        task = track.Task(track.Operation("search", track.OperationType.Search, params=DriverTestParamSource()),
                           warmup_iterations=2, iterations=10, clients=2, target_throughput=10)
-        schedule = driver.schedule_for(task, 0, [])
+        schedule = driver.schedule_for(task, 0)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup, 0, 1, 6, None, {}),
-            (0, metrics.SampleType.Normal, 0, 5, 6, None, {}),
-            (0.2, metrics.SampleType.Normal, 1, 5, 6, None, {}),
-            (0.4, metrics.SampleType.Normal, 2, 5, 6, None, {}),
-            (0.6, metrics.SampleType.Normal, 3, 5, 6, None, {}),
-            (0.8, metrics.SampleType.Normal, 4, 5, 6, None, {}),
+            (0, metrics.SampleType.Warmup, 0, 6, None, {}),
+            (0, metrics.SampleType.Normal, 0, 6, None, {}),
+            (0.2, metrics.SampleType.Normal, 1, 6, None, {}),
+            (0.4, metrics.SampleType.Normal, 2, 6, None, {}),
+            (0.6, metrics.SampleType.Normal, 3, 6, None, {}),
+            (0.8, metrics.SampleType.Normal, 4, 6, None, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
+    def test_schedule_for_warmup_time_based(self):
+        task = track.Task(track.Operation("time-based", track.OperationType.Index,
+                                          DriverTestParamSource(params={"body": ["a"]}, variation_count=11)),
+                          warmup_time_period=0, clients=4, target_throughput=4)
 
-class StringAsFileSource:
-    @staticmethod
-    def open(contents, mode):
-        return StringAsFileSource(contents, mode)
+        invocations = driver.schedule_for(task, 0)
 
-    def __init__(self, contents, mode):
-        self.contents = contents
-        self.current_index = 0
-
-    def seek(self, offset):
-        if offset != 0:
-            raise AssertionError("StringAsFileSource does not support random seeks")
-
-    def readline(self):
-        if self.current_index >= len(self.contents):
-            return ""
-        line = self.contents[self.current_index]
-        self.current_index += 1
-        return line
-
-    def close(self):
-        self.contents = None
-
-
-class IndexDataReaderTests(TestCase):
-    def test_read_bulk_larger_than_number_of_docs(self):
-        data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}'
-        ]
-        bulk_size = 50
-
-        reader = driver.IndexDataReader(data, docs_to_index=len(data), conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, file_source=StringAsFileSource)
-        with reader:
-            for bulk in reader:
-                self.assertEqual(len(data) * 2, len(bulk))
-
-    def test_read_bulk_with_offset(self):
-        data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}'
-        ]
-        bulk_size = 50
-
-        reader = driver.IndexDataReader(data, docs_to_index=len(data), conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, offset=3, file_source=StringAsFileSource)
-        with reader:
-            for bulk in reader:
-                self.assertEqual((len(data) - 3) * 2, len(bulk))
-
-    def test_read_bulk_smaller_than_number_of_docs(self):
-        data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}',
-            '{"key": "value6"}',
-            '{"key": "value7"}',
-        ]
-        bulk_size = 3
-
-        reader = driver.IndexDataReader(data, docs_to_index=len(data), conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, file_source=StringAsFileSource)
-
-        # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_lengths = [6, 6, 2]
-        with reader:
-            bulk_index = 0
-            for bulk in reader:
-                self.assertEqual(expected_bulk_lengths[bulk_index], len(bulk))
-                bulk_index += 1
-
-    def test_read_bulk_smaller_than_number_of_docs_and_multiple_clients(self):
-        data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}',
-            '{"key": "value6"}',
-            '{"key": "value7"}',
-        ]
-        bulk_size = 3
-
-        reader = driver.IndexDataReader(data, docs_to_index=5, conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, file_source=StringAsFileSource)
-
-        # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_lengths = [6, 4]
-        with reader:
-            bulk_index = 0
-            for bulk in reader:
-                self.assertEqual(expected_bulk_lengths[bulk_index], len(bulk))
-                bulk_index += 1
-
-
-class InvocationGeneratorTests(ScheduleTestCase):
-    class TestIndexReader:
-        def __init__(self, data):
-            self.enter_count = 0
-            self.exit_count = 0
-            self.data = data
-
-        def __enter__(self):
-            self.enter_count += 1
-            return self
-
-        def __iter__(self):
-            return iter(self.data)
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            self.exit_count += 1
-            return False
-
-    class TestIndex:
-        def __init__(self, name, types):
-            self.name = name
-            self.types = types
-
-    class TestType:
-        def __init__(self, number_of_documents):
-            self.number_of_documents = number_of_documents
-
-    def idx(self, *args, **kwargs):
-        return InvocationGeneratorTests.TestIndex(*args, **kwargs)
-
-    def t(self, *args, **kwargs):
-        return InvocationGeneratorTests.TestType(*args, **kwargs)
-
-    def test_iterator_chaining_respects_context_manager(self):
-        i0 = InvocationGeneratorTests.TestIndexReader([1, 2, 3])
-        i1 = InvocationGeneratorTests.TestIndexReader([4, 5, 6])
-
-        self.assertEqual([1, 2, 3, 4, 5, 6], list(driver.chain(i0, i1)))
-        self.assertEqual(1, i0.enter_count)
-        self.assertEqual(1, i0.exit_count)
-        self.assertEqual(1, i1.enter_count)
-        self.assertEqual(1, i1.exit_count)
-
-    def test_iteration_count_based(self):
-        invocations = driver.iteration_count_based(None, 2, 3, "runner", ["sample-param"])
         self.assert_schedule([
-            (0, metrics.SampleType.Warmup, 0, 2, 5, None, ["sample-param"]),
-            (0, metrics.SampleType.Warmup, 1, 2, 5, None, ["sample-param"]),
-            (0, metrics.SampleType.Normal, 0, 3, 5, None, ["sample-param"]),
-            (0, metrics.SampleType.Normal, 1, 3, 5, None, ["sample-param"]),
-            (0, metrics.SampleType.Normal, 2, 3, 5, None, ["sample-param"])
+            (0.0, metrics.SampleType.Normal, 0, 11, "runner", {"body": ["a"]}),
+            (1.0, metrics.SampleType.Normal, 1, 11, "runner", {"body": ["a"]}),
+            (2.0, metrics.SampleType.Normal, 2, 11, "runner", {"body": ["a"]}),
+            (3.0, metrics.SampleType.Normal, 3, 11, "runner", {"body": ["a"]}),
+            (4.0, metrics.SampleType.Normal, 4, 11, "runner", {"body": ["a"]}),
+            (5.0, metrics.SampleType.Normal, 5, 11, "runner", {"body": ["a"]}),
+            (6.0, metrics.SampleType.Normal, 6, 11, "runner", {"body": ["a"]}),
+            (7.0, metrics.SampleType.Normal, 7, 11, "runner", {"body": ["a"]}),
+            (8.0, metrics.SampleType.Normal, 8, 11, "runner", {"body": ["a"]}),
+            (9.0, metrics.SampleType.Normal, 9, 11, "runner", {"body": ["a"]}),
+            (10.0, metrics.SampleType.Normal, 10, 11, "runner", {"body": ["a"]}),
         ], list(invocations))
-
-    def test_calculate_bounds(self):
-        self.assertEqual((0, 1000), driver.bounds(1000, 0, 1))
-
-        self.assertEqual((0, 500), driver.bounds(1000, 0, 2))
-        self.assertEqual((500, 500), driver.bounds(1000, 1, 2))
-
-        self.assertEqual((0, 400), driver.bounds(800, 0, 2))
-        self.assertEqual((400, 400), driver.bounds(800, 1, 2))
-
-        self.assertEqual((0, 267), driver.bounds(800, 0, 3))
-        self.assertEqual((267, 267), driver.bounds(800, 1, 3))
-        self.assertEqual((534, 266), driver.bounds(800, 2, 3))
-
-        self.assertEqual((0, 250), driver.bounds(2000, 0, 8))
-        self.assertEqual((250, 250), driver.bounds(2000, 1, 8))
-        self.assertEqual((500, 250), driver.bounds(2000, 2, 8))
-        self.assertEqual((750, 250), driver.bounds(2000, 3, 8))
-        self.assertEqual((1000, 250), driver.bounds(2000, 4, 8))
-        self.assertEqual((1250, 250), driver.bounds(2000, 5, 8))
-        self.assertEqual((1500, 250), driver.bounds(2000, 6, 8))
-        self.assertEqual((1750, 250), driver.bounds(2000, 7, 8))
-
-    def test_calculate_number_of_bulks(self):
-        t1 = self.t(1)
-        t2 = self.t(2)
-
-        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [t1])], 1, 0, 1))
-        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [t1])], 2, 0, 1))
-        self.assertEqual(20, driver.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 1, 0, 1))
-        self.assertEqual(11, driver.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 2, 0, 1))
-        self.assertEqual(11, driver.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 3, 0, 1))
-        self.assertEqual(11, driver.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 100, 0, 1))
-
-        self.assertEqual(2,
-                         driver.number_of_bulks([self.idx("a", [self.t(800)])], 250, 0,
-                                                3))
-        self.assertEqual(1,
-                         driver.number_of_bulks([self.idx("a", [self.t(800)])], 267, 0, 3))
-        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [self.t(80)])], 267, 0, 3))
-        # this looks odd at first but we are prioritizing number of clients above bulk size
-        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [self.t(80)])], 267, 1, 3))
-        self.assertEqual(1, driver.number_of_bulks([self.idx("a", [self.t(80)])], 267, 2, 3))
-
-    def test_bulk_data_based(self):
-        t1 = self.t(1)
-        t2 = self.t(2)
-
-        invocations = driver.bulk_data_based(1, 0, 1, 0, [self.idx("a", [t2, t2, t2, t2, t1]), self.idx("b", [t2, t2, t2, t2, t2, t1])],
-                                             "runner", 2, track.IndexIdConflict.NoConflicts, None,
-                                             create_reader=lambda index, type, offset, num_docs, bulk_size, id_conflicts:
-                                             InvocationGeneratorTests.TestIndexReader([[index.name] * type.number_of_documents])
-                                             )
-        self.assert_schedule([
-            (0.0, metrics.SampleType.Normal, 0, 11, 11, "runner", {"body": ["a", "a"]}),
-            (1.0, metrics.SampleType.Normal, 1, 11, 11, "runner", {"body": ["a", "a"]}),
-            (2.0, metrics.SampleType.Normal, 2, 11, 11, "runner", {"body": ["a", "a"]}),
-            (3.0, metrics.SampleType.Normal, 3, 11, 11, "runner", {"body": ["a", "a"]}),
-            (4.0, metrics.SampleType.Normal, 4, 11, 11, "runner", {"body": ["a"]}),
-            (5.0, metrics.SampleType.Normal, 5, 11, 11, "runner", {"body": ["b", "b"]}),
-            (6.0, metrics.SampleType.Normal, 6, 11, 11, "runner", {"body": ["b", "b"]}),
-            (7.0, metrics.SampleType.Normal, 7, 11, 11, "runner", {"body": ["b", "b"]}),
-            (8.0, metrics.SampleType.Normal, 8, 11, 11, "runner", {"body": ["b", "b"]}),
-            (9.0, metrics.SampleType.Normal, 9, 11, 11, "runner", {"body": ["b", "b"]}),
-            (10.0, metrics.SampleType.Normal, 10, 11, 11, "runner", {"body": ["b"]}),
-        ], list(invocations))
-
-    def test_build_conflicting_ids(self):
-        self.assertIsNone(driver.build_conflicting_ids(track.IndexIdConflict.NoConflicts, 3, 0))
-        self.assertEqual(["         0", "         1", "         2"],
-                         driver.build_conflicting_ids(track.IndexIdConflict.SequentialConflicts, 3, 0))
-        # we cannot tell anything specific about the contents...
-        self.assertEqual(3, len(driver.build_conflicting_ids(track.IndexIdConflict.RandomConflicts, 3, 0)))

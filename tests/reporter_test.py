@@ -29,7 +29,7 @@ class ReporterTests(TestCase):
         store.put_value_cluster_level("service_time", 200, unit="ms", operation="index", operation_type=track.OperationType.Index)
         store.put_value_cluster_level("service_time", 215, unit="ms", operation="index", operation_type=track.OperationType.Index)
 
-        index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, granularity_unit="docs/s"))
+        index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
         challenge = track.Challenge(name="unittest", description="", index_settings=None, schedule=[index])
 
         stats = reporter.Stats(store, challenge)

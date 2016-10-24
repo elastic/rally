@@ -4,9 +4,8 @@ import sys
 
 import tabulate
 import thespian.actors
-from esrally import config, exceptions, paths, track, reporter, metrics, time, PROGRAM_NAME
+from esrally import config, exceptions, paths, track, driver, reporter, metrics, time, PROGRAM_NAME
 from esrally.mechanic import mechanic
-from esrally.driver import driver
 from esrally.utils import console, io, convert
 
 logger = logging.getLogger("rally.racecontrol")
