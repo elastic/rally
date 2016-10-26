@@ -549,25 +549,47 @@ class NodeStats(InternalTelemetryDevice):
     def __init__(self, config, client, metrics_store):
         super().__init__(config, metrics_store)
         self.client = client
+        self.gc_times_per_node = {}
+
+    def on_benchmark_start(self):
+        self.gc_times_per_node = self.gc_times()
 
     def on_benchmark_stop(self):
-        logger.info("Gathering nodes stats")
-        stats = self.client.nodes.stats(metric="_all")
+        gc_times_at_end = self.gc_times()
         total_old_gen_collection_time = 0
         total_young_gen_collection_time = 0
+
+        for node_name, gc_times_end in gc_times_at_end.items():
+            if node_name in self.gc_times_per_node:
+                gc_times_start = self.gc_times_per_node[node_name]
+                young_gc_time = gc_times_end[0] - gc_times_start[0]
+                old_gc_time = gc_times_end[1] - gc_times_start[1]
+
+                total_young_gen_collection_time += young_gc_time
+                total_old_gen_collection_time += old_gc_time
+
+                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
+                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
+            else:
+                logger.warn("Cannot determine GC times for node [%s]. It was not part of the cluster at the start of the benchmark.")
+
+        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
+
+        self.gc_times_per_node = None
+
+    def gc_times(self):
+        logger.debug("Gathering GC times")
+        gc_times = {}
+        stats = self.client.nodes.stats(metric="_all")
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
             gc = node["jvm"]["gc"]["collectors"]
             old_gen_collection_time = gc["old"]["collection_time_in_millis"]
             young_gen_collection_time = gc["young"]["collection_time_in_millis"]
-            self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gen_collection_time, "ms")
-            self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gen_collection_time, "ms")
-            total_old_gen_collection_time += old_gen_collection_time
-            total_young_gen_collection_time += young_gen_collection_time
-
-        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
-        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+            gc_times[node_name] = (young_gen_collection_time, old_gen_collection_time)
+        return gc_times
 
 
 class IndexStats(InternalTelemetryDevice):

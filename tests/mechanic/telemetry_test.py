@@ -6,6 +6,19 @@ from esrally import config, metrics
 from esrally.mechanic import telemetry, car, cluster
 
 
+def create_config():
+    cfg = config.Config()
+    cfg.add(config.Scope.application, "system", "env.name", "unittest")
+    cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
+    cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
+    cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
+    cfg.add(config.Scope.application, "reporting", "datastore.user", "")
+    cfg.add(config.Scope.application, "reporting", "datastore.password", "")
+    # only internal devices are active
+    cfg.add(config.Scope.application, "telemetry", "devices", [])
+    return cfg
+
+
 class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
     def __init__(self, cfg, metrics_store, mock_env):
         super().__init__(cfg, metrics_store)
@@ -16,7 +29,7 @@ class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
 
 
 class TelemetryTests(TestCase):
-    def test_instrument_candidate_env(self):
+    def test_merges_options_set_by_different_devices(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "telemetry", "devices", "jfr")
         cfg.add(config.Scope.application, "system", "challenge.root.dir", "challenge-root")
@@ -43,6 +56,10 @@ class TelemetryTests(TestCase):
 
 
 class MergePartsDeviceTests(TestCase):
+    def setUp(self):
+        self.cfg = create_config()
+        self.cfg.add(config.Scope.application, "launcher", "candidate.log.dir", "/unittests/var/log/elasticsearch")
+
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("builtins.open")
@@ -52,9 +69,8 @@ class MergePartsDeviceTests(TestCase):
         open_mock.side_effect = [
             mock.mock_open(read_data="no data to parse").return_value
         ]
-        cfg = self.create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        merge_parts_device = telemetry.MergeParts(cfg, metrics_store)
+        metrics_store = metrics.EsMetricsStore(self.cfg)
+        merge_parts_device = telemetry.MergeParts(self.cfg, metrics_store)
         merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_not_called()
@@ -76,24 +92,12 @@ class MergePartsDeviceTests(TestCase):
         open_mock.side_effect = [
             mock.mock_open(read_data=log_file).return_value
         ]
-        config = self.create_config()
-        metrics_store = metrics.EsMetricsStore(config)
-        merge_parts_device = telemetry.MergeParts(config, metrics_store)
+        metrics_store = metrics.EsMetricsStore(self.cfg)
+        merge_parts_device = telemetry.MergeParts(self.cfg, metrics_store)
         merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_called_with("merge_parts_total_time_doc_values", 350, "ms")
         metrics_store_put_count.assert_called_with("merge_parts_total_docs_doc_values", 1850)
-
-    def create_config(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "launcher", "candidate.log.dir", "/unittests/var/log/elasticsearch")
-        cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
-        cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
-        cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
-        cfg.add(config.Scope.application, "reporting", "datastore.user", "")
-        cfg.add(config.Scope.application, "reporting", "datastore.password", "")
-        return cfg
 
 
 class Client:
@@ -118,6 +122,9 @@ class SubClient:
 
 
 class EnvironmentInfoTests(TestCase):
+    def setUp(self):
+        self.cfg = create_config()
+
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
         nodes_info = {"nodes": collections.OrderedDict()}
@@ -163,11 +170,9 @@ class EnvironmentInfoTests(TestCase):
         }
 
         client = Client(None, SubClient(nodes_info), cluster_info)
-
-        cfg = self.create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.EnvironmentInfo(cfg, client, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[env_device])
+        metrics_store = metrics.EsMetricsStore(self.cfg)
+        env_device = telemetry.EnvironmentInfo(self.cfg, client, metrics_store)
+        t = telemetry.Telemetry(self.cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
@@ -195,10 +200,9 @@ class EnvironmentInfoTests(TestCase):
         os_version.return_value = "4.2.0-18-generic"
         os_name.return_value = "Linux"
 
-        cfg = self.create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
+        metrics_store = metrics.EsMetricsStore(self.cfg)
         node = cluster.Node(None, "io", "rally0", None)
-        env_device = telemetry.EnvironmentInfo(cfg, None, metrics_store)
+        env_device = telemetry.EnvironmentInfo(self.cfg, None, metrics_store)
         env_device.attach_to_node(node)
 
         calls = [
@@ -213,20 +217,13 @@ class EnvironmentInfoTests(TestCase):
 
         metrics_store_add_meta_info.assert_has_calls(calls)
 
-    def create_config(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
-        cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
-        cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
-        cfg.add(config.Scope.application, "reporting", "datastore.user", "")
-        cfg.add(config.Scope.application, "reporting", "datastore.password", "")
-        # only internal devices are active
-        cfg.add(config.Scope.application, "telemetry", "devices", [])
-        return cfg
-
 
 class ExternalEnvironmentInfoTests(TestCase):
+
+
+    def setUp(self):
+        self.cfg = create_config()
+
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
         nodes_stats = {
@@ -265,10 +262,9 @@ class ExternalEnvironmentInfoTests(TestCase):
                 }
         }
         client = Client(SubClient(nodes_stats), SubClient(nodes_info), cluster_info)
-        cfg = self.create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ExternalEnvironmentInfo(cfg, client, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[env_device])
+        metrics_store = metrics.EsMetricsStore(self.cfg)
+        env_device = telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store)
+        t = telemetry.Telemetry(self.cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
@@ -318,10 +314,9 @@ class ExternalEnvironmentInfoTests(TestCase):
                 }
         }
         client = Client(SubClient(nodes_stats), SubClient(nodes_info), cluster_info)
-        cfg = self.create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ExternalEnvironmentInfo(cfg, client, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[env_device])
+        metrics_store = metrics.EsMetricsStore(self.cfg)
+        env_device = telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store)
+        t = telemetry.Telemetry(self.cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
@@ -336,14 +331,69 @@ class ExternalEnvironmentInfoTests(TestCase):
         ]
         metrics_store_add_meta_info.assert_has_calls(calls)
 
-    def create_config(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
-        cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
-        cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
-        cfg.add(config.Scope.application, "reporting", "datastore.user", "")
-        cfg.add(config.Scope.application, "reporting", "datastore.password", "")
-        # only internal devices are active
-        cfg.add(config.Scope.application, "telemetry", "devices", [])
-        return cfg
+
+class NodeStatsTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_stores_only_diff_of_gc_times(self, metrics_store_node_level, metrics_store_cluster_level):
+        nodes_stats_at_start = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "jvm": {
+                        "gc": {
+                            "collectors": {
+                                "old": {
+                                    "collection_time_in_millis": 1000
+                                },
+                                "young": {
+                                    "collection_time_in_millis": 500
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        client = Client(cluster=None, nodes=SubClient(nodes_stats_at_start), info=None)
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.NodeStats(cfg, client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+        # now we'd need to change the node stats response
+        nodes_stats_at_end = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "jvm": {
+                        "gc": {
+                            "collectors": {
+                                "old": {
+                                    "collection_time_in_millis": 2500
+                                },
+                                "young": {
+                                    "collection_time_in_millis": 1200
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        client.nodes = SubClient(nodes_stats_at_end)
+        t.on_benchmark_stop()
+
+        metrics_store_node_level.assert_has_calls([
+            mock.call("rally0", "node_young_gen_gc_time", 700, "ms"),
+            mock.call("rally0", "node_old_gen_gc_time", 1500, "ms")
+        ])
+
+        metrics_store_cluster_level.assert_has_calls([
+            mock.call("node_total_young_gen_gc_time", 700, "ms"),
+            mock.call("node_total_old_gen_gc_time", 1500, "ms")
+        ])
