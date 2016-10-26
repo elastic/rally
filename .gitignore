@@ -81,6 +81,7 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
+junit-*.xml
 
 # Translations
 *.mo
@@ -97,3 +98,6 @@ target/
 
 #Pickles
 *.pk
+
+# pyenv
+.python-version
