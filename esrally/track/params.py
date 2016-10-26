@@ -9,30 +9,83 @@ from esrally.utils import io
 
 logger = logging.getLogger("rally.track")
 
-PARAM_SOURCES = {}
+__PARAM_SOURCES_BY_OP = {}
+__PARAM_SOURCES_BY_NAME = {}
 
 
-def param_source(op_type, indices, params):
+def param_source_for_operation(op_type, indices, params):
     try:
-        return PARAM_SOURCES[op_type](indices, params)
+        return __PARAM_SOURCES_BY_OP[op_type](indices, params)
     except KeyError:
-        logger.info("No specific parameter source registered for [%s]. Creating default parameter source." % op_type)
+        logger.debug("No specific parameter source registered for operation type [%s]. Creating default parameter source." % op_type)
         return ParamSource(indices, params)
+
+
+def param_source_for_name(name, indices, params):
+    return __PARAM_SOURCES_BY_NAME[name](indices, params)
+
+
+def register_param_source_for_operation(op_type, param_source_class):
+    __PARAM_SOURCES_BY_OP[op_type] = param_source_class
+
+
+def register_param_source_for_name(name, param_source_class):
+    __PARAM_SOURCES_BY_NAME[name] = param_source_class
 
 
 # Default
 class ParamSource:
+    """
+    A `ParamSource` captures the parameters for a given operation. Rally will create one global ParamSource for each operation and will then
+     invoke `#partition()` to get a `ParamSource` instance for each client. During the benchmark, `#params()` will be called repeatedly
+     before Rally invokes the corresponding runner (that will actually execute the operation against Elasticsearch).
+    """
+
     def __init__(self, indices, params):
+        """
+        Creates a new ParamSource instance.
+
+        :param indices: All indices that are defined for this track.
+        :param params: A hash of all parameters that have been extracted for this operation.
+        """
         self.indices = indices
         self._params = params
 
     def partition(self, partition_index, total_partitions):
+        """
+        This method will be invoked by Rally at the beginning of the lifecycle. It splits a parameter source per client. If the
+        corresponding operation is idempotent, return `self` (e.g. for queries). If the corresponding operation has side-effects and it
+        matters which client executes which part (e.g. an index operation from a source file), return the relevant part.
+
+        Do NOT assume that you can share state between ParamSource objects in different partitions (technical explanation: each client
+        will be a dedicated process, so each object of a `ParamSource` lives in its own process and hence cannot share state with other
+        instances).
+
+        :param partition_index: The current partition for which a parameter source is needed. It is in the range [0, `total_partitions`).
+        :param total_partitions: The total number of partitions (i.e. clients).
+        :return: A parameter source for the current partition.
+        """
         return self
 
-    def variation_count(self):
+    def size(self):
+        """
+        Rally has two modes in which it can run:
+
+        * It will either run an operation for a pre-determined number of times or
+        * It can run until the parameter source is exhausted.
+
+        In the former case, return just 1. In the latter case, you should determine the number of times that `#params()` will be invoked.
+        With that number, Rally can show the progress made so far to the user.
+
+        :return:  The "size" of this parameter source.
+        """
         return 1
 
     def params(self):
+        """
+        :return: A hash containing the parameters that will be provided to the corresponding operation runner (key: parameter name,
+        value: parameter value).
+        """
         return self._params
 
 
@@ -111,12 +164,13 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("'bulk-size' must be numeric")
 
     def partition(self, partition_index, total_partitions):
-        return PartitionBulkIndexParamSource(self.indices, partition_index, total_partitions, self.bulk_size, self.id_conflicts, self.pipeline)
+        return PartitionBulkIndexParamSource(self.indices, partition_index, total_partitions, self.bulk_size, self.id_conflicts,
+                                             self.pipeline)
 
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
-    def variation_count(self):
+    def size(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
 
@@ -145,7 +199,7 @@ class PartitionBulkIndexParamSource(ParamSource):
     def params(self):
         return next(self.internal_params)
 
-    def variation_count(self):
+    def size(self):
         return self.number_of_bulks()
 
     def number_of_bulks(self):
@@ -345,5 +399,5 @@ class IndexDataReader:
         return False
 
 
-PARAM_SOURCES[track.OperationType.Index] = BulkIndexParamSource
-PARAM_SOURCES[track.OperationType.Search] = SearchParamSource
+register_param_source_for_operation(track.OperationType.Index, BulkIndexParamSource)
+register_param_source_for_operation(track.OperationType.Search, SearchParamSource)

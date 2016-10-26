@@ -1,23 +1,22 @@
 from unittest import TestCase
 
-from esrally import metrics
+from esrally import metrics, track
 from esrally.driver import driver
-from esrally.track import track
+from esrally.track import params
 
 
 class DriverTestParamSource:
-    def __init__(self, indices=None, params=None, variation_count=1):
+    def __init__(self, indices=None, params=None):
         if params is None:
             params = {}
-        self.indices = indices
+        self._indices = indices
         self._params = params
-        self._variation_count = variation_count
 
     def partition(self, partition_index, total_partitions):
         return self
 
-    def variation_count(self):
-        return self._variation_count
+    def size(self):
+        return self._params["size"] if "size" in self._params else 1
 
     def params(self):
         return self._params
@@ -38,8 +37,11 @@ class ScheduleTestCase(TestCase):
 
 
 class AllocatorTests(TestCase):
+    def setUp(self):
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+
     def test_allocates_one_task(self):
-        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
+        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
         task = track.Task(op)
 
         allocator = driver.Allocator([task])
@@ -50,7 +52,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
 
     def test_allocates_two_serial_tasks(self):
-        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
+        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
         task = track.Task(op)
 
         allocator = driver.Allocator([task, task])
@@ -62,7 +64,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op}, {op}], allocator.operations_per_joinpoint)
 
     def test_allocates_two_parallel_tasks(self):
-        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
+        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
         task = track.Task(op)
 
         allocator = driver.Allocator([track.Parallel([task, task])])
@@ -74,9 +76,9 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
 
     def test_allocates_mixed_tasks(self):
-        op1 = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
-        op2 = track.Operation("stats", track.OperationType.IndicesStats, DriverTestParamSource())
-        op3 = track.Operation("search", track.OperationType.Search, DriverTestParamSource())
+        op1 = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
+        op2 = track.Operation("stats", track.OperationType.IndicesStats, param_source="driver-test-param-source")
+        op3 = track.Operation("search", track.OperationType.Search, param_source="driver-test-param-source")
 
         index = track.Task(op1)
         stats = track.Task(op2)
@@ -98,11 +100,11 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op1}, {op1, op2}, {op1}, {op1}, {op3}], allocator.operations_per_joinpoint)
 
     def test_allocates_more_tasks_than_clients(self):
-        op1 = track.Operation("index-a", track.OperationType.Index, DriverTestParamSource())
-        op2 = track.Operation("index-b", track.OperationType.Index, DriverTestParamSource())
-        op3 = track.Operation("index-c", track.OperationType.Index, DriverTestParamSource())
-        op4 = track.Operation("index-d", track.OperationType.Index, DriverTestParamSource())
-        op5 = track.Operation("index-e", track.OperationType.Index, DriverTestParamSource())
+        op1 = track.Operation("index-a", track.OperationType.Index, param_source="driver-test-param-source")
+        op2 = track.Operation("index-b", track.OperationType.Index, param_source="driver-test-param-source")
+        op3 = track.Operation("index-c", track.OperationType.Index, param_source="driver-test-param-source")
+        op4 = track.Operation("index-d", track.OperationType.Index, param_source="driver-test-param-source")
+        op5 = track.Operation("index-e", track.OperationType.Index, param_source="driver-test-param-source")
 
         index_a = track.Task(op1)
         index_b = track.Task(op2)
@@ -128,9 +130,9 @@ class AllocatorTests(TestCase):
         self.assertEqual([{op1, op2, op3, op4, op5}], allocator.operations_per_joinpoint)
 
     def test_considers_number_of_clients_per_subtask(self):
-        op1 = track.Operation("index-a", track.OperationType.Index, DriverTestParamSource())
-        op2 = track.Operation("index-b", track.OperationType.Index, DriverTestParamSource())
-        op3 = track.Operation("index-c", track.OperationType.Index, DriverTestParamSource())
+        op1 = track.Operation("index-a", track.OperationType.Index, param_source="driver-test-param-source")
+        op2 = track.Operation("index-b", track.OperationType.Index, param_source="driver-test-param-source")
+        op3 = track.Operation("index-c", track.OperationType.Index, param_source="driver-test-param-source")
 
         index_a = track.Task(op1)
         index_b = track.Task(op2)
@@ -158,8 +160,11 @@ class AllocatorTests(TestCase):
 
 
 class MetricsAggregationTests(TestCase):
+    def setUp(self):
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+
     def test_single_metrics_aggregation(self):
-        op = track.Operation("index", track.OperationType.Index, DriverTestParamSource())
+        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
 
         samples = [
             driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 1, 1, 9),
@@ -190,10 +195,17 @@ class MetricsAggregationTests(TestCase):
 
 
 class SchedulerTests(ScheduleTestCase):
+    def setUp(self):
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        self.test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+                                      source_root_url="http://example.org",
+                                      indices=None,
+                                      challenges=None)
+
     def test_search_task_one_client(self):
-        task = track.Task(track.Operation("search", track.OperationType.Search, params=DriverTestParamSource()),
+        task = track.Task(track.Operation("search", track.OperationType.Search, param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, target_throughput=10)
-        schedule = driver.schedule_for(task, 0)
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 0, 8, None, {}),
@@ -208,9 +220,9 @@ class SchedulerTests(ScheduleTestCase):
         self.assert_schedule(expected_schedule, schedule)
 
     def test_search_task_two_clients(self):
-        task = track.Task(track.Operation("search", track.OperationType.Search, params=DriverTestParamSource()),
+        task = track.Task(track.Operation("search", track.OperationType.Search, param_source="driver-test-param-source"),
                           warmup_iterations=2, iterations=10, clients=2, target_throughput=10)
-        schedule = driver.schedule_for(task, 0)
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 0, 6, None, {}),
@@ -223,22 +235,22 @@ class SchedulerTests(ScheduleTestCase):
         self.assert_schedule(expected_schedule, schedule)
 
     def test_schedule_for_warmup_time_based(self):
-        task = track.Task(track.Operation("time-based", track.OperationType.Index,
-                                          DriverTestParamSource(params={"body": ["a"]}, variation_count=11)),
+        task = track.Task(track.Operation("time-based", track.OperationType.Index, params={"body": ["a"], "size": 11},
+                                          param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, target_throughput=4)
 
-        invocations = driver.schedule_for(task, 0)
+        invocations = driver.schedule_for(self.test_track, task, 0)
 
         self.assert_schedule([
-            (0.0, metrics.SampleType.Normal, 0, 11, "runner", {"body": ["a"]}),
-            (1.0, metrics.SampleType.Normal, 1, 11, "runner", {"body": ["a"]}),
-            (2.0, metrics.SampleType.Normal, 2, 11, "runner", {"body": ["a"]}),
-            (3.0, metrics.SampleType.Normal, 3, 11, "runner", {"body": ["a"]}),
-            (4.0, metrics.SampleType.Normal, 4, 11, "runner", {"body": ["a"]}),
-            (5.0, metrics.SampleType.Normal, 5, 11, "runner", {"body": ["a"]}),
-            (6.0, metrics.SampleType.Normal, 6, 11, "runner", {"body": ["a"]}),
-            (7.0, metrics.SampleType.Normal, 7, 11, "runner", {"body": ["a"]}),
-            (8.0, metrics.SampleType.Normal, 8, 11, "runner", {"body": ["a"]}),
-            (9.0, metrics.SampleType.Normal, 9, 11, "runner", {"body": ["a"]}),
-            (10.0, metrics.SampleType.Normal, 10, 11, "runner", {"body": ["a"]}),
+            (0.0, metrics.SampleType.Normal, 0, 11, "runner", {"body": ["a"], "size": 11}),
+            (1.0, metrics.SampleType.Normal, 1, 11, "runner", {"body": ["a"], "size": 11}),
+            (2.0, metrics.SampleType.Normal, 2, 11, "runner", {"body": ["a"], "size": 11}),
+            (3.0, metrics.SampleType.Normal, 3, 11, "runner", {"body": ["a"], "size": 11}),
+            (4.0, metrics.SampleType.Normal, 4, 11, "runner", {"body": ["a"], "size": 11}),
+            (5.0, metrics.SampleType.Normal, 5, 11, "runner", {"body": ["a"], "size": 11}),
+            (6.0, metrics.SampleType.Normal, 6, 11, "runner", {"body": ["a"], "size": 11}),
+            (7.0, metrics.SampleType.Normal, 7, 11, "runner", {"body": ["a"], "size": 11}),
+            (8.0, metrics.SampleType.Normal, 8, 11, "runner", {"body": ["a"], "size": 11}),
+            (9.0, metrics.SampleType.Normal, 9, 11, "runner", {"body": ["a"], "size": 11}),
+            (10.0, metrics.SampleType.Normal, 10, 11, "runner", {"body": ["a"], "size": 11}),
         ], list(invocations))

@@ -41,14 +41,16 @@ class StartLoadGenerator:
     Starts a load generator.
     """
 
-    def __init__(self, client_id, config, tasks):
+    def __init__(self, client_id, config, track, tasks):
         """
         :param client_id: Client id of the load generator.
         :param config: Rally internal configuration object.
+        :param track: The track to use.
         :param tasks: Tasks to run.
         """
         self.client_id = client_id
         self.config = config
+        self.track = track
         self.tasks = tasks
 
 
@@ -189,7 +191,7 @@ class Driver(thespian.actors.Actor):
         for client_id in range(allocator.clients):
             self.drivers.append(self.createActor(LoadGenerator))
         for client_id, driver in enumerate(self.drivers):
-            self.send(driver, StartLoadGenerator(client_id, self.config, self.allocations[client_id]))
+            self.send(driver, StartLoadGenerator(client_id, self.config, current_track, self.allocations[client_id]))
 
         self.update_progress_message()
         self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
@@ -221,11 +223,11 @@ class Driver(thespian.actors.Actor):
                 self.metrics_store.close()
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
-                # start the next task in three seconds (relative to master's timestamp)
+                # start the next task in five seconds (relative to master's timestamp)
                 #
                 # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
                 #             (it doesn't matter too much if we're a few ms off).
-                start_next_task = time.perf_counter() + 3.0
+                start_next_task = time.perf_counter() + 5.0
                 for client_id, driver in enumerate(self.drivers):
                     client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
                     client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
@@ -289,6 +291,7 @@ class LoadGenerator(thespian.actors.Actor):
         self.client_id = None
         self.es = None
         self.config = None
+        self.track = None
         self.tasks = None
         self.current_task = 0
         self.start_timestamp = None
@@ -305,9 +308,11 @@ class LoadGenerator(thespian.actors.Actor):
                 self.client_id = msg.client_id
                 self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
                 self.config = msg.config
+                self.track = msg.track
                 self.tasks = msg.tasks
                 self.current_task = 0
                 self.start_timestamp = time.perf_counter()
+                track.load_track_plugins(self.config)
                 self.drive()
             elif isinstance(msg, Drive):
                 logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %
@@ -357,7 +362,7 @@ class LoadGenerator(thespian.actors.Actor):
         elif isinstance(task, track.Task):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
-            schedule = schedule_for(task, self.client_id)
+            schedule = schedule_for(self.track, task, self.client_id)
             self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
@@ -610,11 +615,6 @@ def execute_schedule(schedule, es, sampler):
     curr_total_it = 1
     # noinspection PyBroadException
     try:
-
-        # yield (wait_time * it,
-        #        lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
-        #        it, iterations, iterations, runner, p)
-
         for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_task, runner, params in schedule:
             sample_type = sample_type_calculator(total_start)
             # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
@@ -773,10 +773,11 @@ class Allocator:
 
 # Runs a concrete schedule on one worker client
 # Needs to determine the runners and concrete iterations per client.
-def schedule_for(task, client_index):
+def schedule_for(current_track, task, client_index):
     """
     Calculates a client's schedule for a given task.
 
+    :param current_track: The current track.
     :param task: The task that should be executed.
     :param client_index: The current client index.  Must be in the range [0, `task.clients').
     :return: A generator for the operations the given client needs to perform for this task.
@@ -785,15 +786,16 @@ def schedule_for(task, client_index):
     num_clients = task.clients
     target_throughput = task.target_throughput / num_clients if task.target_throughput else None
     runner_for_op = runner.runner_for(op.type)
+    params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
 
     if task.warmup_time_period is not None:
         logger.info("Creating time period based schedule for [%s] with a warmup period of [%d] seconds." % (op, task.warmup_time_period))
-        return time_period_based(target_throughput, task.warmup_time_period, runner_for_op, op.params.partition(client_index, num_clients))
+        return time_period_based(target_throughput, task.warmup_time_period, runner_for_op, params_for_op)
     else:
         logger.info("Creating iteration-count based schedule for [%s] with [%d] warmup iterations and [%d] iterations." %
                     (op, task.warmup_iterations, task.iterations))
         return iteration_count_based(target_throughput, task.warmup_iterations // num_clients, task.iterations // num_clients,
-                                     runner_for_op, op.params.partition(client_index, num_clients))
+                                     runner_for_op, params_for_op)
 
 
 def time_period_based(target_throughput, warmup_time_period, runner, params):
@@ -807,7 +809,7 @@ def time_period_based(target_throughput, warmup_time_period, runner, params):
     :return: A generator for the corresponding parameters.
     """
     wait_time = 1 / target_throughput if target_throughput else 0
-    iterations = params.variation_count()
+    iterations = params.size()
     for it in range(0, iterations):
         yield (wait_time * it,
                lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,

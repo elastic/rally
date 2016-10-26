@@ -86,6 +86,7 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 This activates Java flight recorder and the JIT compiler telemetry devices.
 
 .. _command_line_reference_revision:
+
 ``revision``
 ~~~~~~~~~~~~
 
@@ -200,7 +201,7 @@ Tells Rally that it should assume it has no connection to the Internet when chec
 Rally usually installs and launches an Elasticsearch cluster internally and wipes the entire directory after the benchmark is done. Sometimes you want to keep this cluster including all data after the benchmark has finished and that's what you can do with this flag. Note that depending on the track that has been run, the cluster can eat up a very significant amount of disk space (at least dozens of GB). The default value is configurable in the advanced configuration but usually ``false``.
 
 .. note::
-This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
+   This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
 
 
 ``advanced-config``
@@ -214,6 +215,17 @@ This flag determines whether Rally should present additional (advanced) configur
 
    esrally configure --advanced-config
 
+
+``assume-defaults``
+~~~~~~~~~~~~~~~~~~~
+
+This flag determines whether Rally should automatically accept all values for configuration options that provide a default. This is mainly intended to configure Rally automatically in CI runs. The default value is ``false``.
+
+**Example**
+
+ ::
+
+   esrally configure --assume-defaults=true
 
 ``user-tag``
 ~~~~~~~~~~~~

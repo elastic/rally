@@ -37,14 +37,14 @@ class TemplateRenderTests(TestCase):
         self.assertEqual(expected, rendered)
 
 
-class TrackReaderTests(TestCase):
+class TrackSpecificationReaderTests(TestCase):
     def test_missing_description_raises_syntax_error(self):
         track_specification = {
             "meta": {
                 "description": "unittest track"
             }
         }
-        reader = loader.TrackReader()
+        reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
@@ -111,7 +111,7 @@ class TrackReaderTests(TestCase):
 
             ]
         }
-        reader = loader.TrackReader()
+        reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)

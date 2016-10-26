@@ -194,12 +194,13 @@ class Task:
 
 
 class Operation:
-    def __init__(self, name, operation_type, params):
+    def __init__(self, name, operation_type, params=None, param_source=None):
         if params is None:
             params = {}
         self.name = name
         self.type = operation_type
         self.params = params
+        self.param_source = param_source
 
     def __hash__(self):
         return hash(self.name)

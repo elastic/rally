@@ -107,6 +107,7 @@ When using the advanced configuration, Rally stores its metrics not in-memory bu
 
 * Elasticsearch: a dedicated Elasticsearch instance which acts as the metrics store for Rally. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
 * Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
+
 Preparation
 ~~~~~~~~~~~
 

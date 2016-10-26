@@ -48,7 +48,7 @@ You should use this pipeline when you want to build and benchmark Elasticsearch 
 
     esrally --pipeline=from-sources-complete --revision=latest
 
-You have to specify a :ref:`revision </command_line_reference>`.
+You have to specify a :ref:`revision <command_line_reference_revision>`.
 
 from-sources-skip-build
 ~~~~~~~~~~~~~~~~~~~~~~~

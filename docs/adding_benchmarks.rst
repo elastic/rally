@@ -233,6 +233,95 @@ You can find an example in the logging track::
 
 The data set that is used in the logging track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
 
+Custom parameter sources
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+    This is a rather new feature and the API may change! However, the effort to use custom parameter sources is very low.
+
+Consider the following operation definition::
+
+    {
+      "name": "term",
+      "operation-type": "search",
+      "body": {
+        "query": {
+          "term": {
+            "body": "physician"
+          }
+        }
+      }
+    }
+
+This query is defined statically in the track specification but sometimes you may want to vary parameters, e.g. search also for "mechanic" or "nurse". In this case, you can write your own "parameter source" with a little bit of Python code.
+
+First, define the name of your parameter source in the operation definition::
+
+    {
+      "name": "term",
+      "operation-type": "search",
+      "param-source": {
+        "name": "my-custom-term-param-source"
+      }
+    }
+
+Rally will recognize the parameter source and looks then for a file ``track.py`` in the same directory as the corresponding JSON file. This file contains the implementation of the parameter source::
+
+    import random
+
+
+    class TermParamSource:
+        PROFESSIONS = ["mechanic", "physician", "nurse"]
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def partition(self, partition_index, total_partitions):
+            return self
+
+        def size(self):
+            return 1
+
+        def params(self):
+            # you must provide all parameters that the runner expects
+            return {
+                "body": {
+                    "query": {
+                        "term": {
+                            "body": "%s" % self.random_profession()
+                        }
+                    }
+                },
+                "index": None,
+                "type": None,
+                "use_request_cache": False
+            }
+
+        def random_profession(self):
+            return random.choice(TermParamSource.PROFESSIONS)
+
+
+    def register(registry):
+        registry.register_param_source("my-custom-term-param-source", TermParamSource)
+
+
+Let's walk through this code step by step:
+
+* Note the method ``register`` where you need to bind the name in the track specification to your parameter source implementation class. It is called by Rally before the track is executed.
+* The class ``TermParamSource`` is the actual parameter source and needs to fulfill a few requirements:
+
+    * It needs to have a constructor with the signature ``__init__(self, *args, **kwargs)``
+    * ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self`` but in certain cases you need to do something more sophisticated. If each clients needs to act differently then you can provide different parameter source instances here.
+    * ``size(self)``: This method is needed to help Rally provide a proper progress indication to users if you use a warmup time period. For bulk indexing, this would return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
+    * ``params(self)``: This method needs to return a dictionary with all parameters that the corresponding "runner" expects. For the standard case, Rally provides most of these parameters as a convenience, but here you need to define all of them yourself. This method will be invoked once for every iteration during the race. We can see that we randomly select a profession from a list which will be then be executed by the corresponding runner.
+
+.. note::
+
+    Be aware that ``params(self)`` is called on a performance-critical path so don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, please double-check that you did not introduce a bottleneck in the load test driver with your custom parameter source.
+
+In the implementation of custom parameter sources you can access the Python standard API. Using any additional libraries is not supported.
+
 Running tasks in parallel
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 

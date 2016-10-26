@@ -3,6 +3,8 @@ import logging
 import os
 import sys
 import urllib.error
+import importlib.machinery
+import types
 
 import jinja2
 import jinja2.exceptions
@@ -70,6 +72,30 @@ def load_track(cfg):
         logger.exception("Cannot load track [%s]" % track_name)
         raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
                                           (track_name, PROGRAM_NAME))
+
+
+def load_track_plugins(cfg):
+    track_name = cfg.opts("benchmarks", "track")
+    distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
+
+    repo = TrackRepository(cfg, fetch=False)
+    plugin_reader = TrackPluginReader()
+
+    track_plugin_file = repo.plugin_file(distribution_version, track_name)
+    if os.path.exists(track_plugin_file):
+        logger.info("Reading track plugin file [%s]." % track_plugin_file)
+        plugin_reader(track_plugin_file)
+    else:
+        logger.info("Skipping plugin detection for this track ([%s] does not exist)." % track_plugin_file)
+
+
+def operation_parameters(t, op):
+    if op.param_source:
+        logger.debug("Creating parameter source with name [%s]" % op.param_source)
+        return params.param_source_for_name(op.param_source, t.indices, op.params)
+    else:
+        logger.debug("Creating parameter source for operation type [%s]" % op.type)
+        return params.param_source_for_operation(op.type, t.indices, op.params)
 
 
 def prepare_track(track, cfg):
@@ -149,7 +175,7 @@ class TrackRepository:
     Manages track specifications.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, fetch=True):
         self.cfg = cfg
         self.name = cfg.opts("system", "track.repository")
         self.offline = cfg.opts("system", "offline.mode")
@@ -159,7 +185,7 @@ class TrackRepository:
         root = cfg.opts("system", "root.dir")
         track_repositories = cfg.opts("benchmarks", "track.repository.dir")
         self.tracks_dir = "%s/%s/%s" % (root, track_repositories, self.name)
-        if self.remote and not self.offline:
+        if self.remote and not self.offline and fetch:
             # a normal git repo with a remote
             if not git.is_working_copy(self.tracks_dir):
                 git.clone(src=self.tracks_dir, remote=self.url)
@@ -180,6 +206,11 @@ class TrackRepository:
     def track_file(self, distribution_version, track_name):
         self._update(distribution_version)
         return "%s/track.json" % self.track_dir(track_name)
+
+    def plugin_file(self, distribution_version, track_name):
+        # TODO dm 71: We should  assume here that somebody else has already checked out the correct branch. Revisit when we distribute drivers
+        #self._update(distribution_version)
+        return "%s/track.py" % self.track_dir(track_name)
 
     def _update(self, distribution_version):
         try:
@@ -235,27 +266,27 @@ class TrackFileReader:
         self.cfg = cfg
         track_schema_file = "%s/resources/track-schema.json" % (self.cfg.opts("system", "rally.root"))
         self.track_schema = json.loads(open(track_schema_file).read())
-        self.read_track = TrackReader()
+        self.read_track = TrackSpecificationReader()
 
-    def read(self, track_name, track_file, mapping_dir, data_dir):
+    def read(self, track_name, track_spec_file, mapping_dir, data_dir):
         """
         Reads a track file, verifies it against the JSON schema and if valid, creates a track.
 
         :param track_name: The name of the track.
-        :param track_file: The complete path to the track file.
+        :param track_spec_file: The complete path to the track specification file.
         :param mapping_dir: The directory where the mapping files for this track are stored locally.
         :param data_dir: The directory where the data file for this track are stored locally.
         :return: A corresponding track instance if the track file is valid.
         """
 
-        logger.info("Reading track file %s." % track_file)
+        logger.info("Reading track specification file [%s]." % track_spec_file)
         try:
-            rendered = render_template_from_file(track_file)
-            logger.info("Final rendered track for '%s': %s" % (track_file, rendered))
+            rendered = render_template_from_file(track_spec_file)
+            logger.info("Final rendered track for '%s': %s" % (track_spec_file, rendered))
             track_spec = json.loads(rendered)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
-            logger.exception("Could not load [%s]." % track_file)
-            raise TrackSyntaxError("Could not load '%s'" % track_file, e)
+            logger.exception("Could not load [%s]." % track_spec_file)
+            raise TrackSyntaxError("Could not load '%s'" % track_spec_file, e)
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
@@ -266,7 +297,22 @@ class TrackFileReader:
         return self.read_track(track_name, track_spec, mapping_dir, data_dir)
 
 
-class TrackReader:
+class TrackPluginReader:
+    """
+    Loads track plugins
+    """
+    def __call__(self, track_plugin_file):
+        loader = importlib.machinery.SourceFileLoader("track", track_plugin_file)
+        module = types.ModuleType(loader.name)
+        loader.exec_module(module)
+        # every module needs to have a register() method
+        module.register(self)
+
+    def register_param_source(self, name, param_source_class):
+        params.register_param_source_for_name(name, param_source_class)
+
+
+class TrackSpecificationReader:
     """
     Creates a track instances based on its parsed JSON description.
     """
@@ -280,7 +326,7 @@ class TrackReader:
         description = self._r(track_specification, ["meta", "description"])
         source_root_url = self._r(track_specification, ["meta", "data-url"])
         indices = [self._create_index(idx, mapping_dir, data_dir) for idx in self._r(track_specification, "indices")]
-        challenges = self._create_challenges(track_specification, indices)
+        challenges = self._create_challenges(track_specification)
 
         return track.Track(name=self.name, short_description=short_description, description=description,
                            source_root_url=source_root_url,
@@ -338,8 +384,8 @@ class TrackReader:
                           uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", mandatory=False)
                           )
 
-    def _create_challenges(self, track_spec, indices):
-        ops = self._parse_operations(self._r(track_spec, "operations"), indices)
+    def _create_challenges(self, track_spec):
+        ops = self._parse_operations(self._r(track_spec, "operations"))
         challenges = []
         for challenge in self._r(track_spec, "challenges"):
             challenge_name = self._r(challenge, "name", error_ctx="challenges")
@@ -385,7 +431,7 @@ class TrackReader:
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
                           target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
 
-    def _parse_operations(self, ops_specs, indices):
+    def _parse_operations(self, ops_specs):
         # key = name, value = operation
         ops = {}
         for op_spec in ops_specs:
@@ -393,8 +439,10 @@ class TrackReader:
             # TODO dm: If we want to allow custom operations, we need to catch KeyError here and just pass on the string instead of the enum
             # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
             op_type = track.OperationType.from_hyphenated_string(self._r(op_spec, "operation-type", error_ctx="operations"))
+            param_source = self._r(op_spec, "param-source", error_ctx="operations", mandatory=False)
+            param_source_name = param_source["name"] if param_source else None
             try:
-                ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=params.param_source(op_type, indices, op_spec))
+                ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=op_spec, param_source=param_source_name)
             except exceptions.InvalidSyntax as e:
                 raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
         return ops
