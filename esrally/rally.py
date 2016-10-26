@@ -246,6 +246,11 @@ def parse_args():
             help="show additional configuration options (default: false)",
             default=False,
             action="store_true")
+        p.add_argument(
+            "--assume-defaults",
+            help="Automatically accept all options with default values (default: false)",
+            default=False,
+            action="store_true")
 
     for p in [parser, race_parser]:
         p.add_argument(
@@ -396,7 +401,7 @@ def derive_sub_command(args, cfg):
 
 def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
-        config.ConfigFactory().create_config(cfg.config_file, advanced_config=args.advanced_config)
+        config.ConfigFactory().create_config(cfg.config_file, advanced_config=args.advanced_config, assume_defaults=args.assume_defaults)
         exit(0)
     else:
         if cfg.config_present():

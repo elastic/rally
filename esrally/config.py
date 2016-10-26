@@ -186,14 +186,19 @@ class ConfigFactory:
         self.i = i
         self.sec_i = sec_i
         self.o = o
+        self.assume_defaults = False
 
-    def create_config(self, config_file, advanced_config=False):
+    def create_config(self, config_file, advanced_config=False, assume_defaults=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
 
+        :param config_file:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
+        :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
+        configuration in CI run. Default: False.
         """
+        self.assume_defaults = assume_defaults
         if advanced_config:
             self.o("Running advanced configuration. You can get additional help at:")
             self.o("")
@@ -386,12 +391,16 @@ class ConfigFactory:
                                   check_pattern=ConfigFactory.ENV_NAME_PATTERN)
 
     def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, sensitive=False, default_value=None):
+        print("ASSUME DEFAULTS: %s" % (str(self.assume_defaults)))
         if default_value is not None:
             final_prompt = "%s [default: '%s']: " % (prompt, default_value)
         else:
             final_prompt = "%s: " % prompt
         while True:
-            if sensitive:
+            if self.assume_defaults and default_value is not None:
+                self.o(final_prompt)
+                value = None
+            elif sensitive:
                 value = self.sec_i(final_prompt)
             else:
                 value = self.i(final_prompt)
