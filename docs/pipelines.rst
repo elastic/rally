@@ -19,7 +19,7 @@ You can get a list of all pipelines with ``esrally list pipelines``::
 benchmark-only
 ~~~~~~~~~~~~~~
 
-This is intended if you want to provision a cluster by yourself. Do not use this pipeline unless you are absolutely sure you need to. As Rally has not provisioned the cluster, results are not easily reproducable and it also cannot gather a lot of metrics (like CPU usage). We will eventually allow to set up multi-node clusters at some point though so this pipeline will become obsolete over time. It is likely that we remove it then.
+This is intended if you want to provision a cluster by yourself. Do not use this pipeline unless you are absolutely sure you need to. As Rally has not provisioned the cluster, results are not easily reproducable and it also cannot gather a lot of metrics (like CPU usage).
 
 To benchmark a cluster, you also have to specify the hosts to connect to. An example invocation::
 
@@ -41,6 +41,11 @@ You can also benchmark Elasticsearch snapshot versions by specifying the snapsho
 
 However, this feature is mainly intended for continuous integration environments and by default you should just benchmark official distributions.
 
+.. note::
+
+   This pipeline is just mentioned for completeness but Rally will autoselect it for you. All you need to do is to define the ``--distribution-version`` flag.
+
+
 from-sources-complete
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -49,6 +54,11 @@ You should use this pipeline when you want to build and benchmark Elasticsearch 
     esrally --pipeline=from-sources-complete --revision=latest
 
 You have to specify a :ref:`revision <command_line_reference_revision>`.
+
+.. note::
+
+   This pipeline is just mentioned for completeness but Rally will autoselect it for you. All you need to do is to define the ``--revision`` flag.
+
 
 from-sources-skip-build
 ~~~~~~~~~~~~~~~~~~~~~~~

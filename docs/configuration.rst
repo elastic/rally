@@ -1,9 +1,13 @@
 Configuration
 =============
 
-Rally has to be configured once after installation. If you just run ``esrally`` after installation, Rally will detect that the configuration file is missing and asks you a few questions.
+Rally has to be configured once after installation. If you just run ``esrally`` after installing Rally, it will detect that the configuration file is missing and asks you a few questions.
 
 If you want to reconfigure Rally at any later time, just run ``esrally configure`` again.
+
+.. note::
+
+   If you get the error ``UnicodeEncodeError: 'ascii' codec can't encode character``, please configure your shell so it supports UTF-8 encoding. You can check the output of ``locale`` which should show UTF-8 as sole encoding. If in doubt, add ``export LC_ALL=en_US.UTF-8`` to your shell init file (e.g. ``~/.bashrc`` if you use Bash) and relogin.
 
 Simple Configuration
 --------------------
@@ -61,9 +65,7 @@ As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. 
 
     You can still benchmark binary distributions with e.g.:
 
-      esrally --pipeline=from-distribution --distribution-version=5.0.0
-
-    See https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution
+      esrally --distribution-version=5.0.0
     **********************************************************************************
 
 As you can see, Rally tells you that you cannot build Elasticsearch from sources but you can still benchmark official binary distributions.
@@ -135,8 +137,8 @@ Proxy Configuration
 
 Rally downloads all necessary data automatically for you:
 
-* Elasticsearch distributions from elastic.co if you specify ``--pipeline=from-distribution``
-* Elasticsearch source code from Github if you specify ``--pipeline=from-sources``
+* Elasticsearch distributions from elastic.co if you specify ``--distribution-version=SOME_VERSION_NUMBER``
+* Elasticsearch source code from Github if you specify a revision number e.g. ``--revision=952097b``
 * Track meta-data from Github
 * Track data from an S3 bucket
 

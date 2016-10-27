@@ -1,9 +1,10 @@
 Command Line Reference
 ======================
 
-Subcommands determine which task Rally performs. Command line flags are used to customize Rally's behavior and not all command line flags can be used for each subcommand. For example, it makes no sense to run ``esrally compare --preserve-install``.
+You can control Rally with subcommands and command line flags:
 
-To find out which command line flags are supported by a specific subcommand, just run ``esrally <<subcommand>> --help``.
+* Subcommands determine which task Rally performs.
+* Command line flags are used to change Rally's behavior but not all command line flags can be used for each subcommand. To find out which command line flags are supported by a specific subcommand, just run ``esrally <<subcommand>> --help``.
 
 Subcommands
 -----------
@@ -23,7 +24,7 @@ The ``list`` subcommand is used to list different configuration options:
 * telemetry: Will show all :doc:`telemetry devices </telemetry>` that are supported by Rally.
 * tracks: Will show all tracks that are supported by Rally. As this *may* depend on the Elasticsearch version that you want to benchmark, you can specify ``--distribution-version`` and also ``--distribution-repository`` as additional options.
 * pipelines: Will show all :doc:`pipelines </pipelines>` that are supported by Rally.
-* races: Will show all races that are currently stored. This is basically only needed for the :doc:`tournament mode </tournament>` and it will also only work if you have setup Rally so it supports tournaments.
+* races: Will show all races that are currently stored. This is only needed for the :doc:`tournament mode </tournament>` and it will also only work if you have setup Rally so it supports tournaments.
 * cars: Will show all cars that are supported by Rally (i.e. Elasticsearch configurations).
 
 To list a specific configuration option, place it after the ``list`` subcommand. For example, ``esrally list pipelines`` will list all pipelines known to Rally.
@@ -44,12 +45,12 @@ Command Line Flags
 ``track-repository``
 ~~~~~~~~~~~~~~~~~~~~
 
-Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available on `Github <https://github.com/elastic/rally-tracks>`_. See :doc:`adding benchmarks </adding_benchmarks>` on how to add your own track repositories.
+Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available on `Github <https://github.com/elastic/rally-tracks>`_. See :doc:`adding tracks </adding_tracks>` on how to add your own track repositories.
 
 ``track``
 ~~~~~~~~~
 
-Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding benchmarks </adding_benchmarks>`.
+Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>`.
 
 ``challenge``
 ~~~~~~~~~~~~~
@@ -65,6 +66,8 @@ A car defines the Elasticsearch configuration that will be used for the benchmar
 ~~~~~~~~~~~~
 
 Selects the :doc:`pipeline </pipelines>` that Rally should run.
+
+Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources-complete``.
 
 ``rounds``
 ~~~~~~~~~~
@@ -110,7 +113,7 @@ If you want to benchmark a binary distribution, you can specify the version here
 
  ::
 
-   esrally --pipeline=from-distribution --distribution-version=2.3.3
+   esrally --distribution-version=2.3.3
 
 
 Rally will then benchmark the official Elasticsearch 2.3.3 distribution.
@@ -124,9 +127,9 @@ Rally does not only support benchmarking official distributions but can also ben
 
  ::
 
-   esrally --pipeline=from-distribution --distribution-repository=snapshot --distribution-version=5.0.0-SNAPSHOT
+   esrally --distribution-repository=snapshot --distribution-version=6.0.0-SNAPSHOT
 
-This will benchmark the latest 5.0.0 snapshot build of Elasticsearch that is available in the Sonatype repository.
+This will benchmark the latest 6.0.0 snapshot build of Elasticsearch that is available in the Sonatype repository.
 
 ``report-format``
 ~~~~~~~~~~~~~~~~~

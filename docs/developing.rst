@@ -46,7 +46,7 @@ To get a rough understanding of Rally, it makes sense to get to know its key com
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
-There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_benchmarks>`.
+There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tracks>`.
 
 How to contribute code
 ----------------------

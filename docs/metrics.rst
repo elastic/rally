@@ -1,5 +1,8 @@
+Metrics
+=======
+
 Metrics Records
-===============
+---------------
 
 At the end of a race, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster.
 
@@ -95,7 +98,7 @@ Rally captures also some meta information for each metric record:
 Note that depending on the "level" of a metric record, certain meta information might be missing. It makes no sense to record host level meta info for a cluster wide metric record, like a query latency (as it cannot be attributed to a single node).
 
 Metric Keys
-===========
+-----------
 
 Rally stores the following metrics:
 

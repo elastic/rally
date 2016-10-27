@@ -1,5 +1,5 @@
-Adding new benchmarks to Rally
-==============================
+Creating custom tracks
+======================
 
 Overview
 --------
