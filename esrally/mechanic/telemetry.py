@@ -432,6 +432,7 @@ class SampleCpuUsage(threading.Thread):
         self.join()
 
     def run(self):
+        # noinspection PyBroadException
         try:
             while not self.stop:
                 self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",

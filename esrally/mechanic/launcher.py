@@ -38,9 +38,13 @@ class DockerLauncher:
         es = self.client_factory(hosts, client_options).create()
 
         t = telemetry.Telemetry(self.cfg, devices=[
-            telemetry.ExternalEnvironmentInfo(self.cfg, es, self.metrics_store),
+            # Be aware that some the meta-data are taken from the host system, not the container (e.g. number of CPU cores) so if the
+            # Docker container constrains these, the metrics are actually wrong.
+            telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
             telemetry.NodeStats(self.cfg, es, self.metrics_store),
-            telemetry.IndexStats(self.cfg, es, self.metrics_store)
+            telemetry.IndexStats(self.cfg, es, self.metrics_store),
+            telemetry.DiskIo(self.cfg, self.metrics_store),
+            telemetry.CpuUsage(self.cfg, self.metrics_store)
         ])
 
         distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
