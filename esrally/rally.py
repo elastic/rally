@@ -255,8 +255,9 @@ def parse_args():
     for p in [parser, race_parser]:
         p.add_argument(
             "--pipeline",
-            help="select the pipeline to run (default: from-sources-complete).",
-            default="from-sources-complete")
+            help="select the pipeline to run.",
+            # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
+            default="")
         p.add_argument(
             "--preserve-install",
             help="keep the benchmark candidate and its index. (default: %s)" % str(preserve_install).lower(),

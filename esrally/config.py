@@ -244,9 +244,7 @@ class ConfigFactory:
             self.o("")
             self.o("You can still benchmark binary distributions with e.g.:")
             self.o("")
-            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0" % PROGRAM_NAME)
-            self.o("")
-            self.o("See %s" % console.format.link("https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution"))
+            self.o("  %s --distribution-version=5.0.0" % PROGRAM_NAME)
             self.o("**********************************************************************************")
             self.o("")
 
@@ -340,7 +338,7 @@ class ConfigFactory:
         else:
             self.o("To benchmark Elasticsearch 5.0.0 with the default benchmark run:")
             self.o("")
-            self.o("  %s --pipeline=from-distribution --distribution-version=5.0.0" % PROGRAM_NAME)
+            self.o("  %s --distribution-version=5.0.0" % PROGRAM_NAME)
 
         self.o("")
         self.o("For help, type %s --help or see the user documentation at %s"

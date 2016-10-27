@@ -164,6 +164,16 @@ def list_pipelines():
 
 def run(cfg):
     name = cfg.opts("system", "pipeline")
+    if len(name) == 0:
+        distribution_version = cfg.opts("source", "distribution.version")
+        if len(distribution_version) > 0:
+            name = "from-distribution"
+        else:
+            name = "from-sources-complete"
+        logger.info("User specified no pipeline. Automatically derived pipeline [%s]." % name)
+    else:
+        logger.info("User specified pipeline [%s]." % name)
+
     try:
         pipeline = pipelines[name]
     except KeyError:
