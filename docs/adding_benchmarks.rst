@@ -433,8 +433,8 @@ Rally provides a default track repository that is hosted on `Github <https://git
 
 Rally implements a fallback logic so you don't need to define a branch for each patch release of Elasticsearch. For example:
 
-* The branch `5.0.0-alpha1` will be chosen for the version ``5.0.0-alpha1`` of Elasticsearch.
-* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3``, ``5.0.0-beta1`` (provided there is no specific branch).
+* The branch `6.0.0-alpha1` will be chosen for the version ``6.0.0-alpha1`` of Elasticsearch.
+* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3`` (provided there is no specific branch).
 
 Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
 

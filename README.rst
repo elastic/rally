@@ -65,7 +65,7 @@ Running the first benchmark
 
 Now we are ready to run the first benchmark with Rally: Just invoke ``esrally``. This will start Rally with sensible defaults. It will download the necessary benchmark data, checkout the latest version of Elasticsearch, build it and finally run the benchmark.
 
-**Note**: If you want to benchmark a binary distribution instead of a source distribution then run ``esrally --pipeline=from-distribution --distribution-version=VERSION_NUMBER`` (``VERSION_NUMBER`` is for example ``5.0.0-alpha1`` and is identical to the version number used in the download URL)
+**Note**: If you want to benchmark a binary distribution instead of a source distribution then run ``esrally --pipeline=from-distribution --distribution-version=VERSION_NUMBER`` (``VERSION_NUMBER`` is for example ``5.0.0`` and is identical to the version number used in the download URL)
 
 When the benchmark is done, a summary report is written to the command line:::
 

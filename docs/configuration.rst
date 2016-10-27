@@ -61,7 +61,7 @@ As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. 
 
     You can still benchmark binary distributions with e.g.:
 
-      esrally --pipeline=from-distribution --distribution-version=5.0.0-alpha2
+      esrally --pipeline=from-distribution --distribution-version=5.0.0
 
     See https://esrally.readthedocs.io/en/latest/pipelines.html#from-distribution
     **********************************************************************************
