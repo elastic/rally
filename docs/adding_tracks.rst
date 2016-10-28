@@ -347,7 +347,7 @@ Let's walk through this code step by step:
 In the implementation of custom parameter sources you can access the Python standard API. Using any additional libraries is not supported.
 
 Custom runners
-~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^
 
 You cannot only define custom parameter sources but also custom runners. Runners execute an operation against Elasticsearch. Out of the box, Rally supports the following operations:
 
