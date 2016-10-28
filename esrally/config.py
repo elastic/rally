@@ -133,9 +133,6 @@ class Config:
         # them either
         self._opts = {
             "source::distribution.dir": "distributions",
-            "build::gradle.tasks.clean": "clean",
-            "build::gradle.tasks.package": ":distribution:tar:assemble",
-            "build::log.dir": "build",
             "benchmarks::metrics.log.dir": "telemetry",
             "benchmarks::track.repository.dir": "tracks",
             "benchmarks::track.default.repository": "default",

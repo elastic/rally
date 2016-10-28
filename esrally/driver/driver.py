@@ -472,6 +472,7 @@ def wait_for_status(es, es_version, expected_cluster_status):
 
 def _do_wait(es, es_version, expected_cluster_status):
     reached_cluster_status = None
+    relocating_shards = -1
     major, minor, patch, suffix = versions.components(es_version)
     if major < 5:
         use_wait_for_relocating_shards = True

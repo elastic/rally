@@ -1,7 +1,6 @@
 import logging
 
 from esrally import paths, config
-from esrally.utils import console
 from esrally.mechanic import supplier, provisioner, launcher
 
 logger = logging.getLogger("rally.mechanic")
@@ -37,9 +36,9 @@ class Mechanic:
     running the benchmark).
     """
 
-    def __init__(self, cfg, s, p, l):
+    def __init__(self, cfg, supply, p, l):
         self._config = cfg
-        self.supplier = s
+        self.supply = supply
         self.provisioner = p
         self.launcher = l
 
@@ -54,7 +53,7 @@ class Mechanic:
                          race_paths.challenge_logs(track_name, challenge_name))
 
     def prepare_candidate(self):
-        self.supplier()
+        self.supply()
 
     def start_engine(self):
         selected_car = self.provisioner.prepare()

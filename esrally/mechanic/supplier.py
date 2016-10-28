@@ -118,8 +118,8 @@ class Builder:
         self._config = cfg
 
     def build(self):
-        self._exec("gradle.tasks.clean")
-        self._exec("gradle.tasks.package")
+        self.run("clean")
+        self.run(":distribution:tar:assemble")
 
     def add_binary_to_config(self):
         src_dir = self._config.opts("source", "local.src.dir")
@@ -129,7 +129,7 @@ class Builder:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
         self._config.add(config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
-    def _exec(self, task_key):
+    def run(self, task):
         try:
             src_dir = self._config.opts("source", "local.src.dir")
         except config.ConfigError:
@@ -139,20 +139,16 @@ class Builder:
 
         logger.info("Building Elasticsearch from sources in [%s]." % src_dir)
         gradle = self._config.opts("build", "gradle.bin")
-        task = self._config.opts("build", task_key)
         java_home = self._config.opts("runtime", "java8.home")
-
-        log_root = self._config.opts("system", "log.dir")
-        build_log_dir = self._config.opts("build", "log.dir")
-        log_dir = "%s/%s" % (log_root, build_log_dir)
+        log_dir = self._config.opts("system", "log.dir")
 
         logger.info("Executing %s %s..." % (gradle, task))
         io.ensure_dir(log_dir)
-        log_file = "%s/build.%s.log" % (log_dir, task_key)
+        log_file = "%s/build.log" % log_dir
 
         # we capture all output to a dedicated build log file
 
-        if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s > %s 2>&1" % (java_home, src_dir, gradle, task, log_file)):
+        if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" % (java_home, src_dir, gradle, task, log_file)):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:

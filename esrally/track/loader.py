@@ -385,7 +385,7 @@ class TrackSpecificationReader:
                           )
 
     def _create_challenges(self, track_spec):
-        ops = self._parse_operations(self._r(track_spec, "operations"))
+        ops = self.parse_operations(self._r(track_spec, "operations"))
         challenges = []
         for challenge in self._r(track_spec, "challenges"):
             challenge_name = self._r(challenge, "name", error_ctx="challenges")
@@ -431,7 +431,7 @@ class TrackSpecificationReader:
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
                           target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
 
-    def _parse_operations(self, ops_specs):
+    def parse_operations(self, ops_specs):
         # key = name, value = operation
         ops = {}
         for op_spec in ops_specs:

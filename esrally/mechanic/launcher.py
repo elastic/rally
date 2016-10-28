@@ -10,7 +10,7 @@ import jinja2
 import psutil
 
 from esrally import config, time, exceptions, client
-from esrally.mechanic import gear, telemetry, cluster
+from esrally.mechanic import telemetry, cluster
 from esrally.utils import versions, console, process, io, convert
 
 logger = logging.getLogger("rally.launcher")
@@ -304,7 +304,7 @@ class InProcessLauncher:
     def _prepare_env(self, car, node_name, t):
         env = {}
         env.update(os.environ)
-        java_home = gear.Gear(self.cfg).capability(gear.Capability.java)
+        java_home = self.cfg.opts("runtime", "java8.home")
         # Unix specific!:
         self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
         # Don't merge here!
