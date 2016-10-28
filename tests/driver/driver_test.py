@@ -203,7 +203,7 @@ class SchedulerTests(ScheduleTestCase):
                                       challenges=None)
 
     def test_search_task_one_client(self):
-        task = track.Task(track.Operation("search", track.OperationType.Search, param_source="driver-test-param-source"),
+        task = track.Task(track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, target_throughput=10)
         schedule = driver.schedule_for(self.test_track, task, 0)
 
@@ -220,7 +220,7 @@ class SchedulerTests(ScheduleTestCase):
         self.assert_schedule(expected_schedule, schedule)
 
     def test_search_task_two_clients(self):
-        task = track.Task(track.Operation("search", track.OperationType.Search, param_source="driver-test-param-source"),
+        task = track.Task(track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=2, iterations=10, clients=2, target_throughput=10)
         schedule = driver.schedule_for(self.test_track, task, 0)
 
@@ -235,7 +235,7 @@ class SchedulerTests(ScheduleTestCase):
         self.assert_schedule(expected_schedule, schedule)
 
     def test_schedule_for_warmup_time_based(self):
-        task = track.Task(track.Operation("time-based", track.OperationType.Index, params={"body": ["a"], "size": 11},
+        task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"], "size": 11},
                                           param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, target_throughput=4)
 

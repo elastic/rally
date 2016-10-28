@@ -103,8 +103,7 @@
           },
           "operation-type": {
             "type": "string",
-            "enum": ["index", "index-stats", "node-stats", "force-merge", "search"],
-            "description": "Type of this operation. Possible values are: 'index', 'index-stats', 'node-stats', 'force-merge', 'search'."
+            "description": "Type of this operation."
           },
           "bulk-size": {
             "type": "integer",

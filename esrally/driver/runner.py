@@ -1,3 +1,4 @@
+import types
 import logging
 
 import elasticsearch
@@ -7,25 +8,30 @@ from esrally import exceptions, track
 logger = logging.getLogger("rally.driver")
 
 # Mapping from operation type to specific runner
-runners = {}
+__RUNNERS = {}
 
 
 def runner_for(operation_type):
     try:
-        return runners[operation_type]
+        return __RUNNERS[operation_type]
     except KeyError:
         raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
+
+
+def register_runner(operation_type, runner):
+    # we'd rather use callable() but this will erroneously also classify a class as callable...
+    if isinstance(runner, types.FunctionType):
+        logger.debug("Registering function [%s] for [%s]." % (str(runner), str(operation_type)))
+        __RUNNERS[operation_type] = DelegatingRunner(runner)
+    else:
+        logger.debug("Registering object [%s] for [%s]." % (str(runner), str(operation_type)))
+        __RUNNERS[operation_type] = runner
 
 
 class Runner:
     """
     Base class for all operations against Elasticsearch.
     """
-
-    def __init__(self, operation_type):
-        # self register
-        global runners
-        runners[operation_type] = self
 
     def __enter__(self):
         return self
@@ -46,6 +52,14 @@ class Runner:
         return False
 
 
+class DelegatingRunner(Runner):
+    def __init__(self, runnable):
+        self.runnable = runnable
+
+    def __call__(self, *args):
+        return self.runnable(*args)
+
+
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
@@ -54,7 +68,7 @@ class BulkIndex(Runner):
 
     """
     def __init__(self):
-        super().__init__(track.OperationType.Index)
+        super().__init__()
 
     def __call__(self, es, params):
         bulk_params = {}
@@ -78,9 +92,6 @@ class ForceMerge(Runner):
     """
     Runs a force merge operation against Elasticsearch.
     """
-    def __init__(self):
-        super().__init__(track.OperationType.ForceMerge)
-
     def __call__(self, es, params):
         logger.info("Force merging all indices.")
         try:
@@ -98,9 +109,6 @@ class IndicesStats(Runner):
     """
     Gather index stats for all indices.
     """
-    def __init__(self):
-        super().__init__(track.OperationType.IndicesStats)
-
     def __call__(self, es, params):
         es.indices.stats(metric="_all")
         return 1, "ops"
@@ -110,9 +118,6 @@ class NodeStats(Runner):
     """
     Gather node stats for all nodes.
     """
-    def __init__(self):
-        super().__init__(track.OperationType.NodesStats)
-
     def __call__(self, es, params):
         es.nodes.stats(metric="_all")
         return 1, "ops"
@@ -138,7 +143,6 @@ class Query(Runner):
     """
 
     def __init__(self):
-        super().__init__(track.OperationType.Search)
         self.scroll_id = None
         self.es = None
 
@@ -182,9 +186,10 @@ class Query(Runner):
         return False
 
 
-# Initialize all runners - they'll then self-register
-BulkIndex()
-ForceMerge()
-IndicesStats()
-NodeStats()
-Query()
+register_runner(track.OperationType.Index.name, BulkIndex())
+register_runner(track.OperationType.ForceMerge.name, ForceMerge())
+register_runner(track.OperationType.IndicesStats.name, IndicesStats())
+register_runner(track.OperationType.NodesStats.name, NodeStats())
+register_runner(track.OperationType.Search.name, Query())
+
+

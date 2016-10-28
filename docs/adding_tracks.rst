@@ -346,6 +346,57 @@ Let's walk through this code step by step:
 
 In the implementation of custom parameter sources you can access the Python standard API. Using any additional libraries is not supported.
 
+Custom runners
+~~~~~~~~~~~~~~
+
+You cannot only define custom parameter sources but also custom runners. Runners execute an operation against Elasticsearch. Out of the box, Rally supports the following operations:
+
+* Bulk indexing
+* Force merge
+* Searches
+* Index stats
+* Nodes stats
+
+If you want to use any other operation, you can define a custom runner. Consider, we want to use the percolate API with an older version of Elasticsearch (note that it has been replaced by the percolate query in Elasticsearch 5.0). To achieve this, we c
+
+In track.json specify an operation with type "percolate" (you can choose this name freely)::
+
+    {
+      "name": "percolator_with_content_google",
+      "operation-type": "percolate",
+      "body": {
+        "doc": {
+          "body": "google"
+        },
+        "track_scores": true
+      }
+    }
+
+
+Then create a file track.py next to track.json and implement the following two functions::
+
+    def percolate(es, params):
+        es.percolate(
+            index="queries",
+            doc_type="content",
+            body=params["body"]
+        )
+        return 1, "ops"
+
+
+    def register(registry):
+        registry.register_runner("percolate", percolate)
+
+
+The function ``percolate`` is the actual runner and takes the parameters ``es``, which is the Elasticsearch Python client and ``params`` which is a hash of parameters provided by its corresponding parameter source. This function needs to return a tuple of ``weight`` and a ``unit``, which is usually ``1`` and ``"ops"``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
+
+Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
+
+.. note::
+
+    You need to implement ``register`` just once and register all parameter sources and runners there.
+
+
 Running tasks in parallel
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 

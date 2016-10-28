@@ -32,7 +32,7 @@ def param_source_for_name(name, indices, params):
 
 
 def register_param_source_for_operation(op_type, param_source_class):
-    __PARAM_SOURCES_BY_OP[op_type] = param_source_class
+    __PARAM_SOURCES_BY_OP[op_type.name] = param_source_class
 
 
 def register_param_source_for_name(name, param_source_class):

@@ -342,7 +342,7 @@ class MetricsStore:
         if operation:
             doc["operation"] = operation
         if operation_type:
-            doc["operation-type"] = operation_type.name
+            doc["operation-type"] = operation_type
 
         self._add(doc)
 

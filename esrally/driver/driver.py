@@ -312,7 +312,7 @@ class LoadGenerator(thespian.actors.Actor):
                 self.tasks = msg.tasks
                 self.current_task = 0
                 self.start_timestamp = time.perf_counter()
-                track.load_track_plugins(self.config)
+                track.load_track_plugins(self.config, runner.register_runner)
                 self.drive()
             elif isinstance(msg, Drive):
                 logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %

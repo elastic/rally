@@ -74,12 +74,12 @@ def load_track(cfg):
                                           (track_name, PROGRAM_NAME))
 
 
-def load_track_plugins(cfg):
+def load_track_plugins(cfg, register_runner):
     track_name = cfg.opts("benchmarks", "track")
     distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
 
     repo = TrackRepository(cfg, fetch=False)
-    plugin_reader = TrackPluginReader()
+    plugin_reader = TrackPluginReader(register_runner)
 
     track_plugin_file = repo.plugin_file(distribution_version, track_name)
     if os.path.exists(track_plugin_file):
@@ -301,6 +301,9 @@ class TrackPluginReader:
     """
     Loads track plugins
     """
+    def __init__(self, runner_registry):
+        self.runner_registry = runner_registry
+
     def __call__(self, track_plugin_file):
         loader = importlib.machinery.SourceFileLoader("track", track_plugin_file)
         module = types.ModuleType(loader.name)
@@ -310,6 +313,9 @@ class TrackPluginReader:
 
     def register_param_source(self, name, param_source):
         params.register_param_source_for_name(name, param_source)
+
+    def register_runner(self, name, runner):
+        self.runner_registry(name, runner)
 
 
 class TrackSpecificationReader:
@@ -437,9 +443,14 @@ class TrackSpecificationReader:
         ops = {}
         for op_spec in ops_specs:
             op_name = self._r(op_spec, "name", error_ctx="operations")
-            # TODO dm: If we want to allow custom operations, we need to catch KeyError here and just pass on the string instead of the enum
             # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
-            op_type = track.OperationType.from_hyphenated_string(self._r(op_spec, "operation-type", error_ctx="operations"))
+            op_type_name = self._r(op_spec, "operation-type", error_ctx="operations")
+            try:
+                op_type = track.OperationType.from_hyphenated_string(op_type_name).name
+                logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
+            except KeyError:
+                logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
+                op_type = op_type_name
             param_source = self._r(op_spec, "param-source", error_ctx="operations", mandatory=False)
             try:
                 ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=op_spec, param_source=param_source)
