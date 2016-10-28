@@ -362,7 +362,8 @@ class TrackSpecificationReader:
                 valid_document_data = True
                 break
         if not valid_document_data:
-            self._error("Index '%s' is invalid. At least one of its types needs to define documents." % index_name)
+            console.warn("None of the types for index [%s] defines documents. Please check that you either don't want to index data or "
+                         "parameter sources are defined for indexing." % index_name, logger=logger)
 
         return track.Index(name=index_name, types=types)
 
