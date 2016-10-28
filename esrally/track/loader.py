@@ -308,8 +308,8 @@ class TrackPluginReader:
         # every module needs to have a register() method
         module.register(self)
 
-    def register_param_source(self, name, param_source_class):
-        params.register_param_source_for_name(name, param_source_class)
+    def register_param_source(self, name, param_source):
+        params.register_param_source_for_name(name, param_source)
 
 
 class TrackSpecificationReader:
@@ -440,9 +440,8 @@ class TrackSpecificationReader:
             # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
             op_type = track.OperationType.from_hyphenated_string(self._r(op_spec, "operation-type", error_ctx="operations"))
             param_source = self._r(op_spec, "param-source", error_ctx="operations", mandatory=False)
-            param_source_name = param_source["name"] if param_source else None
             try:
-                ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=op_spec, param_source=param_source_name)
+                ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=op_spec, param_source=param_source)
             except exceptions.InvalidSyntax as e:
                 raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
         return ops

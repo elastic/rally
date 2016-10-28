@@ -207,3 +207,45 @@ class InvocationGeneratorTests(TestCase):
                          params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0))
         # we cannot tell anything specific about the contents...
         self.assertEqual(3, len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)))
+
+
+class ParamsRegistrationTests(TestCase):
+    @staticmethod
+    def param_source_function(indices, params):
+        return {
+            "key": params["parameter"]
+        }
+
+    class ParamSourceClass:
+        def __init__(self, indices=None, params=None):
+            self._indices = indices
+            self._params = params
+
+        def partition(self, partition_index, total_partitions):
+            return self
+
+        def size(self):
+            return 1
+
+        def params(self):
+            return {
+                "class-key": self._params["parameter"]
+            }
+
+    def test_can_register_function_as_param_source(self):
+        source_name = "params-test-function-param-source"
+
+        params.register_param_source_for_name(source_name, ParamsRegistrationTests.param_source_function)
+        source = params.param_source_for_name(source_name, None, {"parameter": 42})
+        self.assertEqual({"key": 42}, source.params())
+
+        params._unregister_param_source_for_name(source_name)
+
+    def test_can_register_class_as_param_source(self):
+        source_name = "params-test-class-param-source"
+
+        params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass)
+        source = params.param_source_for_name(source_name, None, {"parameter": 42})
+        self.assertEqual({"class-key": 42}, source.params())
+
+        params._unregister_param_source_for_name(source_name)

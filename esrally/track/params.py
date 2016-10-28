@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+import types
 from enum import Enum
 
 from esrally import exceptions
@@ -22,7 +23,12 @@ def param_source_for_operation(op_type, indices, params):
 
 
 def param_source_for_name(name, indices, params):
-    return __PARAM_SOURCES_BY_NAME[name](indices, params)
+    param_source = __PARAM_SOURCES_BY_NAME[name]
+    # we'd rather use callable() but this will erroneously also classify a class as callable...
+    if isinstance(param_source, types.FunctionType):
+        return DelegatingParamSource(indices, params, param_source)
+    else:
+        return param_source(indices, params)
 
 
 def register_param_source_for_operation(op_type, param_source_class):
@@ -31,6 +37,13 @@ def register_param_source_for_operation(op_type, param_source_class):
 
 def register_param_source_for_name(name, param_source_class):
     __PARAM_SOURCES_BY_NAME[name] = param_source_class
+
+
+# only intended for tests
+def _unregister_param_source_for_name(name):
+    # We intentionally do not specify a default value if the key does not exist. If we try to remove a key that we didn't insert then
+    # something is fishy with the test and we'd rather know early.
+    __PARAM_SOURCES_BY_NAME.pop(name)
 
 
 # Default
@@ -87,6 +100,15 @@ class ParamSource:
         value: parameter value).
         """
         return self._params
+
+
+class DelegatingParamSource(ParamSource):
+    def __init__(self, indices, params, delegate):
+        super().__init__(indices, params)
+        self.delegate = delegate
+
+    def params(self):
+        return self.delegate(self.indices, self._params)
 
 
 class SearchParamSource(ParamSource):
