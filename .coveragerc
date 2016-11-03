@@ -1,0 +1,8 @@
+[run]
+omit =
+    # omit everything in /usr
+    /usr/local/lib/python*
+    tests/*
+    setup.py
+
+branch = True
