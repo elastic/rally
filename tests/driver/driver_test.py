@@ -211,11 +211,11 @@ class SchedulerTests(ScheduleTestCase):
             (0, metrics.SampleType.Warmup, 0, 8, None, {}),
             (0.1, metrics.SampleType.Warmup, 1, 8, None, {}),
             (0.2, metrics.SampleType.Warmup, 2, 8, None, {}),
-            (0, metrics.SampleType.Normal, 0, 8, None, {}),
-            (0.1, metrics.SampleType.Normal, 1, 8, None, {}),
-            (0.2, metrics.SampleType.Normal, 2, 8, None, {}),
-            (0.3, metrics.SampleType.Normal, 3, 8, None, {}),
-            (0.4, metrics.SampleType.Normal, 4, 8, None, {}),
+            (0.3, metrics.SampleType.Normal, 0, 8, None, {}),
+            (0.4, metrics.SampleType.Normal, 1, 8, None, {}),
+            (0.5, metrics.SampleType.Normal, 2, 8, None, {}),
+            (0.6, metrics.SampleType.Normal, 3, 8, None, {}),
+            (0.7, metrics.SampleType.Normal, 4, 8, None, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
@@ -226,11 +226,11 @@ class SchedulerTests(ScheduleTestCase):
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 0, 6, None, {}),
-            (0, metrics.SampleType.Normal, 0, 6, None, {}),
-            (0.2, metrics.SampleType.Normal, 1, 6, None, {}),
-            (0.4, metrics.SampleType.Normal, 2, 6, None, {}),
-            (0.6, metrics.SampleType.Normal, 3, 6, None, {}),
-            (0.8, metrics.SampleType.Normal, 4, 6, None, {}),
+            (0.2, metrics.SampleType.Normal, 0, 6, None, {}),
+            (0.4, metrics.SampleType.Normal, 1, 6, None, {}),
+            (0.6, metrics.SampleType.Normal, 2, 6, None, {}),
+            (0.8, metrics.SampleType.Normal, 3, 6, None, {}),
+            (1.0, metrics.SampleType.Normal, 4, 6, None, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 

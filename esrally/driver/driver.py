@@ -257,7 +257,7 @@ class Driver(thespian.actors.Actor):
 
         aggregates = calculate_global_throughput(self.raw_samples)
         for op, samples in aggregates.items():
-            for absolute_time, relative_time, sample_type, throughput, throughput_unit in moving_average(samples):
+            for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time)
@@ -547,9 +547,6 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
         current_bucket = 0
         current_sample_type = current_samples[0].sample_type
         start_time = current_samples[0].absolute_time - current_samples[0].time_period
-        skip_buckets = False
-        last_throughput = 0
-
         for sample in current_samples:
             # print("%d,%f,%f,%s,%s,%d,%f" %
             # (sample.client_id, sample.absolute_time, sample.relative_time, sample.operation, sample.sample_type,
@@ -558,13 +555,6 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
             # once we have seen a new sample type, we stick to it.
             if current_sample_type < sample.sample_type:
                 current_sample_type = sample.sample_type
-                total_count = 0
-                interval = 0
-                current_bucket = 0
-                start_time = sample.absolute_time - sample.time_period
-                # skip the next few buckets as the system needs time to stabilize again after the sample type has changed
-                # TODO dm: Redo
-                # skip_buckets = True
 
             total_count += sample.total_ops
             interval = max(sample.absolute_time - start_time, interval)
@@ -573,33 +563,10 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
             if interval > 0 and interval >= current_bucket:
                 current_bucket = int(interval) + bucket_interval_secs
                 throughput = (total_count / interval)
-                # skip buckets until throughput catches up. This avoids artifacts introduced by resetting calculation parameters after
-                # the sample type has changed
-                if not skip_buckets or throughput > last_throughput:
-                    skip_buckets = False
-                    last_throughput = throughput
-                    global_throughput[op].append(
-                        # we calculate throughput per second
-                        (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
+                # we calculate throughput per second
+                global_throughput[op].append(
+                    (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
     return global_throughput
-
-
-def moving_average(data, window=3):
-    average_data = []
-    for idx, record in enumerate(data):
-        if idx < window:
-            average_data.append(record)
-        elif idx >= len(data) - window:
-            average_data.append(record)
-        else:
-            sum_in_window = 0
-            # also include upper bound
-            for offset in range(-window, window + 1):
-                _, _, _, v, _ = data[idx + offset]
-                sum_in_window += v
-            absolute_time, relative_time, sample_type, value, unit = record
-            average_data.append((absolute_time, relative_time, sample_type, sum_in_window / (2 * window + 1), unit))
-    return average_data
 
 
 def execute_schedule(schedule, es, sampler):
@@ -610,23 +577,13 @@ def execute_schedule(schedule, es, sampler):
     :param es: Elasticsearch client that will be used to execute the operation.
     :param sampler: A container to store raw samples.
     """
-    relative = None
-    previous_sample_type = None
     total_start = time.perf_counter()
     curr_total_it = 1
     # noinspection PyBroadException
     try:
         for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_task, runner, params in schedule:
             sample_type = sample_type_calculator(total_start)
-            # restart the relative time when the sample type changes. This way all warmup samples and measurement samples will start at
-            # the relative time zero which simplifies throughput calculation.
-            #
-            # Assumption: We always get the same operation here, otherwise simply resetting one timer will not work!
-            if sample_type != previous_sample_type:
-                relative = time.perf_counter()
-                previous_sample_type = sample_type
-            # expected_scheduled_time is relative to the start of the first iteration
-            absolute_expected_schedule_time = relative + expected_scheduled_time
+            absolute_expected_schedule_time = total_start + expected_scheduled_time
             throughput_throttled = expected_scheduled_time > 0
             if throughput_throttled:
                 rest = absolute_expected_schedule_time - time.perf_counter()
@@ -641,7 +598,7 @@ def execute_schedule(schedule, es, sampler):
             # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
             latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
             sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops, total_ops_unit,
-                        (stop - relative), curr_total_it, total_it_for_task)
+                        (stop - total_start), curr_total_it, total_it_for_task)
             curr_total_it += 1
     except BaseException:
         logger.exception("Could not execute schedule")
@@ -836,4 +793,4 @@ def iteration_count_based(target_throughput, warmup_iterations, iterations, runn
         yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, total_iterations, runner, params.params())
 
     for i in range(0, iterations):
-        yield (wait_time * i, lambda start: metrics.SampleType.Normal, i, total_iterations, runner, params.params())
+        yield (wait_time * (warmup_iterations + i), lambda start: metrics.SampleType.Normal, i, total_iterations, runner, params.params())
