@@ -69,10 +69,10 @@ Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources-complete``.
 
-``rounds``
-~~~~~~~~~~
+``laps``
+~~~~~~~~
 
-Allows to run the benchmark for multiple rounds (defaults to 1 round). Note that the benchmark candidate is not restarted between rounds.
+Allows to run the benchmark for multiple laps (defaults to 1 lap). Note that the benchmark candidate is not restarted between laps.
 
 ``telemetry``
 ~~~~~~~~~~~~~

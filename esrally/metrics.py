@@ -778,6 +778,7 @@ class EsRaceStore:
         self.client.put_template("rally", self.index_template_provider.template())
 
         trial_timestamp = self.config.opts("meta", "time.start")
+        laps = self.config.opts("benchmarks", "laps")
 
         selected_challenge = {}
         for challenge in t.challenges:
@@ -793,6 +794,7 @@ class EsRaceStore:
             "pipeline": self.config.opts("system", "pipeline"),
             "revision": self.config.opts("source", "revision"),
             "distribution-version": self.config.opts("source", "distribution.version"),
+            "laps": laps,
             "track": t.name,
             "selected-challenge": selected_challenge,
             "car": self.config.opts("benchmarks", "car"),
@@ -862,6 +864,7 @@ class Race:
         self.pipeline = source["pipeline"]
         self.revision = source["revision"]
         self.distribution_version = source["distribution-version"]
+        self.laps = source["laps"]
         self.track = source["track"]
         self.challenge = SelectedChallenge(source["selected-challenge"])
         self.car = source["car"]

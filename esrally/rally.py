@@ -318,9 +318,9 @@ def parse_args():
             default=False,
             action="store_true")
         p.add_argument(
-            "--rounds",
+            "--laps",
             type=positive_number,
-            help="number of rounds that the benchmark should run (default: 1).",
+            help="number of laps that the benchmark should run (default: 1).",
             default=1)
 
     for p in [parser, list_parser, race_parser]:
@@ -557,7 +557,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "rounds", args.rounds)
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "laps", args.laps)
     cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", convert_hosts(csv_to_list(args.target_hosts)))

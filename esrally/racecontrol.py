@@ -43,100 +43,132 @@ class Pipeline:
         self.target(cfg)
 
 
-def sweep(cfg):
-    invocation_root = cfg.opts("system", "invocation.root.dir")
-    track_name = cfg.opts("benchmarks", "track")
-    challenge_name = cfg.opts("benchmarks", "challenge")
-    car_name = cfg.opts("benchmarks", "car")
+class Benchmark:
+    def __init__(self, cfg, mechanic, metrics_store):
+        self.cfg = cfg
+        self.mechanic = mechanic
+        self.metrics_store = metrics_store
+        self.cluster = None
+        self.actor_system = None
+        self.track = None
 
-    log_root = paths.Paths(cfg).log_root()
-    archive_path = "%s/logs-%s-%s-%s.zip" % (invocation_root, track_name, challenge_name, car_name)
-    io.compress(log_root, archive_path)
-    console.println("")
-    console.info("Archiving logs in %s" % archive_path)
-    shutil.rmtree(log_root)
+    def setup(self):
+        self.mechanic.prepare_candidate()
+        self.cluster = self.mechanic.start_engine()
+        self.track = track.load_track(self.cfg)
+        metrics.race_store(self.cfg).store_race(self.track)
+        self.actor_system = thespian.actors.ActorSystem()
 
-
-def benchmark(cfg, mechanic, metrics_store):
-    track_name = cfg.opts("benchmarks", "track")
-    challenge_name = cfg.opts("benchmarks", "challenge")
-    selected_car_name = cfg.opts("benchmarks", "car")
-    rounds = cfg.opts("benchmarks", "rounds")
-
-    console.info("Racing on track [%s], challenge [%s] and car [%s]" % (track_name, challenge_name, selected_car_name))
-
-    mechanic.prepare_candidate()
-    cluster = mechanic.start_engine()
-
-    t = track.load_track(cfg)
-    metrics.race_store(cfg).store_race(t)
-
-    actors = thespian.actors.ActorSystem()
-    # just ensure it is optically separated
-    console.println("")
-    lap_timer = time.Clock.stop_watch()
-    lap_timer.start()
-    lap_times = 0
-    for round in range(0, rounds):
-        if rounds > 1:
-            msg = "Round [%d/%d]" % (round + 1, rounds)
-            console.println(console.format.bold(msg), logger=logger.info)
-            console.println(console.format.underline_for(msg))
-        main_driver = actors.createActor(driver.Driver)
-        cluster.on_benchmark_start()
-        result = actors.ask(main_driver, driver.StartBenchmark(cfg, t, metrics_store.meta_info))
+    def run(self):
+        main_driver = self.actor_system.createActor(driver.Driver)
+        self.cluster.on_benchmark_start()
+        result = self.actor_system.ask(main_driver, driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info))
         if isinstance(result, driver.BenchmarkComplete):
-            cluster.on_benchmark_stop()
-            metrics_store.bulk_add(result.metrics)
+            self.cluster.on_benchmark_stop()
+            self.metrics_store.bulk_add(result.metrics)
         elif isinstance(result, driver.BenchmarkFailure):
             raise exceptions.RallyError(result.message, result.cause)
         else:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
-        if rounds > 1:
-            lap_time = lap_timer.split_time() - lap_times
-            lap_times += lap_time
+
+    def teardown(self):
+        self.mechanic.stop_engine(self.cluster)
+        self.metrics_store.close()
+        reporter.summarize(self.cfg, self.track)
+        self.sweep()
+
+    def sweep(self):
+        invocation_root = self.cfg.opts("system", "invocation.root.dir")
+        track_name = self.cfg.opts("benchmarks", "track")
+        challenge_name = self.cfg.opts("benchmarks", "challenge")
+        car_name = self.cfg.opts("benchmarks", "car")
+
+        log_root = paths.Paths(self.cfg).log_root()
+        archive_path = "%s/logs-%s-%s-%s.zip" % (invocation_root, track_name, challenge_name, car_name)
+        io.compress(log_root, archive_path)
+        console.println("")
+        console.info("Archiving logs in %s" % archive_path)
+        shutil.rmtree(log_root)
+
+
+class LapCounter:
+    def __init__(self, laps, cfg):
+        self.laps = laps
+        self.cfg = cfg
+        self.lap_timer = time.Clock.stop_watch()
+        self.lap_timer.start()
+        self.lap_times = 0
+
+    def before_lap(self, lap):
+        if self.laps > 1:
+            msg = "Lap [%d/%d]" % (lap + 1, self.laps)
+            console.println(console.format.bold(msg), logger=logger.info)
+            console.println(console.format.underline_for(msg))
+
+    def after_lap(self, lap):
+        if self.laps > 1:
+            lap_time = self.lap_timer.split_time() - self.lap_times
+            self.lap_times += lap_time
             hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
             console.println("")
-            if round + 1 < rounds:
-                remaining = (rounds - round - 1) * lap_times / (round + 1)
+            if lap + 1 < self.laps:
+                remaining = (self.laps - lap - 1) * self.lap_times / (lap + 1)
                 hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
                 console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=logger)
             else:
                 console.info("Lap time %02d:%02d:%02d" % (hl, ml, sl), logger=logger)
             console.println("")
 
-    mechanic.stop_engine(cluster)
-    metrics_store.close()
-    reporter.summarize(cfg, t)
-    sweep(cfg)
+
+def print_race_info(cfg):
+    track_name = cfg.opts("benchmarks", "track")
+    challenge_name = cfg.opts("benchmarks", "challenge")
+    selected_car_name = cfg.opts("benchmarks", "car")
+    console.info("Racing on track [%s], challenge [%s] and car [%s]" % (track_name, challenge_name, selected_car_name))
+    # just ensure it is optically separated
+    console.println("")
+
+
+def race(benchmark, cfg):
+    laps = cfg.opts("benchmarks", "laps")
+    print_race_info(cfg)
+    benchmark.setup()
+    lap_counter = LapCounter(laps, cfg)
+
+    for lap in range(0, laps):
+        lap_counter.before_lap(lap)
+        benchmark.run()
+        lap_counter.after_lap(lap)
+
+    benchmark.teardown()
 
 
 # Poor man's curry
 def from_sources_complete(cfg):
     metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return benchmark(cfg, mechanic.create(cfg, metrics_store, sources=True, build=True), metrics_store)
+    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, sources=True, build=True), metrics_store), cfg)
 
 
 def from_sources_skip_build(cfg):
     metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return benchmark(cfg, mechanic.create(cfg, metrics_store, sources=True, build=False), metrics_store)
+    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, sources=True, build=False), metrics_store), cfg)
 
 
 def from_distribution(cfg):
     metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return benchmark(cfg, mechanic.create(cfg, metrics_store, distribution=True), metrics_store)
+    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, distribution=True), metrics_store), cfg)
 
 
 def benchmark_only(cfg):
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "benchmarks", "car", "external")
     metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return benchmark(cfg, mechanic.create(cfg, metrics_store, external=True), metrics_store)
+    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, external=True), metrics_store), cfg)
 
 
 def docker(cfg):
     metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return benchmark(cfg, mechanic.create(cfg, metrics_store, docker=True), metrics_store)
+    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, docker=True), metrics_store), cfg)
 
 
 Pipeline("from-sources-complete",
