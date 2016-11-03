@@ -6,133 +6,105 @@ Rally is the macrobenchmarking framework for Elasticsearch
 What is Rally?
 --------------
 
-So you want to benchmark Elasticsearch? Then Rally is for you. Rally started as an effort to help developers in the Elasticsearch development team to run benchmarks on their machines. As our users are very creative and use Elasticsearch for all kinds of things, we have to cover a broad range of different performance characteristics and to find out how Elasticsearch performs under various conditions we run different benchmarks.
+You want to benchmark Elasticsearch? Then Rally is for you. It can help you with the following tasks:
 
-Rally is build around a few assumptions:
+* Setup and teardown of an Elasticsearch cluster for benchmarking
+* Management of benchmark data and specifications even across Elasticsearch versions
+* Running benchmarks and recording results
+* Finding performance problems by attaching so-called telemetry devices
+* Comparing performance results
 
-* Everything is run on the same machine (but `we are about to change that <https://github.com/elastic/rally/issues/71>`_)
-* You want to add a specific data set to an Elasticsearch index and then run benchmarking queries on it
+We have also put considerable effort in Rally to ensure that benchmarking data are reproducible.
 
-We are continuously working to remove these restrictions. In contrast to other home-grown benchmarking scripts, we have put considerable effort in Rally to ensure the benchmarking data are reproducible.
-
-First Time Setup
-----------------
-
-Prerequisites
-~~~~~~~~~~~~~
-
-Please ensure that the following packages are installed before installing Rally:
-
-* Python 3.4 or better available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
-* ``pip3`` available on the path (verify with ``pip3 --version``)
-* JDK 8
-* git 1.9 or better
-
-Rally does not support Windows and is only actively tested on Mac OS X and Linux.
-
-If you use RHEL, please ensure to install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
+Quick Start
+-----------
 
 Installing Rally
 ~~~~~~~~~~~~~~~~
 
-**Note**: If you actively develop on Elasticsearch, we recommend that you `install Rally in development mode <http://esrally.readthedocs.io/en/latest/developing.html#installation-instructions-for-development>`_ instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest master version.
+**Note**: If you actively develop on Elasticsearch, we recommend that you `install Rally in development mode <https://esrally.readthedocs.io/en/latest/developing.html#installation-instructions-for-development>`_ instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest master version.
 
-Simply install Rally with pip: ``pip3 install esrally``
+Install Python 3.4+ including ``pip3``, JDK 8 and git 1.9+. Then run the following command, optionally prefixed by ``sudo`` if necessary::
 
-**Note**: Depending on your system setup you may need to prepend this command with ``sudo``.
+    pip3 install esrally
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
 
-Non-sudo Install
-~~~~~~~~~~~~~~~~
+If you have any trouble or need more detailed instructions, please look in the `detailed installation guide <https://esrally.readthedocs.io/en/latest/install.html>`_.
 
-If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
+Configure
+---------
 
-1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
-2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
+Just invoke ``esrally configure``.
 
-You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
+For more detailed instructions and a detailed walkthrough see the `configuration guide <https://esrally.readthedocs.io/en/latest/configuration.html>`_.
 
-Configuring Rally
------------------
+Run your first race
+-------------------
 
-Before we can run our first benchmark, we have to configure Rally. Just invoke ``esrally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to `~/.rally/rally.ini`. After you've configured Rally, it will exit.
+Now we're ready to run our first race::
 
-For more information see the `configuration help page <http://esrally.readthedocs.io/en/latest/configuration.html>`_.
+    esrally --distribution-version=5.0.0
 
-Running the first benchmark
----------------------------
+This will download Elasticsearch 5.0.0 and run Rally's default track against it. After the race, a summary report is written to the command line:::
 
-Now we are ready to run the first benchmark with Rally: Just invoke ``esrally``. This will start Rally with sensible defaults. It will download the necessary benchmark data, checkout the latest version of Elasticsearch, build it and finally run the benchmark.
+    ------------------------------------------------------
+        _______             __   _____
+       / ____(_)___  ____ _/ /  / ___/_________  ________
+      / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
+     / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
+    /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
+    ------------------------------------------------------
 
-**Note**: If you want to benchmark a binary distribution instead of a source distribution then run ``esrally --pipeline=from-distribution --distribution-version=VERSION_NUMBER`` (``VERSION_NUMBER`` is for example ``5.0.0`` and is identical to the version number used in the download URL)
+    |                         Metric |            Operation |     Value |   Unit |
+    |-------------------------------:|---------------------:|----------:|-------:|
+    |                  Indexing time |                      |   28.0997 |    min |
+    |                     Merge time |                      |   6.84378 |    min |
+    |                   Refresh time |                      |   3.06045 |    min |
+    |                     Flush time |                      |  0.106517 |    min |
+    |            Merge throttle time |                      |   1.28193 |    min |
+    |               Median CPU usage |                      |     471.6 |      % |
+    |             Total Young Gen GC |                      |    16.237 |      s |
+    |               Total Old Gen GC |                      |     1.796 |      s |
+    |                     Index size |                      |   2.60124 |     GB |
+    |                Totally written |                      |   11.8144 |     GB |
+    |         Heap used for segments |                      |   14.7326 |     MB |
+    |       Heap used for doc values |                      |  0.115917 |     MB |
+    |            Heap used for terms |                      |   13.3203 |     MB |
+    |            Heap used for norms |                      | 0.0734253 |     MB |
+    |           Heap used for points |                      |    0.5793 |     MB |
+    |    Heap used for stored fields |                      |  0.643608 |     MB |
+    |                  Segment count |                      |        97 |        |
+    |                 Min Throughput |         index-append |   31925.2 | docs/s |
+    |              Median Throughput |         index-append |   39137.5 | docs/s |
+    |                 Max Throughput |         index-append |   39633.6 | docs/s |
+    |      50.0th percentile latency |         index-append |   872.513 |     ms |
+    |      90.0th percentile latency |         index-append |   1457.13 |     ms |
+    |      99.0th percentile latency |         index-append |   1874.89 |     ms |
+    |       100th percentile latency |         index-append |   2711.71 |     ms |
+    | 50.0th percentile service time |         index-append |   872.513 |     ms |
+    | 90.0th percentile service time |         index-append |   1457.13 |     ms |
+    | 99.0th percentile service time |         index-append |   1874.89 |     ms |
+    |  100th percentile service time |         index-append |   2711.71 |     ms |
+    |                           ...  |                  ... |       ... |    ... |
+    |                           ...  |                  ... |       ... |    ... |
+    |                 Min Throughput |     painless_dynamic |   2.53292 |  ops/s |
+    |              Median Throughput |     painless_dynamic |   2.53813 |  ops/s |
+    |                 Max Throughput |     painless_dynamic |   2.54401 |  ops/s |
+    |      50.0th percentile latency |     painless_dynamic |    172208 |     ms |
+    |      90.0th percentile latency |     painless_dynamic |    310401 |     ms |
+    |      99.0th percentile latency |     painless_dynamic |    341341 |     ms |
+    |      99.9th percentile latency |     painless_dynamic |    344404 |     ms |
+    |       100th percentile latency |     painless_dynamic |    344754 |     ms |
+    | 50.0th percentile service time |     painless_dynamic |    393.02 |     ms |
+    | 90.0th percentile service time |     painless_dynamic |   407.579 |     ms |
+    | 99.0th percentile service time |     painless_dynamic |   430.806 |     ms |
+    | 99.9th percentile service time |     painless_dynamic |   457.352 |     ms |
+    |  100th percentile service time |     painless_dynamic |   459.474 |     ms |
 
-When the benchmark is done, a summary report is written to the command line:::
+    ----------------------------------
+    [INFO] SUCCESS (took 2634 seconds)
+    ----------------------------------
 
-   ------------------------------------------------------
-       _______             __   _____
-      / ____(_)___  ____ _/ /  / ___/_________  ________
-     / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
-    / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
-   /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
-   ------------------------------------------------------
-                                                     Metric      Value
-   --------------------------------------------------------  ---------
-                           Min Indexing Throughput [docs/s]      19501
-                        Median Indexing Throughput [docs/s]      20232
-                           Max Indexing Throughput [docs/s]      21172
-                                        Indexing time [min]    55.7989
-                                           Merge time [min]    12.9766
-                                         Refresh time [min]    5.20067
-                                           Flush time [min]  0.0648667
-                                  Merge throttle time [min]   0.796417
-               Query latency default (50.0 percentile) [ms]    5.89058
-               Query latency default (90.0 percentile) [ms]    6.71282
-              Query latency default (100.0 percentile) [ms]    7.65307
-    Query latency country_agg_cached (50.0 percentile) [ms]    1.70223
-    Query latency country_agg_cached (90.0 percentile) [ms]    2.34819
-   Query latency country_agg_cached (100.0 percentile) [ms]    3.42547
-                Query latency scroll (50.0 percentile) [ms]    16.1226
-                Query latency scroll (90.0 percentile) [ms]    17.2383
-               Query latency scroll (100.0 percentile) [ms]    18.8419
-                  Query latency term (50.0 percentile) [ms]    2.10049
-                  Query latency term (90.0 percentile) [ms]    2.77537
-                 Query latency term (100.0 percentile) [ms]    4.52081
-                Query latency phrase (50.0 percentile) [ms]    1.82687
-                Query latency phrase (90.0 percentile) [ms]    2.63714
-               Query latency phrase (100.0 percentile) [ms]    5.39892
-           Query latency country_agg (50.0 percentile) [ms]    112.049
-           Query latency country_agg (90.0 percentile) [ms]    128.426
-          Query latency country_agg (100.0 percentile) [ms]    155.989
-                               Median CPU usage (index) [%]    668.025
-                               Median CPU usage (stats) [%]     143.75
-                              Median CPU usage (search) [%]      223.1
-                                     Total Young Gen GC [s]     39.447
-                                       Total Old Gen GC [s]      7.108
-                                            Index size [GB]    3.25475
-                                       Totally written [GB]    17.8434
-                                Heap used for segments [MB]    21.7504
-                              Heap used for doc values [MB]    0.16436
-                                   Heap used for terms [MB]    20.0293
-                                   Heap used for norms [MB]   0.105469
-                                  Heap used for points [MB]   0.773487
-                                  Heap used for points [MB]   0.677795
-                                              Segment count        136
-                        Indices Stats(90.0 percentile) [ms]    3.16053
-                        Indices Stats(99.0 percentile) [ms]    5.29526
-                       Indices Stats(100.0 percentile) [ms]    5.64971
-                          Nodes Stats(90.0 percentile) [ms]    3.19611
-                          Nodes Stats(99.0 percentile) [ms]    4.44111
-                         Nodes Stats(100.0 percentile) [ms]    5.22527
-
-Before relying too much on the numbers, please double-check that you did not introduce any bottlenecks and that your hardware is sufficient (e.g. spinning disks are not a good idea, better use SSDs). For additional insights and metrics you can activate different telemetry devices in Rally.
-
-Also be very careful and get a deep understanding of the measurement approaches when comparing performance numbers on different OS. Sometimes certain measurements are supported only on one OS but not on another (e.g. disk I/O statistics) and different OS handle I/O differently.
-
-Other command line flags
-------------------------
-
-Rally supports more command line flags, just run ``esrally --help`` to see what's possible. For more details, please refer to the `command line reference <http://esrally.readthedocs.io/en/latest/command_line_reference.html>`_.
 
 Getting help
 ------------
