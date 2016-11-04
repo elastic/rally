@@ -214,7 +214,7 @@ class InProcessLauncher:
 
     Currently, only local launching is supported.
     """
-    PROCESS_WAIT_TIMEOUT_SECONDS = 20.0
+    PROCESS_WAIT_TIMEOUT_SECONDS = 30.0
 
     # TODO 68: We should externalize this (see #68)
     ES_CMD_LINE_OPTS_PER_VERSION = {
