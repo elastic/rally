@@ -365,6 +365,8 @@ class InProcessLauncher:
                                          (distribution_version, console.format.link("https://github.com/elastic/rally")))
 
     def _start_process(self, cmd, env, node_name):
+        if os.geteuid() == 0:
+            raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         install_dir = self.cfg.opts("provisioning", "local.binary.path")
         os.chdir(install_dir)
         startup_event = threading.Event()

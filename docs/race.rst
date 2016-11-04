@@ -28,6 +28,9 @@ The first two columns show the name and a short description of each track. A tra
 Starting a Race
 ---------------
 
+.. note::
+    Do not run Rally as root as Elasticsearch will refuse to start with root privileges.
+
 To start a race you have to define the track and challenge to run. For example::
 
     esrally --distribution-version=5.0.0 --track=geopoint --challenge=append-fast-with-conflicts
