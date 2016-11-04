@@ -181,6 +181,7 @@ def get_size(start_path="."):
 
 
 def _run(args, fallback=None, only_first_line=False):
+    # noinspection PyBroadException
     try:
         lines = subprocess.Popen(args, stdout=subprocess.PIPE).communicate()[0].splitlines()
         result_lines = [line.decode("utf-8") for line in lines]
@@ -194,7 +195,7 @@ def _run(args, fallback=None, only_first_line=False):
 
 def _read_symlink(path):
     try:
-        return os.readlink(path)
+        return os.path.realpath(path)
     except FileNotFoundError:
         return None
 
@@ -242,13 +243,14 @@ def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_r
         else:
             # Red Hat based distributions
             #
-            # [vagrant@localhost alternatives]$ ls -l /etc/alternatives/jre_1.[789].0
+            # ls -l /etc/alternatives/jre_1.[789].0
             # lrwxrwxrwx. 1 root root 62 May 20 07:51 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.91-5.b14.fc23.x86_64/jre
             #
             # We could also use the output of "alternatives --display java" on Red Hat but the output is so
             # verbose that it's easier to use the links.
             path = read_symlink("/etc/alternatives/java_sdk_1.%d.0" % major_version)
-            if path:
+            # return path if and only if it is a proper directory
+            if path and os.path.isdir(path) and not os.path.islink(path):
                 return path
             else:
                 return fallback
