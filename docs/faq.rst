@@ -41,3 +41,11 @@ Does Rally spy on me?
 ---------------------
 
 No. Rally does not collect or send any usage data and also the complete source code is open. We do value your feedback a lot though and if you got any ideas for improvements, found a bug or have any other feedback, please head over to `Rally's Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ or `raise an issue on Github <https://github.com/elastic/rally>`_.
+
+Do I need an Internet connection?
+---------------------------------
+
+You do NOT need Internet access on any node of your Elasticsearch cluster but the machine where you start Rally needs an Internet connection to download track data sets and Elasticsearch distributions. After it has downloaded all data, an Internet connection is not required anymore and you can specify ``--offline``. If Rally detects no active Internet connection, it will automatically enable offline mode and warn you.
+
+As a workaround you can also download all data on a different machine and transfer it the the target machine but this is not actively supported.
+

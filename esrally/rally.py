@@ -524,6 +524,18 @@ def convert_hosts(configured_host_list):
         raise exceptions.SystemSetupError(msg)
 
 
+def bootstrap_actor_system(cfg, system_base="multiprocTCPBase"):
+    try:
+        return thespian.actors.ActorSystem(system_base, logDefs=configure_actor_logging(cfg))
+    except thespian.actors.ActorSystemException:
+        logger.exception("Could not initialize internal actor system. Terminating.")
+        console.error("Could not initialize successfully.\n")
+        console.error("Are there are still processes from a previous race?")
+        console.error("Please check and terminate related Python processes before running Rally again.\n")
+        print_help_on_errors(cfg)
+        sys.exit(70)
+
+
 def main():
     start = time.time()
     # Early init of console output so we start to show everything consistently.
@@ -579,6 +591,13 @@ def main():
     logger.info("Command line arguments: %s" % args)
     # Configure networking
     net.init()
+    if not args.offline:
+        if not net.has_internet_connection():
+            console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.",
+                         logger=logger)
+            cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)
+        else:
+            logger.info("Detected a working Internet connection.")
 
     # Kill any lingering Rally processes before attempting to continue - the actor system needs to a singleton on this machine
     # noinspection PyBroadException
@@ -587,16 +606,15 @@ def main():
     except BaseException:
         logger.exception("Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
 
-    # bootstrap Rally's Actor system
     try:
-        actors = thespian.actors.ActorSystem("multiprocTCPBase", logDefs=configure_actor_logging(cfg))
-    except thespian.actors.ActorSystemException:
-        logger.exception("Could not initialize internal actor system. Terminating.")
-        console.error("Could not initialize successfully.\n")
-        console.error("Are there are still processes from a previous race?")
-        console.error("Please check and terminate related Python processes before running Rally again.\n")
-        print_help_on_errors(cfg)
-        sys.exit(70)
+        actors = bootstrap_actor_system(cfg)
+    except RuntimeError as e:
+        logger.exception("Could not bootstrap actor system.")
+        if str(e) == "Unable to determine valid external socket address.":
+            console.warn("Could not determine a socket address. Are you running without any network?", logger=logger)
+            actors = bootstrap_actor_system(cfg, system_base="multiprocQueueBase")
+        else:
+            raise
 
     success = False
     try:

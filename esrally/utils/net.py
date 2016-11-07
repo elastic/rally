@@ -1,12 +1,12 @@
 import os
 import logging
 import shutil
+import socket
 
 import urllib3
 import certifi
 
 from esrally import exceptions
-
 
 HTTP = None
 
@@ -54,3 +54,13 @@ def download(url, local_path, expected_size_in_bytes=None):
 def retrieve_content_as_string(url):
     with HTTP.request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
         return response.read().decode("utf-8")
+
+
+def has_internet_connection():
+    try:
+        # We connect to Github anyway later on so we use that to avoid touching too much different remote endpoints
+        socket.create_connection(("www.github.com", 80))
+        return True
+    except OSError:
+        return False
+
