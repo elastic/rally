@@ -8,7 +8,7 @@ import time
 
 import pkg_resources
 import thespian.actors
-from esrally import config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME
+from esrally import config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME, DOC_LINK
 from esrally.utils import io, convert, git, process, console, net
 from esrally.mechanic import car, telemetry
 
@@ -205,7 +205,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at %s" % console.format.link("https://esrally.readthedocs.io"),
+                                     epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + version())
 
@@ -437,7 +437,7 @@ def print_help_on_errors(cfg):
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
     console.println("* Check the log file at %s for errors." % log_file_path(cfg))
-    console.println("* Read the documentation at %s" % console.format.link("https://esrally.readthedocs.io"))
+    console.println("* Read the documentation at %s" % console.format.link(DOC_LINK))
     console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/rally"))
     console.println("* Raise an issue at %s and include the log file in %s." %
                     (console.format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))

@@ -6,7 +6,7 @@ import re
 import shutil
 from enum import Enum
 
-from esrally import time, PROGRAM_NAME
+from esrally import time, PROGRAM_NAME, DOC_LINK
 from esrally.utils import io, git, console, convert
 
 logger = logging.getLogger("rally.config")
@@ -199,7 +199,7 @@ class ConfigFactory:
         if advanced_config:
             self.o("Running advanced configuration. You can get additional help at:")
             self.o("")
-            self.o("  %s" % console.format.link("https://esrally.readthedocs.io/en/latest/configuration.html"))
+            self.o("  %s" % console.format.link("%sconfiguration.html" % DOC_LINK))
             self.o("")
 
             logger.info("Running advanced configuration routine.")
@@ -339,7 +339,7 @@ class ConfigFactory:
 
         self.o("")
         self.o("For help, type %s --help or see the user documentation at %s"
-               % (PROGRAM_NAME, console.format.link("https://esrally.readthedocs.io")))
+               % (PROGRAM_NAME, console.format.link(DOC_LINK)))
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
         logger.debug("Autodetected %s at [%s]" % (what, result))
