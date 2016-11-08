@@ -64,6 +64,7 @@ class EsMetricsTests(TestCase):
     def test_put_value_without_meta_info(self):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
 
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
@@ -73,6 +74,7 @@ class EsMetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
+            "lap": 1,
             "challenge": "append-no-conflicts",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -88,6 +90,7 @@ class EsMetricsTests(TestCase):
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
 
         self.metrics_store.put_count_cluster_level(name="indexing_throughput", count=throughput, unit="docs/s",
                                                    absolute_time=0, relative_time=10)
@@ -98,6 +101,7 @@ class EsMetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
+            "lap": 1,
             "challenge": "append-no-conflicts",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -115,6 +119,7 @@ class EsMetricsTests(TestCase):
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "system", "user.tag", "intention:testing")
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -132,6 +137,7 @@ class EsMetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
+            "lap": 1,
             "challenge": "append-no-conflicts",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -201,13 +207,18 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "name": "indexing_throughput"
                             }
+                        },
+                        {
+                            "term": {
+                                "lap": 3
+                            }
                         }
                     ]
                 }
             }
         }
 
-        actual_throughput = self.metrics_store.get_one("indexing_throughput")
+        actual_throughput = self.metrics_store.get_one("indexing_throughput", lap=3)
 
         self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
 
@@ -274,7 +285,7 @@ class EsRaceStoreTests(TestCase):
             "user-tag": ""
         }
 
-        self.es_mock.index.assert_called_with(index="rally-2016", doc_type="races", item=expected_doc)
+        self.es_mock.index.assert_called_with(index="rally-2016", doc_type="races", item=expected_doc, id=EsRaceStoreTests.TRIAL_TIMESTAMP)
 
 
 class InMemoryMetricsStoreTests(TestCase):
@@ -286,6 +297,7 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_value(self):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
         self.metrics_store.put_count_cluster_level("indexing_throughput", 1, "docs/s", sample_type=metrics.SampleType.Warmup)
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
@@ -299,6 +311,7 @@ class InMemoryMetricsStoreTests(TestCase):
 
     def test_get_percentile(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
         for i in range(1, 1001):
             self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
 

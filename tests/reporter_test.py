@@ -12,6 +12,7 @@ class ReporterTests(TestCase):
 
         store = metrics.InMemoryMetricsStore(config=cfg, clear=True)
         store.open(datetime.datetime.now(), "test", "unittest", "unittest_car")
+        store.lap = 1
 
         store.put_value_cluster_level("throughput", 500, unit="docs/s", operation="index", operation_type=track.OperationType.Index)
         store.put_value_cluster_level("throughput", 1000, unit="docs/s", operation="index", operation_type=track.OperationType.Index)

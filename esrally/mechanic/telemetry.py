@@ -6,7 +6,6 @@ import subprocess
 import threading
 
 import tabulate
-
 from esrally import metrics, config
 from esrally.utils import io, sysstats, process, console
 
@@ -25,21 +24,21 @@ def list_telemetry(cfg):
 
 
 class Telemetry:
-    def __init__(self, config, devices):
-        self._config = config
-        self._devices = devices
-        self._enabled_devices = self._config.opts("telemetry", "devices")
+    def __init__(self, cfg, devices):
+        self.cfg = cfg
+        self.devices = devices
+        self.enabled_devices = self.cfg.opts("telemetry", "devices")
 
     def list(self):
         external_devices = []
-        for device in self._devices:
+        for device in self.devices:
             if not device.internal:
                 external_devices.append([device.command, device.human_name, device.help])
         return external_devices
 
     def instrument_candidate_env(self, car, candidate_id):
         opts = {}
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 additional_opts = device.instrument_env(car, candidate_id)
                 # properly merge values with the same key
@@ -51,39 +50,39 @@ class Telemetry:
         return opts
 
     def attach_to_cluster(self, cluster):
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 device.attach_to_cluster(cluster)
 
     def attach_to_node(self, node):
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 device.attach_to_node(node)
 
     def detach_from_node(self, node):
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 device.detach_from_node(node)
 
     def on_benchmark_start(self):
         logger.info("Benchmark start")
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 device.on_benchmark_start()
 
     def on_benchmark_stop(self):
         logger.info("Benchmark stop")
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 device.on_benchmark_stop()
 
     def detach_from_cluster(self, cluster):
-        for device in self._devices:
+        for device in self.devices:
             if self._enabled(device):
                 device.detach_from_cluster(cluster)
 
     def _enabled(self, device):
-        return device.internal or device.command in self._enabled_devices
+        return device.internal or device.command in self.enabled_devices
 
 
 ########################################################################################
@@ -93,17 +92,9 @@ class Telemetry:
 ########################################################################################
 
 class TelemetryDevice:
-    def __init__(self, config, metrics_store):
-        self._config = config
-        self._metrics_store = metrics_store
-
-    @property
-    def metrics_store(self):
-        return self._metrics_store
-
-    @property
-    def config(self):
-        return self._config
+    def __init__(self, cfg, metrics_store):
+        self.cfg = cfg
+        self.metrics_store = metrics_store
 
     @property
     def internal(self):
@@ -144,8 +135,8 @@ class TelemetryDevice:
 
 
 class InternalTelemetryDevice(TelemetryDevice):
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
 
     @property
     def internal(self):
@@ -165,8 +156,8 @@ class InternalTelemetryDevice(TelemetryDevice):
 
 
 class FlightRecorder(TelemetryDevice):
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
 
     @property
     def internal(self):
@@ -185,7 +176,7 @@ class FlightRecorder(TelemetryDevice):
         return "Enables Java Flight Recorder (requires an Oracle JDK)"
 
     def instrument_env(self, car, candidate_id):
-        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jfr" % (log_root, car.name, candidate_id)
 
@@ -200,8 +191,8 @@ class FlightRecorder(TelemetryDevice):
 
 
 class JitCompiler(TelemetryDevice):
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
 
     @property
     def internal(self):
@@ -220,7 +211,7 @@ class JitCompiler(TelemetryDevice):
         return "Enables JIT compiler logs."
 
     def instrument_env(self, car, candidate_id):
-        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jit.log" % (log_root, car.name, candidate_id)
 
@@ -230,8 +221,8 @@ class JitCompiler(TelemetryDevice):
 
 
 class Gc(TelemetryDevice):
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
 
     @property
     def internal(self):
@@ -250,7 +241,7 @@ class Gc(TelemetryDevice):
         return "Enables GC logs."
 
     def instrument_env(self, car, candidate_id):
-        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.gc.log" % (log_root, car.name, candidate_id)
 
@@ -262,8 +253,8 @@ class Gc(TelemetryDevice):
 
 
 class PerfStat(TelemetryDevice):
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.process = None
         self.node = None
         self.log = None
@@ -285,7 +276,7 @@ class PerfStat(TelemetryDevice):
         return "Reads CPU PMU counters (requires Linux and perf)"
 
     def attach_to_node(self, node):
-        log_root = "%s/%s" % (self._config.opts("system", "challenge.root.dir"), self._config.opts("benchmarks", "metrics.log.dir"))
+        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
         log_file = "%s/%s.perf.log" % (log_root, node.node_name)
 
@@ -313,12 +304,12 @@ class MergeParts(InternalTelemetryDevice):
     """
     MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
 
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
         self._t = None
 
     def on_benchmark_stop(self):
-        server_log_dir = self._config.opts("launcher", "candidate.log.dir")
+        server_log_dir = self.cfg.opts("launcher", "candidate.log.dir")
         for log_file in os.listdir(server_log_dir):
             log_path = "%s/%s" % (server_log_dir, log_file)
             logger.debug("Analyzing merge parts in [%s]" % log_path)
@@ -344,16 +335,16 @@ class MergeParts(InternalTelemetryDevice):
         for k, v in merge_times.items():
             metric_suffix = k.replace(" ", "_")
             # TODO dm: This is actually a node level metric (it is extracted from the *node's* log file), we have to add node info here)
-            self._metrics_store.put_value_cluster_level("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
-            self._metrics_store.put_count_cluster_level("merge_parts_total_docs_%s" % metric_suffix, v[1])
+            self.metrics_store.put_value_cluster_level("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
+            self.metrics_store.put_count_cluster_level("merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
 class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.node = None
         self.process = None
         self.disk_start = None
@@ -400,8 +391,8 @@ class CpuUsage(InternalTelemetryDevice):
     """
     Gathers CPU usage statistics.
     """
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.sampler = None
         self.node = None
 
@@ -410,7 +401,7 @@ class CpuUsage(InternalTelemetryDevice):
 
     def on_benchmark_start(self):
         if self.node:
-            self.sampler = SampleCpuUsage(self.node, self._metrics_store)
+            self.sampler = SampleCpuUsage(self.node, self.metrics_store)
             self.sampler.daemon = True
             self.sampler.start()
 
@@ -462,8 +453,8 @@ class EnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
     """
-    def __init__(self, config, client, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, client, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.client = client
         self._t = None
 
@@ -471,8 +462,8 @@ class EnvironmentInfo(InternalTelemetryDevice):
         revision = self.client.info()["version"]["build_hash"]
         distribution_version = self.client.info()["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
-        self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
-        self.config.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
+        self.cfg.add(config.Scope.benchmark, "meta", "source.revision", revision)
+        self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
         for node in nodes_info:
@@ -499,15 +490,15 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information for externally provisioned clusters.
     """
-    def __init__(self, config, client, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, client, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.client = client
         self._t = None
 
     def attach_to_cluster(self, cluster):
         revision = self.client.info()["version"]["build_hash"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
-        self.config.add(config.Scope.benchmark, "meta", "source.revision", revision)
+        self.cfg.add(config.Scope.benchmark, "meta", "source.revision", revision)
 
         stats = self.client.nodes.stats(metric="_all")
         nodes = stats["nodes"]
@@ -547,8 +538,8 @@ class NodeStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch nodes stats API
     """
-    def __init__(self, config, client, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, client, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.client = client
         self.gc_times_per_node = {}
 
@@ -597,8 +588,8 @@ class IndexStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch index stats API
     """
-    def __init__(self, config, client, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, client, metrics_store):
+        super().__init__(cfg, metrics_store)
         self.client = client
 
     def on_benchmark_stop(self):
@@ -606,39 +597,49 @@ class IndexStats(InternalTelemetryDevice):
         stats = self.client.indices.stats(metric="_all", level="shards")
         p = stats["_all"]["primaries"]
 
-        self.add_metrics(p, "segments_count", None, ["segments", "count"])
-        self.add_metrics(p, "segments_memory_in_bytes", "byte", ["segments", "memory_in_bytes"])
-        self.add_metrics(p, "segments_doc_values_memory_in_bytes", "byte", ["segments", "doc_values_memory_in_bytes"])
-        self.add_metrics(p, "segments_stored_fields_memory_in_bytes", "byte", ["segments", "stored_fields_memory_in_bytes"])
-        self.add_metrics(p, "segments_terms_memory_in_bytes", "byte", ["segments", "terms_memory_in_bytes"])
-        self.add_metrics(p, "segments_norms_memory_in_bytes", "byte", ["segments", "norms_memory_in_bytes"])
-        self.add_metrics(p, "segments_points_memory_in_bytes", "byte", ["segments", "points_memory_in_bytes"])
+        # actually this is add_count
+        self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
+        self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
-        self.add_metrics(p, "merges_total_time", "ms", ["merges", "total_time_in_millis"])
-        self.add_metrics(p, "merges_total_throttled_time", "ms", ["merges", "total_throttled_time_in_millis"])
-        self.add_metrics(p, "indexing_total_time", "ms", ["indexing", "index_time_in_millis"])
-        self.add_metrics(p, "refresh_total_time", "ms", ["refresh", "total_time_in_millis"])
-        self.add_metrics(p, "flush_total_time", "ms", ["flush", "total_time_in_millis"])
+        self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
+        self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte")
+        self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
+        self.add_metrics(self.extract_value(p, ["segments", "norms_memory_in_bytes"]), "segments_norms_memory_in_bytes", "byte")
+        self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
 
-    def add_metrics(self, primaries, metric_key, unit, path):
+        self.add_metrics(self.extract_value(p, ["merges", "total_time_in_millis"]), "merges_total_time", "ms")
+        self.add_metrics(self.extract_value(p, ["merges", "total_throttled_time_in_millis"]), "merges_total_throttled_time", "ms")
+        self.add_metrics(self.extract_value(p, ["indexing", "index_time_in_millis"]), "indexing_total_time", "ms")
+        self.add_metrics(self.extract_value(p, ["refresh", "total_time_in_millis"]), "refresh_total_time", "ms")
+        self.add_metrics(self.extract_value(p, ["flush", "total_time_in_millis"]), "flush_total_time", "ms")
+
+    def add_metrics(self, value, metric_key, unit=None):
+        if value:
+            if unit:
+                self.metrics_store.put_value_cluster_level(metric_key, value, unit)
+            else:
+                self.metrics_store.put_count_cluster_level(metric_key, value)
+
+    def extract_value(self, primaries, path):
         value = primaries
         try:
             for k in path:
                 value = value[k]
-            self.metrics_store.put_value_cluster_level(metric_key, value, unit)
+            return value
         except KeyError:
-            logger.warn("Could not determine metric [%s] at path [%s]." % (metric_key, ",".join(path)))
+            logger.warn("Could not determine value at path [%s]." % ",".join(path))
+            return None
 
 
 class IndexSize(InternalTelemetryDevice):
     """
     Measures the final size of the index
     """
-    def __init__(self, config, metrics_store):
-        super().__init__(config, metrics_store)
+    def __init__(self, cfg, metrics_store):
+        super().__init__(cfg, metrics_store)
 
     def detach_from_cluster(self, cluster):
-        data_paths = self.config.opts("provisioning", "local.data.paths", mandatory=False)
+        data_paths = self.cfg.opts("provisioning", "local.data.paths", mandatory=False)
         if data_paths is not None:
             data_path = data_paths[0]
             index_size_bytes = io.get_size(data_path)

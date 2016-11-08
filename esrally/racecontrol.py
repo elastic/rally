@@ -1,6 +1,7 @@
 import logging
 import shutil
 import sys
+import collections
 
 import tabulate
 import thespian.actors
@@ -10,7 +11,7 @@ from esrally.utils import console, io, convert
 
 logger = logging.getLogger("rally.racecontrol")
 
-pipelines = {}
+pipelines = collections.OrderedDict()
 
 
 class Pipeline:
@@ -39,6 +40,10 @@ class Pipeline:
         self.stable = stable
         pipelines[name] = self
 
+    def __del__(self):
+        if pipelines is not None:
+            pipelines.pop(self.name, default=None)
+
     def __call__(self, cfg):
         self.target(cfg)
 
@@ -59,13 +64,16 @@ class Benchmark:
         metrics.race_store(self.cfg).store_race(self.track)
         self.actor_system = thespian.actors.ActorSystem()
 
-    def run(self):
+    def run(self, lap):
+        self.metrics_store.lap = lap
         main_driver = self.actor_system.createActor(driver.Driver)
         self.cluster.on_benchmark_start()
-        result = self.actor_system.ask(main_driver, driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info))
+        result = self.actor_system.ask(main_driver,
+                                       driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, self.metrics_store.lap))
         if isinstance(result, driver.BenchmarkComplete):
             self.cluster.on_benchmark_stop()
             self.metrics_store.bulk_add(result.metrics)
+            self.metrics_store.flush()
         elif isinstance(result, driver.BenchmarkFailure):
             raise exceptions.RallyError(result.message, result.cause)
         else:
@@ -92,7 +100,8 @@ class Benchmark:
 
 
 class LapCounter:
-    def __init__(self, laps, cfg):
+    def __init__(self, track, laps, cfg):
+        self.track = track
         self.laps = laps
         self.cfg = cfg
         self.lap_timer = time.Clock.stop_watch()
@@ -101,7 +110,7 @@ class LapCounter:
 
     def before_lap(self, lap):
         if self.laps > 1:
-            msg = "Lap [%d/%d]" % (lap + 1, self.laps)
+            msg = "Lap [%d/%d]" % (lap, self.laps)
             console.println(console.format.bold(msg), logger=logger.info)
             console.println(console.format.underline_for(msg))
 
@@ -110,9 +119,10 @@ class LapCounter:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
             hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
+            reporter.summarize(self.cfg, track=self.track, lap=lap)
             console.println("")
-            if lap + 1 < self.laps:
-                remaining = (self.laps - lap - 1) * self.lap_times / (lap + 1)
+            if lap < self.laps:
+                remaining = (self.laps - lap) * self.lap_times / lap
                 hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
                 console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=logger)
             else:
@@ -133,11 +143,11 @@ def race(benchmark, cfg):
     laps = cfg.opts("benchmarks", "laps")
     print_race_info(cfg)
     benchmark.setup()
-    lap_counter = LapCounter(laps, cfg)
+    lap_counter = LapCounter(benchmark.track, laps, cfg)
 
-    for lap in range(0, laps):
+    for lap in range(1, laps + 1):
         lap_counter.before_lap(lap)
-        benchmark.run()
+        benchmark.run(lap)
         lap_counter.after_lap(lap)
 
     benchmark.teardown()
@@ -188,10 +198,13 @@ Pipeline("docker",
          "Runs a benchmark against the official Elasticsearch Docker container and reports results", docker, stable=False)
 
 
+def available_pipelines():
+    return [[pipeline.name, pipeline.description] for pipeline in pipelines.values() if pipeline.stable]
+
+
 def list_pipelines():
     console.println("Available pipelines:\n")
-    console.println(tabulate.tabulate([[pipeline.name, pipeline.description] for pipeline in pipelines.values() if pipeline.stable],
-                    headers=["Name", "Description"]))
+    console.println(tabulate.tabulate(available_pipelines(), headers=["Name", "Description"]))
 
 
 def run(cfg):

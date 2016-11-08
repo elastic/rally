@@ -44,7 +44,7 @@ class TelemetryTests(TestCase):
             MockTelemetryDevice(cfg, metrics_store, {"ES_NET_HOST": "127.0.0.1"})
         ]
 
-        t = telemetry.Telemetry(config=cfg, devices=devices)
+        t = telemetry.Telemetry(cfg=cfg, devices=devices)
 
         default_car = car.Car(name="default-car")
         opts = t.instrument_candidate_env(default_car, "default-node")
@@ -101,10 +101,11 @@ class MergePartsDeviceTests(TestCase):
 
 
 class Client:
-    def __init__(self, cluster, nodes, info):
+    def __init__(self, cluster=None, nodes=None, info=None, indices=None):
         self.cluster = cluster
         self.nodes = nodes
         self._info = info
+        self.indices = indices
 
     def info(self):
         return self._info
@@ -169,7 +170,7 @@ class EnvironmentInfoTests(TestCase):
                 }
         }
 
-        client = Client(None, SubClient(nodes_info), cluster_info)
+        client = Client(nodes=SubClient(nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.EnvironmentInfo(self.cfg, client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
@@ -219,8 +220,6 @@ class EnvironmentInfoTests(TestCase):
 
 
 class ExternalEnvironmentInfoTests(TestCase):
-
-
     def setUp(self):
         self.cfg = create_config()
 
@@ -261,7 +260,7 @@ class ExternalEnvironmentInfoTests(TestCase):
                     "build_hash": "abc123"
                 }
         }
-        client = Client(SubClient(nodes_stats), SubClient(nodes_info), cluster_info)
+        client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
@@ -313,7 +312,7 @@ class ExternalEnvironmentInfoTests(TestCase):
                     "build_hash": "abc123"
                 }
         }
-        client = Client(SubClient(nodes_stats), SubClient(nodes_info), cluster_info)
+        client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
@@ -357,7 +356,7 @@ class NodeStatsTests(TestCase):
             }
         }
 
-        client = Client(cluster=None, nodes=SubClient(nodes_stats_at_start), info=None)
+        client = Client(nodes=SubClient(nodes_stats_at_start))
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -397,3 +396,108 @@ class NodeStatsTests(TestCase):
             mock.call("node_total_young_gen_gc_time", 700, "ms"),
             mock.call("node_total_old_gen_gc_time", 1500, "ms")
         ])
+
+
+class IndexStatsTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    def test_stores_available_index_stats(self, metrics_store_cluster_count, metrics_store_cluster_value):
+        indices_stats = {
+            "_all": {
+                "primaries": {
+                    "segments": {
+                        "count": 5,
+                        "memory_in_bytes": 2048,
+                        "stored_fields_memory_in_bytes": 1024,
+                        "doc_values_memory_in_bytes": 128,
+                        "terms_memory_in_bytes": 256,
+                        "points_memory_in_bytes": 512
+                    },
+                    "merges": {
+                        "total_time_in_millis": 300,
+                        "total_throttled_time_in_millis": 120
+                    },
+                    "indexing": {
+                        "index_time_in_millis": 2000
+                    },
+                    "refresh": {
+                        "total_time_in_millis": 200
+                    },
+                    "flush": {
+                        "total_time_in_millis": 100
+                    }
+                }
+            }
+        }
+
+        client = Client(indices=SubClient(indices_stats))
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IndexStats(cfg, client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+
+        metrics_store_cluster_count.assert_has_calls([
+            mock.call("segments_count", 5)
+        ])
+        metrics_store_cluster_value.assert_has_calls([
+            mock.call("segments_memory_in_bytes", 2048, "byte"),
+            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
+            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
+            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
+            # we don't have norms, so nothing should have been called
+            mock.call("segments_points_memory_in_bytes", 512, "byte"),
+            mock.call("merges_total_time", 300, "ms"),
+            mock.call("merges_total_throttled_time", 120, "ms"),
+            mock.call("indexing_total_time", 2000, "ms"),
+            mock.call("refresh_total_time", 200, "ms"),
+            mock.call("flush_total_time", 100, "ms"),
+        ])
+
+
+class IndexSizeTests(TestCase):
+    @mock.patch("esrally.utils.io.get_size")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_stores_index_size_for_data_path(self, run_subprocess, metrics_store_cluster_count, get_size):
+        get_size.return_value = 2048
+
+        cfg = create_config()
+        cfg.add(config.Scope.benchmark, "provisioning", "local.data.paths", ["/var/elasticsearch/data"])
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IndexSize(cfg, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        t.detach_from_cluster(None)
+
+        metrics_store_cluster_count.assert_has_calls([
+            mock.call("final_index_size_bytes", 2048, "byte")
+        ])
+
+        run_subprocess.assert_has_calls([
+            mock.call("find /var/elasticsearch/data -ls", header="index files:")
+        ])
+
+    @mock.patch("esrally.utils.io.get_size")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_stores_nothing_if_no_data_path(self, run_subprocess, metrics_store_cluster_count, get_size):
+        get_size.return_value = 2048
+
+        cfg = create_config()
+        # no data path!
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IndexSize(cfg, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        t.detach_from_cluster(None)
+
+        run_subprocess.assert_not_called()
+        metrics_store_cluster_count.assert_not_called()
+        get_size.assert_not_called()

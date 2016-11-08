@@ -25,12 +25,14 @@ class StartBenchmark:
     Starts a benchmark.
     """
 
-    def __init__(self, config, track, metrics_meta_info):
+    def __init__(self, config, track, metrics_meta_info, lap):
         """
         :param config: Rally internal configuration object.
         :param track: The track to use.
         :param metrics_meta_info: meta info for the metrics store.
+        :param lap: The current lap.
         """
+        self.lap = lap
         self.config = config
         self.track = track
         self.metrics_meta_info = metrics_meta_info
@@ -169,7 +171,7 @@ class Driver(thespian.actors.Actor):
         logger.info("Benchmark is about to start.")
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
-        self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info)
+        self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info, lap=msg.lap)
         invocation = self.config.opts("meta", "time.start")
         expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
         track_name = self.config.opts("benchmarks", "track")

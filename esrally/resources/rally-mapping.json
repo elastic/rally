@@ -61,6 +61,10 @@
           "doc_values": true,
           "index": "not_analyzed"
         },
+        "lap": {
+          "type": "integer",
+          "doc_values": true
+        },
         "name": {
           "type": "string",
           "doc_values": true,
