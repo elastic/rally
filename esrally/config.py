@@ -386,7 +386,6 @@ class ConfigFactory:
                                   check_pattern=ConfigFactory.ENV_NAME_PATTERN)
 
     def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, sensitive=False, default_value=None):
-        print("ASSUME DEFAULTS: %s" % (str(self.assume_defaults)))
         if default_value is not None:
             final_prompt = "%s [default: '%s']: " % (prompt, default_value)
         else:
