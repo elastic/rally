@@ -100,7 +100,12 @@ class SourceRepository:
 
     @property
     def src_dir(self):
-        return self.cfg.opts("source", "local.src.dir")
+        try:
+            return self.cfg.opts("source", "local.src.dir")
+        except config.ConfigError:
+            logger.exception("Cannot determine source directory")
+            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Are you missing Gradle 2.13? Please install"
+                                              " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
     @property
     def remote_url(self):
