@@ -240,17 +240,16 @@ def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_r
             for j in java_home:
                 if debian_jdk_pattern.match(j):
                     return j[:-len("/jre/bin/java")]
+        # Red Hat based distributions
+        #
+        # ls -l /etc/alternatives/jre_1.[789].0
+        # lrwxrwxrwx. 1 root root 62 May 20 07:51 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.91-5.b14.fc23.x86_64/jre
+        #
+        # We could also use the output of "alternatives --display java" on Red Hat but the output is so
+        # verbose that it's easier to use the links.
+        path = read_symlink("/etc/alternatives/java_sdk_1.%d.0" % major_version)
+        # return path if and only if it is a proper directory
+        if path and os.path.isdir(path) and not os.path.islink(path):
+            return path
         else:
-            # Red Hat based distributions
-            #
-            # ls -l /etc/alternatives/jre_1.[789].0
-            # lrwxrwxrwx. 1 root root 62 May 20 07:51 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.91-5.b14.fc23.x86_64/jre
-            #
-            # We could also use the output of "alternatives --display java" on Red Hat but the output is so
-            # verbose that it's easier to use the links.
-            path = read_symlink("/etc/alternatives/java_sdk_1.%d.0" % major_version)
-            # return path if and only if it is a proper directory
-            if path and os.path.isdir(path) and not os.path.islink(path):
-                return path
-            else:
-                return fallback
+            return fallback
