@@ -124,7 +124,7 @@ class Provisioner:
             binary_path = self._config.opts("provisioning", "local.binary.path")
             return ["%s/data" % binary_path]
         else:
-            return data_paths
+            return ["%s/data" % path for path in data_paths]
 
     def _install_dir(self):
         root = self._config.opts("system", "challenge.root.dir")

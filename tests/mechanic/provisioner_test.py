@@ -57,7 +57,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "builder", "candidate.bin.path", "/data/builds/distributions/")
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
         cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
-        cfg.add(config.Scope.application, "provisioning", "datapaths", ["/var/elasticsearch/data"])
+        cfg.add(config.Scope.application, "provisioning", "datapaths", ["/var/elasticsearch"])
         cfg.add(config.Scope.application, "provisioning", "node.http.port", 39200)
 
         p = provisioner.Provisioner(cfg)
