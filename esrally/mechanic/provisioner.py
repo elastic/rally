@@ -44,7 +44,7 @@ class Provisioner:
             logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
             if os.path.exists(install_dir):
                 shutil.rmtree(install_dir)
-            data_paths = self._config.opts("provisioning", "datapaths", mandatory=False)
+            data_paths = self._config.opts("provisioning", "local.data.paths")
             if data_paths is not None:
                 for path in data_paths:
                     if os.path.exists(path):
@@ -93,7 +93,7 @@ class Provisioner:
         logger.info("Using port [%d]" % http_port)
         env_name = self._config.opts("system", "env.name")
         additional_config = car.custom_config_snippet
-        data_paths = self._data_paths(car)
+        data_paths = self._data_paths()
         logger.info("Using data paths [%s]" % data_paths)
         self._config.add(config.Scope.challenge, "provisioning", "local.data.paths", data_paths)
         s = open("%s/config/elasticsearch.yml" % binary_path, "r").read()
@@ -118,14 +118,13 @@ class Provisioner:
             configure = True
         return "\nnode.max_local_storage_nodes: %d" % car.nodes if configure else ""
 
-    def _data_paths(self, car):
-        binary_path = self._config.opts("provisioning", "local.binary.path")
+    def _data_paths(self):
         data_paths = self._config.opts("provisioning", "datapaths")
         if data_paths is None:
+            binary_path = self._config.opts("provisioning", "local.binary.path")
             return ["%s/data" % binary_path]
         else:
-            # we have to add the car name here as we need to preserve data potentially across runs
-            return ["%s/%s" % (path, car.name) for path in data_paths]
+            return data_paths
 
     def _install_dir(self):
         root = self._config.opts("system", "challenge.root.dir")

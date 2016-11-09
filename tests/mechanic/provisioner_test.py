@@ -8,22 +8,6 @@ from esrally.mechanic import provisioner
 class ProvisionerTests(TestCase):
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
-    def test_cleanup_nothing(self, mock_path_exists, mock_rm):
-        mock_path_exists.return_value = False
-
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
-        cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
-        cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
-
-        p = provisioner.Provisioner(cfg)
-        p.cleanup()
-
-        mock_path_exists.assert_called_once_with("/rally-root/track/challenge/es-bin")
-        mock_rm.assert_not_called()
-
-    @mock.patch("shutil.rmtree")
-    @mock.patch("os.path.exists")
     def test_cleanup_nothing_on_preserve(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = False
 
@@ -31,7 +15,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
         cfg.add(config.Scope.application, "provisioning", "install.preserve", True)
-        cfg.add(config.Scope.application, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
+        cfg.add(config.Scope.application, "provisioning", "local.data.paths", ["/tmp/some/data-path-dir"])
 
         p = provisioner.Provisioner(cfg)
         p.cleanup()
@@ -48,7 +32,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
         cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
-        cfg.add(config.Scope.application, "provisioning", "datapaths", ["/tmp/some/data-path-dir"])
+        cfg.add(config.Scope.application, "provisioning", "local.data.paths", ["/tmp/some/data-path-dir"])
 
         p = provisioner.Provisioner(cfg)
         p.cleanup()
@@ -73,10 +57,11 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "builder", "candidate.bin.path", "/data/builds/distributions/")
         cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
         cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
-        cfg.add(config.Scope.application, "provisioning", "datapaths", [])
+        cfg.add(config.Scope.application, "provisioning", "datapaths", ["/var/elasticsearch/data"])
         cfg.add(config.Scope.application, "provisioning", "node.http.port", 39200)
 
         p = provisioner.Provisioner(cfg)
         p.prepare()
 
         self.assertEqual(cfg.opts("provisioning", "local.binary.path"), "/install/elasticsearch-5.0.0-SNAPSHOT")
+        self.assertEqual(cfg.opts("provisioning", "local.data.paths"), ["/var/elasticsearch/data"])
