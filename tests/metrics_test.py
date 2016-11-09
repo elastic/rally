@@ -285,7 +285,7 @@ class EsRaceStoreTests(TestCase):
             "user-tag": ""
         }
 
-        self.es_mock.index.assert_called_with(index="rally-2016", doc_type="races", item=expected_doc, id=EsRaceStoreTests.TRIAL_TIMESTAMP)
+        self.es_mock.index.assert_called_with(index="rally-2016", doc_type="races", item=expected_doc)
 
 
 class InMemoryMetricsStoreTests(TestCase):

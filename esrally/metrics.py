@@ -37,14 +37,11 @@ class EsClient:
     def refresh(self, index):
         return self.guarded(self._client.indices.refresh, index=index)
 
-    def create_document(self, index, doc_type, body):
-        return self.guarded(self._client.create, index=index, doc_type=doc_type, body=body)
-
     def bulk_index(self, index, doc_type, items):
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
-    def index(self, index, doc_type, item, id=None):
-        self.guarded(self._client.create, index=index, doc_type=doc_type, body=item, id=id)
+    def index(self, index, doc_type, item):
+        self.guarded(self._client.index, index=index, doc_type=doc_type, body=item)
 
     def search(self, index, doc_type, body):
         return self.guarded(self._client.search, index=index, doc_type=doc_type, body=body)
@@ -841,7 +838,7 @@ class EsRaceStore:
             "target-hosts": ["%s:%s" % (i["host"], i["port"]) for i in self.config.opts("launcher", "external.target.hosts")],
             "user-tag": self.config.opts("system", "user.tag")
         }
-        self.client.index(index_name(trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc, id=trial_timestamp)
+        self.client.index(index_name(trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc)
 
     def list(self):
         filters = [{
