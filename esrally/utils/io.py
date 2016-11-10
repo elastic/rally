@@ -20,12 +20,13 @@ def ensure_dir(directory):
 
     :param directory: The directory to create (if it does not exist).
     """
-    try:
-        # avoid a race condition by trying to create the checkout directory
-        os.makedirs(directory)
-    except OSError as exception:
-        if exception.errno != errno.EEXIST:
-            raise
+    if directory:
+        try:
+            # avoid a race condition by trying to create the checkout directory
+            os.makedirs(directory)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                raise
 
 
 def _zipdir(source_directory, archive):
