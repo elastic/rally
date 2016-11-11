@@ -239,7 +239,8 @@ class SummaryReporter:
         if show_also_in_console:
             print_internal(formatter(headers, data))
         if len(report_file) > 0:
-            normalized_report_file = rio.normalize_path(report_file)
+            cwd = self._config.opts("system", "rally.cwd")
+            normalized_report_file = rio.normalize_path(report_file, cwd)
             logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
                         (normalized_report_file, report_file, report_format))
             # ensure that the parent folder already exists when we try to write the file...

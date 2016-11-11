@@ -99,13 +99,19 @@ def basename(path):
     return os.path.basename(path)
 
 
-def normalize_path(path):
+def normalize_path(path, cwd="."):
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.
     :param path: A possibly non-normalized path.
+    :param cwd: The current working directory. "." by default.
     :return: A normalized path.
     """
-    return os.path.normpath(os.path.expanduser(path))
+    normalized = os.path.normpath(os.path.expanduser(path))
+    # user specified only a file name? -> treat as relative to the current directory
+    if dirname(normalized) == "":
+        return "%s/%s" % (cwd, normalized)
+    else:
+        return normalized
 
 
 def splitext(file_name):

@@ -553,6 +553,7 @@ def main():
     # Add global meta info derived by rally itself
     cfg.add(config.Scope.application, "meta", "time.start", args.effective_start_date)
     cfg.add(config.Scope.application, "system", "rally.root", rally_root_path())
+    cfg.add(config.Scope.application, "system", "rally.cwd", os.getcwd())
     cfg.add(config.Scope.application, "system", "invocation.root.dir", paths.Paths(cfg).invocation_root())
     # Add command line config
     cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
