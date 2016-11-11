@@ -2,14 +2,16 @@ import collections
 import datetime
 import logging
 import math
+import pickle
 import statistics
+import sys
+import zlib
 from enum import Enum, IntEnum
 
 import certifi
 import elasticsearch
 import elasticsearch.helpers
 import tabulate
-
 from esrally import time, exceptions
 from esrally.utils import console
 
@@ -708,13 +710,16 @@ class InMemoryMetricsStore(MetricsStore):
         pass
 
     def to_externalizable(self):
-        return InMemoryMetricsStore.DOCS
+        compressed = zlib.compress(pickle.dumps(InMemoryMetricsStore.DOCS))
+        logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
+                    (sys.getsizeof(InMemoryMetricsStore.DOCS), sys.getsizeof(compressed)))
+        return compressed
 
     def bulk_add(self, docs):
         if docs == InMemoryMetricsStore.DOCS:
             return
         else:
-            for doc in docs:
+            for doc in pickle.loads(zlib.decompress(docs)):
                 self._add(doc)
 
     def get_percentiles(self, name, operation=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
