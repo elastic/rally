@@ -216,13 +216,19 @@ class Driver(thespian.actors.Actor):
             self.most_recent_sample_per_client = {}
             self.current_step += 1
             if self.finished():
-                logger.info("All steps completed. Shutting down")
+                logger.info("All steps completed. Shutting down.")
                 # we're done here
                 for driver in self.drivers:
                     self.send(driver, thespian.actors.ActorExitRequest())
+                logger.info("Postprocessing samples...")
                 self.post_process_samples()
+                logger.info("Sending benchmark results...")
                 self.send(self.start_sender, BenchmarkComplete(self.metrics_store.to_externalizable()))
+                logger.info("Closing metrics store...")
                 self.metrics_store.close()
+                # immediately clear as we don't need it anymore and it can consume a significant amount of memory
+                del self.metrics_store
+                logger.info("Terminating main driver actor.")
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
                 # start the next task in five seconds (relative to master's timestamp)
@@ -247,6 +253,8 @@ class Driver(thespian.actors.Actor):
             self.most_recent_sample_per_client[most_recent.client_id] = most_recent
 
     def post_process_samples(self):
+        logger.info("Post processing [%d] samples..." % len(self.raw_samples))
+        logger.info("Storing latency and service time... ")
         for sample in self.raw_samples:
             self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.operation.name,
                                                        operation_type=sample.operation.type, sample_type=sample.sample_type,
@@ -257,7 +265,9 @@ class Driver(thespian.actors.Actor):
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                        relative_time=sample.relative_time)
 
+        logger.info("Calculating throughput... ")
         aggregates = calculate_global_throughput(self.raw_samples)
+        logger.info("Storing throughput... ")
         for op, samples in aggregates.items():
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
@@ -386,7 +396,7 @@ class Sampler:
         self.client_id = client_id
         self.operation = operation
         self.start_timestamp = start_timestamp
-        self.q = queue.Queue(maxsize=1024)
+        self.q = queue.Queue(maxsize=16384)
 
     def add(self, sample_type, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration, total_iterations):
         try:

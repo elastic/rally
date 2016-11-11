@@ -71,18 +71,27 @@ class Benchmark:
         result = self.actor_system.ask(main_driver,
                                        driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, self.metrics_store.lap))
         if isinstance(result, driver.BenchmarkComplete):
+            logger.info("Benchmark is complete.")
+            logger.info("Notifying cluster.")
             self.cluster.on_benchmark_stop()
+            logger.info("Bulk adding data to metrics store.")
             self.metrics_store.bulk_add(result.metrics)
+            logger.info("Flushing metrics data...")
             self.metrics_store.flush()
+            logger.info("Flushing done")
         elif isinstance(result, driver.BenchmarkFailure):
             raise exceptions.RallyError(result.message, result.cause)
         else:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
 
     def teardown(self):
+        logger.info("Stopping engine.")
         self.mechanic.stop_engine(self.cluster)
+        logger.info("Closing metrics store.")
         self.metrics_store.close()
+        logger.info("Summarizing results.")
         reporter.summarize(self.cfg, self.track)
+        logger.info("Sweeping")
         self.sweep()
 
     def sweep(self):
