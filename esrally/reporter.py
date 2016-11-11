@@ -9,8 +9,6 @@ from esrally.utils import convert, io as rio, console
 
 logger = logging.getLogger("rally.reporting")
 
-MEDIAN = "50.0"
-
 
 def summarize(cfg, track, lap=None):
     SummaryReporter(cfg, lap).report(track)
@@ -93,15 +91,11 @@ class Stats:
         return self.store.get_one(metric_name, lap=self.lap)
 
     def summary_stats(self, metric_name, operation_name):
-        percentiles = self.store.get_percentiles(metric_name,
-                                                 operation=operation_name,
-                                                 sample_type=metrics.SampleType.Normal,
-                                                 percentiles=[MEDIAN],
-                                                 lap=self.lap)
+        median = self.store.get_median(metric_name, operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         unit = self.store.get_unit(metric_name, operation=operation_name)
         stats = self.store.get_stats(metric_name, operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
-        if percentiles and stats:
-            return stats["min"], percentiles[MEDIAN], stats["max"], unit
+        if median and stats:
+            return stats["min"], median, stats["max"], unit
         else:
             return None, None, None, unit
 
@@ -125,16 +119,7 @@ class Stats:
         return self.index_size and self.bytes_written
 
     def median(self, metric_name, operation_name=None, operation_type=None, sample_type=None):
-        percentiles = self.store.get_percentiles(metric_name,
-                                                 operation=operation_name,
-                                                 operation_type=operation_type,
-                                                 sample_type=sample_type,
-                                                 lap=self.lap,
-                                                 percentiles=[MEDIAN])
-        if percentiles:
-            return percentiles[MEDIAN]
-        else:
-            return None
+        return self.store.get_median(metric_name, operation=operation_name, operation_type=operation_type, sample_type=sample_type, lap=self.lap)
 
     def single_latency(self, operation, metric_name="latency"):
         sample_type = metrics.SampleType.Normal
@@ -257,8 +242,6 @@ class SummaryReporter:
             normalized_report_file = rio.normalize_path(report_file)
             logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
                         (normalized_report_file, report_file, report_format))
-            # if show_also_in_console:
-            #     print("\nWriting report also to '%s'" % normalized_report_file)
             # ensure that the parent folder already exists when we try to write the file...
             rio.ensure_dir(rio.dirname(normalized_report_file))
             with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:

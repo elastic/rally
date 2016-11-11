@@ -482,6 +482,21 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
+    def get_median(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+        """
+        Retrieves median value of the given metric.
+
+        :param name: The metric name to query.
+        :param operation The operation name to query. Optional.
+        :param operation_type The operation type to query. Optional.
+        :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param lap The lap to query. Optional. By default, all laps are considered.
+        :return: The median value.
+        """
+        median = "50.0"
+        percentiles = self.get_percentiles(name, operation, operation_type, sample_type, lap, percentiles=[median])
+        return percentiles[median] if percentiles else None
+
 
 def index_name(ts):
     return "rally-%04d" % ts.year
@@ -678,6 +693,14 @@ class InMemoryMetricsStore(MetricsStore):
         if clear:
             InMemoryMetricsStore.DOCS = []
 
+    def __del__(self):
+        """
+        Deletes the metrics store instance. This method should only be called if the metrics gathered by this metrics store are not
+        needed anymore for the current process.
+        """
+        del InMemoryMetricsStore.DOCS
+        InMemoryMetricsStore.DOCS = []
+
     def _add(self, doc):
         InMemoryMetricsStore.DOCS.append(doc)
 
@@ -705,7 +728,8 @@ class InMemoryMetricsStore(MetricsStore):
                 result[percentile] = self.percentile_value(sorted_values, percentile)
         return result
 
-    def percentile_value(self, sorted_values, percentile):
+    @staticmethod
+    def percentile_value(sorted_values, percentile):
         """
         Calculates a percentile value for a given list of values and a percentile.
 

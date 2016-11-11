@@ -10,7 +10,7 @@ class ReporterTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
 
-        store = metrics.InMemoryMetricsStore(config=cfg, clear=True)
+        store = metrics.InMemoryMetricsStore(config=cfg)
         store.open(datetime.datetime.now(), "test", "unittest", "unittest_car")
         store.lap = 1
 
@@ -34,6 +34,8 @@ class ReporterTests(TestCase):
         challenge = track.Challenge(name="unittest", description="", index_settings=None, schedule=[index])
 
         stats = reporter.Stats(store, challenge)
+
+        del store
 
         self.assertEqual((500, 1000, 2000, "docs/s"), stats.op_metrics["index"]["throughput"])
         self.assertEqual(collections.OrderedDict([(50.0, 220), (100, 225)]), stats.op_metrics["index"]["latency"])

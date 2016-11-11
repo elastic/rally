@@ -1,6 +1,6 @@
 import datetime
-from unittest import TestCase
 import unittest.mock as mock
+from unittest import TestCase
 
 from esrally import config, metrics, track
 
@@ -224,6 +224,82 @@ class EsMetricsTests(TestCase):
 
         self.assertEqual(throughput, actual_throughput)
 
+    def test_get_median(self):
+        median_throughput = 30535
+        search_result = {
+            "hits": {
+                "total": 1,
+            },
+            "aggregations": {
+                "percentile_stats": {
+                    "values": {
+                        "50.0": median_throughput
+                    }
+                }
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "trial-timestamp": "20160131T000000Z"
+                            }
+                        },
+                        {
+                            "term": {
+                                "environment": "unittest"
+                            }
+                        },
+                        {
+                            "term": {
+                                "track": "test"
+                            }
+                        },
+                        {
+                            "term": {
+                                "challenge": "append-no-conflicts"
+                            }
+                        },
+                        {
+                            "term": {
+                                "car": "defaults"
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "indexing_throughput"
+                            }
+                        },
+                        {
+                            "term": {
+                                "lap": 3
+                            }
+                        }
+                    ]
+                }
+            },
+            "aggs": {
+                "percentile_stats": {
+                    "percentiles": {
+                        "field": "value",
+                        "percents": ["50.0"]
+                    }
+                }
+            }
+        }
+
+        actual_median_throughput = self.metrics_store.get_median("indexing_throughput", lap=3)
+
+        self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
+
+        self.assertEqual(median_throughput, actual_median_throughput)
+
 
 class EsRaceStoreTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
@@ -292,7 +368,11 @@ class InMemoryMetricsStoreTests(TestCase):
     def setUp(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock, clear=True)
+        self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
+
+    def tearDown(self):
+        del self.metrics_store
+        del self.cfg
 
     def test_get_value(self):
         throughput = 5000
@@ -325,6 +405,18 @@ class InMemoryMetricsStoreTests(TestCase):
         self.assert_equal_percentiles("query_latency", [0.0], {0.0: 1.0})
 
         self.assert_equal_percentiles("query_latency", [99, 99.9, 100], {99: 990.0, 99.9: 999.0, 100: 1000.0})
+
+    def test_get_median(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
+        for i in range(1, 1001):
+            self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        self.assertAlmostEqual(500.5, self.metrics_store.get_median("query_latency", lap=1))
 
     def assert_equal_percentiles(self, name, percentiles, expected_percentiles):
         actual_percentiles = self.metrics_store.get_percentiles(name, percentiles=percentiles)
