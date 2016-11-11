@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from esrally import exceptions
 from esrally.track import params
 
 
@@ -27,6 +28,147 @@ class StringAsFileSource:
         self.contents = None
 
 
+class SliceTests(TestCase):
+    def test_slice_with_source_larger_than_slice(self):
+        source = params.Slice(StringAsFileSource, 2, 5)
+        data = [
+            '{"key": "value1"}',
+            '{"key": "value2"}',
+            '{"key": "value3"}',
+            '{"key": "value4"}',
+            '{"key": "value5"}',
+            '{"key": "value6"}',
+            '{"key": "value7"}',
+            '{"key": "value8"}',
+            '{"key": "value9"}',
+            '{"key": "value10"}'
+        ]
+
+        source.open(data, "r")
+        self.assertEqual(data[2:7], list(source))
+        source.close()
+
+    def test_slice_with_slice_larger_than_source(self):
+        source = params.Slice(StringAsFileSource, 0, 5)
+        data = [
+            '{"key": "value1"}',
+            '{"key": "value2"}',
+            '{"key": "value3"}',
+        ]
+
+        source.open(data, "r")
+        self.assertEqual(data, list(source))
+        source.close()
+
+
+class ConflictingIdsBuilderTests(TestCase):
+    def test_no_id_conflicts(self):
+        self.assertIsNone(params.build_conflicting_ids(None, 100, 0))
+        self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 100, 0))
+
+    def test_sequential_conflicts(self):
+        self.assertEqual(
+            [
+                "         0",
+                "         1",
+                "         2",
+                "         3",
+                "         4",
+                "         5",
+                "         6",
+                "         7",
+                "         8",
+                "         9",
+                "        10",
+            ],
+            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 0)
+        )
+
+        self.assertEqual(
+            [
+                "         5",
+                "         6",
+                "         7",
+                "         8",
+                "         9",
+                "        10",
+                "        11",
+                "        12",
+                "        13",
+                "        14",
+                "        15",
+            ],
+            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 5)
+        )
+
+    def test_random_conflicts(self):
+        self.assertEqual(
+            [
+                "         3",
+                "         3",
+                "         3"
+            ],
+            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, rand=lambda x, y: y)
+        )
+
+        self.assertEqual(
+            [
+                "         8",
+                "         8",
+                "         8"
+            ],
+            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, rand=lambda x, y: y)
+        )
+
+
+class ActionMetaDataTests(TestCase):
+    def test_none_action_meta_data_is_none(self):
+        self.assertIsNone(next(params.NoneActionMetaData()))
+
+    def test_generate_action_meta_data_without_id_conflicts(self):
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type"}}',
+                         next(params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)))
+
+    def test_generate_action_meta_data_with_id_conflicts(self):
+        pseudo_random_sequence = iter([
+            # first column == 3 -> we'll draw a "random" id, second column == "random" id
+            3, 1,
+            3, 3,
+            3, 2,
+            0,
+            3, 0])
+
+        generator = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=[100, 200, 300, 400],
+                                                  rand=lambda x, y: next(pseudo_random_sequence))
+
+        # first one is always not drawn from a random index
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}', next(generator))
+        # now we start using random ids, i.e. look in the first line of the pseudo-random sequence
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}', next(generator))
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}', next(generator))
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}', next(generator))
+        # "random" returns 0 instead of 3 -> we draw the next sequential one, which is 200
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}', next(generator))
+        # and we're back to random
+        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}', next(generator))
+
+    def test_source_file_action_meta_data(self):
+        source = params.Slice(StringAsFileSource, 0, 5)
+        generator = params.SourceActionMetaData(source)
+
+        data = [
+            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "1"}}',
+            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "2"}}',
+            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "3"}}',
+            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "4"}}',
+            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "5"}}',
+        ]
+
+        source.open(data, "r")
+        self.assertEqual(data, list(generator))
+        source.close()
+
+
 class IndexDataReaderTests(TestCase):
     def test_read_bulk_larger_than_number_of_docs(self):
         data = [
@@ -38,11 +180,14 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 50
 
-        reader = params.IndexDataReader(data, docs_to_index=len(data), conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, file_source=StringAsFileSource)
-        with reader:
-            for bulk in reader:
-                self.assertEqual(len(data) * 2, len(bulk))
+        source = params.Slice(StringAsFileSource, 0, len(data))
+        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
+
+        expected_bulk_sizes = [len(data) * 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes)
 
     def test_read_bulk_with_offset(self):
         data = [
@@ -54,11 +199,14 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 50
 
-        reader = params.IndexDataReader(data, docs_to_index=len(data), conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, offset=3, file_source=StringAsFileSource)
-        with reader:
-            for bulk in reader:
-                self.assertEqual((len(data) - 3) * 2, len(bulk))
+        source = params.Slice(StringAsFileSource, 3, len(data))
+        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
+
+        expected_bulk_sizes = [(len(data) - 3) * 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes)
 
     def test_read_bulk_smaller_than_number_of_docs(self):
         data = [
@@ -72,16 +220,15 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 3
 
-        reader = params.IndexDataReader(data, docs_to_index=len(data), conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, file_source=StringAsFileSource)
+        source = params.Slice(StringAsFileSource, 0, len(data))
+        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
 
         # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_lengths = [6, 6, 2]
-        with reader:
-            bulk_index = 0
-            for bulk in reader:
-                self.assertEqual(expected_bulk_lengths[bulk_index], len(bulk))
-                bulk_index += 1
+        expected_bulk_sizes = [6, 6, 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes)
 
     def test_read_bulk_smaller_than_number_of_docs_and_multiple_clients(self):
         data = [
@@ -95,16 +242,75 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 3
 
-        reader = params.IndexDataReader(data, docs_to_index=5, conflicting_ids=None, index_name="test_index", type_name="test_type",
-                                        bulk_size=bulk_size, file_source=StringAsFileSource)
+        # only 5 documents to index for this client
+        source = params.Slice(StringAsFileSource, 0, 5)
+        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
 
         # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_lengths = [6, 4]
+        expected_bulk_sizes = [6, 4]
+        self.assert_bulks_sized(reader, expected_bulk_sizes)
+
+    def test_read_bulks_and_assume_metadata_line_in_source_file(self):
+        data = [
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value1"}',
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value2"}',
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value3"}',
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value4"}',
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value5"}',
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value6"}',
+            '{"index": {"_index": "test_index", "_type": "test_type"}',
+            '{"key": "value7"}'
+        ]
+        bulk_size = 3
+
+        source = params.Slice(StringAsFileSource, 0, len(data))
+        am_handler = params.SourceActionMetaData(source)
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
+
+        # always double the amount as one line contains the data and one line contains the index command
+        expected_bulk_sizes = [6, 6, 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes)
+
+    def test_read_bulks_and_assume_no_metadata(self):
+        data = [
+            '{"key": "value1"}',
+            '{"key": "value2"}',
+            '{"key": "value3"}',
+            '{"key": "value4"}',
+            '{"key": "value5"}',
+            '{"key": "value6"}',
+            '{"key": "value7"}'
+        ]
+        bulk_size = 3
+
+        source = params.Slice(StringAsFileSource, 0, len(data))
+        am_handler = params.NoneActionMetaData()
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
+
+        # always double the amount as one line contains the data and one line contains the index command
+        expected_bulk_sizes = [3, 3, 1]
+        self.assert_bulks_sized(reader, expected_bulk_sizes)
+
+    def assert_bulks_sized(self, reader, expected_bulk_sizes):
         with reader:
             bulk_index = 0
-            for bulk in reader:
-                self.assertEqual(expected_bulk_lengths[bulk_index], len(bulk))
-                bulk_index += 1
+            for index, type, batch in reader:
+                for bulk in batch:
+                    self.assertEqual(expected_bulk_sizes[bulk_index], len(bulk))
+                    bulk_index += 1
 
 
 class InvocationGeneratorTests(TestCase):
@@ -151,26 +357,32 @@ class InvocationGeneratorTests(TestCase):
         self.assertEqual(1, i1.exit_count)
 
     def test_calculate_bounds(self):
-        self.assertEqual((0, 1000), params.bounds(1000, 0, 1))
+        self.assertEqual((0, 1000, 1000), params.bounds(1000, 0, 1, params.ActionMetaData.Generate))
+        self.assertEqual((0, 1000, 2000), params.bounds(1000, 0, 1, params.ActionMetaData.SourceFile))
 
-        self.assertEqual((0, 500), params.bounds(1000, 0, 2))
-        self.assertEqual((500, 500), params.bounds(1000, 1, 2))
+        self.assertEqual((0, 500, 500), params.bounds(1000, 0, 2, params.ActionMetaData.Generate))
+        self.assertEqual((500, 500, 500), params.bounds(1000, 1, 2, params.ActionMetaData.Generate))
 
-        self.assertEqual((0, 400), params.bounds(800, 0, 2))
-        self.assertEqual((400, 400), params.bounds(800, 1, 2))
+        self.assertEqual((0, 400, 400), params.bounds(800, 0, 2, params.ActionMetaData.NoMetaData))
+        self.assertEqual((400, 400, 400), params.bounds(800, 1, 2, params.ActionMetaData.NoMetaData))
 
-        self.assertEqual((0, 267), params.bounds(800, 0, 3))
-        self.assertEqual((267, 267), params.bounds(800, 1, 3))
-        self.assertEqual((534, 266), params.bounds(800, 2, 3))
+        self.assertEqual((0, 267, 267), params.bounds(800, 0, 3, params.ActionMetaData.NoMetaData))
+        self.assertEqual((267, 267, 267), params.bounds(800, 1, 3, params.ActionMetaData.NoMetaData))
+        self.assertEqual((534, 266, 266), params.bounds(800, 2, 3, params.ActionMetaData.NoMetaData))
 
-        self.assertEqual((0, 250), params.bounds(2000, 0, 8))
-        self.assertEqual((250, 250), params.bounds(2000, 1, 8))
-        self.assertEqual((500, 250), params.bounds(2000, 2, 8))
-        self.assertEqual((750, 250), params.bounds(2000, 3, 8))
-        self.assertEqual((1000, 250), params.bounds(2000, 4, 8))
-        self.assertEqual((1250, 250), params.bounds(2000, 5, 8))
-        self.assertEqual((1500, 250), params.bounds(2000, 6, 8))
-        self.assertEqual((1750, 250), params.bounds(2000, 7, 8))
+        self.assertEqual((0, 200, 400), params.bounds(800, 0, 4, params.ActionMetaData.SourceFile))
+        self.assertEqual((400, 200, 400), params.bounds(800, 1, 4, params.ActionMetaData.SourceFile))
+        self.assertEqual((800, 200, 400), params.bounds(800, 2, 4, params.ActionMetaData.SourceFile))
+        self.assertEqual((1200, 200, 400), params.bounds(800, 3, 4, params.ActionMetaData.SourceFile))
+
+        self.assertEqual((0, 250, 250), params.bounds(2000, 0, 8, params.ActionMetaData.Generate))
+        self.assertEqual((250, 250, 250), params.bounds(2000, 1, 8, params.ActionMetaData.Generate))
+        self.assertEqual((500, 250, 250), params.bounds(2000, 2, 8, params.ActionMetaData.Generate))
+        self.assertEqual((750, 250, 250), params.bounds(2000, 3, 8, params.ActionMetaData.Generate))
+        self.assertEqual((1000, 250, 250), params.bounds(2000, 4, 8, params.ActionMetaData.Generate))
+        self.assertEqual((1250, 250, 250), params.bounds(2000, 5, 8, params.ActionMetaData.Generate))
+        self.assertEqual((1500, 250, 250), params.bounds(2000, 6, 8, params.ActionMetaData.Generate))
+        self.assertEqual((1750, 250, 250), params.bounds(2000, 7, 8, params.ActionMetaData.Generate))
 
     def test_calculate_number_of_bulks(self):
         t1 = self.t(1)
@@ -198,8 +410,10 @@ class InvocationGeneratorTests(TestCase):
         self.assertEqual(1, self.number_of_bulks([self.idx("a", [self.t(80)])], 1, 3, 267))
         self.assertEqual(1, self.number_of_bulks([self.idx("a", [self.t(80)])], 2, 3, 267))
 
-    def number_of_bulks(self, indices, partition_index, total_partitions, bulk_size):
-        return params.PartitionBulkIndexParamSource(indices, partition_index, total_partitions, bulk_size).number_of_bulks()
+    @staticmethod
+    def number_of_bulks(indices, partition_index, total_partitions, bulk_size):
+        return params.PartitionBulkIndexParamSource(
+            indices, partition_index, total_partitions, params.ActionMetaData.Generate, bulk_size, bulk_size).number_of_bulks()
 
     def test_build_conflicting_ids(self):
         self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
@@ -207,6 +421,83 @@ class InvocationGeneratorTests(TestCase):
                          params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0))
         # we cannot tell anything specific about the contents...
         self.assertEqual(3, len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)))
+
+
+class BulkIndexParamSourceTests(TestCase):
+    def test_create_without_params(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={})
+
+        self.assertEqual("Mandatory parameter 'bulk-size' is missing", ctx.exception.args[0])
+
+    def test_create_with_non_numeric_bulk_size(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "bulk-size": "Three"
+            })
+
+        self.assertEqual("'bulk-size' must be numeric", ctx.exception.args[0])
+
+    def test_create_with_negative_bulk_size(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "bulk-size": -5
+            })
+
+        self.assertEqual("'bulk-size' must be positive but was -5", ctx.exception.args[0])
+
+    def test_create_with_fraction_smaller_batch_size(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "bulk-size": 5,
+                "batch-size": 3
+            })
+
+        self.assertEqual("'batch-size' must be greater than or equal to 'bulk-size'", ctx.exception.args[0])
+
+    def test_create_with_fraction_larger_batch_size(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "bulk-size": 5,
+                "batch-size": 8
+            })
+
+        self.assertEqual("'batch-size' must be a multiple of 'bulk-size'", ctx.exception.args[0])
+
+    def test_create_with_no_metadata_but_conflicts(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "action-and-meta-data": "none",
+                "conflicts": "random"
+            })
+
+        self.assertEqual("Cannot generate id conflicts [random] when 'action-and-meta-data' is [none].", ctx.exception.args[0])
+
+    def test_create_with_unknown_id_conflicts(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "action-and-meta-data": "none",
+                "conflicts": "crazy"
+            })
+
+        self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
+
+    def test_create_with_unknown_action_meta_data(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(indices=[], params={
+                "action-and-meta-data": "guess",
+            })
+
+        self.assertEqual("Unknown 'action-and-meta-data' setting [guess]", ctx.exception.args[0])
+
+    def test_create_valid_param_source(self):
+        self.assertIsNotNone(params.BulkIndexParamSource(indices=[], params={
+            "action-and-meta-data": "generate",
+            "conflicts": "random",
+            "bulk-size": 5000,
+            "batch-size": 20000,
+            "pipeline": "test-pipeline"
+        }))
 
 
 class ParamsRegistrationTests(TestCase):

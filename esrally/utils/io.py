@@ -151,6 +151,9 @@ def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
     :param data_file: The data file. It is assumed that this file is already open for reading and its file pointer is at position zero.
     :param number_of_lines_to_skip: A non-negative number of lines that should be skipped.
     """
+    if number_of_lines_to_skip == 0:
+        return
+
     offset_file_path = "%s.offset" % data_file_path
     offset = 0
     remaining_lines = number_of_lines_to_skip

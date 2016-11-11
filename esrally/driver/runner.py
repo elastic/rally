@@ -75,7 +75,15 @@ class BulkIndex(Runner):
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
 
-        response = es.bulk(body=params["body"], params=bulk_params)
+        with_action_metadata = params["action_metadata_present"]
+
+        if with_action_metadata:
+            # only half of the lines are documents
+            bulk_size = len(params["body"]) // 2
+            response = es.bulk(body=params["body"], params=bulk_params)
+        else:
+            bulk_size = len(params["body"])
+            response = es.bulk(body=params["body"], index=params["index"], type=params["type"], params=bulk_params)
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
                 if item["index"]["status"] != 201:
@@ -84,8 +92,7 @@ class BulkIndex(Runner):
                     msg += "Bulk item: [%s]\n" % item
                     msg += "Buffer size is [%d]\n" % idx
                     raise exceptions.DataError(msg)
-        # at this point, the bulk will always contain a separate meta data line
-        return len(params["body"]) // 2, "docs"
+        return bulk_size, "docs"
 
 
 class ForceMerge(Runner):
