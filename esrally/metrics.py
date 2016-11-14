@@ -383,7 +383,7 @@ class MetricsStore:
         :param docs:
         :return:
         """
-        for doc in docs:
+        for doc in pickle.loads(zlib.decompress(docs)):
             self._add(doc)
 
     def _add(self, doc):
