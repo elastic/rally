@@ -895,7 +895,7 @@ class EsRaceStore:
         if result["hits"]["total"] > 0:
             return [Race(v["_source"]) for v in result["hits"]["hits"]]
         else:
-            return None
+            return []
 
     def find_by_timestamp(self, timestamp):
         filters = [{
