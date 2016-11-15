@@ -102,5 +102,5 @@ target/
 # pyenv
 .python-version
 
-#Coverage reports
-htmlcov/
+# Rally specific
+.rally_it/

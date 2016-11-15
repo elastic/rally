@@ -1,10 +1,10 @@
+import importlib.machinery
 import json
 import logging
 import os
 import sys
-import urllib.error
-import importlib.machinery
 import types
+import urllib.error
 
 import jinja2
 import jinja2.exceptions
@@ -66,8 +66,12 @@ def load_track(cfg):
         reader = TrackFileReader(cfg)
         distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
         data_root = cfg.opts("benchmarks", "local.dataset.cache")
-        return reader.read(track_name, repo.track_file(distribution_version, track_name), repo.track_dir(track_name),
-                           "%s/%s" % (data_root, track_name.lower()))
+        full_track = reader.read(track_name, repo.track_file(distribution_version, track_name), repo.track_dir(track_name),
+                                 "%s/%s" % (data_root, track_name.lower()))
+        if cfg.opts("benchmarks", "test.mode"):
+            return post_process_for_test_mode(full_track)
+        else:
+            return full_track
     except FileNotFoundError:
         logger.exception("Cannot load track [%s]" % track_name)
         raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
@@ -111,17 +115,21 @@ def prepare_track(track, cfg):
         file_exists = os.path.isfile(local_path)
 
         # ensure we only skip the download if the file size also matches our expectation
-        if file_exists and os.path.getsize(local_path) == size_in_bytes:
+        if file_exists and (size_in_bytes is None or os.path.getsize(local_path) == size_in_bytes):
             logger.info("[%s] already exists locally. Skipping download." % local_path)
             return False
 
         if not offline:
             try:
                 io.ensure_dir(os.path.dirname(local_path))
-                size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
-                # ensure output appears immediately
-                console.info("Downloading data from [%s] (%s MB) to [%s] ... " % (url, size_in_mb, local_path),
-                             end='', flush=True, logger=logger)
+                if size_in_bytes:
+                    size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
+                    # ensure output appears immediately
+                    console.info("Downloading data from [%s] (%s MB) to [%s] ... " % (url, size_in_mb, local_path),
+                                 end='', flush=True, logger=logger)
+                else:
+                    console.info("Downloading data from [%s] to [%s] ... " % (url, local_path), end='', flush=True, logger=logger)
+
                 net.download(url, local_path, size_in_bytes)
                 console.println("[OK]")
             except urllib.error.URLError:
@@ -138,7 +146,7 @@ def prepare_track(track, cfg):
                     "check your internet connection." % (url, local_path, url))
 
         actual_size = os.path.getsize(local_path)
-        if actual_size != size_in_bytes:
+        if size_in_bytes is not None and actual_size != size_in_bytes:
             raise exceptions.DataError("[%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected." %
                                        (local_path, actual_size, size_in_bytes))
 
@@ -150,12 +158,18 @@ def prepare_track(track, cfg):
         decompressed = False
         if not os.path.isfile(basename) or os.path.getsize(basename) != expected_size_in_bytes:
             decompressed = True
-            console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
-                         (data_set_path, basename, convert.bytes_to_gb(type.uncompressed_size_in_bytes)), end='', flush=True, logger=logger)
+            if type.uncompressed_size_in_bytes:
+                console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
+                             (data_set_path, basename, convert.bytes_to_gb(type.uncompressed_size_in_bytes)),
+                             end='', flush=True, logger=logger)
+            else:
+                console.info("Decompressing track data from [%s] to [%s] ... " % (data_set_path, basename), end='',
+                             flush=True, logger=logger)
+
             io.decompress(data_set_path, io.dirname(data_set_path))
             console.println("[OK]")
             extracted_bytes = os.path.getsize(basename)
-            if extracted_bytes != expected_size_in_bytes:
+            if expected_size_in_bytes is not None and extracted_bytes != expected_size_in_bytes:
                 raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
                                            (basename, extracted_bytes, expected_size_in_bytes))
         return basename, decompressed
@@ -209,7 +223,7 @@ class TrackRepository:
 
     def plugin_file(self, distribution_version, track_name):
         # TODO dm 71: We should  assume here that somebody else has already checked out the correct branch. Revisit when we distribute drivers
-        #self._update(distribution_version)
+        # self._update(distribution_version)
         return "%s/track.py" % self.track_dir(track_name)
 
     def _update(self, distribution_version):
@@ -255,6 +269,37 @@ def render_template(loader, template_name, clock=time.Clock):
 
 def render_template_from_file(template_file_name):
     return render_template(loader=jinja2.FileSystemLoader(io.dirname(template_file_name)), template_name=io.basename(template_file_name))
+
+
+def post_process_for_test_mode(t):
+    logger.info("Preparing track [%s] for test mode." % str(t))
+    for index in t.indices:
+        for type in index.types:
+            if type.has_valid_document_data():
+                logger.info("Reducing corpus size to 1000 documents for [%s/%s]" % (index, type))
+                type.number_of_documents = 1000
+
+                path, ext = io.splitext(type.document_archive)
+                path_2, ext_2 = io.splitext(path)
+
+                type.document_archive = "%s-1k%s%s" % (path_2, ext_2, ext)
+                type.document_file = "%s-1k%s" % (path_2, ext_2)
+                # we don't want to check sizes
+                type.compressed_size_in_bytes = None
+                type.uncompressed_size_in_bytes = None
+
+    for challenge in t.challenges:
+        for task in challenge.schedule:
+            if task.warmup_iterations > 1:
+                logger.info("Resetting warmup iterations to 1 for [%s]" % str(task))
+                task.warmup_iterations = 1
+            if task.iterations > 1:
+                logger.info("Resetting measurement iterations to 1 for [%s]" % str(task))
+                task.iterations = 1
+            if task.warmup_time_period is not None:
+                logger.info("Resetting warmup time period for [%s] to 1 second." % str(task))
+                task.warmup_time_period = 1
+    return t
 
 
 class TrackFileReader:
