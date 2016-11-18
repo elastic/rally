@@ -10,8 +10,8 @@ from esrally.utils import convert, io as rio, console
 logger = logging.getLogger("rally.reporting")
 
 
-def summarize(cfg, track, lap=None):
-    SummaryReporter(cfg, lap).report(track)
+def summarize(metrics_store, cfg, track, lap=None):
+    SummaryReporter(metrics_store, cfg, lap).report(track)
 
 
 def compare(cfg):
@@ -152,7 +152,8 @@ class Stats:
 
 
 class SummaryReporter:
-    def __init__(self, config, lap):
+    def __init__(self, metrics_store, config, lap):
+        self._metrics_store = metrics_store
         self._config = config
         self._lap = lap
 
@@ -165,7 +166,7 @@ class SummaryReporter:
 
     @property
     def lap(self):
-        return str(self._lap) if self._lap is not None else "All"
+        return "All" if self.is_final_report() else str(self._lap)
 
     def report(self, t):
         if self.is_final_report():
@@ -193,8 +194,7 @@ class SummaryReporter:
         selected_challenge = self._config.opts("benchmarks", "challenge")
         for challenge in t.challenges:
             if challenge.name == selected_challenge:
-                store = metrics.metrics_store(self._config)
-                stats = Stats(store, challenge, self._lap)
+                stats = Stats(self._metrics_store, challenge, self._lap)
 
                 metrics_table = []
                 meta_info_table = []

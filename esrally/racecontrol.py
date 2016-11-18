@@ -90,7 +90,7 @@ class Benchmark:
         logger.info("Closing metrics store.")
         self.metrics_store.close()
         logger.info("Summarizing results.")
-        reporter.summarize(self.cfg, self.track)
+        reporter.summarize(self.metrics_store, self.cfg, self.track)
         logger.info("Sweeping")
         self.sweep()
 
@@ -109,7 +109,8 @@ class Benchmark:
 
 
 class LapCounter:
-    def __init__(self, track, laps, cfg):
+    def __init__(self, metrics_store, track, laps, cfg):
+        self.metrics_store = metrics_store
         self.track = track
         self.laps = laps
         self.cfg = cfg
@@ -128,7 +129,7 @@ class LapCounter:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
             hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
-            reporter.summarize(self.cfg, track=self.track, lap=lap)
+            reporter.summarize(self.metrics_store, self.cfg, track=self.track, lap=lap)
             console.println("")
             if lap < self.laps:
                 remaining = (self.laps - lap) * self.lap_times / lap
@@ -152,7 +153,7 @@ def race(benchmark, cfg):
     laps = cfg.opts("benchmarks", "laps")
     print_race_info(cfg)
     benchmark.setup()
-    lap_counter = LapCounter(benchmark.track, laps, cfg)
+    lap_counter = LapCounter(benchmark.metrics_store, benchmark.track, laps, cfg)
 
     for lap in range(1, laps + 1):
         lap_counter.before_lap(lap)

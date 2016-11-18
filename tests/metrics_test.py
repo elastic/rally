@@ -430,15 +430,15 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.lap = 1
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
 
-        self.assertEqual(1, len(self.metrics_store.DOCS))
+        self.assertEqual(1, len(self.metrics_store.docs))
         memento = self.metrics_store.to_externalizable()
 
         self.metrics_store.close()
         del self.metrics_store
 
         self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
-        self.assertEqual(0, len(self.metrics_store.DOCS))
+        self.assertEqual(0, len(self.metrics_store.docs))
 
         self.metrics_store.bulk_add(memento)
-        self.assertEqual(1, len(self.metrics_store.DOCS))
+        self.assertEqual(1, len(self.metrics_store.docs))
         self.assertEqual(1000, self.metrics_store.get_one("final_index_size"))

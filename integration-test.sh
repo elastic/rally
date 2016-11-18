@@ -69,7 +69,7 @@ function test_sources() {
     esrally --configuration-name=${cfg} --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=defaults
 
     esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap
-    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-no-conflicts --car=4gheap
+    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-no-conflicts --car=4gheap --laps=2
     esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-with-conflicts --car=4gheap
     esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=two_nodes
     esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=verbose_iw

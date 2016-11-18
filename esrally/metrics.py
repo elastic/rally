@@ -677,46 +677,39 @@ class EsMetricsStore(MetricsStore):
 
 
 class InMemoryMetricsStore(MetricsStore):
-    # global per process
-    DOCS = []
-
-    def __init__(self, config, clock=time.Clock, clear=False, meta_info=None, lap=None):
+    def __init__(self, config, clock=time.Clock, meta_info=None, lap=None):
         """
 
         Creates a new metrics store.
 
         :param config: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
-        :param clear: iff True, the internal state will be cleared. This should never be used in production and is only intended for tests.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
         super().__init__(config=config, clock=clock, meta_info=meta_info, lap=lap)
-        if clear:
-            InMemoryMetricsStore.DOCS = []
+        self.docs = []
 
     def __del__(self):
         """
-        Deletes the metrics store instance. This method should only be called if the metrics gathered by this metrics store are not
-        needed anymore for the current process.
+        Deletes the metrics store instance.
         """
-        del InMemoryMetricsStore.DOCS
-        InMemoryMetricsStore.DOCS = []
+        del self.docs
 
     def _add(self, doc):
-        InMemoryMetricsStore.DOCS.append(doc)
+        self.docs.append(doc)
 
     def flush(self):
         pass
 
     def to_externalizable(self):
-        compressed = zlib.compress(pickle.dumps(InMemoryMetricsStore.DOCS))
+        compressed = zlib.compress(pickle.dumps(self.docs))
         logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
-                    (sys.getsizeof(InMemoryMetricsStore.DOCS), sys.getsizeof(compressed)))
+                    (sys.getsizeof(self.docs), sys.getsizeof(compressed)))
         return compressed
 
     def bulk_add(self, docs):
-        if docs == InMemoryMetricsStore.DOCS:
+        if docs == self.docs:
             return
         else:
             for doc in pickle.loads(zlib.decompress(docs)):
@@ -771,7 +764,7 @@ class InMemoryMetricsStore(MetricsStore):
 
     def _get(self, name, operation, operation_type, sample_type, lap, mapper):
         return [mapper(doc)
-                for doc in InMemoryMetricsStore.DOCS
+                for doc in self.docs
                 if doc["name"] == name and
                 (operation is None or doc["operation"] == operation) and
                 (operation_type is None or doc["operation-type"] == operation_type.name) and
