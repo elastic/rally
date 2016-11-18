@@ -14,7 +14,7 @@ Benchmarking an existing cluster
 
 Consider the following configuration: You have an existing benchmarking cluster, that consists of three Elasticsearch nodes running on ``10.5.5.10``, ``10.5.5.11``, ``10.5.5.12``. You've setup the cluster yourself and want to benchmark it with Rally. Rally is installed on ``10.5.5.5``.
 
-. image:: benchmark_existing.png
+.. image:: benchmark_existing.png
    :alt: Sample Benchmarking Scenario
 
 First of all, we need to decide on a track. So, we run ``esrally list tracks``::
