@@ -46,6 +46,7 @@ Contents
    pipelines
    metrics
    tournament
+   recipes
    command_line_reference
    developing
 
