@@ -178,11 +178,12 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, operation, warmup_iterations=0, warmup_time_period=None, iterations=1, clients=1, target_throughput=None):
+    def __init__(self, operation, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1, target_throughput=None):
         self.operation = operation
         self.warmup_iterations = warmup_iterations
-        self.warmup_time_period = warmup_time_period
         self.iterations = iterations
+        self.warmup_time_period = warmup_time_period
+        self.time_period = time_period
         self.clients = clients
         self.target_throughput = target_throughput
 

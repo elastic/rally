@@ -26,12 +26,11 @@ class DriverTestParamSource:
 class ScheduleTestCase(TestCase):
     def assert_schedule(self, expected_schedule, schedule):
         idx = 0
-        for invocation_time, sample_type_calculator, current_it, total_it, runner, params in schedule:
-            exp_invocation_time, exp_sample_type, exp_current_it, exp_total_it, exp_runner, exp_params = expected_schedule[idx]
+        for invocation_time, sample_type, progress_percent, runner, params in schedule:
+            exp_invocation_time, exp_sample_type, exp_progress_percent, exp_params = expected_schedule[idx]
             self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Expected invocation time does not match")
-            self.assertEqual(exp_sample_type, sample_type_calculator(0), "Sample type does not match")
-            self.assertEqual(exp_current_it, current_it, "Current iteration does not match")
-            self.assertEqual(exp_total_it, total_it, "Number of iterations does not match")
+            self.assertEqual(exp_sample_type, sample_type, "Sample type does not match")
+            self.assertEqual(exp_progress_percent, progress_percent, "Current progress does not match")
             self.assertIsNotNone(runner, "runner must be defined")
             self.assertEqual(exp_params, params, "Parameters do not match")
             idx += 1
@@ -168,15 +167,15 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 1, 1, 9),
-            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 2, 1, 9),
-            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 3, 1, 9),
-            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4, 1, 9),
-            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5, 1, 9),
-            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6, 1, 9),
-            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4.5, 1, 9),
-            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5.5, 1, 9),
-            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6.5, 1, 9)
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 1, 1 / 9),
+            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 2, 2 / 9),
+            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 3, 3 / 9),
+            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4, 4 / 9),
+            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5, 5 / 9),
+            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6, 6 / 9),
+            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4.5, 7 / 9),
+            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5.5, 8 / 9),
+            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6.5, 9 / 9)
         ]
 
         aggregated = driver.calculate_global_throughput(samples)
@@ -209,14 +208,14 @@ class SchedulerTests(ScheduleTestCase):
         schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup, 0, 8, None, {}),
-            (0.1, metrics.SampleType.Warmup, 1, 8, None, {}),
-            (0.2, metrics.SampleType.Warmup, 2, 8, None, {}),
-            (0.3, metrics.SampleType.Normal, 0, 8, None, {}),
-            (0.4, metrics.SampleType.Normal, 1, 8, None, {}),
-            (0.5, metrics.SampleType.Normal, 2, 8, None, {}),
-            (0.6, metrics.SampleType.Normal, 3, 8, None, {}),
-            (0.7, metrics.SampleType.Normal, 4, 8, None, {}),
+            (0, metrics.SampleType.Warmup, 1 / 8, {}),
+            (0.1, metrics.SampleType.Warmup, 2 / 8, {}),
+            (0.2, metrics.SampleType.Warmup, 3 / 8, {}),
+            (0.3, metrics.SampleType.Normal, 4 / 8, {}),
+            (0.4, metrics.SampleType.Normal, 5 / 8, {}),
+            (0.5, metrics.SampleType.Normal, 6 / 8, {}),
+            (0.6, metrics.SampleType.Normal, 7 / 8, {}),
+            (0.7, metrics.SampleType.Normal, 8 / 8, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
@@ -226,12 +225,12 @@ class SchedulerTests(ScheduleTestCase):
         schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup, 0, 6, None, {}),
-            (0.2, metrics.SampleType.Normal, 0, 6, None, {}),
-            (0.4, metrics.SampleType.Normal, 1, 6, None, {}),
-            (0.6, metrics.SampleType.Normal, 2, 6, None, {}),
-            (0.8, metrics.SampleType.Normal, 3, 6, None, {}),
-            (1.0, metrics.SampleType.Normal, 4, 6, None, {}),
+            (0, metrics.SampleType.Warmup,   1 / 6, {}),
+            (0.2, metrics.SampleType.Normal, 2 / 6, {}),
+            (0.4, metrics.SampleType.Normal, 3 / 6, {}),
+            (0.6, metrics.SampleType.Normal, 4 / 6, {}),
+            (0.8, metrics.SampleType.Normal, 5 / 6, {}),
+            (1.0, metrics.SampleType.Normal, 6 / 6, {}),
         ]
         self.assert_schedule(expected_schedule, schedule)
 
@@ -243,18 +242,42 @@ class SchedulerTests(ScheduleTestCase):
         invocations = driver.schedule_for(self.test_track, task, 0)
 
         self.assert_schedule([
-            (0.0, metrics.SampleType.Normal, 0, 11, "runner", {"body": ["a"], "size": 11}),
-            (1.0, metrics.SampleType.Normal, 1, 11, "runner", {"body": ["a"], "size": 11}),
-            (2.0, metrics.SampleType.Normal, 2, 11, "runner", {"body": ["a"], "size": 11}),
-            (3.0, metrics.SampleType.Normal, 3, 11, "runner", {"body": ["a"], "size": 11}),
-            (4.0, metrics.SampleType.Normal, 4, 11, "runner", {"body": ["a"], "size": 11}),
-            (5.0, metrics.SampleType.Normal, 5, 11, "runner", {"body": ["a"], "size": 11}),
-            (6.0, metrics.SampleType.Normal, 6, 11, "runner", {"body": ["a"], "size": 11}),
-            (7.0, metrics.SampleType.Normal, 7, 11, "runner", {"body": ["a"], "size": 11}),
-            (8.0, metrics.SampleType.Normal, 8, 11, "runner", {"body": ["a"], "size": 11}),
-            (9.0, metrics.SampleType.Normal, 9, 11, "runner", {"body": ["a"], "size": 11}),
-            (10.0, metrics.SampleType.Normal, 10, 11, "runner", {"body": ["a"], "size": 11}),
+            (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "size": 11}),
+            (1.0, metrics.SampleType.Normal, 2 / 11, {"body": ["a"], "size": 11}),
+            (2.0, metrics.SampleType.Normal, 3 / 11, {"body": ["a"], "size": 11}),
+            (3.0, metrics.SampleType.Normal, 4 / 11, {"body": ["a"], "size": 11}),
+            (4.0, metrics.SampleType.Normal, 5 / 11, {"body": ["a"], "size": 11}),
+            (5.0, metrics.SampleType.Normal, 6 / 11, {"body": ["a"], "size": 11}),
+            (6.0, metrics.SampleType.Normal, 7 / 11, {"body": ["a"], "size": 11}),
+            (7.0, metrics.SampleType.Normal, 8 / 11, {"body": ["a"], "size": 11}),
+            (8.0, metrics.SampleType.Normal, 9 / 11, {"body": ["a"], "size": 11}),
+            (9.0, metrics.SampleType.Normal, 10 / 11, {"body": ["a"], "size": 11}),
+            (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "size": 11}),
         ], list(invocations))
+
+    def test_schedule_for_time_based(self):
+        task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"], "size": 11},
+                                          param_source="driver-test-param-source"), warmup_time_period=0.1, time_period=0.1, clients=1)
+
+        invocations = list(driver.schedule_for(self.test_track, task, 0))
+
+        self.assertTrue(len(invocations) > 0)
+
+        last_progress = -1
+
+        for invocation_time, sample_type, progress_percent, runner, params in invocations:
+            # we're not throughput throttled
+            self.assertEqual(0, invocation_time)
+            if progress_percent <= 0.5:
+                self.assertEqual(metrics.SampleType.Warmup, sample_type)
+            else:
+                self.assertEqual(metrics.SampleType.Normal, sample_type)
+            self.assertTrue(last_progress < progress_percent)
+            last_progress = progress_percent
+            self.assertTrue(round(progress_percent, 6) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
+            self.assertTrue(round(progress_percent, 6) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
+            self.assertIsNotNone(runner, "runner must be defined")
+            self.assertEqual({"body": ["a"], "size": 11}, params)
 
 
 class ExecutorTests(TestCase):

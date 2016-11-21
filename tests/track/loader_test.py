@@ -49,6 +49,112 @@ class TrackSpecificationReaderTests(TestCase):
             reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
 
+    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
+        track_specification = {
+            "meta": {
+                "short-description": "short description for unit test",
+                "description": "longer description of this track for unit test",
+                "data-url": "https://localhost/data"
+            },
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": [
+                        {
+                            "name": "main",
+                            "documents": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "mapping": "main-type-mappings.json"
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index",
+                    "bulk-size": 5000,
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "index-settings": {},
+                            "clients": 8,
+                            "operation": "index-append",
+                            "warmup-iterations": 3,
+                            "time-period": 60
+                        }
+                    ]
+                }
+
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' mixes warmup iterations "
+                         "with time periods. Please do not mix time periods and iterations.", ctx.exception.args[0])
+
+    def test_parse_with_mixed_warmup_timeperiod_and_iterations(self):
+        track_specification = {
+            "meta": {
+                "short-description": "short description for unit test",
+                "description": "longer description of this track for unit test",
+                "data-url": "https://localhost/data"
+            },
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": [
+                        {
+                            "name": "main",
+                            "documents": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "mapping": "main-type-mappings.json"
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index",
+                    "bulk-size": 5000,
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "index-settings": {},
+                            "clients": 8,
+                            "operation": "index-append",
+                            "warmup-time-period": 20,
+                            "iterations": 1000
+                        }
+                    ]
+                }
+
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' mixes warmup time period "
+                         "with iterations. Please do not mix time periods and iterations.", ctx.exception.args[0])
+
     def test_parse_valid_track_specification(self):
         track_specification = {
             "meta": {

@@ -135,21 +135,6 @@
             },
             "required": ["count"]
           },
-          "warmup-iterations": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "[Only for types 'stats', 'search']: Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
-          },
-          "warmup-time-period": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "[Only for type 'index']: Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
-          },
-          "iterations": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "[Only for types 'stats', 'search']: Defines the number of times to run the operation."
-          },
           "cache": {
             "type": "boolean",
             "description": "[Only for type 'search']: Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version."
@@ -248,11 +233,23 @@
                           },
                           "warmup-iterations": {
                             "type": "integer",
-                            "minimum": 0
+                            "minimum": 0,
+                            "description": "Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
                           },
                           "iterations": {
                             "type": "integer",
-                            "minimum": 1
+                            "minimum": 1,
+                            "description": "Defines the number of times to run the operation."
+                          },
+                          "warmup-time-period": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+                          },
+                          "time-period": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
                           },
                           "target-throughput": {
                             "type": "number",

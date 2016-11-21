@@ -399,12 +399,11 @@ class Sampler:
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=16384)
 
-    def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration,
-            total_iterations):
+    def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
         try:
             self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
                                      sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
-                                     curr_iteration, total_iterations))
+                                     percent_completed))
         except queue.Full:
             logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
 
@@ -421,7 +420,7 @@ class Sampler:
 
 class Sample:
     def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, request_meta_data, latency_ms, service_time_ms,
-                 total_ops, total_ops_unit, time_period, curr_iteration, total_iterations):
+                 total_ops, total_ops_unit, time_period, percent_completed):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
@@ -433,12 +432,7 @@ class Sample:
         self.total_ops = total_ops
         self.total_ops_unit = total_ops_unit
         self.time_period = time_period
-        self.curr_iteration = curr_iteration
-        self.total_iterations = total_iterations
-
-    @property
-    def percent_completed(self):
-        return self.curr_iteration / self.total_iterations
+        self.percent_completed = percent_completed
 
 
 def select_challenge(config, t):
@@ -593,11 +587,9 @@ def execute_schedule(schedule, es, sampler):
     :param sampler: A container to store raw samples.
     """
     total_start = time.perf_counter()
-    curr_total_it = 1
     # noinspection PyBroadException
     try:
-        for expected_scheduled_time, sample_type_calculator, curr_iteration, total_it_for_task, runner, params in schedule:
-            sample_type = sample_type_calculator(total_start)
+        for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
             absolute_expected_schedule_time = total_start + expected_scheduled_time
             throughput_throttled = expected_scheduled_time > 0
             if throughput_throttled:
@@ -605,39 +597,47 @@ def execute_schedule(schedule, es, sampler):
                 if rest > 0:
                     time.sleep(rest)
             start = time.perf_counter()
-            try:
-                with runner:
-                    return_value = runner(es, params)
-                if isinstance(return_value, tuple) and len(return_value) == 2:
-                    total_ops, total_ops_unit = return_value
-                    request_meta_data = None
-                elif isinstance(return_value, dict):
-                    total_ops = return_value.pop("weight", 1)
-                    total_ops_unit = return_value.pop("unit", "ops")
-                    request_meta_data = return_value
-                else:
-                    total_ops = 1
-                    total_ops_unit = "ops"
-                    request_meta_data = None
-            except elasticsearch.TransportError as e:
-                total_ops = 0
-                total_ops_unit = "ops"
-                request_meta_data = {
-                    "http_status": e.status_code,
-                    "error_description": e.error
-                }
-            finally:
-                stop = time.perf_counter()
+            total_ops, total_ops_unit, request_meta_data = execute_single(runner, es, params)
+            stop = time.perf_counter()
 
             service_time = stop - start
             # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
             latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
             sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops,
-                        total_ops_unit, (stop - total_start), curr_total_it, total_it_for_task)
-            curr_total_it += 1
+                        total_ops_unit, (stop - total_start), percent_completed)
     except BaseException:
         logger.exception("Could not execute schedule")
         raise
+
+
+def execute_single(runner, es, params):
+    """
+    Invokes the given runner once and provides the runner's return value in a uniform structure.
+
+    :return: a triple of: total number of operations, unit of operations, a dict of request meta data (may be None).
+    """
+    try:
+        with runner:
+            return_value = runner(es, params)
+        if isinstance(return_value, tuple) and len(return_value) == 2:
+            total_ops, total_ops_unit = return_value
+            request_meta_data = None
+        elif isinstance(return_value, dict):
+            total_ops = return_value.pop("weight", 1)
+            total_ops_unit = return_value.pop("unit", "ops")
+            request_meta_data = return_value
+        else:
+            total_ops = 1
+            total_ops_unit = "ops"
+            request_meta_data = None
+    except elasticsearch.TransportError as e:
+        total_ops = 0
+        total_ops_unit = "ops"
+        request_meta_data = {
+            "http_status": e.status_code,
+            "error_description": e.error
+        }
+    return total_ops, total_ops_unit, request_meta_data
 
 
 class JoinPoint:
@@ -781,9 +781,11 @@ def schedule_for(current_track, task, client_index):
     runner_for_op = runner.runner_for(op.type)
     params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
 
-    if task.warmup_time_period is not None:
-        logger.info("Creating time period based schedule for [%s] with a warmup period of [%d] seconds." % (op, task.warmup_time_period))
-        return time_period_based(target_throughput, task.warmup_time_period, runner_for_op, params_for_op)
+    if task.warmup_time_period is not None or task.time_period is not None:
+        warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
+        logger.info("Creating time-period based schedule for [%s] with a warmup period of [%s] seconds and a time period of [%s] seconds."
+                    % (op, str(warmup_time_period), str(task.time_period)))
+        return time_period_based(target_throughput, warmup_time_period, task.time_period, runner_for_op, params_for_op)
     else:
         logger.info("Creating iteration-count based schedule for [%s] with [%d] warmup iterations and [%d] iterations." %
                     (op, task.warmup_iterations, task.iterations))
@@ -791,22 +793,34 @@ def schedule_for(current_track, task, client_index):
                                      runner_for_op, params_for_op)
 
 
-def time_period_based(target_throughput, warmup_time_period, runner, params):
+def time_period_based(target_throughput, warmup_time_period, time_period, runner, params):
     """
     Calculates the necessary schedule for time period based operations.
 
     :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
-    :param warmup_time_period: The time period in seconds that is considered for warmup.
+    :param warmup_time_period: The time period in seconds that is considered for warmup. Must not be None; provide zero instead.
+    :param time_period: The time period in seconds that is considered for measurement. May be None.
     :param runner: The runner for a given operation.
     :param params: The parameter source for a given operation.
     :return: A generator for the corresponding parameters.
     """
     wait_time = 1 / target_throughput if target_throughput else 0
-    iterations = params.size()
-    for it in range(0, iterations):
-        yield (wait_time * it,
-               lambda start: metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal,
-               it, iterations, runner, params.params())
+    start = time.perf_counter()
+    if time_period is None:
+        iterations = params.size()
+        for it in range(0, iterations):
+            sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
+            percent_completed = (it + 1) / iterations
+            yield (wait_time * it, sample_type, percent_completed, runner, params.params())
+    else:
+        end = start + warmup_time_period + time_period
+        it = 0
+        while time.perf_counter() < end:
+            now = time.perf_counter()
+            sample_type = metrics.SampleType.Warmup if now - start < warmup_time_period else metrics.SampleType.Normal
+            percent_completed = (now - start) / (warmup_time_period + time_period)
+            yield (wait_time * it, sample_type, percent_completed, runner, params.params())
+            it += 1
 
 
 def iteration_count_based(target_throughput, warmup_iterations, iterations, runner, params):
@@ -824,8 +838,7 @@ def iteration_count_based(target_throughput, warmup_iterations, iterations, runn
     total_iterations = warmup_iterations + iterations
     if total_iterations == 0:
         raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
-    for i in range(0, warmup_iterations):
-        yield (wait_time * i, lambda start: metrics.SampleType.Warmup, i, total_iterations, runner, params.params())
-
-    for i in range(0, iterations):
-        yield (wait_time * (warmup_iterations + i), lambda start: metrics.SampleType.Normal, i, total_iterations, runner, params.params())
+    for it in range(0, total_iterations):
+        sample_type = metrics.SampleType.Warmup if it < warmup_iterations else metrics.SampleType.Normal
+        percent_completed = (it + 1) / total_iterations
+        yield (wait_time * it, sample_type, percent_completed, runner, params.params())

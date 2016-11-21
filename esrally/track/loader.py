@@ -475,13 +475,22 @@ class TrackSpecificationReader:
         if op_name not in ops:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
                         "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
-        return track.Task(operation=ops[op_name],
+        task = track.Task(operation=ops[op_name],
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
                                                     default_value=default_warmup_iterations),
-                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False),
                           iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
+                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False),
+                          time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False),
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
                           target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
+        if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
+            self._error("Operation '%s' in challenge '%s' mixes warmup iterations with time periods. Please do not mix time periods and "
+                        "iterations." % (op_name, challenge_name))
+        elif task.warmup_time_period is not None and task.iterations != default_iterations:
+            self._error("Operation '%s' in challenge '%s' mixes warmup time period with iterations. Please do not mix time periods and "
+                        "iterations." % (op_name, challenge_name))
+
+        return task
 
     def parse_operations(self, ops_specs):
         # key = name, value = operation
