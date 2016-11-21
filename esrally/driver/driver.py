@@ -259,12 +259,12 @@ class Driver(thespian.actors.Actor):
             self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.operation.name,
                                                        operation_type=sample.operation.type, sample_type=sample.sample_type,
                                                        absolute_time=sample.absolute_time, relative_time=sample.relative_time,
-                                                       meta_data=sample.meta_data)
+                                                       meta_data=sample.request_meta_data)
 
             self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms",
                                                        operation=sample.operation.name, operation_type=sample.operation.type,
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                       relative_time=sample.relative_time, meta_data=sample.meta_data)
+                                                       relative_time=sample.relative_time, meta_data=sample.request_meta_data)
 
         logger.info("Calculating throughput... ")
         aggregates = calculate_global_throughput(self.raw_samples)
