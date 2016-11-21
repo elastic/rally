@@ -264,7 +264,7 @@ class MetricsStore:
         return self._meta_info
 
     def put_count_cluster_level(self, name, count, unit=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                                absolute_time=None, relative_time=None):
+                                absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new cluster level counter metric.
 
@@ -278,11 +278,13 @@ class MetricsStore:
                store will derive the timestamp automatically.
         :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
+        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.cluster, None, name, count, unit, operation, operation_type, sample_type, absolute_time, relative_time)
+        self._put(MetaInfoScope.cluster, None, name, count, unit, operation, operation_type, sample_type, absolute_time, relative_time,
+                  meta_data)
 
     def put_count_node_level(self, node_name, name, count, unit=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                             absolute_time=None, relative_time=None):
+                             absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new node level counter metric.
 
@@ -297,12 +299,14 @@ class MetricsStore:
                store will derive the timestamp automatically.
         :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
+        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.node, node_name, name, count, unit, operation, operation_type, sample_type, absolute_time, relative_time)
+        self._put(MetaInfoScope.node, node_name, name, count, unit, operation, operation_type, sample_type, absolute_time, relative_time,
+                  meta_data)
 
     # should be a float
     def put_value_cluster_level(self, name, value, unit, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                                absolute_time=None, relative_time=None):
+                                absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new cluster level value metric.
 
@@ -316,11 +320,13 @@ class MetricsStore:
                store will derive the timestamp automatically.
         :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
+       :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.cluster, None, name, value, unit, operation, operation_type, sample_type, absolute_time, relative_time)
+        self._put(MetaInfoScope.cluster, None, name, value, unit, operation, operation_type, sample_type, absolute_time, relative_time,
+                  meta_data)
 
     def put_value_node_level(self, node_name, name, value, unit, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                             absolute_time=None, relative_time=None):
+                             absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new node level value metric.
 
@@ -335,10 +341,13 @@ class MetricsStore:
                store will derive the timestamp automatically.
         :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
+        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.node, node_name, name, value, unit, operation, operation_type, sample_type, absolute_time, relative_time)
+        self._put(MetaInfoScope.node, node_name, name, value, unit, operation, operation_type, sample_type, absolute_time, relative_time,
+                  meta_data)
 
-    def _put(self, level, level_key, name, value, unit, operation, operation_type, sample_type, absolute_time=None, relative_time=None):
+    def _put(self, level, level_key, name, value, unit, operation, operation_type, sample_type, absolute_time=None, relative_time=None,
+             meta_data=None):
         if level == MetaInfoScope.cluster:
             meta = self._meta_info[MetaInfoScope.cluster]
         elif level == MetaInfoScope.node:
@@ -346,6 +355,9 @@ class MetricsStore:
             meta.update(self._meta_info[MetaInfoScope.node][level_key])
         else:
             raise exceptions.SystemSetupError("Unknown meta info level [%s] for metric [%s]" % (level, name))
+        if meta_data:
+            meta["operation"] = meta_data
+
         if absolute_time is None:
             absolute_time = self._clock.now()
         if relative_time is None:

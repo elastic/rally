@@ -1,3 +1,4 @@
+import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import metrics, track
@@ -167,15 +168,15 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 1, 1, 9),
-            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 2, 1, 9),
-            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 3, 1, 9),
-            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 4, 1, 9),
-            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 5, 1, 9),
-            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 6, 1, 9),
-            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 4.5, 1, 9),
-            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 5.5, 1, 9),
-            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, -1, -1, 5000, "docs", 6.5, 1, 9)
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 1, 1, 9),
+            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 2, 1, 9),
+            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 3, 1, 9),
+            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4, 1, 9),
+            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5, 1, 9),
+            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6, 1, 9),
+            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4.5, 1, 9),
+            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5.5, 1, 9),
+            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6.5, 1, 9)
         ]
 
         aggregated = driver.calculate_global_throughput(samples)
@@ -254,3 +255,49 @@ class SchedulerTests(ScheduleTestCase):
             (9.0, metrics.SampleType.Normal, 9, 11, "runner", {"body": ["a"], "size": 11}),
             (10.0, metrics.SampleType.Normal, 10, 11, "runner", {"body": ["a"], "size": 11}),
         ], list(invocations))
+
+
+class ExecutorTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_execute_schedule_in_throughput_mode(self, es):
+        es.bulk.return_value = {
+            "errors": False
+        }
+
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+                                 source_root_url="http://example.org",
+                                 indices=None,
+                                 challenges=None)
+
+        task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={
+            "body": ["action_metadata_line", "index_line"],
+            "action_metadata_present": True
+        },
+                                          param_source="driver-test-param-source"),
+                          warmup_time_period=0, clients=4, target_throughput=None)
+        schedule = driver.schedule_for(test_track, task, 0)
+
+        sampler = driver.Sampler(client_id=2, operation=task.operation, start_timestamp=100)
+
+        driver.execute_schedule(schedule, es, sampler)
+
+        samples = sampler.samples
+
+        self.assertTrue(len(samples) > 0)
+        previous_absolute_time = -1.0
+        previous_relative_time = -1.0
+        for sample in samples:
+            self.assertEqual(2, sample.client_id)
+            self.assertEqual(task.operation, sample.operation)
+            self.assertTrue(previous_absolute_time < sample.absolute_time)
+            previous_absolute_time = sample.absolute_time
+            self.assertTrue(previous_relative_time < sample.relative_time)
+            previous_relative_time = sample.relative_time
+            # we don't have any warmup time period
+            self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
+            # latency equals service time in throughput mode
+            self.assertEqual(sample.latency_ms, sample.service_time_ms)
+            self.assertEqual(1, sample.total_ops)
+            self.assertEqual("docs", sample.total_ops_unit)
+            self.assertEqual(1, sample.request_meta_data["bulk-size"])

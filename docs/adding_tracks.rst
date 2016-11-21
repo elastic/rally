@@ -381,14 +381,22 @@ Then create a file track.py next to track.json and implement the following two f
             doc_type="content",
             body=params["body"]
         )
-        return 1, "ops"
 
 
     def register(registry):
         registry.register_runner("percolate", percolate)
 
 
-The function ``percolate`` is the actual runner and takes the parameters ``es``, which is the Elasticsearch Python client and ``params`` which is a hash of parameters provided by its corresponding parameter source. This function needs to return a tuple of ``weight`` and a ``unit``, which is usually ``1`` and ``"ops"``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
+The function ``percolate`` is the actual runner and takes the following parameters:
+
+* ``es``, which is the Elasticsearch Python client
+* ``params`` which is a dict of parameters provided by its corresponding parameter source. Treat this parameter as read only and do not attempt to write to it.
+
+This function can return either:
+
+* Nothing at all. Then Rally will assume that by default ``1`` and ``"ops"`` (see below)
+* A tuple of ``weight`` and a ``unit``, which is usually ``1`` and ``"ops"``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
+* A ``dict`` with arbitrary keys. If the ``dict`` contains the key ``weight`` it is assumed to be numeric and chosen as weight as defined above. The key ``unit`` is treated similarly. All other keys are added to the ``meta`` section of the corresponding service time and latency metrics records.
 
 Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
 

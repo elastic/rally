@@ -84,15 +84,20 @@ class BulkIndex(Runner):
         else:
             bulk_size = len(params["body"])
             response = es.bulk(body=params["body"], index=params["index"], type=params["type"], params=bulk_params)
+
+        bulk_error_count = 0
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
-                if item["index"]["status"] != 201:
-                    msg = "Could not bulk index. "
-                    msg += "Error in line [%d]\n" % (idx + 1)
-                    msg += "Bulk item: [%s]\n" % item
-                    msg += "Buffer size is [%d]\n" % idx
-                    raise exceptions.DataError(msg)
-        return bulk_size, "docs"
+                if item["index"]["status"] > 299:
+                    bulk_error_count += 1
+
+        return {
+            "weight": bulk_size,
+            "unit": "docs",
+            "bulk-size": bulk_size,
+            "success": bulk_error_count == 0,
+            "error-count": bulk_error_count
+        }
 
 
 class ForceMerge(Runner):
@@ -109,7 +114,6 @@ class ForceMerge(Runner):
                 es.indices.optimize(index="_all")
             else:
                 raise e
-        return 1, "ops"
 
 
 class IndicesStats(Runner):
@@ -118,7 +122,6 @@ class IndicesStats(Runner):
     """
     def __call__(self, es, params):
         es.indices.stats(metric="_all")
-        return 1, "ops"
 
 
 class NodeStats(Runner):
@@ -127,7 +130,6 @@ class NodeStats(Runner):
     """
     def __call__(self, es, params):
         es.nodes.stats(metric="_all")
-        return 1, "ops"
 
 
 class Query(Runner):

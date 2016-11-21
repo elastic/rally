@@ -258,12 +258,13 @@ class Driver(thespian.actors.Actor):
         for sample in self.raw_samples:
             self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.operation.name,
                                                        operation_type=sample.operation.type, sample_type=sample.sample_type,
-                                                       absolute_time=sample.absolute_time, relative_time=sample.relative_time)
+                                                       absolute_time=sample.absolute_time, relative_time=sample.relative_time,
+                                                       meta_data=sample.meta_data)
 
             self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms",
                                                        operation=sample.operation.name, operation_type=sample.operation.type,
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                       relative_time=sample.relative_time)
+                                                       relative_time=sample.relative_time, meta_data=sample.meta_data)
 
         logger.info("Calculating throughput... ")
         aggregates = calculate_global_throughput(self.raw_samples)
@@ -398,11 +399,12 @@ class Sampler:
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=16384)
 
-    def add(self, sample_type, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration, total_iterations):
+    def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration,
+            total_iterations):
         try:
             self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
-                                     sample_type, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, curr_iteration,
-                                     total_iterations))
+                                     sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
+                                     curr_iteration, total_iterations))
         except queue.Full:
             logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
 
@@ -418,13 +420,14 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, latency_ms, service_time_ms, total_ops,
-                 total_ops_unit, time_period, curr_iteration, total_iterations):
+    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, request_meta_data, latency_ms, service_time_ms,
+                 total_ops, total_ops_unit, time_period, curr_iteration, total_iterations):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
         self.operation = operation
         self.sample_type = sample_type
+        self.request_meta_data = request_meta_data
         self.latency_ms = latency_ms
         self.service_time_ms = service_time_ms
         self.total_ops = total_ops
@@ -602,15 +605,35 @@ def execute_schedule(schedule, es, sampler):
                 if rest > 0:
                     time.sleep(rest)
             start = time.perf_counter()
-            with runner:
-                total_ops, total_ops_unit = runner(es, params)
-            stop = time.perf_counter()
+            try:
+                with runner:
+                    return_value = runner(es, params)
+                if isinstance(return_value, tuple) and len(return_value) == 2:
+                    total_ops, total_ops_unit = return_value
+                    request_meta_data = None
+                elif isinstance(return_value, dict):
+                    total_ops = return_value.pop("weight", 1)
+                    total_ops_unit = return_value.pop("unit", "ops")
+                    request_meta_data = return_value
+                else:
+                    total_ops = 1
+                    total_ops_unit = "ops"
+                    request_meta_data = None
+            except elasticsearch.TransportError as e:
+                total_ops = 0
+                total_ops_unit = "ops"
+                request_meta_data = {
+                    "http_status": e.status_code,
+                    "error_description": e.error
+                }
+            finally:
+                stop = time.perf_counter()
 
             service_time = stop - start
             # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
             latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
-            sampler.add(sample_type, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops, total_ops_unit,
-                        (stop - total_start), curr_total_it, total_it_for_task)
+            sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops,
+                        total_ops_unit, (stop - total_start), curr_total_it, total_it_for_task)
             curr_total_it += 1
     except BaseException:
         logger.exception("Could not execute schedule")
