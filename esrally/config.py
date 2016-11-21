@@ -57,7 +57,7 @@ class ConfigFile:
 
     @property
     def config_dir(self):
-        return "%s/.rally" % os.getenv("HOME")
+        return "%s/.rally" % os.path.expanduser("~")
 
     @property
     def location(self):

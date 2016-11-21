@@ -55,4 +55,4 @@ class IoTests(TestCase):
     def test_normalize_path(self):
         self.assertEqual("/already/a/normalized/path", io.normalize_path("/already/a/normalized/path"))
         self.assertEqual("/not/normalized", io.normalize_path("/not/normalized/path/../"))
-        self.assertEqual(os.getenv("HOME"), io.normalize_path("~/Documents/.."))
+        self.assertEqual(os.path.expanduser("~"), io.normalize_path("~/Documents/.."))
