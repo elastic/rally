@@ -72,7 +72,7 @@ Rally can autodetect the pipeline in most cases. If you specify ``--distribution
 ``laps``
 ~~~~~~~~
 
-Allows to run the benchmark for multiple laps (defaults to 1 lap). Note that the benchmark candidate is not restarted between laps.
+Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted between laps.
 
 ``telemetry``
 ~~~~~~~~~~~~~
