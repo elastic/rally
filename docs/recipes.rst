@@ -8,7 +8,7 @@ Benchmarking an existing cluster
 
     If you are just getting started with Rally and don't understand how it works, please do NOT run it against any production or production-like cluster. Besides, benchmarks should be executed in a dedicated environment anyway where no additional traffic skews results.
 
-.. info::
+.. note::
 
     We assume in this recipe, that Rally is already properly :doc:`configured </configuration>`.
 
