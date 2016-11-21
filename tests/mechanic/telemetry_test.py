@@ -177,6 +177,7 @@ class EnvironmentInfoTests(TestCase):
         t.attach_to_cluster(cluster.Cluster([], t))
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
             mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_vendor", "Oracle Corporation"),
@@ -257,7 +258,9 @@ class ExternalEnvironmentInfoTests(TestCase):
         cluster_info = {
             "version":
                 {
-                    "build_hash": "abc123"
+                    "build_hash": "253032b",
+                    "number": "5.0.0"
+
                 }
         }
         client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
@@ -267,7 +270,8 @@ class ExternalEnvironmentInfoTests(TestCase):
         t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
-            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "253032b"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "5.0.0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "127.0.0.1"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Mac OS X"),
@@ -309,7 +313,9 @@ class ExternalEnvironmentInfoTests(TestCase):
         cluster_info = {
             "version":
                 {
-                    "build_hash": "abc123"
+                    "build_hash": "253032b",
+                    "number": "5.0.0"
+
                 }
         }
         client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
@@ -319,7 +325,8 @@ class ExternalEnvironmentInfoTests(TestCase):
         t.attach_to_cluster(cluster.Cluster([], t))
 
         calls = [
-            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "253032b"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "5.0.0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "unknown"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Mac OS X"),

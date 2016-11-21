@@ -33,6 +33,7 @@ Here is a typical metrics record::
             "host_name": "beast2",
             "node_name": "rally-node0",
             "source_revision": "a6c0a81",
+            "distribution_version": "5.0.0-SNAPSHOT",
             "tag_reference": "Github ticket 1234",
           }
         }
@@ -99,6 +100,7 @@ Rally captures also some meta information for each metric record:
 * Host name
 * Node name: If Rally provisions the cluster, it will choose a unique name for each node.
 * Source revision: We always record the git hash of the version of Elasticsearch that is benchmarked. This is even done if you benchmark an official binary release.
+* Distribution version: We always record the distribution version of Elasticsearch that is benchmarked. This is even done if you benchmark a source release.
 * Custom tag: You can define one custom tag with the command line flag ``--user-tag``. The tag is prefixed by ``tag_`` in order to avoid accidental clashes with Rally internal tags.
 * Operation-specific: The optional substructure ``operation`` contains additional information depending on the type of operation. For bulk requests, this may be the number of documents or for searches the number of hits.
 

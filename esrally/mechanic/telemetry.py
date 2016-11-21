@@ -462,6 +462,7 @@ class EnvironmentInfo(InternalTelemetryDevice):
         revision = self.client.info()["version"]["build_hash"]
         distribution_version = self.client.info()["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.cfg.add(config.Scope.benchmark, "meta", "source.revision", revision)
         self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
         info = self.client.nodes.info(node_id="_all")
@@ -497,7 +498,9 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
 
     def attach_to_cluster(self, cluster):
         revision = self.client.info()["version"]["build_hash"]
+        distribution_version = self.client.info()["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.cfg.add(config.Scope.benchmark, "meta", "source.revision", revision)
 
         stats = self.client.nodes.stats(metric="_all")
