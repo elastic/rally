@@ -49,6 +49,7 @@ Contents
    recipes
    command_line_reference
    developing
+   glossary
 
 License
 -------
