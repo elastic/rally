@@ -2,6 +2,7 @@ import logging
 import random
 import time
 import types
+import re
 from enum import Enum
 
 from esrally import exceptions
