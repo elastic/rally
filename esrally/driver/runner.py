@@ -96,6 +96,7 @@ class BulkIndex(Runner):
             "unit": "docs",
             "bulk-size": bulk_size,
             "success": bulk_error_count == 0,
+            "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
         }
 
