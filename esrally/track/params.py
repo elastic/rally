@@ -197,25 +197,40 @@ class BulkIndexParamSource(ParamSource):
                                            (id_conflicts, action_metadata))
 
         self.pipeline = params.get("pipeline", None)
-        try:
-            self.bulk_size = int(params["bulk-size"])
-            if self.bulk_size <= 0:
-                raise exceptions.InvalidSyntax("'bulk-size' must be positive but was %d" % self.bulk_size)
-        except KeyError:
-            raise exceptions.InvalidSyntax("Mandatory parameter 'bulk-size' is missing")
-        except ValueError:
-            raise exceptions.InvalidSyntax("'bulk-size' must be numeric")
 
-        try:
-            self.batch_size = int(params.get("batch-size", self.bulk_size))
-            if self.batch_size <= 0:
-                raise exceptions.InvalidSyntax("'batch-size' must be positive but was %d" % self.batch_size)
-            if self.batch_size < self.bulk_size:
-                raise exceptions.InvalidSyntax("'batch-size' must be greater than or equal to 'bulk-size'")
-            if self.batch_size % self.bulk_size != 0:
-                raise exceptions.InvalidSyntax("'batch-size' must be a multiple of 'bulk-size'")
-        except ValueError:
-            raise exceptions.InvalidSyntax("'batch-size' must be numeric")
+        def handler_size_number(params_size, params_key):
+            #regexp the size with unit
+            if_with_unit = re.findall(r'(\d+)([kKmMgGbB]+)', params_size)
+            # not with unit
+            if len(if_with_unit) == 0:
+                try:
+                    temp_size = int(params_size)
+                    if temp_size <=0:
+                        raise exceptions.InvalidSyntax("'%s' must be positive but was %d" % (params_key, params_size))
+                except ValueError:
+                    raise exceptions.InvalidSyntax("'%s' must be numeric"% (params_key) )
+            else:
+                temp_size = if_with_unit[0][0]
+                temp_unit = if_with_unit[0][1].upper()
+                if temp_unit == "GB":
+                    temp_size = int(float(temp_size) * 1024 * 1024 * 1024)
+                elif temp_unit == "MB":
+                    temp_size = int(float(temp_size) * 1024 * 1024)
+                elif temp_unit == "KB":
+                    temp_size = int(float(temp_size) * 1024)
+                else:
+                    raise AttributeError("'%s' unit '%s' must be KB/MB/GB" % (params_size, temp_size))
+            return temp_size
+
+        for key in ["bulk-size", "batch_size"]:
+            if key not in params:
+                raise KeyError("Mandatory parameter '%s' is missing" % (key))
+        self.bulk_size = handler_size_number(params["bulk-size"], "bulk-size")
+        self.batch_size = handler_size_number(params["batch_size"], "batch_size")
+        if self.batch_size < self.bulk_size:
+            raise ArithmeticError("'batch-size' must be greater than or equal to 'bulk-size'")
+        if self.batch_size % self.bulk_size != 0:
+            raise ArithmeticError("'batch-size' must be a multiple of 'bulk-size'")
 
     def partition(self, partition_index, total_partitions):
         return PartitionBulkIndexParamSource(self.indices, partition_index, total_partitions, self.action_metadata,
