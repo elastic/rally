@@ -41,6 +41,7 @@ class Mechanic:
         self.supply = supply
         self.provisioner = p
         self.launcher = l
+        self.cluster = None
 
         # TODO dm: Check whether we can remove this completely
         # ensure we don't mix ES installs
@@ -52,13 +53,21 @@ class Mechanic:
         self._config.add(config.Scope.challenge, "system", "challenge.log.dir",
                          race_paths.challenge_logs(track_name, challenge_name))
 
-    def prepare_candidate(self):
-        self.supply()
-
     def start_engine(self):
+        self.supply()
         selected_car = self.provisioner.prepare()
-        return self.launcher.start(selected_car)
+        logger.info("Starting engine.")
+        self.cluster = self.launcher.start(selected_car)
 
-    def stop_engine(self, cluster):
-        self.launcher.stop(cluster)
+    def on_benchmark_start(self):
+        logger.info("Notifying cluster of benchmark start.")
+        self.cluster.on_benchmark_start()
+
+    def stop_engine(self):
+        logger.info("Stopping engine.")
+        self.launcher.stop(self.cluster)
         self.provisioner.cleanup()
+
+    def on_benchmark_stop(self):
+        logger.info("Notifying cluster of benchmark stop.")
+        self.cluster.on_benchmark_stop()

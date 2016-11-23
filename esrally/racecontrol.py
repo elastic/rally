@@ -53,27 +53,25 @@ class Benchmark:
         self.cfg = cfg
         self.mechanic = mechanic
         self.metrics_store = metrics_store
-        self.cluster = None
         self.actor_system = None
         self.track = None
 
     def setup(self):
-        self.mechanic.prepare_candidate()
-        self.cluster = self.mechanic.start_engine()
+        self.actor_system = thespian.actors.ActorSystem()
+        self.mechanic.start_engine()
         self.track = track.load_track(self.cfg)
         metrics.race_store(self.cfg).store_race(self.track)
-        self.actor_system = thespian.actors.ActorSystem()
+
 
     def run(self, lap):
         self.metrics_store.lap = lap
         main_driver = self.actor_system.createActor(driver.Driver)
-        self.cluster.on_benchmark_start()
+        self.mechanic.on_benchmark_start()
         result = self.actor_system.ask(main_driver,
                                        driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, self.metrics_store.lap))
         if isinstance(result, driver.BenchmarkComplete):
             logger.info("Benchmark is complete.")
-            logger.info("Notifying cluster.")
-            self.cluster.on_benchmark_stop()
+            self.mechanic.on_benchmark_stop()
             logger.info("Bulk adding data to metrics store.")
             self.metrics_store.bulk_add(result.metrics)
             logger.info("Flushing metrics data...")
@@ -85,8 +83,7 @@ class Benchmark:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
 
     def teardown(self):
-        logger.info("Stopping engine.")
-        self.mechanic.stop_engine(self.cluster)
+        self.mechanic.stop_engine()
         logger.info("Closing metrics store.")
         self.metrics_store.close()
         logger.info("Summarizing results.")
