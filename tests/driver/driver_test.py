@@ -317,8 +317,8 @@ class SchedulerTests(ScheduleTestCase):
                 self.assertEqual(metrics.SampleType.Normal, sample_type)
             self.assertTrue(last_progress < progress_percent)
             last_progress = progress_percent
-            self.assertTrue(round(progress_percent, 6) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
-            self.assertTrue(round(progress_percent, 6) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
+            self.assertTrue(round(progress_percent, 2) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
+            self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
             self.assertIsNotNone(runner, "runner must be defined")
             self.assertEqual({"body": ["a"], "size": 11}, params)
 
