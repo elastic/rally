@@ -174,14 +174,21 @@ def prepare_track(track, cfg):
                                            (basename, extracted_bytes, expected_size_in_bytes))
         return basename, decompressed
 
+    if not track.source_root_url:
+        logger.info("Track [%s] does not specify a source root URL. Assuming data are available locally." % track.name)
+
     for index in track.indices:
         for type in index.types:
             if type.document_archive:
-                data_url = "%s/%s" % (track.source_root_url, os.path.basename(type.document_archive))
-                download(cfg, data_url, type.document_archive, type.compressed_size_in_bytes)
+                if track.source_root_url:
+                    data_url = "%s/%s" % (track.source_root_url, os.path.basename(type.document_archive))
+                    download(cfg, data_url, type.document_archive, type.compressed_size_in_bytes)
                 decompressed_file_path, was_decompressed = decompress(type.document_archive, type.uncompressed_size_in_bytes)
                 # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
                 io.prepare_file_offset_table(decompressed_file_path)
+            else:
+                logger.info("Type [%s] in index [%s] does not define a document archive. No data are indexed from a file for this type." %
+                            (type.name, index.name))
 
 
 class TrackRepository:

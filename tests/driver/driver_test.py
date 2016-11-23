@@ -324,6 +324,22 @@ class SchedulerTests(ScheduleTestCase):
 
 
 class ExecutorTests(TestCase):
+    class NoopContextManager:
+        def __init__(self, mock):
+            self.mock = mock
+
+        def __enter__(self):
+            return self
+
+        def __call__(self, *args):
+            return self.mock(*args)
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    def context_managed(self, mock):
+        return ExecutorTests.NoopContextManager(mock)
+
     @mock.patch("elasticsearch.Elasticsearch")
     def test_execute_schedule_in_throughput_mode(self, es):
         es.bulk.return_value = {
@@ -367,3 +383,54 @@ class ExecutorTests(TestCase):
             self.assertEqual(1, sample.total_ops)
             self.assertEqual("docs", sample.total_ops_unit)
             self.assertEqual(1, sample.request_meta_data["bulk-size"])
+
+    def test_execute_single_no_return_value(self):
+        es = None
+        params = None
+        runner = mock.Mock()
+
+        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+
+        self.assertEqual(1, total_ops)
+        self.assertEqual("ops", total_ops_unit)
+        self.assertIsNone(request_meta_data)
+
+    def test_execute_single_tuple(self):
+        es = None
+        params = None
+        runner = mock.Mock()
+        runner.return_value = (500, "MB")
+
+        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+
+        self.assertEqual(500, total_ops)
+        self.assertEqual("MB", total_ops_unit)
+        self.assertIsNone(request_meta_data)
+
+    def test_execute_single_dict(self):
+        es = None
+        params = None
+        runner = mock.Mock()
+        runner.return_value = {
+            "weight": 50,
+            "unit": "docs",
+            "some-custom-meta-data": "valid",
+            "http-status": 200
+        }
+
+        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+
+        self.assertEqual(50, total_ops)
+        self.assertEqual("docs", total_ops_unit)
+        self.assertEqual({
+            "some-custom-meta-data": "valid",
+            "http-status": 200
+        }, request_meta_data)
+
+    def test_execute_single_with_http_400(self):
+        # TODO dm: Implement a mock that throws a TransportError when called
+        pass
+
+    def test_execute_single_with_key_error(self):
+        # TODO dm: Implement a mock that throws a KeyError when called (simulates missing parameters)
+        pass

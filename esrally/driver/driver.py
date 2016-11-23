@@ -639,6 +639,11 @@ def execute_single(runner, es, params):
             "http_status": e.status_code,
             "error_description": e.error
         }
+    except KeyError as e:
+        logger.exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
+        msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), str(params.keys()), str(e))
+        raise exceptions.SystemSetupError(msg)
+
     return total_ops, total_ops_unit, request_meta_data
 
 

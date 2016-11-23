@@ -59,6 +59,10 @@ class DelegatingRunner(Runner):
     def __call__(self, *args):
         return self.runnable(*args)
 
+    def __repr__(self, *args, **kwargs):
+        return "user-defined runner [%s]" % str(self.runnable)
+
+
 
 class BulkIndex(Runner):
     """
@@ -100,6 +104,9 @@ class BulkIndex(Runner):
             "error-count": bulk_error_count
         }
 
+    def __repr__(self, *args, **kwargs):
+        return "bulk-index"
+
 
 class ForceMerge(Runner):
     """
@@ -116,6 +123,9 @@ class ForceMerge(Runner):
             else:
                 raise e
 
+    def __repr__(self, *args, **kwargs):
+        return "force-merge"
+
 
 class IndicesStats(Runner):
     """
@@ -124,6 +134,10 @@ class IndicesStats(Runner):
     def __call__(self, es, params):
         es.indices.stats(metric="_all")
 
+    def __repr__(self, *args, **kwargs):
+        return "indices-stats"
+
+
 
 class NodeStats(Runner):
     """
@@ -131,6 +145,9 @@ class NodeStats(Runner):
     """
     def __call__(self, es, params):
         es.nodes.stats(metric="_all")
+
+    def __repr__(self, *args, **kwargs):
+        return "node-stats"
 
 
 class Query(Runner):
@@ -194,6 +211,10 @@ class Query(Runner):
             self.scroll_id = None
             self.es = None
         return False
+
+    def __repr__(self, *args, **kwargs):
+        return "query"
+
 
 
 register_runner(track.OperationType.Index.name, BulkIndex())
