@@ -306,7 +306,7 @@ def chain(*iterables):
 
 
 def create_default_reader(index, type, offset, num_lines, num_docs, action_metadata, batch_size, bulk_size, id_conflicts):
-    source = Slice(FileSource, offset, num_lines)
+    source = Slice(io.FileSource, offset, num_lines)
 
     if action_metadata == ActionMetaData.Generate:
         am_handler = GenerateActionMetaData(index, type, build_conflicting_ids(id_conflicts, num_docs, offset))
@@ -435,29 +435,6 @@ class SourceActionMetaData:
         return next(self.source)
 
 
-class FileSource:
-    @staticmethod
-    def open(file_name, mode):
-        return FileSource(file_name, mode)
-
-    def __init__(self, file_name, mode):
-        self.f = open(file_name, mode)
-        self.file_name = file_name
-
-    def seek(self, offset):
-        self.f.seek(offset)
-
-    def readline(self):
-        return self.f.readline()
-
-    def close(self):
-        self.f.close()
-        self.f = None
-
-    def __str__(self, *args, **kwargs):
-        return self.file_name
-
-
 class Slice:
     def __init__(self, source_class, offset, number_of_lines):
         self.source_class = source_class
@@ -467,7 +444,7 @@ class Slice:
         self.current_line = 0
 
     def open(self, file_name, mode):
-        self.source = self.source_class.open(file_name, mode)
+        self.source = self.source_class(file_name, mode).open()
         # skip offset number of lines
         logger.info("Skipping %d lines in [%s]." % (self.offset, file_name))
         start = time.perf_counter()

@@ -13,6 +13,100 @@ from esrally.utils import console
 logger = logging.getLogger("rally.utils.io")
 
 
+class FileSource:
+    """
+    FileSource is a wrapper around a plain file which simplifies testing of file I/O calls.
+    """
+    def __init__(self, file_name, mode):
+        self.file_name = file_name
+        self.mode = mode
+        self.f = None
+
+    def open(self):
+        self.f = open(self.file_name, self.mode)
+        # allow for chaining
+        return self
+
+    def seek(self, offset):
+        self.f.seek(offset)
+
+    def read(self):
+        return self.f.read()
+
+    def readline(self):
+        return self.f.readline()
+
+    def close(self):
+        self.f.close()
+        self.f = None
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    def __str__(self, *args, **kwargs):
+        return self.file_name
+
+
+class StringAsFileSource:
+    """
+    Implementation of ``FileSource`` intended for tests. It's kept close to ``FileSource`` to simplify maintenance but it is not meant to
+     be used in production code.
+    """
+    def __init__(self, contents, mode):
+        """
+        :param contents: The file contents as an array of strings. Each item in the array should correspond to one line.
+        :param mode: The file mode. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
+        """
+        self.contents = contents
+        self.current_index = 0
+        self.opened = False
+
+    def open(self):
+        self.opened = True
+        return self
+
+    def seek(self, offset):
+        self._assert_opened()
+        if offset != 0:
+            raise AssertionError("StringAsFileSource does not support random seeks")
+
+    def read(self):
+        self._assert_opened()
+        return "\n".join(self.contents)
+
+    def readline(self):
+        self._assert_opened()
+        if self.current_index >= len(self.contents):
+            return ""
+        line = self.contents[self.current_index]
+        self.current_index += 1
+        return line
+
+    def close(self):
+        self._assert_opened()
+        self.contents = None
+        self.opened = False
+
+    def _assert_opened(self):
+        assert self.opened
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    def __str__(self, *args, **kwargs):
+        return "StringAsFileSource"
+
+
 def ensure_dir(directory):
     """
     Ensure that the provided directory and all of its parent directories exist.

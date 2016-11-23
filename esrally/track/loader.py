@@ -406,6 +406,7 @@ class TrackSpecificationReader:
 
     def _create_index(self, index_spec, mapping_dir, data_dir):
         index_name = self._r(index_spec, "name")
+        auto_managed = self._r(index_spec, "auto-managed", mandatory=False, default_value=True)
         types = [self._create_type(type_spec, mapping_dir, data_dir) for type_spec in self._r(index_spec, "types")]
         valid_document_data = False
         for type in types:
@@ -416,7 +417,7 @@ class TrackSpecificationReader:
             console.warn("None of the types for index [%s] defines documents. Please check that you either don't want to index data or "
                          "parameter sources are defined for indexing." % index_name, logger=logger)
 
-        return track.Index(name=index_name, types=types)
+        return track.Index(name=index_name, auto_managed=auto_managed, types=types)
 
     def _create_type(self, type_spec, mapping_dir, data_dir):
         compressed_docs = self._r(type_spec, "documents", mandatory=False)

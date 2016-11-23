@@ -9,15 +9,17 @@ class Index:
     Defines an index in Elasticsearch.
     """
 
-    def __init__(self, name, types):
+    def __init__(self, name, auto_managed, types):
         """
 
         Creates a new index.
 
         :param name: The index name. Mandatory.
+        :param auto_managed: True iff Rally should automatically manage this index (i.e. it can create and delete it at will).
         :param types: A list of types. Should contain at least one type.
         """
         self.name = name
+        self.auto_managed = auto_managed
         self.types = types
 
     @property

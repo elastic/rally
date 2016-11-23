@@ -21,6 +21,22 @@ Separately from a track, we also have "cars" which define the settings of the be
 
 Tracks are written as JSON files and are kept in a separate track repository, which is located at https://github.com/elastic/rally-tracks. This repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter ``--distribution-version``. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the master branch of the track repository.
 
+Anatomy of a track
+------------------
+
+A track JSON file consists of the following sections:
+
+* indices
+* operations
+* challenges
+
+In the ``indices`` section you describe the relevant indices. Rally can auto-manage them for you: it can download the associated data files, create and destroy the index and apply the relevant mappings. Sometimes, you may want to have full control over the index. Then you can specify ``"auto-managed": false`` on an index. Rally will then assume the index is already present. However, there are some disadvantages with this approach. First of all, this can only work if you set up the cluster by yourself and use the pipeline ``benchmark-only``. Second, the index is out of control of Rally, which means that you need to keep track for yourself of the index configuration. Third, it does not play nice with the ``laps`` feature (which you can use to run multiple iterations). Usually, Rally will destroy and recreate all specified indices for each lap but if you use ``"auto-managed": false``, it cannot do that. As a consequence it will produce bogus metrics if your track specifies that Rally should run bulk-index operations (as you'll just overwrite existing documents from lap 2 on). So please use extra care if you don't let Rally manage the track's indices.
+
+In the ``operations`` section you describe which operations are available for this track and how they are parameterized.
+
+In the ``challenges`` section you describe one or more execution schedules for the operations defined in the ``operations`` block. Think of it as different scenarios that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
+
+
 Example track
 -------------
 

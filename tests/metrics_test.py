@@ -335,7 +335,7 @@ class EsRaceStoreTests(TestCase):
 
         t = track.Track(name="unittest", short_description="unittest track", description="unittest track",
                         source_root_url="http://example.org",
-                        indices=[track.Index(name=index, types=[track.Type(name=type, mapping_file=None)])],
+                        indices=[track.Index(name=index, auto_managed=True, types=[track.Type(name=type, mapping_file=None)])],
                         challenges=[
                             track.Challenge(name="index-and-search", description="Index & Search", index_settings=None, schedule=schedule)
                         ])

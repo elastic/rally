@@ -39,6 +39,10 @@
             "type": "string",
             "description": "Name of the index to create."
           },
+          "auto-managed": {
+            "type": "boolean",
+            "description": "If 'true' then Rally will automatically create / destroy this index. If 'false' users need to ensure that the index exists prior to running the track (optional, defaults to true)."
+          },
           "types": {
             "type": "array",
             "minItems": 1,

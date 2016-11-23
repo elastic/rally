@@ -10,7 +10,7 @@ import elasticsearch
 import thespian.actors
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME
 from esrally.driver import runner
-from esrally.utils import convert, console, versions
+from esrally.utils import convert, console, versions, io
 
 logger = logging.getLogger("rally.driver")
 
@@ -181,7 +181,9 @@ class Driver(thespian.actors.Actor):
 
         challenge = select_challenge(self.config, current_track)
         es_version = self.config.opts("source", "distribution.version")
-        setup_index(self.es, current_track, challenge, es_version, expected_cluster_health)
+        for index in current_track.indices:
+            setup_index(self.es, index, challenge.index_settings)
+        wait_for_status(self.es, es_version, expected_cluster_health)
         allocator = Allocator(challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -444,22 +446,22 @@ def select_challenge(config, t):
                                       "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
 
 
-def setup_index(es, t, challenge, es_version, expected_cluster_health):
-    if challenge.index_settings:
-        for index in t.indices:
-            if es.indices.exists(index=index.name):
-                logger.warn("Index [%s] already exists. Deleting it." % index.name)
-                es.indices.delete(index=index.name)
-            logger.info("Creating index [%s]" % index.name)
-            es.indices.create(index=index.name, body=challenge.index_settings)
-            for type in index.types:
-                mappings = open(type.mapping_file).read()
-                logger.info("create mapping for type [%s] in index [%s] with content:\n%s" % (type.name, index.name, mappings))
-                logger.debug(mappings)
-                es.indices.put_mapping(index=index.name,
-                                       doc_type=type.name,
-                                       body=json.loads(mappings))
-    wait_for_status(es, es_version, expected_cluster_health)
+def setup_index(es, index, index_settings, source=io.FileSource):
+    if index.auto_managed:
+        if es.indices.exists(index=index.name):
+            logger.warn("Index [%s] already exists. Deleting it." % index.name)
+            es.indices.delete(index=index.name)
+        logger.info("Creating index [%s]" % index.name)
+        es.indices.create(index=index.name, body=index_settings)
+        for type in index.types:
+            with source(type.mapping_file, "rt") as f:
+                mappings = f.read()
+            logger.info("create mapping for type [%s] in index [%s] with content:\n%s" % (type.name, index.name, mappings))
+            es.indices.put_mapping(index=index.name,
+                                   doc_type=type.name,
+                                   body=json.loads(mappings))
+    else:
+        logger.info("Skipping index [%s] as it is managed by the user." % index.name)
 
 
 def wait_for_status(es, es_version, expected_cluster_status):

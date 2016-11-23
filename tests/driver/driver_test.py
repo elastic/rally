@@ -2,6 +2,7 @@ import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import metrics, track
+from esrally.utils import io
 from esrally.driver import driver
 from esrally.track import params
 
@@ -157,6 +158,48 @@ class AllocatorTests(TestCase):
         self.assertEqual([allocations[2][0], index_c, None, allocations[2][3]], allocations[2])
 
         self.assertEqual([{op1, op2, op3}], allocator.operations_per_joinpoint)
+
+
+class IndexManagementTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_setup_auto_managed_index(self, es):
+        es.indices.exists.return_value = False
+
+        index = track.Index(name="test-index",
+                            auto_managed=True,
+                            types=[track.Type(name="test-type", mapping_file=['{"mapping": "empty-for-test"}'])])
+        index_settings = {
+            "index.number_of_replicas": 0
+        }
+        driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
+
+        es.indices.exists.assert_called_with(index="test-index")
+        es.indices.delete.assert_not_called()
+        es.indices.create.assert_called_with(index="test-index", body=index_settings)
+        es.indices.put_mapping.assert_called_with(index="test-index", doc_type="test-type", body={"mapping": "empty-for-test"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_recreate_existing_managed_index(self, es):
+        es.indices.exists.return_value = True
+
+        index = track.Index(name="test-index",
+                            auto_managed=True,
+                            types=[track.Type(name="test-type", mapping_file=['{"mapping": "empty-for-test"}'])])
+        index_settings = {
+            "index.number_of_replicas": 0
+        }
+        driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
+
+        es.indices.exists.assert_called_with(index="test-index")
+        es.indices.delete.assert_called_with(index="test-index")
+        es.indices.create.assert_called_with(index="test-index", body=index_settings)
+        es.indices.put_mapping.assert_called_with(index="test-index", doc_type="test-type", body={"mapping": "empty-for-test"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_do_not_change_manually_managed_index(self, es):
+        index = track.Index(name="test-index", auto_managed=False, types=[])
+        driver.setup_index(es, index, index_settings=None)
+        es.assert_not_called()
 
 
 class MetricsAggregationTests(TestCase):

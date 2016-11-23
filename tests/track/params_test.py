@@ -1,36 +1,13 @@
 from unittest import TestCase
 
 from esrally import exceptions
+from esrally.utils import io
 from esrally.track import params
-
-
-class StringAsFileSource:
-    @staticmethod
-    def open(contents, mode):
-        return StringAsFileSource(contents, mode)
-
-    def __init__(self, contents, mode):
-        self.contents = contents
-        self.current_index = 0
-
-    def seek(self, offset):
-        if offset != 0:
-            raise AssertionError("StringAsFileSource does not support random seeks")
-
-    def readline(self):
-        if self.current_index >= len(self.contents):
-            return ""
-        line = self.contents[self.current_index]
-        self.current_index += 1
-        return line
-
-    def close(self):
-        self.contents = None
 
 
 class SliceTests(TestCase):
     def test_slice_with_source_larger_than_slice(self):
-        source = params.Slice(StringAsFileSource, 2, 5)
+        source = params.Slice(io.StringAsFileSource, 2, 5)
         data = [
             '{"key": "value1"}',
             '{"key": "value2"}',
@@ -49,7 +26,7 @@ class SliceTests(TestCase):
         source.close()
 
     def test_slice_with_slice_larger_than_source(self):
-        source = params.Slice(StringAsFileSource, 0, 5)
+        source = params.Slice(io.StringAsFileSource, 0, 5)
         data = [
             '{"key": "value1"}',
             '{"key": "value2"}',
@@ -153,7 +130,7 @@ class ActionMetaDataTests(TestCase):
         self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}', next(generator))
 
     def test_source_file_action_meta_data(self):
-        source = params.Slice(StringAsFileSource, 0, 5)
+        source = params.Slice(io.StringAsFileSource, 0, 5)
         generator = params.SourceActionMetaData(source)
 
         data = [
@@ -180,7 +157,7 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 50
 
-        source = params.Slice(StringAsFileSource, 0, len(data))
+        source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
@@ -199,7 +176,7 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 50
 
-        source = params.Slice(StringAsFileSource, 3, len(data))
+        source = params.Slice(io.StringAsFileSource, 3, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
@@ -220,7 +197,7 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 3
 
-        source = params.Slice(StringAsFileSource, 0, len(data))
+        source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
@@ -243,7 +220,7 @@ class IndexDataReaderTests(TestCase):
         bulk_size = 3
 
         # only 5 documents to index for this client
-        source = params.Slice(StringAsFileSource, 0, 5)
+        source = params.Slice(io.StringAsFileSource, 0, 5)
         am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
@@ -272,7 +249,7 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 3
 
-        source = params.Slice(StringAsFileSource, 0, len(data))
+        source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.SourceActionMetaData(source)
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
@@ -294,7 +271,7 @@ class IndexDataReaderTests(TestCase):
         ]
         bulk_size = 3
 
-        source = params.Slice(StringAsFileSource, 0, len(data))
+        source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.NoneActionMetaData()
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
