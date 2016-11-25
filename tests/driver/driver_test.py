@@ -2,9 +2,9 @@ import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import metrics, track
-from esrally.utils import io
 from esrally.driver import driver
 from esrally.track import params
+from esrally.utils import io
 
 
 class DriverTestParamSource:
@@ -268,7 +268,7 @@ class SchedulerTests(ScheduleTestCase):
         schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup,   1 / 6, {}),
+            (0, metrics.SampleType.Warmup, 1 / 6, {}),
             (0.2, metrics.SampleType.Normal, 2 / 6, {}),
             (0.4, metrics.SampleType.Normal, 3 / 6, {}),
             (0.6, metrics.SampleType.Normal, 4 / 6, {}),
@@ -383,6 +383,54 @@ class ExecutorTests(TestCase):
             self.assertEqual(1, sample.total_ops)
             self.assertEqual("docs", sample.total_ops_unit)
             self.assertEqual(1, sample.request_meta_data["bulk-size"])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_execute_schedule_throughput_throttled(self, es):
+        es.bulk.return_value = {
+            "errors": False
+        }
+
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+                                 source_root_url="http://example.org",
+                                 indices=None,
+                                 challenges=None)
+
+        # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
+        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
+            task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={
+                "body": ["action_metadata_line", "index_line"],
+                "action_metadata_present": True
+            },
+                                              param_source="driver-test-param-source"),
+                              warmup_time_period=0.5, time_period=0.5, clients=4, target_throughput=target_throughput)
+            schedule = driver.schedule_for(test_track, task, 0)
+            sampler = driver.Sampler(client_id=0, operation=task.operation, start_timestamp=0)
+
+            driver.execute_schedule(schedule, es, sampler)
+
+            samples = sampler.samples
+
+            sample_size = len(samples)
+            lower_bound = bounds[0]
+            upper_bound = bounds[1]
+            self.assertTrue(lower_bound <= sample_size <= upper_bound,
+                            msg="Expected sample size to be between %d and %d but was %d" % (lower_bound, upper_bound, sample_size))
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_execute_schedule_aborts_on_error(self, es):
+        class ExpectedUnitTestException(Exception):
+            pass
+
+        def run(*args, **kwargs):
+            raise ExpectedUnitTestException()
+
+        schedule = [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
+        sampler = driver.Sampler(client_id=0, operation=None, start_timestamp=0)
+        with self.assertRaises(ExpectedUnitTestException):
+            driver.execute_schedule(schedule, es, sampler=sampler)
+
+        es.assert_not_called()
 
     def test_execute_single_no_return_value(self):
         es = None
