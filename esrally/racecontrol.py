@@ -40,9 +40,9 @@ class Pipeline:
         self.stable = stable
         pipelines[name] = self
 
-    def __del__(self):
-        if pipelines is not None:
-            pipelines.pop(self.name, default=None)
+    # def __del__(self):
+    #     if pipelines is not None:
+    #         pipelines.pop(self.name, default=None)
 
     def __call__(self, cfg):
         self.target(cfg)
