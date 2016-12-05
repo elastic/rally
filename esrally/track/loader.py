@@ -382,7 +382,7 @@ class TrackSpecificationReader:
         self.name = track_name
         short_description = self._r(track_specification, ["meta", "short-description"])
         description = self._r(track_specification, ["meta", "description"])
-        source_root_url = self._r(track_specification, ["meta", "data-url"])
+        source_root_url = self._r(track_specification, ["meta", "data-url"], mandatory=False)
         indices = [self._create_index(idx, mapping_dir, data_dir) for idx in self._r(track_specification, "indices")]
         challenges = self._create_challenges(track_specification)
 
