@@ -181,6 +181,9 @@ class Driver(thespian.actors.Actor):
 
         challenge = select_challenge(self.config, current_track)
         es_version = self.config.opts("source", "distribution.version")
+        for template in current_track.templates:
+            setup_template(self.es, template)
+
         for index in current_track.indices:
             setup_index(self.es, index, challenge.index_settings)
         wait_for_status(self.es, es_version, expected_cluster_health)
@@ -407,7 +410,7 @@ class Sampler:
                                      sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
                                      percent_completed))
         except queue.Full:
-            logger.warn("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
+            logger.warning("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
 
     @property
     def samples(self):
@@ -446,10 +449,21 @@ def select_challenge(config, t):
                                       "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
 
 
+def setup_template(es, template, source=io.FileSource):
+    if es.indices.exists_template(template.name):
+        es.indices.delete_template(template.name)
+    # Always wipe the matching indices too
+    es.indices.delete(index=template.pattern)
+    with source(template.template_file, "rt") as f:
+        template_content = f.read()
+    logger.info("create index template [%s] matching indices [%s] with content:\n%s" % (template.name, template.pattern, template_content))
+    es.indices.put_template(name=template.name, body=template_content)
+
+
 def setup_index(es, index, index_settings, source=io.FileSource):
     if index.auto_managed:
         if es.indices.exists(index=index.name):
-            logger.warn("Index [%s] already exists. Deleting it." % index.name)
+            logger.warning("Index [%s] already exists. Deleting it." % index.name)
             es.indices.delete(index=index.name)
         logger.info("Creating index [%s]" % index.name)
         es.indices.create(index=index.name, body=index_settings)

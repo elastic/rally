@@ -232,3 +232,31 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
+
+    def test_parse_valid_track_specification_with_index_template(self):
+        track_specification = {
+            "meta": {
+                "short-description": "short description for unit test",
+                "description": "longer description of this track for unit test"
+            },
+            "templates": [
+                {
+                    "name": "my-index-template",
+                    "index-pattern": "*",
+                    "template": "default-template.json"
+                }
+            ],
+            "operations": [],
+            "challenges": []
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("short description for unit test", resulting_track.short_description)
+        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual(0, len(resulting_track.indices))
+        self.assertEqual(1, len(resulting_track.templates))
+        self.assertEqual("my-index-template", resulting_track.templates[0].name)
+        self.assertEqual("*", resulting_track.templates[0].pattern)
+        self.assertEqual("/mappings/default-template.json", resulting_track.templates[0].template_file)
+        self.assertEqual(0, len(resulting_track.challenges))

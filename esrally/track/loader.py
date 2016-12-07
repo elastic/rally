@@ -357,6 +357,7 @@ class TrackPluginReader:
         self.runner_registry = runner_registry
 
     def __call__(self, track_plugin_file):
+        # TODO dm: Need to load multiple files
         loader = importlib.machinery.SourceFileLoader("track", track_plugin_file)
         module = types.ModuleType(loader.name)
         loader.exec_module(module)
@@ -383,12 +384,18 @@ class TrackSpecificationReader:
         short_description = self._r(track_specification, ["meta", "short-description"])
         description = self._r(track_specification, ["meta", "description"])
         source_root_url = self._r(track_specification, ["meta", "data-url"], mandatory=False)
-        indices = [self._create_index(idx, mapping_dir, data_dir) for idx in self._r(track_specification, "indices")]
+        indices = [self._create_index(idx, mapping_dir, data_dir)
+                   for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
+        templates = [self._create_template(tpl, mapping_dir)
+                     for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         challenges = self._create_challenges(track_specification)
+
+        if len(indices) == 0 and len(templates) == 0:
+            self._error("Specify at least one index or one template.")
 
         return track.Track(name=self.name, short_description=short_description, description=description,
                            source_root_url=source_root_url,
-                           challenges=challenges, indices=indices)
+                           challenges=challenges, indices=indices, templates=templates)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -425,6 +432,12 @@ class TrackSpecificationReader:
                          "parameter sources are defined for indexing." % index_name, logger=logger)
 
         return track.Index(name=index_name, auto_managed=auto_managed, types=types)
+
+    def _create_template(self, tpl_spec, mapping_dir):
+        name = self._r(tpl_spec, "name")
+        index_pattern = self._r(tpl_spec, "index-pattern")
+        template_file = "%s/%s" % (mapping_dir, self._r(tpl_spec, "template"))
+        return track.IndexTemplate(name, index_pattern, template_file)
 
     def _create_type(self, type_spec, mapping_dir, data_dir):
         compressed_docs = self._r(type_spec, "documents", mandatory=False)

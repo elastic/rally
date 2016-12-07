@@ -33,6 +33,28 @@ class Index:
         return self.name
 
 
+class IndexTemplate:
+    """
+    Defines an index template in Elasticsearch.
+    """
+
+    def __init__(self, name, pattern, template_file):
+        """
+
+        Creates a new index template.
+
+        :param name: Name of the index template. Mandatory.
+        :param pattern: The index pattern to which the index template applies. Mandatory.
+        :param template_file: The name of the corresponding template file. Mandatory.
+        """
+        self.name = name
+        self.pattern = pattern
+        self.template_file = template_file
+
+    def __str__(self, *args, **kwargs):
+        return self.name
+
+
 class Type:
     """
     Defines a type in Elasticsearch.
@@ -81,7 +103,7 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url, challenges, indices=None):
+    def __init__(self, name, short_description, description, source_root_url, challenges, indices=None, templates=None):
         """
 
         Creates a new track.
@@ -92,7 +114,8 @@ class Track:
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL the benchmark document files have to be located.
         :param challenges: A list of one or more challenges to use.
-        :param indices: A list of indices for this track.
+        :param indices: A list of indices for this track. May be None. One of `indices` or `templates` must be set though.
+        :param templates: A list of index templates for this track. May be None. One of `indices` or `templates` must be set though.
         """
         self.name = name
         self.short_description = short_description
@@ -100,12 +123,14 @@ class Track:
         self.source_root_url = source_root_url
         self.challenges = challenges
         self.indices = indices
+        self.templates = templates
 
     @property
     def number_of_documents(self):
         num_docs = 0
-        for index in self.indices:
-            num_docs += index.number_of_documents
+        if self.indices:
+            for index in self.indices:
+                num_docs += index.number_of_documents
         return num_docs
 
     def __str__(self):

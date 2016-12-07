@@ -26,6 +26,34 @@
         "description"
       ]
     },
+    "templates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Template",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Index template name."
+          },
+          "index-pattern": {
+            "type": "string",
+            "description": "Index pattern that matches the index template. This must match the definition in the index template file."
+          },
+          "template": {
+            "type": "string",
+            "description": "Index template file name."
+          }
+        },
+        "required": [
+          "name",
+          "index-pattern",
+          "template"
+        ]
+      }
+    },
     "indices": {
       "type": "array",
       "minItems": 1,
