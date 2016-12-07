@@ -42,6 +42,11 @@
             "type": "string",
             "description": "Index pattern that matches the index template. This must match the definition in the index template file."
           },
+          "delete-matching-indices": {
+            "type": "boolean",
+            "description": "Delete all indices that match the provided index pattern before start of the benchmark (optional, defaults to true)."
+          },
+
           "template": {
             "type": "string",
             "description": "Index template file name."

@@ -38,7 +38,7 @@ class IndexTemplate:
     Defines an index template in Elasticsearch.
     """
 
-    def __init__(self, name, pattern, template_file):
+    def __init__(self, name, pattern, template_file, delete_matching_indices):
         """
 
         Creates a new index template.
@@ -46,10 +46,12 @@ class IndexTemplate:
         :param name: Name of the index template. Mandatory.
         :param pattern: The index pattern to which the index template applies. Mandatory.
         :param template_file: The name of the corresponding template file. Mandatory.
+        :param delete_matching_indices: Delete all indices that match the pattern before the benchmark iff True.
         """
         self.name = name
         self.pattern = pattern
         self.template_file = template_file
+        self.delete_matching_indices = delete_matching_indices
 
     def __str__(self, *args, **kwargs):
         return self.name

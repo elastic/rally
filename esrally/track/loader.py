@@ -436,8 +436,9 @@ class TrackSpecificationReader:
     def _create_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         index_pattern = self._r(tpl_spec, "index-pattern")
+        delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
         template_file = "%s/%s" % (mapping_dir, self._r(tpl_spec, "template"))
-        return track.IndexTemplate(name, index_pattern, template_file)
+        return track.IndexTemplate(name, index_pattern, template_file, delete_matching_indices)
 
     def _create_type(self, type_spec, mapping_dir, data_dir):
         compressed_docs = self._r(type_spec, "documents", mandatory=False)

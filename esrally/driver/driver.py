@@ -452,8 +452,8 @@ def select_challenge(config, t):
 def setup_template(es, template, source=io.FileSource):
     if es.indices.exists_template(template.name):
         es.indices.delete_template(template.name)
-    # Always wipe the matching indices too
-    es.indices.delete(index=template.pattern)
+    if template.delete_matching_indices:
+        es.indices.delete(index=template.pattern)
     with source(template.template_file, "rt") as f:
         template_content = f.read()
     logger.info("create index template [%s] matching indices [%s] with content:\n%s" % (template.name, template.pattern, template_content))
