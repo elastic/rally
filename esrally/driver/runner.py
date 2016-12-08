@@ -87,7 +87,7 @@ class BulkIndex(Runner):
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
             bulk_size = len(params["body"])
-            response = es.bulk(body=params["body"], index=params["index"], type=params["type"], params=bulk_params)
+            response = es.bulk(body=params["body"], index=params["index"], doc_type=params["type"], params=bulk_params)
 
         bulk_error_count = 0
         if response["errors"]:
