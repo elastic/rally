@@ -422,7 +422,7 @@ class TrackSpecificationReader:
         index_name = self._r(index_spec, "name")
         auto_managed = self._r(index_spec, "auto-managed", mandatory=False, default_value=True)
         types = [self._create_type(type_spec, mapping_dir, data_dir)
-                 for type_spec in self._r(index_spec, "types", mandatory=not auto_managed, default_value=[])]
+                 for type_spec in self._r(index_spec, "types", mandatory=auto_managed, default_value=[])]
         valid_document_data = False
         for type in types:
             if type.has_valid_document_data():

@@ -267,7 +267,7 @@ class TrackSpecificationReaderTests(TestCase):
                 "short-description": "short description for unit test",
                 "description": "longer description of this track for unit test"
             },
-            "indices": [{"name": "test-index"}],
+            "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [],
             "challenges": []
         }
