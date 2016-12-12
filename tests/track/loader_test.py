@@ -260,3 +260,23 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("*", resulting_track.templates[0].pattern)
         self.assertEqual("/mappings/default-template.json", resulting_track.templates[0].template_file)
         self.assertEqual(0, len(resulting_track.challenges))
+
+    def test_types_are_optional_for_user_managed_indices(self):
+        track_specification = {
+            "meta": {
+                "short-description": "short description for unit test",
+                "description": "longer description of this track for unit test"
+            },
+            "indices": [{"name": "test-index"}],
+            "operations": [],
+            "challenges": []
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("short description for unit test", resulting_track.short_description)
+        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual(1, len(resulting_track.indices))
+        self.assertEqual(0, len(resulting_track.templates))
+        self.assertEqual("test-index", resulting_track.indices[0].name)
+        self.assertEqual(0, len(resulting_track.indices[0].types))
