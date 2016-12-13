@@ -25,7 +25,7 @@ install_requires = [
     "jsonschema==2.5.1",
     "Jinja2==2.8",
     # remote messaging
-    "thespian==3.0.4",
+    "thespian==3.5.0",
     # always use the latest version, these are certificate files...
     "certifi"
 ]
