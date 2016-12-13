@@ -60,7 +60,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
 
-        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", type="test-type", params={})
+        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="test-type", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_error(self, es):
