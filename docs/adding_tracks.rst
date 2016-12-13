@@ -362,6 +362,8 @@ Let's walk through this code step by step:
 
 In the implementation of custom parameter sources you can access the Python standard API. Using any additional libraries is not supported.
 
+You can also implement your parameter sources and runners in multiple Python files but the main entry point is always ``track.py``. The root package name of your plugin is the name of your track.
+
 Custom runners
 ^^^^^^^^^^^^^^
 

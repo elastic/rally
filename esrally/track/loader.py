@@ -80,17 +80,15 @@ def load_track(cfg):
 
 def load_track_plugins(cfg, register_runner):
     track_name = cfg.opts("benchmarks", "track")
-    distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
-
+    # TODO #71: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
     repo = TrackRepository(cfg, fetch=False)
     plugin_reader = TrackPluginReader(register_runner)
 
-    track_plugin_file = repo.plugin_file(distribution_version, track_name)
-    if os.path.exists(track_plugin_file):
-        logger.info("Reading track plugin file [%s]." % track_plugin_file)
-        plugin_reader(track_plugin_file)
+    track_plugin_path = repo.track_dir(track_name)
+    if plugin_reader.can_load(track_plugin_path):
+        plugin_reader.load(track_plugin_path)
     else:
-        logger.info("Skipping plugin detection for this track ([%s] does not exist)." % track_plugin_file)
+        logger.info("Track [%s] in path [%s] does not define any track plugins." % (track_name, track_plugin_path))
 
 
 def operation_parameters(t, op):
@@ -228,11 +226,6 @@ class TrackRepository:
         self._update(distribution_version)
         return "%s/track.json" % self.track_dir(track_name)
 
-    def plugin_file(self, distribution_version, track_name):
-        # TODO dm 71: We should  assume here that somebody else has already checked out the correct branch. Revisit when we distribute drivers
-        # self._update(distribution_version)
-        return "%s/track.py" % self.track_dir(track_name)
-
     def _update(self, distribution_version):
         try:
             if self.remote and not self.offline:
@@ -356,13 +349,48 @@ class TrackPluginReader:
     def __init__(self, runner_registry):
         self.runner_registry = runner_registry
 
-    def __call__(self, track_plugin_file):
-        # TODO dm: Need to load multiple files
-        loader = importlib.machinery.SourceFileLoader("track", track_plugin_file)
-        module = types.ModuleType(loader.name)
-        loader.exec_module(module)
-        # every module needs to have a register() method
-        module.register(self)
+    def _modules(self, plugins_dirs, plugin_name, plugin_root_path):
+        for path in plugins_dirs:
+            for filename in os.listdir(path):
+                name, ext = os.path.splitext(filename)
+                if ext.endswith(".py"):
+                    root_relative_path = os.path.join(path, name)[len(plugin_root_path) + len(os.path.sep):]
+                    module_name = "%s.%s" % (plugin_name, root_relative_path.replace(os.path.sep, "."))
+                    yield module_name
+
+    def _load_plugin(self, plugin_name, plugins_dirs, plugin_root_path):
+        # precondition: A module with this name has to exist provided that the caller has called #can_load() before.
+        root_module_name = "%s.track" % plugin_name
+
+        for p in self._modules(plugins_dirs, plugin_name, plugin_root_path):
+            logger.debug("Loading module [%s]" % p)
+            m = importlib.import_module(p)
+            importlib.reload(m)
+            if p == root_module_name:
+                root_module = m
+        return root_module
+
+    def can_load(self, track_plugin_path):
+        return os.path.exists(os.path.join(track_plugin_path, "track.py"))
+
+    def load(self, track_plugin_path):
+        plugin_name = io.basename(track_plugin_path)
+        logger.info("Loading track plugin [%s] from [%s]" % (plugin_name, track_plugin_path))
+        # search all paths within this directory for modules
+        module_dirs = [dirpath for dirpath, _, _ in os.walk(track_plugin_path)]
+        # load path is only the root of the package hierarchy
+        plugin_root_path = os.path.abspath(os.path.join(track_plugin_path, os.pardir))
+        logger.debug("Adding [%s] to Python load path." % plugin_root_path)
+        # needs to be at the beginning of the system path, otherwise import machinery tries to load application-internal modules
+        sys.path.insert(0, plugin_root_path)
+        try:
+            root_module = self._load_plugin(plugin_name, module_dirs, track_plugin_path)
+            # every module needs to have a register() method
+            root_module.register(self)
+        except BaseException:
+            msg = "Could not load track plugin [%s]" % plugin_name
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
 
     def register_param_source(self, name, param_source):
         params.register_param_source_for_name(name, param_source)

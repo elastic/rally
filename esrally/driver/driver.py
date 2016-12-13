@@ -359,6 +359,7 @@ class LoadGenerator(thespian.actors.Actor):
             else:
                 logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
         except Exception as e:
+            logger.exception("Fatal error in load generator [%d]" % self.client_id)
             self.send(self.master, BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
 
     def drive(self):
