@@ -1,5 +1,8 @@
+Track Reference
+---------------
+
 Definition
-----------
+==========
 
 A track is the description of one ore more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and which operations are invoked. Its most important attributes are:
 
@@ -11,7 +14,7 @@ A track is the description of one ore more benchmarking scenarios with a specifi
 Tracks are written as JSON files and are kept in a separate track repository, which is located at https://github.com/elastic/rally-tracks. This repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter ``--distribution-version``. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the ``master`` branch of the track repository.
 
 Anatomy of a track
-------------------
+==================
 
 A track JSON file consists of the following sections:
 
@@ -25,13 +28,13 @@ In the ``operations`` section you describe which operations are available for th
 
 In the ``challenges`` section you describe one or more execution schedules for the operations defined in the ``operations`` block. Think of it as different scenarios that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
 
-Track element reference
------------------------
+Track elements
+==============
 
 The track elements that are described here are defined in `Rally's JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_. Rally uses this track schema to validate your tracks when it is loading them.
 
 meta
-====
+....
 
 The ``meta`` section contains a meta-description of the track and consists of the following properties:
 
@@ -48,7 +51,7 @@ Example::
     }
 
 indices
-=======
+.......
 
 The ``indices`` section contains a list of all indices that are used by this track. By default Rally will assume that it can destroy and create these indices at will.
 
@@ -86,7 +89,7 @@ Example::
     ]
 
 templates
-=========
+.........
 
 The ``indices`` section contains a list of all index templates that Rally should create.
 
@@ -107,7 +110,7 @@ Example::
     ]
 
 operations
-==========
+..........
 
 The ``operations`` section contains a list of all operations that are available later when specifying challenges. Operations define the static properties of a request against Elasticsearch whereas the ``schedule`` element defines the dynamic properties (such as the target throughput).
 
@@ -168,7 +171,7 @@ Example::
     }
 
 challenges
-==========
+..........
 
 The ``challenges`` section contains a list of challenges which describe the benchmark scenarios for this data set. It can reference all operations that are defined in the ``operations`` section.
 
