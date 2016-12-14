@@ -1,40 +1,8 @@
 Creating custom tracks
 ======================
 
-Overview
---------
-
-First of all we need to clarify what a benchmark is. Rally has a few assumptions built-in:
-
-1. Rally sets up a fresh Elasticsearch cluster, i.e. the cluster is entirely under Rally's control.
-2. The first step of the benchmark is to index all required documents via the `bulk API <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. Rally will measure metrics like indexing throughput in this phase.
-3. An optional second step is to run one or more queries against the index. Rally will measure metrics like query latency in this phase.
-
-This is called a "track" in Rally. The most important attributes of a track are:
-
-* One or more indices, each with one or more types
-* The queries to issue
-* Source URL of the benchmark data
-* A list of steps to run, which we'll call "challenge", for example indexing data with a specific number of documents per bulk request or running searches for a defined number of iterations.
-
-Separately from a track, we also have "cars" which define the settings of the benchmark candidate (Elasticsearch), like how much heap memory to use, the number of nodes to start and so on. Rally comes with a set of default tracks and cars which you can use for your own benchmarks (but you don't have to).
-
-Tracks are written as JSON files and are kept in a separate track repository, which is located at https://github.com/elastic/rally-tracks. This repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter ``--distribution-version``. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the master branch of the track repository.
-
-Anatomy of a track
-------------------
-
-A track JSON file consists of the following sections:
-
-* indices
-* operations
-* challenges
-
-In the ``indices`` section you describe the relevant indices. Rally can auto-manage them for you: it can download the associated data files, create and destroy the index and apply the relevant mappings. Sometimes, you may want to have full control over the index. Then you can specify ``"auto-managed": false`` on an index. Rally will then assume the index is already present. However, there are some disadvantages with this approach. First of all, this can only work if you set up the cluster by yourself and use the pipeline ``benchmark-only``. Second, the index is out of control of Rally, which means that you need to keep track for yourself of the index configuration. Third, it does not play nice with the ``laps`` feature (which you can use to run multiple iterations). Usually, Rally will destroy and recreate all specified indices for each lap but if you use ``"auto-managed": false``, it cannot do that. As a consequence it will produce bogus metrics if your track specifies that Rally should run bulk-index operations (as you'll just overwrite existing documents from lap 2 on). So please use extra care if you don't let Rally manage the track's indices.
-
-In the ``operations`` section you describe which operations are available for this track and how they are parameterized.
-
-In the ``challenges`` section you describe one or more execution schedules for the operations defined in the ``operations`` block. Think of it as different scenarios that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
+.. note::
+    Please see the :doc:`track reference </track>` for more information on the structure of a track.
 
 
 Example track

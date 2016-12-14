@@ -1,7 +1,7 @@
 Running Races
 =============
 
-A "race" in Rally is the execution of a benchmarking experiment. You can use different benchmarks (which we call "tracks") for your experiments.
+A "race" in Rally is the execution of a benchmarking experiment. You can use different data sets (which we call :doc:`tracks </track>`) for your benchmarks.
 
 List Tracks
 -----------
@@ -23,7 +23,6 @@ This will show the following list::
     tiny        First 2k documents of the geonames track for local tests              append-no-conflicts,append-no-conflicts-index-only,append-fast-no-conflicts,append-fast-with-conflicts
 
 The first two columns show the name and a short description of each track. A track also specifies one or more challenges which basically defines the operations that will be run.
-
 
 Starting a Race
 ---------------

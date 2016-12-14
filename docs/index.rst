@@ -40,8 +40,8 @@ Contents
    configuration
    race
    adding_tracks
+   track
    car
-   faq
    telemetry
    pipelines
    metrics
@@ -49,6 +49,7 @@ Contents
    recipes
    command_line_reference
    developing
+   faq
    glossary
 
 License

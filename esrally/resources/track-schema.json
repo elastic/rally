@@ -230,7 +230,7 @@
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "description": "Defines the concrete execution order of operations. Currently, all operations are executed sequentially.",
+            "description": "Defines the concrete execution order of operations.",
             "items": {
               "type": "object",
               "properties": {
