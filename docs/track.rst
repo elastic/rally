@@ -116,12 +116,6 @@ The ``operations`` section contains a list of all operations that are available 
 
 Each operation consists of the following properties:
 
-register_runner(track.OperationType.Index.name, BulkIndex())
-register_runner(track.OperationType.ForceMerge.name, ForceMerge())
-register_runner(track.OperationType.IndicesStats.name, IndicesStats())
-register_runner(track.OperationType.NodesStats.name, NodeStats())
-register_runner(track.OperationType.Search.name, Query())
-
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
 * ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``index``, ``force-merge``, ``index-stats``, ``node-stats` and ``search``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
 
