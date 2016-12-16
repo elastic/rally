@@ -117,7 +117,7 @@ The ``operations`` section contains a list of all operations that are available 
 Each operation consists of the following properties:
 
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
-* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``index``, ``force-merge``, ``index-stats``, ``node-stats` and ``search``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
+* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``index``, ``force-merge``, ``index-stats``, ``node-stats`` and ``search``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
 
 Depending on the operation type a couple of further parameters can be specified.
 
