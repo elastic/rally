@@ -6,7 +6,7 @@ import subprocess
 import threading
 
 import tabulate
-from esrally import metrics, config
+from esrally import metrics, config, time
 from esrally.utils import io, sysstats, process, console
 
 logger = logging.getLogger("rally.telemetry")
@@ -179,6 +179,16 @@ class FlightRecorder(TelemetryDevice):
         log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
         io.ensure_dir(log_root)
         log_file = "%s/%s-%s.jfr" % (log_root, car.name, candidate_id)
+
+        console.println("\n***************************************************************************\n")
+        console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
+        console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
+        console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
+        console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
+        console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
+        console.println("\n***************************************************************************\n")
+
+        time.sleep(3)
 
         console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger)
         # this is more robust in case we want to use custom settings
