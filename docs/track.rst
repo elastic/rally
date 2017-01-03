@@ -145,7 +145,7 @@ search
 
 The operation type ``search`` supports the following properties:
 
-* ``index`` (optional): Defines the index for this query. Only needed if more the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use.
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this query. Only needed if the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use. If you have defined multiple indices and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
 * ``body`` (mandatory): The query body.
