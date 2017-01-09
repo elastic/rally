@@ -4,27 +4,22 @@
   "description": "Specification of tracks for Rally",
   "type": "object",
   "properties": {
+    "short-description": {
+      "type": "string",
+      "description": "A short description of this track suitable for command line usage. It should be less than 80 characters."
+    },
+    "description": {
+      "type": "string",
+      "description": "A longer description of this track."
+    },
+    "data-url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The root URL for track data. Has to be a publicly accessible http or https URL. If not specified, Rally will not attempt to download data and assume that it will be available locally."
+    },
     "meta": {
       "type": "object",
-      "properties": {
-        "short-description": {
-          "type": "string",
-          "description": "A short description of this track suitable for command line usage. It should be less than 80 characters."
-        },
-        "description": {
-          "type": "string",
-          "description": "A longer description of this track."
-        },
-        "data-url": {
-          "type": "string",
-          "format": "uri",
-          "description": "The root URL for track data. Has to be a publicly accessible http or https URL. If not specified, Rally will not attempt to download data and assume that it will be available locally."
-        }
-      },
-      "required": [
-        "short-description",
-        "description"
-      ]
+      "description": "Meta-information which will be added to each metrics-record of this track."
     },
     "templates": {
       "type": "array",
@@ -137,6 +132,10 @@
             "type": "string",
             "description": "A human-readable name of this operation"
           },
+          "meta": {
+            "type": "object",
+            "description": "Meta-information which will be added to each metrics-record of this operation."
+          },
           "operation-type": {
             "type": "string",
             "description": "Type of this operation."
@@ -214,6 +213,10 @@
             "type": "string",
             "description": "A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users."
           },
+          "meta": {
+            "type": "object",
+            "description": "Meta-information which will be added to each metrics-record of this challenge."
+          },
           "description": {
             "type": "string",
             "description": "A human readable description of the challenge"
@@ -262,6 +265,10 @@
                           "operation": {
                             "type": "string",
                             "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
+                          },
+                          "meta": {
+                            "type": "object",
+                            "description": "Meta-information which will be added to each metrics-record of this task."
                           },
                           "clients": {
                             "type": "integer",
@@ -329,5 +336,11 @@
         ]
       }
     }
-  }
+  },
+  "required": [
+    "short-description",
+    "description",
+    "operations",
+    "challenges"
+  ]
 }

@@ -360,7 +360,7 @@ class ExecutorTests(TestCase):
                           warmup_time_period=0, clients=4, target_throughput=None)
         schedule = driver.schedule_for(test_track, task, 0)
 
-        sampler = driver.Sampler(client_id=2, operation=task.operation, start_timestamp=100)
+        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=100)
 
         driver.execute_schedule(schedule, es, sampler)
 
@@ -371,7 +371,7 @@ class ExecutorTests(TestCase):
         previous_relative_time = -1.0
         for sample in samples:
             self.assertEqual(2, sample.client_id)
-            self.assertEqual(task.operation, sample.operation)
+            self.assertEqual(task, sample.task)
             self.assertTrue(previous_absolute_time < sample.absolute_time)
             previous_absolute_time = sample.absolute_time
             self.assertTrue(previous_relative_time < sample.relative_time)
@@ -405,7 +405,7 @@ class ExecutorTests(TestCase):
                                               param_source="driver-test-param-source"),
                               warmup_time_period=0.5, time_period=0.5, clients=4, target_throughput=target_throughput)
             schedule = driver.schedule_for(test_track, task, 0)
-            sampler = driver.Sampler(client_id=0, operation=task.operation, start_timestamp=0)
+            sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
             driver.execute_schedule(schedule, es, sampler)
 
@@ -426,7 +426,7 @@ class ExecutorTests(TestCase):
             raise ExpectedUnitTestException()
 
         schedule = [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
-        sampler = driver.Sampler(client_id=0, operation=None, start_timestamp=0)
+        sampler = driver.Sampler(client_id=0, task=None, start_timestamp=0)
         with self.assertRaises(ExpectedUnitTestException):
             driver.execute_schedule(schedule, es, sampler=sampler)
 

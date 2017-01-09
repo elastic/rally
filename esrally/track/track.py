@@ -105,7 +105,7 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url, challenges, indices=None, templates=None):
+    def __init__(self, name, short_description, description, source_root_url, meta_data=None, challenges=None, indices=None, templates=None):
         """
 
         Creates a new track.
@@ -115,15 +115,17 @@ class Track:
         :param description: A longer description for this track.
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL the benchmark document files have to be located.
+        :param meta_data: An optional dict of meta-data elements to attach to each metrics record. Default: {}.
         :param challenges: A list of one or more challenges to use.
         :param indices: A list of indices for this track. May be None. One of `indices` or `templates` must be set though.
         :param templates: A list of index templates for this track. May be None. One of `indices` or `templates` must be set though.
         """
         self.name = name
+        self.meta_data = meta_data if meta_data else {}
         self.short_description = short_description
         self.description = description
         self.source_root_url = source_root_url
-        self.challenges = challenges
+        self.challenges = challenges if challenges else []
         self.indices = indices
         self.templates = templates
 
@@ -148,13 +150,15 @@ class Challenge:
                  name,
                  description,
                  index_settings,
+                 meta_data=None,
                  schedule=None):
         if schedule is None:
-            schedule = {}
+            schedule = []
         self.name = name
+        self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.index_settings = index_settings
-        self.schedule = schedule
+        self.schedule = schedule if schedule else []
 
     def __str__(self):
         return self.name
@@ -207,14 +211,22 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, operation, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1, target_throughput=None):
+    def __init__(self, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1,
+                 target_throughput=None):
         self.operation = operation
+        self.meta_data = meta_data if meta_data else {}
         self.warmup_iterations = warmup_iterations
         self.iterations = iterations
         self.warmup_time_period = warmup_time_period
         self.time_period = time_period
         self.clients = clients
         self.target_throughput = target_throughput
+
+    def __hash__(self):
+        return hash(self.operation)
+
+    def __eq__(self, other):
+        return self.operation == other.operation
 
     def __iter__(self):
         return iter([self])
@@ -224,10 +236,11 @@ class Task:
 
 
 class Operation:
-    def __init__(self, name, operation_type, params=None, param_source=None):
+    def __init__(self, name, operation_type, meta_data=None, params=None, param_source=None):
         if params is None:
             params = {}
         self.name = name
+        self.meta_data = meta_data if meta_data else {}
         self.type = operation_type
         self.params = params
         self.param_source = param_source

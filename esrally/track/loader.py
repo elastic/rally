@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-import types
 import urllib.error
 
 import jinja2
@@ -409,9 +408,15 @@ class TrackSpecificationReader:
 
     def __call__(self, track_name, track_specification, mapping_dir, data_dir):
         self.name = track_name
-        short_description = self._r(track_specification, ["meta", "short-description"])
-        description = self._r(track_specification, ["meta", "description"])
-        source_root_url = self._r(track_specification, ["meta", "data-url"], mandatory=False)
+        short_description = self._track_info(track_specification, "short-description")
+        description = self._track_info(track_specification, "description")
+        source_root_url = self._track_info(track_specification, "data-url", mandatory=False)
+        meta_data = self._r(track_specification, "meta", mandatory=False)
+        # TODO dm: Remove this backwards compatibility layer
+        if meta_data:
+            meta_data.pop("description", None)
+            meta_data.pop("short-description", None)
+            meta_data.pop("data-url", None)
         indices = [self._create_index(idx, mapping_dir, data_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
         templates = [self._create_template(tpl, mapping_dir)
@@ -421,9 +426,27 @@ class TrackSpecificationReader:
         if len(indices) == 0 and len(templates) == 0:
             self._error("Specify at least one index or one template.")
 
-        return track.Track(name=self.name, short_description=short_description, description=description,
+        return track.Track(name=self.name, meta_data=meta_data, short_description=short_description, description=description,
                            source_root_url=source_root_url,
                            challenges=challenges, indices=indices, templates=templates)
+
+    def _track_info(self, track_specification, name, mandatory=True):
+        # TODO dm: Remove this backwards compatibility layer
+        v_root = self._r(track_specification, name, mandatory=False)
+        if not v_root:
+            v_meta = self._r(track_specification, ["meta", name], mandatory=False)
+            if not v_meta and mandatory:
+                # issue warning already on the intended level (don't include "meta" here)
+                self._error("Mandatory element '%s' is missing." % name)
+            if v_meta:
+                # do not warn users for tracks in the 'default' repository. It is maintained by us and we will keep the meta
+                # block around for a little while after the release to give users a chance to upgrade.
+                if self.name not in ["geonames", "geopoint", "nyc_taxis", "pmc", "logging", "tiny", "percolator"]:
+                    console.warn("Track '%s' uses deprecated syntax: The element '%s' is contained in a meta-block. Please move this "
+                                 "element to the top-level." % (self.name, name))
+            return v_meta
+        else:
+            return v_root
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -491,21 +514,23 @@ class TrackSpecificationReader:
         ops = self.parse_operations(self._r(track_spec, "operations"))
         challenges = []
         for challenge in self._r(track_spec, "challenges"):
-            challenge_name = self._r(challenge, "name", error_ctx="challenges")
-            challenge_description = self._r(challenge, "description", error_ctx=challenge_name)
-            index_settings = self._r(challenge, "index-settings", error_ctx=challenge_name, mandatory=False)
+            name = self._r(challenge, "name", error_ctx="challenges")
+            description = self._r(challenge, "description", error_ctx=name)
+            meta_data = self._r(challenge, "meta", error_ctx=name, mandatory=False)
+            index_settings = self._r(challenge, "index-settings", error_ctx=name, mandatory=False)
 
             schedule = []
 
-            for op in self._r(challenge, "schedule", error_ctx=challenge_name):
+            for op in self._r(challenge, "schedule", error_ctx=name):
                 if "parallel" in op:
-                    task = self.parse_parallel(op["parallel"], ops, challenge_name)
+                    task = self.parse_parallel(op["parallel"], ops, name)
                 else:
-                    task = self.parse_task(op, ops, challenge_name)
+                    task = self.parse_task(op, ops, name)
                 schedule.append(task)
 
-            challenges.append(track.Challenge(name=challenge_name,
-                                              description=challenge_description,
+            challenges.append(track.Challenge(name=name,
+                                              meta_data=meta_data,
+                                              description=description,
                                               index_settings=index_settings,
                                               schedule=schedule))
         return challenges
@@ -527,6 +552,7 @@ class TrackSpecificationReader:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
                         "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
         task = track.Task(operation=ops[op_name],
+                          meta_data=self._r(task_spec, "meta", error_ctx=op_name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
                                                     default_value=default_warmup_iterations),
                           iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
@@ -548,6 +574,7 @@ class TrackSpecificationReader:
         ops = {}
         for op_spec in ops_specs:
             op_name = self._r(op_spec, "name", error_ctx="operations")
+            meta_data = self._r(op_spec, "meta", error_ctx="operations", mandatory=False)
             # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
             op_type_name = self._r(op_spec, "operation-type", error_ctx="operations")
             try:
@@ -558,7 +585,8 @@ class TrackSpecificationReader:
                 op_type = op_type_name
             param_source = self._r(op_spec, "param-source", error_ctx="operations", mandatory=False)
             try:
-                ops[op_name] = track.Operation(name=op_name, operation_type=op_type, params=op_spec, param_source=param_source)
+                ops[op_name] = track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=op_spec,
+                                               param_source=param_source)
             except exceptions.InvalidSyntax as e:
                 raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
         return ops

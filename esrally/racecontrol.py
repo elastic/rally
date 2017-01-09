@@ -62,7 +62,6 @@ class Benchmark:
         self.track = track.load_track(self.cfg)
         metrics.race_store(self.cfg).store_race(self.track)
 
-
     def run(self, lap):
         self.metrics_store.lap = lap
         main_driver = self.actor_system.createActor(driver.Driver)

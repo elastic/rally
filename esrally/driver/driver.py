@@ -114,6 +114,8 @@ class Driver(thespian.actors.Actor):
     def __init__(self):
         super().__init__()
         self.config = None
+        self.track = None
+        self.challenge = None
         # Elasticsearch client
         self.es = None
         self.metrics_store = None
@@ -162,11 +164,11 @@ class Driver(thespian.actors.Actor):
     def start_benchmark(self, msg, sender):
         self.start_sender = sender
         self.config = msg.config
-        current_track = msg.track
+        self.track = msg.track
 
         logger.info("Preparing track")
         # TODO #71: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
-        track.prepare_track(current_track, self.config)
+        track.prepare_track(self.track, self.config)
 
         logger.info("Benchmark is about to start.")
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
@@ -179,15 +181,15 @@ class Driver(thespian.actors.Actor):
         selected_car_name = self.config.opts("benchmarks", "car")
         self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
 
-        challenge = select_challenge(self.config, current_track)
+        self.challenge = select_challenge(self.config, self.track)
         es_version = self.config.opts("source", "distribution.version")
-        for template in current_track.templates:
+        for template in self.track.templates:
             setup_template(self.es, template)
 
-        for index in current_track.indices:
-            setup_index(self.es, index, challenge.index_settings)
+        for index in self.track.indices:
+            setup_index(self.es, index, self.challenge.index_settings)
         wait_for_status(self.es, es_version, expected_cluster_health)
-        allocator = Allocator(challenge.schedule)
+        allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
         self.ops_per_join_point = allocator.operations_per_joinpoint
@@ -198,7 +200,7 @@ class Driver(thespian.actors.Actor):
         for client_id in range(allocator.clients):
             self.drivers.append(self.createActor(LoadGenerator))
         for client_id, driver in enumerate(self.drivers):
-            self.send(driver, StartLoadGenerator(client_id, self.config, current_track, self.allocations[client_id]))
+            self.send(driver, StartLoadGenerator(client_id, self.config, self.track, self.allocations[client_id]))
 
         self.update_progress_message()
         self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
@@ -258,27 +260,47 @@ class Driver(thespian.actors.Actor):
             self.most_recent_sample_per_client[most_recent.client_id] = most_recent
 
     def post_process_samples(self):
-        logger.info("Post processing [%d] samples..." % len(self.raw_samples))
         logger.info("Storing latency and service time... ")
         for sample in self.raw_samples:
+            meta_data = self.merge(
+                self.track.meta_data,
+                self.challenge.meta_data,
+                sample.operation.meta_data,
+                sample.task.meta_data,
+                sample.request_meta_data)
+
             self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.operation.name,
                                                        operation_type=sample.operation.type, sample_type=sample.sample_type,
                                                        absolute_time=sample.absolute_time, relative_time=sample.relative_time,
-                                                       meta_data=sample.request_meta_data)
+                                                       meta_data=meta_data)
 
             self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms",
                                                        operation=sample.operation.name, operation_type=sample.operation.type,
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                       relative_time=sample.relative_time, meta_data=sample.request_meta_data)
+                                                       relative_time=sample.relative_time, meta_data=meta_data)
 
         logger.info("Calculating throughput... ")
         aggregates = calculate_global_throughput(self.raw_samples)
         logger.info("Storing throughput... ")
-        for op, samples in aggregates.items():
+        for task, samples in aggregates.items():
+            meta_data = self.merge(
+                self.track.meta_data,
+                self.challenge.meta_data,
+                task.operation.meta_data,
+                task.meta_data
+            )
+            op = task.operation
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
-                                                           absolute_time=absolute_time, relative_time=relative_time)
+                                                           absolute_time=absolute_time, relative_time=relative_time, meta_data=meta_data)
+
+    def merge(self, *args):
+        result = {}
+        for arg in args:
+            if arg is not None:
+                result.update(arg)
+        return result
 
     def update_progress_message(self, task_finished=False):
         if not self.quiet and self.current_step >= 0:
@@ -380,7 +402,7 @@ class LoadGenerator(thespian.actors.Actor):
             self.send(self.master, JoinPointReached(self.client_id, task))
         elif isinstance(task, track.Task):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
-            self.sampler = Sampler(self.client_id, task.operation, self.start_timestamp)
+            self.sampler = Sampler(self.client_id, task, self.start_timestamp)
             schedule = schedule_for(self.track, task, self.client_id)
             self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
@@ -399,19 +421,19 @@ class Sampler:
     Encapsulates management of gathered samples.
     """
 
-    def __init__(self, client_id, operation, start_timestamp):
+    def __init__(self, client_id, task, start_timestamp):
         self.client_id = client_id
-        self.operation = operation
+        self.task = task
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=16384)
 
     def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
         try:
-            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.operation,
+            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.task,
                                      sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
                                      percent_completed))
         except queue.Full:
-            logger.warning("Dropping sample for [%s] due to a full sampling queue." % self.operation.name)
+            logger.warning("Dropping sample for [%s] due to a full sampling queue." % self.task.operation.name)
 
     @property
     def samples(self):
@@ -425,12 +447,12 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, client_id, absolute_time, relative_time, operation, sample_type, request_meta_data, latency_ms, service_time_ms,
+    def __init__(self, client_id, absolute_time, relative_time, task, sample_type, request_meta_data, latency_ms, service_time_ms,
                  total_ops, total_ops_unit, time_period, percent_completed):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
-        self.operation = operation
+        self.task = task
         self.sample_type = sample_type
         self.request_meta_data = request_meta_data
         self.latency_ms = latency_ms
@@ -439,6 +461,10 @@ class Sample:
         self.total_ops_unit = total_ops_unit
         self.time_period = time_period
         self.percent_completed = percent_completed
+
+    @property
+    def operation(self):
+        return self.task.operation
 
 
 def select_challenge(config, t):
@@ -550,21 +576,21 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
     :param bucket_interval_secs: The bucket interval for aggregations.
     :return: A global view of throughput samples.
     """
-    samples_per_op = {}
+    samples_per_task = {}
     # first we group all warmup / measurement samples by operation.
     for sample in samples:
-        k = sample.operation
-        if k not in samples_per_op:
-            samples_per_op[k] = []
-        samples_per_op[k].append(sample)
+        k = sample.task
+        if k not in samples_per_task:
+            samples_per_task[k] = []
+        samples_per_task[k].append(sample)
 
     global_throughput = {}
     # with open("raw_samples.csv", "w") as sample_log:
     #    print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
-    for k, v in samples_per_op.items():
-        op = k
-        if op not in global_throughput:
-            global_throughput[op] = []
+    for k, v in samples_per_task.items():
+        task = k
+        if task not in global_throughput:
+            global_throughput[task] = []
         # sort all samples by time
         current_samples = sorted(v, key=lambda s: s.absolute_time)
 
@@ -590,7 +616,7 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
                 current_bucket = int(interval) + bucket_interval_secs
                 throughput = (total_count / interval)
                 # we calculate throughput per second
-                global_throughput[op].append(
+                global_throughput[task].append(
                     (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
     return global_throughput
 

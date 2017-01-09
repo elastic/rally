@@ -40,22 +40,37 @@ class TemplateRenderTests(TestCase):
 class TrackSpecificationReaderTests(TestCase):
     def test_missing_description_raises_syntax_error(self):
         track_specification = {
-            "meta": {
-                "description": "unittest track"
-            }
+            "description": "unittest track"
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings", "/data")
-        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'meta.short-description' is missing.", ctx.exception.args[0])
+        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'short-description' is missing.", ctx.exception.args[0])
 
-    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
+    def test_can_read_track_info_from_meta_block(self):
+        # This test checks for the old syntax where track info was contained in a meta-block
         track_specification = {
             "meta": {
                 "short-description": "short description for unit test",
                 "description": "longer description of this track for unit test",
                 "data-url": "https://localhost/data"
             },
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [],
+            "challenges": []
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("short description for unit test", resulting_track.short_description)
+        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual("https://localhost/data", resulting_track.source_root_url)
+
+    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "test-index",
@@ -104,11 +119,9 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_with_mixed_warmup_timeperiod_and_iterations(self):
         track_specification = {
-            "meta": {
-                "short-description": "short description for unit test",
-                "description": "longer description of this track for unit test",
-                "data-url": "https://localhost/data"
-            },
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "test-index",
@@ -157,11 +170,9 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_valid_track_specification(self):
         track_specification = {
-            "meta": {
-                "short-description": "short description for unit test",
-                "description": "longer description of this track for unit test",
-                "data-url": "https://localhost/data"
-            },
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "index-historical",
@@ -191,6 +202,9 @@ class TrackSpecificationReaderTests(TestCase):
                     "name": "index-append",
                     "operation-type": "index",
                     "bulk-size": 5000,
+                    "meta": {
+                        "append": True
+                    }
                 },
                 {
                     "name": "search",
@@ -202,11 +216,18 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
+                    "meta": {
+                        "mixed": True,
+                        "max-clients": 8
+                    },
                     "schedule": [
                         {
                             "index-settings": {},
                             "clients": 8,
-                            "operation": "index-append"
+                            "operation": "index-append",
+                            "meta": {
+                                "operation-index": 0
+                            }
                         },
                         {
                             "clients": 1,
@@ -232,13 +253,14 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
+        self.assertEqual({"mixed": True, "max-clients": 8}, resulting_track.challenges[0].meta_data)
+        self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
+        self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
 
     def test_parse_valid_track_specification_with_index_template(self):
         track_specification = {
-            "meta": {
-                "short-description": "short description for unit test",
-                "description": "longer description of this track for unit test"
-            },
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
             "templates": [
                 {
                     "name": "my-index-template",
@@ -263,10 +285,8 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_types_are_optional_for_user_managed_indices(self):
         track_specification = {
-            "meta": {
-                "short-description": "short description for unit test",
-                "description": "longer description of this track for unit test"
-            },
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [],
             "challenges": []

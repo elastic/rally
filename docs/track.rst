@@ -33,10 +33,7 @@ Track elements
 
 The track elements that are described here are defined in `Rally's JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_. Rally uses this track schema to validate your tracks when it is loading them.
 
-meta
-....
-
-The ``meta`` section contains a meta-description of the track and consists of the following properties:
+Each track defines a three info attributes:
 
 * ``description`` (mandatory): A human-readable description of the track.
 * ``short-description`` (mandatory): A shorter description of the track.
@@ -44,11 +41,31 @@ The ``meta`` section contains a meta-description of the track and consists of th
 
 Example::
 
-    "meta": {
+    {
         "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
         "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
         "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
     }
+
+meta
+....
+
+For each track, an optional structure, called ``meta`` can be defined. You are free which properties this element should contain.
+
+This element can also be defined on the following elements:
+
+* ``challenge``
+* ``operation``
+* ``task``
+
+If the ``meta`` structure contains the same key on different elements, more specific ones will override the same key of more generic elements. The order from generic to most specific is:
+
+1. track
+2. challenge
+3. operation
+4. task
+
+E.g. a key defined on a task, will override the same key defined on a challenge. All properties defined within the merged ``meta`` structure, will get copied into each metrics record.
 
 indices
 .......

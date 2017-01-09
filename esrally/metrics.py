@@ -356,7 +356,7 @@ class MetricsStore:
         else:
             raise exceptions.SystemSetupError("Unknown meta info level [%s] for metric [%s]" % (level, name))
         if meta_data:
-            meta["operation"] = meta_data
+            meta.update(meta_data)
 
         if absolute_time is None:
             absolute_time = self._clock.now()
@@ -384,7 +384,6 @@ class MetricsStore:
             doc["operation-type"] = operation_type
 
         assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
-
         self._add(doc)
 
     def bulk_add(self, docs):
