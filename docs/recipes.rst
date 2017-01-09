@@ -15,7 +15,7 @@ Benchmarking an existing cluster
 Consider the following configuration: You have an existing benchmarking cluster, that consists of three Elasticsearch nodes running on ``10.5.5.10``, ``10.5.5.11``, ``10.5.5.12``. You've setup the cluster yourself and want to benchmark it with Rally. Rally is installed on ``10.5.5.5``.
 
 .. image:: benchmark_existing.png
-   :alt: Sample Benchmarking Scenario
+:alt: Sample Benchmarking Scenario
 
 First of all, we need to decide on a track. So, we run ``esrally list tracks``::
 
@@ -42,3 +42,27 @@ If you have `X-Pack Security <https://www.elastic.co/products/x-pack/security>`_
 
     esrally --track=pmc --target-hosts=10.5.5.10:9243,10.5.5.11:9243,10.5.5.12:9243 --pipeline=benchmark-only --client-options="basic_auth_user:'elastic',basic_auth_password:'changeme'"
 
+Changing the default track repository
+-------------------------------------
+
+Rally supports multiple track repositories. This allows you for example to have a separate company-internal repository for your own tracks that is separate from `Rally's default track repository <https://github.com/elastic/rally-tracks>`_. However, you always need to define ``--track-repository=my-custom-repository`` which can be cumbersome. If you want to avoid that and want Rally to use your own track repository by default you can just replace the default track repository definition in ``~./rally/rally.ini``. Consider this example::
+
+    ...
+    [tracks]
+    default.url = git@github.com:elastic/rally-tracks.git
+    teamtrackrepo.url = git@example.org/myteam/my-tracks.git
+
+If ``teamtrackrepo`` should be the default track repository, just define it as ``default.url``. E.g.::
+
+    ...
+    [tracks]
+    default.url = git@example.org/myteam/my-tracks.git
+    old-rally-default.url=git@github.com:elastic/rally-tracks.git
+
+Also don't forget to rename the folder of your local working copy as Rally will search for a track repository with the name ``default``::
+
+    cd ~/.rally/benchmarks/tracks/
+    mv default old-rally-default
+    mv teamtrackrepo default
+
+From now on, Rally will treat your repository as default and you need to run Rally with ``--track-repository=old-rally-default`` if you want to use the out-of-the-box Rally tracks.
