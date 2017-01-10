@@ -378,7 +378,7 @@ def parse_args():
             help=argparse.SUPPRESS,
             default="green")
 
-    for p in [parser, config_parser, list_parser, race_parser]:
+    for p in [parser, config_parser, list_parser, race_parser, compare_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
