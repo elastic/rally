@@ -111,7 +111,7 @@ Getting help
 
 * Quick help: ``esrally --help``
 * Look in `Rally's user guide <https://esrally.readthedocs.io/>`_ for more information
-* Ask questions about Rally in the `Rally Discuss forum <https://discuss.elastic.co/c/rally>`_.
+* Ask questions about Rally in the `Rally Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_.
 * File improvements or bug reports in our `Github repo <https://github.com/elastic/rally/issues>`_.
 
 How to Contribute

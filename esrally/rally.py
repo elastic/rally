@@ -444,7 +444,7 @@ def print_help_on_errors(cfg):
     console.println(console.format.underline_for(heading))
     console.println("* Check the log file at %s for errors." % log_file_path(cfg))
     console.println("* Read the documentation at %s" % console.format.link(DOC_LINK))
-    console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/rally"))
+    console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
     console.println("* Raise an issue at %s and include the log file in %s." %
                     (console.format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
 
