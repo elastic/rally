@@ -276,15 +276,17 @@ class SummaryReporter:
     def report_latency(self, stats, operation):
         lines = []
         latency = stats.op_metrics[operation.name]["latency"]
-        for percentile, value in latency.items():
-            lines.append([self.lap, "%sth percentile latency" % percentile, operation.name, value, "ms"])
+        if latency:
+            for percentile, value in latency.items():
+                lines.append([self.lap, "%sth percentile latency" % percentile, operation.name, value, "ms"])
         return lines
 
     def report_service_time(self, stats, operation):
         lines = []
         service_time = stats.op_metrics[operation.name]["service_time"]
-        for percentile, value in service_time.items():
-            lines.append([self.lap, "%sth percentile service time" % percentile, operation.name, value, "ms"])
+        if service_time:
+            for percentile, value in service_time.items():
+                lines.append([self.lap, "%sth percentile service time" % percentile, operation.name, value, "ms"])
         return lines
 
     def report_total_times(self, stats):
