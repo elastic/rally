@@ -30,7 +30,7 @@ class Scope(Enum):
 
 
 class ConfigFile:
-    def __init__(self, config_name):
+    def __init__(self, config_name=None):
         self.config_name = config_name
 
     @property

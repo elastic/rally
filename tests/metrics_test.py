@@ -1,8 +1,10 @@
+import os
 import datetime
 import unittest.mock as mock
 from unittest import TestCase
+import elasticsearch.exceptions
 
-from esrally import config, metrics, track
+from esrally import config, metrics, track, exceptions
 
 
 class MockClientFactory:
@@ -45,6 +47,64 @@ class StaticStopWatch:
 
     def total_time(self):
         return 0
+
+
+class EsClientTests(TestCase):
+    class TransportMock:
+        def __init__(self, hosts):
+            self.hosts = hosts
+
+    class ClientMock:
+        def __init__(self, hosts):
+            self.transport = EsClientTests.TransportMock(hosts)
+
+    def test_raises_sytem_setup_error_on_connection_problems(self):
+        def raise_connection_error():
+            raise elasticsearch.exceptions.ConnectionError("unit-test")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9200"}]))
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            client.guarded(raise_connection_error)
+        self.assertEqual("Could not connect to your Elasticsearch metrics store. Please check that it is running on host [127.0.0.1] at "
+                         "port [9200] or fix the configuration in [%s/.rally/rally.ini]." % os.path.expanduser("~"),
+                         ctx.exception.args[0])
+
+    def test_raises_sytem_setup_error_on_authentication_problems(self):
+        def raise_authentication_error():
+            raise elasticsearch.exceptions.AuthenticationException("unit-test")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            client.guarded(raise_authentication_error)
+        self.assertEqual("The configured user could not authenticate against your Elasticsearch metrics store running on host [127.0.0.1] "
+                         "at port [9243] (wrong password?). Please fix the configuration in [%s/.rally/rally.ini]."
+                         % os.path.expanduser("~"), ctx.exception.args[0])
+
+    def test_raises_sytem_setup_error_on_authorization_problems(self):
+        def raise_authorization_error():
+            raise elasticsearch.exceptions.AuthorizationException("unit-test")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            client.guarded(raise_authorization_error)
+        self.assertEqual("The configured user does not have enough privileges to run the operation [raise_authorization_error] against "
+                         "your Elasticsearch metrics store running on host [127.0.0.1] at port [9243]. Please adjust your x-pack "
+                         "configuration or specify a user with enough privileges in the configuration in [%s/.rally/rally.ini]."
+                         % os.path.expanduser("~"), ctx.exception.args[0])
+
+    def test_raises_rally_error_on_unknown_problems(self):
+        def raise_unknown_error():
+            raise elasticsearch.exceptions.SerializationError("unit-test")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            client.guarded(raise_unknown_error)
+        self.assertEqual("An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
+                         "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
 
 
 class EsMetricsTests(TestCase):

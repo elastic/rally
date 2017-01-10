@@ -12,7 +12,7 @@ import certifi
 import elasticsearch
 import elasticsearch.helpers
 import tabulate
-from esrally import time, exceptions
+from esrally import time, exceptions, config
 from esrally.utils import console
 
 logger = logging.getLogger("rally.metrics")
@@ -51,9 +51,36 @@ class EsClient:
     def guarded(self, target, *args, **kwargs):
         try:
             return target(*args, **kwargs)
-        except elasticsearch.exceptions.ConnectionError:
-            msg = "Could not connect to metrics store %s. Please check that it is running and retry." % self._client.transport.hosts
+        except elasticsearch.exceptions.AuthenticationException:
+            # we know that it is just one host (see EsClientFactory)
+            node = self._client.transport.hosts[0]
+            msg = "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at " \
+                  "port [%s] (wrong password?). Please fix the configuration in [%s]." % \
+                  (node["host"], node["port"], config.ConfigFile().location)
+            logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
+        except elasticsearch.exceptions.AuthorizationException:
+            node = self._client.transport.hosts[0]
+            msg = "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics " \
+                  "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough " \
+                  "privileges in the configuration in [%s]." % (target.__name__, node["host"], node["port"], config.ConfigFile().location)
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
+        except elasticsearch.exceptions.ConnectionError:
+            node = self._client.transport.hosts[0]
+            msg = "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s] or " \
+                  "fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
+        except elasticsearch.exceptions.ElasticsearchException:
+            node = self._client.transport.hosts[0]
+            msg = "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] at " \
+                  "port [%s]." % (target.__name__, node["host"], node["port"])
+            logger.exception(msg)
+            # this does not necessarily mean it's a system setup problem...
+            raise exceptions.RallyError(msg)
+
+
 
 
 class EsClientFactory:
@@ -61,8 +88,8 @@ class EsClientFactory:
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
-    def __init__(self, config):
-        self._config = config
+    def __init__(self, cfg):
+        self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
         # poor man's boolean conversion
