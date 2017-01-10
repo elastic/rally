@@ -17,7 +17,7 @@ echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
 
-# Update author information
+echo "Updating author information"
 git log --format='%aN' | sort -u > AUTHORS
 # This will produce a non-zero exit code iff there are changes.
 # Obviously we should disable exiting on error temporarily.
@@ -31,9 +31,11 @@ then
 fi
 
 # * Update version in `setup.py` and `docs/conf.py`
+echo "Updating release version number"
 echo "$RELEASE_VERSION" > version.txt
 git commit -a -m "Bump version to $RELEASE_VERSION"
 
+echo "Running tests"
 cd docs && make html && cd -
 # run integration tests, note that this requires that tox is properly set up
 tox
