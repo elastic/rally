@@ -119,7 +119,8 @@ class Stats:
         return self.index_size and self.bytes_written
 
     def median(self, metric_name, operation_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, operation=operation_name, operation_type=operation_type, sample_type=sample_type, lap=self.lap)
+        return self.store.get_median(metric_name, operation=operation_name, operation_type=operation_type, sample_type=sample_type,
+                                     lap=self.lap)
 
     def single_latency(self, operation, metric_name="latency"):
         sample_type = metrics.SampleType.Normal
@@ -420,16 +421,17 @@ class ComparisonReporter:
 
         print_internal(tabulate.tabulate(metrics_table,
                                          headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
-                                         numalign="right", stralign="right"))
+                                         tablefmt="pipe", numalign="right", stralign="right"))
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
         b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation.name]["throughput"]
         c_min, c_median, c_max, c_unit = contender_stats.op_metrics[operation.name]["throughput"]
-        return [
+
+        return self.join(
             self.line("Min Throughput", b_min, c_min, operation, b_unit, treat_increase_as_improvement=True),
             self.line("Median Throughput", b_median, c_median, operation, b_unit, treat_increase_as_improvement=True),
             self.line("Max Throughput", b_max, c_max, operation, b_unit, treat_increase_as_improvement=True)
-        ]
+        )
 
     def report_latency(self, baseline_stats, contender_stats, operation):
         lines = []
@@ -453,41 +455,46 @@ class ComparisonReporter:
         for percentile, baseline_value in baseline_service_time.items():
             if percentile in contender_service_time:
                 contender_value = contender_service_time[percentile]
-                lines.append(self.line("%sth percentile service time" % percentile, baseline_value, contender_value,
-                                       operation, "ms", treat_increase_as_improvement=False))
+                self.append_if_present(lines, self.line("%sth percentile service time" % percentile, baseline_value, contender_value,
+                                                        operation, "ms", treat_increase_as_improvement=False))
         return lines
 
     def report_merge_part_times(self, baseline_stats, contender_stats):
-        lines = []
         if baseline_stats.has_merge_part_stats() and contender_stats.has_merge_part_stats():
-            self.append_if_present(lines,
-                                   self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
-                                             contender_stats.merge_part_time_postings,
-                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(lines,
-                                   self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
-                                             contender_stats.merge_part_time_stored_fields,
-                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(lines,
-                                   self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
-                                             contender_stats.merge_part_time_doc_values,
-                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(lines,
-                                   self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
-                                             contender_stats.merge_part_time_norms,
-                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-            self.append_if_present(lines,
-                                   self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
-                                             contender_stats.merge_part_time_vectors,
-                                             "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes))
-        return lines
+            return self.join(
+                self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
+                          contender_stats.merge_part_time_postings,
+                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+                self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
+                          contender_stats.merge_part_time_stored_fields,
+                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+                self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
+                          contender_stats.merge_part_time_doc_values,
+                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+                self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
+                          contender_stats.merge_part_time_norms,
+                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+                self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
+                          contender_stats.merge_part_time_vectors,
+                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
+            )
+        else:
+            return []
 
     def append_if_present(self, l, v):
         if v and len(v) > 0:
             l.append(v)
 
+    def join(self, *args):
+        lines = []
+        for arg in args:
+            if arg and len(arg) > 0:
+                lines.append(arg)
+
+        return lines
+
     def report_total_times(self, baseline_stats, contender_stats):
-        return [
+        return self.join(
             self.line("Indexing time", baseline_stats.total_time, contender_stats.total_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
             self.line("Merge time", baseline_stats.merge_time, contender_stats.merge_time, "", "min",
@@ -498,38 +505,38 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
             self.line("Merge throttle time", baseline_stats.merge_throttle_time, contender_stats.merge_throttle_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
-        ]
+        )
 
     # def report_cpu_usage(self, baseline_stats, contender_stats):
     #     cpu_usage = []
     #     for op, v in baseline_stats.median_cpu_usage.items():
     #         if op in contender_stats.median_cpu_usage:
-    #             cpu_usage.append(self.line("Median CPU usage", baseline_stats.median_cpu_usage[op], contender_stats.median_cpu_usage[op],
-    #                                        op, "%", treat_increase_as_improvement=True))
+    #             self.append_if_present(cpu_usage, self.line("Median CPU usage", baseline_stats.median_cpu_usage[op],
+    #                            contender_stats.median_cpu_usage[op], op, "%", treat_increase_as_improvement=True))
     #     return cpu_usage
 
     def report_gc_times(self, baseline_stats, contender_stats):
-        return [
+        return self.join(
             self.line("Total Young Gen GC", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
             self.line("Total Old Gen GC", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds)
-        ]
+        )
 
     def report_disk_usage(self, baseline_stats, contender_stats):
         if baseline_stats.has_disk_usage_stats() and contender_stats.has_disk_usage_stats():
-            return [
+            return self.join(
                 self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
                 self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            ]
+                          treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
+            )
         else:
             return []
 
     def report_segment_memory(self, baseline_stats, contender_stats):
         if baseline_stats.has_memory_stats() and contender_stats.has_memory_stats():
-            return [
+            return self.join(
                 self.line("Heap used for segments", baseline_stats.memory_segments, contender_stats.memory_segments, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
                 self.line("Heap used for doc values", baseline_stats.memory_doc_values, contender_stats.memory_doc_values, "", "MB",
@@ -542,16 +549,16 @@ class ComparisonReporter:
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
                 self.line("Heap used for points", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
-            ]
+            )
         else:
             return []
 
     def report_segment_counts(self, baseline_stats, contender_stats):
         if baseline_stats.segment_count and contender_stats.segment_count:
-            return [
+            return self.join(
                 self.line("Segment count", baseline_stats.segment_count, contender_stats.segment_count,
                           "", "", treat_increase_as_improvement=False)
-            ]
+            )
         else:
             return []
 
