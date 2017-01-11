@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# Prerequisites for releasing: pip3 install twine sphinx sphinx_rtd_theme
+
 # fail this script immediately if any command fails with a non-zero exit code
 set -e
 
