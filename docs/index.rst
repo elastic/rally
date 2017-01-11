@@ -51,6 +51,7 @@ Contents
    developing
    faq
    glossary
+   community
 
 License
 -------
