@@ -5,7 +5,7 @@ from unittest import TestCase
 from esrally import reporter, metrics, config, track
 
 
-class ReporterTests(TestCase):
+class StatsTests(TestCase):
     def test_calculate_simple_index_stats(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -40,3 +40,24 @@ class ReporterTests(TestCase):
         self.assertEqual((500, 1000, 2000, "docs/s"), stats.op_metrics["index"]["throughput"])
         self.assertEqual(collections.OrderedDict([(50.0, 220), (100, 225)]), stats.op_metrics["index"]["latency"])
         self.assertEqual(collections.OrderedDict([(50.0, 200), (100, 215)]), stats.op_metrics["index"]["service_time"])
+
+
+class ComparisonReporterTests(TestCase):
+    def test_formats_table(self):
+        cfg = config.Config()
+        r = reporter.ComparisonReporter(cfg)
+
+        formatted = r.format_as_table([])
+        # 1 header line, 1 separation line + 0 data lines
+        self.assertEqual(1 + 1 + 0, len(formatted.splitlines()))
+
+        # ["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"]
+        metrics_table = [
+            ["Min Throughput", "index", "17300", "18000", "700", "ops/s"],
+            ["Median Throughput", "index", "17500", "18500", "1000", "ops/s"],
+            ["Max Throughput", "index", "17700", "19000", "1300", "ops/s"]
+        ]
+
+        formatted = r.format_as_table(metrics_table)
+        # 1 header line, 1 separation line + 3 data lines
+        self.assertEqual(1 + 1 + 3, len(formatted.splitlines()))

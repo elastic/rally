@@ -400,6 +400,14 @@ class ComparisonReporter:
         print_header("------------------------------------------------------")
         print_internal("")
 
+        print_internal(self.format_as_table(self.metrics_table(baseline_stats, contender_stats)))
+
+    def format_as_table(self, metrics_table):
+        return tabulate.tabulate(metrics_table,
+                                 headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
+                                 tablefmt="pipe", numalign="right", stralign="right")
+
+    def metrics_table(self, baseline_stats, contender_stats):
         metrics_table = []
         metrics_table += self.report_total_times(baseline_stats, contender_stats)
         metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
@@ -411,21 +419,16 @@ class ComparisonReporter:
         metrics_table += self.report_segment_memory(baseline_stats, contender_stats)
         metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
 
-        for t1 in r1.challenge.schedule:
-            for t2 in r2.challenge.schedule:
-                # only report matching metrics
-                if t1.operation.name == t2.operation.name:
-                    metrics_table += self.report_throughput(baseline_stats, contender_stats, t1.operation)
-                    metrics_table += self.report_latency(baseline_stats, contender_stats, t1.operation)
-                    metrics_table += self.report_service_time(baseline_stats, contender_stats, t1.operation)
-
-        print_internal(tabulate.tabulate(metrics_table,
-                                         headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
-                                         tablefmt="pipe", numalign="right", stralign="right"))
+        for op in baseline_stats.op_metrics.keys():
+            if op in contender_stats.op_metrics:
+                metrics_table += self.report_throughput(baseline_stats, contender_stats, op)
+                metrics_table += self.report_latency(baseline_stats, contender_stats, op)
+                metrics_table += self.report_service_time(baseline_stats, contender_stats, op)
+        return baseline_stats, contender_stats
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
-        b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation.name]["throughput"]
-        c_min, c_median, c_max, c_unit = contender_stats.op_metrics[operation.name]["throughput"]
+        b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation]["throughput"]
+        c_min, c_median, c_max, c_unit = contender_stats.op_metrics[operation]["throughput"]
 
         return self.join(
             self.line("Min Throughput", b_min, c_min, operation, b_unit, treat_increase_as_improvement=True),
@@ -436,8 +439,8 @@ class ComparisonReporter:
     def report_latency(self, baseline_stats, contender_stats, operation):
         lines = []
 
-        baseline_latency = baseline_stats.op_metrics[operation.name]["latency"]
-        contender_latency = contender_stats.op_metrics[operation.name]["latency"]
+        baseline_latency = baseline_stats.op_metrics[operation]["latency"]
+        contender_latency = contender_stats.op_metrics[operation]["latency"]
 
         for percentile, baseline_value in baseline_latency.items():
             if percentile in contender_latency:
@@ -449,8 +452,8 @@ class ComparisonReporter:
     def report_service_time(self, baseline_stats, contender_stats, operation):
         lines = []
 
-        baseline_service_time = baseline_stats.op_metrics[operation.name]["service_time"]
-        contender_service_time = contender_stats.op_metrics[operation.name]["service_time"]
+        baseline_service_time = baseline_stats.op_metrics[operation]["service_time"]
+        contender_service_time = contender_stats.op_metrics[operation]["service_time"]
 
         for percentile, baseline_value in baseline_service_time.items():
             if percentile in contender_service_time:
