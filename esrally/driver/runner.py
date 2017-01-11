@@ -60,8 +60,7 @@ class DelegatingRunner(Runner):
         return self.runnable(*args)
 
     def __repr__(self, *args, **kwargs):
-        return "user-defined runner [%s]" % str(self.runnable)
-
+        return "user-defined runner for [%s]" % self.runnable.__name__
 
 
 class BulkIndex(Runner):
@@ -214,7 +213,6 @@ class Query(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "query"
-
 
 
 register_runner(track.OperationType.Index.name, BulkIndex())
