@@ -502,3 +502,29 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.bulk_add(memento)
         self.assertEqual(1, len(self.metrics_store.docs))
         self.assertEqual(1000, self.metrics_store.get_one("final_index_size"))
+
+    def test_meta_data_per_document(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "cluster-name", "test")
+
+        self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB", meta_data={
+            "fs-block-size-bytes": 512
+        })
+        self.metrics_store.put_count_cluster_level("final_bytes_written", 1, "TB", meta_data={
+            "io-batch-size-kb": 4
+        })
+
+        self.assertEqual(2, len(self.metrics_store.docs))
+        self.assertEqual({
+            "cluster-name": "test",
+            "fs-block-size-bytes": 512
+        }, self.metrics_store.docs[0]["meta"])
+
+        self.assertEqual({
+            "cluster-name": "test",
+            "io-batch-size-kb": 4
+        }, self.metrics_store.docs[1]["meta"])
+
+
+

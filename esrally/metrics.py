@@ -376,7 +376,7 @@ class MetricsStore:
     def _put(self, level, level_key, name, value, unit, operation, operation_type, sample_type, absolute_time=None, relative_time=None,
              meta_data=None):
         if level == MetaInfoScope.cluster:
-            meta = self._meta_info[MetaInfoScope.cluster]
+            meta = self._meta_info[MetaInfoScope.cluster].copy()
         elif level == MetaInfoScope.node:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
             meta.update(self._meta_info[MetaInfoScope.node][level_key])
