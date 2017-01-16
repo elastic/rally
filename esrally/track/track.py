@@ -140,10 +140,16 @@ class Track:
         return None
 
     def find_challenge_or_default(self, name):
+        """
+        :param name: The name of the challenge to find.
+        :return: The challenge with the given name. The default challenge, if the name is "" or ``None``. Otherwise, returns ``None``.
+        """
+        if name in [None, ""]:
+            return self.default_challenge
         for challenge in self.challenges:
             if challenge.name == name:
                 return challenge
-        return self.default_challenge
+        return None
 
     @property
     def number_of_documents(self):
@@ -176,7 +182,7 @@ class Challenge:
         self.default = default
         self.schedule = schedule if schedule else []
 
-    def __str__(self):
+    def __repr__(self):
         return self.name
 
 

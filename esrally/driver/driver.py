@@ -468,12 +468,13 @@ class Sample:
 
 
 def select_challenge(config, t):
-    selected_challenge = config.opts("benchmarks", "challenge")
-    for challenge in t.challenges:
-        if challenge.name == selected_challenge:
-            return challenge
-    raise exceptions.SystemSetupError("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
-                                      "challenges with %s list tracks." % (selected_challenge, t.name, PROGRAM_NAME))
+    challenge_name = config.opts("benchmarks", "challenge", default_value=None)
+    selected_challenge = t.find_challenge_or_default(challenge_name)
+
+    if not selected_challenge:
+        raise exceptions.SystemSetupError("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
+                                          "challenges with %s list tracks." % (challenge_name, t.name, PROGRAM_NAME))
+    return selected_challenge
 
 
 def setup_template(es, template, source=io.FileSource):
