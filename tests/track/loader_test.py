@@ -300,3 +300,192 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(0, len(resulting_track.templates))
         self.assertEqual("test-index", resulting_track.indices[0].name)
         self.assertEqual(0, len(resulting_track.indices[0].types))
+
+    def test_unique_challenge_names(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "test-challenge",
+                    "description": "Some challenge",
+                    "default": True,
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                },
+                {
+                    "name": "test-challenge",
+                    "description": "Another challenge with the same name",
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                }
+
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. Duplicate challenge with name 'test-challenge'.", ctx.exception.args[0])
+
+    def test_not_more_than_one_default_challenge_possible(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "default": True,
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                },
+                {
+                    "name": "another-challenge",
+                    "description": "See if we can sneek it in as another default",
+                    "default": True,
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                }
+
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. Both 'default-challenge' and 'another-challenge' are defined as default challenges. "
+                         "Please define only one of them as default.", ctx.exception.args[0])
+
+    def test_at_least_one_default_challenge(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "challenge",
+                    "description": "Some challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                },
+                {
+                    "name": "another-challenge",
+                    "description": "Another challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                }
+
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. No default challenge specified. Please edit the track and add \"default\": true "
+                         "to one of the challenges challenge, another-challenge.", ctx.exception.args[0])
+
+    def test_exactly_one_default_challenge(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "challenge",
+                    "description": "Some challenge",
+                    "default": True,
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                },
+                {
+                    "name": "another-challenge",
+                    "description": "Another challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                }
+
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual(2, len(resulting_track.challenges))
+        self.assertEqual("challenge", resulting_track.challenges[0].name)
+        self.assertTrue(resulting_track.challenges[0].default)
+        self.assertFalse(resulting_track.challenges[1].default)
+
+    def test_selects_sole_challenge_implicitly_as_default(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "challenge",
+                    "description": "Some challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual(1, len(resulting_track.challenges))
+        self.assertEqual("challenge", resulting_track.challenges[0].name)
+        self.assertTrue(resulting_track.challenges[0].default)

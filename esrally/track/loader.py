@@ -47,8 +47,8 @@ def tracks(cfg):
 def list_tracks(cfg):
     console.println("Available tracks:\n")
     console.println(tabulate.tabulate(
-        tabular_data=[[t.name, t.short_description, ",".join(map(str, t.challenges))] for t in tracks(cfg)],
-        headers=["Name", "Description", "Challenges"]))
+        tabular_data=[[t.name, t.short_description, t.default_challenge, ",".join(map(str, t.challenges))] for t in tracks(cfg)],
+        headers=["Name", "Description", "Default Challenge", "All Challenges"]))
 
 
 def load_track(cfg):
@@ -513,11 +513,23 @@ class TrackSpecificationReader:
     def _create_challenges(self, track_spec):
         ops = self.parse_operations(self._r(track_spec, "operations"))
         challenges = []
+        known_challenge_names = set()
+        default_challenge = None
+        number_of_challenges = len(self._r(track_spec, "challenges"))
         for challenge in self._r(track_spec, "challenges"):
             name = self._r(challenge, "name", error_ctx="challenges")
             description = self._r(challenge, "description", error_ctx=name)
             meta_data = self._r(challenge, "meta", error_ctx=name, mandatory=False)
+            # if we only have one challenge it is treated as default challenge, no matter what the user has specified
+            default = number_of_challenges == 1 or self._r(challenge, "default", error_ctx=name, mandatory=False)
             index_settings = self._r(challenge, "index-settings", error_ctx=name, mandatory=False)
+
+            if default and default_challenge is not None:
+                self._error("Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
+                            % (default_challenge.name, name))
+            if name in known_challenge_names:
+                self._error("Duplicate challenge with name '%s'." % name)
+            known_challenge_names.add(name)
 
             schedule = []
 
@@ -528,11 +540,20 @@ class TrackSpecificationReader:
                     task = self.parse_task(op, ops, name)
                 schedule.append(task)
 
-            challenges.append(track.Challenge(name=name,
-                                              meta_data=meta_data,
-                                              description=description,
-                                              index_settings=index_settings,
-                                              schedule=schedule))
+            new_challenge = track.Challenge(name=name,
+                                            meta_data=meta_data,
+                                            description=description,
+                                            index_settings=index_settings,
+                                            default=default,
+                                            schedule=schedule)
+            if default:
+                default_challenge = new_challenge
+
+            challenges.append(new_challenge)
+
+        if challenges and default_challenge is None:
+            self._error("No default challenge specified. Please edit the track and add \"default\": true to one of the challenges %s."
+                        % ", ".join([c.name for c in challenges]))
         return challenges
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
@@ -584,6 +605,8 @@ class TrackSpecificationReader:
                 logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
                 op_type = op_type_name
             param_source = self._r(op_spec, "param-source", error_ctx="operations", mandatory=False)
+            if op_name in ops:
+                self._error("Duplicate operation with name '%s'." % op_name)
             try:
                 ops[op_name] = track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=op_spec,
                                                param_source=param_source)

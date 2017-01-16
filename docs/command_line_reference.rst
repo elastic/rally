@@ -55,7 +55,7 @@ Selects the track that Rally should run. By default the ``geonames`` track is ru
 ``challenge``
 ~~~~~~~~~~~~~
 
-A track consists of one or more challenges. With this flag you can specify which challenge should be run.
+A track consists of one or more challenges. With this flag you can specify which challenge should be run. If you don't specify a challenge, Rally derives the default challenge itself. To see the default challenge of a track, run ``esrally list tracks``.
 
 ``car``
 ~~~~~~~

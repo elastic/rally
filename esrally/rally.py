@@ -280,9 +280,7 @@ def parse_args():
             default="geonames")
         p.add_argument(
             "--challenge",
-            help="define the challenge to use. List possible challenges for tracks with `%s list tracks`"
-                 " (default: append-no-conflicts)." % PROGRAM_NAME,
-            default="append-no-conflicts")  # optimized for local usage
+            help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
         p.add_argument(
             "--car",
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
@@ -462,7 +460,7 @@ def dispatch_sub_command(cfg, sub_command):
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
-        console.error("Cannot %s. %s." % (sub_command, e))
+        console.error("Cannot %s. %s" % (sub_command, e))
         console.println("")
         print_help_on_errors(cfg)
         return False

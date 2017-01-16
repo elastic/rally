@@ -46,7 +46,9 @@ class Mechanic:
         # TODO dm: Check whether we can remove this completely
         # ensure we don't mix ES installs
         track_name = self._config.opts("benchmarks", "track")
-        challenge_name = self._config.opts("benchmarks", "challenge")
+        # if the user does not specify, we just use a default ourselves (it's just about unique names). For backwards compatibility we will
+        # choose the only possible name where this option can be empty ("append-no-conflicts"). With Rally 0.5.0, this should all be gone.
+        challenge_name = self._config.opts("benchmarks", "challenge", default_value="append-no-conflicts")
         race_paths = paths.Paths(self._config)
         self._config.add(config.Scope.challenge, "system", "challenge.root.dir",
                          race_paths.challenge_root(track_name, challenge_name))

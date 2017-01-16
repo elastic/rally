@@ -105,7 +105,8 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url, meta_data=None, challenges=None, indices=None, templates=None):
+    def __init__(self, name, short_description, description, source_root_url=None, meta_data=None, challenges=None, indices=None,
+                 templates=None):
         """
 
         Creates a new track.
@@ -116,7 +117,8 @@ class Track:
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL the benchmark document files have to be located.
         :param meta_data: An optional dict of meta-data elements to attach to each metrics record. Default: {}.
-        :param challenges: A list of one or more challenges to use.
+        :param challenges: A list of one or more challenges to use. Precondition: If the list is non-empty it contains exactly one element
+        with its ``default`` property set to ``True``.
         :param indices: A list of indices for this track. May be None. One of `indices` or `templates` must be set though.
         :param templates: A list of index templates for this track. May be None. One of `indices` or `templates` must be set though.
         """
@@ -128,6 +130,20 @@ class Track:
         self.challenges = challenges if challenges else []
         self.indices = indices
         self.templates = templates
+
+    @property
+    def default_challenge(self):
+        for challenge in self.challenges:
+            if challenge.default:
+                return challenge
+        # This should only happen if we don't have any challenges
+        return None
+
+    def find_challenge_or_default(self, name):
+        for challenge in self.challenges:
+            if challenge.name == name:
+                return challenge
+        return self.default_challenge
 
     @property
     def number_of_documents(self):
@@ -149,15 +165,15 @@ class Challenge:
     def __init__(self,
                  name,
                  description,
-                 index_settings,
+                 index_settings=None,
+                 default=False,
                  meta_data=None,
                  schedule=None):
-        if schedule is None:
-            schedule = []
         self.name = name
         self.meta_data = meta_data if meta_data else {}
         self.description = description
-        self.index_settings = index_settings
+        self.index_settings = index_settings if index_settings else {}
+        self.default = default
         self.schedule = schedule if schedule else []
 
     def __str__(self):

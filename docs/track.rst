@@ -190,6 +190,7 @@ Each challenge consists of the following properties:
 
 * ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
 * ``description`` (mandatory): A human readable description of the challenge.
+* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need define ``"default": true`` on exactly one challenge.
 * ``index-settings`` (optional): Defines the index settings of the benchmark candidate when an index is created. Note that these settings are only applied if the index is auto-managed.
 * ``schedule`` (mandatory): Defines the concrete execution order of operations. It is described in more detail below.
 

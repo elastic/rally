@@ -107,8 +107,9 @@ The track repository is managed by git, so ensure that you are on the ``master``
       ],
       "challenges": [
         {
-          "name": "append-no-conflicts",
+          "name": "append-only",
           "description": "",
+          "default": true,
           "index-settings": {
             "index.number_of_replicas": 0
           },
@@ -138,7 +139,7 @@ Finally, you need to commit your changes: ``git commit -a -m "Add geonames track
 
 A few things to note:
 
-* Rally assumes that the challenge that should be run by default is called "append-no-conflicts". If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
+* If you define multiple challenges, Rally will run the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 * You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
 * The numbers below the ``types`` property are needed to verify integrity and provide progress reports.
 
@@ -158,11 +159,11 @@ When you invoke ``esrally list tracks``, the new track should now appear::
                     /____/
     Available tracks:
     
-    Name        Description                                               Challenges
-    ----------  --------------------------------------------------------  -------------------
-    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)     append-no-conflicts
+    Name        Description                                                           Default Challenge    All Challenges
+    ----------  --------------------------------------------------------------------  -------------------  --------------
+    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)                 append-only          append-only
 
-Congratulations, you have created your first track! You can test it with ``esrally --track=geonames --offline`` (or whatever the name of your track is) and run specific challenges with ``esrally --track=geonames --challenge=append-fast-with-conflicts --offline``.
+Congratulations, you have created your first track! You can test it with ``esrally --track=geonames --offline`` (or whatever the name of your track is) and run specific challenges with ``esrally --track=geonames --challenge=append-only --offline``.
 
 If you want to share your track with the community, please read on.
 

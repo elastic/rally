@@ -192,7 +192,7 @@ class SummaryReporter:
             print_header("--------------------------------------------------")
             print_internal("")
 
-        selected_challenge = self._config.opts("benchmarks", "challenge")
+        selected_challenge = t.find_challenge_or_default(self._config.opts("benchmarks", "challenge"))
         for challenge in t.challenges:
             if challenge.name == selected_challenge:
                 stats = Stats(self._metrics_store, challenge, self._lap)

@@ -213,6 +213,10 @@
             "type": "string",
             "description": "A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users."
           },
+          "default": {
+            "type": "boolean",
+            "description": "If true, Rally should select this challenge as the default challenge if the user does not specify one on the command line."
+          },
           "meta": {
             "type": "object",
             "description": "Meta-information which will be added to each metrics-record of this challenge."
