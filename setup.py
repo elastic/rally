@@ -5,6 +5,7 @@ except ImportError:
     print("*** Could not find setuptools. Did you install pip3? *** \n\n")
     raise
 
+
 def str_from_file(name):
     with open(join(dirname(__file__), name)) as f:
         return f.read().strip()
@@ -25,7 +26,7 @@ install_requires = [
     "jsonschema==2.5.1",
     "Jinja2==2.8",
     # remote messaging
-    "thespian==3.5.2",
+    "thespian==3.6.0",
     # always use the latest version, these are certificate files...
     "certifi"
 ]
