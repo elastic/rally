@@ -67,11 +67,9 @@ Next we need a mapping file for our documents. For details on how to write a map
 The track repository is managed by git, so ensure that you are on the ``master`` branch by running ``git checkout master``. Then add a new JSON file right next to the mapping file. The file has to be called "track.json" and is the actual track specification ::
 
     {
-      "meta": {
-        "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
-        "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
-        "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
-      },
+      "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+      "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
       "indices": [
         {
           "name": "geonames",
@@ -90,12 +88,12 @@ The track repository is managed by git, so ensure that you are on the ``master``
       "operations": [
         {
           "name": "index",
-          "type": "index",
+          "operation-type": "index",
           "bulk-size": 5000
         },
         {
           "name": "force-merge",
-          "type": "force-merge"
+          "operation-type": "force-merge"
         },
         {
           "name": "query-match-all",
@@ -105,7 +103,7 @@ The track repository is managed by git, so ensure that you are on the ``master``
               "match_all": {}
             }
           }
-        },
+        }
       ],
       "challenges": [
         {
