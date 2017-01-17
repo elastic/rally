@@ -571,7 +571,11 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "logging.output", args.logging)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "benchmarks", "track", args.track)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
+    # TODO dm: Workaround to ensure there is always a default challenge. Should be gone with 0.5.0
+    if args.challenge:
+        cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
+    else:
+        cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", "append-no-conflicts")
     cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
     cfg.add(config.Scope.applicationOverride, "benchmarks", "laps", args.laps)
