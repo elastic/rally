@@ -295,9 +295,12 @@ def post_process_for_test_mode(t):
             if task.iterations > 1:
                 logger.info("Resetting measurement iterations to 1 for [%s]" % str(task))
                 task.iterations = 1
-            if task.warmup_time_period is not None:
-                logger.info("Resetting warmup time period for [%s] to 1 second." % str(task))
-                task.warmup_time_period = 1
+            if task.warmup_time_period is not None and task.warmup_time_period > 0:
+                logger.info("Resetting warmup time period for [%s] to 0.01 second." % str(task))
+                task.warmup_time_period = 0
+            if task.time_period is not None and task.time_period > 10:
+                logger.info("Resetting time period for [%s] to 10 second." % str(task))
+                task.warmup_time_period = 10
     return t
 
 
