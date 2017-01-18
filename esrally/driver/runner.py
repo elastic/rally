@@ -1,8 +1,6 @@
 import types
 import logging
 
-import elasticsearch
-
 from esrally import exceptions, track
 
 logger = logging.getLogger("rally.driver")
@@ -70,6 +68,7 @@ class BulkIndex(Runner):
     It expects the parameter hash to contain a key "body" containing all documents for the current bulk request.
 
     """
+
     def __init__(self):
         super().__init__()
 
@@ -111,8 +110,10 @@ class ForceMerge(Runner):
     """
     Runs a force merge operation against Elasticsearch.
     """
+
     def __call__(self, es, params):
         logger.info("Force merging all indices.")
+        import elasticsearch
         try:
             es.indices.forcemerge(index="_all")
         except elasticsearch.TransportError as e:
@@ -130,6 +131,7 @@ class IndicesStats(Runner):
     """
     Gather index stats for all indices.
     """
+
     def __call__(self, es, params):
         es.indices.stats(metric="_all")
 
@@ -137,11 +139,11 @@ class IndicesStats(Runner):
         return "indices-stats"
 
 
-
 class NodeStats(Runner):
     """
     Gather node stats for all nodes.
     """
+
     def __call__(self, es, params):
         es.nodes.stats(metric="_all")
 
@@ -220,5 +222,3 @@ register_runner(track.OperationType.ForceMerge.name, ForceMerge())
 register_runner(track.OperationType.IndicesStats.name, IndicesStats())
 register_runner(track.OperationType.NodesStats.name, NodeStats())
 register_runner(track.OperationType.Search.name, Query())
-
-

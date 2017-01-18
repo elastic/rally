@@ -89,7 +89,7 @@ This will download Elasticsearch 5.0.0 and run Rally's default track against it.
 Next steps
 ----------
 
-Now you can check :doc:`how to run benchmarks </race>` or :doc:`how to define your own benchmarks </adding_tracks>`.
+Now you can check :doc:`how to run benchmarks </race>` or :doc:`how to define your own benchmarks </adding_tracks>`. Be sure to check also the available :doc:`recipes </recipes>` to help you understand how to solve specific problems in Rally.
 
 Also run ``esrally --help`` to see what options are available and keep the :doc:`command line reference </command_line_reference>` handy for more detailed explanations of each option.
 
