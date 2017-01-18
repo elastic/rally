@@ -1,3 +1,14 @@
+### 0.5.0
+
+The only change in 0.5.0 is the ability to provision a remote cluster. As this change is by itself already very large, we only support provisioning single-node clusters in this release and will add the ability to provision multi-node clusters in a later release.
+
+To use remote provisioning, you need to start a separate daemon process, called `esrallyd`.
+
+#### Breaking changes in 0.5.0
+
+* The logging file is not maintained per race anymore but is instead located at ~/.rally/logs/rally.log and is rotated once per day.
+
+
 ### 0.4.0
 
 #### Breaking changes in 0.4.0

@@ -1,27 +1,26 @@
-import os
 import logging
+import os
 import shutil
 import socket
 
-import urllib3
 import certifi
-
+import urllib3
 from esrally import exceptions
 
-HTTP = None
+__HTTP = None
 
 logger = logging.getLogger("rally.net")
 
 
 def init():
-    global HTTP
+    global __HTTP
     proxy_url = os.getenv("http_proxy")
     if proxy_url and len(proxy_url) > 0:
         logger.info("Rally connects via proxy URL [%s] to the Internet (picked up from the environment variable [http_proxy])." % proxy_url)
-        HTTP = urllib3.ProxyManager(proxy_url, cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
+        __HTTP = urllib3.ProxyManager(proxy_url, cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
     else:
         logger.info("Rally connects directly to the Internet (no proxy support).")
-        HTTP = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
+        __HTTP = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
 
 
 def download(url, local_path, expected_size_in_bytes=None):
@@ -34,8 +33,8 @@ def download(url, local_path, expected_size_in_bytes=None):
     """
     tmp_data_set_path = local_path + ".tmp"
     try:
-        with HTTP.request("GET", url, preload_content=False, retries=10,
-                          timeout=urllib3.Timeout(connect=45, read=240)) as r, open(tmp_data_set_path, "wb") as out_file:
+        with __http().request("GET", url, preload_content=False, retries=10,
+                              timeout=urllib3.Timeout(connect=45, read=240)) as r, open(tmp_data_set_path, "wb") as out_file:
             shutil.copyfileobj(r, out_file)
     except:
         if os.path.isfile(tmp_data_set_path):
@@ -52,7 +51,7 @@ def download(url, local_path, expected_size_in_bytes=None):
 
 
 def retrieve_content_as_string(url):
-    with HTTP.request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
+    with __http().request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
         return response.read().decode("utf-8")
 
 
@@ -64,3 +63,8 @@ def has_internet_connection():
     except OSError:
         return False
 
+
+def __http():
+    if not __HTTP:
+        init()
+    return __HTTP

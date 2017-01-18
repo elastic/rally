@@ -24,6 +24,13 @@ def cpu_model():
     return cpuinfo.get_cpu_info()["brand"]
 
 
+def total_memory():
+    """
+    :return: total available memory in bytes
+    """
+    return psutil.virtual_memory().total
+
+
 def os_name():
     return platform.uname().system
 

@@ -10,6 +10,14 @@ def bytes_to_gb(b):
     return b / 1024.0 / 1024.0 / 1024.0 if b else b
 
 
+def mb_to_bytes(mb):
+    return int(mb * 1024 * 1024) if mb else mb
+
+
+def gb_to_bytes(gb):
+    return gb * 1024 * 1024 * 1024 if gb else gb
+
+
 def seconds_to_ms(s):
     return s * 1000 if s else s
 

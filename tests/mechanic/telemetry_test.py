@@ -15,13 +15,13 @@ def create_config():
     cfg.add(config.Scope.application, "reporting", "datastore.user", "")
     cfg.add(config.Scope.application, "reporting", "datastore.password", "")
     # only internal devices are active
-    cfg.add(config.Scope.application, "telemetry", "devices", [])
+    cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
     return cfg
 
 
 class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
-    def __init__(self, cfg, metrics_store, mock_env):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, mock_env):
+        super().__init__()
         self.mock_env = mock_env
 
     def instrument_env(self, car, candidate_id):
@@ -31,20 +31,17 @@ class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
 class TelemetryTests(TestCase):
     def test_merges_options_set_by_different_devices(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "telemetry", "devices", "jfr")
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", "jfr")
         cfg.add(config.Scope.application, "system", "challenge.root.dir", "challenge-root")
         cfg.add(config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
 
-        # we don't need one for this test
-        metrics_store = None
-
         devices = [
-            MockTelemetryDevice(cfg, metrics_store, {"ES_JAVA_OPTS": "-Xms256M"}),
-            MockTelemetryDevice(cfg, metrics_store, {"ES_JAVA_OPTS": "-Xmx512M"}),
-            MockTelemetryDevice(cfg, metrics_store, {"ES_NET_HOST": "127.0.0.1"})
+            MockTelemetryDevice({"ES_JAVA_OPTS": "-Xms256M"}),
+            MockTelemetryDevice({"ES_JAVA_OPTS": "-Xmx512M"}),
+            MockTelemetryDevice({"ES_NET_HOST": "127.0.0.1"})
         ]
 
-        t = telemetry.Telemetry(cfg=cfg, devices=devices)
+        t = telemetry.Telemetry(enabled_devices=None, devices=devices)
 
         default_car = car.Car(name="default-car")
         opts = t.instrument_candidate_env(default_car, "default-node")
@@ -93,7 +90,7 @@ class MergePartsDeviceTests(TestCase):
             mock.mock_open(read_data=log_file).return_value
         ]
         metrics_store = metrics.EsMetricsStore(self.cfg)
-        merge_parts_device = telemetry.MergeParts(self.cfg, metrics_store)
+        merge_parts_device = telemetry.MergeParts(metrics_store, node_log_dir="/var/log")
         merge_parts_device.on_benchmark_stop()
 
         metrics_store_put_value.assert_called_with("merge_parts_total_time_doc_values", 350, "ms")
@@ -172,9 +169,9 @@ class EnvironmentInfoTests(TestCase):
 
         client = Client(nodes=SubClient(nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
-        env_device = telemetry.EnvironmentInfo(self.cfg, client, metrics_store)
+        env_device = telemetry.EnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], t))
+        t.attach_to_cluster(cluster.Cluster([], [], t))
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
@@ -204,7 +201,7 @@ class EnvironmentInfoTests(TestCase):
 
         metrics_store = metrics.EsMetricsStore(self.cfg)
         node = cluster.Node(None, "io", "rally0", None)
-        env_device = telemetry.EnvironmentInfo(self.cfg, None, metrics_store)
+        env_device = telemetry.EnvironmentInfo(None, metrics_store)
         env_device.attach_to_node(node)
 
         calls = [
@@ -265,9 +262,9 @@ class ExternalEnvironmentInfoTests(TestCase):
         }
         client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
-        env_device = telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store)
-        t = telemetry.Telemetry(self.cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], t))
+        env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
+        t = telemetry.Telemetry(devices=[env_device])
+        t.attach_to_cluster(cluster.Cluster([], [], t))
 
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "253032b"),
@@ -320,9 +317,9 @@ class ExternalEnvironmentInfoTests(TestCase):
         }
         client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
-        env_device = telemetry.ExternalEnvironmentInfo(self.cfg, client, metrics_store)
+        env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], t))
+        t.attach_to_cluster(cluster.Cluster([], [], t))
 
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "253032b"),
@@ -367,7 +364,7 @@ class NodeStatsTests(TestCase):
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.NodeStats(cfg, client, metrics_store)
+        device = telemetry.NodeStats(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_start()
         # now we'd need to change the node stats response
@@ -441,7 +438,7 @@ class IndexStatsTests(TestCase):
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexStats(cfg, client, metrics_store)
+        device = telemetry.IndexStats(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -472,11 +469,9 @@ class IndexSizeTests(TestCase):
         get_size.return_value = 2048
 
         cfg = create_config()
-        cfg.add(config.Scope.benchmark, "provisioning", "local.data.paths", ["/var/elasticsearch/data"])
-
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(cfg, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[device])
+        device = telemetry.IndexSize(["/var/elasticsearch/data"], metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
         t.detach_from_cluster(None)
@@ -496,11 +491,10 @@ class IndexSizeTests(TestCase):
         get_size.return_value = 2048
 
         cfg = create_config()
-        # no data path!
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(cfg, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[device])
+        device = telemetry.IndexSize(data_paths=[], metrics_store=metrics_store)
+        t = telemetry.Telemetry(devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
         t.detach_from_cluster(None)

@@ -177,7 +177,7 @@ class EsMetricsTests(TestCase):
     def test_put_value_with_meta_info(self):
         throughput = 5000
         # add a user-defined tag
-        self.cfg.add(config.Scope.application, "system", "user.tag", "intention:testing")
+        self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing")
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
 
@@ -367,7 +367,7 @@ class EsRaceStoreTests(TestCase):
     def setUp(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
-        self.cfg.add(config.Scope.application, "meta", "time.start", EsRaceStoreTests.TRIAL_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.TRIAL_TIMESTAMP)
         self.race_store = metrics.EsRaceStore(self.cfg,
                                               client_factory_class=MockClientFactory,
                                               index_template_provider_class=DummyIndexTemplateProvider,
@@ -376,14 +376,14 @@ class EsRaceStoreTests(TestCase):
         self.es_mock = self.race_store.client
 
     def test_store_race(self):
-        self.cfg.add(config.Scope.application, "system", "pipeline", "unittest-pipeline")
-        self.cfg.add(config.Scope.application, "system", "user.tag", "")
-        self.cfg.add(config.Scope.application, "benchmarks", "challenge", "index-and-search")
-        self.cfg.add(config.Scope.application, "benchmarks", "car", "defaults")
-        self.cfg.add(config.Scope.application, "benchmarks", "laps", 1)
+        self.cfg.add(config.Scope.application, "race", "pipeline", "unittest-pipeline")
+        self.cfg.add(config.Scope.application, "race", "user.tag", "")
+        self.cfg.add(config.Scope.application, "track", "challenge.name", "index-and-search")
+        self.cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
+        self.cfg.add(config.Scope.application, "race", "laps", 1)
         self.cfg.add(config.Scope.application, "launcher", "external.target.hosts", [{"host": "localhost", "port": "9200"}])
-        self.cfg.add(config.Scope.application, "source", "revision", "latest")
-        self.cfg.add(config.Scope.application, "source", "distribution.version", "5.0.0")
+        self.cfg.add(config.Scope.application, "mechanic", "source.revision", "latest")
+        self.cfg.add(config.Scope.application, "mechanic", "distribution.version", "5.0.0")
 
         index = "tests"
         type = "test-type"
@@ -399,7 +399,7 @@ class EsRaceStoreTests(TestCase):
                         challenges=[
                             track.Challenge(name="index-and-search", description="Index & Search", index_settings=None, schedule=schedule)
                         ])
-        self.race_store.store_race(t)
+        self.race_store.store_race(t, [{"host": "localhost", "port": "9200"}], "latest", "5.0.0")
 
         expected_doc = {
             "environment": "unittest-env",

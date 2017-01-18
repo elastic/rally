@@ -69,7 +69,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 6
+    CURRENT_CONFIG_VERSION = 7
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -78,6 +78,7 @@ class Config:
     """
 
     def __init__(self, config_name=None, config_file_class=ConfigFile):
+        self.name = config_name
         self.config_file = config_file_class(config_name)
         self._opts = {}
         self._clear_config()
@@ -92,6 +93,18 @@ class Config:
         :param value: The associated value.
         """
         self._opts[self._k(scope, section, key)] = value
+
+    def add_all(self, source, section):
+        """
+        Adds all config items within the given `section` from the `source` config object.
+
+        :param source: The source config object.
+        :param section: A section in the source config object. Ignored if it does not exist.
+        """
+        for k, v in source._opts.items():
+            scope, source_section, key = k
+            if source_section == section:
+                self.add(scope, source_section, key, v)
 
     def opts(self, section, key, default_value=None, mandatory=True):
         """
@@ -132,12 +145,11 @@ class Config:
         # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change
         # them either
         self._opts = {
-            "source::distribution.dir": "distributions",
-            "benchmarks::metrics.log.dir": "telemetry",
-            "benchmarks::track.repository.dir": "tracks",
-            "benchmarks::track.default.repository": "default",
-            "provisioning::node.name.prefix": "rally-node",
-            "provisioning::node.http.port": 39200,
+            (Scope.application, "source", "distribution.dir"): "distributions",
+            (Scope.application, "benchmarks", "track.repository.dir"): "tracks",
+            (Scope.application, "benchmarks", "track.default.repository"): "default",
+            (Scope.application, "provisioning", "node.name.prefix"): "rally-node",
+            (Scope.application, "provisioning", "node.http.port"): 39200,
         }
 
     def _fill_from_config_file(self, config):
@@ -159,17 +171,16 @@ class Config:
         if self._k(start_from, section, key) in self._opts:
             return start_from
         elif start_from == Scope.application:
-            return None
+            return Scope.application
         else:
             # continue search in the enclosing scope
             return self._resolve_scope(section, key, Scope(start_from.value - 1))
 
     def _k(self, scope, section, key):
-        # keep global config keys a bit shorter / nicer for now
         if scope is None or scope == Scope.application:
-            return "%s::%s" % (section, key)
+            return Scope.application, section, key
         else:
-            return "%s::%s::%s" % (scope.name, section, key)
+            return scope, section, key
 
 
 class ConfigFactory:
@@ -290,7 +301,6 @@ class ConfigFactory:
 
         config["system"] = {}
         config["system"]["root.dir"] = root_dir
-        config["system"]["log.root.dir"] = "logs"
         config["system"]["env.name"] = env_name
 
         if benchmark_from_sources:
@@ -300,9 +310,6 @@ class ConfigFactory:
 
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
-
-        config["provisioning"] = {}
-        config["provisioning"]["local.install.dir"] = "install"
 
         config["runtime"] = {}
         config["runtime"]["java8.home"] = jdk8_home
@@ -508,6 +515,13 @@ def migrate(config_file, current_version, target_version, out=print):
         config["defaults"] = {}
         config["defaults"]["preserve_benchmark_candidate"] = str(False)
         current_version = 6
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 6 and target_version > current_version:
+        # Remove obsolete settings
+        config.pop("provisioning")
+        config["system"].pop("log.root.dir")
+        current_version = 7
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

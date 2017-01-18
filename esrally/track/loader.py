@@ -34,7 +34,7 @@ def tracks(cfg):
     """
     repo = TrackRepository(cfg)
     reader = TrackFileReader(cfg)
-    distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
+    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     data_root = cfg.opts("benchmarks", "local.dataset.cache")
     return [reader.read(track_name,
                         repo.track_file(distribution_version, track_name),
@@ -59,15 +59,15 @@ def load_track(cfg):
     :param cfg: The config object. It contains the name of the track to load.
     :return: The loaded track.
     """
-    track_name = cfg.opts("benchmarks", "track")
+    track_name = cfg.opts("track", "track.name")
     try:
         repo = TrackRepository(cfg)
         reader = TrackFileReader(cfg)
-        distribution_version = cfg.opts("source", "distribution.version", mandatory=False)
+        distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         data_root = cfg.opts("benchmarks", "local.dataset.cache")
         full_track = reader.read(track_name, repo.track_file(distribution_version, track_name), repo.track_dir(track_name),
                                  "%s/%s" % (data_root, track_name.lower()))
-        if cfg.opts("benchmarks", "test.mode"):
+        if cfg.opts("track", "test.mode.enabled"):
             return post_process_for_test_mode(full_track)
         else:
             return full_track
@@ -78,7 +78,7 @@ def load_track(cfg):
 
 
 def load_track_plugins(cfg, register_runner):
-    track_name = cfg.opts("benchmarks", "track")
+    track_name = cfg.opts("track", "track.name")
     # TODO #71: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
     repo = TrackRepository(cfg, fetch=False)
     plugin_reader = TrackPluginReader(register_runner)
@@ -195,7 +195,7 @@ class TrackRepository:
 
     def __init__(self, cfg, fetch=True):
         self.cfg = cfg
-        self.name = cfg.opts("system", "track.repository")
+        self.name = cfg.opts("track", "repository.name")
         self.offline = cfg.opts("system", "offline.mode")
         # If no URL is found, we consider this a local only repo (but still require that it is a git repo)
         self.url = cfg.opts("tracks", "%s.url" % self.name, mandatory=False)
@@ -245,7 +245,7 @@ class TrackRepository:
                 else:
                     msg = "Could not find track data remotely for distribution version [%s]. " \
                           "Trying to find track data locally." % distribution_version
-                    logger.warn(msg)
+                    logger.warning(msg)
             branch = versions.best_match(git.branches(self.tracks_dir, remote=False), distribution_version)
             if branch:
                 logger.info("Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
@@ -311,7 +311,7 @@ class TrackFileReader:
 
     def __init__(self, cfg):
         self.cfg = cfg
-        track_schema_file = "%s/resources/track-schema.json" % (self.cfg.opts("system", "rally.root"))
+        track_schema_file = "%s/resources/track-schema.json" % (self.cfg.opts("node", "rally.root"))
         self.track_schema = json.loads(open(track_schema_file).read())
         self.read_track = TrackSpecificationReader()
 

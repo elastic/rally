@@ -1,16 +1,17 @@
 import argparse
 import datetime
 import logging
+import logging.handlers
 import os
 import shutil
 import sys
 import time
 
 import pkg_resources
-import thespian.actors
-from esrally import config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME, DOC_LINK
-from esrally.utils import io, convert, git, process, console, net
+
+from esrally import actor, config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME, DOC_LINK
 from esrally.mechanic import car, telemetry
+from esrally.utils import io, convert, git, process, console, net
 
 __version__ = pkg_resources.require("esrally")[0].version
 
@@ -55,15 +56,12 @@ $$$$$$$$$$""""           ""$$$$$$$$$$$"
 '''
 
 
-def rally_root_path():
-    return os.path.dirname(os.path.realpath(__file__))
-
-
 def version():
     release = __version__
+    # noinspection PyBroadException
     try:
-        if git.is_working_copy(io.normalize_path("%s/.." % rally_root_path())):
-            revision = git.head_revision(rally_root_path())
+        if git.is_working_copy(io.normalize_path("%s/.." % paths.rally_root())):
+            revision = git.head_revision(paths.rally_root())
             return "%s (git revision: %s)" % (release, revision.strip())
     except BaseException:
         pass
@@ -76,30 +74,20 @@ def pre_configure_logging():
     logging.basicConfig(level=logging.INFO)
 
 
-def log_file_path(cfg):
-    log_dir = paths.Paths(cfg).log_root()
-    node_name = cfg.opts("system", "node.name", mandatory=False)
-    if node_name:
-        return "%s/rally_out_%s.log" % (log_dir, node_name)
-    else:
-        return "%s/rally_out.log" % log_dir
+def application_log_file_path():
+    log_dir = "%s/.rally/logs" % os.path.expanduser("~")
+    return "%s/rally_out.log" % log_dir
 
 
 def configure_logging(cfg):
-    # Even if we don't log to a file, other parts of the application rely on this path to exist -> enforce
-    log_file = log_file_path(cfg)
-    log_dir = os.path.dirname(log_file)
-    io.ensure_dir(log_dir)
-    cfg.add(config.Scope.application, "system", "log.dir", log_dir)
-
     logging_output = cfg.opts("system", "logging.output")
 
     if logging_output == "file":
+        log_file = application_log_file_path()
+        log_dir = os.path.dirname(log_file)
+        io.ensure_dir(log_dir)
         console.info("Writing logs to %s" % log_file)
-        # there is an old log file lying around -> backup
-        if os.path.exists(log_file):
-            os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
-        ch = logging.FileHandler(filename=log_file, mode="a")
+        ch = logging.handlers.RotatingFileHandler(filename=log_file, maxBytes=convert.mb_to_bytes(20), backupCount=5, encoding="UTF-8")
     else:
         ch = logging.StreamHandler(stream=sys.stdout)
 
@@ -114,65 +102,7 @@ def configure_logging(cfg):
         logging.root.removeHandler(handler)
 
     logging.root.addHandler(ch)
-    logging.getLogger("elasticsearch").setLevel(logging.WARN)
-
-
-def configure_actor_logging(cfg):
-    class ActorLogFilter(logging.Filter):
-        def filter(self, logrecord):
-            return "actorAddress" in logrecord.__dict__
-
-    class NotActorLogFilter(logging.Filter):
-        def filter(self, logrecord):
-            return "actorAddress" not in logrecord.__dict__
-
-    log_dir = paths.Paths(cfg).log_root()
-
-    logging_output = cfg.opts("system", "logging.output")
-
-    if logging_output == "file":
-        actor_log_handler = {"class": "logging.FileHandler", "filename": "%s/rally-actors.log" % log_dir}
-        actor_messages_handler = {"class": "logging.FileHandler", "filename": "%s/rally-actor-messages.log" % log_dir}
-    else:
-        actor_log_handler = {"class": "logging.StreamHandler", "stream": sys.stdout}
-        actor_messages_handler = {"class": "logging.StreamHandler", "stream": sys.stdout}
-
-    actor_log_handler["formatter"] = "normal"
-    actor_log_handler["filters"] = ["notActorLog"]
-    actor_log_handler["level"] = logging.INFO
-
-    actor_messages_handler["formatter"] = "actor"
-    actor_messages_handler["filters"] = ["isActorLog"]
-    actor_messages_handler["level"] = logging.INFO
-
-    return {
-        "version": 1,
-        "formatters": {
-            "normal": {
-                "format": "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s"
-            },
-            "actor": {
-                "format": "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(actorAddress)s => %(message)s"
-            }
-        },
-        "filters": {
-            "isActorLog": {
-                "()": ActorLogFilter
-            },
-            "notActorLog": {
-                "()": NotActorLogFilter
-            }
-        },
-        "handlers": {
-            "h1": actor_log_handler,
-            "h2": actor_messages_handler
-        },
-        "loggers": {
-            "": {
-                "handlers": ["h1", "h2"], "level": logging.INFO
-            }
-        }
-    }
+    logging.getLogger("elasticsearch").setLevel(logging.WARNING)
 
 
 def parse_args():
@@ -290,7 +220,7 @@ def parse_args():
             "--target-hosts",
             help="define a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
                  "(default: localhost:9200).",
-            default="localhost:9200")
+            default="")  # actually the default is pipeline specific and it is set later
         p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
@@ -423,7 +353,7 @@ def ensure_configuration_present(cfg, args, sub_command):
 def list(cfg):
     what = cfg.opts("system", "list.config.option")
     if what == "telemetry":
-        telemetry.list_telemetry(cfg)
+        telemetry.list_telemetry()
     elif what == "tracks":
         track.list_tracks(cfg)
     elif what == "pipelines":
@@ -440,11 +370,52 @@ def print_help_on_errors(cfg):
     heading = "Getting further help:"
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
-    console.println("* Check the log file at %s for errors." % log_file_path(cfg))
+    console.println("* Check the log file at %s for errors." % application_log_file_path())
     console.println("* Read the documentation at %s" % console.format.link(DOC_LINK))
     console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
     console.println("* Raise an issue at %s and include the log file in %s." %
-                    (console.format.link("https://github.com/elastic/rally/issues"), log_file_path(cfg)))
+                    (console.format.link("https://github.com/elastic/rally/issues"), application_log_file_path()))
+
+
+def race(cfg):
+    already_running = actor.actor_system_already_running()
+    try:
+        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
+        # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
+        cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
+    except RuntimeError as e:
+        logger.exception("Could not bootstrap actor system.")
+        if str(e) == "Unable to determine valid external socket address.":
+            console.warn("Could not determine a socket address. Are you running without any network?", logger=logger)
+            actors = actor.bootstrap_actor_system(system_base="multiprocQueueBase")
+        else:
+            raise
+    try:
+        racecontrol.run(cfg)
+    finally:
+        # We only shutdown the actor system if it was not already running before
+        if not already_running:
+            shutdown_complete = False
+            times_interrupted = 0
+            while not shutdown_complete and times_interrupted < 2:
+                try:
+                    logger.info("Attempting to shutdown internal actor system.")
+                    actors.shutdown()
+                    shutdown_complete = True
+                    logger.info("Shutdown completed.")
+                except KeyboardInterrupt:
+                    times_interrupted += 1
+                    logger.warning("User interrupted shutdown of internal actor system.")
+                    console.info("Please wait a moment for Rally's internal components to shutdown.")
+            if not shutdown_complete and times_interrupted > 0:
+                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
+                console.println("")
+                console.warn("Terminating now at the risk of leaving child processes behind.")
+                console.println("")
+                console.warn("The next race may fail due to an unclean shutdown.")
+                console.println("")
+                console.println(SKULL)
+                console.println("")
 
 
 def dispatch_sub_command(cfg, sub_command):
@@ -454,7 +425,7 @@ def dispatch_sub_command(cfg, sub_command):
         elif sub_command == "list":
             list(cfg)
         elif sub_command == "race":
-            racecontrol.run(cfg)
+            race(cfg)
         else:
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
         return True
@@ -528,18 +499,6 @@ def convert_hosts(configured_host_list):
         raise exceptions.SystemSetupError(msg)
 
 
-def bootstrap_actor_system(cfg, system_base="multiprocTCPBase"):
-    try:
-        return thespian.actors.ActorSystem(system_base, logDefs=configure_actor_logging(cfg))
-    except thespian.actors.ActorSystemException:
-        logger.exception("Could not initialize internal actor system. Terminating.")
-        console.error("Could not initialize successfully.\n")
-        console.error("Are there are still processes from a previous race?")
-        console.error("Please check and terminate related Python processes before running Rally again.\n")
-        print_help_on_errors(cfg)
-        sys.exit(70)
-
-
 def main():
     start = time.time()
     # Early init of console output so we start to show everything consistently.
@@ -554,47 +513,56 @@ def main():
     cfg = config.Config(config_name=args.configuration_name)
     sub_command = derive_sub_command(args, cfg)
     ensure_configuration_present(cfg, args, sub_command)
-    # Add global meta info derived by rally itself
-    cfg.add(config.Scope.application, "meta", "time.start", args.effective_start_date)
-    cfg.add(config.Scope.application, "system", "rally.root", rally_root_path())
-    cfg.add(config.Scope.application, "system", "rally.cwd", os.getcwd())
-    cfg.add(config.Scope.application, "system", "invocation.root.dir", paths.Paths(cfg).invocation_root())
-    # Add command line config
-    cfg.add(config.Scope.applicationOverride, "source", "revision", args.revision)
-    cfg.add(config.Scope.applicationOverride, "source", "distribution.version", args.distribution_version)
-    cfg.add(config.Scope.applicationOverride, "source", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "system", "pipeline", args.pipeline)
-    cfg.add(config.Scope.applicationOverride, "system", "track.repository", args.track_repository)
+
+    cfg.add(config.Scope.application, "system", "time.start", args.effective_start_date)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
+
+    # per node?
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
-    cfg.add(config.Scope.applicationOverride, "system", "user.tag", args.user_tag)
     cfg.add(config.Scope.applicationOverride, "system", "logging.output", args.logging)
-    cfg.add(config.Scope.applicationOverride, "telemetry", "devices", csv_to_list(args.telemetry))
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "track", args.track)
-    # TODO dm: Workaround to ensure there is always a default challenge. Should be gone with 0.5.0
-    if args.challenge:
-        cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", args.challenge)
-    else:
-        cfg.add(config.Scope.applicationOverride, "benchmarks", "challenge", "append-no-conflicts")
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "car", args.car)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "laps", args.laps)
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "test.mode", args.test_mode)
-    cfg.add(config.Scope.applicationOverride, "provisioning", "datapaths", csv_to_list(args.data_paths))
-    cfg.add(config.Scope.applicationOverride, "provisioning", "install.preserve", convert.to_bool(args.preserve_install))
-    cfg.add(config.Scope.applicationOverride, "launcher", "external.target.hosts", convert_hosts(csv_to_list(args.target_hosts)))
-    cfg.add(config.Scope.applicationOverride, "launcher", "client.options", kv_to_map(csv_to_list(args.client_options)))
-    cfg.add(config.Scope.applicationOverride, "report", "reportformat", args.report_format)
-    cfg.add(config.Scope.applicationOverride, "report", "reportfile", args.report_file)
+
+    # Local config per node
+    cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+    cfg.add(config.Scope.application, "node", "rally.cwd", os.getcwd())
+
+    cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+    #TODO dm: Consider renaming this one. It's used by different modules
+    cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
+    cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.name", args.car)
+    cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
     if args.override_src_dir is not None:
         cfg.add(config.Scope.applicationOverride, "source", "local.src.dir", args.override_src_dir)
 
+    cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
+    cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
+    cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
+
+    cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
+    cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+    cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
+    cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
+
+    cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
+    cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
+    if sub_command == "compare":
+        cfg.add(config.Scope.applicationOverride, "reporting", "baseline.timestamp", args.baseline)
+        cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
+
+    ################################
+    # new section name: driver
+    ################################
+    cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
+    # Also needed by mechanic (-> telemetry) - duplicate by module?
+    cfg.add(config.Scope.applicationOverride, "client", "hosts", convert_hosts(csv_to_list(args.target_hosts)))
+    cfg.add(config.Scope.applicationOverride, "client", "options", kv_to_map(csv_to_list(args.client_options)))
+
+    # split by component?
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-    if sub_command == "compare":
-        cfg.add(config.Scope.applicationOverride, "report", "comparison.baseline.timestamp", args.baseline)
-        cfg.add(config.Scope.applicationOverride, "report", "comparison.contender.timestamp", args.contender)
 
     configure_logging(cfg)
     logger.info("Rally version [%s]" % version())
@@ -609,48 +577,14 @@ def main():
         else:
             logger.info("Detected a working Internet connection.")
 
-    # Kill any lingering Rally processes before attempting to continue - the actor system needs to a singleton on this machine
+    # Kill any lingering Rally processes before attempting to continue - the actor system needs to be a singleton on this machine
     # noinspection PyBroadException
     try:
         process.kill_running_rally_instances()
     except BaseException:
         logger.exception("Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
 
-    try:
-        actors = bootstrap_actor_system(cfg)
-    except RuntimeError as e:
-        logger.exception("Could not bootstrap actor system.")
-        if str(e) == "Unable to determine valid external socket address.":
-            console.warn("Could not determine a socket address. Are you running without any network?", logger=logger)
-            actors = bootstrap_actor_system(cfg, system_base="multiprocQueueBase")
-        else:
-            raise
-
-    success = False
-    try:
-        success = dispatch_sub_command(cfg, sub_command)
-    finally:
-        shutdown_complete = False
-        times_interrupted = 0
-        while not shutdown_complete and times_interrupted < 2:
-            try:
-                logger.info("Attempting to shutdown internal actor system.")
-                actors.shutdown()
-                shutdown_complete = True
-                logger.info("Shutdown completed.")
-            except KeyboardInterrupt:
-                times_interrupted += 1
-                logger.warn("User interrupted shutdown of internal actor system.")
-                console.info("Please wait a moment for Rally's internal components to shutdown.")
-        if not shutdown_complete and times_interrupted > 0:
-            logger.warn("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
-            console.println("")
-            console.warn("Terminating now at the risk of leaving child processes behind.")
-            console.println("")
-            console.warn("The next race may fail due to an unclean shutdown.")
-            console.println("")
-            console.println(SKULL)
-            console.println("")
+    success = dispatch_sub_command(cfg, sub_command)
 
     end = time.time()
     if success:

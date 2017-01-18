@@ -4,39 +4,36 @@ import logging
 import urllib.error
 import xml.etree.ElementTree
 
-from esrally import config, exceptions, PROGRAM_NAME
+from esrally import exceptions
 from esrally.utils import git, console, io, process, net, versions
 from esrally.exceptions import BuildError, SystemSetupError
 
 logger = logging.getLogger("rally.supplier")
 
 
-def from_sources(cfg, build=True):
+def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build=True):
     if build:
         console.info("Preparing for race ...", end="", flush=True)
     try:
-        builder = Builder(cfg)
-        SourceRepository(cfg).fetch()
+        SourceRepository(remote_url, src_dir).fetch(revision)
+
+        builder = Builder(src_dir, gradle, java_home, log_dir)
 
         if build:
             builder.build()
-        builder.add_binary_to_config()
-        if build:
             console.println(" [OK]")
+        return builder.binary
     except BaseException:
         if build:
             console.println(" [FAILED]")
         raise
 
 
-def from_distribution(cfg):
-    version = cfg.opts("source", "distribution.version")
-    repo_name = cfg.opts("source", "distribution.repository")
+def from_distribution(version, repo_name, distributions_root):
     if version.strip() == "":
         raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
                                           "to download with the command line parameter --distribution-version. "
                                           "E.g. --distribution-version=5.0.0")
-    distributions_root = "%s/%s" % (cfg.opts("system", "root.dir"), cfg.opts("source", "distribution.dir"))
     io.ensure_dir(distributions_root)
     distribution_path = "%s/elasticsearch-%s.tar.gz" % (distributions_root, version)
 
@@ -60,8 +57,7 @@ def from_distribution(cfg):
                                               "version [%s] is correct." % (download_url, version))
     else:
         logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (version, distribution_path))
-
-    cfg.add(config.Scope.invocation, "builder", "candidate.bin.path", distribution_path)
+    return distribution_path
 
 
 class SourceRepository:
@@ -69,21 +65,21 @@ class SourceRepository:
     Supplier fetches the benchmark candidate source tree from the remote repository.
     """
 
-    def __init__(self, cfg):
-        self.cfg = cfg
+    def __init__(self, remote_url, src_dir):
+        self.remote_url = remote_url
+        self.src_dir = src_dir
 
-    def fetch(self):
+    def fetch(self, revision):
         # assume fetching of latest version for now
         self._try_init()
-        self._update()
+        self._update(revision)
 
     def _try_init(self):
         if not git.is_working_copy(self.src_dir):
             console.println("Downloading sources from %s to %s." % (self.remote_url, self.src_dir))
             git.clone(self.src_dir, self.remote_url)
 
-    def _update(self):
-        revision = self.cfg.opts("source", "revision")
+    def _update(self, revision):
         if revision == "latest":
             logger.info("Fetching latest sources from origin.")
             git.pull(self.src_dir)
@@ -94,22 +90,8 @@ class SourceRepository:
             git.pull_ts(self.src_dir, revision[1:])
         else:  # assume a git commit hash
             git.pull_revision(self.src_dir, revision)
-
         git_revision = git.head_revision(self.src_dir)
         logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))
-
-    @property
-    def src_dir(self):
-        try:
-            return self.cfg.opts("source", "local.src.dir")
-        except config.ConfigError:
-            logger.exception("Cannot determine source directory")
-            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Are you missing Gradle 2.13? Please install"
-                                              " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
-
-    @property
-    def remote_url(self):
-        return self.cfg.opts("source", "remote.repo.url")
 
 
 class Builder:
@@ -119,42 +101,34 @@ class Builder:
     It is not intended to be used directly but should be triggered by its mechanic.
     """
 
-    def __init__(self, cfg):
-        self._config = cfg
+    def __init__(self, src_dir, gradle=None, java_home=None, log_dir=None):
+        self.src_dir = src_dir
+        self.gradle = gradle
+        self.java_home = java_home
+        self.log_dir = log_dir
 
     def build(self):
         self.run("clean")
         self.run(":distribution:tar:assemble")
 
-    def add_binary_to_config(self):
-        src_dir = self._config.opts("source", "local.src.dir")
+    @property
+    def binary(self):
         try:
-            binary = glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % src_dir)[0]
+            return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
-        self._config.add(config.Scope.invocation, "builder", "candidate.bin.path", binary)
 
     def run(self, task):
-        try:
-            src_dir = self._config.opts("source", "local.src.dir")
-        except config.ConfigError:
-            logging.exception("Rally is not configured to build from sources")
-            raise SystemSetupError("Rally is not setup to build from sources. You can either benchmark a binary distribution or "
-                                   "install the required software and reconfigure Rally with %s --configure." % PROGRAM_NAME)
-
-        logger.info("Building Elasticsearch from sources in [%s]." % src_dir)
-        gradle = self._config.opts("build", "gradle.bin")
-        java_home = self._config.opts("runtime", "java8.home")
-        log_dir = self._config.opts("system", "log.dir")
-
-        logger.info("Executing %s %s..." % (gradle, task))
-        io.ensure_dir(log_dir)
-        log_file = "%s/build.log" % log_dir
+        logger.info("Building Elasticsearch from sources in [%s]." % self.src_dir)
+        logger.info("Executing %s %s..." % (self.gradle, task))
+        io.ensure_dir(self.log_dir)
+        log_file = "%s/build.log" % self.log_dir
 
         # we capture all output to a dedicated build log file
 
-        if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" % (java_home, src_dir, gradle, task, log_file)):
-            msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (gradle, task)
+        if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
+                                          (self.java_home, self.src_dir, self.gradle, task, log_file)):
+            msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:
                 msg += "\t"

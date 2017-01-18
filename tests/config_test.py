@@ -74,6 +74,34 @@ class ConfigTests(TestCase):
         cfg.add(config.Scope.applicationOverride, "tests", "sample.key", "override")
         self.assertEqual("override", cfg.opts("tests", "sample.key"))
 
+    def test_add_all_in_section(self):
+        source_cfg = config.Config(config_file_class=InMemoryConfigStore)
+        sample_config = {
+            "tests": {
+                "sample.key": "value",
+                "sample.key2": "value"
+            },
+            "no_copy": {
+                "other.key": "value"
+            },
+            "meta": {
+                "config.version": config.Config.CURRENT_CONFIG_VERSION
+            }
+        }
+        source_cfg.config_file.store(sample_config)
+        source_cfg.load_config()
+
+        target_cfg = config.Config(config_file_class=InMemoryConfigStore)
+
+        self.assertIsNone(target_cfg.opts("tests", "sample.key", mandatory=False))
+
+        target_cfg.add_all(source=source_cfg, section="tests")
+        self.assertEqual("value", target_cfg.opts("tests", "sample.key"))
+        self.assertIsNone(target_cfg.opts("no_copy", "other.key", mandatory=False))
+
+        # nonexisting key will not throw an error
+        target_cfg.add_all(source=source_cfg, section="this section does not exist")
+
 
 class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.io.guess_java_home")
@@ -89,13 +117,12 @@ class ConfigFactoryTests(TestCase):
         f.create_config(config_store)
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("6", config_store.config["meta"]["config.version"])
+        self.assertEqual("7", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
-        self.assertTrue("provisioning" in config_store.config)
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
         self.assertTrue("benchmarks" in config_store.config)
@@ -153,13 +180,12 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("6", config_store.config["meta"]["config.version"])
+        self.assertEqual("7", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
-        self.assertTrue("provisioning" in config_store.config)
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
         self.assertTrue("benchmarks" in config_store.config)
@@ -298,5 +324,26 @@ class ConfigMigrationTests(TestCase):
         self.assertEqual("6", config_file.config["meta"]["config.version"])
         self.assertTrue("defaults" in config_file.config)
         self.assertEqual("False", config_file.config["defaults"]["preserve_benchmark_candidate"])
+
+    def test_migrate_from_6_to_7(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 6
+            },
+            "system": {
+                "log.root.dir": "logs"
+            },
+            "provisioning": {
+                "local.install.dir": "install"
+            },
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 6, 7, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("7", config_file.config["meta"]["config.version"])
+        self.assertTrue("provisioning" not in config_file.config)
+        self.assertTrue("log.root.dir" not in config_file.config["system"])
 
 

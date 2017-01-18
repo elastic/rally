@@ -10,7 +10,7 @@ class StatsTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
 
-        store = metrics.InMemoryMetricsStore(config=cfg)
+        store = metrics.InMemoryMetricsStore(cfg=cfg)
         store.open(datetime.datetime.now(), "test", "unittest", "unittest_car")
         store.lap = 1
 

@@ -6,9 +6,8 @@ import queue
 import socket
 import time
 
-import elasticsearch
 import thespian.actors
-from esrally import exceptions, metrics, track, client, PROGRAM_NAME
+from esrally import actor, exceptions, metrics, track, client, PROGRAM_NAME
 from esrally.driver import runner
 from esrally.utils import convert, console, versions, io
 
@@ -105,7 +104,14 @@ class BenchmarkFailure:
         self.cause = cause
 
 
-class Driver(thespian.actors.Actor):
+class BenchmarkCancelled:
+    """
+    Indicates that the benchmark has been cancelled (by the user).
+    """
+    pass
+
+
+class Driver(actor.RallyActor):
     WAKEUP_INTERVAL_SECONDS = 1
     """
     Coordinates all worker drivers.
@@ -113,6 +119,7 @@ class Driver(thespian.actors.Actor):
 
     def __init__(self):
         super().__init__()
+        actor.RallyActor.configure_logging(logger)
         self.config = None
         self.track = None
         self.challenge = None
@@ -136,6 +143,7 @@ class Driver(thespian.actors.Actor):
 
     def receiveMessage(self, msg, sender):
         try:
+            logger.debug("Driver#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartBenchmark):
                 self.start_benchmark(msg, sender)
             elif isinstance(msg, JoinPointReached):
@@ -149,11 +157,20 @@ class Driver(thespian.actors.Actor):
             elif isinstance(msg, BenchmarkFailure):
                 logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
                 self.metrics_store.close()
-                for driver in self.drivers:
-                    self.send(driver, thespian.actors.ActorExitRequest())
                 self.send(self.start_sender, msg)
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
-        except Exception as e:
+            elif isinstance(msg, BenchmarkCancelled):
+                logger.info("Main driver received a notification that the benchmark has been cancelled. Shutting down.")
+                self.metrics_store.close()
+                self.send(self.start_sender, msg)
+                self.send(self.myAddress, thespian.actors.ActorExitRequest())
+            elif isinstance(msg, thespian.actors.ActorExitRequest):
+                logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
+                for driver in self.drivers:
+                    self.send(driver, thespian.actors.ActorExitRequest())
+            else:
+                logger.debug("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
+        except BaseException as e:
             logger.exception("Main driver encountered a fatal exception. Shutting down.")
             self.metrics_store.close()
             for driver in self.drivers:
@@ -173,22 +190,21 @@ class Driver(thespian.actors.Actor):
         logger.info("Benchmark is about to start.")
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
-        self.metrics_store = metrics.InMemoryMetricsStore(config=self.config, meta_info=msg.metrics_meta_info, lap=msg.lap)
-        invocation = self.config.opts("meta", "time.start")
+        self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=msg.metrics_meta_info, lap=msg.lap)
+        invocation = self.config.opts("system", "time.start")
         expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
-        track_name = self.config.opts("benchmarks", "track")
-        challenge_name = self.config.opts("benchmarks", "challenge")
-        selected_car_name = self.config.opts("benchmarks", "car")
+        track_name = self.track.name
+        challenge_name = self.track.find_challenge_or_default(self.config.opts("track", "challenge.name")).name
+        selected_car_name = self.config.opts("mechanic", "car.name")
         self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
 
         self.challenge = select_challenge(self.config, self.track)
-        es_version = self.config.opts("source", "distribution.version")
         for template in self.track.templates:
             setup_template(self.es, template)
 
         for index in self.track.indices:
             setup_index(self.es, index, self.challenge.index_settings)
-        wait_for_status(self.es, es_version, expected_cluster_health)
+        wait_for_status(self.es, expected_cluster_health)
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -198,7 +214,7 @@ class Driver(thespian.actors.Actor):
                     (self.number_of_steps, len(self.allocations), self.allocations))
 
         for client_id in range(allocator.clients):
-            self.drivers.append(self.createActor(LoadGenerator))
+            self.drivers.append(self.createActor(LoadGenerator, targetActorRequirements={"coordinator": True}))
         for client_id, driver in enumerate(self.drivers):
             self.send(driver, StartLoadGenerator(client_id, self.config, self.track, self.allocations[client_id]))
 
@@ -316,7 +332,7 @@ class Driver(thespian.actors.Actor):
                 self.progress_reporter.finish()
 
 
-class LoadGenerator(thespian.actors.Actor):
+class LoadGenerator(actor.RallyActor):
     """
     The actual driver that applies load against the cluster.
 
@@ -327,6 +343,7 @@ class LoadGenerator(thespian.actors.Actor):
 
     def __init__(self):
         super().__init__()
+        actor.RallyActor.configure_logging(logger)
         self.master = None
         self.client_id = None
         self.es = None
@@ -342,8 +359,9 @@ class LoadGenerator(thespian.actors.Actor):
 
     def receiveMessage(self, msg, sender):
         try:
+            logger.debug("LoadGenerator[%s]#receiveMessage(msg = [%s], sender = [%s])" % (str(self.client_id), str(type(msg)), str(sender)))
             if isinstance(msg, StartLoadGenerator):
-                logger.debug("client [%d] is about to start." % msg.client_id)
+                logger.debug("LoadGenerator[%d] is about to start." % msg.client_id)
                 self.master = sender
                 self.client_id = msg.client_id
                 self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
@@ -355,13 +373,11 @@ class LoadGenerator(thespian.actors.Actor):
                 track.load_track_plugins(self.config, runner.register_runner)
                 self.drive()
             elif isinstance(msg, Drive):
-                logger.debug("Client [%d] is continuing its work at task index [%d] on [%f]." %
+                logger.debug("LoadGenerator[%d] is continuing its work at task index [%d] on [%f]." %
                              (self.client_id, self.current_task, msg.client_start_timestamp))
-                self.master = sender
                 self.start_driving = True
                 self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
             elif isinstance(msg, thespian.actors.WakeupMessage):
-                logger.debug("client [%d] woke up." % self.client_id)
                 # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
                 if self.start_driving:
                     self.start_driving = False
@@ -369,6 +385,8 @@ class LoadGenerator(thespian.actors.Actor):
                 else:
                     self.send_samples()
                     if self.executor_future is not None:
+                        if self.executor_future.cancelled():
+                            self.send(self.master, BenchmarkCancelled())
                         if self.executor_future.done():
                             e = self.executor_future.exception(timeout=0)
                             if e:
@@ -378,6 +396,14 @@ class LoadGenerator(thespian.actors.Actor):
                                 self.drive()
                         else:
                             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
+            elif isinstance(msg, thespian.actors.ActorExitRequest):
+                logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest." % str(self.client_id))
+                if self.executor_future is not None and self.executor_future.running():
+                    if self.executor_future.cancel():
+                        self.pool.shutdown()
+                    else:
+                        logger.warning("Could not cancel running schedule execution.")
+
             else:
                 logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
         except Exception as e:
@@ -468,7 +494,7 @@ class Sample:
 
 
 def select_challenge(config, t):
-    challenge_name = config.opts("benchmarks", "challenge", default_value=None)
+    challenge_name = config.opts("track", "challenge.name")
     selected_challenge = t.find_challenge_or_default(challenge_name)
 
     if not selected_challenge:
@@ -506,27 +532,27 @@ def setup_index(es, index, index_settings, source=io.FileSource):
         logger.info("Skipping index [%s] as it is managed by the user." % index.name)
 
 
-def wait_for_status(es, es_version, expected_cluster_status):
+def wait_for_status(es, expected_cluster_status):
     """
     Synchronously waits until the cluster reaches the provided status. Upon timeout a LaunchError is thrown.
 
     :param es Elasticsearch client
-    :param es_version Elasticsearch version string.
     :param expected_cluster_status the cluster status that should be reached.
     """
     logger.info("Wait for cluster status [%s]" % expected_cluster_status)
     start = time.perf_counter()
-    reached_cluster_status, relocating_shards = _do_wait(es, es_version, expected_cluster_status)
+    reached_cluster_status, relocating_shards = _do_wait(es, expected_cluster_status)
     stop = time.perf_counter()
     logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
     logger.info("Cluster health: [%s]" % str(es.cluster.health()))
     logger.info("Shards:\n%s" % es.cat.shards(v=True))
 
 
-def _do_wait(es, es_version, expected_cluster_status):
+def _do_wait(es, expected_cluster_status):
+    import elasticsearch
     reached_cluster_status = None
     relocating_shards = -1
-    major, minor, patch, suffix = versions.components(es_version)
+    major, minor, patch, suffix = versions.components(es.info()["version"]["number"])
     if major < 5:
         use_wait_for_relocating_shards = True
     elif major == 5 and minor == 0 and patch == 0 and suffix and suffix.startswith("alpha"):
@@ -649,6 +675,8 @@ def execute_schedule(schedule, es, sampler):
             latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
             sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops,
                         total_ops_unit, (stop - total_start), percent_completed)
+    except concurrent.futures.CancelledError:
+        logger.info("User cancelled execution.")
     except BaseException:
         logger.exception("Could not execute schedule")
         raise
@@ -660,6 +688,7 @@ def execute_single(runner, es, params):
 
     :return: a triple of: total number of operations, unit of operations, a dict of request meta data (may be None).
     """
+    import elasticsearch
     try:
         with runner:
             return_value = runner(es, params)

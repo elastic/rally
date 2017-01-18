@@ -16,8 +16,8 @@ class RaceControlTests(TestCase):
 
     def test_prevents_running_an_unknown_pipeline(self):
         cfg = config.Config()
-        cfg.add(config.Scope.benchmark, "system", "pipeline", "invalid")
-        cfg.add(config.Scope.benchmark, "source", "distribution.version", "5.0.0")
+        cfg.add(config.Scope.benchmark, "race", "pipeline", "invalid")
+        cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "5.0.0")
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             racecontrol.run(cfg)
@@ -29,8 +29,8 @@ class RaceControlTests(TestCase):
         p = racecontrol.Pipeline("unit-test-pipeline", "Pipeline intended for unit-testing", mock_pipeline)
 
         cfg = config.Config()
-        cfg.add(config.Scope.benchmark, "system", "pipeline", "unit-test-pipeline")
-        cfg.add(config.Scope.benchmark, "source", "distribution.version", "")
+        cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
+        cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "")
 
         racecontrol.run(cfg)
 

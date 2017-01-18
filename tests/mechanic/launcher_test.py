@@ -71,24 +71,24 @@ class SubClient:
 class ExternalLauncherTests(TestCase):
     def test_setup_external_cluster_single_node(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "telemetry", "devices", [])
-        cfg.add(config.Scope.application, "launcher", "external.target.hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
-        cfg.add(config.Scope.application, "launcher", "client.options", [])
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
+        cfg.add(config.Scope.application, "client", "options", [])
 
         m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         m.start()
 
         # automatically determined by launcher on attach
-        self.assertEqual(cfg.opts("source", "distribution.version"), "5.0.0")
+        self.assertEqual(cfg.opts("mechanic", "distribution.version"), "5.0.0")
 
     def test_setup_external_cluster_multiple_nodes(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "telemetry", "devices", [])
-        cfg.add(config.Scope.application, "launcher", "external.target.hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
-        cfg.add(config.Scope.application, "launcher", "client.options", [])
-        cfg.add(config.Scope.application, "source", "distribution.version", "2.3.3")
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
+        cfg.add(config.Scope.application, "client", "options", [])
+        cfg.add(config.Scope.application, "mechanic", "distribution.version", "2.3.3")
 
         m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         m.start()
         # did not change user defined value
-        self.assertEqual(cfg.opts("source", "distribution.version"), "2.3.3")
+        self.assertEqual(cfg.opts("mechanic", "distribution.version"), "2.3.3")

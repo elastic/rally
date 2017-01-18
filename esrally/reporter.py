@@ -10,13 +10,13 @@ from esrally.utils import convert, io as rio, console
 logger = logging.getLogger("rally.reporting")
 
 
-def summarize(metrics_store, cfg, track, lap=None):
-    SummaryReporter(metrics_store, cfg, lap).report(track)
+def summarize(race_store, metrics_store, cfg, track, lap=None):
+    SummaryReporter(race_store, metrics_store, cfg, lap).report(track)
 
 
 def compare(cfg):
-    baseline_ts = cfg.opts("report", "comparison.baseline.timestamp")
-    contender_ts = cfg.opts("report", "comparison.contender.timestamp")
+    baseline_ts = cfg.opts("reporting", "baseline.timestamp")
+    contender_ts = cfg.opts("reporting", "contender.timestamp")
 
     if not baseline_ts or not contender_ts:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
@@ -153,7 +153,8 @@ class Stats:
 
 
 class SummaryReporter:
-    def __init__(self, metrics_store, config, lap):
+    def __init__(self, race_store, metrics_store, config, lap):
+        self._race_store = race_store
         self._metrics_store = metrics_store
         self._config = config
         self._lap = lap
@@ -162,7 +163,7 @@ class SummaryReporter:
         return self._lap is None
 
     def needs_header(self):
-        laps = self._config.opts("benchmarks", "laps")
+        laps = self._race_store.current_race.laps
         return laps == 1 or self._lap == 1
 
     @property
@@ -192,7 +193,7 @@ class SummaryReporter:
             print_header("--------------------------------------------------")
             print_internal("")
 
-        selected_challenge = t.find_challenge_or_default(self._config.opts("benchmarks", "challenge"))
+        selected_challenge = t.find_challenge_or_default(self._config.opts("track", "challenge.name"))
         stats = Stats(self._metrics_store, selected_challenge, self._lap)
 
         metrics_table = []
@@ -218,7 +219,7 @@ class SummaryReporter:
         self.write_report(metrics_table, meta_info_table)
 
     def write_report(self, metrics_table, meta_info_table):
-        report_file = self._config.opts("report", "reportfile")
+        report_file = self._config.opts("reporting", "output.path")
 
         self.write_single_report(report_file, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data=metrics_table,
                                  write_header=self.needs_header())
@@ -227,7 +228,7 @@ class SummaryReporter:
             self.write_single_report("%s.meta" % report_file, headers=["Name", "Value"], data=meta_info_table, show_also_in_console=False)
 
     def write_single_report(self, report_file, headers, data, write_header=True, show_also_in_console=True):
-        report_format = self._config.opts("report", "reportformat")
+        report_format = self._config.opts("reporting", "format")
         if report_format == "markdown":
             formatter = self.format_as_markdown
         elif report_format == "csv":
@@ -238,7 +239,7 @@ class SummaryReporter:
         if show_also_in_console:
             print_internal(formatter(headers, data))
         if len(report_file) > 0:
-            cwd = self._config.opts("system", "rally.cwd")
+            cwd = self._config.opts("node", "rally.cwd")
             normalized_report_file = rio.normalize_path(report_file, cwd)
             logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
                         (normalized_report_file, report_file, report_format))
@@ -356,7 +357,7 @@ class SummaryReporter:
 
     def report_meta_info(self):
         return [
-            ["Elasticsearch source revision", self._config.opts("meta", "source.revision", mandatory=False, default_value="unknown")]
+            ["Elasticsearch source revision", self._race_store.current_race.revision]
         ]
 
 

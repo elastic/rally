@@ -6,35 +6,27 @@ import subprocess
 import threading
 
 import tabulate
-from esrally import metrics, config, time
+from esrally import metrics, time
 from esrally.utils import io, sysstats, process, console
 
 logger = logging.getLogger("rally.telemetry")
 
 
-def list_telemetry(cfg):
+def list_telemetry():
     console.println("Available telemetry devices:\n")
-    console.println(tabulate.tabulate(Telemetry(cfg, devices=[
-        JitCompiler(cfg, None),
-        Gc(cfg, None),
-        FlightRecorder(cfg, None),
-        PerfStat(cfg,  None)
-    ]).list(), ["Command", "Name", "Description"]))
+    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat]]
+    console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
 
 class Telemetry:
-    def __init__(self, cfg, devices):
-        self.cfg = cfg
+    def __init__(self, enabled_devices=None, devices=None):
+        if devices is None:
+            devices = []
+        if enabled_devices is None:
+            enabled_devices = []
+        self.enabled_devices = enabled_devices
         self.devices = devices
-        self.enabled_devices = self.cfg.opts("telemetry", "devices")
-
-    def list(self):
-        external_devices = []
-        for device in self.devices:
-            if not device.internal:
-                external_devices.append([device.command, device.human_name, device.help])
-        return external_devices
 
     def instrument_candidate_env(self, car, candidate_id):
         opts = {}
@@ -65,13 +57,11 @@ class Telemetry:
                 device.detach_from_node(node)
 
     def on_benchmark_start(self):
-        logger.info("Benchmark start")
         for device in self.devices:
             if self._enabled(device):
                 device.on_benchmark_start()
 
     def on_benchmark_stop(self):
-        logger.info("Benchmark stop")
         for device in self.devices:
             if self._enabled(device):
                 device.on_benchmark_stop()
@@ -92,26 +82,6 @@ class Telemetry:
 ########################################################################################
 
 class TelemetryDevice:
-    def __init__(self, cfg, metrics_store):
-        self.cfg = cfg
-        self.metrics_store = metrics_store
-
-    @property
-    def internal(self):
-        raise NotImplementedError("abstract method")
-
-    @property
-    def command(self):
-        raise NotImplementedError("abstract method")
-
-    @property
-    def human_name(self):
-        raise NotImplementedError("abstract method")
-
-    @property
-    def help(self):
-        raise NotImplementedError("abstract method")
-
     def instrument_env(self, car, candidate_id):
         return {}
 
@@ -135,50 +105,32 @@ class TelemetryDevice:
 
 
 class InternalTelemetryDevice(TelemetryDevice):
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
-
-    @property
-    def internal(self):
-        return True
-
-    @property
-    def command(self):
-        return "internal"
-
-    @property
-    def human_name(self):
-        return ""
-
-    @property
-    def help(self):
-        return ""
+    internal = True
 
 
 class FlightRecorder(TelemetryDevice):
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    internal = False
+    command = "jfr"
+    human_name = "Flight Recorder"
+    help = "Enables Java Flight Recorder (requires an Oracle JDK)"
 
-    @property
-    def internal(self):
-        return False
-
-    @property
-    def command(self):
-        return "jfr"
-
-    @property
-    def human_name(self):
-        return "Flight Recorder"
-
-    @property
-    def help(self):
-        return "Enables Java Flight Recorder (requires an Oracle JDK)"
+    def __init__(self, log_root):
+        super().__init__()
+        self.log_root = log_root
 
     def instrument_env(self, car, candidate_id):
-        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
-        io.ensure_dir(log_root)
-        log_file = "%s/%s-%s.jfr" % (log_root, car.name, candidate_id)
+        io.ensure_dir(self.log_root)
+        log_file = "%s/%s-%s.jfr" % (self.log_root, car.name, candidate_id)
+
+        console.println("\n***************************************************************************\n")
+        console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
+        console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
+        console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
+        console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
+        console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
+        console.println("\n***************************************************************************\n")
+
+        time.sleep(3)
 
         console.println("\n***************************************************************************\n")
         console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
@@ -201,29 +153,18 @@ class FlightRecorder(TelemetryDevice):
 
 
 class JitCompiler(TelemetryDevice):
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    internal = False
+    command = "jit"
+    human_name = "JIT Compiler Profiler"
+    help = "Enables JIT compiler logs."
 
-    @property
-    def internal(self):
-        return False
-
-    @property
-    def command(self):
-        return "jit"
-
-    @property
-    def human_name(self):
-        return "JIT Compiler Profiler"
-
-    @property
-    def help(self):
-        return "Enables JIT compiler logs."
+    def __init__(self, log_root):
+        super().__init__()
+        self.log_root = log_root
 
     def instrument_env(self, car, candidate_id):
-        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
-        io.ensure_dir(log_root)
-        log_file = "%s/%s-%s.jit.log" % (log_root, car.name, candidate_id)
+        io.ensure_dir(self.log_root)
+        log_file = "%s/%s-%s.jit.log" % (self.log_root, car.name, candidate_id)
 
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger)
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
@@ -231,29 +172,18 @@ class JitCompiler(TelemetryDevice):
 
 
 class Gc(TelemetryDevice):
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    internal = False
+    command = "gc"
+    human_name = "GC log"
+    help = "Enables GC logs."
 
-    @property
-    def internal(self):
-        return False
-
-    @property
-    def command(self):
-        return "gc"
-
-    @property
-    def human_name(self):
-        return "GC log"
-
-    @property
-    def help(self):
-        return "Enables GC logs."
+    def __init__(self, log_root):
+        super().__init__()
+        self.log_root = log_root
 
     def instrument_env(self, car, candidate_id):
-        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
-        io.ensure_dir(log_root)
-        log_file = "%s/%s-%s.gc.log" % (log_root, car.name, candidate_id)
+        io.ensure_dir(self.log_root)
+        log_file = "%s/%s-%s.gc.log" % (self.log_root, car.name, candidate_id)
 
         console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger)
         # TODO dm: These options change in JDK 9!
@@ -263,32 +193,21 @@ class Gc(TelemetryDevice):
 
 
 class PerfStat(TelemetryDevice):
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    internal = False
+    command = "perf"
+    human_name = "perf stat"
+    help = "Reads CPU PMU counters (requires Linux and perf)"
+
+    def __init__(self, log_root):
+        super().__init__()
+        self.log_root = log_root
         self.process = None
         self.node = None
         self.log = None
 
-    @property
-    def internal(self):
-        return False
-
-    @property
-    def command(self):
-        return "perf"
-
-    @property
-    def human_name(self):
-        return "perf stat"
-
-    @property
-    def help(self):
-        return "Reads CPU PMU counters (requires Linux and perf)"
-
     def attach_to_node(self, node):
-        log_root = "%s/%s" % (self.cfg.opts("system", "challenge.root.dir"), self.cfg.opts("benchmarks", "metrics.log.dir"))
-        io.ensure_dir(log_root)
-        log_file = "%s/%s.perf.log" % (log_root, node.node_name)
+        io.ensure_dir(self.log_root)
+        log_file = "%s/%s.perf.log" % (self.log_root, node.node_name)
 
         console.info("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=logger)
 
@@ -304,7 +223,7 @@ class PerfStat(TelemetryDevice):
         try:
             self.process.wait(10.0)
         except subprocess.TimeoutExpired:
-            logger.warn("perf stat did not terminate")
+            logger.warning("perf stat did not terminate")
         self.log.close()
 
 
@@ -314,14 +233,15 @@ class MergeParts(InternalTelemetryDevice):
     """
     MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
 
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, metrics_store, node_log_dir):
+        super().__init__()
+        self.node_log_dir = node_log_dir
+        self.metrics_store = metrics_store
         self._t = None
 
     def on_benchmark_stop(self):
-        server_log_dir = self.cfg.opts("launcher", "candidate.log.dir")
-        for log_file in os.listdir(server_log_dir):
-            log_path = "%s/%s" % (server_log_dir, log_file)
+        for log_file in os.listdir(self.node_log_dir):
+            log_path = "%s/%s" % (self.node_log_dir, log_file)
             logger.debug("Analyzing merge parts in [%s]" % log_path)
             with open(log_path) as f:
                 merge_times = self._extract_merge_times(f)
@@ -353,8 +273,9 @@ class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, metrics_store):
+        super().__init__()
+        self.metrics_store = metrics_store
         self.node = None
         self.process = None
         self.disk_start = None
@@ -371,7 +292,7 @@ class DiskIo(InternalTelemetryDevice):
             if self.process_start:
                 logger.info("Using more accurate process-based I/O counters.")
             else:
-                logger.warn("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+                logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
 
     def on_benchmark_stop(self):
         if self.process is not None:
@@ -401,8 +322,9 @@ class CpuUsage(InternalTelemetryDevice):
     """
     Gathers CPU usage statistics.
     """
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, metrics_store):
+        super().__init__()
+        self.metrics_store = metrics_store
         self.sampler = None
         self.node = None
 
@@ -463,8 +385,9 @@ class EnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
     """
-    def __init__(self, cfg, client, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, client, metrics_store):
+        super().__init__()
+        self.metrics_store = metrics_store
         self.client = client
         self._t = None
 
@@ -473,8 +396,10 @@ class EnvironmentInfo(InternalTelemetryDevice):
         distribution_version = self.client.info()["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
-        self.cfg.add(config.Scope.benchmark, "meta", "source.revision", revision)
-        self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
+
+        cluster.distribution_version = distribution_version
+        cluster.source_revision = revision
+
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
         for node in nodes_info:
@@ -501,8 +426,9 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information for externally provisioned clusters.
     """
-    def __init__(self, cfg, client, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, client, metrics_store):
+        super().__init__()
+        self.metrics_store = metrics_store
         self.client = client
         self._t = None
 
@@ -511,7 +437,9 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         distribution_version = self.client.info()["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
-        self.cfg.add(config.Scope.benchmark, "meta", "source.revision", revision)
+
+        cluster.distribution_version = distribution_version
+        cluster.source_revision = revision
 
         stats = self.client.nodes.stats(metric="_all")
         nodes = stats["nodes"]
@@ -542,7 +470,7 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
             for k in path:
                 value = value[k]
         except KeyError:
-            logger.warn("Could not determine metric [%s] for node [%s] at path [%s]." % (metric_key, node_name, ",".join(path)))
+            logger.warning("Could not determine metric [%s] for node [%s] at path [%s]." % (metric_key, node_name, ",".join(path)))
             value = "unknown"
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, metric_key, value)
 
@@ -551,8 +479,9 @@ class NodeStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch nodes stats API
     """
-    def __init__(self, cfg, client, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, client, metrics_store):
+        super().__init__()
+        self.metrics_store = metrics_store
         self.client = client
         self.gc_times_per_node = {}
 
@@ -576,7 +505,7 @@ class NodeStats(InternalTelemetryDevice):
                 self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
             else:
-                logger.warn("Cannot determine GC times for node [%s]. It was not part of the cluster at the start of the benchmark.")
+                logger.warning("Cannot determine GC times for node [%s]. It was not part of the cluster at the start of the benchmark.")
 
         self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
         self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
@@ -601,9 +530,10 @@ class IndexStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch index stats API
     """
-    def __init__(self, cfg, client, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, client, metrics_store):
+        super().__init__()
         self.client = client
+        self.metrics_store = metrics_store
 
     def on_benchmark_stop(self):
         logger.info("Gathering indices stats")
@@ -640,7 +570,7 @@ class IndexStats(InternalTelemetryDevice):
                 value = value[k]
             return value
         except KeyError:
-            logger.warn("Could not determine value at path [%s]." % ",".join(path))
+            logger.warning("Could not determine value at path [%s]." % ",".join(path))
             return None
 
 
@@ -648,13 +578,14 @@ class IndexSize(InternalTelemetryDevice):
     """
     Measures the final size of the index
     """
-    def __init__(self, cfg, metrics_store):
-        super().__init__(cfg, metrics_store)
+    def __init__(self, data_paths, metrics_store):
+        super().__init__()
+        self.data_paths = data_paths
+        self.metrics_store = metrics_store
 
     def detach_from_cluster(self, cluster):
-        data_paths = self.cfg.opts("provisioning", "local.data.paths", mandatory=False)
-        if data_paths is not None:
-            data_path = data_paths[0]
+        if self.data_paths:
+            data_path = self.data_paths[0]
             index_size_bytes = io.get_size(data_path)
             self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
             process.run_subprocess_with_logging("find %s -ls" % data_path, header="index files:")

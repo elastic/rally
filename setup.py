@@ -1,4 +1,5 @@
 from os.path import join, dirname
+
 try:
     from setuptools import setup, find_packages
 except ImportError:
@@ -27,6 +28,8 @@ install_requires = [
     "Jinja2==2.8",
     # remote messaging
     "thespian==3.6.0",
+    # recommended library for thespian to identify actors more easily with `ps`
+    #"setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
     "certifi"
 ]
@@ -47,12 +50,15 @@ setup(name="esrally",
           exclude=("tests*",)
       ),
       include_package_data=True,
-      package_data={"": ["*.json"]},
+      package_data={"": ["*.json", "*.yml"]},
       install_requires=install_requires,
       test_suite="tests",
       tests_require=tests_require,
       entry_points={
-          "console_scripts": ["esrally=esrally.rally:main"],
+          "console_scripts": [
+              "esrally=esrally.rally:main",
+              "esrallyd=esrally.rallyd:main"
+          ],
       },
       classifiers=[
           "Topic :: System :: Benchmark",

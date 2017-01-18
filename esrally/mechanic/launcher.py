@@ -6,12 +6,9 @@ import subprocess
 import threading
 import shlex
 
-import jinja2
-import psutil
-
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster
-from esrally.utils import versions, console, process, io, convert
+from esrally.utils import versions, console, process
 
 logger = logging.getLogger("rally.launcher")
 
@@ -24,56 +21,28 @@ class DockerLauncher:
         self.cfg = cfg
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
+        self.binary_path = None
 
-    def start(self, car):
-        # hardcoded for the moment, should actually be identical to internal launcher
-        # Only needed on Mac:
-        # hosts = [{"host": process.run_subprocess_with_output("docker-machine ip default")[0].strip(), "port": 9200}]
-        hosts = [{"host": "localhost", "port": 9200}]
-        client_options = self.cfg.opts("launcher", "client.options")
-        # unified client config
-        self.cfg.add(config.Scope.benchmark, "client", "hosts", hosts)
-        self.cfg.add(config.Scope.benchmark, "client", "options", client_options)
+    def start(self, car, binary, data_paths):
+        self.binary_path = binary
 
+        hosts = self.cfg.opts("client", "hosts")
+        client_options = self.cfg.opts("client", "options")
         es = self.client_factory(hosts, client_options).create()
 
-        t = telemetry.Telemetry(self.cfg, devices=[
+        # Cannot enable custom telemetry devices here
+        t = telemetry.Telemetry(devices=[
             # Be aware that some the meta-data are taken from the host system, not the container (e.g. number of CPU cores) so if the
             # Docker container constrains these, the metrics are actually wrong.
-            telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
-            telemetry.NodeStats(self.cfg, es, self.metrics_store),
-            telemetry.IndexStats(self.cfg, es, self.metrics_store),
-            telemetry.DiskIo(self.cfg, self.metrics_store),
-            telemetry.CpuUsage(self.cfg, self.metrics_store)
+            telemetry.EnvironmentInfo(es, self.metrics_store),
+            telemetry.NodeStats(es, self.metrics_store),
+            telemetry.IndexStats(es, self.metrics_store),
+            telemetry.DiskIo(self.metrics_store),
+            telemetry.CpuUsage(self.metrics_store)
         ])
 
-        distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
-
-        install_dir = self._install_dir()
-        io.ensure_dir(install_dir)
-
-        java_opts = ""
-        if car.heap:
-            java_opts += "-Xms%s -Xmx%s " % (car.heap, car.heap)
-        if car.java_opts:
-            java_opts += car.java_opts
-
-        vars = {
-            "es_java_opts": java_opts,
-            "container_memory_gb": "%dg" % (convert.bytes_to_gb(psutil.virtual_memory().total) // 2),
-            "es_data_dir": "%s/data" % install_dir,
-            "es_version": distribution_version
-        }
-
-        docker_cfg = self._render_template_from_file(vars)
-        logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
-        docker_cfg_path = self._docker_cfg_path()
-        with open(docker_cfg_path, "wt") as f:
-            f.write(docker_cfg)
-
-        c = cluster.Cluster([], t)
-
-        self._start_process(cmd="docker-compose -f %s up" % docker_cfg_path, node_name="rally0")
+        c = cluster.Cluster(hosts, [], t)
+        self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name="rally0")
         # Wait for a little while: Plugins may still be initializing although the node has already started.
         time.sleep(10)
 
@@ -112,7 +81,7 @@ class DockerLauncher:
             l = l.rstrip()
 
             if l.find("Initialization Failed") != -1:
-                logger.warn("[%s] has started with initialization errors." % node_name)
+                logger.warning("[%s] has started with initialization errors." % node_name)
                 startup_event.set()
 
             logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
@@ -122,31 +91,7 @@ class DockerLauncher:
 
     def stop(self, cluster):
         logger.info("Stopping Docker container")
-        docker_cfg_path = self._docker_cfg_path()
-        process.run_subprocess_with_logging("docker-compose down -v -f %s" % docker_cfg_path)
-
-    def _docker_cfg_path(self):
-        install_dir = self._install_dir()
-        return "%s/docker-compose.yml" % install_dir
-
-    def _render_template(self, loader, template_name, variables):
-        env = jinja2.Environment(loader=loader)
-        for k, v in variables.items():
-            env.globals[k] = v
-        template = env.get_template(template_name)
-
-        return template.render()
-
-    def _render_template_from_file(self, variables):
-        compose_file = "%s/resources/docker-compose.yml" % (self.cfg.opts("system", "rally.root"))
-        return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
-                                     template_name=io.basename(compose_file),
-                                     variables=variables)
-
-    def _install_dir(self):
-        root = self.cfg.opts("system", "challenge.root.dir")
-        install = self.cfg.opts("provisioning", "local.install.dir")
-        return "%s/%s" % (root, install)
+        process.run_subprocess_with_logging("docker-compose down -v -f %s" % self.binary_path)
 
 
 class ExternalLauncher:
@@ -175,32 +120,28 @@ the index size).
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
 
-    def start(self, car=None):
+    def start(self, car=None, binary=None, data_paths=None):
         console.println(ExternalLauncher.BOGUS_RESULTS_WARNING)
-
-        hosts = self.cfg.opts("launcher", "external.target.hosts")
-        client_options = self.cfg.opts("launcher", "client.options")
-        # unified client config
-        self.cfg.add(config.Scope.benchmark, "client", "hosts", hosts)
-        self.cfg.add(config.Scope.benchmark, "client", "options", client_options)
-
+        hosts = self.cfg.opts("client", "hosts")
+        client_options = self.cfg.opts("client", "options")
         es = self.client_factory(hosts, client_options).create()
 
-        t = telemetry.Telemetry(self.cfg, devices=[
-            telemetry.ExternalEnvironmentInfo(self.cfg, es, self.metrics_store),
-            telemetry.NodeStats(self.cfg, es, self.metrics_store),
-            telemetry.IndexStats(self.cfg, es, self.metrics_store)
+        # cannot enable custom telemetry devices here
+        t = telemetry.Telemetry(devices=[
+            telemetry.ExternalEnvironmentInfo(es, self.metrics_store),
+            telemetry.NodeStats(es, self.metrics_store),
+            telemetry.IndexStats(es, self.metrics_store)
         ])
-        c = cluster.Cluster([], t)
-        user_defined_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+        c = cluster.Cluster(hosts, [], t)
+        user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
         distribution_version = es.info()["version"]["number"]
         if not user_defined_version or user_defined_version.strip() == "":
             logger.info("Distribution version was not specified by user. Rally-determined version is [%s]" % distribution_version)
-            self.cfg.add(config.Scope.benchmark, "source", "distribution.version", distribution_version)
+            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         elif user_defined_version != distribution_version:
-            console.println(
-                "Warning: Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
-                (user_defined_version, distribution_version), logger=logger.warn)
+            console.warn(
+                "Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
+                (user_defined_version, distribution_version), logger=logger)
         t.attach_to_cluster(c)
         return c
 
@@ -240,20 +181,17 @@ class InProcessLauncher:
         }
     }
 
-    def __init__(self, cfg, metrics_store, clock=time.Clock):
+    def __init__(self, cfg, metrics_store, challenge_root_dir, log_root_dir, clock=time.Clock):
         self.cfg = cfg
         self.metrics_store = metrics_store
         self._clock = clock
         self._servers = []
+        self.node_telemetry_dir = "%s/telemetry" % challenge_root_dir
+        self.node_log_dir = "%s/server" % log_root_dir
 
-    def start(self, car):
-        port = self.cfg.opts("provisioning", "node.http.port")
-        hosts = [{"host": "localhost", "port": port}]
-        client_options = self.cfg.opts("launcher", "client.options")
-        # unified client config
-        self.cfg.add(config.Scope.benchmark, "client", "hosts", hosts)
-        self.cfg.add(config.Scope.benchmark, "client", "options", client_options)
-
+    def start(self, car, binary, data_paths):
+        hosts = self.cfg.opts("client", "hosts")
+        client_options = self.cfg.opts("client", "options")
         es = client.EsClientFactory(hosts, client_options).create()
 
         # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
@@ -262,40 +200,44 @@ class InProcessLauncher:
 
         logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
 
+        # TODO dm: Get rid of these...
+        enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
+
         cluster_telemetry = [
             # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
-            telemetry.MergeParts(self.cfg, self.metrics_store),
-            telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
-            telemetry.NodeStats(self.cfg, es, self.metrics_store),
-            telemetry.IndexStats(self.cfg, es, self.metrics_store),
+            telemetry.MergeParts(self.metrics_store, self.node_log_dir),
+            telemetry.EnvironmentInfo(es, self.metrics_store),
+            telemetry.NodeStats(es, self.metrics_store),
+            telemetry.IndexStats(es, self.metrics_store),
             # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
-            telemetry.IndexSize(self.cfg, self.metrics_store)
+            telemetry.IndexSize(data_paths, self.metrics_store)
         ]
-
-        t = telemetry.Telemetry(self.cfg, devices=cluster_telemetry)
-        c = cluster.Cluster([self._start_node(node, car, es) for node in range(car.nodes)], t)
+        t = telemetry.Telemetry(enabled_devices, devices=cluster_telemetry)
+        c = cluster.Cluster(hosts, [self._start_node(node, car, es, binary) for node in range(car.nodes)], t)
         t.attach_to_cluster(c)
         return c
 
-    def _start_node(self, node, car, es):
+    def _start_node(self, node, car, es, binary_path):
         node_name = self._node_name(node)
         host_name = socket.gethostname()
 
+        enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
+
         node_telemetry = [
-            telemetry.FlightRecorder(self.cfg, self.metrics_store),
-            telemetry.JitCompiler(self.cfg, self.metrics_store),
-            telemetry.Gc(self.cfg, self.metrics_store),
-            telemetry.PerfStat(self.cfg, self.metrics_store),
-            telemetry.DiskIo(self.cfg, self.metrics_store),
-            telemetry.CpuUsage(self.cfg, self.metrics_store),
-            telemetry.EnvironmentInfo(self.cfg, es, self.metrics_store),
+            telemetry.FlightRecorder(self.node_telemetry_dir),
+            telemetry.JitCompiler(self.node_telemetry_dir),
+            telemetry.Gc(self.node_telemetry_dir),
+            telemetry.PerfStat(self.node_telemetry_dir),
+            telemetry.DiskIo(self.metrics_store),
+            telemetry.CpuUsage(self.metrics_store),
+            telemetry.EnvironmentInfo(es, self.metrics_store),
         ]
 
-        t = telemetry.Telemetry(self.cfg, devices=node_telemetry)
+        t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
 
         env = self._prepare_env(car, node_name, t)
         cmd = self.prepare_cmd(car, node_name)
-        process = self._start_process(cmd, env, node_name)
+        process = self._start_process(cmd, env, node_name, binary_path)
         node = cluster.Node(process, host_name, node_name, t)
         t.attach_to_node(node)
 
@@ -341,13 +283,11 @@ class InProcessLauncher:
                 env[k] = v + separator + env[k]
 
     def prepare_cmd(self, car, node_name):
-        server_log_dir = "%s/server" % self.cfg.opts("system", "challenge.log.dir")
-        self.cfg.add(config.Scope.invocation, "launcher", "candidate.log.dir", server_log_dir)
-        distribution_version = self.cfg.opts("source", "distribution.version", mandatory=False)
+        distribution_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
 
         cmd = ["bin/elasticsearch",
                "%s=%s" % (self.cmd_line_opt(distribution_version, "node_name"), node_name),
-               "%s=%s" % (self.cmd_line_opt(distribution_version, "log_path"), server_log_dir)
+               "%s=%s" % (self.cmd_line_opt(distribution_version, "log_path"), self.node_log_dir)
                ]
         processor_count = car.processors
         if processor_count is not None and processor_count > 1:
@@ -364,11 +304,10 @@ class InProcessLauncher:
                                          "Please raise a bug at %s." %
                                          (distribution_version, console.format.link("https://github.com/elastic/rally")))
 
-    def _start_process(self, cmd, env, node_name):
+    def _start_process(self, cmd, env, node_name, binary_path):
         if os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
-        install_dir = self.cfg.opts("provisioning", "local.binary.path")
-        os.chdir(install_dir)
+        os.chdir(binary_path)
         startup_event = threading.Event()
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
         t = threading.Thread(target=self._read_output, args=(node_name, process, startup_event))
@@ -378,11 +317,10 @@ class InProcessLauncher:
             logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
             return process
         else:
-            log_dir = self.cfg.opts("system", "log.dir")
             msg = "Could not start node '%s' within timeout period of %s seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
-            raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
+            raise exceptions.LaunchError(msg)
 
     def _node_name(self, node):
         prefix = self.cfg.opts("provisioning", "node.name.prefix")
@@ -399,7 +337,7 @@ class InProcessLauncher:
             l = l.rstrip()
 
             if l.find("Initialization Failed") != -1:
-                logger.warn("[%s] has started with initialization errors." % node_name)
+                logger.warning("[%s] has started with initialization errors." % node_name)
                 startup_event.set()
 
             logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
@@ -424,11 +362,11 @@ class InProcessLauncher:
                 logger.info("Done shutdown node (%.1f sec)" % stop_watch.split_time())
             except subprocess.TimeoutExpired:
                 # kill -9
-                logger.warn("Server %s did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node.node_name)
+                logger.warning("Server %s did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node.node_name)
                 try:
                     os.kill(process.pid, signal.SIGQUIT)
                 except OSError:
-                    logger.warn("  no such process")
+                    logger.warning("  no such process")
                     return
 
                 try:
@@ -442,6 +380,6 @@ class InProcessLauncher:
                 try:
                     process.kill()
                 except ProcessLookupError:
-                    logger.warn("No such process")
+                    logger.warning("No such process")
         cluster.telemetry.detach_from_cluster(cluster)
         self._servers = []

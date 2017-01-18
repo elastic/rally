@@ -9,8 +9,7 @@ def list_cars():
     console.println(tabulate.tabulate([[c.name] for c in cars], headers=["Name"]))
 
 
-def select_car(cfg):
-    name = cfg.opts("benchmarks", "car")
+def select_car(name):
     for c in cars:
         if c.name == name:
             return c

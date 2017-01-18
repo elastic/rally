@@ -1,8 +1,10 @@
+import tempfile
 import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import config
 from esrally.mechanic import provisioner
+from esrally.utils import convert
 
 
 class ProvisionerTests(TestCase):
@@ -12,12 +14,11 @@ class ProvisionerTests(TestCase):
         mock_path_exists.return_value = False
 
         cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
-        cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
-        cfg.add(config.Scope.application, "provisioning", "install.preserve", True)
-        cfg.add(config.Scope.application, "provisioning", "local.data.paths", ["/tmp/some/data-path-dir"])
+        cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", True)
+        cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg)
+        p = provisioner.Provisioner(cfg, install_dir="es-bin", single_machine=True)
         p.cleanup()
 
         mock_path_exists.assert_not_called()
@@ -29,12 +30,12 @@ class ProvisionerTests(TestCase):
         mock_path_exists.return_value = True
 
         cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
-        cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
-        cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
-        cfg.add(config.Scope.application, "provisioning", "local.data.paths", ["/tmp/some/data-path-dir"])
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
+        cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
+        cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg)
+        p = provisioner.Provisioner(cfg, install_dir="es-bin", single_machine=True)
+        p.data_paths = ["/tmp/some/data-path-dir"]
         p.cleanup()
 
         expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/challenge/es-bin")]
@@ -51,17 +52,29 @@ class ProvisionerTests(TestCase):
         mock_path_exists.return_value = True
 
         cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        cfg.add(config.Scope.application, "system", "challenge.root.dir", "/rally-root/track/challenge")
-        cfg.add(config.Scope.application, "benchmarks", "car", "defaults")
-        cfg.add(config.Scope.application, "builder", "candidate.bin.path", "/data/builds/distributions/")
-        cfg.add(config.Scope.application, "provisioning", "local.install.dir", "es-bin")
-        cfg.add(config.Scope.application, "provisioning", "install.preserve", False)
-        cfg.add(config.Scope.application, "provisioning", "datapaths", ["/var/elasticsearch"])
-        cfg.add(config.Scope.application, "provisioning", "node.http.port", 39200)
+        cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
+        cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/var/elasticsearch"])
 
-        p = provisioner.Provisioner(cfg)
-        p.prepare()
+        p = provisioner.Provisioner(cfg, install_dir="es-bin", single_machine=True)
+        p.prepare("/data/builds/distributions/")
 
-        self.assertEqual(cfg.opts("provisioning", "local.binary.path"), "/install/elasticsearch-5.0.0-SNAPSHOT")
-        self.assertEqual(cfg.opts("provisioning", "local.data.paths"), ["/var/elasticsearch/data"])
+        self.assertEqual(p.binary_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
+        self.assertEqual(p.data_paths, ["/var/elasticsearch/data"])
+
+
+class DockerProvisionerTests(TestCase):
+    @mock.patch("esrally.utils.sysstats.total_memory")
+    def test_docker_vars(self, total_memory):
+        total_memory.return_value = convert.gb_to_bytes(64)
+        tmp = tempfile.gettempdir()
+
+        docker = provisioner.DockerProvisioner("defaults", tmp, "5.0.0", "../../")
+
+        self.assertEqual({
+            "es_java_opts": "",
+            "container_memory_gb": "32g",
+            "es_data_dir": "%s/data" % tmp,
+            "es_version": "5.0.0"
+        }, docker.docker_vars)
+

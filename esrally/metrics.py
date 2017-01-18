@@ -9,8 +9,6 @@ import zlib
 from enum import Enum, IntEnum
 
 import certifi
-import elasticsearch
-import elasticsearch.helpers
 import tabulate
 from esrally import time, exceptions, config
 from esrally.utils import console
@@ -40,6 +38,7 @@ class EsClient:
         return self.guarded(self._client.indices.refresh, index=index)
 
     def bulk_index(self, index, doc_type, items):
+        import elasticsearch.helpers
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
     def index(self, index, doc_type, item):
@@ -49,6 +48,7 @@ class EsClient:
         return self.guarded(self._client.search, index=index, doc_type=doc_type, body=body)
 
     def guarded(self, target, *args, **kwargs):
+        import elasticsearch
         try:
             return target(*args, **kwargs)
         except elasticsearch.exceptions.AuthenticationException:
@@ -81,8 +81,6 @@ class EsClient:
             raise exceptions.RallyError(msg)
 
 
-
-
 class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
@@ -102,6 +100,7 @@ class EsClientFactory:
         else:
             auth = None
         logger.info("Creating connection to metrics store at %s:%s" % (host, port))
+        import elasticsearch
         self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
                                                    use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where())
 
@@ -118,7 +117,7 @@ class IndexTemplateProvider:
         self._config = config
 
     def template(self):
-        script_dir = self._config.opts("system", "rally.root")
+        script_dir = self._config.opts("node", "rally.root")
         mapping_template = "%s/resources/rally-mapping.json" % script_dir
         return open(mapping_template).read()
 
@@ -142,27 +141,25 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(config, read_only=True, invocation=None, track=None, challenge=None, car=None):
+def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=None, car=None):
     """
     Creates a proper metrics store based on the current configuration.
 
-    :param config: Config object.
+    :param cfg: Config object.
     :param read_only: Whether to open the metrics store only for reading (Default: True).
     :return: A metrics store implementation.
     """
-    if config.opts("reporting", "datastore.type") == "elasticsearch":
+    if cfg.opts("reporting", "datastore.type") == "elasticsearch":
         logger.info("Creating ES metrics store")
-        store = EsMetricsStore(config)
+        store = EsMetricsStore(cfg)
     else:
         logger.info("Creating in-memory metrics store")
-        store = InMemoryMetricsStore(config)
+        store = InMemoryMetricsStore(cfg)
 
-    selected_invocation = config.opts("meta", "time.start") if invocation is None else invocation
-    selected_track = config.opts("benchmarks", "track") if track is None else track
-    selected_challenge = config.opts("benchmarks", "challenge") if challenge is None else challenge
-    selected_car = config.opts("benchmarks", "car") if car is None else car
+    selected_invocation = cfg.opts("system", "time.start") if invocation is None else invocation
+    selected_car = cfg.opts("mechanic", "car.name") if car is None else car
 
-    store.open(selected_invocation, selected_track, selected_challenge, selected_car, create=not read_only)
+    store.open(selected_invocation, track, challenge, selected_car, create=not read_only)
     return store
 
 
@@ -176,22 +173,22 @@ class MetricsStore:
     Abstract metrics store
     """
 
-    def __init__(self, config, clock=time.Clock, meta_info=None, lap=None):
+    def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
         """
         Creates a new metrics store.
 
-        :param config: The config object. Mandatory.
+        :param cfg: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        self._config = config
+        self._config = cfg
         self._invocation = None
         self._track = None
         self._challenge = None
         self._car = None
         self._lap = lap
-        self._environment_name = config.opts("system", "env.name")
+        self._environment_name = cfg.opts("system", "env.name")
         if meta_info is None:
             self._meta_info = {
                 MetaInfoScope.cluster: {},
@@ -202,7 +199,7 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
 
-    def open(self, invocation, track_name, challenge_name, car_name, create=False):
+    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
         Opens a metrics store for a specific invocation, track, challenge and car.
 
@@ -210,16 +207,23 @@ class MetricsStore:
         :param track_name: Track name.
         :param challenge_name: Challenge name.
         :param car_name: Car name.
+        :param ctx: An metrics store open context retrieved from another metrics store with ``#open_context``.
         :param create: True if an index should be created (if necessary). This is typically True, when attempting to write metrics and
         False when it is just opened for reading (as we can assume all necessary indices exist at this point).
         """
-        self._invocation = time.to_iso8601(invocation)
-        self._track = track_name
-        self._challenge = challenge_name
-        self._car = car_name
+        if ctx:
+            self._invocation = ctx["invocation"]
+            self._track = ctx["track"]
+            self._challenge = ctx["challenge"]
+            self._car = ctx["car"]
+        else:
+            self._invocation = time.to_iso8601(invocation)
+            self._track = track_name
+            self._challenge = challenge_name
+            self._car = car_name
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
                     (self._invocation, track_name, challenge_name, car_name))
-        user_tag = self._config.opts("system", "user.tag", mandatory=False)
+        user_tag = self._config.opts("race", "user.tag", mandatory=False)
         if user_tag and user_tag.strip() != "":
             try:
                 user_tag_key, user_tag_value = user_tag.split(":")
@@ -289,6 +293,19 @@ class MetricsStore:
         :return: All currently stored meta-info. This is considered Rally internal API and not intended for normal client consumption.
         """
         return self._meta_info
+
+    @meta_info.setter
+    def meta_info(self, meta_info):
+        self._meta_info = meta_info
+
+    @property
+    def open_context(self):
+        return {
+            "invocation": self._invocation,
+            "track": self._track,
+            "challenge": self._challenge,
+            "car": self._car
+        }
 
     def put_count_cluster_level(self, name, count, unit=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
                                 absolute_time=None, relative_time=None, meta_data=None):
@@ -549,7 +566,7 @@ class EsMetricsStore(MetricsStore):
     METRICS_DOC_TYPE = "metrics"
 
     def __init__(self,
-                 config,
+                 cfg,
                  client_factory_class=EsClientFactory,
                  index_template_provider_class=IndexTemplateProvider,
                  clock=time.Clock, meta_info=None, lap=None):
@@ -563,15 +580,15 @@ class EsMetricsStore(MetricsStore):
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        MetricsStore.__init__(self, config=config, clock=clock, meta_info=meta_info, lap=lap)
+        MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info, lap=lap)
         self._index = None
-        self._client = client_factory_class(config).create()
-        self._index_template_provider = index_template_provider_class(config)
+        self._client = client_factory_class(cfg).create()
+        self._index_template_provider = index_template_provider_class(cfg)
         self._docs = None
 
-    def open(self, invocation, track_name, challenge_name, car_name, create=False):
+    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
-        MetricsStore.open(self, invocation, track_name, challenge_name, car_name, create)
+        MetricsStore.open(self, invocation, track_name, challenge_name, car_name, ctx, create)
         self._index = index_name(invocation)
         # reduce a bit of noise in the metrics cluster log
         if create:
@@ -715,17 +732,17 @@ class EsMetricsStore(MetricsStore):
 
 
 class InMemoryMetricsStore(MetricsStore):
-    def __init__(self, config, clock=time.Clock, meta_info=None, lap=None):
+    def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
         """
 
         Creates a new metrics store.
 
-        :param config: The config object. Mandatory.
+        :param cfg: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        super().__init__(config=config, clock=clock, meta_info=meta_info, lap=lap)
+        super().__init__(cfg=cfg, clock=clock, meta_info=meta_info, lap=lap)
         self.docs = []
 
     def __del__(self):
@@ -811,18 +828,18 @@ class InMemoryMetricsStore(MetricsStore):
                 ]
 
 
-def race_store(config):
+def race_store(cfg):
     """
     Creates a proper race store based on the current configuration.
     :param config: Config object. Mandatory.
     :return: A race store implementation.
     """
-    if config.opts("reporting", "datastore.type") == "elasticsearch":
+    if cfg.opts("reporting", "datastore.type") == "elasticsearch":
         logger.info("Creating ES race store")
-        return EsRaceStore(config)
+        return EsRaceStore(cfg)
     else:
         logger.info("Creating in-memory race store")
-        return InMemoryRaceStore(config)
+        return InMemoryRaceStore(cfg)
 
 
 def list_races(cfg):
@@ -838,11 +855,49 @@ def list_races(cfg):
         console.println("No recent races found.")
 
 
-class InMemoryRaceStore:
-    def __init__(self, config):
-        self.config = config
+class RaceStore:
+    def __init__(self, cfg):
+        self.config = cfg
+        self.environment_name = cfg.opts("system", "env.name")
+        self.trial_timestamp = cfg.opts("system", "time.start")
+        self.current_race = None
 
-    def store_race(self, t):
+    def store_race(self, track, hosts, revision, distribution_version):
+        laps = self.config.opts("race", "laps")
+        challenge = track.find_challenge_or_default(self.config.opts("track", "challenge.name"))
+
+        selected_challenge = {
+            "name": challenge.name,
+            "operations": []
+        }
+        for tasks in challenge.schedule:
+            for task in tasks:
+                selected_challenge["operations"].append(task.operation.name)
+        doc = {
+            "environment": self.environment_name,
+            "trial-timestamp": time.to_iso8601(self.trial_timestamp),
+            "pipeline": self.config.opts("race", "pipeline"),
+            "revision": revision,
+            "distribution-version": distribution_version,
+            "laps": laps,
+            "track": track.name,
+            "selected-challenge": selected_challenge,
+            "car": self.config.opts("mechanic", "car.name"),
+            "target-hosts": ["%s:%s" % (i["host"], i["port"]) for i in hosts],
+            "user-tag": self.config.opts("race", "user.tag")
+        }
+        self.current_race = Race(doc)
+        self._store(doc)
+
+    def _store(self, doc):
+        raise NotImplementedError("abstract method")
+
+
+class InMemoryRaceStore(RaceStore):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+
+    def _store(self, doc):
         pass
 
     def list(self):
@@ -852,53 +907,24 @@ class InMemoryRaceStore:
         return None
 
 
-class EsRaceStore:
+class EsRaceStore(RaceStore):
     RACE_DOC_TYPE = "races"
 
-    def __init__(self,
-                 config,
-                 client_factory_class=EsClientFactory,
-                 index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new metrics store.
 
         :param config: The config object. Mandatory.
         :param client_factory_class: This parameter is optional and needed for testing.
         """
-        self.config = config
-        self.environment_name = config.opts("system", "env.name")
+        super().__init__(config)
         self.client = client_factory_class(config).create()
         self.index_template_provider = index_template_provider_class(config)
 
-    def store_race(self, t):
+    def _store(self, doc):
         # always update the mapping to the latest version
         self.client.put_template("rally", self.index_template_provider.template())
-
-        trial_timestamp = self.config.opts("meta", "time.start")
-        laps = self.config.opts("benchmarks", "laps")
-
-        selected_challenge = {}
-        for challenge in t.challenges:
-            if challenge.name == self.config.opts("benchmarks", "challenge"):
-                selected_challenge["name"] = challenge.name
-                selected_challenge["operations"] = []
-                for tasks in challenge.schedule:
-                    for task in tasks:
-                        selected_challenge["operations"].append(task.operation.name)
-        doc = {
-            "environment": self.environment_name,
-            "trial-timestamp": time.to_iso8601(trial_timestamp),
-            "pipeline": self.config.opts("system", "pipeline"),
-            "revision": self.config.opts("source", "revision"),
-            "distribution-version": self.config.opts("source", "distribution.version"),
-            "laps": laps,
-            "track": t.name,
-            "selected-challenge": selected_challenge,
-            "car": self.config.opts("benchmarks", "car"),
-            "target-hosts": ["%s:%s" % (i["host"], i["port"]) for i in self.config.opts("launcher", "external.target.hosts")],
-            "user-tag": self.config.opts("system", "user.tag")
-        }
-        self.client.index(index_name(trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc)
+        self.client.index(index_name(self.trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc)
 
     def list(self):
         filters = [{
@@ -994,4 +1020,3 @@ class Operation:
 
     def __str__(self, *args, **kwargs):
         return self.name
-

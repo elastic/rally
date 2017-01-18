@@ -1,1 +1,1 @@
-from .driver import Driver, StartBenchmark, BenchmarkComplete, BenchmarkFailure
+from .driver import Driver, StartBenchmark, BenchmarkComplete, BenchmarkFailure, BenchmarkCancelled

@@ -3,19 +3,27 @@ import glob
 import shutil
 import logging
 
-from esrally import config, exceptions
+import jinja2
+
+from esrally import exceptions
 from esrally.mechanic import car
-from esrally.utils import io, versions, console
+from esrally.utils import io, versions, console, convert, sysstats
 
 logger = logging.getLogger("rally.provisioner")
 
 
-def local_provisioner(cfg):
-    return Provisioner(cfg)
+def local_provisioner(cfg, install_dir, single_machine):
+    return Provisioner(cfg, install_dir, single_machine)
 
 
 def no_op_provisioner(cfg):
-    return NoOpProvisioner(cfg)
+    return NoOpProvisioner(cfg.opts("mechanic", "car.name"))
+
+
+def docker_provisioner(cfg, install_dir):
+    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    rally_root = cfg.opts("node", "rally.root")
+    return DockerProvisioner(cfg.opts("mechanic", "car.name"), install_dir, distribution_version, rally_root)
 
 
 class Provisioner:
@@ -24,51 +32,51 @@ class Provisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, install_dir, single_machine):
         self._config = cfg
-        self.preserve = self._config.opts("provisioning", "install.preserve")
+        self.preserve = self._config.opts("mechanic", "preserve.install")
+        car_name = self._config.opts("mechanic", "car.name")
+        self.car = car.select_car(car_name)
+        self.http_port = self._config.opts("provisioning", "node.http.port")
+        self.data_root_paths = self._config.opts("mechanic", "node.datapaths")
+        self.data_paths = None
+        self.binary_path = None
+        self.install_dir = install_dir
+        self.single_machine = single_machine
 
-    def prepare(self):
-        selected_car = car.select_car(self._config)
-        http_port = self._config.opts("provisioning", "node.http.port")
-        self._install_binary()
-        self._configure(selected_car, http_port)
-        return selected_car
+    def prepare(self, binary):
+        self._install_binary(binary)
+        self._configure()
 
     def cleanup(self):
-        install_dir = self._install_dir()
         if self.preserve:
-            logger.info("Preserving benchmark candidate installation at [%s]." % install_dir)
-            console.info("Keeping benchmark candidate including index at [%s] (will need several GB)." % install_dir)
+            logger.info("Preserving benchmark candidate installation at [%s]." % self.install_dir)
+            console.info("Keeping benchmark candidate including index at [%s] (will need several GB)." % self.install_dir)
         else:
-            logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
-            if os.path.exists(install_dir):
-                shutil.rmtree(install_dir)
-            data_paths = self._config.opts("provisioning", "local.data.paths")
-            if data_paths is not None:
-                for path in data_paths:
-                    if os.path.exists(path):
-                        shutil.rmtree(path)
+            logger.info("Wiping benchmark candidate installation at [%s]." % self.install_dir)
+            for path in self.data_paths:
+                if os.path.exists(path):
+                    shutil.rmtree(path)
 
-    def _install_binary(self):
-        binary = self._config.opts("builder", "candidate.bin.path")
-        install_dir = self._install_dir()
-        logger.info("Preparing candidate locally in [%s]." % install_dir)
-        io.ensure_dir(install_dir)
+            if os.path.exists(self.install_dir):
+                shutil.rmtree(self.install_dir)
+
+    def _install_binary(self, binary):
+        logger.info("Preparing candidate locally in [%s]." % self.install_dir)
+        io.ensure_dir(self.install_dir)
         if not self.preserve:
             console.info("Rally will delete the benchmark candidate after the benchmark")
 
-        logger.info("Unzipping %s to %s" % (binary, install_dir))
-        io.decompress(binary, install_dir)
-        binary_path = glob.glob("%s/elasticsearch*" % install_dir)[0]
-        self._config.add(config.Scope.benchmark, "provisioning", "local.binary.path", binary_path)
+        logger.info("Unzipping %s to %s" % (binary, self.install_dir))
+        io.decompress(binary, self.install_dir)
+        self.binary_path = glob.glob("%s/elasticsearch*" % self.install_dir)[0]
 
-    def _configure(self, car, http_port):
-        self._configure_logging(car)
-        self._configure_cluster(car, http_port)
+    def _configure(self):
+        self._configure_logging()
+        self._configure_node()
 
-    def _configure_logging(self, car):
-        log_cfg = car.custom_logging_config
+    def _configure_logging(self):
+        log_cfg = self.car.custom_logging_config
         if log_cfg:
             log_config_type, log_config_path = self._es_log_config()
             logger.info("Replacing pre-bundled ES log configuration at [%s] with custom config: [%s]" %
@@ -77,9 +85,8 @@ class Provisioner:
                 log_config.write(log_cfg[log_config_type])
 
     def _es_log_config(self):
-        binary_path = self._config.opts("provisioning", "local.binary.path")
-        logging_yml_path = "%s/config/logging.yml" % binary_path
-        log4j2_properties_path = "%s/config/log4j2.properties" % binary_path
+        logging_yml_path = "%s/config/logging.yml" % self.binary_path
+        log4j2_properties_path = "%s/config/log4j2.properties" % self.binary_path
 
         if os.path.isfile(logging_yml_path):
             return "logging.yml", logging_yml_path
@@ -88,26 +95,28 @@ class Provisioner:
         else:
             raise exceptions.SystemSetupError("Unrecognized Elasticsearch log config file format")
 
-    def _configure_cluster(self, car, http_port):
-        binary_path = self._config.opts("provisioning", "local.binary.path")
-        logger.info("Using port [%d]" % http_port)
-        env_name = self._config.opts("system", "env.name")
-        additional_config = car.custom_config_snippet
-        data_paths = self._data_paths()
-        logger.info("Using data paths [%s]" % data_paths)
-        self._config.add(config.Scope.challenge, "provisioning", "local.data.paths", data_paths)
-        s = open("%s/config/elasticsearch.yml" % binary_path, "r").read()
-        s += "\ncluster.name: %s\n" % "benchmark.%s" % env_name
-        s += self.number_of_nodes(car)
-        s += "\npath.data: %s" % ", ".join(data_paths)
-        s += "\nhttp.port: %d-%d" % (http_port, http_port + 100)
-        s += "\ntransport.tcp.port: %d-%d" % (http_port + 100, http_port + 200)
+    def _configure_node(self):
+        logger.info("Using port [%d]" % self.http_port)
+        additional_config = self.car.custom_config_snippet
+        self.data_paths = self._data_paths()
+        logger.info("Using data paths [%s]" % self.data_paths)
+        s = open("%s/config/elasticsearch.yml" % self.binary_path, "r").read()
+        s += "\ncluster.name: rally-benchmark\n"
+        s += self.number_of_nodes()
+        if self.single_machine:
+            logger.info("Binding node to 127.0.0.1 (single-machine benchmark).")
+        else:
+            logger.info("Binding node to 0.0.0.0 (multi-machine benchmark).")
+            s += "\nnetwork.host: 0.0.0.0"
+        s += "\npath.data: %s" % ", ".join(self.data_paths)
+        s += "\nhttp.port: %d-%d" % (self.http_port, self.http_port + 100)
+        s += "\ntransport.tcp.port: %d-%d" % (self.http_port + 100, self.http_port + 200)
         if additional_config:
             s += "\n%s" % additional_config
-        open("%s/config/elasticsearch.yml" % binary_path, "w").write(s)
+        open("%s/config/elasticsearch.yml" % self.binary_path, "w").write(s)
 
-    def number_of_nodes(self, car):
-        distribution_version = self._config.opts("source", "distribution.version", mandatory=False)
+    def number_of_nodes(self):
+        distribution_version = self._config.opts("mechanic", "distribution.version", mandatory=False)
         configure = False
         if versions.is_version_identifier(distribution_version):
             major, _, _, _ = versions.components(distribution_version)
@@ -116,31 +125,80 @@ class Provisioner:
         else:
             # we're very likely benchmarking from sources which is ES 5+
             configure = True
-        return "\nnode.max_local_storage_nodes: %d" % car.nodes if configure else ""
+        return "\nnode.max_local_storage_nodes: %d" % self.car.nodes if configure else ""
 
     def _data_paths(self):
-        data_paths = self._config.opts("provisioning", "datapaths")
-        if data_paths is None:
-            binary_path = self._config.opts("provisioning", "local.binary.path")
-            return ["%s/data" % binary_path]
+        if self.data_root_paths is None:
+            return ["%s/data" % self.binary_path]
         else:
-            return ["%s/data" % path for path in data_paths]
-
-    def _install_dir(self):
-        root = self._config.opts("system", "challenge.root.dir")
-        install = self._config.opts("provisioning", "local.install.dir")
-        return "%s/%s" % (root, install)
+            return ["%s/data" % path for path in self.data_root_paths]
 
 
 class NoOpProvisioner:
-    def __init__(self, cfg):
-        self.cfg = cfg
-
-    def prepare(self):
+    def __init__(self, car_name):
         try:
-            return car.select_car(self.cfg)
+            self.car = car.select_car(car_name)
         except exceptions.SystemSetupError:
-            return None
+            self.car = None
+        self.binary_path = None
+        self.data_paths = None
+
+    def prepare(self, binary):
+        return self.car
 
     def cleanup(self):
         pass
+
+
+class DockerProvisioner:
+    def __init__(self, car_name, install_dir, distribution_version, rally_root):
+        self.car = car.select_car(car_name)
+        self.install_dir = install_dir
+        self.distribution_version = distribution_version
+        self.rally_root = rally_root
+        self.binary_path = "%s/docker-compose.yml" % self.install_dir
+        self.data_paths = [self.install_dir]
+
+    def prepare(self, binary):
+        io.ensure_dir(self.install_dir)
+
+        docker_cfg = self._render_template_from_file(self.docker_vars)
+        logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
+
+        with open(self.binary_path, "wt") as f:
+            f.write(docker_cfg)
+
+        return self.car
+
+    @property
+    def docker_vars(self):
+        java_opts = ""
+        if self.car.heap:
+            java_opts += "-Xms%s -Xmx%s " % (self.car.heap, self.car.heap)
+        if self.car.java_opts:
+            java_opts += self.car.java_opts
+
+        return {
+            "es_java_opts": java_opts,
+            "container_memory_gb": "%dg" % (convert.bytes_to_gb(sysstats.total_memory()) // 2),
+            "es_data_dir": "%s/data" % self.install_dir,
+            "es_version": self.distribution_version
+        }
+
+    def cleanup(self):
+        # TODO dm: We can remove the compose file and the data paths here (just as the normal provisioner does)
+        pass
+
+    def _render_template(self, loader, template_name, variables):
+        env = jinja2.Environment(loader=loader)
+        for k, v in variables.items():
+            env.globals[k] = v
+        template = env.get_template(template_name)
+
+        return template.render()
+
+    def _render_template_from_file(self, variables):
+        compose_file = "%s/resources/docker-compose.yml" % self.rally_root
+        return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
+                                     template_name=io.basename(compose_file),
+                                     variables=variables)

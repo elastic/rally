@@ -1,13 +1,11 @@
-import logging
-import shutil
-import sys
 import collections
+import logging
+import sys
 
 import tabulate
-import thespian.actors
-from esrally import config, exceptions, paths, track, driver, reporter, metrics, time, PROGRAM_NAME
+from esrally import actor, config, exceptions, track, driver, reporter, metrics, time, PROGRAM_NAME
 from esrally.mechanic import mechanic
-from esrally.utils import console, io, convert
+from esrally.utils import console, convert
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -40,72 +38,107 @@ class Pipeline:
         self.stable = stable
         pipelines[name] = self
 
-    # def __del__(self):
-    #     if pipelines is not None:
-    #         pipelines.pop(self.name, default=None)
-
     def __call__(self, cfg):
         self.target(cfg)
 
 
 class Benchmark:
-    def __init__(self, cfg, mechanic, metrics_store):
+    def __init__(self, cfg, sources=False, build=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
-        self.mechanic = mechanic
-        self.metrics_store = metrics_store
+        self.track = track.load_track(self.cfg)
+        self.metrics_store = metrics.metrics_store(
+            self.cfg,
+            track=self.track.name,
+            challenge=self.track.find_challenge_or_default(self.cfg.opts("track", "challenge.name")).name,
+            read_only=False
+        )
+        self.race_store = metrics.race_store(self.cfg)
+        self.sources = sources
+        self.build = build
+        self.distribution = distribution
+        self.external = external
+        self.docker = docker
         self.actor_system = None
-        self.track = None
+        self.mechanic = None
 
     def setup(self):
-        self.actor_system = thespian.actors.ActorSystem()
-        self.mechanic.start_engine()
-        self.track = track.load_track(self.cfg)
-        metrics.race_store(self.cfg).store_race(self.track)
+        # at this point an actor system has to run and we should only join
+        self.actor_system = actor.bootstrap_actor_system(try_join=True)
+        self.mechanic = self.actor_system.createActor(mechanic.MechanicActor)
+        result = self.actor_system.ask(self.mechanic,
+                                       mechanic.StartEngine(
+                                           self.cfg, self.metrics_store.open_context,
+                                           self.sources, self.build, self.distribution, self.external, self.docker))
+        if isinstance(result, mechanic.EngineStarted):
+            self.metrics_store.meta_info = result.system_meta_info
+            cluster = result.cluster_meta_info
+            self.race_store.store_race(self.track, cluster.hosts, cluster.revision, cluster.distribution_version)
+            console.info("Racing on track [%s], challenge [%s] and car [%s]" %
+                         (self.track,
+                          self.track.find_challenge_or_default(self.cfg.opts("track", "challenge.name")),
+                          self.cfg.opts("mechanic", "car.name")))
+            # just ensure it is optically separated
+            console.println("")
+        elif isinstance(result, mechanic.Failure):
+            raise exceptions.RallyError(result.message)
+        else:
+            raise exceptions.RallyError("Mechanic has not started engine but instead [%s]. Terminating race without result." % str(result))
 
     def run(self, lap):
+        """
+        Runs the provided lap of a benchmark.
+
+        :param lap: The current lap number.
+        :return: True iff the benchmark may go on. False iff the user has cancelled the benchmark.
+        """
         self.metrics_store.lap = lap
-        main_driver = self.actor_system.createActor(driver.Driver)
-        self.mechanic.on_benchmark_start()
+        logger.info("Notifying mechanic of benchmark start.")
+        # we could use #tell() here but then the ask call to driver below will fail because it returns the response that mechanic
+        # sends (see http://godaddy.github.io/Thespian/doc/using.html#sec-6-6-1).
+        self.actor_system.ask(self.mechanic, mechanic.OnBenchmarkStart(lap))
+        logger.info("Asking driver to start benchmark.")
+        main_driver = self.actor_system.createActor(driver.Driver, targetActorRequirements={"coordinator": True})
         result = self.actor_system.ask(main_driver,
-                                       driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, self.metrics_store.lap))
+                                       driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, lap))
         if isinstance(result, driver.BenchmarkComplete):
             logger.info("Benchmark is complete.")
-            self.mechanic.on_benchmark_stop()
+            # we could use #tell() here but then the ask call to driver below will fail because it returns the response that mechanic
+            # sends (see http://godaddy.github.io/Thespian/doc/using.html#sec-6-6-1).
+            self.actor_system.ask(self.mechanic, mechanic.OnBenchmarkStop())
             logger.info("Bulk adding data to metrics store.")
             self.metrics_store.bulk_add(result.metrics)
             logger.info("Flushing metrics data...")
             self.metrics_store.flush()
             logger.info("Flushing done")
+        elif isinstance(result, driver.BenchmarkCancelled):
+            logger.info("User has cancelled the benchmark.")
+            return False
         elif isinstance(result, driver.BenchmarkFailure):
+            logger.info("Driver has reported a benchmark failure.")
             raise exceptions.RallyError(result.message, result.cause)
         else:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
+        return True
 
     def teardown(self):
-        self.mechanic.stop_engine()
+        result = self.actor_system.ask(self.mechanic, mechanic.StopEngine())
+        if isinstance(result, mechanic.EngineStopped):
+            logger.info("Bulk adding system metrics to metrics store.")
+            self.metrics_store.bulk_add(result.system_metrics)
+        elif isinstance(result, mechanic.Failure):
+            raise exceptions.RallyError(result.message, result.cause)
+        else:
+            raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
+
         logger.info("Closing metrics store.")
         self.metrics_store.close()
         logger.info("Summarizing results.")
-        reporter.summarize(self.metrics_store, self.cfg, self.track)
-        logger.info("Sweeping")
-        self.sweep()
-
-    def sweep(self):
-        invocation_root = self.cfg.opts("system", "invocation.root.dir")
-        track_name = self.cfg.opts("benchmarks", "track")
-        challenge_name = self.cfg.opts("benchmarks", "challenge")
-        car_name = self.cfg.opts("benchmarks", "car")
-
-        log_root = paths.Paths(self.cfg).log_root()
-        archive_path = "%s/logs-%s-%s-%s.zip" % (invocation_root, track_name, challenge_name, car_name)
-        io.compress(log_root, archive_path)
-        console.println("")
-        console.info("Archiving logs in %s" % archive_path)
-        shutil.rmtree(log_root)
+        reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
 
 
 class LapCounter:
-    def __init__(self, metrics_store, track, laps, cfg):
+    def __init__(self, race_store, metrics_store, track, laps, cfg):
+        self.race_store = race_store
         self.metrics_store = metrics_store
         self.track = track
         self.laps = laps
@@ -125,7 +158,7 @@ class LapCounter:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
             hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
-            reporter.summarize(self.metrics_store, self.cfg, track=self.track, lap=lap)
+            reporter.summarize(self.race_store, self.metrics_store, self.cfg, track=self.track, lap=lap)
             console.println("")
             if lap < self.laps:
                 remaining = (self.laps - lap) * self.lap_times / lap
@@ -136,55 +169,62 @@ class LapCounter:
             console.println("")
 
 
-def print_race_info(cfg):
-    track_name = cfg.opts("benchmarks", "track")
-    challenge_name = cfg.opts("benchmarks", "challenge")
-    selected_car_name = cfg.opts("benchmarks", "car")
-    console.info("Racing on track [%s], challenge [%s] and car [%s]" % (track_name, challenge_name, selected_car_name))
-    # just ensure it is optically separated
-    console.println("")
-
-
-def race(benchmark, cfg):
-    laps = cfg.opts("benchmarks", "laps")
-    print_race_info(cfg)
+def race(benchmark):
+    cfg = benchmark.cfg
+    laps = cfg.opts("race", "laps")
     benchmark.setup()
-    lap_counter = LapCounter(benchmark.metrics_store, benchmark.track, laps, cfg)
+    lap_counter = LapCounter(benchmark.race_store, benchmark.metrics_store, benchmark.track, laps, cfg)
 
     for lap in range(1, laps + 1):
         lap_counter.before_lap(lap)
-        benchmark.run(lap)
-        lap_counter.after_lap(lap)
+        may_continue = benchmark.run(lap)
+        if may_continue:
+            lap_counter.after_lap(lap)
+        else:
+            # Early termination due to cancellation by the user
+            break
 
     benchmark.teardown()
 
 
+def set_default_hosts(cfg, host="127.0.0.1", port=9200):
+    configured_hosts = cfg.opts("client", "hosts", mandatory=False)
+    if configured_hosts:
+        logger.info("Using configured hosts %s" % configured_hosts)
+    else:
+        logger.info("Setting default host to [%s:%d]" % (host, port))
+        cfg.add(config.Scope.benchmark, "client", "hosts", [{"host": host, "port": port}])
+
+
 # Poor man's curry
 def from_sources_complete(cfg):
-    metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, sources=True, build=True), metrics_store), cfg)
+    port = cfg.opts("provisioning", "node.http.port")
+    set_default_hosts(cfg, port=port)
+    return race(Benchmark(cfg, sources=True, build=True))
 
 
 def from_sources_skip_build(cfg):
-    metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, sources=True, build=False), metrics_store), cfg)
+    port = cfg.opts("provisioning", "node.http.port")
+    set_default_hosts(cfg, port=port)
+    return race(Benchmark(cfg, sources=True, build=False))
 
 
 def from_distribution(cfg):
-    metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, distribution=True), metrics_store), cfg)
+    port = cfg.opts("provisioning", "node.http.port")
+    set_default_hosts(cfg, port=port)
+    return race(Benchmark(cfg, distribution=True))
 
 
 def benchmark_only(cfg):
+    set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
-    cfg.add(config.Scope.benchmark, "benchmarks", "car", "external")
-    metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, external=True), metrics_store), cfg)
+    cfg.add(config.Scope.benchmark, "mechanic", "car.name", "external")
+    return race(Benchmark(cfg, external=True))
 
 
 def docker(cfg):
-    metrics_store = metrics.metrics_store(cfg, read_only=False)
-    return race(Benchmark(cfg, mechanic.create(cfg, metrics_store, docker=True), metrics_store), cfg)
+    set_default_hosts(cfg)
+    return race(Benchmark(cfg, docker=True))
 
 
 Pipeline("from-sources-complete",
@@ -214,9 +254,9 @@ def list_pipelines():
 
 
 def run(cfg):
-    name = cfg.opts("system", "pipeline")
+    name = cfg.opts("race", "pipeline")
     if len(name) == 0:
-        distribution_version = cfg.opts("source", "distribution.version")
+        distribution_version = cfg.opts("mechanic", "distribution.version")
         if len(distribution_version) > 0:
             name = "from-distribution"
         else:
@@ -235,6 +275,8 @@ def run(cfg):
     except exceptions.RallyError as e:
         # just pass on our own errors. It should be treated differently on top-level
         raise e
+    except KeyboardInterrupt:
+        console.info("User cancelled benchmark", logger=logger)
     except BaseException:
         tb = sys.exc_info()[2]
         raise exceptions.RallyError("This race ended with a fatal crash.").with_traceback(tb)

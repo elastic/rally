@@ -89,7 +89,7 @@ def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None)
 def warn(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
     if not QUIET:
         println(msg, console_prefix="[WARNING]", end=end, flush=flush, overline=overline, underline=underline
-                , logger=logger.warn if logger else None)
+                , logger=logger.warning if logger else None)
 
 
 def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
