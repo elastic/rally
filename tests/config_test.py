@@ -159,6 +159,8 @@ class ConfigFactoryTests(TestCase):
         guess_java_home.return_value = "/tests/java8/home"
 
         f = config.ConfigFactory(i=MockInput([
+            # benchmark root directory
+            "/var/data/rally",
             # src dir
             "/Projects/elasticsearch/src",
             # env
@@ -182,6 +184,7 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("meta" in config_store.config)
         self.assertEqual("7", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
+        self.assertEqual("/var/data/rally", config_store.config["system"]["root.dir"])
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
         self.assertTrue("build" in config_store.config)

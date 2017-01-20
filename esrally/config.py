@@ -232,7 +232,6 @@ class ConfigFactory:
         self.o("[✓] Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
         gradle_bin = io.guess_install_location("gradle")
-        # default_jdk_7 = io.guess_java_home(major_version=7)
         default_jdk_8 = io.guess_java_home(major_version=8)
 
         self.print_detection_result("git    ", git_path)
@@ -257,7 +256,10 @@ class ConfigFactory:
             self.o("")
 
         root_dir = "%s/benchmarks" % config_file.config_dir
-        self.o("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
+        if advanced_config:
+            root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory:", default_value=root_dir))
+        else:
+            self.o("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
 
         if benchmark_from_sources:
             # We try to autodetect an existing ES source directory
