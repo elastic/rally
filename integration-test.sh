@@ -4,7 +4,7 @@ set -e
 
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
-readonly DISTRIBUTIONS=(1.7.5 2.4.1 5.0.0)
+readonly DISTRIBUTIONS=(1.7.6 2.4.4 5.1.2)
 # TODO: Should we just derive the tracks with Rally itself?
 readonly TRACKS=(geonames geopoint nyc_taxis pmc logging)
 
