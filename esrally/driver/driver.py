@@ -566,7 +566,7 @@ def _do_wait(es, expected_cluster_status):
                 result = es.cluster.health(wait_for_status=expected_cluster_status, wait_for_relocating_shards=0, timeout="3s")
             else:
                 result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s",
-                                           params={"wait_for_no_relocating_shards": True})
+                                           params={"wait_for_no_relocating_shards": "true"})
         except (socket.timeout, elasticsearch.exceptions.ConnectionError):
             pass
         except elasticsearch.exceptions.TransportError as e:
