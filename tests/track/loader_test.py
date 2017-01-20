@@ -489,3 +489,90 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
+
+    def test_either_target_throughput_or_target_interval(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append",
+                            "target-throughput": 10,
+                            "target-interval": 3
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' specifies target-interval "
+                         "and target-throughput but only one of them is allowed.", ctx.exception.args[0])
+
+    def test_supports_target_throughput(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append",
+                            "target-throughput": 10,
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual(10, resulting_track.challenges[0].schedule[0].target_throughput)
+
+    def test_supports_target_interval(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append",
+                            "target-interval": 5,
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual(0.2, resulting_track.challenges[0].schedule[0].target_throughput)

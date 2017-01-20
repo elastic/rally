@@ -575,6 +575,15 @@ class TrackSpecificationReader:
         if op_name not in ops:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
                         "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
+
+        target_interval = self._r(task_spec, "target-interval", error_ctx=op_name, mandatory=False)
+        target_throughput = self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False)
+        if target_interval is not None and target_throughput is not None:
+            self._error("Operation '%s' in challenge '%s' specifies target-interval and target-throughput but only one of them is allowed."
+                        % (op_name, challenge_name))
+        if target_interval:
+            target_throughput = 1 / target_interval
+
         task = track.Task(operation=ops[op_name],
                           meta_data=self._r(task_spec, "meta", error_ctx=op_name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
@@ -583,7 +592,7 @@ class TrackSpecificationReader:
                           warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False),
                           time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False),
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
-                          target_throughput=self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False))
+                          target_throughput=target_throughput)
         if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' mixes warmup iterations with time periods. Please do not mix time periods and "
                         "iterations." % (op_name, challenge_name))

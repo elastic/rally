@@ -300,7 +300,13 @@
                           },
                           "target-throughput": {
                             "type": "number",
-                            "minimum": 0
+                            "minimum": 0,
+                            "description": "Defines the number of operations per second that Rally should attempt to run."
+                          },
+                          "target-interval": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
                           }
                         },
                         "required": ["operation"]
