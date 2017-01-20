@@ -119,7 +119,8 @@ class ForceMerge(Runner):
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                es.indices.optimize(index="_all")
+                # es.indices.optimize(index="_all")
+                es.transport.perform_request("POST", "/_optimize")
             else:
                 raise e
 
