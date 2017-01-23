@@ -457,7 +457,6 @@ class Slice:
     def open(self, file_name, mode):
         self.source = self.source_class(file_name, mode).open()
         # skip offset number of lines
-        print("*** Open [%s] ***" % file_name)
         logger.info("Skipping %d lines in [%s]." % (self.offset, file_name))
         start = time.perf_counter()
         io.skip_lines(file_name, self.source, self.offset)
