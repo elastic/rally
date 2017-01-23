@@ -22,6 +22,16 @@ class Index:
         self.auto_managed = auto_managed
         self.types = types
 
+    def matches(self, pattern):
+        if pattern is None:
+            return True
+        elif pattern in ["_all", "*"]:
+            return True
+        elif self.name == pattern:
+            return True
+        else:
+            return False
+
     @property
     def number_of_documents(self):
         num_docs = 0
@@ -29,7 +39,7 @@ class Index:
             num_docs += t.number_of_documents
         return num_docs
 
-    def __str__(self, *args, **kwargs):
+    def __repr__(self, *args, **kwargs):
         return self.name
 
 

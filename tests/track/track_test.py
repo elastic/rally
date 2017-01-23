@@ -53,3 +53,16 @@ class TrackTests(TestCase):
                                       description="unittest track",
                                       challenges=[another_challenge, default_challenge])
                           .find_challenge_or_default("unknown-name"))
+
+
+class IndexTests(TestCase):
+    def test_matches_exactly(self):
+        self.assertTrue(track.Index("test", auto_managed=TrackTests, types=[]).matches("test"))
+        self.assertFalse(track.Index("test", auto_managed=TrackTests, types=[]).matches(" test"))
+
+    def test_matches_if_no_pattern_is_defined(self):
+        self.assertTrue(track.Index("test", auto_managed=TrackTests, types=[]).matches(pattern=None))
+
+    def test_matches_if_catch_all_pattern_is_defined(self):
+        self.assertTrue(track.Index("test", auto_managed=TrackTests, types=[]).matches(pattern="*"))
+        self.assertTrue(track.Index("test", auto_managed=TrackTests, types=[]).matches(pattern="_all"))

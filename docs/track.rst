@@ -143,6 +143,7 @@ index
 
 The operation type ``index`` supports the following properties:
 
+* ``index`` (optional): An index name that defines which indices should be targeted by this indexing operation. Only needed if the ``index`` section contains more than one index and you don't want to index all of them with this operation.
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
 * ``batch-size`` (optional): Defines how many documents Rally will read at once. This is an expert setting and only meant to avoid accidental bottlenecks for very small bulk sizes (e.g. if you want to benchmark with a bulk-size of 1, you should set batch-size higher).
 * ``pipeline`` (optional): Defines the name of an (existing) ingest pipeline that should be used (only supported from Elasticsearch 5.0).

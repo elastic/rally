@@ -2,7 +2,7 @@ from unittest import TestCase
 
 from esrally import exceptions
 from esrally.utils import io
-from esrally.track import params
+from esrally.track import params, track
 
 
 class SliceTests(TestCase):
@@ -475,6 +475,59 @@ class BulkIndexParamSourceTests(TestCase):
             "batch-size": 20000,
             "pipeline": "test-pipeline"
         }))
+
+    def test_passes_all_indices_by_default(self):
+        index1 = track.Index(name="index1", auto_managed=True, types=[])
+        index2 = track.Index(name="index2", auto_managed=True, types=[])
+
+        source = params.BulkIndexParamSource(
+            indices=[index1, index2],
+            params={
+                "action-and-meta-data": "generate",
+                "conflicts": "random",
+                "bulk-size": 5000,
+                "batch-size": 20000,
+                "pipeline": "test-pipeline"
+            })
+
+        partition = source.partition(0, 1)
+        self.assertEqual(partition.indices, [index1, index2])
+
+    def test_filters_indices(self):
+        index1 = track.Index(name="index1", auto_managed=True, types=[])
+        index2 = track.Index(name="index2", auto_managed=True, types=[])
+
+        source = params.BulkIndexParamSource(
+            indices=[index1, index2],
+            params={
+                "index": "index2",
+                "action-and-meta-data": "generate",
+                "conflicts": "random",
+                "bulk-size": 5000,
+                "batch-size": 20000,
+                "pipeline": "test-pipeline"
+            })
+
+        partition = source.partition(0, 1)
+        self.assertEqual(partition.indices, [index2])
+
+    def test_raises_exception_if_no_index_matches(self):
+        index1 = track.Index(name="index1", auto_managed=True, types=[])
+
+        source = params.BulkIndexParamSource(
+            indices=[index1],
+            params={
+                "index": "does_not_exist",
+                "action-and-meta-data": "generate",
+                "conflicts": "random",
+                "bulk-size": 5000,
+                "batch-size": 20000,
+                "pipeline": "test-pipeline"
+            })
+
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            source.partition(0, 1)
+        self.assertEqual("The provided index [does_not_exist] does not match any of the indices [index1].", ctx.exception.args[0])
 
 
 class ParamsRegistrationTests(TestCase):

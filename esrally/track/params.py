@@ -216,9 +216,20 @@ class BulkIndexParamSource(ParamSource):
                 raise exceptions.InvalidSyntax("'batch-size' must be a multiple of 'bulk-size'")
         except ValueError:
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
+        if len(indices) == 1 and len(indices[0].types) == 1:
+            default_index = indices[0].name
+        else:
+            default_index = None
+        self.index_name = params.get("index", default_index)
 
     def partition(self, partition_index, total_partitions):
-        return PartitionBulkIndexParamSource(self.indices, partition_index, total_partitions, self.action_metadata,
+        chosen_indices = [idx for idx in self.indices if idx.matches(self.index_name)]
+        if not chosen_indices:
+            raise exceptions.RallyAssertionError("The provided index [%s] does not match any of the indices %s." %
+                                                 (self.index_name, self.indices))
+
+        logger.info("Choosing indices %s for partition [%d] of [%d]." % (chosen_indices, partition_index, total_partitions))
+        return PartitionBulkIndexParamSource(chosen_indices, partition_index, total_partitions, self.action_metadata,
                                              self.batch_size, self.bulk_size, self.id_conflicts, self.pipeline)
 
     def params(self):
@@ -446,6 +457,7 @@ class Slice:
     def open(self, file_name, mode):
         self.source = self.source_class(file_name, mode).open()
         # skip offset number of lines
+        print("*** Open [%s] ***" % file_name)
         logger.info("Skipping %d lines in [%s]." % (self.offset, file_name))
         start = time.perf_counter()
         io.skip_lines(file_name, self.source, self.offset)
