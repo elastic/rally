@@ -195,7 +195,12 @@ class Query(Runner):
             scroll="10s",
             size=params["items_per_page"],
             request_cache=params["use_request_cache"])
-        self.scroll_id = r["_scroll_id"]
+
+        if "_scroll_id" in r:
+            self.scroll_id = r["_scroll_id"]
+        else:
+            # This should only happen if we concurrently create an index and start searching
+            self.scroll_id = None
         total_pages = params["pages"]
         # Note that starting with ES 2.0, the initial call to search() returns already the first result page
         # so we have to retrieve one page less
@@ -210,8 +215,8 @@ class Query(Runner):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:
             self.es.clear_scroll(scroll_id=self.scroll_id)
-            self.scroll_id = None
-            self.es = None
+        self.scroll_id = None
+        self.es = None
         return False
 
     def __repr__(self, *args, **kwargs):
