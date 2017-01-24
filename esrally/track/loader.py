@@ -216,14 +216,21 @@ class TrackRepository:
 
     def track_names(self, distribution_version):
         self._update(distribution_version)
-        return filter(lambda d: not d.startswith("."), next(os.walk(self.tracks_dir))[1])
+        return filter(self._is_track, next(os.walk(self.tracks_dir))[1])
+
+    def _is_track(self, path):
+        return os.path.exists(self._track_file(path))
 
     def track_dir(self, track_name):
         return "%s/%s" % (self.tracks_dir, track_name)
 
+    def _track_file(self, track_name):
+        return "%s/track.json" % self.track_dir(track_name)
+
     def track_file(self, distribution_version, track_name):
         self._update(distribution_version)
-        return "%s/track.json" % self.track_dir(track_name)
+        return self._track_file(track_name)
+
 
     def _update(self, distribution_version):
         try:
