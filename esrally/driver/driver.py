@@ -560,9 +560,13 @@ def _do_wait(es, expected_cluster_status):
     else:
         use_wait_for_relocating_shards = False
 
-    for attempt in range(10):
+    max_attempts = 10
+    for attempt in range(max_attempts):
         try:
-            if use_wait_for_relocating_shards:
+            # Is this the last attempt? Then just retrieve the status
+            if attempt + 1 == max_attempts:
+                result = es.cluster.health()
+            elif use_wait_for_relocating_shards:
                 result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s",
                                            params={"wait_for_relocating_shards": 0})
             else:
