@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -56,3 +57,22 @@ class IoTests(TestCase):
         self.assertEqual("/already/a/normalized/path", io.normalize_path("/already/a/normalized/path"))
         self.assertEqual("/not/normalized", io.normalize_path("/not/normalized/path/../"))
         self.assertEqual(os.path.expanduser("~"), io.normalize_path("~/Documents/.."))
+
+
+class DecompressionTests(TestCase):
+    def test_decompresses_supported_file_formats(self):
+        for ext in ["zip", "gz", "bz2", "tgz", "tar.bz2", "tar.gz"]:
+            tmp_dir = tempfile.mkdtemp()
+            archive_path = "resources/test.txt.%s" % ext
+            decompressed_path = "%s/test.txt" % tmp_dir
+
+            io.decompress(archive_path, target_directory=tmp_dir)
+
+            self.assertTrue(os.path.exists(decompressed_path), msg="Could not decompress [%s] to [%s] (target file does not exist)" %
+                                                                   (archive_path, decompressed_path))
+            self.assertEqual("Sample text for DecompressionTests\n", self.read(decompressed_path),
+                             msg="Could not decompress [%s] to [%s] (target file is corrupt)" % (archive_path, decompressed_path))
+
+    def read(self, f):
+        with open(f, 'r') as content_file:
+            return content_file.read()

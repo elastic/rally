@@ -160,19 +160,28 @@ def decompress(zip_name, target_directory):
     :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling
     this function.
     """
-    filename, extension = splitext(zip_name)
+    path_without_extension, extension = splitext(zip_name)
+    filename = basename(path_without_extension)
     if extension == ".zip":
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
-        with open(filename, 'wb') as new_file, bz2.BZ2File(zip_name, 'rb') as file:
-            for data in iter(lambda: file.read(100 * 1024), b''):
-                new_file.write(data)
+        _do_decompress_manually(target_directory, filename, bz2.open(zip_name))
     elif extension == ".gz":
-        _do_decompress(target_directory, gzip.open(zip_name))
+        _do_decompress_manually(target_directory, filename, gzip.open(zip_name))
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
         _do_decompress(target_directory, tarfile.open(zip_name))
     else:
         raise RuntimeError("Unsupported file extension [%s]. Cannot decompress [%s]" % (extension, zip_name))
+
+
+def _do_decompress_manually(target_directory, filename, compressed_file):
+    ensure_dir(target_directory)
+    try:
+        with open("%s/%s" % (target_directory, filename), 'wb') as new_file:
+            for data in iter(lambda: compressed_file.read(100 * 1024), b''):
+                new_file.write(data)
+    finally:
+        compressed_file.close()
 
 
 def _do_decompress(target_directory, compressed_file):
