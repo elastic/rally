@@ -62,9 +62,13 @@ class OnBenchmarkStart:
         self.lap = lap
 
 
-# TODO dm: Add metrics store here as param?
 class OnBenchmarkStop:
     pass
+
+
+class BenchmarkStopped:
+    def __init__(self, system_metrics):
+        self.system_metrics = system_metrics
 
 
 class MechanicActor(actor.RallyActor):
@@ -127,6 +131,10 @@ class MechanicActor(actor.RallyActor):
             elif isinstance(msg, OnBenchmarkStop):
                 for m in self.mechanics:
                     self.send(m, msg)
+            elif isinstance(msg, BenchmarkStopped):
+                # TODO dm: Actually we need to wait for all BenchmarkStopped messages from all our mechanic actors
+                # TODO dm: We will actually duplicate cluster level metrics if each of our mechanic actors gathers these...
+                self.send(self.race_control, msg)
             elif isinstance(msg, StopEngine):
                 for m in self.mechanics:
                     self.send(m, msg)
@@ -145,7 +153,6 @@ class MechanicActor(actor.RallyActor):
                 else:
                     logger.error("[%s] sent to a child actor has resulted in PoisonMessage" % str(msg.poisonMessage))
                     raise exceptions.RallyError("Could not communicate with benchmark candidate (unknown reason)")
-
         except BaseException:
             logger.exception("Cannot process message [%s]" % msg)
             ex_type, ex_value, ex_traceback = sys.exc_info()
@@ -198,7 +205,8 @@ class NodeMechanicActor(actor.RallyActor):
                 self.send(sender, Success())
             elif isinstance(msg, OnBenchmarkStop):
                 self.mechanic.on_benchmark_stop()
-                self.send(sender, Success())
+                # clear metrics store data to not send duplicate system metrics data
+                self.send(sender, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
             elif isinstance(msg, StopEngine):
                 logger.info("Stopping engine")
                 self.mechanic.stop_engine()

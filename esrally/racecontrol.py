@@ -102,11 +102,16 @@ class Benchmark:
                                        driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, lap))
         if isinstance(result, driver.BenchmarkComplete):
             logger.info("Benchmark is complete.")
-            # we could use #tell() here but then the ask call to driver below will fail because it returns the response that mechanic
-            # sends (see http://godaddy.github.io/Thespian/doc/using.html#sec-6-6-1).
-            self.actor_system.ask(self.mechanic, mechanic.OnBenchmarkStop())
-            logger.info("Bulk adding data to metrics store.")
+            logger.info("Bulk adding request metrics to metrics store.")
             self.metrics_store.bulk_add(result.metrics)
+            stop_result = self.actor_system.ask(self.mechanic, mechanic.OnBenchmarkStop())
+            if isinstance(stop_result, mechanic.BenchmarkStopped):
+                logger.info("Bulk adding system metrics to metrics store.")
+                self.metrics_store.bulk_add(stop_result.system_metrics)
+            else:
+                raise exceptions.RallyError("Mechanic has returned no metrics but instead [%s]. Terminating race without result." %
+                                            str(stop_result))
+
             logger.info("Flushing metrics data...")
             self.metrics_store.flush()
             logger.info("Flushing done")

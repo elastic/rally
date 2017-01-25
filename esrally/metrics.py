@@ -757,10 +757,13 @@ class InMemoryMetricsStore(MetricsStore):
     def flush(self):
         pass
 
-    def to_externalizable(self):
-        compressed = zlib.compress(pickle.dumps(self.docs))
+    def to_externalizable(self, clear=False):
+        docs = self.docs
+        if clear:
+            self.docs = []
+        compressed = zlib.compress(pickle.dumps(docs))
         logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
-                    (sys.getsizeof(self.docs), sys.getsizeof(compressed)))
+                    (sys.getsizeof(docs), sys.getsizeof(compressed)))
         return compressed
 
     def bulk_add(self, docs):
