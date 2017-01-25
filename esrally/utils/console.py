@@ -99,7 +99,7 @@ def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
-    if not QUIET:
+    if not QUIET and sys.stdout.isatty():
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
             print(format.underline_for(complete_msg, underline_symbol=overline), flush=flush)
