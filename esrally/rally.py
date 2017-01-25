@@ -6,6 +6,8 @@ import os
 import shutil
 import sys
 import time
+import faulthandler
+import signal
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME, DOC_LINK, BANNER, SKULL
 from esrally.mechanic import car, telemetry
@@ -448,6 +450,8 @@ def main():
     start = time.time()
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
+    # allow to see a thread-dump on SIGQUIT
+    faulthandler.register(signal.SIGQUIT, file=sys.stderr)
 
     pre_configure_logging()
     args = parse_args()
