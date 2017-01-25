@@ -21,7 +21,7 @@ class RaceControlTests(TestCase):
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             racecontrol.run(cfg)
-        self.assertEqual("Unknown pipeline [invalid]. List the available pipelines with esrally list pipelines.", ctx.exception.args[0])
+        self.assertRegex(ctx.exception.args[0], r"Unknown pipeline \[invalid\]. List the available pipelines with [\S]+? list pipelines.")
 
     def test_runs_a_known_pipeline(self):
         mock_pipeline = mock.Mock()
