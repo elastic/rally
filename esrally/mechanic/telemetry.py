@@ -534,6 +534,12 @@ class IndexStats(InternalTelemetryDevice):
         super().__init__()
         self.client = client
         self.metrics_store = metrics_store
+        self.index_times_at_start = {}
+
+    def on_benchmark_start(self):
+        stats = self.client.indices.stats(metric="_all", level="shards")
+        p = stats["_all"]["primaries"]
+        self.index_times_at_start = self.index_times(p)
 
     def on_benchmark_stop(self):
         logger.info("Gathering indices stats")
@@ -544,34 +550,44 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
+        index_time_at_end = self.index_times(p)
+
+        for metric_key, value_at_end in index_time_at_end.items():
+            value_at_start = self.index_times_at_start[metric_key]
+            self.add_metrics(value_at_end - value_at_start, metric_key, "ms")
+        self.index_times_at_start = {}
+
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "norms_memory_in_bytes"]), "segments_norms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
 
-        self.add_metrics(self.extract_value(p, ["merges", "total_time_in_millis"]), "merges_total_time", "ms")
-        self.add_metrics(self.extract_value(p, ["merges", "total_throttled_time_in_millis"]), "merges_total_throttled_time", "ms")
-        self.add_metrics(self.extract_value(p, ["indexing", "index_time_in_millis"]), "indexing_total_time", "ms")
-        self.add_metrics(self.extract_value(p, ["refresh", "total_time_in_millis"]), "refresh_total_time", "ms")
-        self.add_metrics(self.extract_value(p, ["flush", "total_time_in_millis"]), "flush_total_time", "ms")
+    def index_times(self, p):
+        return {
+            "merges_total_time": self.extract_value(p, ["merges", "total_time_in_millis"], default_value=0),
+            "merges_total_throttled_time": self.extract_value(p, ["merges", "total_throttled_time_in_millis"], default_value=0),
+            "indexing_total_time": self.extract_value(p, ["indexing", "index_time_in_millis"], default_value=0),
+            "refresh_total_time": self.extract_value(p, ["refresh", "total_time_in_millis"], default_value=0),
+            "flush_total_time": self.extract_value(p, ["flush", "total_time_in_millis"], default_value=0)
+        }
 
     def add_metrics(self, value, metric_key, unit=None):
-        if value:
+        if value is not None:
             if unit:
                 self.metrics_store.put_value_cluster_level(metric_key, value, unit)
             else:
                 self.metrics_store.put_count_cluster_level(metric_key, value)
 
-    def extract_value(self, primaries, path):
+    def extract_value(self, primaries, path, default_value=None):
         value = primaries
         try:
             for k in path:
                 value = value[k]
             return value
         except KeyError:
-            logger.warning("Could not determine value at path [%s]." % ",".join(path))
-            return None
+            logger.warning("Could not determine value at path [%s]. Returning default value [%s]" % (",".join(path), str(default_value)))
+            return default_value
 
 
 class IndexSize(InternalTelemetryDevice):

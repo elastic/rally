@@ -406,7 +406,36 @@ class IndexStatsTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
     def test_stores_available_index_stats(self, metrics_store_cluster_count, metrics_store_cluster_value):
-        indices_stats = {
+        client = Client(indices=SubClient({
+            "_all": {
+                "primaries": {
+                    "segments": {
+                        "count": 0
+                    },
+                    "merges": {
+                        "total_time_in_millis": 0,
+                        "total_throttled_time_in_millis": 0
+                    },
+                    "indexing": {
+                        "index_time_in_millis": 0
+                    },
+                    "refresh": {
+                        "total_time_in_millis": 0
+                    },
+                    "flush": {
+                        "total_time_in_millis": 0
+                    }
+                }
+            }
+        }))
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IndexStats(client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+
+        client.indices = SubClient({
             "_all": {
                 "primaries": {
                     "segments": {
@@ -432,15 +461,8 @@ class IndexStatsTests(TestCase):
                     }
                 }
             }
-        }
+        })
 
-        client = Client(indices=SubClient(indices_stats))
-        cfg = create_config()
-
-        metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexStats(client, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[device])
-        t.on_benchmark_start()
         t.on_benchmark_stop()
 
         metrics_store_cluster_count.assert_has_calls([
@@ -448,16 +470,134 @@ class IndexStatsTests(TestCase):
         ])
         metrics_store_cluster_value.assert_has_calls([
             mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
-            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
-            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
-            # we don't have norms, so nothing should have been called
-            mock.call("segments_points_memory_in_bytes", 512, "byte"),
             mock.call("merges_total_time", 300, "ms"),
             mock.call("merges_total_throttled_time", 120, "ms"),
             mock.call("indexing_total_time", 2000, "ms"),
             mock.call("refresh_total_time", 200, "ms"),
             mock.call("flush_total_time", 100, "ms"),
+            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
+            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
+            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
+            # we don't have norms, so nothing should have been called
+            mock.call("segments_points_memory_in_bytes", 512, "byte"),
+        ])
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    def test_index_stats_are_per_lap(self, metrics_store_cluster_count, metrics_store_cluster_value):
+        client = Client(indices=SubClient({
+            "_all": {
+                "primaries": {
+                    "segments": {
+                        "count": 0
+                    },
+                    "merges": {
+                        "total_time_in_millis": 0,
+                        "total_throttled_time_in_millis": 0
+                    },
+                    "indexing": {
+                        "index_time_in_millis": 0
+                    },
+                    "refresh": {
+                        "total_time_in_millis": 0
+                    },
+                    "flush": {
+                        "total_time_in_millis": 0
+                    }
+                }
+            }
+        }))
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IndexStats(client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        # lap 1
+        t.on_benchmark_start()
+
+        client.indices = SubClient({
+            "_all": {
+                "primaries": {
+                    "segments": {
+                        "count": 5,
+                        "memory_in_bytes": 2048,
+                        "stored_fields_memory_in_bytes": 1024,
+                        "doc_values_memory_in_bytes": 128,
+                        "terms_memory_in_bytes": 256
+                    },
+                    "merges": {
+                        "total_time_in_millis": 300,
+                        "total_throttled_time_in_millis": 120
+                    },
+                    "indexing": {
+                        "index_time_in_millis": 2000
+                    },
+                    "refresh": {
+                        "total_time_in_millis": 200
+                    },
+                    "flush": {
+                        "total_time_in_millis": 100
+                    }
+                }
+            }
+        })
+
+        t.on_benchmark_stop()
+        # lap 2
+        t.on_benchmark_start()
+
+        client.indices = SubClient({
+            "_all": {
+                "primaries": {
+                    "segments": {
+                        "count": 7,
+                        "memory_in_bytes": 2048,
+                        "stored_fields_memory_in_bytes": 1024,
+                        "doc_values_memory_in_bytes": 128,
+                        "terms_memory_in_bytes": 256
+                    },
+                    "merges": {
+                        "total_time_in_millis": 900,
+                        "total_throttled_time_in_millis": 120
+                    },
+                    "indexing": {
+                        "index_time_in_millis": 8000
+                    },
+                    "refresh": {
+                        "total_time_in_millis": 500
+                    },
+                    "flush": {
+                        "total_time_in_millis": 300
+                    }
+                }
+            }
+        })
+
+        t.on_benchmark_stop()
+
+        metrics_store_cluster_value.assert_has_calls([
+            # 1st lap
+            mock.call("segments_memory_in_bytes", 2048, "byte"),
+            mock.call("merges_total_time", 300, "ms"),
+            mock.call("merges_total_throttled_time", 120, "ms"),
+            mock.call("indexing_total_time", 2000, "ms"),
+            mock.call("refresh_total_time", 200, "ms"),
+            mock.call("flush_total_time", 100, "ms"),
+            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
+            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
+            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
+            # we don't have norms or points, so nothing should have been called
+
+            # 2nd lap
+            mock.call("segments_memory_in_bytes", 2048, "byte"),
+            mock.call("merges_total_time", 600, "ms"),
+            mock.call("merges_total_throttled_time", 0, "ms"),
+            mock.call("indexing_total_time", 6000, "ms"),
+            mock.call("refresh_total_time", 300, "ms"),
+            mock.call("flush_total_time", 200, "ms"),
+            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
+            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
+            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
         ])
 
 
