@@ -63,7 +63,7 @@ class DecompressionTests(TestCase):
     def test_decompresses_supported_file_formats(self):
         for ext in ["zip", "gz", "bz2", "tgz", "tar.bz2", "tar.gz"]:
             tmp_dir = tempfile.mkdtemp()
-            archive_path = "resources/test.txt.%s" % ext
+            archive_path = "%s/resources/test.txt.%s" % (os.path.dirname(os.path.abspath(__file__)), ext)
             decompressed_path = "%s/test.txt" % tmp_dir
 
             io.decompress(archive_path, target_directory=tmp_dir)
