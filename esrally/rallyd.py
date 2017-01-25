@@ -2,22 +2,24 @@ import sys
 import logging
 import argparse
 
-from esrally import actor, exceptions
+from esrally import actor, version, exceptions, DOC_LINK, BANNER, PROGRAM_NAME
 from esrally.utils import console
 
-if __name__ == '__main__':
+
+def main():
     console.init()
 
-    parser = argparse.ArgumentParser(prog="esrallyd",
-                                     description="Rally daemon to support remote benchmarks",
-                                     #epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
+    parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
+                                     description=BANNER + "\n\n Rally daemon to support remote benchmarks",
+                                     epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    #parser.add_argument('--version', action='version', version="%(prog)s " + version())
+    parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 
     subparsers = parser.add_subparsers(
         title="subcommands",
         dest="subcommand",
         help="")
+    subparsers.required = True
 
     start = subparsers.add_parser("start", help="Starts the Rally daemon")
     start.add_argument(
@@ -27,7 +29,7 @@ if __name__ == '__main__':
         "--coordinator-ip",
         help="The IP of the coordinator node."
     )
-    stop = subparsers.add_parser("stop", help="Stops the Rally daemon")
+    subparsers.add_parser("stop", help="Stops the Rally daemon")
 
     args = parser.parse_args()
 
@@ -49,7 +51,7 @@ if __name__ == '__main__':
                 running_system = actor.bootstrap_actor_system(try_join=True)
                 running_system.shutdown()
                 console.println("Successfully shut down actor system.")
-            except BaseException as e:
+            except BaseException:
                 console.error("Could not shut down actor system.")
                 # raise again so user can see the error
                 raise
@@ -58,3 +60,7 @@ if __name__ == '__main__':
             sys.exit(1)
     else:
         raise exceptions.RallyError("Unknown subcommand [%s]" % args.subcommand)
+
+
+if __name__ == '__main__':
+    main()

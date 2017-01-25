@@ -7,66 +7,11 @@ import shutil
 import sys
 import time
 
-import pkg_resources
-
-from esrally import actor, config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME, DOC_LINK
+from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, PROGRAM_NAME, DOC_LINK, BANNER, SKULL
 from esrally.mechanic import car, telemetry
-from esrally.utils import io, convert, git, process, console, net
-
-__version__ = pkg_resources.require("esrally")[0].version
-
-BANNER = """
-    ____        ____
-   / __ \____ _/ / /_  __
-  / /_/ / __ `/ / / / / /
- / _, _/ /_/ / / / /_/ /
-/_/ |_|\__,_/_/_/\__, /
-                /____/
-"""
+from esrally.utils import io, convert, process, console, net
 
 logger = logging.getLogger("rally.main")
-
-SKULL = '''
-                 uuuuuuu
-             uu$$$$$$$$$$$uu
-          uu$$$$$$$$$$$$$$$$$uu
-         u$$$$$$$$$$$$$$$$$$$$$u
-        u$$$$$$$$$$$$$$$$$$$$$$$u
-       u$$$$$$$$$$$$$$$$$$$$$$$$$u
-       u$$$$$$$$$$$$$$$$$$$$$$$$$u
-       u$$$$$$"   "$$$"   "$$$$$$u
-       "$$$$"      u$u       $$$$"
-        $$$u       u$u       u$$$
-        $$$u      u$$$u      u$$$
-         "$$$$uu$$$   $$$uu$$$$"
-          "$$$$$$$"   "$$$$$$$"
-            u$$$$$$$u$$$$$$$u
-             u$"$"$"$"$"$"$u
-  uuu        $$u$ $ $ $ $u$$       uuu
- u$$$$        $$$$$u$u$u$$$       u$$$$
-  $$$$$uu      "$$$$$$$$$"     uu$$$$$$
-u$$$$$$$$$$$uu    """""    uuuu$$$$$$$$$$
-$$$$"""$$$$$$$$$$uuu   uu$$$$$$$$$"""$$$"
-"""      ""$$$$$$$$$$$uu ""$"""
-uuuu ""$$$$$$$$$$uuu
-u$$$uuu$$$$$$$$$uu ""$$$$$$$$$$$uuu$$$
-$$$$$$$$$$""""           ""$$$$$$$$$$$"
-   "$$$$$"                      ""$$$$""
-     $$$"                         $$$$"
-'''
-
-
-def version():
-    release = __version__
-    # noinspection PyBroadException
-    try:
-        if git.is_working_copy(io.normalize_path("%s/.." % paths.rally_root())):
-            revision = git.head_revision(paths.rally_root())
-            return "%s (git revision: %s)" % (release, revision.strip())
-    except BaseException:
-        pass
-    # cannot determine head revision so user has probably installed Rally via pip instead of git clone
-    return release
 
 
 # we want to use some basic logging even before the output to log file is configured
@@ -137,7 +82,7 @@ def parse_args():
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",
                                      epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--version', action='version', version="%(prog)s " + version())
+    parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 
     subparsers = parser.add_subparsers(
         title="subcommands",
@@ -565,7 +510,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
 
     configure_logging(cfg)
-    logger.info("Rally version [%s]" % version())
+    logger.info("Rally version [%s]" % version.version())
     logger.info("Command line arguments: %s" % args)
     # Configure networking
     net.init()
