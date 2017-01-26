@@ -306,7 +306,7 @@ def post_process_for_test_mode(t):
                 logger.info("Resetting warmup time period for [%s] to 0.01 second." % str(task))
                 task.warmup_time_period = 0
             if task.time_period is not None and task.time_period > 10:
-                logger.info("Resetting time period for [%s] to 10 second." % str(task))
+                logger.info("Resetting time period for [%s] to 10 seconds." % str(task))
                 task.warmup_time_period = 10
     return t
 

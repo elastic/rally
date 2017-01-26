@@ -206,6 +206,24 @@ class MetricsAggregationTests(TestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
 
+    def test_different_sample_types(self):
+        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
+
+        samples = [
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, 3000, "docs", 1, 1),
+            driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, 2500, "docs", 1, 1),
+        ]
+
+        aggregated = driver.calculate_global_throughput(samples)
+
+        self.assertIn(op, aggregated)
+        self.assertEqual(1, len(aggregated))
+
+        throughput = aggregated[op]
+        self.assertEqual(2, len(throughput))
+        self.assertEqual((1470838595, 21, metrics.SampleType.Warmup, 3000, "docs/s"), throughput[0])
+        self.assertEqual((1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s"), throughput[1])
+
     def test_single_metrics_aggregation(self):
         op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
 

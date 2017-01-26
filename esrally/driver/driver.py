@@ -492,6 +492,11 @@ class Sample:
     def operation(self):
         return self.task.operation
 
+    def __repr__(self, *args, **kwargs):
+        return "[%f; %f] [client [%s]] [%s] [%s]: [%f] ms request latency, [%f] ms service time, [%d %s]" % \
+               (self.absolute_time, self.relative_time, self.client_id, self.task, self.sample_type, self.latency_ms, self.service_time_ms,
+                self.total_ops, self.total_ops_unit)
+
 
 def select_challenge(config, t):
     challenge_name = config.opts("track", "challenge.name")
@@ -629,6 +634,7 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
         interval = 0
         current_bucket = 0
         current_sample_type = current_samples[0].sample_type
+        sample_count_for_current_sample_type = 0
         start_time = current_samples[0].absolute_time - current_samples[0].time_period
         for sample in current_samples:
             # print("%d,%f,%f,%s,%s,%d,%f" %
@@ -638,17 +644,26 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
             # once we have seen a new sample type, we stick to it.
             if current_sample_type < sample.sample_type:
                 current_sample_type = sample.sample_type
+                sample_count_for_current_sample_type = 0
 
             total_count += sample.total_ops
             interval = max(sample.absolute_time - start_time, interval)
 
             # avoid division by zero
             if interval > 0 and interval >= current_bucket:
+                sample_count_for_current_sample_type += 1
                 current_bucket = int(interval) + bucket_interval_secs
                 throughput = (total_count / interval)
                 # we calculate throughput per second
                 global_throughput[task].append(
                     (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
+        # also include the last sample if we don't have one for the current sample type, even if it is below the bucket interval
+        # (mainly needed to ensure we show throughput data in test mode)
+        if interval > 0 and sample_count_for_current_sample_type == 0:
+            throughput = (total_count / interval)
+            global_throughput[task].append(
+                (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
+
     return global_throughput
 
 

@@ -77,7 +77,7 @@ Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corr
 ``test-mode``
 ~~~~~~~~~~~~~
 
-Allows you to test a track without running it for the whole duration. This is mainly intended for quick sanity checks when creating a track. It is expected that some metrics are missing due to the short duration of the benchmark in test mode. Please don't rely on these numbers at all (they are meaningless).
+Allows you to test a track without running it for the whole duration. This mode is only intended for quick sanity checks when creating a track. Please don't rely on these numbers at all (they are meaningless).
 
 ``telemetry``
 ~~~~~~~~~~~~~
