@@ -197,10 +197,9 @@ def parse_args():
             type=positive_number,
             help="number of laps that the benchmark should run (default: 1).",
             default=1)
-        # undocumented for the time being...
         p.add_argument(
             "--test-mode",
-            help=argparse.SUPPRESS,
+            help="runs the given track in 'test mode'. Meant to check a track for errors but not for real benchmarks (default: false).",
             default=False,
             action="store_true")
 

@@ -74,6 +74,11 @@ Rally can autodetect the pipeline in most cases. If you specify ``--distribution
 
 Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted between laps.
 
+``test-mode``
+~~~~~~~~~~~~~
+
+Allows you to test a track without running it for the whole duration. This is mainly intended for quick sanity checks when creating a track. It is expected that some metrics are missing due to the short duration of the benchmark in test mode. Please don't rely on these numbers at all (they are meaningless).
+
 ``telemetry``
 ~~~~~~~~~~~~~
 
