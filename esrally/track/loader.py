@@ -87,7 +87,7 @@ def load_track_plugins(cfg, register_runner):
     if plugin_reader.can_load(track_plugin_path):
         plugin_reader.load(track_plugin_path)
     else:
-        logger.info("Track [%s] in path [%s] does not define any track plugins." % (track_name, track_plugin_path))
+        logger.debug("Track [%s] in path [%s] does not define any track plugins." % (track_name, track_plugin_path))
 
 
 def operation_parameters(t, op):

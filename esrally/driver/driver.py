@@ -183,19 +183,21 @@ class Driver(actor.RallyActor):
         self.config = msg.config
         self.track = msg.track
 
-        logger.info("Preparing track")
+        track_name = self.track.name
+        challenge_name = self.track.find_challenge_or_default(self.config.opts("track", "challenge.name")).name
+        selected_car_name = self.config.opts("mechanic", "car.name")
+
+        logger.info("Preparing track [%s]" % track_name)
         # TODO #71: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
         track.prepare_track(self.track, self.config)
 
-        logger.info("Benchmark is about to start.")
+        logger.info("Benchmark for track [%s], challenge [%s] and car [%s] is about to start." %
+                    (track_name, challenge_name, selected_car_name))
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
         self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=msg.metrics_meta_info, lap=msg.lap)
         invocation = self.config.opts("system", "time.start")
         expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
-        track_name = self.track.name
-        challenge_name = self.track.find_challenge_or_default(self.config.opts("track", "challenge.name")).name
-        selected_car_name = self.config.opts("mechanic", "car.name")
         self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
 
         self.challenge = select_challenge(self.config, self.track)

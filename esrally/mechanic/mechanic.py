@@ -87,12 +87,15 @@ class MechanicActor(actor.RallyActor):
         try:
             logger.debug("MechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartEngine):
+                logger.info("Received signal from race control to start engine.")
                 self.race_control = sender
                 if msg.external:
+                    logger.info("Target node(s) will not be provisioned by Rally.")
                     # just create one actor for this special case and run it on the coordinator node (i.e. here)
                     self.mechanics.append(self.createActor(LocalNodeMechanicActor, targetActorRequirements={"coordinator": True}))
                 else:
                     hosts = msg.cfg.opts("client", "hosts")
+                    logger.info("Target node(s) %s will be provisioned by Rally." % hosts)
                     if len(hosts) == 0:
                         raise exceptions.LaunchError("No target hosts are configured.")
                     for host in hosts:
@@ -104,11 +107,14 @@ class MechanicActor(actor.RallyActor):
                         if ip == "localhost" or ip == "127.0.0.1":
                             self.mechanics.append(self.createActor(LocalNodeMechanicActor, targetActorRequirements={"coordinator": True}))
                         else:
-                            if not msg.cfg.opts("system", "remote.benchmarking.supported"):
+                            if msg.cfg.opts("system", "remote.benchmarking.supported"):
+                                logger.info("Benchmarking against %s with external Rally daemon." % hosts)
+                            else:
                                 logger.error("User tried to benchmark against %s but no external Rally daemon has been started." % hosts)
                                 raise exceptions.SystemSetupError("To benchmark remote hosts (e.g. %s) you need to start the Rally daemon "
                                                                   "on each machine including this one." % ip)
                             already_running = actor.actor_system_already_running(ip=ip)
+                            logger.info("Actor system on [%s] already running? [%s]" % (ip, str(already_running)))
                             if not already_running:
                                 console.println("Waiting for Rally daemon on [%s] " % ip, end="", flush=True)
                             while not actor.actor_system_already_running(ip=ip):
@@ -146,6 +152,10 @@ class MechanicActor(actor.RallyActor):
                 self.mechanics = []
                 # self terminate + slave nodes
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
+            elif isinstance(msg, thespian.actors.ChildActorExited):
+                # TODO dm: Depending on our state model this can be fine (e.g. when it exited due to our ActorExitRequest message
+                # or it could be problematic and mean that an exception has occured.
+                pass
             elif isinstance(msg, thespian.actors.PoisonMessage):
                 # something went wrong with a child actor
                 if isinstance(msg.poisonMessage, StartEngine):
@@ -155,9 +165,13 @@ class MechanicActor(actor.RallyActor):
                     raise exceptions.RallyError("Could not communicate with benchmark candidate (unknown reason)")
         except BaseException:
             logger.exception("Cannot process message [%s]" % msg)
+            # usually, we'll notify the sender but in case a child sent something that caused an exception we'd rather
+            # have it bubble up to race control. Otherwise, we could play ping-pong with our child actor.
+            recipient = self.race_control if sender in self.mechanics else sender
             ex_type, ex_value, ex_traceback = sys.exc_info()
-            # Is it ok to send the message always to the coordinator?
-            self.send(self.race_control, Failure("Could not execute command (%s)" % ex_value, ex_traceback))
+            # avoid "can't pickle traceback objects"
+            import traceback
+            self.send(recipient, Failure("Could not execute command (%s)" % ex_value, traceback.format_exc()))
 
 
 class NodeMechanicActor(actor.RallyActor):
@@ -217,6 +231,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.metrics_store = None
         except BaseException:
             logger.exception("Cannot process message [%s]" % msg)
+            # avoid "can't pickle traceback objects"
             import traceback
             ex_type, ex_value, ex_traceback = sys.exc_info()
             self.send(sender, Failure(ex_value, traceback.format_exc()))

@@ -36,7 +36,10 @@ class RallyActor(thespian.actors.Actor):
         for name, value in requirements.items():
             current = capabilities.get(name, None)
             if current != value:
+                # A mismatch by is not a problem by itself as long as at least one actor system instance matches the requirements.
+                logger.info("Checking capabilities [%s] against requirements [%s] failed." % (capabilities, requirements))
                 return False
+        logger.info("Capabilities [%s] match requirements [%s]." % (capabilities, requirements))
         return True
 
 
