@@ -6,7 +6,7 @@ To use remote provisioning, you need to start a separate daemon process, called 
 
 #### Breaking changes in 0.5.0
 
-* The logging file is not maintained per race anymore but is instead located at ~/.rally/logs/rally.log and is rotated once per day.
+* The logging file is not maintained per race anymore but is instead split into three different files located at ~/.rally/logs/ which are rotated once per day with a retention period of 14 days.
 
 
 ### 0.4.0
