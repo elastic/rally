@@ -8,7 +8,7 @@ import os
 import thespian.actors
 import thespian.system.messages.status
 from esrally import exceptions
-from esrally.utils import console, convert, io
+from esrally.utils import console, io
 
 logger = logging.getLogger("rally.actor")
 
@@ -93,24 +93,20 @@ def configure_actor_logging():
         },
         "handlers": {
             "rally_log_handler": {
-                #"class": "logging.StreamHandler",
-                #"stream": sys.stderr,
-                "class": "logging.handlers.RotatingFileHandler",
+                "class": "logging.handlers.TimedRotatingFileHandler",
                 "filename": "%s/rally-actors.log" % log_dir,
-                "maxBytes": convert.mb_to_bytes(20),
-                "backupCount": 5,
+                "when": "midnight",
+                "backupCount": 14,
                 "encoding": "UTF-8",
                 "formatter": "normal",
                 "filters": ["notActorLog"],
                 "level": root_log_level
             },
             "actor_log_handler": {
-                #"class": "logging.StreamHandler",
-                #"stream": sys.stderr,
-                "class": "logging.handlers.RotatingFileHandler",
+                "class": "logging.handlers.TimedRotatingFileHandler",
                 "filename": "%s/rally-actor-messages.log" % log_dir,
-                "maxBytes": convert.mb_to_bytes(20),
-                "backupCount": 5,
+                "when": "midnight",
+                "backupCount": 14,
                 "encoding": "UTF-8",
                 "formatter": "actor",
                 "filters": ["isActorLog"],

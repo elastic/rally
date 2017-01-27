@@ -34,7 +34,7 @@ def configure_logging(cfg):
         log_dir = os.path.dirname(log_file)
         io.ensure_dir(log_dir)
         console.info("Writing logs to %s" % log_file)
-        ch = logging.handlers.RotatingFileHandler(filename=log_file, maxBytes=convert.mb_to_bytes(20), backupCount=5, encoding="UTF-8")
+        ch = logging.handlers.TimedRotatingFileHandler(filename=log_file, when="midnight", backupCount=14, encoding="UTF-8")
     else:
         ch = logging.StreamHandler(stream=sys.stdout)
 
