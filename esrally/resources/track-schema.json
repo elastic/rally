@@ -348,8 +348,6 @@
     }
   },
   "required": [
-    "short-description",
-    "description",
     "operations",
     "challenges"
   ]
