@@ -180,6 +180,15 @@ def prepare_track(track, cfg):
                 if track.source_root_url:
                     data_url = "%s/%s" % (track.source_root_url, os.path.basename(type.document_archive))
                     download(cfg, data_url, type.document_archive, type.compressed_size_in_bytes)
+                if not os.path.exists(type.document_archive):
+                    if cfg.opts("track", "test.mode.enabled"):
+                        logger.error("[%s] does not exist so assuming that track [%s] does not support test mode." %
+                                     (type.document_archive, track))
+                        raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
+                                                   "disable test mode and retry." % track)
+                    else:
+                        logger.error("[%s] does not exist." % type.document_archive)
+                        raise exceptions.DataError("Track data file [%s] is missing." % type.document_archive)
                 decompressed_file_path, was_decompressed = decompress(type.document_archive, type.uncompressed_size_in_bytes)
                 # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
                 io.prepare_file_offset_table(decompressed_file_path)
@@ -230,7 +239,6 @@ class TrackRepository:
     def track_file(self, distribution_version, track_name):
         self._update(distribution_version)
         return self._track_file(track_name)
-
 
     def _update(self, distribution_version):
         try:

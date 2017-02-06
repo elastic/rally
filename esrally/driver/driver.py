@@ -172,7 +172,8 @@ class Driver(actor.RallyActor):
                 logger.debug("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
             logger.exception("Main driver encountered a fatal exception. Shutting down.")
-            self.metrics_store.close()
+            if self.metrics_store:
+                self.metrics_store.close()
             for driver in self.drivers:
                 self.send(driver, thespian.actors.ActorExitRequest())
             self.send(self.start_sender, BenchmarkFailure("Could not execute benchmark", e))
