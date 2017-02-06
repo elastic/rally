@@ -11,6 +11,7 @@ logger = logging.getLogger("rally.reporting")
 
 
 def summarize(race_store, metrics_store, cfg, track, lap=None):
+    logger.info("Summarizing results.")
     SummaryReporter(race_store, metrics_store, cfg, lap).report(track)
 
 

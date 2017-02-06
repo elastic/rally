@@ -513,6 +513,8 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
 
     configure_logging(cfg)
+    logger.info("OS [%s]" % str(os.uname()))
+    logger.info("Python [%s]" % str(sys.implementation))
     logger.info("Rally version [%s]" % version.version())
     logger.info("Command line arguments: %s" % args)
     # Configure networking

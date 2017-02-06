@@ -250,6 +250,7 @@ class MetricsStore:
         raise NotImplementedError("abstract method")
 
     def close(self):
+        logger.info("Closing metrics store.")
         """
         Closes the metric store. Note that it is mandatory to close the metrics store when it is no longer needed as it only persists
         metrics on close (in order to avoid additional latency during the benchmark).

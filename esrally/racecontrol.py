@@ -65,11 +65,13 @@ class Benchmark:
         # at this point an actor system has to run and we should only join
         self.actor_system = actor.bootstrap_actor_system(try_join=True)
         self.mechanic = self.actor_system.createActor(mechanic.MechanicActor)
+        logger.info("Asking mechanic to start the engine.")
         result = self.actor_system.ask(self.mechanic,
                                        mechanic.StartEngine(
                                            self.cfg, self.metrics_store.open_context,
                                            self.sources, self.build, self.distribution, self.external, self.docker))
         if isinstance(result, mechanic.EngineStarted):
+            logger.info("Mechanic has started engine successfully.")
             self.metrics_store.meta_info = result.system_meta_info
             cluster = result.cluster_meta_info
             self.race_store.store_race(self.track, cluster.hosts, cluster.revision, cluster.distribution_version)
@@ -80,6 +82,7 @@ class Benchmark:
             # just ensure it is optically separated
             console.println("")
         elif isinstance(result, mechanic.Failure):
+            logger.info("Starting engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message)
         else:
             raise exceptions.RallyError("Mechanic has not started engine but instead [%s]. Terminating race without result." % str(result))
@@ -126,18 +129,19 @@ class Benchmark:
         return True
 
     def teardown(self):
+        logger.info("Asking mechanic to stop the engine.")
         result = self.actor_system.ask(self.mechanic, mechanic.StopEngine())
         if isinstance(result, mechanic.EngineStopped):
+            logger.info("Mechanic has stopped engine successfully.")
             logger.info("Bulk adding system metrics to metrics store.")
             self.metrics_store.bulk_add(result.system_metrics)
         elif isinstance(result, mechanic.Failure):
+            logger.info("Stopping engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message, result.cause)
         else:
             raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
 
-        logger.info("Closing metrics store.")
         self.metrics_store.close()
-        logger.info("Summarizing results.")
         reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
 
 
@@ -153,12 +157,14 @@ class LapCounter:
         self.lap_times = 0
 
     def before_lap(self, lap):
+        logger.info("Starting lap [%d/%d]" % (lap, self.laps))
         if self.laps > 1:
             msg = "Lap [%d/%d]" % (lap, self.laps)
-            console.println(console.format.bold(msg), logger=logger.info)
+            console.println(console.format.bold(msg))
             console.println(console.format.underline_for(msg))
 
     def after_lap(self, lap):
+        logger.info("Finished lap [%d/%d]" % (lap, self.laps))
         if self.laps > 1:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
