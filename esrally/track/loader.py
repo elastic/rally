@@ -296,18 +296,20 @@ def post_process_for_test_mode(t):
 
     for challenge in t.challenges:
         for task in challenge.schedule:
-            if task.warmup_iterations > 1:
-                logger.info("Resetting warmup iterations to 1 for [%s]" % str(task))
-                task.warmup_iterations = 1
-            if task.iterations > 1:
-                logger.info("Resetting measurement iterations to 1 for [%s]" % str(task))
-                task.iterations = 1
-            if task.warmup_time_period is not None and task.warmup_time_period > 0:
-                logger.info("Resetting warmup time period for [%s] to 0.01 second." % str(task))
-                task.warmup_time_period = 0
-            if task.time_period is not None and task.time_period > 10:
-                logger.info("Resetting time period for [%s] to 10 seconds." % str(task))
-                task.warmup_time_period = 10
+            # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
+            for leaf_task in task:
+                if leaf_task.warmup_iterations > 1:
+                    logger.info("Resetting warmup iterations to 1 for [%s]" % str(leaf_task))
+                    leaf_task.warmup_iterations = 1
+                if leaf_task.iterations > 1:
+                    logger.info("Resetting measurement iterations to 1 for [%s]" % str(leaf_task))
+                    leaf_task.iterations = 1
+                if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
+                    leaf_task.warmup_time_period = 0
+                    logger.info("Resetting warmup time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.warmup_time_period))
+                if leaf_task.time_period is not None and leaf_task.time_period > 10:
+                    leaf_task.time_period = 10
+                    logger.info("Resetting measurement time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.time_period))
     return t
 
 
@@ -567,17 +569,22 @@ class TrackSpecificationReader:
         return challenges
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
-        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False)
-        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False)
+        # use same default values as #parseTask() in case the 'parallel' element did not specify anything
+        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False, default_value=0)
+        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False, default_value=1)
+        default_warmup_time_period = self._r(ops_spec, "warmup-time-period", error_ctx="parallel", mandatory=False)
+        default_time_period = self._r(ops_spec, "time-period", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
 
         # now descent to each operation
         tasks = []
         for task in self._r(ops_spec, "tasks", error_ctx="parallel"):
-            tasks.append(self.parse_task(task, ops, challenge_name, default_warmup_iterations, default_iterations))
+            tasks.append(self.parse_task(task, ops, challenge_name, default_warmup_iterations, default_iterations,
+                                         default_warmup_time_period, default_time_period))
         return track.Parallel(tasks, clients)
 
-    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1):
+    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1,
+                   default_warmup_time_period=None, default_time_period=None):
         op_name = task_spec["operation"]
         if op_name not in ops:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
@@ -596,16 +603,18 @@ class TrackSpecificationReader:
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
                                                     default_value=default_warmup_iterations),
                           iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
-                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False),
-                          time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False),
+                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False,
+                                                     default_value=default_warmup_time_period),
+                          time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False,
+                                              default_value=default_time_period),
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
                           target_throughput=target_throughput)
         if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
-            self._error("Operation '%s' in challenge '%s' mixes warmup iterations with time periods. Please do not mix time periods and "
-                        "iterations." % (op_name, challenge_name))
+            self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
+                        "mix time periods and iterations." % (op_name, challenge_name, task.warmup_iterations, task.time_period))
         elif task.warmup_time_period is not None and task.iterations != default_iterations:
-            self._error("Operation '%s' in challenge '%s' mixes warmup time period with iterations. Please do not mix time periods and "
-                        "iterations." % (op_name, challenge_name))
+            self._error("Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
+                        "mix time periods and iterations." % (op_name, challenge_name, task.warmup_time_period, task.iterations))
 
         return task
 

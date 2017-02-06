@@ -114,8 +114,9 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings", "/data")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' mixes warmup iterations "
-                         "with time periods. Please do not mix time periods and iterations.", ctx.exception.args[0])
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines '3' warmup "
+                         "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
+                         ctx.exception.args[0])
 
     def test_parse_with_mixed_warmup_timeperiod_and_iterations(self):
         track_specification = {
@@ -165,8 +166,9 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings", "/data")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' mixes warmup time period "
-                         "with iterations. Please do not mix time periods and iterations.", ctx.exception.args[0])
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines a warmup time "
+                         "period of '20' seconds and '1000' iterations. Please do not mix time periods and iterations.",
+                         ctx.exception.args[0])
 
     def test_parse_valid_track_specification(self):
         track_specification = {
