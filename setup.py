@@ -29,12 +29,15 @@ install_requires = [
     # remote messaging
     "thespian==3.6.1",
     # recommended library for thespian to identify actors more easily with `ps`
-    #"setproctitle==1.1.10",
+    # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
     "certifi"
 ]
 
-tests_require = []
+tests_require = [
+    "pytest==3.0.6",
+    "pytest-benchmark==3.0.0"
+]
 
 # we call the tool rally, but it will be published as esrally on pypi
 setup(name="esrally",
@@ -47,13 +50,16 @@ setup(name="esrally",
       license="Apache License, Version 2.0",
       packages=find_packages(
           where=".",
-          exclude=("tests*",)
+          exclude=("tests*", "benchmarks*")
       ),
       include_package_data=True,
       package_data={"": ["*.json", "*.yml"]},
       install_requires=install_requires,
       test_suite="tests",
       tests_require=tests_require,
+      setup_requires=[
+          "pytest-runner==2.10.1",
+      ],
       entry_points={
           "console_scripts": [
               "esrally=esrally.rally:main",
