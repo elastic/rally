@@ -134,6 +134,8 @@ class CmdLineProgressReporter:
         :param message: A message to display (will be left-aligned)
         :param progress: A progress indication (will be right-aligned)
         """
+        if QUIET or not sys.stdout.isatty():
+            return
         w = self._width
         if self._first_print:
             print(" " * w, end="")
@@ -155,5 +157,7 @@ class CmdLineProgressReporter:
             return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
 
     def finish(self):
+        if QUIET or not sys.stdout.isatty():
+            return
         # print a final statement in order to end the progress line
         print("")
