@@ -62,29 +62,6 @@ class DelegatingRunner(Runner):
         return "user-defined runner for [%s]" % self.runnable.__name__
 
 
-# {
-#     "ops": [
-#         {
-#             "type": "index",
-#             "item_count": 1000,
-#             "#COMMENT": "Count of result",
-#             "created": 1000
-#         }
-#     ],
-#     "shards_histogram": [
-#         {
-#             "item_count": 1000,
-#             "shards": {
-#                 "total": 2,
-#                 "successful": 1,
-#                 "failed": 0,
-#                 "#COMMENT": "If failed > 0 we will NOT show the failure text"
-#             }
-#         }
-#     ]
-# }
-
-
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
