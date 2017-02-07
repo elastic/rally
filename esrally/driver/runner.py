@@ -1,5 +1,6 @@
 import types
 import logging
+from collections import Counter, OrderedDict
 
 from esrally import exceptions, track
 
@@ -61,18 +62,183 @@ class DelegatingRunner(Runner):
         return "user-defined runner for [%s]" % self.runnable.__name__
 
 
+# {
+#     "ops": [
+#         {
+#             "type": "index",
+#             "item_count": 1000,
+#             "#COMMENT": "Count of result",
+#             "created": 1000
+#         }
+#     ],
+#     "shards_histogram": [
+#         {
+#             "item_count": 1000,
+#             "shards": {
+#                 "total": 2,
+#                 "successful": 1,
+#                 "failed": 0,
+#                 "#COMMENT": "If failed > 0 we will NOT show the failure text"
+#             }
+#         }
+#     ]
+# }
+
+
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
-
-    It expects the parameter hash to contain a key "body" containing all documents for the current bulk request.
-
     """
 
     def __init__(self):
         super().__init__()
 
     def __call__(self, es, params):
+        """
+        Runs one bulk indexing operation.
+
+        :param es: The Elasticsearch client.
+        :param params: A hash with all parameters. See below for details.
+        :return: A hash with meta data for this bulk operation. See below for details.
+
+        It expects a parameter dict with the following mandatory keys:
+
+        * ``body``: containing all documents for the current bulk request.
+        * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
+        contain actual documents to index)
+        * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
+        * ``type``: The name of the affected type in case ``action_metadata_present`` is ``False``.
+
+        The following keys are optional:
+
+        * ``pipeline``: If present, runs the the specified ingest pipeline for this bulk.
+        * ``detailed-results``: If ``True``, the runner will analyze the response and add detailed meta-data. Defaults to ``False``. Note
+        that this has a very significant impact on performance and will very likely cause a bottleneck in the benchmark driver so please
+        be very cautious enabling this feature. Our own measurements have shown a median overhead of several thousand times (execution time
+         is in the single digit microsecond range when this feature is disabled and in the single digit millisecond range when this feature
+         is enabled; numbers based on a bulk size of 500 elements and no errors). For details please refer to the respective benchmarks
+         in ``benchmarks/driver``.
+
+
+        Returned meta data
+        `
+        The following meta data are always returned:
+
+        * ``bulk-size``: bulk size, e.g. 5.000.
+        * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
+        * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
+        * ``success``: A boolean indicating whether the bulk request has succeeded.
+        * ``success-count``: Number of successfully processed items for this request (denoted in ``unit``).
+        * ``error-count``: Number of failed items for this request (denoted in ``unit``).
+
+        If ``detailed-results`` is ``True`` the following meta data are returned in addition:
+
+        * ``ops``: A hash with the operation name as key (e.g. index, update, delete) and various counts as values. ``item-count`` contains
+          the total number of items for this key. Additionally, we return a separate counter each result (indicating e.g. the number of created
+          items, the number of deleted items etc.).
+        * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a shard
+          distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and ``failed``
+          shards (see examples below).
+
+
+        Here are a few examples:
+
+        If ``detailed-results`` is ``False`` a typical return value is::
+
+            {
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "success": True,
+                "success-count": 5000,
+                "error-count": 0
+            }
+
+        Whereas the response will look as follow if there are bulk errors::
+
+            {
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "success": False,
+                "success-count": 4000,
+                "error-count": 1000
+            }
+
+        If ``detailed-results`` is ``True`` a typical return value is::
+
+
+            {
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "success": True,
+                "success-count": 5000,
+                "error-count": 0,
+                "ops": {
+                    "index": {
+                        "item-count": 5000,
+                        "created": 5000
+                    }
+                },
+                "shards_histogram": [
+                    {
+                        "item-count": 5000,
+                        "shards": {
+                            "total": 2,
+                            "successful": 2,
+                            "failed": 0
+                        }
+                    }
+                ]
+            }
+
+        An example error response may look like this::
+
+
+            {
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "success": False,
+                "success-count": 4000,
+                "error-count": 1000,
+                "ops": {
+                    "index": {
+                        "item-count": 5000,
+                        "created": 4000,
+                        "noop": 1000
+                    }
+                },
+                "shards_histogram": [
+                    {
+                        "item-count": 4000,
+                        "shards": {
+                            "total": 2,
+                            "successful": 2,
+                            "failed": 0
+                        }
+                    },
+                    {
+                        "item-count": 500,
+                        "shards": {
+                            "total": 2,
+                            "successful": 1,
+                            "failed": 1
+                        }
+                    },
+                    {
+                        "item-count": 500,
+                        "shards": {
+                            "total": 2,
+                            "successful": 0,
+                            "failed": 2
+                        }
+                    }
+                ]
+            }
+        """
+        detailed_results = params.get("detailed-results", False)
         bulk_params = {}
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
@@ -87,16 +253,54 @@ class BulkIndex(Runner):
             bulk_size = len(params["body"])
             response = es.bulk(body=params["body"], index=params["index"], doc_type=params["type"], params=bulk_params)
 
-        bulk_error_count = 0
-        if response["errors"]:
-            for idx, item in enumerate(response["items"]):
-                if item["index"]["status"] > 299:
-                    bulk_error_count += 1
+        stats = self.detailed_stats(bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
-        return {
+        meta_data = {
             "weight": bulk_size,
             "unit": "docs",
             "bulk-size": bulk_size,
+        }
+        meta_data.update(stats)
+        return meta_data
+
+    def detailed_stats(self, bulk_size, response):
+        ops = {}
+        shards_histogram = OrderedDict()
+        bulk_error_count = 0
+        for idx, item in enumerate(response["items"]):
+            # there is only one (top-level) item
+            op, data = next(iter(item.items()))
+            if op not in ops:
+                ops[op] = Counter()
+            ops[op]["item-count"] += 1
+            ops[op][data["result"]] += 1
+
+            s = data["_shards"]
+            sk = "%d-%d-%d" % (s["total"], s["successful"], s["failed"])
+            if sk not in shards_histogram:
+                shards_histogram[sk] = {
+                    "item-count": 0,
+                    "shards": s
+                }
+            shards_histogram[sk]["item-count"] += 1
+            if data["status"] > 299 or data["_shards"]["failed"] > 0:
+                bulk_error_count += 1
+        return {
+            "success": bulk_error_count == 0,
+            "success-count": bulk_size - bulk_error_count,
+            "error-count": bulk_error_count,
+            "ops": ops,
+            "shards_histogram": list(shards_histogram.values())
+        }
+
+    def simple_stats(self, bulk_size, response):
+        bulk_error_count = 0
+        if response["errors"]:
+            for idx, item in enumerate(response["items"]):
+                data = next(iter(item.values()))
+                if data["status"] > 299 or data["_shards"]["failed"] > 0:
+                    bulk_error_count += 1
+        return {
             "success": bulk_error_count == 0,
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
