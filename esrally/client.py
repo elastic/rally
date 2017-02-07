@@ -47,6 +47,7 @@ class EsClientFactory:
         class ConfigurableHttpConnection(elasticsearch.Urllib3HttpConnection):
             def __init__(self, compressed=False, **kwargs):
                 super(ConfigurableHttpConnection, self).__init__(**kwargs)
+                self.headers.update({"Content-Type": "application/json"})
                 if compressed:
                     self.headers.update(urllib3.make_headers(accept_encoding=True))
                     self.headers.update({"Content-Encoding": "gzip"})
