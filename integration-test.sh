@@ -10,7 +10,17 @@ readonly TRACKS=(geonames geopoint nyc_taxis pmc logging)
 
 ES_PID=-1
 
+function log() {
+    local ts=`date -u "+%Y-%m-%dT%H:%M:%SZ"`
+    echo "[${ts}] [${1}] ${2}"
+}
+
+function info() {
+    log "INFO" "${1}"
+}
+
 function set_up() {
+    info "setting up"
     # configure for tests with an Elasticsearch metrics store
     esrally configure --assume-defaults --configuration-name=es-integration-test
     # configure Elasticsearch instead of in-memory after the fact
@@ -29,7 +39,7 @@ function set_up() {
     fi
     tar -xzf elasticsearch-5.0.0.tar.gz
     cd elasticsearch-5.0.0
-    bin/elasticsearch &
+    bin/elasticsearch --quiet &
     # store PID so we can kill ES later
     ES_PID=$!
     sleep 20
@@ -43,8 +53,7 @@ function random_configuration() {
 }
 
 function test_configure() {
-    echo "*** test configure() ***"
-
+    info "test configure()"
     esrally configure --assume-defaults --configuration-name=integration-test
 }
 
@@ -52,11 +61,13 @@ function test_list() {
     local cfg
     random_configuration cfg
 
-    echo "*** test list([${cfg}]) ***"
-
+    info "test list races [${cfg}]"
     esrally list races --configuration-name=${cfg}
+    info "test list cars [${cfg}]"
     esrally list cars --configuration-name=${cfg}
+    info "test list tracks [${cfg}]"
     esrally list tracks --configuration-name=${cfg}
+    info "test list telemetry [${cfg}]"
     esrally list telemetry --configuration-name=${cfg}
 }
 
@@ -64,15 +75,18 @@ function test_sources() {
     local cfg
     random_configuration cfg
 
-    echo "*** test sources([${cfg}]) ***"
-
-    esrally --configuration-name=${cfg} --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=defaults
-
-    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap
-    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-no-conflicts --car=4gheap --laps=2
-    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-with-conflicts --car=4gheap
-    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=two_nodes
-    esrally --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=verbose_iw
+    info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=defaults]"
+    esrally --quiet --configuration-name=${cfg} --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=defaults
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap]"
+    esrally --quiet --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-fast-no-conflicts], [--car=4gheap], [--laps=2]"
+    esrally --quiet --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-no-conflicts --car=4gheap --laps=2
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-fast-with-conflicts], [--car=4gheap]"
+    esrally --quiet --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-fast-with-conflicts --car=4gheap
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts], [--car=two_nodes]"
+    esrally --quiet --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=two_nodes
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts], [--car=verbose_iw]"
+    esrally --quiet --configuration-name=${cfg} --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts --car=verbose_iw
 }
 
 function test_distributions() {
@@ -83,10 +97,8 @@ function test_distributions() {
         for track in "${TRACKS[@]}"
         do
             random_configuration cfg
-
-            echo "*** test distributions([${cfg}], [${dist}], [${track}]) ***"
-
-            esrally --configuration-name=${cfg} --distribution-version=${dist} --track=${track} --test-mode --challenge=append-no-conflicts --car=defaults
+            info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--challenge=append-no-conflicts], [--car=defaults]"
+            esrally --quiet --configuration-name=${cfg} --distribution-version=${dist} --track=${track} --test-mode --challenge=append-no-conflicts --car=defaults
         done
     done
 }
@@ -99,6 +111,7 @@ function run_test() {
 }
 
 function tear_down() {
+    info "tearing down"
     # terminate metrics store
     kill -9 ${ES_PID}
 
