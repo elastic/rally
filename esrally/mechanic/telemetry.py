@@ -515,7 +515,12 @@ class NodeStats(InternalTelemetryDevice):
     def gc_times(self):
         logger.debug("Gathering GC times")
         gc_times = {}
-        stats = self.client.nodes.stats(metric="_all")
+        import elasticsearch
+        try:
+            stats = self.client.nodes.stats(metric="_all")
+        except elasticsearch.TransportError:
+            logger.exception("Could not retrieve GC times.")
+            return gc_times
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
@@ -537,15 +542,10 @@ class IndexStats(InternalTelemetryDevice):
         self.index_times_at_start = {}
 
     def on_benchmark_start(self):
-        stats = self.client.indices.stats(metric="_all", level="shards")
-        p = stats["_all"]["primaries"]
-        self.index_times_at_start = self.index_times(p)
+        self.index_times_at_start = self.index_times(self.primaries_index_stats())
 
     def on_benchmark_stop(self):
-        logger.info("Gathering indices stats")
-        stats = self.client.indices.stats(metric="_all", level="shards")
-        p = stats["_all"]["primaries"]
-
+        p = self.primaries_index_stats()
         # actually this is add_count
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
@@ -562,6 +562,16 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "norms_memory_in_bytes"]), "segments_norms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
+
+    def primaries_index_stats(self):
+        logger.info("Gathering indices stats.")
+        import elasticsearch
+        try:
+            stats = self.client.indices.stats(metric="_all", level="shards")
+            return stats["_all"]["primaries"]
+        except elasticsearch.TransportError:
+            logger.exception("Could not retrieve index stats.")
+            return {}
 
     def index_times(self, p):
         return {

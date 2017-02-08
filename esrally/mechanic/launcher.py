@@ -214,8 +214,31 @@ class InProcessLauncher:
         ]
         t = telemetry.Telemetry(enabled_devices, devices=cluster_telemetry)
         c = cluster.Cluster(hosts, [self._start_node(node, car, es, binary) for node in range(car.nodes)], t)
-        t.attach_to_cluster(c)
+        logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
+        if self.wait_for_rest_layer(es):
+            logger.info("REST API is available. Attaching telemetry devices to cluster.")
+            t.attach_to_cluster(c)
+            logger.info("Telemetry devices are now attached to the cluster.")
+        else:
+            logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
+            self.stop(c)
+            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
+
+    def wait_for_rest_layer(self, es):
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            import elasticsearch
+            try:
+                es.info()
+                return True
+            except elasticsearch.TransportError as e:
+                if e.status_code == 503:
+                    logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
+                    time.sleep(2)
+                else:
+                    raise e
+        return False
 
     def _start_node(self, node, car, es, binary_path):
         node_name = self._node_name(node)
@@ -239,7 +262,9 @@ class InProcessLauncher:
         cmd = self.prepare_cmd(car, node_name)
         process = self._start_process(cmd, env, node_name, binary_path)
         node = cluster.Node(process, host_name, node_name, t)
+        logger.info("Cluster node [%s] has successfully started. Attaching telemetry devices to node." % node_name)
         t.attach_to_node(node)
+        logger.info("Telemetry devices are now attached to node [%s]." % node_name)
 
         return node
 
@@ -314,10 +339,10 @@ class InProcessLauncher:
         t.setDaemon(True)
         t.start()
         if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            logger.info("Started node=%s with pid=%s" % (node_name, process.pid))
+            logger.info("Started node [%s] with PID [%s]" % (node_name, process.pid))
             return process
         else:
-            msg = "Could not start node '%s' within timeout period of %s seconds." % (
+            msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
             raise exceptions.LaunchError(msg)
