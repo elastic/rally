@@ -380,7 +380,7 @@ class ExecutorTests(TestCase):
 
         sampler = driver.Sampler(client_id=2, task=task, start_timestamp=100)
 
-        driver.execute_schedule(schedule, es, sampler)
+        driver.execute_schedule(task.operation, schedule, es, sampler)
 
         samples = sampler.samples
 
@@ -425,7 +425,7 @@ class ExecutorTests(TestCase):
             schedule = driver.schedule_for(test_track, task, 0)
             sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
-            driver.execute_schedule(schedule, es, sampler)
+            driver.execute_schedule(task.operation, schedule, es, sampler)
 
             samples = sampler.samples
 
@@ -446,7 +446,7 @@ class ExecutorTests(TestCase):
         schedule = [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
         sampler = driver.Sampler(client_id=0, task=None, start_timestamp=0)
         with self.assertRaises(ExpectedUnitTestException):
-            driver.execute_schedule(schedule, es, sampler=sampler)
+            driver.execute_schedule("operation_name", schedule, es, sampler=sampler)
 
         es.assert_not_called()
 

@@ -223,6 +223,11 @@ Custom parameter sources
 
     This is a rather new feature and the API may change! However, the effort to use custom parameter sources is very low.
 
+.. warning::
+
+    Your parameter source is on a performance-critical code-path so please double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
+
+
 Consider the following operation definition::
 
     {
@@ -334,6 +339,10 @@ You can also implement your parameter sources and runners in multiple Python fil
 Custom runners
 ^^^^^^^^^^^^^^
 
+.. warning::
+
+    Your runner is on a performance-critical code-path so please double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
+
 You cannot only define custom parameter sources but also custom runners. Runners execute an operation against Elasticsearch. Out of the box, Rally supports the following operations:
 
 * Bulk indexing
@@ -388,7 +397,6 @@ Similar to a parameter source you also need to bind the name of your operation t
 .. note::
 
     You need to implement ``register`` just once and register all parameter sources and runners there.
-
 
 Running tasks in parallel
 ^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -223,6 +223,11 @@ def parse_args():
             help="assume that Rally has no connection to the Internet (default: false)",
             default=False,
             action="store_true")
+        p.add_argument(
+            "--enable-driver-profiling",
+            help="Enables a profiler for analyzing the performance of calls in Rally's driver (default: false)",
+            default=False,
+            action="store_true")
 
     ###############################################################################
     #
@@ -503,6 +508,7 @@ def main():
     # new section name: driver
     ################################
     cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
+    cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     # Also needed by mechanic (-> telemetry) - duplicate by module?
     cfg.add(config.Scope.applicationOverride, "client", "hosts", convert_hosts(csv_to_list(args.target_hosts)))
     cfg.add(config.Scope.applicationOverride, "client", "options", kv_to_map(csv_to_list(args.client_options)))

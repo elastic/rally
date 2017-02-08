@@ -414,6 +414,7 @@ class LoadGenerator(actor.RallyActor):
             self.send(self.master, BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
 
     def drive(self):
+        profiling_enabled = self.config.opts("driver", "profiling")
         task = None
         # skip non-tasks in the task list
         while task is None:
@@ -433,7 +434,7 @@ class LoadGenerator(actor.RallyActor):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task, self.start_timestamp)
             schedule = schedule_for(self.track, task, self.client_id)
-            self.executor_future = self.pool.submit(execute_schedule, schedule, self.es, self.sampler)
+            self.executor_future = self.pool.submit(execute_schedule, task.operation, schedule, self.es, self.sampler, profiling_enabled)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
@@ -670,14 +671,25 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
     return global_throughput
 
 
-def execute_schedule(schedule, es, sampler):
+def execute_schedule(op, schedule, es, sampler, enable_profiling=False):
     """
     Executes tasks according to the schedule for a given operation.
 
+    :param op: The operation that is executed.
     :param schedule: The schedule for this operation.
     :param es: Elasticsearch client that will be used to execute the operation.
     :param sampler: A container to store raw samples.
+    :param enable_profiling: Enables a Python profiler for this execution (default: False).
     """
+    if enable_profiling:
+        logger.debug("Enabling Python profiler for [%s]" % str(op))
+        import cProfile, pstats
+        import io as python_io
+        profiler = cProfile.Profile()
+        profiler.enable()
+    else:
+        logger.debug("Python profiler for [%s] is disabled." % str(op))
+
     total_start = time.perf_counter()
     # noinspection PyBroadException
     try:
@@ -702,6 +714,16 @@ def execute_schedule(schedule, es, sampler):
     except BaseException:
         logger.exception("Could not execute schedule")
         raise
+    finally:
+        if enable_profiling:
+            profiler.disable()
+            s = python_io.StringIO()
+            sortby = 'cumulative'
+            ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            logger.info("============= Python profile info START for [%s] =============" % str(op))
+            logger.info(s.getvalue())
+            logger.info("============= Python profile info END for [%s] =============" % str(op))
 
 
 def execute_single(runner, es, params):

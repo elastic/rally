@@ -74,6 +74,33 @@ Rally can autodetect the pipeline in most cases. If you specify ``--distribution
 
 Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted between laps.
 
+.. _clr_enable_driver_profiling:
+
+``enable-driver-profiling``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This option enables a profiler on all operations that the load test driver performs. It is intended to help track authors spot accidental bottlenecks, especially if they implement their own runners or parameter sources. When this mode is enabled, Rally will enable a profiler in the load driver module. After each task and for each client, Rally will add the profile information to its log file. For example::
+
+   2017-02-08 12:47:33,126 rally.driver INFO ============= Python profile info START for [index-append-1000] =============
+   2017-02-08 12:47:33,63 rally.driver INFO 16052402 function calls (15794402 primitive calls) in 180.221 seconds
+
+      Ordered by: cumulative time
+
+      ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+         130    0.001    0.000  168.089    1.293 /Users/dm/Projects/rally/esrally/driver/driver.py:908(time_period_based)
+         129    0.260    0.002  168.088    1.303 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/bulk_source.py:79(params)
+      129000    0.750    0.000  167.791    0.001 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/randomevent.py:142(generate_event)
+      516000    0.387    0.000  160.485    0.000 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/weightedarray.py:20(get_random)
+      516000    6.199    0.000  160.098    0.000 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/weightedarray.py:23(__random_index)
+      516000    1.292    0.000  152.289    0.000 /usr/local/Cellar/python3/3.6.0/Frameworks/Python.framework/Versions/3.6/lib/python3.6/random.py:96(seed)
+      516000  150.783    0.000  150.783    0.000 {function Random.seed at 0x10b7fa2f0}
+      129000    0.363    0.000   45.686    0.000 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/randomevent.py:48(add_fields)
+      129000    0.181    0.000   41.742    0.000 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/randomevent.py:79(add_fields)
+      ....
+      2017-02-08 12:47:33,66 rally.driver INFO ============= Python profile info END for [index-append-1000] =============
+
+In this example we can spot quickly that ``Random.seed`` is called excessively, causing an accidental bottleneck in the load test driver.
+
 ``test-mode``
 ~~~~~~~~~~~~~
 
@@ -93,7 +120,7 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 
 This activates Java flight recorder and the JIT compiler telemetry devices.
 
-.. _command_line_reference_revision:
+.. _clr_revision:
 
 ``revision``
 ~~~~~~~~~~~~
