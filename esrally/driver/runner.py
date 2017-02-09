@@ -376,7 +376,6 @@ class Query(Runner):
             scroll="10s",
             size=params["items_per_page"],
             request_cache=params["use_request_cache"])
-
         if "_scroll_id" in r:
             self.scroll_id = r["_scroll_id"]
         else:
@@ -390,12 +389,16 @@ class Query(Runner):
             if hit_count == 0:
                 # We're done prematurely. Even if we are on page index zero, we still made one call.
                 return page + 1, "ops"
-            r = es.scroll(scroll_id=self.scroll_id, scroll="10s")
+            r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
         return total_pages, "ops"
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:
-            self.es.clear_scroll(scroll_id=self.scroll_id)
+            try:
+                self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
+            except BaseException:
+                logger.exception("Could not clear scroll. This will lead to excessive resource usage in Elasticsearch and "
+                                 "will skew your benchmark results.")
         self.scroll_id = None
         self.es = None
         return False
