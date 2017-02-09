@@ -37,7 +37,8 @@ def tracks(cfg):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     data_root = cfg.opts("benchmarks", "local.dataset.cache")
     return [reader.read(track_name,
-                        repo.track_file(distribution_version, track_name),
+                        # avoid excessive fetch from remote repo
+                        repo.track_file(distribution_version, track_name, needs_update=False),
                         repo.track_dir(track_name),
                         "%s/%s" % (data_root, track_name.lower())
                         )
@@ -239,8 +240,9 @@ class TrackRepository:
     def _track_file(self, track_name):
         return "%s/track.json" % self.track_dir(track_name)
 
-    def track_file(self, distribution_version, track_name):
-        self._update(distribution_version)
+    def track_file(self, distribution_version, track_name, needs_update=True):
+        if needs_update:
+            self._update(distribution_version)
         return self._track_file(track_name)
 
     def _update(self, distribution_version):
