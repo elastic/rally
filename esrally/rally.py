@@ -21,13 +21,17 @@ def pre_configure_logging():
     logging.basicConfig(level=logging.INFO)
 
 
+def application_log_dir_path():
+    return "%s/.rally/logs" % os.path.expanduser("~")
+
+
 def application_log_file_path():
-    log_dir = "%s/.rally/logs" % os.path.expanduser("~")
-    return "%s/rally_out.log" % log_dir
+    return "%s/rally_out.log" % application_log_dir_path()
 
 
 def configure_logging(cfg):
     logging_output = cfg.opts("system", "logging.output")
+    profiling_enabled = cfg.opts("driver", "profiling")
 
     if logging_output == "file":
         log_file = application_log_file_path()
@@ -50,6 +54,18 @@ def configure_logging(cfg):
 
     logging.root.addHandler(ch)
     logging.getLogger("elasticsearch").setLevel(logging.WARNING)
+
+    if profiling_enabled:
+        profile_file = "%s/profile.log" % application_log_dir_path()
+        log_dir = os.path.dirname(profile_file)
+        io.ensure_dir(log_dir)
+        console.info("Writing driver profiling data to %s" % profile_file)
+        handler = logging.FileHandler(filename=profile_file, encoding="UTF-8")
+        handler.setFormatter(formatter)
+
+        profile_logger = logging.getLogger("rally.profile")
+        profile_logger.setLevel(logging.INFO)
+        profile_logger.addHandler(handler)
 
 
 def parse_args():

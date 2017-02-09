@@ -12,6 +12,7 @@ from esrally.driver import runner
 from esrally.utils import convert, console, versions, io
 
 logger = logging.getLogger("rally.driver")
+profile_logger = logging.getLogger("rally.profile")
 
 
 ##################################
@@ -434,7 +435,8 @@ class LoadGenerator(actor.RallyActor):
             logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task, self.start_timestamp)
             schedule = schedule_for(self.track, task, self.client_id)
-            self.executor_future = self.pool.submit(execute_schedule, task.operation, schedule, self.es, self.sampler, profiling_enabled)
+            self.executor_future = self.pool.submit(execute_schedule,
+                                                    self.client_id, task.operation, schedule, self.es, self.sampler, profiling_enabled)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
@@ -671,10 +673,11 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
     return global_throughput
 
 
-def execute_schedule(op, schedule, es, sampler, enable_profiling=False):
+def execute_schedule(client_id, op, schedule, es, sampler, enable_profiling=False):
     """
     Executes tasks according to the schedule for a given operation.
 
+    :param client_id: The id of the client that executes the operation.
     :param op: The operation that is executed.
     :param schedule: The schedule for this operation.
     :param es: Elasticsearch client that will be used to execute the operation.
@@ -721,9 +724,11 @@ def execute_schedule(op, schedule, es, sampler, enable_profiling=False):
             sortby = 'cumulative'
             ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
             ps.print_stats()
-            logger.info("============= Python profile info START for [%s] =============" % str(op))
-            logger.info(s.getvalue())
-            logger.info("============= Python profile info END for [%s] =============" % str(op))
+
+            profile = "\n=== Profile START for client [%s] and operation [%s] ===\n" % (str(client_id), str(op))
+            profile += s.getvalue()
+            profile += "=== Profile END for client [%s] and operation [%s] ===" % (str(client_id), str(op))
+            profile_logger.info(profile)
 
 
 def execute_single(runner, es, params):
