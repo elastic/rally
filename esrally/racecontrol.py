@@ -141,8 +141,9 @@ class Benchmark:
         else:
             raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
 
-        self.metrics_store.close()
+        self.metrics_store.flush()
         reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
+        self.metrics_store.close()
 
 
 class LapCounter:

@@ -608,6 +608,8 @@ class EsMetricsStore(MetricsStore):
         logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
                     (len(self._docs), self._invocation, self._track, self._challenge, self._car))
         self._docs = []
+        # ensure we can search immediately after flushing
+        self._client.refresh(index=self._index)
 
     def _add(self, doc):
         self._docs.append(doc)

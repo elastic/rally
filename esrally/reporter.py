@@ -43,29 +43,34 @@ class Stats:
         for tasks in challenge.schedule:
             for task in tasks:
                 op = task.operation.name
+                logger.debug("Gathering request metrics for [%s]." % op)
                 self.op_metrics[op] = {}
                 self.op_metrics[op]["throughput"] = self.summary_stats("throughput", op)
                 self.op_metrics[op]["latency"] = self.single_latency(op)
                 self.op_metrics[op]["service_time"] = self.single_latency(op, metric_name="service_time")
 
+        logger.debug("Gathering indexing metrics.")
         self.total_time = self.sum("indexing_total_time")
         self.merge_time = self.sum("merges_total_time")
         self.refresh_time = self.sum("refresh_total_time")
         self.flush_time = self.sum("flush_total_time")
         self.merge_throttle_time = self.sum("merges_total_throttled_time")
 
+        logger.debug("Gathering merge part metrics.")
         self.merge_part_time_postings = self.sum("merge_parts_total_time_postings")
         self.merge_part_time_stored_fields = self.sum("merge_parts_total_time_stored_fields")
         self.merge_part_time_doc_values = self.sum("merge_parts_total_time_doc_values")
         self.merge_part_time_norms = self.sum("merge_parts_total_time_norms")
         self.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
         self.merge_part_time_points = self.sum("merge_parts_total_time_points")
-        self.query_latencies = collections.OrderedDict()
 
+        logger.debug("Gathering CPU usage metrics.")
         self.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
+        logger.debug("Gathering garbage collection metrics.")
         self.young_gc_time = self.sum("node_total_young_gen_gc_time")
         self.old_gc_time = self.sum("node_total_old_gen_gc_time")
 
+        logger.debug("Gathering segment memory metrics.")
         self.memory_segments = self.median("segments_memory_in_bytes")
         self.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
         self.memory_terms = self.median("segments_terms_memory_in_bytes")
@@ -74,6 +79,7 @@ class Stats:
         self.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
 
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
+        logger.debug("Gathering disk metrics.")
         self.index_size = self.one("final_index_size_bytes")
         self.bytes_written = self.sum("disk_io_write_bytes")
 
