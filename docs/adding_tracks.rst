@@ -165,7 +165,24 @@ When you invoke ``esrally list tracks``, the new track should now appear::
 
 Congratulations, you have created your first track! You can test it with ``esrally --track=geonames --offline`` (or whatever the name of your track is) and run specific challenges with ``esrally --track=geonames --challenge=append-only --offline``.
 
-If you want to share your track with the community, please read on.
+.. _add_track_test_mode:
+
+Adding support for test mode
+----------------------------
+
+When you invoke Rally with ``--test-mode``, it switches to a mode that allows you to check your track very quickly for problems. To achieve that, it will postprocess its internal track representation after loading it:
+
+* Iteration-based tasks will run at most one warmup iteration and one measurement iteration.
+* Time-period-based task will run for at most 10 seconds without any warmup.
+
+To avoid downloading a lot of data, Rally will postprocess all data file names of a track. So instead of ``documents.json.bz2``, Rally will attempt to download ``documents-1k.json.bz2`` and will assume it contains 1.000 documents. However, you need to prepare these data files otherwise this test mode is not supported.
+
+The preparation is very easy and requires these two steps:
+
+1. Pick 1.000 documents from your data set. We choose the first 1.000 here but it does not matter usually which part you choose: ``head -n 1000 documents.json > documents-1k.json``.
+2. Compress it: ``bzip2 -9 -c documents-1k.json > documents-1k.json.bz2``
+
+You have to repeat these steps for all data files of your track.
 
 How to contribute a track
 -------------------------
@@ -175,7 +192,7 @@ First of all, please read Rally's `contributors guide <https://github.com/elasti
 If you want to contribute your track, follow these steps:
 
 1. Create a track JSON file and mapping files as described above and place them in a separate folder in the ``rally-tracks`` repository. Please also add a README file in this folder which contains licensing information (respecting the licensing terms of the source data). Note that pull requests for tracks without a license cannot be accepted.
-2. Upload the associated data so they can be publicly downloaded via HTTP. The data should be compressed either as .bz2 (recommended) or as .zip.
+2. Upload the associated data so they can be publicly downloaded via HTTP. The data should be compressed either as .bz2 (recommended) or as .zip. Also, don't forget to upload the "-1k" data files to support test mode properly.
 3. Create a pull request in the `rally-tracks Github repo <https://github.com/elastic/rally-tracks>`_.
 
 Advanced topics

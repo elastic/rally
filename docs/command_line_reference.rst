@@ -103,10 +103,14 @@ This option enables a profiler on all operations that the load test driver perfo
 
 In this example we can spot quickly that ``Random.seed`` is called excessively, causing an accidental bottleneck in the load test driver.
 
+.. _clr_test_mode:
+
 ``test-mode``
 ~~~~~~~~~~~~~
 
 Allows you to test a track without running it for the whole duration. This mode is only intended for quick sanity checks when creating a track. Please don't rely on these numbers at all (they are meaningless).
+
+If you write your own track, please keep in mind that you need :ref:`prepare your track to support this mode <add_track_test_mode>`.
 
 ``telemetry``
 ~~~~~~~~~~~~~
