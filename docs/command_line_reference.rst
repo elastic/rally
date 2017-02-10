@@ -273,11 +273,13 @@ This flag determines whether Rally should automatically accept all values for co
 
 This is only relevant when you want to run :doc:`tournaments </tournament>`. You can use this flag to attach an arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
+The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely. Note that only one user tag is supported.
+
 **Example**
 
  ::
 
-   esrally --user-tag=github-issue-1234-baseline
+   esrally --user-tag=intention:github-issue-1234-baseline
 
 
 When you run ``esrally list races``, this will show up again::
@@ -293,7 +295,7 @@ When you run ``esrally list races``, this will show up again::
     Recent races:
 
     Race Timestamp    Track    Challenge            Car       User Tag
-    ----------------  -------  -------------------  --------  ------------------------------
-    20160518T122341Z  pmc      append-no-conflicts  defaults  github-issue-1234-baseline
+    ----------------  -------  -------------------  --------  ------------------------------------
+    20160518T122341Z  pmc      append-no-conflicts  defaults  intention:github-issue-1234-baseline
 
 This will help you recognize a specific race when running ``esrally compare``.
