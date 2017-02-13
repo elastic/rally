@@ -408,8 +408,8 @@ class ComparisonReporter:
 
         print_internal(self.format_as_table(self.metrics_table(baseline_stats, contender_stats)))
 
-    def format_as_table(self, metrics_table):
-        return tabulate.tabulate(metrics_table,
+    def format_as_table(self, table):
+        return tabulate.tabulate(table,
                                  headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
                                  tablefmt="pipe", numalign="right", stralign="right")
 
@@ -430,7 +430,7 @@ class ComparisonReporter:
                 metrics_table += self.report_throughput(baseline_stats, contender_stats, op)
                 metrics_table += self.report_latency(baseline_stats, contender_stats, op)
                 metrics_table += self.report_service_time(baseline_stats, contender_stats, op)
-        return baseline_stats, contender_stats
+        return metrics_table
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
         b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation]["throughput"]
