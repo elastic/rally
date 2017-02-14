@@ -105,8 +105,13 @@ class Benchmark:
         main_driver = self.actor_system.createActor(driver.Driver,
                                                     targetActorRequirements={"coordinator": True},
                                                     globalName="/rally/driver/coordinator")
-        result = self.actor_system.ask(main_driver,
-                                       driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, lap))
+        try:
+            result = self.actor_system.ask(main_driver,
+                                           driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, lap))
+        except KeyboardInterrupt:
+            result = self.actor_system.ask(main_driver, driver.BenchmarkCancelled())
+            logger.info("User has cancelled the benchmark.")
+
         if isinstance(result, driver.BenchmarkComplete):
             logger.info("Benchmark is complete.")
             logger.info("Bulk adding request metrics to metrics store.")
@@ -132,7 +137,7 @@ class Benchmark:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
         return True
 
-    def teardown(self):
+    def teardown(self, cancelled=False):
         logger.info("Asking mechanic to stop the engine.")
         result = self.actor_system.ask(self.mechanic, mechanic.StopEngine())
         if isinstance(result, mechanic.EngineStopped):
@@ -146,7 +151,8 @@ class Benchmark:
             raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
 
         self.metrics_store.flush()
-        reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
+        if not cancelled:
+            reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
         self.metrics_store.close()
 
 
@@ -190,17 +196,19 @@ def race(benchmark):
     laps = cfg.opts("race", "laps")
     benchmark.setup()
     lap_counter = LapCounter(benchmark.race_store, benchmark.metrics_store, benchmark.track, laps, cfg)
-
-    for lap in range(1, laps + 1):
-        lap_counter.before_lap(lap)
-        may_continue = benchmark.run(lap)
-        if may_continue:
-            lap_counter.after_lap(lap)
-        else:
-            # Early termination due to cancellation by the user
-            break
-
-    benchmark.teardown()
+    cancelled = False
+    try:
+        for lap in range(1, laps + 1):
+            lap_counter.before_lap(lap)
+            may_continue = benchmark.run(lap)
+            if may_continue:
+                lap_counter.after_lap(lap)
+            else:
+                cancelled = True
+                # Early termination due to cancellation by the user
+                break
+    finally:
+        benchmark.teardown(cancelled)
 
 
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
@@ -292,7 +300,7 @@ def run(cfg):
         # just pass on our own errors. It should be treated differently on top-level
         raise e
     except KeyboardInterrupt:
-        console.info("User cancelled benchmark", logger=logger)
+        logger.info("User has cancelled the benchmark.")
     except BaseException:
         tb = sys.exc_info()[2]
         raise exceptions.RallyError("This race ended with a fatal crash.").with_traceback(tb)

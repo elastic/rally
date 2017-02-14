@@ -1,4 +1,5 @@
 import concurrent.futures
+import threading
 import datetime
 import json
 import logging
@@ -162,6 +163,7 @@ class Driver(actor.RallyActor):
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             elif isinstance(msg, BenchmarkCancelled):
                 logger.info("Main driver received a notification that the benchmark has been cancelled. Shutting down.")
+                self.progress_reporter.finish()
                 self.metrics_store.close()
                 self.send(self.start_sender, msg)
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
@@ -231,7 +233,7 @@ class Driver(actor.RallyActor):
     def joinpoint_reached(self, msg):
         self.currently_completed += 1
         self.clients_completed_current_step[msg.client_id] = (msg.client_local_timestamp, time.perf_counter())
-        logger.debug("[%d/%d] drivers reached join point [%d/%d]." %
+        logger.info("[%d/%d] drivers reached join point [%d/%d]." %
                      (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
         if self.currently_completed == len(self.drivers):
             logger.info("All drivers completed their operations until join point [%d/%d]." %
@@ -360,6 +362,8 @@ class LoadGenerator(actor.RallyActor):
         self.current_task = 0
         self.start_timestamp = None
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
+        self.cancel = threading.Event()
         self.executor_future = None
         self.sampler = None
         self.start_driving = False
@@ -376,6 +380,7 @@ class LoadGenerator(actor.RallyActor):
                 self.track = msg.track
                 self.tasks = msg.tasks
                 self.current_task = 0
+                self.cancel.clear()
                 self.start_timestamp = time.perf_counter()
                 track.load_track_plugins(self.config, runner.register_runner)
                 self.drive()
@@ -391,26 +396,22 @@ class LoadGenerator(actor.RallyActor):
                     self.drive()
                 else:
                     self.send_samples()
-                    if self.executor_future is not None:
-                        if self.executor_future.cancelled():
-                            self.send(self.master, BenchmarkCancelled())
-                        if self.executor_future.done():
-                            e = self.executor_future.exception(timeout=0)
-                            if e:
-                                self.send(self.master, BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
-                            else:
-                                self.executor_future = None
-                                self.drive()
+                    if self.cancel.is_set():
+                        self.send(self.master, BenchmarkCancelled())
+                    elif self.executor_future is not None and self.executor_future.done():
+                        e = self.executor_future.exception(timeout=0)
+                        if e:
+                            self.send(self.master, BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
                         else:
-                            self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
+                            self.executor_future = None
+                            self.drive()
+                    else:
+                        self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest." % str(self.client_id))
                 if self.executor_future is not None and self.executor_future.running():
-                    if self.executor_future.cancel():
-                        self.pool.shutdown()
-                    else:
-                        logger.warning("Could not cancel running schedule execution.")
-
+                    self.cancel.set()
+                    self.pool.shutdown()
             else:
                 logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
         except Exception as e:
@@ -431,6 +432,7 @@ class LoadGenerator(actor.RallyActor):
             if self.executor_future is not None:
                 self.executor_future.result()
             self.send_samples()
+            self.cancel.clear()
             self.executor_future = None
             self.sampler = None
             self.send(self.master, JoinPointReached(self.client_id, task))
@@ -439,7 +441,8 @@ class LoadGenerator(actor.RallyActor):
             self.sampler = Sampler(self.client_id, task, self.start_timestamp)
             schedule = schedule_for(self.track, task, self.client_id)
             self.executor_future = self.pool.submit(execute_schedule,
-                                                    self.client_id, task.operation, schedule, self.es, self.sampler, profiling_enabled)
+                                                    self.cancel, self.client_id, task.operation, schedule, self.es, self.sampler,
+                                                    profiling_enabled)
             self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
@@ -676,10 +679,11 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
     return global_throughput
 
 
-def execute_schedule(client_id, op, schedule, es, sampler, enable_profiling=False):
+def execute_schedule(cancel, client_id, op, schedule, es, sampler, enable_profiling=False):
     """
     Executes tasks according to the schedule for a given operation.
 
+    :param cancel: A shared boolean that indicates we need to cancel execution.
     :param client_id: The id of the client that executes the operation.
     :param op: The operation that is executed.
     :param schedule: The schedule for this operation.
@@ -700,6 +704,9 @@ def execute_schedule(client_id, op, schedule, es, sampler, enable_profiling=Fals
     # noinspection PyBroadException
     try:
         for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
+            if cancel.is_set():
+                logger.info("User cancelled execution.")
+                break
             absolute_expected_schedule_time = total_start + expected_scheduled_time
             throughput_throttled = expected_scheduled_time > 0
             if throughput_throttled:
@@ -715,8 +722,6 @@ def execute_schedule(client_id, op, schedule, es, sampler, enable_profiling=Fals
             latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
             sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops,
                         total_ops_unit, (stop - total_start), percent_completed)
-    except concurrent.futures.CancelledError:
-        logger.info("User cancelled execution.")
     except BaseException:
         logger.exception("Could not execute schedule")
         raise
