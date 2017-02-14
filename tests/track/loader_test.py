@@ -578,3 +578,132 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual(0.2, resulting_track.challenges[0].schedule[0].target_throughput)
+
+    def test_parallel_tasks_with_default_values(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-3",
+                    "operation-type": "index"
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "warmup-time-period": 2400,
+                                "time-period": 36000,
+                                "tasks": [
+                                    {
+                                        "operation": "index-1",
+                                        "warmup-time-period": 300,
+                                        "clients": 2
+                                    },
+                                    {
+                                        "operation": "index-2",
+                                        "time-period": 3600,
+                                        "clients": 4
+                                    },
+                                    {
+                                        "operation": "index-3",
+                                        "target-throughput": 10,
+                                        "clients": 16
+                                    },
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        parallel_element = resulting_track.challenges[0].schedule[0]
+        parallel_tasks = parallel_element.tasks
+
+        self.assertEqual(22, parallel_element.clients)
+        self.assertEqual(3, len(parallel_tasks))
+
+        self.assertEqual("index-1", parallel_tasks[0].operation.name)
+        self.assertEqual(300, parallel_tasks[0].warmup_time_period)
+        self.assertEqual(36000, parallel_tasks[0].time_period)
+        self.assertEqual(2, parallel_tasks[0].clients)
+        self.assertIsNone(parallel_tasks[0].target_throughput)
+
+        self.assertEqual("index-2", parallel_tasks[1].operation.name)
+        self.assertEqual(2400, parallel_tasks[1].warmup_time_period)
+        self.assertEqual(3600, parallel_tasks[1].time_period)
+        self.assertEqual(4, parallel_tasks[1].clients)
+        self.assertIsNone(parallel_tasks[1].target_throughput)
+
+        self.assertEqual("index-3", parallel_tasks[2].operation.name)
+        self.assertEqual(2400, parallel_tasks[2].warmup_time_period)
+        self.assertEqual(36000, parallel_tasks[2].time_period)
+        self.assertEqual(16, parallel_tasks[2].clients)
+        self.assertEqual(10, parallel_tasks[2].target_throughput)
+
+    def test_parallel_tasks_with_default_clients_does_not_propagate(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "warmup-time-period": 2400,
+                                "time-period": 36000,
+                                "clients": 2,
+                                "tasks": [
+                                    {
+                                        "operation": "index-1"
+                                    },
+                                    {
+                                        "operation": "index-1"
+                                    },
+                                    {
+                                        "operation": "index-1"
+                                    },
+                                    {
+                                        "operation": "index-1"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        parallel_element = resulting_track.challenges[0].schedule[0]
+        parallel_tasks = parallel_element.tasks
+
+        # we will only have two clients *in total*
+        self.assertEqual(2, parallel_element.clients)
+        self.assertEqual(4, len(parallel_tasks))
+        for task in parallel_tasks:
+            self.assertEqual(1, task.clients)

@@ -257,6 +257,16 @@
                       "type": "integer",
                       "minimum": 1
                     },
+                    "warmup-time-period": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+                    },
+                    "time-period": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
+                    },
                     "tasks": {
                       "type": "array",
                       "minItems": 1,
@@ -319,21 +329,43 @@
                   "type": "string",
                   "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
                 },
+                "meta": {
+                  "type": "object",
+                  "description": "Meta-information which will be added to each metrics-record of this task."
+                },
                 "clients": {
                   "type": "integer",
                   "minimum": 1
                 },
                 "warmup-iterations": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
                 },
                 "iterations": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "description": "Defines the number of times to run the operation."
+                },
+                "warmup-time-period": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+                },
+                "time-period": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
                 },
                 "target-throughput": {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Defines the number of operations per second that Rally should attempt to run."
+                },
+                "target-interval": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
                 }
               }
             }

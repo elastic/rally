@@ -212,14 +212,20 @@ You should usually use time periods for batch style operations and iterations fo
 
 All tasks in the ``schedule`` list are executed sequentially in the order in which they have been defined. However, it is also possible to execute multiple tasks concurrently, by wrapping them in a ``parallel`` element. The ``parallel`` element defines of the following properties:
 
-* ``clients`` (optional): The number of clients that should execute all tasks concurrently. It is usually not necessary to specify it because the number of clients can also be defined per task.
-* ``warmup-iterations`` (optional, defaults to 0): Allows to define a different default value for all tasks of the ``parallel`` element.
-* ``iterations`` (optional, defaults to 1): Allows to define a different default value for all tasks of the ``parallel`` element.
+* ``clients`` (optional): The number of clients that should execute the provided tasks. If you specify this property, Rally will only use as many clients as you have defined on the ``parallel`` element (see examples)!
+* ``warmup-time-period`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the same properties as defined above.
 
 .. note::
 
     ``parallel`` elements cannot be nested.
+
+.. warning::
+
+    Specify the number of clients on each task separately. If you specify this number on the ``parallel`` element instead, Rally will only use that many clients in total and you will only want to use this behavior in very rare cases (see examples)!
 
 
 Examples
@@ -237,34 +243,30 @@ In this example Rally will run a bulk index operation unthrottled for one hour::
           "time-period": 3600,
           "clients": 8
         }
-    ]
+      ]
 
-If we want to run a few queries concurrently, we can use the ``parallel`` element::
+If we want to run a few queries concurrently, we can use the ``parallel`` element (note how we can define default values on the ``parallel`` element)::
 
 
       "schedule": [
         {
           "parallel": {
+            "warmup-iterations": 50,
+            "iterations": 100,
             "tasks": [
               {
                 "operation": "match-all",
                 "clients": 4,
-                "warmup-iterations": 50,
-                "iterations": 100,
                 "target-throughput": 50
               },
               {
                 "operation": "term",
                 "clients": 2,
-                "warmup-iterations": 50,
-                "iterations": 100,
                 "target-throughput": 200
               },
               {
                 "operation": "phrase",
                 "clients": 2,
-                "warmup-iterations": 50,
-                "iterations": 100,
                 "target-throughput": 200
               }
             ]
@@ -274,7 +276,7 @@ If we want to run a few queries concurrently, we can use the ``parallel`` elemen
 
 This schedule will run a match all query, a term query and a phrase query concurrently. It will run with eight clients in total (four for the match all query and two each for the term and phrase query). You can also see that each task can have different settings.
 
-In this scenario, we run indexing and a few queries concurrently::
+In this scenario, we run indexing and a few queries concurrently with a total of 14 clients::
 
       "schedule": [
         {
@@ -312,3 +314,66 @@ In this scenario, we run indexing and a few queries concurrently::
           }
         }
       ]
+
+We can also mix sequential tasks with the ``parallel` element. In this scenario we are indexing with 8 clients and continue querying with 6 clients after indexing has finished::
+
+      "schedule": [
+        {
+          "operation": "bulk",
+          "warmup-time-period": 120,
+          "time-period": 3600,
+          "clients": 8,
+          "target-throughput": 50
+        },
+        {
+          "parallel": {
+            "warmup-iterations": 50,
+            "iterations": 100,
+            "tasks": [
+              {
+                "operation": "default",
+                "clients": 2,
+                "target-throughput": 50
+              },
+              {
+                "operation": "term",
+                "clients": 2,
+                "target-throughput": 200
+              },
+              {
+                "operation": "phrase",
+                "clients": 2,
+                "target-throughput": 200
+              }
+            ]
+          }
+        }
+      ]
+
+Be aware of the following case where we explicitly define that we want to run only with two clients *in total*::
+
+      "schedule": [
+        {
+          "parallel": {
+            "warmup-iterations": 50,
+            "iterations": 100,
+            "clients": 2,
+            "tasks": [
+              {
+                "operation": "match-all",
+                "target-throughput": 50
+              },
+              {
+                "operation": "term",
+                "target-throughput": 200
+              },
+              {
+                "operation": "phrase",
+                "target-throughput": 200
+              }
+            ]
+          }
+        }
+      ]
+
+Rally will *not* run all three tasks concurrently because you specified that you want only two clients in total. Hence, Rally will first run "match-all" and "term" concurrently (with one client each). After they have finished, Rally will run "phrase" with one client.
