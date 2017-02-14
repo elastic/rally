@@ -315,40 +315,40 @@ In this scenario, we run indexing and a few queries concurrently with a total of
         }
       ]
 
-We can also mix sequential tasks with the ``parallel` element. In this scenario we are indexing with 8 clients and continue querying with 6 clients after indexing has finished::
+We can also mix sequential tasks with the ``parallel`` element. In this scenario we are indexing with 8 clients and continue querying with 6 clients after indexing has finished::
 
-      "schedule": [
-        {
-          "operation": "bulk",
-          "warmup-time-period": 120,
-          "time-period": 3600,
-          "clients": 8,
-          "target-throughput": 50
-        },
-        {
-          "parallel": {
-            "warmup-iterations": 50,
-            "iterations": 100,
-            "tasks": [
-              {
-                "operation": "default",
-                "clients": 2,
-                "target-throughput": 50
-              },
-              {
-                "operation": "term",
-                "clients": 2,
-                "target-throughput": 200
-              },
-              {
-                "operation": "phrase",
-                "clients": 2,
-                "target-throughput": 200
-              }
-            ]
-          }
+    "schedule": [
+      {
+        "operation": "bulk",
+        "warmup-time-period": 120,
+        "time-period": 3600,
+        "clients": 8,
+        "target-throughput": 50
+      },
+      {
+        "parallel": {
+          "warmup-iterations": 50,
+          "iterations": 100,
+          "tasks": [
+            {
+              "operation": "default",
+              "clients": 2,
+              "target-throughput": 50
+            },
+            {
+              "operation": "term",
+              "clients": 2,
+              "target-throughput": 200
+            },
+            {
+              "operation": "phrase",
+              "clients": 2,
+              "target-throughput": 200
+            }
+          ]
         }
-      ]
+      }
+    ]
 
 Be aware of the following case where we explicitly define that we want to run only with two clients *in total*::
 
