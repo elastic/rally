@@ -218,7 +218,10 @@ class Driver(actor.RallyActor):
                     (self.number_of_steps, len(self.allocations), self.allocations))
 
         for client_id in range(allocator.clients):
-            self.drivers.append(self.createActor(LoadGenerator, targetActorRequirements={"coordinator": True}))
+            self.drivers.append(
+                self.createActor(LoadGenerator,
+                                 globalName="/rally/driver/worker/%s" % str(client_id),
+                                 targetActorRequirements={"coordinator": True}))
         for client_id, driver in enumerate(self.drivers):
             self.send(driver, StartLoadGenerator(client_id, self.config, self.track, self.allocations[client_id]))
 

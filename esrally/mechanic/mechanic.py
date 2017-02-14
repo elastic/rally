@@ -92,7 +92,10 @@ class MechanicActor(actor.RallyActor):
                 if msg.external:
                     logger.info("Target node(s) will not be provisioned by Rally.")
                     # just create one actor for this special case and run it on the coordinator node (i.e. here)
-                    self.mechanics.append(self.createActor(LocalNodeMechanicActor, targetActorRequirements={"coordinator": True}))
+                    self.mechanics.append(
+                        self.createActor(LocalNodeMechanicActor,
+                                         globalName="/rally/mechanic/worker/external",
+                                         targetActorRequirements={"coordinator": True}))
                 else:
                     hosts = msg.cfg.opts("client", "hosts")
                     logger.info("Target node(s) %s will be provisioned by Rally." % hosts)
@@ -105,7 +108,10 @@ class MechanicActor(actor.RallyActor):
                         # start the actor system on the other host and is aware that the parameter for the actor system and the
                         # --target-hosts parameter need to match.
                         if ip == "localhost" or ip == "127.0.0.1":
-                            self.mechanics.append(self.createActor(LocalNodeMechanicActor, targetActorRequirements={"coordinator": True}))
+                            self.mechanics.append(
+                                self.createActor(LocalNodeMechanicActor,
+                                                 globalName="/rally/mechanic/worker/localhost",
+                                                 targetActorRequirements={"coordinator": True}))
                         else:
                             if msg.cfg.opts("system", "remote.benchmarking.supported"):
                                 logger.info("Benchmarking against %s with external Rally daemon." % hosts)
@@ -122,7 +128,10 @@ class MechanicActor(actor.RallyActor):
                                 time.sleep(3)
                             if not already_running:
                                 console.println(" [OK]")
-                            self.mechanics.append(self.createActor(RemoteNodeMechanicActor, targetActorRequirements={"ip": ip}))
+                            self.mechanics.append(
+                                self.createActor(RemoteNodeMechanicActor,
+                                                 globalName="/rally/mechanic/worker/%s" % ip,
+                                                 targetActorRequirements={"ip": ip}))
                 for m in self.mechanics:
                     self.send(m, msg)
             elif isinstance(msg, EngineStarted):

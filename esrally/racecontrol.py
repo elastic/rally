@@ -64,7 +64,9 @@ class Benchmark:
     def setup(self):
         # at this point an actor system has to run and we should only join
         self.actor_system = actor.bootstrap_actor_system(try_join=True)
-        self.mechanic = self.actor_system.createActor(mechanic.MechanicActor)
+        self.mechanic = self.actor_system.createActor(mechanic.MechanicActor,
+                                                      targetActorRequirements={"coordinator": True},
+                                                      globalName="/rally/mechanic/coordinator")
         logger.info("Asking mechanic to start the engine.")
         result = self.actor_system.ask(self.mechanic,
                                        mechanic.StartEngine(
@@ -100,7 +102,9 @@ class Benchmark:
         # sends (see http://godaddy.github.io/Thespian/doc/using.html#sec-6-6-1).
         self.actor_system.ask(self.mechanic, mechanic.OnBenchmarkStart(lap))
         logger.info("Asking driver to start benchmark.")
-        main_driver = self.actor_system.createActor(driver.Driver, targetActorRequirements={"coordinator": True})
+        main_driver = self.actor_system.createActor(driver.Driver,
+                                                    targetActorRequirements={"coordinator": True},
+                                                    globalName="/rally/driver/coordinator")
         result = self.actor_system.ask(main_driver,
                                        driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, lap))
         if isinstance(result, driver.BenchmarkComplete):
