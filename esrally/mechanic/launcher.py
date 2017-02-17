@@ -43,12 +43,31 @@ class DockerLauncher:
 
         c = cluster.Cluster(hosts, [], t)
         self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name="rally0")
-        # Wait for a little while: Plugins may still be initializing although the node has already started.
-        time.sleep(10)
-
-        t.attach_to_cluster(c)
-        logger.info("Successfully started Docker container")
+        logger.info("Docker container has successfully started. Checking if REST API is available.")
+        if self.wait_for_rest_layer(es):
+            logger.info("REST API is available. Attaching telemetry devices to cluster.")
+            t.attach_to_cluster(c)
+            logger.info("Telemetry devices are now attached to the cluster.")
+        else:
+            logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
+            self.stop(c)
+            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
+
+    def wait_for_rest_layer(self, es):
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            import elasticsearch
+            try:
+                es.info()
+                return True
+            except elasticsearch.TransportError as e:
+                if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
+                    logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
+                    time.sleep(2)
+                else:
+                    raise e
+        return False
 
     def _start_process(self, cmd, node_name):
         startup_event = threading.Event()
@@ -233,7 +252,7 @@ class InProcessLauncher:
                 es.info()
                 return True
             except elasticsearch.TransportError as e:
-                if e.status_code == 503:
+                if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
                     logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
                     time.sleep(2)
                 else:
