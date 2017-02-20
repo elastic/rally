@@ -334,12 +334,15 @@ def post_process_for_test_mode(t):
         for task in challenge.schedule:
             # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
             for leaf_task in task:
-                if leaf_task.warmup_iterations > 1:
-                    logger.info("Resetting warmup iterations to 1 for [%s]" % str(leaf_task))
-                    leaf_task.warmup_iterations = 1
-                if leaf_task.iterations > 1:
-                    logger.info("Resetting measurement iterations to 1 for [%s]" % str(leaf_task))
-                    leaf_task.iterations = 1
+                # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
+                if leaf_task.warmup_iterations > leaf_task.clients:
+                    count = leaf_task.clients
+                    logger.info("Resetting warmup iterations to %d for [%s]" % (count, str(leaf_task)))
+                    leaf_task.warmup_iterations = count
+                if leaf_task.iterations > leaf_task.clients:
+                    count = leaf_task.clients
+                    logger.info("Resetting measurement iterations to %d for [%s]" % (count, str(leaf_task)))
+                    leaf_task.iterations = count
                 if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                     leaf_task.warmup_time_period = 0
                     logger.info("Resetting warmup time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.warmup_time_period))
