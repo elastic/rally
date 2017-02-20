@@ -132,16 +132,6 @@ class FlightRecorder(TelemetryDevice):
 
         time.sleep(3)
 
-        console.println("\n***************************************************************************\n")
-        console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
-        console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
-        console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
-        console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
-        console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
-        console.println("\n***************************************************************************\n")
-
-        time.sleep(3)
-
         console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger)
         # this is more robust in case we want to use custom settings
         # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
