@@ -184,6 +184,142 @@ The preparation is very easy and requires these two steps:
 
 You have to repeat these steps for all data files of your track.
 
+Structuring your track
+----------------------
+
+``track.json`` is just the entry point to a track but you can split your track as you see fit. Suppose you want to add more challenges to the track above but you want to keep them in a separate files. Let's start by storing our challenge in a separate file, e.g in ``challenges/append-only.json``. Create the directory and store the following in ``append-only.json``::
+
+    {
+          "name": "append-only",
+          "description": "",
+          "default": true,
+          "index-settings": {
+            "index.number_of_replicas": 0
+          },
+          "schedule": [
+            {
+              "operation": "index",
+              "warmup-time-period": 120,
+              "clients": 8
+            },
+            {
+              "operation": "force-merge",
+              "clients": 1
+            },
+            {
+              "operation": "query-match-all",
+              "clients": 8,
+              "warmup-iterations": 1000,
+              "iterations": 1000,
+              "target-throughput": 100
+            }
+          ]
+        }
+
+Now modify ``track.json`` so it knows about your new file::
+
+
+    {
+      "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+      "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+      "indices": [
+        {
+          "name": "geonames",
+          "types": [
+            {
+              "name": "type",
+              "mapping": "mappings.json",
+              "documents": "documents.json.bz2",
+              "document-count": 8647880,
+              "compressed-bytes": 197857614,
+              "uncompressed-bytes": 2790927196
+            }
+          ]
+        }
+      ],
+      "operations": [
+        {
+          "name": "index",
+          "operation-type": "index",
+          "bulk-size": 5000
+        },
+        {
+          "name": "force-merge",
+          "operation-type": "force-merge"
+        },
+        {
+          "name": "query-match-all",
+          "operation-type": "search",
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        }
+      ],
+      "challenges": [
+        {% include "challenges/append-no-conflicts.json" %}
+      ]
+    }
+
+We replaced the challenge content with  ``{% include "challenges/append-no-conflicts.json" %}`` which tells Rally to include the challenge from the provided file. You can use ``include`` on arbitrary parts of your track.
+
+However, if your track consists of multiple challenges it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
+
+    {% import "rally.helpers" as rally %}
+    {
+      "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+      "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+      "indices": [
+        {
+          "name": "geonames",
+          "types": [
+            {
+              "name": "type",
+              "mapping": "mappings.json",
+              "documents": "documents.json.bz2",
+              "document-count": 8647880,
+              "compressed-bytes": 197857614,
+              "uncompressed-bytes": 2790927196
+            }
+          ]
+        }
+      ],
+      "operations": [
+        {
+          "name": "index",
+          "operation-type": "index",
+          "bulk-size": 5000
+        },
+        {
+          "name": "force-merge",
+          "operation-type": "force-merge"
+        },
+        {
+          "name": "query-match-all",
+          "operation-type": "search",
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        }
+      ],
+      "challenges": [
+        {{ rally.collect(parts="challenges/*.json") }}
+      ]
+    }
+
+We changed two things here. First, we imported helper functions from Rally by adding ``{% import "rally.helpers" as rally %}`` in line 1. Second, we used Rally's ``collect`` helper to find and include all JSON files in the "challenges" subdirectory with the statement ``{{ rally.collect(parts="challenges/*.json") }}``. When you add new challenges in this directory, Rally will automatically pick them up.
+
+.. note::
+
+    If you want to check the final result, please check Rally's log file. Rally will print the full rendered track there after it has loaded it successfully.
+
+You've now mastered the basics of track development for Rally. It's time to pat yourself on the back before you dive into the advanced topics!
+
 How to contribute a track
 -------------------------
 

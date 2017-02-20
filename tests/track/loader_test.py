@@ -26,7 +26,8 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
+        rendered = loader.render_template(
+            loader=jinja2.DictLoader({"unittest": template}), base_path=".", template_name="unittest", clock=StaticClock)
 
         expected = """
         {

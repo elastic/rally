@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import glob
 import urllib.error
 
 import jinja2
@@ -277,9 +278,17 @@ class TrackRepository:
             raise exceptions.DataError("Cannot update track data in [%s]." % self.tracks_dir).with_traceback(tb)
 
 
-def render_template(loader, template_name, clock=time.Clock):
+def render_template(loader, base_path, template_name, clock=time.Clock):
+    def relative_glob(start, f):
+        result = glob.glob(os.path.join(start, f), recursive=False)
+        if result:
+            return [os.path.relpath(p, start) for p in result]
+        else:
+            return []
+
     env = jinja2.Environment(loader=loader)
     env.globals["now"] = clock.now()
+    env.globals["glob"] = lambda f: relative_glob(base_path, f)
     env.filters["days_ago"] = time.days_ago
     template = env.get_template(template_name)
 
@@ -287,7 +296,21 @@ def render_template(loader, template_name, clock=time.Clock):
 
 
 def render_template_from_file(template_file_name):
-    return render_template(loader=jinja2.FileSystemLoader(io.dirname(template_file_name)), template_name=io.basename(template_file_name))
+    macros = """
+        {% macro collect(parts) -%}
+            {% set comma = joiner() %}
+            {% for part in glob(parts) %}
+                {{ comma() }}
+                {% include part %}
+            {% endfor %}
+        {%- endmacro %}
+    """
+
+    base_path = io.dirname(template_file_name)
+    # place helpers dict loader first to prevent users from overriding our macros.
+    return render_template(loader=jinja2.ChoiceLoader([jinja2.DictLoader({"rally.helpers": macros}), jinja2.FileSystemLoader(base_path)]),
+                           base_path=base_path,
+                           template_name=io.basename(template_file_name))
 
 
 def post_process_for_test_mode(t):

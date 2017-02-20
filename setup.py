@@ -25,7 +25,7 @@ install_requires = [
     "py-cpuinfo==0.2.3",
     "tabulate==0.7.5",
     "jsonschema==2.5.1",
-    "Jinja2==2.8",
+    "Jinja2==2.9.5",
     # remote messaging
     "thespian==3.6.1",
     # recommended library for thespian to identify actors more easily with `ps`
