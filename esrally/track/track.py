@@ -39,8 +39,20 @@ class Index:
             num_docs += t.number_of_documents
         return num_docs
 
-    def __repr__(self, *args, **kwargs):
+    def __str__(self):
         return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
 
 
 class IndexTemplate:
@@ -65,6 +77,18 @@ class IndexTemplate:
 
     def __str__(self, *args, **kwargs):
         return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
 
 
 class Type:
@@ -108,6 +132,18 @@ class Type:
 
     def __str__(self, *args, **kwargs):
         return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
 
 
 class Track:
@@ -172,6 +208,22 @@ class Track:
     def __str__(self):
         return self.name
 
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name) ^ hash(self.meta_data) ^ hash(self.short_description) ^ hash(self.description) ^ \
+               hash(self.source_root_url) ^ hash(self.challenges) ^ hash(self.indices) ^ hash(self.templates)
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and (self.name, self.meta_data, self.short_description, self.description,
+                                                   self.source_root_url, self.challenges, self.indices, self.templates) ==
+                (other.name, other.meta_data, other.short_description, other.description, other.source_root_url,
+                 other.challenges, other.indices, other.templates))
+
 
 class Challenge:
     """
@@ -192,8 +244,23 @@ class Challenge:
         self.default = default
         self.schedule = schedule if schedule else []
 
-    def __repr__(self):
+    def __str__(self):
         return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name) ^ hash(self.description) ^ hash(self.index_settings) ^ hash(self.default) ^ \
+               hash(self.meta_data) ^ hash(self.schedule)
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and 
+                (self.name, self.default, self.index_settings, self.default, self.meta_data, self.schedule) ==
+                (other.name, other.default, other.index_settings, other.default, other.meta_data, other.schedule))
 
 
 class OperationType(Enum):
@@ -238,8 +305,20 @@ class Parallel:
     def __iter__(self):
         return iter(self.tasks)
 
-    def __repr__(self, *args, **kwargs):
+    def __str__(self, *args, **kwargs):
         return "%d parallel tasks" % len(self.tasks)
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.tasks)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.tasks == other.tasks
 
 
 class Task:
@@ -255,16 +334,26 @@ class Task:
         self.target_throughput = target_throughput
 
     def __hash__(self):
-        return hash(self.operation)
+        return hash(self.operation) ^ hash(self.warmup_iterations) ^ hash(self.iterations) ^ hash(self.warmup_time_period) ^ \
+               hash(self.time_period) ^ hash(self.clients) ^ hash(self.target_throughput)
 
     def __eq__(self, other):
-        return self.operation == other.operation
+        return isinstance(other, type(self)) and (self.operation, self.warmup_iterations, self.iterations, self.warmup_time_period, 
+                                                  self.time_period, self.clients, self.target_throughput) == \
+                                                 (other.operation, other.warmup_iterations, other.iterations, other.warmup_time_period,
+                                                  other.time_period, other.clients, other.target_throughput)
 
     def __iter__(self):
         return iter([self])
 
-    def __repr__(self, *args, **kwargs):
+    def __str__(self, *args, **kwargs):
         return "Task for [%s]" % self.operation.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
 
 
 class Operation:
@@ -281,7 +370,13 @@ class Operation:
         return hash(self.name)
 
     def __eq__(self, other):
-        return self.name == other.name
+        return isinstance(other, type(self)) and self.name == other.name
 
-    def __repr__(self, *args, **kwargs):
+    def __str__(self, *args, **kwargs):
         return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)

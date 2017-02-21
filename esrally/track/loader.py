@@ -278,24 +278,7 @@ class TrackRepository:
             raise exceptions.DataError("Cannot update track data in [%s]." % self.tracks_dir).with_traceback(tb)
 
 
-def render_template(loader, base_path, template_name, clock=time.Clock):
-    def relative_glob(start, f):
-        result = glob.glob(os.path.join(start, f), recursive=False)
-        if result:
-            return [os.path.relpath(p, start) for p in result]
-        else:
-            return []
-
-    env = jinja2.Environment(loader=loader)
-    env.globals["now"] = clock.now()
-    env.globals["glob"] = lambda f: relative_glob(base_path, f)
-    env.filters["days_ago"] = time.days_ago
-    template = env.get_template(template_name)
-
-    return template.render()
-
-
-def render_template_from_file(template_file_name):
+def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.Clock):
     macros = """
         {% macro collect(parts) -%}
             {% set comma = joiner() %}
@@ -306,11 +289,30 @@ def render_template_from_file(template_file_name):
         {%- endmacro %}
     """
 
-    base_path = io.dirname(template_file_name)
     # place helpers dict loader first to prevent users from overriding our macros.
-    return render_template(loader=jinja2.ChoiceLoader([jinja2.DictLoader({"rally.helpers": macros}), jinja2.FileSystemLoader(base_path)]),
-                           base_path=base_path,
-                           template_name=io.basename(template_file_name))
+    env = jinja2.Environment(
+        loader=jinja2.ChoiceLoader([jinja2.DictLoader({"rally.helpers": macros}), loader])
+    )
+    env.globals["now"] = clock.now()
+    env.globals["glob"] = glob_helper
+    env.filters["days_ago"] = time.days_ago
+    template = env.get_template(template_name)
+
+    return template.render()
+
+
+def render_template_from_file(template_file_name):
+    def relative_glob(start, f):
+        result = glob.glob(os.path.join(start, f), recursive=False)
+        if result:
+            return [os.path.relpath(p, start) for p in result]
+        else:
+            return []
+
+    base_path = io.dirname(template_file_name)
+    return render_template(loader=jinja2.FileSystemLoader(base_path),
+                           template_name=io.basename(template_file_name),
+                           glob_helper=lambda f: relative_glob(base_path, f))
 
 
 def post_process_for_test_mode(t):

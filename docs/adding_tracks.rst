@@ -318,6 +318,13 @@ We changed two things here. First, we imported helper functions from Rally by ad
 
     If you want to check the final result, please check Rally's log file. Rally will print the full rendered track there after it has loaded it successfully.
 
+You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but you need to import the Rally helpers a bit differently then. You also need to declare all variables before the ``import`` statement::
+
+        {% set clients = 16 %}
+        {% import "rally.helpers" as rally with context %}
+
+If you use this idiom you can then refer to variables inside your snippets with ``{{ clients }}``.
+
 You've now mastered the basics of track development for Rally. It's time to pat yourself on the back before you dive into the advanced topics!
 
 How to contribute a track

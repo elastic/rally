@@ -225,10 +225,11 @@ class BulkIndexParamSource(ParamSource):
     def partition(self, partition_index, total_partitions):
         chosen_indices = [idx for idx in self.indices if idx.matches(self.index_name)]
         if not chosen_indices:
-            raise exceptions.RallyAssertionError("The provided index [%s] does not match any of the indices %s." %
-                                                 (self.index_name, self.indices))
+            raise exceptions.RallyAssertionError("The provided index [%s] does not match any of the indices [%s]." %
+                                                 (self.index_name, ",".join([str(i) for i in self.indices])))
 
-        logger.info("Choosing indices %s for partition [%d] of [%d]." % (chosen_indices, partition_index, total_partitions))
+        logger.info("Choosing indices [%s] for partition [%d] of [%d]." %
+                    (",".join([str(i) for i in chosen_indices]), partition_index, total_partitions))
         return PartitionBulkIndexParamSource(chosen_indices, partition_index, total_partitions, self.action_metadata,
                                              self.batch_size, self.bulk_size, self.id_conflicts, self.pipeline)
 

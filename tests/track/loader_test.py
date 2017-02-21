@@ -1,8 +1,13 @@
+import re
 from unittest import TestCase
 
 import jinja2
 
 from esrally.track import loader
+
+
+def strip_ws(s):
+    return re.sub(r"\s", "", s)
 
 
 class StaticClock:
@@ -18,7 +23,7 @@ class StaticClock:
 
 
 class TemplateRenderTests(TestCase):
-    def test_render_template(self):
+    def test_render_simple_template(self):
         template = """
         {
             "key": {{'01-01-2000' | days_ago(now)}},
@@ -27,7 +32,7 @@ class TemplateRenderTests(TestCase):
         """
 
         rendered = loader.render_template(
-            loader=jinja2.DictLoader({"unittest": template}), base_path=".", template_name="unittest", clock=StaticClock)
+            loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
 
         expected = """
         {
@@ -36,6 +41,230 @@ class TemplateRenderTests(TestCase):
         }
         """
         self.assertEqual(expected, rendered)
+
+    def test_render_template_with_globbing(self):
+        def key_globber(e):
+            if e == "dynamic-key-*":
+                return [
+                    "dynamic-key-1",
+                    "dynamic-key-2",
+                    "dynamic-key-3",
+                ]
+            else:
+                return []
+
+        template = """
+        {% import "rally.helpers" as rally %}
+        {
+            "key1": "static value",
+            {{ rally.collect(parts="dynamic-key-*") }}
+
+        }
+        """
+
+        rendered = loader.render_template(
+            loader=jinja2.DictLoader(
+                {
+                    "unittest": template,
+                    "dynamic-key-1": '"dkey1": "value1"',
+                    "dynamic-key-2": '"dkey2": "value2"',
+                    "dynamic-key-3": '"dkey3": "value3"',
+                 }),
+            template_name="unittest", glob_helper=key_globber, clock=StaticClock)
+
+        expected = """
+        {
+            "key1": "static value",
+            "dkey1": "value1",
+            "dkey2": "value2",
+            "dkey3": "value3"
+
+        }
+        """
+        self.assertEqualIgnoreWhitespace(expected, rendered)
+
+    def test_render_template_with_variables(self):
+        def key_globber(e):
+            if e == "dynamic-key-*":
+                return ["dynamic-key-1"]
+            else:
+                return []
+
+        template = """
+        {% set clients = 16 %}
+        {% import "rally.helpers" as rally with context %}
+        {
+            "key1": "static value",
+            {{ rally.collect(parts="dynamic-key-*") }}
+
+        }
+        """
+        rendered = loader.render_template(
+            loader=jinja2.DictLoader(
+                {
+                    "unittest": template,
+                    "dynamic-key-1": '"dkey1": {{ clients }}',
+                 }),
+            template_name="unittest", glob_helper=key_globber, clock=StaticClock)
+
+        expected = """
+        {
+            "key1": "static value",
+            "dkey1": 16
+        }
+        """
+        self.assertEqualIgnoreWhitespace(expected, rendered)
+
+    def assertEqualIgnoreWhitespace(self, expected, actual):
+        self.assertEqual(strip_ws(expected), strip_ws(actual))
+
+
+class TrackPostProcessingTests(TestCase):
+    def test_post_processes_track_spec(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": [
+                        {
+                            "name": "test-type",
+                            "documents": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "mapping": "type-mappings.json"
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index",
+                    "bulk-size": 5000
+                },
+                {
+                    "name": "search",
+                    "operation-type": "search"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "index-settings": {},
+                    "schedule": [
+                        {
+                            "clients": 8,
+                            "operation": "index-append",
+                            "warmup-time-period": 100,
+                            "time-period": 240,
+                        },
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "clients": 4,
+                                        "operation": "search",
+                                        "warmup-iterations": 1000,
+                                        "iterations": 2000
+                                    },
+                                    {
+                                        "clients": 1,
+                                        "operation": "search",
+                                        "warmup-iterations": 1000,
+                                        "iterations": 2000
+                                    },
+                                    {
+                                        "clients": 1,
+                                        "operation": "search",
+                                        "iterations": 1
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        expected_post_processed = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": [
+                        {
+                            "name": "test-type",
+                            "documents": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "mapping": "type-mappings.json"
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "index",
+                    "bulk-size": 5000
+                },
+                {
+                    "name": "search",
+                    "operation-type": "search"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "index-settings": {},
+                    "schedule": [
+                        {
+                            "clients": 8,
+                            "operation": "index-append",
+                            "warmup-time-period": 0,
+                            "time-period": 10,
+                        },
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "clients": 4,
+                                        "operation": "search",
+                                        "warmup-iterations": 4,
+                                        "iterations": 4
+                                    },
+                                    {
+                                        "clients": 1,
+                                        "operation": "search",
+                                        "warmup-iterations": 1,
+                                        "iterations": 1
+                                    },
+                                    {
+                                        "clients": 1,
+                                        "operation": "search",
+                                        "iterations": 1
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        self.assertEqual(self.as_track(expected_post_processed),
+                         loader.post_process_for_test_mode(self.as_track(track_specification)))
+
+    def as_track(self, track_specification):
+        reader = loader.TrackSpecificationReader()
+        return reader("unittest", track_specification, "/mappings", "/data")
 
 
 class TrackSpecificationReaderTests(TestCase):
@@ -98,9 +327,9 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
+                    "index-settings": {},
                     "schedule": [
                         {
-                            "index-settings": {},
                             "clients": 8,
                             "operation": "index-append",
                             "warmup-iterations": 3,
@@ -150,9 +379,9 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
+                    "index-settings": {},
                     "schedule": [
                         {
-                            "index-settings": {},
                             "clients": 8,
                             "operation": "index-append",
                             "warmup-time-period": 20,
@@ -223,9 +452,11 @@ class TrackSpecificationReaderTests(TestCase):
                         "mixed": True,
                         "max-clients": 8
                     },
+                    "index-settings": {
+                        "index.number_of_replicas": 2
+                    },
                     "schedule": [
                         {
-                            "index-settings": {},
                             "clients": 8,
                             "operation": "index-append",
                             "meta": {
@@ -256,6 +487,8 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
+        self.assertEqual(1, len(resulting_track.challenges[0].index_settings))
+        self.assertEqual(2, resulting_track.challenges[0].index_settings["index.number_of_replicas"])
         self.assertEqual({"mixed": True, "max-clients": 8}, resulting_track.challenges[0].meta_data)
         self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
         self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
