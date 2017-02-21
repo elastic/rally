@@ -598,9 +598,14 @@ class IndexSize(InternalTelemetryDevice):
         super().__init__()
         self.data_paths = data_paths
         self.metrics_store = metrics_store
+        self.attached = False
+
+    def attach_to_cluster(self, cluster):
+        self.attached = True
 
     def detach_from_cluster(self, cluster):
-        if self.data_paths:
+        if self.attached and self.data_paths:
+            self.attached = False
             data_path = self.data_paths[0]
             index_size_bytes = io.get_size(data_path)
             self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
