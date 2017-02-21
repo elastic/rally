@@ -319,7 +319,7 @@ class ConfigFactory:
         config["runtime"]["java8.home"] = jdk8_home
 
         config["benchmarks"] = {}
-        config["benchmarks"]["local.dataset.cache"] = "${system:root.dir}/data"
+        config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
 
         config["reporting"] = {}
         config["reporting"]["datastore.type"] = data_store_type
