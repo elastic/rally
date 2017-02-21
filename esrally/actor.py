@@ -147,8 +147,11 @@ def actor_system_already_running(ip="127.0.0.1"):
 def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None, system_base="multiprocTCPBase"):
     try:
         if try_join:
-            # if we try to join we can only run on the coordinator...
-            return thespian.actors.ActorSystem(system_base, logDefs=configure_actor_logging(), capabilities={"coordinator": True})
+            if actor_system_already_running():
+                return thespian.actors.ActorSystem(system_base)
+            else:
+                # if we try to join we can only run on the coordinator...
+                return thespian.actors.ActorSystem(system_base, logDefs=configure_actor_logging(), capabilities={"coordinator": True})
         elif prefer_local_only:
             coordinator_ip = "127.0.0.1"
             local_ip = "127.0.0.1"
