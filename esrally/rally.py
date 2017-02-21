@@ -333,7 +333,7 @@ def list(cfg):
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
-def print_help_on_errors(cfg):
+def print_help_on_errors():
     heading = "Getting further help:"
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
@@ -346,6 +346,7 @@ def print_help_on_errors(cfg):
 
 def race(cfg):
     already_running = actor.actor_system_already_running()
+    logger.info("Actor system already running locally? [%s]" % str(already_running))
     try:
         actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
@@ -400,13 +401,13 @@ def dispatch_sub_command(cfg, sub_command):
         logging.exception("Cannot run subcommand [%s]." % sub_command)
         console.error("Cannot %s. %s" % (sub_command, e))
         console.println("")
-        print_help_on_errors(cfg)
+        print_help_on_errors()
         return False
     except BaseException as e:
         logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
         console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
-        print_help_on_errors(cfg)
+        print_help_on_errors()
         return False
 
 
