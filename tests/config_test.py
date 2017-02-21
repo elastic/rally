@@ -117,7 +117,7 @@ class ConfigFactoryTests(TestCase):
         f.create_config(config_store)
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("7", config_store.config["meta"]["config.version"])
+        self.assertEqual("8", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
         self.assertTrue("source" in config_store.config)
@@ -182,10 +182,11 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("7", config_store.config["meta"]["config.version"])
+        self.assertEqual("8", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
-        self.assertEqual("/var/data/rally", config_store.config["system"]["root.dir"])
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
+        self.assertTrue("node" in config_store.config)
+        self.assertEqual("/var/data/rally", config_store.config["node"]["root.dir"])
         self.assertTrue("source" in config_store.config)
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
@@ -348,5 +349,31 @@ class ConfigMigrationTests(TestCase):
         self.assertEqual("7", config_file.config["meta"]["config.version"])
         self.assertTrue("provisioning" not in config_file.config)
         self.assertTrue("log.root.dir" not in config_file.config["system"])
+
+    def test_migrate_from_7_to_8(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 7
+            },
+            "system": {
+                "root.dir": "~/.rally/benchmarks",
+                "environment.name": "local"
+            },
+            "benchmarks": {
+                "local.dataset.cache": "${system:root.dir}/data",
+                "some.other.cache": "/data"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 7, 8, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("8", config_file.config["meta"]["config.version"])
+        self.assertTrue("root.dir" not in config_file.config["system"])
+        self.assertEqual("~/.rally/benchmarks", config_file.config["node"]["root.dir"])
+        self.assertEqual("local", config_file.config["system"]["environment.name"])
+        self.assertEqual("${node:root.dir}/data", config_file.config["benchmarks"]["local.dataset.cache"])
+        self.assertEqual("/data", config_file.config["benchmarks"]["some.other.cache"])
 
 

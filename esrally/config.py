@@ -69,7 +69,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 7
+    CURRENT_CONFIG_VERSION = 8
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -302,8 +302,10 @@ class ConfigFactory:
         config["meta"]["config.version"] = str(Config.CURRENT_CONFIG_VERSION)
 
         config["system"] = {}
-        config["system"]["root.dir"] = root_dir
         config["system"]["env.name"] = env_name
+
+        config["node"] = {}
+        config["node"]["root.dir"] = root_dir
 
         if benchmark_from_sources:
             config["source"] = {}
@@ -524,6 +526,18 @@ def migrate(config_file, current_version, target_version, out=print):
         config.pop("provisioning")
         config["system"].pop("log.root.dir")
         current_version = 7
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 7 and target_version > current_version:
+        # move [system][root.dir] to [node][root.dir]
+        if "node" not in config:
+            config["node"] = {}
+        config["node"]["root.dir"] = config["system"].pop("root.dir")
+        # also move all references!
+        for section in config:
+            for k, v in config[section].items():
+                config[section][k] = v.replace("${system:root.dir}", "${node:root.dir}")
+        current_version = 8
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

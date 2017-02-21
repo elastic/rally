@@ -285,7 +285,7 @@ def create(cfg, metrics_store, single_machine=True, sources=False, build=False, 
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
         repo_name = cfg.opts("mechanic", "distribution.repository")
-        distributions_root = "%s/%s" % (cfg.opts("system", "root.dir"), cfg.opts("source", "distribution.dir"))
+        distributions_root = "%s/%s" % (cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
 
         s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distributions_root=distributions_root)
         p = provisioner.local_provisioner(cfg, install_dir, single_machine)

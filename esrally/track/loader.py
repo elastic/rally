@@ -211,7 +211,7 @@ class TrackRepository:
         # If no URL is found, we consider this a local only repo (but still require that it is a git repo)
         self.url = cfg.opts("tracks", "%s.url" % self.name, mandatory=False)
         self.remote = self.url is not None and self.url.strip() != ""
-        root = cfg.opts("system", "root.dir")
+        root = cfg.opts("node", "root.dir")
         track_repositories = cfg.opts("benchmarks", "track.repository.dir")
         self.tracks_dir = "%s/%s/%s" % (root, track_repositories, self.name)
         if self.remote and not self.offline and fetch:
