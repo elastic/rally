@@ -15,6 +15,8 @@ from esrally.utils import io, convert, process, console, net
 
 logger = logging.getLogger("rally.main")
 
+DEFAULT_CLIENT_OPTIONS = "timeout:60000,request_timeout:60000"
+
 
 # we want to use some basic logging even before the output to log file is configured
 def pre_configure_logging():
@@ -187,8 +189,8 @@ def parse_args():
         p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
-                 "(default: timeout:60000,request_timeout:60000).",
-            default="timeout:60000,request_timeout:60000")
+                 "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
+            default=DEFAULT_CLIENT_OPTIONS)
         p.add_argument(
             "--user-tag",
             help="define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
@@ -528,7 +530,10 @@ def main():
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     # Also needed by mechanic (-> telemetry) - duplicate by module?
     cfg.add(config.Scope.applicationOverride, "client", "hosts", convert_hosts(csv_to_list(args.target_hosts)))
-    cfg.add(config.Scope.applicationOverride, "client", "options", kv_to_map(csv_to_list(args.client_options)))
+    client_options = kv_to_map(csv_to_list(args.client_options))
+    cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+    if "timeout" not in client_options:
+        console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
 
     # split by component?
     if sub_command == "list":
