@@ -303,7 +303,7 @@ def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.
 
 def render_template_from_file(template_file_name):
     def relative_glob(start, f):
-        result = glob.glob(os.path.join(start, f), recursive=False)
+        result = glob.glob(os.path.join(start, f))
         if result:
             return [os.path.relpath(p, start) for p in result]
         else:
