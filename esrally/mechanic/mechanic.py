@@ -22,7 +22,7 @@ class ClusterMetaInfo:
 
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, sources, build, distribution, external, docker):
+    def __init__(self, cfg, open_metrics_context, sources, build, distribution, external, docker, port=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.sources = sources
@@ -30,6 +30,18 @@ class StartEngine:
         self.distribution = distribution
         self.external = external
         self.docker = docker
+        self.port = port
+
+    def with_port(self, port):
+        """
+
+        Creates a copy of this StartEngine instance but with a modified port argument. This simplifies sending a customized ``StartEngine``
+        message to each of the worker mechanics.
+
+        :param port: The port number to set in the copy.
+        :return: A shallow copy of this message with the specified port number.
+        """
+        return StartEngine(self.cfg, self.open_metrics_context, self.sources, self.build, self.distribution, self.external, self.docker, port)
 
 
 class EngineStarted:
@@ -89,13 +101,18 @@ class MechanicActor(actor.RallyActor):
             if isinstance(msg, StartEngine):
                 logger.info("Received signal from race control to start engine.")
                 self.race_control = sender
+                # In our startup procedure we first create all mechanics. Only if this succeeds
+                mechanics_and_start_message = []
+
                 if msg.external:
                     logger.info("Target node(s) will not be provisioned by Rally.")
                     # just create one actor for this special case and run it on the coordinator node (i.e. here)
-                    self.mechanics.append(
-                        self.createActor(LocalNodeMechanicActor,
+                    m = self.createActor(LocalNodeMechanicActor,
                                          globalName="/rally/mechanic/worker/external",
-                                         targetActorRequirements={"coordinator": True}))
+                                         targetActorRequirements={"coordinator": True})
+                    self.mechanics.append(m)
+                    # we can use the original message in this case
+                    mechanics_and_start_message = (m, msg)
                 else:
                     hosts = msg.cfg.opts("client", "hosts")
                     logger.info("Target node(s) %s will be provisioned by Rally." % hosts)
@@ -103,15 +120,17 @@ class MechanicActor(actor.RallyActor):
                         raise exceptions.LaunchError("No target hosts are configured.")
                     for host in hosts:
                         ip = host["host"]
+                        port = host["port"]
                         # user may specify "localhost" on the command line but the problem is that we auto-register the actor system
                         # with "ip": "127.0.0.1" so we convert this special case automatically. In all other cases the user needs to
                         # start the actor system on the other host and is aware that the parameter for the actor system and the
                         # --target-hosts parameter need to match.
                         if ip == "localhost" or ip == "127.0.0.1":
-                            self.mechanics.append(
-                                self.createActor(LocalNodeMechanicActor,
+                            m = self.createActor(LocalNodeMechanicActor,
                                                  globalName="/rally/mechanic/worker/localhost",
-                                                 targetActorRequirements={"coordinator": True}))
+                                                 targetActorRequirements={"coordinator": True})
+                            self.mechanics.append(m)
+                            mechanics_and_start_message = (m, msg.with_port(port))
                         else:
                             if msg.cfg.opts("system", "remote.benchmarking.supported"):
                                 logger.info("Benchmarking against %s with external Rally daemon." % hosts)
@@ -128,12 +147,13 @@ class MechanicActor(actor.RallyActor):
                                 time.sleep(3)
                             if not already_running:
                                 console.println(" [OK]")
-                            self.mechanics.append(
-                                self.createActor(RemoteNodeMechanicActor,
+                            m = self.createActor(RemoteNodeMechanicActor,
                                                  globalName="/rally/mechanic/worker/%s" % ip,
-                                                 targetActorRequirements={"ip": ip}))
-                for m in self.mechanics:
-                    self.send(m, msg)
+                                                 targetActorRequirements={"ip": ip})
+                            mechanics_and_start_message = (m, msg.with_port(port))
+                            self.mechanics.append(m)
+                for mechanic_actor, start_message in mechanics_and_start_message:
+                    self.send(mechanic_actor, start_message)
             elif isinstance(msg, EngineStarted):
                 self.send(self.race_control, msg)
             elif isinstance(msg, OnBenchmarkStart):
@@ -212,6 +232,9 @@ class NodeMechanicActor(actor.RallyActor):
                 self.config.add_all(msg.cfg, "client")
                 self.config.add_all(msg.cfg, "track")
                 self.config.add_all(msg.cfg, "mechanic")
+                if msg.port is not None:
+                    # we need to override the port with the value that the user has specified instead of using the default value (39200)
+                    self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
 
                 self.metrics_store = metrics.InMemoryMetricsStore(self.config)
                 self.metrics_store.open(ctx=msg.open_metrics_context)
