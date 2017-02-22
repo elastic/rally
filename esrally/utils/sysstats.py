@@ -24,6 +24,11 @@ def cpu_model():
     return cpuinfo.get_cpu_info()["brand"]
 
 
+def disks():
+    # only physical partitions (no memory partitions etc)
+    return psutil.disk_partitions(all=False)
+
+
 def total_memory():
     """
     :return: total available memory in bytes

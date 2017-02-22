@@ -26,8 +26,21 @@ The ``list`` subcommand is used to list different configuration options:
 * pipelines: Will show all :doc:`pipelines </pipelines>` that are supported by Rally.
 * races: Will show all races that are currently stored. This is only needed for the :doc:`tournament mode </tournament>` and it will also only work if you have setup Rally so it supports tournaments.
 * cars: Will show all cars that are supported by Rally (i.e. Elasticsearch configurations).
+* facts: Will show facts about the hardware and software configuration. This helps you sharing the results with others via https://github.com/elastic/rally-results.
 
 To list a specific configuration option, place it after the ``list`` subcommand. For example, ``esrally list pipelines`` will list all pipelines known to Rally.
+
+The ``facts`` subcommand requires one target host. If you have started a Rally daemon, it can also gather facts from remote machines.
+
+**Example**
+
+ ::
+
+   esrally list facts --target-hosts=10.17.20.3
+
+
+This will gather facts about the target host with the IP ``10.17.20.3`` but requires that you have started the Rally daemon first (see :doc:`recipes </recipes>` on how to do that).
+
 
 ``compare``
 ~~~~~~~~~~~
