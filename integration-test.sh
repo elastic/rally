@@ -6,7 +6,7 @@ readonly CONFIGURATIONS=(integration-test es-integration-test)
 
 readonly DISTRIBUTIONS=(1.7.6 2.4.4 5.2.0)
 # TODO: Should we just derive the tracks with Rally itself?
-readonly TRACKS=(geonames geopoint nyc_taxis pmc logging)
+readonly TRACKS=(geonames geopoint nyc_taxis pmc logging nested)
 
 ES_PID=-1
 
@@ -39,7 +39,7 @@ function set_up() {
     fi
     tar -xzf elasticsearch-5.0.0.tar.gz
     cd elasticsearch-5.0.0
-    bin/elasticsearch --quiet &
+    bin/elasticsearch &
     # store PID so we can kill ES later
     ES_PID=$!
     sleep 20
@@ -97,8 +97,8 @@ function test_distributions() {
         for track in "${TRACKS[@]}"
         do
             random_configuration cfg
-            info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--challenge=append-no-conflicts], [--car=defaults]"
-            esrally --quiet --configuration-name=${cfg} --distribution-version=${dist} --track=${track} --test-mode --challenge=append-no-conflicts --car=defaults
+            info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=defaults]"
+            esrally --quiet --configuration-name=${cfg} --distribution-version=${dist} --track=${track} --test-mode --car=defaults
         done
     done
 }
@@ -112,11 +112,14 @@ function run_test() {
 
 function tear_down() {
     info "tearing down"
+    # just let tear down finish
+    set +e
     # terminate metrics store
     kill -9 ${ES_PID}
 
     rm -f ~/.rally/rally*integration-test.ini
     rm -rf .rally_it/cache/elasticsearch-5.0.0
+    set -e
 }
 
 function main {
