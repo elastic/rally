@@ -263,11 +263,15 @@ class Driver(actor.RallyActor):
                 logger.info("Terminating main driver actor.")
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
-                # start the next task in five seconds (relative to master's timestamp)
-                #
-                # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
-                #             (it doesn't matter too much if we're a few ms off).
-                start_next_task = time.perf_counter() + 5.0
+                if self.config.opts("track", "test.mode.enabled"):
+                    # don't wait if test mode is enabled and start the next task immediately.
+                    start_next_task = time.perf_counter()
+                else:
+                    # start the next task in five seconds (relative to master's timestamp)
+                    #
+                    # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
+                    #             (it doesn't matter too much if we're a few ms off).
+                    start_next_task = time.perf_counter() + 5.0
                 for client_id, driver in enumerate(self.drivers):
                     client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
                     client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
@@ -367,6 +371,7 @@ class LoadGenerator(actor.RallyActor):
         self.executor_future = None
         self.sampler = None
         self.start_driving = False
+        self.wakeup_interval = LoadGenerator.WAKEUP_INTERVAL_SECONDS
 
     def receiveMessage(self, msg, sender):
         try:
@@ -381,6 +386,9 @@ class LoadGenerator(actor.RallyActor):
                 self.tasks = msg.tasks
                 self.current_task = 0
                 self.cancel.clear()
+                # we need to wake up more often in test mode
+                if self.config.opts("track", "test.mode.enabled"):
+                    self.wakeup_interval = 0.5
                 self.start_timestamp = time.perf_counter()
                 track.load_track_plugins(self.config, runner.register_runner)
                 self.drive()
@@ -406,7 +414,7 @@ class LoadGenerator(actor.RallyActor):
                             self.executor_future = None
                             self.drive()
                     else:
-                        self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
+                        self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest." % str(self.client_id))
                 if self.executor_future is not None and self.executor_future.running():
@@ -443,7 +451,7 @@ class LoadGenerator(actor.RallyActor):
             self.executor_future = self.pool.submit(execute_schedule,
                                                     self.cancel, self.client_id, task.operation, schedule, self.es, self.sampler,
                                                     profiling_enabled)
-            self.wakeupAfter(datetime.timedelta(seconds=LoadGenerator.WAKEUP_INTERVAL_SECONDS))
+            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
 
