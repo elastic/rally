@@ -112,7 +112,7 @@ class MechanicActor(actor.RallyActor):
                                          targetActorRequirements={"coordinator": True})
                     self.mechanics.append(m)
                     # we can use the original message in this case
-                    mechanics_and_start_message = (m, msg)
+                    mechanics_and_start_message.append((m, msg))
                 else:
                     hosts = msg.cfg.opts("client", "hosts")
                     logger.info("Target node(s) %s will be provisioned by Rally." % hosts)
@@ -120,7 +120,7 @@ class MechanicActor(actor.RallyActor):
                         raise exceptions.LaunchError("No target hosts are configured.")
                     for host in hosts:
                         ip = host["host"]
-                        port = host["port"]
+                        port = int(host["port"])
                         # user may specify "localhost" on the command line but the problem is that we auto-register the actor system
                         # with "ip": "127.0.0.1" so we convert this special case automatically. In all other cases the user needs to
                         # start the actor system on the other host and is aware that the parameter for the actor system and the
@@ -130,7 +130,7 @@ class MechanicActor(actor.RallyActor):
                                                  globalName="/rally/mechanic/worker/localhost",
                                                  targetActorRequirements={"coordinator": True})
                             self.mechanics.append(m)
-                            mechanics_and_start_message = (m, msg.with_port(port))
+                            mechanics_and_start_message.append((m, msg.with_port(port)))
                         else:
                             if msg.cfg.opts("system", "remote.benchmarking.supported"):
                                 logger.info("Benchmarking against %s with external Rally daemon." % hosts)
@@ -150,7 +150,7 @@ class MechanicActor(actor.RallyActor):
                             m = self.createActor(RemoteNodeMechanicActor,
                                                  globalName="/rally/mechanic/worker/%s" % ip,
                                                  targetActorRequirements={"ip": ip})
-                            mechanics_and_start_message = (m, msg.with_port(port))
+                            mechanics_and_start_message.append((m, msg.with_port(port)))
                             self.mechanics.append(m)
                 for mechanic_actor, start_message in mechanics_and_start_message:
                     self.send(mechanic_actor, start_message)
