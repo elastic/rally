@@ -1,8 +1,9 @@
 import unittest.mock as mock
 import threading
+import collections
 from unittest import TestCase
 
-from esrally import metrics, track
+from esrally import metrics, track, exceptions
 from esrally.driver import driver
 from esrally.track import params
 from esrally.utils import io
@@ -356,6 +357,9 @@ class ExecutorTests(TestCase):
         def __exit__(self, exc_type, exc_val, exc_tb):
             return False
 
+        def __str__(self):
+            return str(self.mock)
+
     def context_managed(self, mock):
         return ExecutorTests.NoopContextManager(mock)
 
@@ -528,10 +532,56 @@ class ExecutorTests(TestCase):
             "http-status": 200
         }, request_meta_data)
 
+    def test_execute_single_with_connection_error(self):
+        import elasticsearch
+        es = None
+        params = None
+        # ES client uses pseudo-status "N/A" in this case...
+        runner = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+
+        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+
+        self.assertEqual(0, total_ops)
+        self.assertEqual("ops", total_ops_unit)
+        self.assertEqual({
+            # Look ma: No http-status!
+            "error-description": "no route to host"
+        }, request_meta_data)
+
+
     def test_execute_single_with_http_400(self):
-        # TODO dm: Implement a mock that throws a TransportError when called
-        pass
+        import elasticsearch
+        es = None
+        params = None
+        runner = mock.Mock(side_effect=elasticsearch.NotFoundError(404, "not found"))
+
+        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+
+        self.assertEqual(0, total_ops)
+        self.assertEqual("ops", total_ops_unit)
+        self.assertEqual({
+            "http-status": 404,
+            "error-description": "not found"
+        }, request_meta_data)
 
     def test_execute_single_with_key_error(self):
-        # TODO dm: Implement a mock that throws a KeyError when called (simulates missing parameters)
-        pass
+        class FailingRunner:
+            def __call__(self, *args):
+                raise KeyError("bulk-size missing")
+
+            def __str__(self):
+                return "failing_mock_runner"
+
+
+        es = None
+        params = collections.OrderedDict()
+        # simulating an error; this should be "bulk-size"
+        params["bulk"] = 5000
+        params["mode"] = "append"
+        runner = FailingRunner()
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            driver.execute_single(self.context_managed(runner), es, params)
+        self.assertEqual(
+            "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing'].",
+            ctx.exception.args[0])

@@ -764,12 +764,14 @@ def execute_single(runner, es, params):
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {
-            "http_status": e.status_code,
-            "error_description": e.error
+            "error-description": e.error
         }
+        # The ES client will return N/A for connection errors
+        if e.status_code != "N/A":
+            request_meta_data["http-status"] = e.status_code
     except KeyError as e:
         logger.exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
-        msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), str(params.keys()), str(e))
+        msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
         raise exceptions.SystemSetupError(msg)
 
     return total_ops, total_ops_unit, request_meta_data
