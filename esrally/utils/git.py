@@ -39,7 +39,7 @@ def clone(src, remote):
 def fetch(src, remote="origin"):
     # Don't swallow output but silence git at least a bit... (--quiet)
     if process.run_subprocess(
-            "git -C {0} fetch --quiet {1}".format(src, remote)):
+            "git -C {0} fetch --prune --quiet {1}".format(src, remote)):
         raise exceptions.SupplyError("Could not fetch source tree from '%s'" % remote)
 
 
