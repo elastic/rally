@@ -1,5 +1,33 @@
 ### 0.5.0
 
+#### Highlights
+
+* [#238](https://github.com/elastic/rally/issues/238): Simplify gathering of facts for benchmark results sharing
+* [#216](https://github.com/elastic/rally/issues/216): Add possibility to profile load driver internals
+* [#184](https://github.com/elastic/rally/issues/184): Allow to benchmark a single-machine cluster remotely
+
+#### Enhancements
+
+* [#207](https://github.com/elastic/rally/issues/207): Improve response checks in bulk API runner
+* [#205](https://github.com/elastic/rally/issues/205): Make track configuration more modular
+* [#200](https://github.com/elastic/rally/issues/200): Allow root.dir to be set during configure
+* [#199](https://github.com/elastic/rally/issues/199): Let track authors decide on the default challenge
+* [#191](https://github.com/elastic/rally/issues/191): Support target-interval for operations
+
+#### Bug Fixes
+
+* [#225](https://github.com/elastic/rally/issues/225): Final score report blank when metrics store specified
+* [#221](https://github.com/elastic/rally/issues/221): Scrolls fail against Elasticsearch master
+* [#203](https://github.com/elastic/rally/issues/203): Index time metrics are not aware of laps
+* [#202](https://github.com/elastic/rally/issues/202): Bulk index source reads data for all indices
+
+#### Doc Changes
+
+* [#224](https://github.com/elastic/rally/issues/224): Issue(s) with --user-tags
+* [#214](https://github.com/elastic/rally/issues/214): Improve documentation of "parallel"
+* [#213](https://github.com/elastic/rally/issues/213): Document how to support --test-mode in a track
+* [#208](https://github.com/elastic/rally/issues/208): Add FAQ item to explain latency, service time and their relation to "took"
+
 ### 0.4.0
 
 #### Breaking changes in 0.4.0
