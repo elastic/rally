@@ -81,21 +81,18 @@ def init(quiet=False):
 
 
 def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
-    if not QUIET:
-        println(msg, console_prefix="[INFO]", end=end, flush=flush, overline=overline, underline=underline,
-                logger=logger.info if logger else None)
+    println(msg, console_prefix="[INFO]", end=end, flush=flush, overline=overline, underline=underline,
+            logger=logger.info if logger else None)
 
 
 def warn(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
-    if not QUIET:
-        println(msg, console_prefix="[WARNING]", end=end, flush=flush, overline=overline, underline=underline
-                , logger=logger.warning if logger else None)
+    println(msg, console_prefix="[WARNING]", end=end, flush=flush, overline=overline, underline=underline
+            , logger=logger.warning if logger else None)
 
 
 def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
-    if not QUIET:
-        println(msg, console_prefix="[ERROR]", end=end, flush=flush, overline=overline, underline=underline
-                , logger=logger.error if logger else None)
+    println(msg, console_prefix="[ERROR]", end=end, flush=flush, overline=overline, underline=underline
+            , logger=logger.error if logger else None)
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
