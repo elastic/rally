@@ -59,7 +59,7 @@ class GitTests(TestCase):
         run_subprocess_with_logging.return_value = True
         run_subprocess.return_value = False
         git.fetch("/src", remote="my-origin")
-        run_subprocess.assert_called_with("git -C /src fetch --quiet my-origin")
+        run_subprocess.assert_called_with("git -C /src fetch --prune --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -69,7 +69,7 @@ class GitTests(TestCase):
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.fetch("/src", remote="my-origin")
         self.assertEqual("Could not fetch source tree from 'my-origin'", ctx.exception.args[0])
-        run_subprocess.assert_called_with("git -C /src fetch --quiet my-origin")
+        run_subprocess.assert_called_with("git -C /src fetch --prune --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -108,7 +108,7 @@ class GitTests(TestCase):
         run_subprocess.return_value = False
         git.pull("/src", remote="my-origin", branch="feature-branch")
         calls = [
-            mock.call("git -C /src fetch --quiet my-origin"),
+            mock.call("git -C /src fetch --prune --quiet my-origin"),
             mock.call("git -C /src checkout --quiet feature-branch"),
             mock.call("git -C /src rebase --quiet my-origin/feature-branch")
         ]
