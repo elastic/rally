@@ -279,6 +279,11 @@ def parse_args():
             choices=["red", "yellow", "green"],
             help=argparse.SUPPRESS,
             default="green")
+        p.add_argument(
+            "--auto-manage-indices",
+            choices=["true", "false"],
+            help=argparse.SUPPRESS,
+            default=None)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -433,6 +438,17 @@ def csv_to_list(csv):
         return [e.strip() for e in csv.split(",")]
 
 
+def to_bool(v):
+    if v is None:
+        return None
+    elif v.lower() == "false":
+        return False
+    elif v.lower() == "true":
+        return True
+    else:
+        raise ValueError("Could not convert value '%s'" % v)
+
+
 def kv_to_map(kvs):
     def convert(v):
         # string
@@ -452,12 +468,7 @@ def kv_to_map(kvs):
             pass
 
         # boolean
-        if v.lower() == "false":
-            return False
-        elif v.lower() == "true":
-            return True
-        else:
-            raise ValueError("Could not convert value '%s'" % v)
+        return to_bool(v)
 
     result = {}
     for kv in kvs:
@@ -527,6 +538,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
+    cfg.add(config.Scope.applicationOverride, "track", "auto_manage_indices", to_bool(args.auto_manage_indices))
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)

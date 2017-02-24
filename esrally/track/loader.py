@@ -360,10 +360,10 @@ class TrackFileReader:
     """
 
     def __init__(self, cfg):
-        self.cfg = cfg
-        track_schema_file = "%s/resources/track-schema.json" % (self.cfg.opts("node", "rally.root"))
+        track_schema_file = "%s/resources/track-schema.json" % (cfg.opts("node", "rally.root"))
         self.track_schema = json.loads(open(track_schema_file).read())
-        self.read_track = TrackSpecificationReader()
+        override_auto_manage_indices = cfg.opts("track", "auto_manage_indices")
+        self.read_track = TrackSpecificationReader(override_auto_manage_indices)
 
     def read(self, track_name, track_spec_file, mapping_dir, data_dir):
         """
@@ -456,8 +456,9 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self):
+    def __init__(self, override_auto_manage_indices=None):
         self.name = None
+        self.override_auto_manage_indices = override_auto_manage_indices
 
     def __call__(self, track_name, track_specification, mapping_dir, data_dir):
         self.name = track_name
@@ -524,7 +525,13 @@ class TrackSpecificationReader:
 
     def _create_index(self, index_spec, mapping_dir, data_dir):
         index_name = self._r(index_spec, "name")
-        auto_managed = self._r(index_spec, "auto-managed", mandatory=False, default_value=True)
+        if self.override_auto_manage_indices is not None:
+            auto_managed = self.override_auto_manage_indices
+            logger.info("User explicitly forced auto-managed indices to [%s] on the command line." % str(auto_managed))
+        else:
+            auto_managed = self._r(index_spec, "auto-managed", mandatory=False, default_value=True)
+            logger.info("Using index auto-management setting from track which is set to [%s]." % str(auto_managed))
+
         types = [self._create_type(type_spec, mapping_dir, data_dir)
                  for type_spec in self._r(index_spec, "types", mandatory=auto_managed, default_value=[])]
         valid_document_data = False
