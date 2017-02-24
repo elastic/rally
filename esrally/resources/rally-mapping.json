@@ -39,7 +39,14 @@
         "trial-timestamp": {
           "type": "date",
           "format": "basic_date_time_no_millis",
-          "doc_values": true
+          "doc_values": true,
+          "fields": {
+            "raw": {
+              "type": "string",
+              "doc_values": true,
+              "index": "not_analyzed"
+            }
+          }
         },
         "environment": {
           "type": "string",
