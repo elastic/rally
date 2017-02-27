@@ -13,6 +13,25 @@ from esrally.utils import versions, console, process
 logger = logging.getLogger("rally.launcher")
 
 
+def wait_for_rest_layer(es):
+    max_attempts = 10
+    for attempt in range(max_attempts):
+        import elasticsearch
+        try:
+            es.info()
+            return True
+        except elasticsearch.TransportError as e:
+            if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
+                logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
+                time.sleep(2)
+            elif e.status_code == 401:
+                logger.debug("Could not authenticate yet (probably x-pack initializing).")
+                time.sleep(2)
+            else:
+                raise e
+    return False
+
+
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
@@ -44,7 +63,7 @@ class DockerLauncher:
         c = cluster.Cluster(hosts, [], t)
         self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name="rally0")
         logger.info("Docker container has successfully started. Checking if REST API is available.")
-        if self.wait_for_rest_layer(es):
+        if wait_for_rest_layer(es):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
             t.attach_to_cluster(c)
             logger.info("Telemetry devices are now attached to the cluster.")
@@ -53,21 +72,6 @@ class DockerLauncher:
             self.stop(c)
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
-
-    def wait_for_rest_layer(self, es):
-        max_attempts = 10
-        for attempt in range(max_attempts):
-            import elasticsearch
-            try:
-                es.info()
-                return True
-            except elasticsearch.TransportError as e:
-                if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
-                    logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
-                    time.sleep(2)
-                else:
-                    raise e
-        return False
 
     def _start_process(self, cmd, node_name):
         startup_event = threading.Event()
@@ -110,7 +114,8 @@ class DockerLauncher:
 
     def stop(self, cluster):
         logger.info("Stopping Docker container")
-        process.run_subprocess_with_logging("docker-compose down -v -f %s" % self.binary_path)
+        process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_path)
+        cluster.telemetry.detach_from_cluster(cluster)
 
 
 class ExternalLauncher:
@@ -234,7 +239,7 @@ class InProcessLauncher:
         t = telemetry.Telemetry(enabled_devices, devices=cluster_telemetry)
         c = cluster.Cluster(hosts, [self._start_node(node, car, es, binary) for node in range(car.nodes)], t)
         logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-        if self.wait_for_rest_layer(es):
+        if wait_for_rest_layer(es):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
             t.attach_to_cluster(c)
             logger.info("Telemetry devices are now attached to the cluster.")
@@ -243,21 +248,6 @@ class InProcessLauncher:
             self.stop(c)
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
-
-    def wait_for_rest_layer(self, es):
-        max_attempts = 10
-        for attempt in range(max_attempts):
-            import elasticsearch
-            try:
-                es.info()
-                return True
-            except elasticsearch.TransportError as e:
-                if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
-                    logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
-                    time.sleep(2)
-                else:
-                    raise e
-        return False
 
     def _start_node(self, node, car, es, binary_path):
         node_name = self._node_name(node)

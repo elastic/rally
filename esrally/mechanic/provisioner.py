@@ -22,6 +22,7 @@ def no_op_provisioner(cfg):
 
 def docker_provisioner(cfg, install_dir):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
     return DockerProvisioner(cfg.opts("mechanic", "car.name"), install_dir, distribution_version, rally_root)
 
@@ -151,8 +152,9 @@ class NoOpProvisioner:
 
 
 class DockerProvisioner:
-    def __init__(self, car_name, install_dir, distribution_version, rally_root):
+    def __init__(self, car_name, http_port, install_dir, distribution_version, rally_root):
         self.car = car.select_car(car_name)
+        self.http_port = http_port
         self.install_dir = install_dir
         self.distribution_version = distribution_version
         self.rally_root = rally_root
@@ -182,7 +184,8 @@ class DockerProvisioner:
             "es_java_opts": java_opts,
             "container_memory_gb": "%dg" % (convert.bytes_to_gb(sysstats.total_memory()) // 2),
             "es_data_dir": "%s/data" % self.install_dir,
-            "es_version": self.distribution_version
+            "es_version": self.distribution_version,
+            "http_port": self.http_port
         }
 
     def cleanup(self):

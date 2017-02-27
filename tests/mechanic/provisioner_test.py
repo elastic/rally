@@ -69,12 +69,13 @@ class DockerProvisionerTests(TestCase):
         total_memory.return_value = convert.gb_to_bytes(64)
         tmp = tempfile.gettempdir()
 
-        docker = provisioner.DockerProvisioner("defaults", tmp, "5.0.0", "../../")
+        docker = provisioner.DockerProvisioner("defaults", "39200", tmp, "5.0.0", "../../")
 
         self.assertEqual({
             "es_java_opts": "",
             "container_memory_gb": "32g",
             "es_data_dir": "%s/data" % tmp,
-            "es_version": "5.0.0"
+            "es_version": "5.0.0",
+            "http_port": "39200"
         }, docker.docker_vars)
 

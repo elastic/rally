@@ -10,7 +10,7 @@ services:
     image: "docker.elastic.co/elasticsearch/elasticsearch:{{es_version}}"
     mem_limit: {{container_memory_gb}}
     ports:
-      - 9200:9200
+      - {{http_port}}:9200
       - 9300
     ulimits:
       memlock:
