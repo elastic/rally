@@ -24,7 +24,7 @@ def docker_provisioner(cfg, install_dir):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
-    return DockerProvisioner(cfg.opts("mechanic", "car.name"), install_dir, distribution_version, rally_root)
+    return DockerProvisioner(cfg.opts("mechanic", "car.name"), http_port, install_dir, distribution_version, rally_root)
 
 
 class Provisioner:
