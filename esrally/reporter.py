@@ -48,6 +48,7 @@ class Stats:
                 self.op_metrics[op]["throughput"] = self.summary_stats("throughput", op)
                 self.op_metrics[op]["latency"] = self.single_latency(op)
                 self.op_metrics[op]["service_time"] = self.single_latency(op, metric_name="service_time")
+                self.op_metrics[op]["error_rate"] = self.error_rate(op)
 
         logger.debug("Gathering indexing metrics.")
         self.total_time = self.sum("indexing_total_time")
@@ -105,6 +106,9 @@ class Stats:
             return stats["min"], median, stats["max"], unit
         else:
             return None, None, None, unit
+
+    def error_rate(self, operation_name):
+        return self.store.get_error_rate(operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
 
     def has_merge_part_stats(self):
         return self.merge_part_time_postings or \
@@ -220,6 +224,7 @@ class SummaryReporter:
                 metrics_table += self.report_throughput(stats, task.operation)
                 metrics_table += self.report_latency(stats, task.operation)
                 metrics_table += self.report_service_time(stats, task.operation)
+                metrics_table += self.report_error_rate(stats, task.operation)
 
         meta_info_table += self.report_meta_info()
 
@@ -294,6 +299,13 @@ class SummaryReporter:
         if service_time:
             for percentile, value in service_time.items():
                 lines.append([self.lap, "%sth percentile service time" % percentile, operation.name, value, "ms"])
+        return lines
+
+    def report_error_rate(self, stats, operation):
+        lines = []
+        error_rate = stats.op_metrics[operation.name]["error_rate"]
+        if error_rate is not None:
+            lines.append([self.lap, "error rate", operation.name, "%.2f" % (error_rate * 100.0), "%"])
         return lines
 
     def report_total_times(self, stats):
@@ -430,6 +442,7 @@ class ComparisonReporter:
                 metrics_table += self.report_throughput(baseline_stats, contender_stats, op)
                 metrics_table += self.report_latency(baseline_stats, contender_stats, op)
                 metrics_table += self.report_service_time(baseline_stats, contender_stats, op)
+                metrics_table += self.report_error_rate(baseline_stats, contender_stats, op)
         return metrics_table
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
@@ -467,6 +480,14 @@ class ComparisonReporter:
                 self.append_if_present(lines, self.line("%sth percentile service time" % percentile, baseline_value, contender_value,
                                                         operation, "ms", treat_increase_as_improvement=False))
         return lines
+
+    def report_error_rate(self, baseline_stats, contender_stats, operation):
+        baseline_error_rate = baseline_stats.op_metrics[operation]["error_rate"]
+        contender_error_rate = contender_stats.op_metrics[operation]["error_rate"]
+        return self.join(
+            self.line("error rate", baseline_error_rate, contender_error_rate, operation, "%",
+                      treat_increase_as_improvement=False, formatter=convert.factor(100.0))
+        )
 
     def report_merge_part_times(self, baseline_stats, contender_stats):
         if baseline_stats.has_merge_part_stats() and contender_stats.has_merge_part_stats():

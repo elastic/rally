@@ -498,7 +498,7 @@ class ExecutorTests(TestCase):
 
         self.assertEqual(1, total_ops)
         self.assertEqual("ops", total_ops_unit)
-        self.assertIsNone(request_meta_data)
+        self.assertEqual({"success": True}, request_meta_data)
 
     def test_execute_single_tuple(self):
         es = None
@@ -510,7 +510,7 @@ class ExecutorTests(TestCase):
 
         self.assertEqual(500, total_ops)
         self.assertEqual("MB", total_ops_unit)
-        self.assertIsNone(request_meta_data)
+        self.assertEqual({"success": True}, request_meta_data)
 
     def test_execute_single_dict(self):
         es = None
@@ -529,7 +529,8 @@ class ExecutorTests(TestCase):
         self.assertEqual("docs", total_ops_unit)
         self.assertEqual({
             "some-custom-meta-data": "valid",
-            "http-status": 200
+            "http-status": 200,
+            "success": True
         }, request_meta_data)
 
     def test_execute_single_with_connection_error(self):
@@ -545,9 +546,9 @@ class ExecutorTests(TestCase):
         self.assertEqual("ops", total_ops_unit)
         self.assertEqual({
             # Look ma: No http-status!
-            "error-description": "no route to host"
+            "error-description": "no route to host",
+            "success": False
         }, request_meta_data)
-
 
     def test_execute_single_with_http_400(self):
         import elasticsearch
@@ -561,7 +562,8 @@ class ExecutorTests(TestCase):
         self.assertEqual("ops", total_ops_unit)
         self.assertEqual({
             "http-status": 404,
-            "error-description": "not found"
+            "error-description": "not found",
+            "success": False
         }, request_meta_data)
 
     def test_execute_single_with_key_error(self):

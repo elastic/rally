@@ -510,6 +510,18 @@ class MetricsStore:
         else:
             return 0
 
+    def get_error_rate(self, operation, operation_type=None, sample_type=None, lap=None):
+        """
+        Gets the error rate for a specific operation.
+
+        :param operation The operation name to query.
+        :param operation_type The operation type to query. Optional.
+        :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param lap The lap to query. Optional. By default, all laps are considered.
+        :return: A float between 0.0 and 1.0 (inclusive) representing the error rate.
+        """
+        raise NotImplementedError("abstract method")
+
     def get_stats(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
         """
         Gets standard statistics for the given metric.
@@ -623,6 +635,43 @@ class EsMetricsStore(MetricsStore):
         logger.debug("Metrics query produced [%s] results." % result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
+    def get_error_rate(self, operation, operation_type=None, sample_type=None, lap=None):
+        query = {
+            "query": self._query_by_name("service_time", operation, operation_type, sample_type, lap),
+            "size": 0,
+            "aggs": {
+                "error_rate": {
+                    "terms": {
+                        "field": "meta.success"
+                    }
+                }
+            }
+        }
+        logger.debug("Issuing get_error_rate against index=[%s], doc_type=[%s], query=[%s]" %
+                     (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        buckets = result["aggregations"]["error_rate"]["buckets"]
+        logger.debug("Query returned [%d] buckets." % len(buckets))
+        count_success = 0
+        count_errors = 0
+        for bucket in buckets:
+            k = bucket["key_as_string"]
+            doc_count = int(bucket["doc_count"])
+            logger.debug("Processing key [%s] with [%d] docs." % (k, doc_count))
+            if k == "true":
+                count_success = doc_count
+            elif k == "false":
+                count_errors = doc_count
+            else:
+                logger.warning("Unrecognized bucket key [%s] with [%d] docs." % (k, doc_count))
+
+        if count_errors == 0:
+            return 0.0
+        elif count_success == 0:
+            return 1.0
+        else:
+            return count_errors / (count_errors + count_success)
+
     def get_stats(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
         """
         Gets standard statistics for the given metric name.
@@ -632,6 +681,7 @@ class EsMetricsStore(MetricsStore):
         """
         query = {
             "query": self._query_by_name(name, operation, operation_type, sample_type, lap),
+            "size": 0,
             "aggs": {
                 "metric_stats": {
                     "stats": {
@@ -650,6 +700,7 @@ class EsMetricsStore(MetricsStore):
             percentiles = [99, 99.9, 100]
         query = {
             "query": self._query_by_name(name, operation, operation_type, sample_type, lap),
+            "size": 0,
             "aggs": {
                 "percentile_stats": {
                     "percentiles": {
@@ -808,6 +859,23 @@ class InMemoryMetricsStore(MetricsStore):
             lower_score = sorted_values[lr]
             higher_score = sorted_values[lr_next]
             return lower_score + (higher_score - lower_score) * fr
+
+    def get_error_rate(self, operation, operation_type=None, sample_type=None, lap=None):
+        error = 0
+        total_count = 0
+        for doc in self.docs:
+            # we can use any request metrics record (i.e. service time or latency)
+            if doc["name"] == "service_time" and doc["operation"] == operation and \
+                    (operation_type is None or doc["operation-type"] == operation_type.name) and \
+                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and \
+                    (lap is None or doc["lap"] == lap):
+                total_count += 1
+                if doc["meta"]["success"] is False:
+                    error += 1
+        if total_count > 0:
+            return error / total_count
+        else:
+            return 0.0
 
     def get_stats(self, name, operation=None, operation_type=None, sample_type=SampleType.Normal, lap=None):
         values = self.get(name, operation, operation_type, sample_type, lap)

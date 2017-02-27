@@ -101,6 +101,7 @@ class BenchmarkFailure:
     """
     Indicates a failure in the benchmark execution due to an exception
     """
+
     def __init__(self, message, cause):
         self.message = message
         self.cause = cause
@@ -234,7 +235,7 @@ class Driver(actor.RallyActor):
         self.currently_completed += 1
         self.clients_completed_current_step[msg.client_id] = (msg.client_local_timestamp, time.perf_counter())
         logger.info("[%d/%d] drivers reached join point [%d/%d]." %
-                     (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
+                    (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
         if self.currently_completed == len(self.drivers):
             logger.info("All drivers completed their operations until join point [%d/%d]." %
                         (self.current_step + 1, self.number_of_steps))
@@ -759,19 +760,22 @@ def execute_single(runner, es, params):
             return_value = runner(es, params)
         if isinstance(return_value, tuple) and len(return_value) == 2:
             total_ops, total_ops_unit = return_value
-            request_meta_data = None
+            request_meta_data = {"success": True}
         elif isinstance(return_value, dict):
             total_ops = return_value.pop("weight", 1)
             total_ops_unit = return_value.pop("unit", "ops")
             request_meta_data = return_value
+            if "success" not in request_meta_data:
+                request_meta_data["success"] = True
         else:
             total_ops = 1
             total_ops_unit = "ops"
-            request_meta_data = None
+            request_meta_data = {"success": True}
     except elasticsearch.TransportError as e:
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {
+            "success": False,
             "error-description": e.error
         }
         # The ES client will return N/A for connection errors

@@ -25,10 +25,13 @@ class StatsTests(TestCase):
         store.put_value_cluster_level("latency", 225, unit="ms", operation="index", operation_type=track.OperationType.Index)
 
         store.put_value_cluster_level("service_time", 250, unit="ms", operation="index", operation_type=track.OperationType.Index,
-                                      sample_type=metrics.SampleType.Warmup)
-        store.put_value_cluster_level("service_time", 190, unit="ms", operation="index", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("service_time", 200, unit="ms", operation="index", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("service_time", 215, unit="ms", operation="index", operation_type=track.OperationType.Index)
+                                      sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
+        store.put_value_cluster_level("service_time", 190, unit="ms", operation="index", operation_type=track.OperationType.Index,
+                                      meta_data={"success": True})
+        store.put_value_cluster_level("service_time", 200, unit="ms", operation="index", operation_type=track.OperationType.Index,
+                                      meta_data={"success": False})
+        store.put_value_cluster_level("service_time", 215, unit="ms", operation="index", operation_type=track.OperationType.Index,
+                                      meta_data={"success": True})
 
         index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
         challenge = track.Challenge(name="unittest", description="", index_settings=None, schedule=[index])
@@ -40,6 +43,7 @@ class StatsTests(TestCase):
         self.assertEqual((500, 1000, 2000, "docs/s"), stats.op_metrics["index"]["throughput"])
         self.assertEqual(collections.OrderedDict([(50.0, 220), (100, 225)]), stats.op_metrics["index"]["latency"])
         self.assertEqual(collections.OrderedDict([(50.0, 200), (100, 215)]), stats.op_metrics["index"]["service_time"])
+        self.assertAlmostEqual(0.3333333333333333, stats.op_metrics["index"]["error_rate"])
 
 
 class ComparisonReporterTests(TestCase):

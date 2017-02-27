@@ -344,6 +344,7 @@ class EsMetricsTests(TestCase):
                     ]
                 }
             },
+            "size": 0,
             "aggs": {
                 "percentile_stats": {
                     "percentiles": {
@@ -359,6 +360,162 @@ class EsMetricsTests(TestCase):
         self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
 
         self.assertEqual(median_throughput, actual_median_throughput)
+
+    def test_get_error_rate_implicit_zero(self):
+        self.assertEqual(0.0, self._get_error_rate(buckets=[
+            {
+                "key": 1,
+                "key_as_string": "true",
+                "doc_count": 0
+
+            }
+        ]))
+
+    def test_get_error_rate_explicit_zero(self):
+        self.assertEqual(0.0, self._get_error_rate(buckets=[
+            {
+                "key": 0,
+                "key_as_string": "false",
+                "doc_count": 0
+            },
+            {
+                "key": 1,
+                "key_as_string": "true",
+                "doc_count": 500
+            }
+        ]))
+
+    def test_get_error_rate_implicit_one(self):
+        self.assertEqual(1.0, self._get_error_rate(buckets=[
+            {
+                "key": 0,
+                "key_as_string": "false",
+                "doc_count": 123
+            }
+        ]))
+
+    def test_get_error_rate_explicit_one(self):
+        self.assertEqual(1.0, self._get_error_rate(buckets=[
+            {
+                "key": 0,
+                "key_as_string": "false",
+                "doc_count": 123
+            },
+            {
+                "key": 1,
+                "key_as_string": "true",
+                "doc_count": 0
+            }
+        ]))
+
+    def test_get_error_rate_mixed(self):
+        self.assertEqual(0.5, self._get_error_rate(buckets=[
+            {
+                "key": 0,
+                "key_as_string": "false",
+                "doc_count": 500
+            },
+            {
+                "key": 1,
+                "key_as_string": "true",
+                "doc_count": 500
+            }
+        ]))
+
+    def test_get_error_rate_additional_unknown_key(self):
+        self.assertEqual(0.25, self._get_error_rate(buckets=[
+            {
+                "key": 0,
+                "key_as_string": "false",
+                "doc_count": 500
+            },
+            {
+                "key": 1,
+                "key_as_string": "true",
+                "doc_count": 1500
+            },
+            {
+                "key": 2,
+                "key_as_string": "undefined_for_test",
+                "doc_count": 13700
+            }
+        ]))
+
+    def _get_error_rate(self, buckets):
+        search_result = {
+            "hits": {
+                "total": 1,
+            },
+            "aggregations": {
+                "error_rate": {
+                    "buckets": buckets
+                }
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "trial-timestamp": "20160131T000000Z"
+                            }
+                        },
+                        {
+                            "term": {
+                                "environment": "unittest"
+                            }
+                        },
+                        {
+                            "term": {
+                                "track": "test"
+                            }
+                        },
+                        {
+                            "term": {
+                                "challenge": "append-no-conflicts"
+                            }
+                        },
+                        {
+                            "term": {
+                                "car": "defaults"
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "service_time"
+                            }
+                        },
+                        {
+                            "term": {
+                                "operation": "scroll_query"
+                            }
+                        },
+                        {
+                            "term": {
+                                "lap": 3
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": 0,
+            "aggs": {
+                "error_rate": {
+                    "terms": {
+                        "field": "meta.success"
+                    }
+                }
+            }
+        }
+
+        actual_error_rate = self.metrics_store.get_error_rate("scroll_query", lap=3)
+        self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
+        return actual_error_rate
 
 
 class EsRaceStoreTests(TestCase):
@@ -526,5 +683,40 @@ class InMemoryMetricsStoreTests(TestCase):
             "io-batch-size-kb": 4
         }, self.metrics_store.docs[1]["meta"])
 
+    def test_get_error_rate_zero_without_samples(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
+        self.metrics_store.close()
 
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
+        self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
+
+    def test_get_error_rate_by_sample_type(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        self.assertEqual(1.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
+        self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
+
+    def test_get_error_rate_mixed(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": False})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
+        self.assertEqual(0.2, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))

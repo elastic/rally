@@ -40,6 +40,10 @@ def ms_to_minutes(ms):
     return ms / 1000.0 / 60.0 if ms else ms
 
 
+def factor(n):
+    return lambda v: v * n
+
+
 def to_bool(value):
     if value in ["True", "true", "Yes", "yes", "t", "y", "1", True]:
         return True
@@ -47,4 +51,3 @@ def to_bool(value):
         return False
     else:
         return ValueError("Cannot convert [%s] to bool." % value)
-
