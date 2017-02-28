@@ -574,8 +574,29 @@ def wait_for_status(es, expected_cluster_status):
     logger.info("Shards:\n%s" % es.cat.shards(v=True))
 
 
-def _do_wait(es, expected_cluster_status):
+def _do_wait(es, expected_cluster_status, sleep=time.sleep):
     import elasticsearch
+    from enum import Enum
+    from functools import total_ordering
+
+    @total_ordering
+    class ClusterHealthStatus(Enum):
+        UNKNOWN = 0
+        RED = 1
+        YELLOW = 2
+        GREEN = 3
+
+        def __lt__(self, other):
+            if self.__class__ is other.__class__:
+                return self.value < other.value
+            return NotImplemented
+
+    def status(v):
+        try:
+            return ClusterHealthStatus[v.upper()]
+        except (KeyError, AttributeError):
+            return ClusterHealthStatus.UNKNOWN
+
     reached_cluster_status = None
     relocating_shards = -1
     major, minor, patch, suffix = versions.components(es.info()["version"]["number"])
@@ -602,7 +623,7 @@ def _do_wait(es, expected_cluster_status):
         except elasticsearch.exceptions.TransportError as e:
             if e.status_code == 408:
                 logger.info("Timed out waiting for cluster health status. Retrying shortly...")
-                time.sleep(0.5)
+                sleep(0.5)
             else:
                 raise e
         else:
@@ -612,15 +633,16 @@ def _do_wait(es, expected_cluster_status):
             logger.info("ALLOC:\n%s" % es.cat.allocation(v=True))
             logger.info("RECOVERY:\n%s" % es.cat.recovery(v=True))
             logger.info("SHARDS:\n%s" % es.cat.shards(v=True))
-            if reached_cluster_status == expected_cluster_status and relocating_shards == 0:
+            if status(reached_cluster_status) >= status(expected_cluster_status) and relocating_shards == 0:
                 return reached_cluster_status, relocating_shards
             else:
-                time.sleep(0.5)
-    if reached_cluster_status != expected_cluster_status:
+                sleep(0.5)
+    if status(reached_cluster_status) < status(expected_cluster_status):
         msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
     else:
-        msg = "Cluster reached expected status [%s] but there were [%d] relocating shards and we require zero relocating shards " \
-              "(Use the /_cat/shards API to check which shards are relocating.)" % (reached_cluster_status, relocating_shards)
+        msg = "Cluster reached status [%s] which is equal or better than the expected status [%s] but there were [%d] relocating shards " \
+              "and we require zero relocating shards (Use the /_cat/shards API to check which shards are relocating.)" % \
+              (reached_cluster_status, expected_cluster_status, relocating_shards)
     logger.error(msg)
     raise exceptions.RallyAssertionError(msg)
 

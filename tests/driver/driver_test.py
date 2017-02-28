@@ -587,3 +587,73 @@ class ExecutorTests(TestCase):
         self.assertEqual(
             "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing'].",
             ctx.exception.args[0])
+
+
+class ClusterHealthCheckTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_waits_for_expected_cluster_status(self, es):
+        es.info.return_value = {
+            "version": {
+                "number": "6.0.0"
+            }
+        }
+        es.cluster.health.return_value = {
+            "status": "green",
+            "relocating_shards": 0
+        }
+
+        reached_cluster_status, relocating_shards = driver._do_wait(es, "green")
+
+        self.assertEqual("green", reached_cluster_status)
+        self.assertEqual(0, relocating_shards)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_accepts_better_cluster_status(self, es):
+        es.info.return_value = {
+            "version": {
+                "number": "6.0.0"
+            }
+        }
+        es.cluster.health.return_value = {
+            "status": "green",
+            "relocating_shards": 0
+        }
+
+        reached_cluster_status, relocating_shards = driver._do_wait(es, "yellow")
+
+        self.assertEqual("green", reached_cluster_status)
+        self.assertEqual(0, relocating_shards)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_rejects_relocating_shards(self, es):
+        es.info.return_value = {
+            "version": {
+                "number": "6.0.0"
+            }
+        }
+        es.cluster.health.return_value = {
+            "status": "yellow",
+            "relocating_shards": 3
+        }
+
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            driver._do_wait(es, "red", sleep=lambda t: t)
+        self.assertEqual("Cluster reached status [yellow] which is equal or better than the expected status [red] but there were [3] "
+                         "relocating shards and we require zero relocating shards (Use the /_cat/shards API to check which shards are "
+                         "relocating.)", ctx.exception.args[0])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_rejects_unknown_cluster_status(self, es):
+        es.info.return_value = {
+            "version": {
+                "number": "6.0.0"
+            }
+        }
+        es.cluster.health.return_value = {
+            "status": None,
+            "relocating_shards": 0
+        }
+
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            driver._do_wait(es, "red", sleep=lambda t: t)
+        self.assertEqual("Cluster did not reach status [red]. Last reached status: [None]", ctx.exception.args[0])
