@@ -173,7 +173,7 @@ class Driver(actor.RallyActor):
                 for driver in self.drivers:
                     self.send(driver, thespian.actors.ActorExitRequest())
             else:
-                logger.debug("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
+                logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
             logger.exception("Main driver encountered a fatal exception. Shutting down.")
             if self.metrics_store:
@@ -226,6 +226,7 @@ class Driver(actor.RallyActor):
                                  globalName="/rally/driver/worker/%s" % str(client_id),
                                  targetActorRequirements={"coordinator": True}))
         for client_id, driver in enumerate(self.drivers):
+            logger.info("Starting load generator [%d]." % client_id)
             self.send(driver, StartLoadGenerator(client_id, self.config, self.track, self.allocations[client_id]))
 
         self.update_progress_message()
@@ -378,7 +379,7 @@ class LoadGenerator(actor.RallyActor):
         try:
             logger.debug("LoadGenerator[%s]#receiveMessage(msg = [%s], sender = [%s])" % (str(self.client_id), str(type(msg)), str(sender)))
             if isinstance(msg, StartLoadGenerator):
-                logger.debug("LoadGenerator[%d] is about to start." % msg.client_id)
+                logger.info("LoadGenerator[%d] is about to start." % msg.client_id)
                 self.master = sender
                 self.client_id = msg.client_id
                 self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
@@ -422,9 +423,9 @@ class LoadGenerator(actor.RallyActor):
                     self.cancel.set()
                     self.pool.shutdown()
             else:
-                logger.debug("client [%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
+                logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
         except Exception as e:
-            logger.exception("Fatal error in load generator [%d]" % self.client_id)
+            logger.exception("Fatal error in LoadGenerator[%d]" % self.client_id)
             self.send(self.master, BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
 
     def drive(self):
@@ -436,7 +437,7 @@ class LoadGenerator(actor.RallyActor):
             self.current_task += 1
 
         if isinstance(task, JoinPoint):
-            logger.info("client [%d] reached join point [%s]." % (self.client_id, task))
+            logger.info("LoadGenerator[%d] reached join point [%s]." % (self.client_id, task))
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
                 self.executor_future.result()
@@ -446,7 +447,7 @@ class LoadGenerator(actor.RallyActor):
             self.sampler = None
             self.send(self.master, JoinPointReached(self.client_id, task))
         elif isinstance(task, track.Task):
-            logger.info("Client [%d] is executing [%s]." % (self.client_id, task))
+            logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
             self.sampler = Sampler(self.client_id, task, self.start_timestamp)
             schedule = schedule_for(self.track, task, self.client_id)
             self.executor_future = self.pool.submit(execute_schedule,
