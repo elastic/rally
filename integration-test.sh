@@ -46,7 +46,7 @@ function set_up() {
     # Wait for ES cluster to be up and running
     while true
     do
-        curl http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s > /dev/null 2>&1 && break
+        curl "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s" > /dev/null 2>&1 && break
         info "Waiting for ES metrics store..."
         sleep 1
     done ;
