@@ -1,3 +1,9 @@
+### 0.5.1
+
+#### Enhancements
+
+* [#234](https://github.com/elastic/rally/issues/234): Add request error rate to summary report
+
 ### 0.5.0
 
 #### Highlights
