@@ -1,7 +1,6 @@
 import logging
 import os
 import shutil
-import socket
 
 import certifi
 import urllib3
@@ -57,10 +56,16 @@ def retrieve_content_as_string(url):
 
 def has_internet_connection():
     try:
-        # We connect to Github anyway later on so we use that to avoid touching too much different remote endpoints
-        socket.create_connection(("www.github.com", 80))
-        return True
-    except OSError:
+        # We connect to Github anyway later on so we use that to avoid touching too much different remote endpoints.
+        probing_url = "https://github.com/"
+        logger.debug("Checking for internet connection against [%s]" % probing_url)
+        # We do a HTTP request here to respect the HTTP proxy setting. If we'd open a plain socket connection we circumvent the
+        # proxy and erroneously conclude we don't have an Internet connection.
+        response = __http().request("GET", probing_url)
+        status = response.status
+        logger.debug("Probing result is HTTP status [%s]" % str(status))
+        return status == 200
+    except BaseException:
         return False
 
 
