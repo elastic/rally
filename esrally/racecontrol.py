@@ -46,10 +46,15 @@ class Benchmark:
     def __init__(self, cfg, sources=False, build=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
         self.track = track.load_track(self.cfg)
+        challenge_name = self.cfg.opts("track", "challenge.name")
+        challenge = self.track.find_challenge_or_default(challenge_name)
+        if challenge is None:
+            raise exceptions.SystemSetupError("Track [%s] does not provide challenge [%s]. List the available tracks with %s list tracks."
+                                              % (self.track.name, challenge_name, PROGRAM_NAME))
         self.metrics_store = metrics.metrics_store(
             self.cfg,
             track=self.track.name,
-            challenge=self.track.find_challenge_or_default(self.cfg.opts("track", "challenge.name")).name,
+            challenge=challenge.name,
             read_only=False
         )
         self.race_store = metrics.race_store(self.cfg)
