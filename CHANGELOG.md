@@ -1,3 +1,13 @@
+### 0.5.2
+
+#### Enhancements
+
+* [#244](https://github.com/elastic/rally/issues/244): Show a nice error message when user tries to run a non-existing challenge on an existing track
+
+#### Bug Fixes
+
+* [#245](https://github.com/elastic/rally/issues/245): Connection behind a proxy fails. has_internet_connection() returns False
+
 ### 0.5.1
 
 #### Enhancements
