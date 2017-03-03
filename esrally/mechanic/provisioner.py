@@ -92,7 +92,13 @@ class Provisioner:
         if os.path.isfile(logging_yml_path):
             return "logging.yml", logging_yml_path
         elif os.path.isfile(log4j2_properties_path):
-            return "log4j2.properties", log4j2_properties_path
+            distribution_version = self._config.opts("mechanic", "distribution.version", mandatory=False)
+            if versions.is_version_identifier(distribution_version):
+                major, _, _, _ = versions.components(distribution_version)
+                if major == 5:
+                    return "log4j2.properties.5", log4j2_properties_path
+            else:
+                return "log4j2.properties", log4j2_properties_path
         else:
             raise exceptions.SystemSetupError("Unrecognized Elasticsearch log config file format")
 
