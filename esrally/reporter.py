@@ -577,7 +577,7 @@ class ComparisonReporter:
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
                 self.line("Heap used for points", baseline_stats.memory_points, contender_stats.memory_points, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for points", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "", "MB",
+                self.line("Heap used for stored fields", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
             )
         else:
