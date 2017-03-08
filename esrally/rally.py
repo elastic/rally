@@ -139,10 +139,10 @@ def parse_args():
         help="Race timestamp of the contender (see %s list races)" % PROGRAM_NAME,
         default="")
     compare_parser.add_argument(
-            "--report-format",
-            help="define the output format for the command line report (default: markdown).",
-            choices=["markdown", "csv"],
-            default="markdown")
+        "--report-format",
+        help="define the output format for the command line report (default: markdown).",
+        choices=["markdown", "csv"],
+        default="markdown")
     compare_parser.add_argument(
         "--report-file",
         help="write the command line report also to the provided file",
