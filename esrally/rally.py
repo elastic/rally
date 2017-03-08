@@ -138,6 +138,15 @@ def parse_args():
         "--contender",
         help="Race timestamp of the contender (see %s list races)" % PROGRAM_NAME,
         default="")
+    compare_parser.add_argument(
+            "--report-format",
+            help="define the output format for the command line report (default: markdown).",
+            choices=["markdown", "csv"],
+            default="markdown")
+    compare_parser.add_argument(
+        "--report-file",
+        help="write the command line report also to the provided file",
+        default="")
 
     config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
     for p in [parser, config_parser]:
