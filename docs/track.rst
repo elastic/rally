@@ -141,7 +141,7 @@ Depending on the operation type a couple of further parameters can be specified.
 index
 ~~~~~
 
-The operation type ``index`` supports the following properties:
+With the operation type ``index`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. It supports the following properties:
 
 * ``index`` (optional): An index name that defines which indices should be targeted by this indexing operation. Only needed if the ``index`` section contains more than one index and you don't want to index all of them with this operation.
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
@@ -158,10 +158,26 @@ Example::
       "bulk-size": 5000
     }
 
+
+force-merge
+~~~~~~~~~~~
+
+With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It does not support any parameters.
+
+index-stats
+~~~~~~~~~~~
+
+With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_. It does not support any parameters.
+
+node-stats
+~~~~~~~~~~
+
+With the operation type ``nodes-stats`` you can execute `nodes stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_. It does not support any parameters.
+
 search
 ~~~~~~
 
-The operation type ``search`` supports the following properties:
+With the operation type ``search`` you can execute `request body searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_. It supports the following properties:
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this query. Only needed if the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use. If you have defined multiple indices and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query.
