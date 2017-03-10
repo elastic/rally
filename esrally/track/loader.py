@@ -428,8 +428,17 @@ class TrackPluginReader:
     def load(self, track_plugin_path):
         plugin_name = io.basename(track_plugin_path)
         logger.info("Loading track plugin [%s] from [%s]" % (plugin_name, track_plugin_path))
-        # search all paths within this directory for modules
-        module_dirs = [dirpath for dirpath, _, _ in os.walk(track_plugin_path)]
+        # search all paths within this directory for modules but exclude all directories starting with "_"
+        module_dirs = []
+        for dirpath, dirs, _ in os.walk(track_plugin_path):
+            module_dirs.append(dirpath)
+            ignore = []
+            for d in dirs:
+                if d.startswith("_"):
+                    logger.debug("Removing [%s] from load path." % d)
+                    ignore.append(d)
+            for d in ignore:
+                dirs.remove(d)
         # load path is only the root of the package hierarchy
         plugin_root_path = os.path.abspath(os.path.join(track_plugin_path, os.pardir))
         logger.debug("Adding [%s] to Python load path." % plugin_root_path)

@@ -8,7 +8,9 @@ Creating custom tracks
 Example track
 -------------
 
-Let's create an example track step by step. First of all, we need some data. There are a lot of public data sets available which are interesting for new benchmarks and we also have a
+Let's create an example track step by step. We will call this track "tutorial". The track consists of two components: the data set and the actual track which describes what Rally should do with the data set.
+
+First of all, we need some data. There are a lot of public data sets available which are interesting for new benchmarks and we also have a
 `backlog of benchmarks to add <https://github.com/elastic/rally-tracks/issues>`_.
 
 `Geonames <http://www.geonames.org/>`_ provides geo data under a `creative commons license <http://creativecommons.org/licenses/by/3.0/>`_. We will download `allCountries.zip <http://download.geonames.org/export/dump/allCountries.zip>`_ (around 300MB), extract it and inspect ``allCountries.txt``.
@@ -56,20 +58,20 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
     
        print(json.dumps(d))
 
-We can invoke the script with ``python3 toJSON.py > documents.json``.
+Go to ``~/.rally/benchmarks/data`` and create a folder "tutorial" there. Then invoke the script with ``python3 toJSON.py > ~/.rally/benchmarks/data/tutorial/documents.json``.
 
-Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``. Upload the data file to a place where it is publicly available. We choose ``http://benchmarks.elastic.co/corpora/geonames`` for this example.
+Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``. If you want other people to run the benchmark too, upload the data file to a place where it is publicly available. We choose ``http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/tutorial`` for this example. If you don't want to share your track, just don't specify a ``data-url`` below.
 
-For initial local testing you can place the data file in Rally's data directory, which is located in ``~/.rally/benchmarks/data``. For this example you need to place the data for the "geonames" track in ``~/.rally/benchmarks/data/geonames`` so Rally can pick it up. Additionally, you have to specify the ``--offline`` option when running Rally so it does not try to download any benchmark data.
+Next we need a mapping file for our documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at an `example mapping file <https://github.com/elastic/rally-tracks/blob/master/geonames/mappings.json>`_. Place the mapping file in your ``rally-tracks`` repository in a dedicated folder. This repository is located in ``~/.rally/benchmarks/tracks/default`` and we place the mapping file in ``~/.rally/benchmarks/tracks/default/tutorial`` for this track.
 
-Next we need a mapping file for our documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at the `example mapping file <https://github.com/elastic/rally-tracks/blob/master/geonames/mappings.json>`_. Place the mapping file in your ``rally-tracks`` repository in a dedicated folder. This repository is located in ``~/.rally/benchmarks/tracks/default`` and we place the mapping file in ``~/.rally/benchmarks/tracks/default/geonames`` for this track.
+The track repository is managed by git. The reason is that you can run Rally with any version of Elasticsearch from 1.0 until the latest master version. As mappings change over time, we need to have a possibility to define different versions of our track. Therefore, Rally uses branches for that. For example, if you create a track on a branch named ``5``, Rally will checkout this branch. Please see the `README of the rally-track repository <https://github.com/elastic/rally-tracks>`_ for details on the versioning scheme.
 
-The track repository is managed by git, so ensure that you are on the ``master`` branch by running ``git checkout master``. Then add a new JSON file right next to the mapping file. The file has to be called "track.json" and is the actual track specification ::
+Ensure that you are on the ``master`` branch by running ``git checkout master``. Then add a new JSON file right next to the mapping file. The file has to be called "track.json" and is the actual track specification ::
 
     {
-      "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+      "short-description": "Tutorial benchmark for Rally",
       "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
-      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/tutorial",
       "indices": [
         {
           "name": "geonames",
@@ -107,7 +109,7 @@ The track repository is managed by git, so ensure that you are on the ``master``
       ],
       "challenges": [
         {
-          "name": "append-only",
+          "name": "index-and-query",
           "description": "",
           "default": true,
           "index-settings": {
@@ -135,13 +137,17 @@ The track repository is managed by git, so ensure that you are on the ``master``
       ]
     }
 
-Finally, you need to commit your changes: ``git commit -a -m "Add geonames track"``.
+Finally, you need to commit your changes: ``git commit -a -m "Add tutorial track"``.
 
 A few things to note:
 
 * If you define multiple challenges, Rally will run the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 * You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
 * The numbers below the ``types`` property are needed to verify integrity and provide progress reports.
+
+.. note::
+
+    You can store any supporting scripts along with your track. However, you need to place them in a directory starting with "_", e.g. "_support". Rally loads track plugins (see below) from any directory but will ignore directories starting with "_".
 
 .. note::
 
@@ -159,18 +165,18 @@ When you invoke ``esrally list tracks``, the new track should now appear::
                     /____/
     Available tracks:
     
-    Name        Description                                                           Default Challenge    All Challenges
-    ----------  --------------------------------------------------------------------  -------------------  --------------
-    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)                 append-only          append-only
+    Name        Description                   Default Challenge  All Challenges
+    ----------  ----------------------------  -----------------  ---------------
+    tutorial    Tutorial benchmark for Rally  index-and-query    index-and-query
 
-Congratulations, you have created your first track! You can test it with ``esrally --track=geonames --offline`` (or whatever the name of your track is) and run specific challenges with ``esrally --track=geonames --challenge=append-only --offline``.
+Congratulations, you have created your first track! You can test it with ``esrally --track=tutorial --offline`` and run specific challenges with ``esrally --track=tutorial --challenge=index-and-query --offline``.
 
 .. _add_track_test_mode:
 
 Adding support for test mode
 ----------------------------
 
-When you invoke Rally with ``--test-mode``, it switches to a mode that allows you to check your track very quickly for problems. To achieve that, it will postprocess its internal track representation after loading it:
+When you invoke Rally with ``--test-mode``, it switches to a mode that allows you to check your track very quickly for syntax errors. To achieve that, it will postprocess its internal track representation after loading it:
 
 * Iteration-based tasks will run at most one warmup iteration and one measurement iteration.
 * Time-period-based task will run for at most 10 seconds without any warmup.
@@ -187,10 +193,10 @@ You have to repeat these steps for all data files of your track.
 Structuring your track
 ----------------------
 
-``track.json`` is just the entry point to a track but you can split your track as you see fit. Suppose you want to add more challenges to the track above but you want to keep them in a separate files. Let's start by storing our challenge in a separate file, e.g in ``challenges/append-only.json``. Create the directory and store the following in ``append-only.json``::
+``track.json`` is just the entry point to a track but you can split your track as you see fit. Suppose you want to add more challenges to the track above but you want to keep them in a separate files. Let's start by storing our challenge in a separate file, e.g in ``challenges/index-and-query.json``. Create the directory and store the following in ``index-and-query.json``::
 
     {
-          "name": "append-only",
+          "name": "index-and-query",
           "description": "",
           "default": true,
           "index-settings": {
@@ -220,9 +226,9 @@ Now modify ``track.json`` so it knows about your new file::
 
 
     {
-      "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
+      "short-description": "Tutorial benchmark for Rally",
       "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
-      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/tutorial",
       "indices": [
         {
           "name": "geonames",
@@ -259,11 +265,11 @@ Now modify ``track.json`` so it knows about your new file::
         }
       ],
       "challenges": [
-        {% include "challenges/append-no-conflicts.json" %}
+        {% include "challenges/index-and-query.json" %}
       ]
     }
 
-We replaced the challenge content with  ``{% include "challenges/append-no-conflicts.json" %}`` which tells Rally to include the challenge from the provided file. You can use ``include`` on arbitrary parts of your track.
+We replaced the challenge content with  ``{% include "challenges/index-and-query.json" %}`` which tells Rally to include the challenge from the provided file. You can use ``include`` on arbitrary parts of your track.
 
 However, if your track consists of multiple challenges it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
 
@@ -271,7 +277,7 @@ However, if your track consists of multiple challenges it can be cumbersome to i
     {
       "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
       "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
-      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/tutorial",
       "indices": [
         {
           "name": "geonames",
