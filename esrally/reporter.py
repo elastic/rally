@@ -34,6 +34,26 @@ def print_internal(message):
 def print_header(message):
     print_internal(console.format.bold(message))
 
+def write_single_report(self, report_file, headers, data, write_header=True, show_also_in_console=True):
+    report_format = self._config.opts("reporting", "format")
+    if report_format == "markdown":
+        formatter = self.format_as_markdown
+    elif report_format == "csv":
+        formatter = self.format_as_csv
+    else:
+        raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
+
+    if show_also_in_console:
+        print_internal(formatter(headers, data))
+    if len(report_file) > 0:
+        cwd = self._config.opts("node", "rally.cwd")
+        normalized_report_file = rio.normalize_path(report_file, cwd)
+        logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
+                    (normalized_report_file, report_file, report_format))
+        # ensure that the parent folder already exists when we try to write the file...
+        rio.ensure_dir(rio.dirname(normalized_report_file))
+        with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
+            f.writelines(formatter(headers, data, write_header))
 
 class Stats:
     def __init__(self, store, challenge, lap=None):
@@ -233,32 +253,12 @@ class SummaryReporter:
     def write_report(self, metrics_table, meta_info_table):
         report_file = self._config.opts("reporting", "output.path")
 
-        self.write_single_report(report_file, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data=metrics_table,
+        write_single_report(report_file, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data=metrics_table,
                                  write_header=self.needs_header())
 
         if self.is_final_report() and len(report_file) > 0:
-            self.write_single_report("%s.meta" % report_file, headers=["Name", "Value"], data=meta_info_table, show_also_in_console=False)
+            write_single_report("%s.meta" % report_file, headers=["Name", "Value"], data=meta_info_table, show_also_in_console=False)
 
-    def write_single_report(self, report_file, headers, data, write_header=True, show_also_in_console=True):
-        report_format = self._config.opts("reporting", "format")
-        if report_format == "markdown":
-            formatter = self.format_as_markdown
-        elif report_format == "csv":
-            formatter = self.format_as_csv
-        else:
-            raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
-
-        if show_also_in_console:
-            print_internal(formatter(headers, data))
-        if len(report_file) > 0:
-            cwd = self._config.opts("node", "rally.cwd")
-            normalized_report_file = rio.normalize_path(report_file, cwd)
-            logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
-                        (normalized_report_file, report_file, report_format))
-            # ensure that the parent folder already exists when we try to write the file...
-            rio.ensure_dir(rio.dirname(normalized_report_file))
-            with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
-                f.writelines(formatter(headers, data, write_header))
 
     def format_as_markdown(self, headers, data, write_header=True):
         rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
@@ -382,8 +382,8 @@ class SummaryReporter:
 
 class ComparisonReporter:
     def __init__(self, config):
-        self._config = config
-
+        self._config = config    
+        
     def report(self, r1, r2):
         logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], challenge=[%s], car=[%s]) and "
                     "contender (invocation=[%s], track=[%s], challenge=[%s], car=[%s])" %
@@ -419,14 +419,6 @@ class ComparisonReporter:
         print_internal("")
 
         print_internal(self.format_as_table(self.metrics_table(baseline_stats, contender_stats)))
-        self.write_report(metrics_table())
-
-    def format_as_table(self, table):
-        return tabulate.tabulate(table,
-                                 headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
-                                 tablefmt="pipe", numalign="right", stralign="right")
-
-    def metrics_table(self, baseline_stats, contender_stats):
         metrics_table = []
         metrics_table += self.report_total_times(baseline_stats, contender_stats)
         metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
@@ -443,35 +435,18 @@ class ComparisonReporter:
                 metrics_table += self.report_throughput(baseline_stats, contender_stats, op)
                 metrics_table += self.report_latency(baseline_stats, contender_stats, op)
                 metrics_table += self.report_service_time(baseline_stats, contender_stats, op)
-                metrics_table += self.report_error_rate(baseline_stats, contender_stats, op)
-        return metrics_table
+                metrics_table += self.report_error_rate(baseline_stats, contender_stats, op)        
+        self.write_report(metrics_table)
 
-    def write_report(self, metrics_table, meta_info_table):
+    def format_as_table(self, table):
+        return tabulate.tabulate(table,
+                                 headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
+                                 tablefmt="pipe", numalign="right", stralign="right")
+
+    def write_report(self, metrics_table):
         report_file = self._config.opts("reporting", "output.path")
 
-        self.write_single_report(report_file, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], data=metrics_table)
-
-
-    def write_single_report(self, report_file, headers, data, show_also_in_console=True):
-        report_format = self._config.opts("reporting", "format")
-        if report_format == "markdown":
-            formatter = self.format_as_markdown
-        elif report_format == "csv":
-            formatter = self.format_as_csv
-        else:
-            raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
-
-        if show_also_in_console:
-            print_internal(formatter(headers, data))
-        if len(report_file) > 0:
-            cwd = self._config.opts("node", "rally.cwd")
-            normalized_report_file = rio.normalize_path(report_file, cwd)
-            logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
-                        (normalized_report_file, report_file, report_format))
-            # ensure that the parent folder already exists when we try to write the file...
-            rio.ensure_dir(rio.dirname(normalized_report_file))
-            with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
-                f.writelines(formatter(headers, data, write_header))
+        write_single_report(report_file, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], data=metrics_table,write_header=self.needs_header())
 
     def format_as_markdown(self, headers, data, write_header=True):
         rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
