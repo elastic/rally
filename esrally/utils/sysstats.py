@@ -1,6 +1,13 @@
 import platform
-import cpuinfo
 import psutil
+
+# py-cpuinfo raises an Exception on unsupported systems. This is as specific as we can get.
+# noinspection PyBroadException
+try:
+    import cpuinfo
+    cpuinfo_available = True
+except Exception:
+    cpuinfo_available = False
 
 
 def logical_cpu_cores():
@@ -21,7 +28,7 @@ def cpu_model():
     """
     :return: The CPU model name.
     """
-    return cpuinfo.get_cpu_info()["brand"]
+    return cpuinfo.get_cpu_info()["brand"] if cpuinfo_available else "Unknown"
 
 
 def disks():
