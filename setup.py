@@ -27,7 +27,7 @@ install_requires = [
     "jsonschema==2.5.1",
     "Jinja2==2.9.5",
     # remote messaging
-    "thespian==3.6.3",
+    "thespian==3.7.0",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
