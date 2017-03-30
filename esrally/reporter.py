@@ -416,10 +416,12 @@ class ComparisonReporter:
         print_header("------------------------------------------------------")
         print_internal("")
 
-        metric_table = self.metrics_table(baseline_stats, contender_stats)
-        self.write_report(metric_table)
+        metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain = True)
+        metric_table_rich = self.metrics_table(baseline_stats, contender_stats, plain = False)
+        self.write_report(metric_table_plain,metric_table_rich)
 
-    def metrics_table(self, baseline_stats, contender_stats):
+    def metrics_table(self, baseline_stats, contender_stats, plain):
+        self.plain=plain
         metrics_table = []
         metrics_table += self.report_total_times(baseline_stats, contender_stats)
         metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
@@ -442,12 +444,14 @@ class ComparisonReporter:
                                  headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
                                  tablefmt="pipe", numalign="right", stralign="right")
 
-    def write_report(self, metrics_table):
+    def write_report(self, metrics_table, metrics_table_console):
         report_file = self._config.opts("reporting", "output.path")
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
         write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], 
             data= metrics_table, write_header=True)
+        write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], 
+            data= metrics_table_console, write_header=True)
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
         b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation]["throughput"]
@@ -605,17 +609,23 @@ class ComparisonReporter:
 
     def diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
         diff = formatter(contender - baseline)
-        if treat_increase_as_improvement:
+        if self.plain:
+            color_greater = lambda x: x
+            color_smaller = lambda x: x
+            color_neutral = lambda x: x
+        elif treat_increase_as_improvement:
             color_greater = console.format.green
             color_smaller = console.format.red
+            color_neutral = console.format.neutral
         else:
             color_greater = console.format.red
             color_smaller = console.format.green
+            color_neutral = console.format.neutral
 
         if diff > 0:
-            return ("+%.5f" % diff)
+            return color_greater("+%.5f" % diff)
         elif diff < 0:
-            return ("%.5f" % diff)
+            return color_smaller("%.5f" % diff)
         else:
             # tabulate needs this to align all values correctly
-            return ("%.5f" % diff)
+            return color_neutral("%.5f" % diff)
