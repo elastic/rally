@@ -126,6 +126,14 @@ class Config:
             else:
                 raise ConfigError("No value for mandatory configuration: section='%s', key='%s'" % (section, key))
 
+    def exists(self, section, key):
+        """
+        :param section: The configuration section.
+        :param key: The configuration key.
+        :return: True iff a value for the specified key exists in the specified configuration section.  
+        """
+        return self.opts(section, key, mandatory=False) is not None
+
     def config_present(self):
         """
         :return: true iff a config file already exists.

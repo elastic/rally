@@ -221,6 +221,11 @@ class MetricsStore:
             self._track = track_name
             self._challenge = challenge_name
             self._car = car_name
+        assert self._invocation is not None, "Attempting to open metrics store without an invocation"
+        assert self._track is not None, "Attempting to open metrics store without a track"
+        assert self._challenge is not None, "Attempting to open metrics store without a challenge"
+        assert self._car is not None, "Attempting to open metrics store without a car"
+
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
                     (self._invocation, track_name, challenge_name, car_name))
         user_tag = self._config.opts("race", "user.tag", mandatory=False)

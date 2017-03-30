@@ -45,12 +45,10 @@ class Pipeline:
 class Benchmark:
     def __init__(self, cfg, sources=False, build=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
-        self.track = track.load_track(self.cfg)
-        challenge_name = self.cfg.opts("track", "challenge.name")
-        challenge = self.track.find_challenge_or_default(challenge_name)
-        if challenge is None:
-            raise exceptions.SystemSetupError("Track [%s] does not provide challenge [%s]. List the available tracks with %s list tracks."
-                                              % (self.track.name, challenge_name, PROGRAM_NAME))
+        # we preload the track here but in rare cases (external pipeline and user did not specify the distribution version) we might need
+        # to reload the track again. We are assuming that a track always specifies the same challenges for each version (i.e. branch).
+        self.track = self._load_track()
+        challenge = self._find_challenge(self.track)
         self.metrics_store = metrics.metrics_store(
             self.cfg,
             track=self.track.name,
@@ -65,6 +63,17 @@ class Benchmark:
         self.docker = docker
         self.actor_system = None
         self.mechanic = None
+
+    def _load_track(self):
+        return track.load_track(self.cfg)
+
+    def _find_challenge(self, t):
+        challenge_name = self.cfg.opts("track", "challenge.name")
+        challenge = t.find_challenge_or_default(challenge_name)
+        if challenge is None:
+            raise exceptions.SystemSetupError("Track [%s] does not provide challenge [%s]. List the available tracks with %s list tracks."
+                                              % (t.name, challenge_name, PROGRAM_NAME))
+        return challenge
 
     def setup(self):
         # at this point an actor system has to run and we should only join
@@ -81,13 +90,18 @@ class Benchmark:
             logger.info("Mechanic has started engine successfully.")
             self.metrics_store.meta_info = result.system_meta_info
             cluster = result.cluster_meta_info
-            self.race_store.store_race(self.track, cluster.hosts, cluster.revision, cluster.distribution_version)
-            console.info("Racing on track [%s], challenge [%s] and car [%s]" %
-                         (self.track,
-                          self.track.find_challenge_or_default(self.cfg.opts("track", "challenge.name")),
-                          self.cfg.opts("mechanic", "car.name")))
+            if not self.cfg.exists("mechanic", "distribution.version"):
+                self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", cluster.distribution_version)
+                logger.info("Reloading track based for distribution version [%s]" % cluster.distribution_version)
+                self.track = self._load_track()
+
+            challenge = self._find_challenge(self.track)
+            console.info("Racing on track [%s], challenge [%s] and car [%s]"
+                         % (self.track, challenge, self.cfg.opts("mechanic", "car.name")))
             # just ensure it is optically separated
             console.println("")
+
+            self.race_store.store_race(self.track, cluster.hosts, cluster.revision, cluster.distribution_version)
         elif isinstance(result, mechanic.Failure):
             logger.info("Starting engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message)
@@ -285,8 +299,7 @@ def list_pipelines():
 def run(cfg):
     name = cfg.opts("race", "pipeline")
     if len(name) == 0:
-        distribution_version = cfg.opts("mechanic", "distribution.version")
-        if len(distribution_version) > 0:
+        if cfg.exists("mechanic", "distribution.version"):
             name = "from-distribution"
         else:
             name = "from-sources-complete"

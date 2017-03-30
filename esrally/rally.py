@@ -521,7 +521,8 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
     #TODO dm: Consider renaming this one. It's used by different modules
-    cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
+    if args.distribution_version:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.name", args.car)
     cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
