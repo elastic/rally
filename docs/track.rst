@@ -82,7 +82,7 @@ Each type consists of the following properties:
 
 * ``name`` (mandatory): Name of the type.
 * ``mapping`` (mandatory): File name of the corresponding mapping file.
-* ``documents`` (optional): File name of the corresponding documents that should be indexed. If you are using parent-child, specify the number of parent documents. This file has to be compressed either as bz2, zip or tar.gz and must contain exactly one JSON file with the same name.
+* ``documents`` (optional): File name of the corresponding documents that should be indexed. If you are using parent-child, specify the number of parent documents. This file has to be compressed either as ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2`` and must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is .bz2.
 * ``document-count`` (optional): Number of documents in the documents file. This number will be used to verify that all documents have been indexed successfully.
 * ``compressed-bytes`` (optional): The size in bytes of the compressed document file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional): The size in bytes of the documents file after decompression.
