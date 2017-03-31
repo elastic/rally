@@ -34,7 +34,7 @@ def print_internal(message):
 def print_header(message):
     print_internal(console.format.bold(message))
 
-def write_single_report(report_file, report_format, cwd, headers, data, write_header=True, show_also_in_console=True):
+def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich, write_header=True, show_also_in_console=True):
     
     if report_format == "markdown":
         formatter = format_as_markdown
@@ -44,7 +44,7 @@ def write_single_report(report_file, report_format, cwd, headers, data, write_he
         raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
 
     if show_also_in_console:
-        print_internal(formatter(headers, data))
+        print_internal(formatter(headers, data_rich))
     if len(report_file) > 0:
         normalized_report_file = rio.normalize_path(report_file, cwd)
         logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
@@ -52,7 +52,7 @@ def write_single_report(report_file, report_format, cwd, headers, data, write_he
         # ensure that the parent folder already exists when we try to write the file...
         rio.ensure_dir(rio.dirname(normalized_report_file))
         with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
-            f.writelines(formatter(headers, data, write_header))
+            f.writelines(formatter(headers, data_plain, write_header))
 
 def format_as_markdown(headers, data, write_header=True):
     rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
@@ -270,10 +270,10 @@ class SummaryReporter:
         report_file = self._config.opts("reporting", "output.path")
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data=metrics_table,
-                                 write_header=self.needs_header())
+        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data_plain=metrics_table,
+                                 data_rich = metrics_table, write_header=self.needs_header())
         if self.is_final_report() and len(report_file) > 0:
-            write_single_report("%s.meta" % report_file, headers=["Name", "Value"], data=meta_info_table, show_also_in_console=False)
+            write_single_report("%s.meta" % report_file, headers=["Name", "Value"], data=meta_info_table, data_rich = meta_info_table, show_also_in_console=False)
 
     def report_throughput(self, stats, operation):
         min, median, max, unit = stats.op_metrics[operation.name]["throughput"]
@@ -418,6 +418,7 @@ class ComparisonReporter:
 
         metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain = True)
         metric_table_rich = self.metrics_table(baseline_stats, contender_stats, plain = False)
+        # Writes metric_table_rich to console, writes metric_table_plain to file
         self.write_report(metric_table_plain,metric_table_rich)
 
     def metrics_table(self, baseline_stats, contender_stats, plain):
@@ -449,9 +450,7 @@ class ComparisonReporter:
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
         write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], 
-            data= metrics_table, write_header=True)
-        write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], 
-            data= metrics_table_console, write_header=True)
+            data_plain= metrics_table, data_rich= metrics_table_console, write_header=True)
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
         b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation]["throughput"]
