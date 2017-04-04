@@ -13,7 +13,7 @@ done
 RALLY_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 pushd . >/dev/null 2>&1
-cd ${RALLY_SRC_HOME} >/dev/null 2>&1
+cd "${RALLY_SRC_HOME}" >/dev/null 2>&1
 
 export PYTHONPATH=$RALLY_SRC_HOME:$PYTHONPATH
 

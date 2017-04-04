@@ -15,7 +15,7 @@ done
 RALLY_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 pushd . >/dev/null 2>&1
-cd ${RALLY_SRC_HOME} >/dev/null 2>&1
+cd "${RALLY_SRC_HOME}" >/dev/null 2>&1
 
 # see http://unix.stackexchange.com/a/155077
 if output=$(git status --porcelain) && [ -z "$output" ] && on_master=$(git rev-parse --abbrev-ref HEAD) && [ "$on_master" == "master" ]
