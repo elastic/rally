@@ -273,7 +273,7 @@ class SummaryReporter:
         write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data_plain=metrics_table,
                                  data_rich = metrics_table, write_header=self.needs_header())
         if self.is_final_report() and len(report_file) > 0:
-            write_single_report("%s.meta" % report_file, headers=["Name", "Value"], data=meta_info_table, data_rich = meta_info_table, show_also_in_console=False)
+            write_single_report("%s.meta" % report_file, report_format, cwd, headers=["Name", "Value"], data_plain = meta_info_table, data_rich = meta_info_table, show_also_in_console=False)
 
     def report_throughput(self, stats, operation):
         min, median, max, unit = stats.op_metrics[operation.name]["throughput"]
