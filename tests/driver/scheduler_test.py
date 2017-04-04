@@ -34,7 +34,7 @@ class WaitTimeTests(TestCase):
 class SchedulerTestCase(TestCase):
     ITERATIONS = 10000
 
-    def assertRateEquals(self, sched, expected_average_rate, msg="", relative_delta=0.02):
+    def assertRateEquals(self, sched, expected_average_rate, msg="", relative_delta=0.05):
         sum = 0
         for i in range(0, SchedulerTestCase.ITERATIONS):
             tn = sched.next(0)
