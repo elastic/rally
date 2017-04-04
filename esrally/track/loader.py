@@ -461,7 +461,7 @@ class TrackPluginReader:
         self.runner_registry(name, runner)
 
     def register_scheduler(self, name, scheduler):
-        self.register_scheduler(name, scheduler)
+        self.scheduler_registry(name, scheduler)
 
 
 class TrackSpecificationReader:
