@@ -9,7 +9,7 @@ import time
 
 import thespian.actors
 from esrally import actor, exceptions, metrics, track, client, PROGRAM_NAME
-from esrally.driver import runner
+from esrally.driver import runner, scheduler
 from esrally.utils import convert, console, versions, io
 
 logger = logging.getLogger("rally.driver")
@@ -392,7 +392,7 @@ class LoadGenerator(actor.RallyActor):
                 if self.config.opts("track", "test.mode.enabled"):
                     self.wakeup_interval = 0.5
                 self.start_timestamp = time.perf_counter()
-                track.load_track_plugins(self.config, runner.register_runner)
+                track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
                 self.drive()
             elif isinstance(msg, Drive):
                 logger.debug("LoadGenerator[%d] is continuing its work at task index [%d] on [%f]." %
@@ -949,68 +949,73 @@ def schedule_for(current_track, task, client_index):
     """
     op = task.operation
     num_clients = task.clients
-    target_throughput = task.target_throughput / num_clients if task.target_throughput else None
+    sched = scheduler.scheduler_for(task.schedule, task.params)
+    logger.info("Choosing [%s] for [%s]." % (sched, task))
     runner_for_op = runner.runner_for(op.type)
     params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
 
     if task.warmup_time_period is not None or task.time_period is not None:
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
-        logger.info("Creating time-period based schedule for [%s] with a warmup period of [%s] seconds and a time period of [%s] seconds."
-                    % (op, str(warmup_time_period), str(task.time_period)))
-        return time_period_based(target_throughput, warmup_time_period, task.time_period, runner_for_op, params_for_op)
+        logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] seconds and a "
+                    "time period of [%s] seconds." % (task.schedule, op, str(warmup_time_period), str(task.time_period)))
+        return time_period_based(sched, warmup_time_period, task.time_period, runner_for_op, params_for_op)
     else:
-        logger.info("Creating iteration-count based schedule for [%s] with [%d] warmup iterations and [%d] iterations." %
-                    (op, task.warmup_iterations, task.iterations))
-        return iteration_count_based(target_throughput, task.warmup_iterations // num_clients, task.iterations // num_clients,
+        logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%d] warmup iterations and "
+                    "[%d] iterations." % (task.schedule, op, task.warmup_iterations, task.iterations))
+        return iteration_count_based(sched, task.warmup_iterations // num_clients, task.iterations // num_clients,
                                      runner_for_op, params_for_op)
 
 
-def time_period_based(target_throughput, warmup_time_period, time_period, runner, params):
+def time_period_based(sched, warmup_time_period, time_period, runner, params):
     """
     Calculates the necessary schedule for time period based operations.
 
-    :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
+    :param sched: The scheduler for this task. Must not be None.
     :param warmup_time_period: The time period in seconds that is considered for warmup. Must not be None; provide zero instead.
     :param time_period: The time period in seconds that is considered for measurement. May be None.
     :param runner: The runner for a given operation.
     :param params: The parameter source for a given operation.
     :return: A generator for the corresponding parameters.
     """
-    wait_time = 1 / target_throughput if target_throughput else 0
+    next_scheduled = 0
     start = time.perf_counter()
     if time_period is None:
         iterations = params.size()
         for it in range(0, iterations):
             sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
             percent_completed = (it + 1) / iterations
-            yield (wait_time * it, sample_type, percent_completed, runner, params.params())
+            yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+            next_scheduled = sched.next(next_scheduled)
     else:
         end = start + warmup_time_period + time_period
         it = 0
+
         while time.perf_counter() < end:
             now = time.perf_counter()
             sample_type = metrics.SampleType.Warmup if now - start < warmup_time_period else metrics.SampleType.Normal
             percent_completed = (now - start) / (warmup_time_period + time_period)
-            yield (wait_time * it, sample_type, percent_completed, runner, params.params())
+            yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+            next_scheduled = sched.next(next_scheduled)
             it += 1
 
 
-def iteration_count_based(target_throughput, warmup_iterations, iterations, runner, params):
+def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
     """
     Calculates the necessary schedule based on a given number of iterations.
 
-    :param target_throughput: The desired target throughput in operations / second or None if throughput should not be limited.
+    :param sched: The scheduler for this task. Must not be None.
     :param warmup_iterations: The number of warmup iterations to run. 0 if no warmup should be performed.
     :param iterations: The number of measurement iterations to run.
     :param runner: The runner for a given operation.
     :param params: The parameter source for a given operation.
     :return: A generator for the corresponding parameters.
     """
-    wait_time = 1 / target_throughput if target_throughput else 0
+    next_scheduled = 0
     total_iterations = warmup_iterations + iterations
     if total_iterations == 0:
         raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
     for it in range(0, total_iterations):
         sample_type = metrics.SampleType.Warmup if it < warmup_iterations else metrics.SampleType.Normal
         percent_completed = (it + 1) / total_iterations
-        yield (wait_time * it, sample_type, percent_completed, runner, params.params())
+        yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+        next_scheduled = sched.next(next_scheduled)

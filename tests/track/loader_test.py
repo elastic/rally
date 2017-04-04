@@ -726,37 +726,6 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
 
-    def test_either_target_throughput_or_target_interval(self):
-        track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
-            "operations": [
-                {
-                    "name": "index-append",
-                    "operation-type": "index"
-                }
-            ],
-            "challenges": [
-                {
-                    "name": "default-challenge",
-                    "description": "Default challenge",
-                    "schedule": [
-                        {
-                            "operation": "index-append",
-                            "target-throughput": 10,
-                            "target-interval": 3
-                        }
-                    ]
-                }
-            ]
-        }
-        reader = loader.TrackSpecificationReader()
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' specifies target-interval "
-                         "and target-throughput but only one of them is allowed.", ctx.exception.args[0])
-
     def test_supports_target_throughput(self):
         track_specification = {
             "short-description": "short description for unit test",
@@ -783,7 +752,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings", "/data")
-        self.assertEqual(10, resulting_track.challenges[0].schedule[0].target_throughput)
+        self.assertEqual(10, resulting_track.challenges[0].schedule[0].params["target-throughput"])
 
     def test_supports_target_interval(self):
         track_specification = {
@@ -811,7 +780,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings", "/data")
-        self.assertEqual(0.2, resulting_track.challenges[0].schedule[0].target_throughput)
+        self.assertEqual(5, resulting_track.challenges[0].schedule[0].params["target-interval"])
 
     def test_parallel_tasks_with_default_values(self):
         track_specification = {
@@ -876,19 +845,19 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(300, parallel_tasks[0].warmup_time_period)
         self.assertEqual(36000, parallel_tasks[0].time_period)
         self.assertEqual(2, parallel_tasks[0].clients)
-        self.assertIsNone(parallel_tasks[0].target_throughput)
+        self.assertFalse("target-throughput" in parallel_tasks[0].params)
 
         self.assertEqual("index-2", parallel_tasks[1].operation.name)
         self.assertEqual(2400, parallel_tasks[1].warmup_time_period)
         self.assertEqual(3600, parallel_tasks[1].time_period)
         self.assertEqual(4, parallel_tasks[1].clients)
-        self.assertIsNone(parallel_tasks[1].target_throughput)
+        self.assertFalse("target-throughput" in parallel_tasks[1].params)
 
         self.assertEqual("index-3", parallel_tasks[2].operation.name)
         self.assertEqual(2400, parallel_tasks[2].warmup_time_period)
         self.assertEqual(36000, parallel_tasks[2].time_period)
         self.assertEqual(16, parallel_tasks[2].clients)
-        self.assertEqual(10, parallel_tasks[2].target_throughput)
+        self.assertEqual(10, parallel_tasks[2].params["target-throughput"])
 
     def test_parallel_tasks_with_default_clients_does_not_propagate(self):
         track_specification = {

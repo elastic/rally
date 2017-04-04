@@ -306,6 +306,10 @@
                             "minimum": 1,
                             "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
                           },
+                          "schedule": {
+                            "type": "string",
+                            "description": "Defines the scheduling strategy that is used for throughput throttled operations. Out of the box, Rally supports 'deterministic' (default) and 'poisson' but you can implement your own schedules."
+                          },
                           "target-throughput": {
                             "type": "number",
                             "minimum": 0,

@@ -79,11 +79,11 @@ def load_track(cfg):
                                           (track_name, PROGRAM_NAME))
 
 
-def load_track_plugins(cfg, register_runner):
+def load_track_plugins(cfg, register_runner, register_scheduler):
     track_name = cfg.opts("track", "track.name")
     # TODO #71: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
     repo = TrackRepository(cfg, fetch=False)
-    plugin_reader = TrackPluginReader(register_runner)
+    plugin_reader = TrackPluginReader(register_runner, register_scheduler)
 
     track_plugin_path = repo.track_dir(track_name)
     if plugin_reader.can_load(track_plugin_path):
@@ -398,8 +398,9 @@ class TrackPluginReader:
     """
     Loads track plugins
     """
-    def __init__(self, runner_registry):
+    def __init__(self, runner_registry, scheduler_registry):
         self.runner_registry = runner_registry
+        self.scheduler_registry = scheduler_registry
 
     def _modules(self, plugins_dirs, plugin_name, plugin_root_path):
         for path in plugins_dirs:
@@ -458,6 +459,9 @@ class TrackPluginReader:
 
     def register_runner(self, name, runner):
         self.runner_registry(name, runner)
+
+    def register_scheduler(self, name, scheduler):
+        self.register_scheduler(name, scheduler)
 
 
 class TrackSpecificationReader:
@@ -647,14 +651,7 @@ class TrackSpecificationReader:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
                         "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
 
-        target_interval = self._r(task_spec, "target-interval", error_ctx=op_name, mandatory=False)
-        target_throughput = self._r(task_spec, "target-throughput", error_ctx=op_name, mandatory=False)
-        if target_interval is not None and target_throughput is not None:
-            self._error("Operation '%s' in challenge '%s' specifies target-interval and target-throughput but only one of them is allowed."
-                        % (op_name, challenge_name))
-        if target_interval:
-            target_throughput = 1 / target_interval
-
+        schedule = self._r(task_spec, "schedule", error_ctx=op_name, mandatory=False, default_value="deterministic")
         task = track.Task(operation=ops[op_name],
                           meta_data=self._r(task_spec, "meta", error_ctx=op_name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
@@ -665,7 +662,7 @@ class TrackSpecificationReader:
                           time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False,
                                               default_value=default_time_period),
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
-                          target_throughput=target_throughput)
+                          schedule=schedule, params=task_spec)
         if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
                         "mix time periods and iterations." % (op_name, challenge_name, task.warmup_iterations, task.time_period))

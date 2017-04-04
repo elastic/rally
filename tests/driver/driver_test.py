@@ -267,7 +267,7 @@ class SchedulerTests(ScheduleTestCase):
 
     def test_search_task_one_client(self):
         task = track.Task(track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
-                          warmup_iterations=3, iterations=5, clients=1, target_throughput=10)
+                          warmup_iterations=3, iterations=5, clients=1, params={"target-throughput": 10, "clients": 1})
         schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
@@ -284,7 +284,7 @@ class SchedulerTests(ScheduleTestCase):
 
     def test_search_task_two_clients(self):
         task = track.Task(track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
-                          warmup_iterations=2, iterations=10, clients=2, target_throughput=10)
+                          warmup_iterations=2, iterations=10, clients=2, params={"target-throughput": 10, "clients": 2})
         schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
@@ -300,7 +300,7 @@ class SchedulerTests(ScheduleTestCase):
     def test_schedule_for_warmup_time_based(self):
         task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"], "size": 11},
                                           param_source="driver-test-param-source"),
-                          warmup_time_period=0, clients=4, target_throughput=4)
+                          warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         invocations = driver.schedule_for(self.test_track, task, 0)
 
@@ -380,7 +380,7 @@ class ExecutorTests(TestCase):
             "action_metadata_present": True
         },
                                           param_source="driver-test-param-source"),
-                          warmup_time_period=0, clients=4, target_throughput=None)
+                          warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
         sampler = driver.Sampler(client_id=2, task=task, start_timestamp=100)
@@ -426,7 +426,8 @@ class ExecutorTests(TestCase):
                 "action_metadata_present": True
             },
                                               param_source="driver-test-param-source"),
-                              warmup_time_period=0.5, time_period=0.5, clients=4, target_throughput=target_throughput)
+                              warmup_time_period=0.5, time_period=0.5, clients=4,
+                              params={"target-throughput": target_throughput, "clients": 4})
             schedule = driver.schedule_for(test_track, task, 0)
             sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
@@ -460,7 +461,8 @@ class ExecutorTests(TestCase):
                 "action_metadata_present": True
             },
                                               param_source="driver-test-param-source"),
-                              warmup_time_period=0.5, time_period=0.5, clients=4, target_throughput=target_throughput)
+                              warmup_time_period=0.5, time_period=0.5, clients=4,
+                              params={"target-throughput": target_throughput, "clients": 4})
             schedule = driver.schedule_for(test_track, task, 0)
             sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
@@ -573,7 +575,6 @@ class ExecutorTests(TestCase):
 
             def __str__(self):
                 return "failing_mock_runner"
-
 
         es = None
         params = collections.OrderedDict()
