@@ -377,7 +377,8 @@ class ExecutorTests(TestCase):
 
         task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={
             "body": ["action_metadata_line", "index_line"],
-            "action_metadata_present": True
+            "action_metadata_present": True,
+            "bulk-size": 1
         },
                                           param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4)
@@ -423,7 +424,8 @@ class ExecutorTests(TestCase):
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
             task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={
                 "body": ["action_metadata_line", "index_line"],
-                "action_metadata_present": True
+                "action_metadata_present": True,
+                "bulk-size": 1
             },
                                               param_source="driver-test-param-source"),
                               warmup_time_period=0.5, time_period=0.5, clients=4,
@@ -458,7 +460,8 @@ class ExecutorTests(TestCase):
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
             task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={
                 "body": ["action_metadata_line", "index_line"],
-                "action_metadata_present": True
+                "action_metadata_present": True,
+                "bulk-size": 1
             },
                                               param_source="driver-test-param-source"),
                               warmup_time_period=0.5, time_period=0.5, clients=4,

@@ -81,6 +81,7 @@ class BulkIndex(Runner):
         It expects a parameter dict with the following mandatory keys:
 
         * ``body``: containing all documents for the current bulk request.
+        * ``bulk-size``: the number of documents in this bulk.
         * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
         contain actual documents to index)
         * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
@@ -221,13 +222,16 @@ class BulkIndex(Runner):
             bulk_params["pipeline"] = params["pipeline"]
 
         with_action_metadata = params["action_metadata_present"]
+        try:
+            bulk_size = params["bulk-size"]
+        except KeyError:
+            raise exceptions.DataError(
+                "Bulk parameter source did not provide a 'bulk-size' parameter. Please add it to your parameter source.")
 
         if with_action_metadata:
             # only half of the lines are documents
-            bulk_size = len(params["body"]) // 2
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
-            bulk_size = len(params["body"])
             response = es.bulk(body=params["body"], index=params["index"], doc_type=params["type"], params=bulk_params)
 
         stats = self.detailed_stats(bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)

@@ -389,13 +389,15 @@ def bulk_data_based(num_clients, client_index, indices, action_metadata, batch_s
     bulk_id = 0
     for index, type, batch in reader:
         # each batch can contain of one or more bulks
-        for bulk in batch:
+        for docs_in_bulk, bulk in batch:
             bulk_id += 1
             params = {
                 "index": index,
                 "type": type,
                 "action_metadata_present": action_metadata != ActionMetaData.NoMetaData,
                 "body": bulk,
+                # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.
+                "bulk-size": docs_in_bulk,
                 # a globally unique id for this bulk
                 "bulk-id": "%d-%d" % (client_index, bulk_id)
             }
@@ -522,7 +524,7 @@ class IndexDataReader:
                 if docs_in_bulk == 0:
                     break
                 docs_in_batch += docs_in_bulk
-                batch.append(bulk)
+                batch.append((docs_in_bulk, bulk))
             if docs_in_batch == 0:
                 raise StopIteration()
             logger.debug("Returning a batch with %d bulks." % len(batch))

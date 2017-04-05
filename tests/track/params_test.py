@@ -163,8 +163,10 @@ class IndexDataReaderTests(TestCase):
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
 
-        expected_bulk_sizes = [len(data) * 2]
-        self.assert_bulks_sized(reader, expected_bulk_sizes)
+        expected_bulk_sizes = [len(data)]
+        # lines should include meta-data
+        expected_line_sizes = [len(data) * 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulk_with_offset(self):
         data = [
@@ -182,8 +184,10 @@ class IndexDataReaderTests(TestCase):
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
 
-        expected_bulk_sizes = [(len(data) - 3) * 2]
-        self.assert_bulks_sized(reader, expected_bulk_sizes)
+        expected_bulk_sizes = [(len(data) - 3)]
+        # lines should include meta-data
+        expected_line_sizes = [(len(data) - 3) * 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulk_smaller_than_number_of_docs(self):
         data = [
@@ -203,9 +207,10 @@ class IndexDataReaderTests(TestCase):
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
 
-        # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_sizes = [6, 6, 2]
-        self.assert_bulks_sized(reader, expected_bulk_sizes)
+        expected_bulk_sizes = [3, 3, 1]
+        # lines should include meta-data
+        expected_line_sizes = [6, 6, 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulk_smaller_than_number_of_docs_and_multiple_clients(self):
         data = [
@@ -226,9 +231,10 @@ class IndexDataReaderTests(TestCase):
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
 
-        # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_sizes = [6, 4]
-        self.assert_bulks_sized(reader, expected_bulk_sizes)
+        expected_bulk_sizes = [3, 2]
+        # lines should include meta-data
+        expected_line_sizes = [6, 4]
+        self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulks_and_assume_metadata_line_in_source_file(self):
         data = [
@@ -255,9 +261,10 @@ class IndexDataReaderTests(TestCase):
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
 
-        # always double the amount as one line contains the data and one line contains the index command
-        expected_bulk_sizes = [6, 6, 2]
-        self.assert_bulks_sized(reader, expected_bulk_sizes)
+        expected_bulk_sizes = [3, 3, 1]
+        # lines should include meta-data
+        expected_line_sizes = [6, 6, 2]
+        self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulks_and_assume_no_metadata(self):
         data = [
@@ -277,16 +284,17 @@ class IndexDataReaderTests(TestCase):
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
 
-        # always double the amount as one line contains the data and one line contains the index command
+        # no meta-data, hence line numbers and bulk sizes need to be identical
         expected_bulk_sizes = [3, 3, 1]
-        self.assert_bulks_sized(reader, expected_bulk_sizes)
+        self.assert_bulks_sized(reader, expected_bulk_sizes, expected_bulk_sizes)
 
-    def assert_bulks_sized(self, reader, expected_bulk_sizes):
+    def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
         with reader:
             bulk_index = 0
             for index, type, batch in reader:
-                for bulk in batch:
-                    self.assertEqual(expected_bulk_sizes[bulk_index], len(bulk))
+                for bulk_size, bulk in batch:
+                    self.assertEqual(expected_bulk_sizes[bulk_index], bulk_size)
+                    self.assertEqual(expected_line_sizes[bulk_index], len(bulk))
                     bulk_index += 1
 
 

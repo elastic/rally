@@ -4,6 +4,7 @@ from esrally.driver import runner
 
 bulk_index = runner.BulkIndex()
 
+BULK_SIZE=5000
 
 class ElasticsearchMock:
     def __init__(self, bulk_size):
@@ -35,7 +36,7 @@ class ElasticsearchMock:
         return self.no_errors
 
 
-es = ElasticsearchMock(bulk_size=5000)
+es = ElasticsearchMock(bulk_size=BULK_SIZE)
 
 
 @pytest.mark.benchmark(
@@ -47,7 +48,8 @@ es = ElasticsearchMock(bulk_size=5000)
 def test_bulk_runner_without_errors_no_detailed_results(benchmark):
     benchmark(bulk_index, es, {
         "action_metadata_present": True,
-        "body": "bulk API body"
+        "body": "bulk API body",
+        "bulk-size": BULK_SIZE
     })
 
 
@@ -61,5 +63,6 @@ def test_bulk_runner_without_errors_with_detailed_results(benchmark):
     benchmark(bulk_index, es, {
         "action_metadata_present": True,
         "body": "bulk API body",
+        "bulk-size": BULK_SIZE,
         "detailed-results": True
     })
