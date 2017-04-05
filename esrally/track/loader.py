@@ -81,7 +81,7 @@ def load_track(cfg):
 
 def load_track_plugins(cfg, register_runner, register_scheduler):
     track_name = cfg.opts("track", "track.name")
-    # TODO #71: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
+    # TODO #257: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
     repo = TrackRepository(cfg, fetch=False)
     plugin_reader = TrackPluginReader(register_runner, register_scheduler)
 

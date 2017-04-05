@@ -193,7 +193,7 @@ class Driver(actor.RallyActor):
         selected_car_name = self.config.opts("mechanic", "car.name")
 
         logger.info("Preparing track [%s]" % track_name)
-        # TODO #71: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
+        # TODO #257: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
         track.prepare_track(self.track, self.config)
 
         logger.info("Benchmark for track [%s], challenge [%s] and car [%s] is about to start." %
