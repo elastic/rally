@@ -169,6 +169,15 @@ If you want to benchmark a binary distribution, you can specify the version here
 
 Rally will then benchmark the official Elasticsearch 2.3.3 distribution.
 
+Rally works with all releases of Elasticsearch that are `supported by Elastic <https://www.elastic.co/support/matrix#show_compatibility>`_.
+
+The following versions are already end-of-life:
+
+* ``0.x``: Rally is not tested, and not expected to work for this version; we will make no effort to make Rally work.
+* ``1.x``: Rally works on a best-effort basis with this version but support may be removed at any time.
+
+Additionally, Rally will always work with the current development version of Elasticsearch (by using either a snapshot repository or by building Elasticsearch from sources).
+
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
