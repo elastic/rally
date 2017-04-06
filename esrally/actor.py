@@ -144,18 +144,33 @@ def actor_system_already_running(ip="127.0.0.1"):
         return False
 
 
-def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None, system_base="multiprocTCPBase"):
+__SYSTEM_BASE = "multiprocTCPBase"
+
+
+def use_offline_actor_system():
+    global __SYSTEM_BASE
+    __SYSTEM_BASE = "multiprocQueueBase"
+
+
+def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None):
+    system_base = __SYSTEM_BASE
     try:
         if try_join:
             if actor_system_already_running():
+                logger.info("Joining already running actor system with system base [%s]." % system_base)
                 return thespian.actors.ActorSystem(system_base)
             else:
+                logger.info("Creating new actor system with system base [%s] on coordinator node." % system_base)
                 # if we try to join we can only run on the coordinator...
                 return thespian.actors.ActorSystem(system_base, logDefs=configure_actor_logging(), capabilities={"coordinator": True})
         elif prefer_local_only:
-            coordinator_ip = "127.0.0.1"
-            local_ip = "127.0.0.1"
             coordinator = True
+            if system_base != "multiprocQueueBase":
+                coordinator_ip = "127.0.0.1"
+                local_ip = "127.0.0.1"
+            else:
+                coordinator_ip = None
+                local_ip = None
         else:
             if system_base != "multiprocTCPBase" and system_base != "multiprocUDPBase":
                 raise exceptions.SystemSetupError("Rally requires a network-capable system base but got [%s]." % system_base)
@@ -165,15 +180,17 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
                 raise exceptions.SystemSetupError("local IP is required")
             coordinator = local_ip == coordinator_ip
 
+        capabilities = {"coordinator": coordinator}
+        if local_ip:
+            # just needed to determine whether to run benchmarks locally
+            capabilities["ip"] = local_ip
+        if coordinator_ip:
+            # Make the coordinator node the convention leader
+            capabilities["Convention Address.IPv4"] = "%s:1900" % coordinator_ip
+        logger.info("Starting actor system with system base [%s] and capabilities [%s]." % (system_base, capabilities))
         return thespian.actors.ActorSystem(system_base,
                                            logDefs=configure_actor_logging(),
-                                           capabilities={
-                                               "coordinator": coordinator,
-                                               # just needed to determine whether to run benchmarks locally
-                                               "ip": local_ip,
-                                               # Make the coordinator node the convention leader
-                                               "Convention Address.IPv4": "%s:1900" % coordinator_ip
-                                           })
+                                           capabilities=capabilities)
     except thespian.actors.ActorSystemException:
         logger.exception("Could not initialize internal actor system. Terminating.")
         console.error("Could not initialize successfully.\n")

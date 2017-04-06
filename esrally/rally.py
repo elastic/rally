@@ -381,8 +381,10 @@ def with_actor_system(runnable, cfg):
     except RuntimeError as e:
         logger.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
-            console.warn("Could not determine a socket address. Are you running without any network?", logger=logger)
-            actors = actor.bootstrap_actor_system(system_base="multiprocQueueBase")
+            console.warn("Could not determine a socket address. Are you running without any network? Switching to degraded mode.",
+                         logger=logger)
+            actor.use_offline_actor_system()
+            actors = actor.bootstrap_actor_system(try_join=True)
         else:
             raise
     try:
