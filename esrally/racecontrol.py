@@ -156,7 +156,7 @@ class Benchmark:
             raise exceptions.RallyError("Driver has returned no metrics but instead [%s]. Terminating race without result." % str(result))
         return True
 
-    def teardown(self, cancelled=False):
+    def teardown(self, cancelled=False, error=False):
         logger.info("Asking mechanic to stop the engine.")
         result = self.actor_system.ask(self.mechanic, mechanic.StopEngine())
         if isinstance(result, mechanic.EngineStopped):
@@ -170,8 +170,10 @@ class Benchmark:
             raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
 
         self.metrics_store.flush()
-        if not cancelled:
+        if not cancelled and not error:
             reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
+        else:
+            logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r]." % (cancelled, error))
         self.metrics_store.close()
 
 
@@ -216,6 +218,7 @@ def race(benchmark):
     benchmark.setup()
     lap_counter = LapCounter(benchmark.race_store, benchmark.metrics_store, benchmark.track, laps, cfg)
     cancelled = False
+    error = True
     try:
         for lap in range(1, laps + 1):
             lap_counter.before_lap(lap)
@@ -226,8 +229,9 @@ def race(benchmark):
                 cancelled = True
                 # Early termination due to cancellation by the user
                 break
+        error = False
     finally:
-        benchmark.teardown(cancelled)
+        benchmark.teardown(cancelled, error)
 
 
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
