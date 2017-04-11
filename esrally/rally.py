@@ -9,7 +9,7 @@ import time
 import faulthandler
 import signal
 
-from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, facts
+from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, facts, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL
 from esrally.mechanic import car, telemetry
 from esrally.utils import io, convert, process, console, net
@@ -28,20 +28,24 @@ def application_log_dir_path():
     return "%s/.rally/logs" % os.path.expanduser("~")
 
 
-def application_log_file_path():
-    return "%s/rally_out.log" % application_log_dir_path()
+def application_log_file_path(start_time):
+    return "%s/rally_out_%s.log" % (application_log_dir_path(), start_time)
 
 
 def configure_logging(cfg):
+    start_time = rtime.to_iso8601(cfg.opts("system", "time.start"))
     logging_output = cfg.opts("system", "logging.output")
     profiling_enabled = cfg.opts("driver", "profiling")
 
     if logging_output == "file":
-        log_file = application_log_file_path()
+        log_file = application_log_file_path(start_time)
         log_dir = os.path.dirname(log_file)
         io.ensure_dir(log_dir)
         console.info("Writing logs to %s" % log_file)
-        ch = logging.handlers.TimedRotatingFileHandler(filename=log_file, when="midnight", backupCount=14, encoding="UTF-8")
+        # there is an old log file lying around -> backup
+        if os.path.exists(log_file):
+            os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
+        ch = logging.FileHandler(filename=log_file, mode="a")
     else:
         ch = logging.StreamHandler(stream=sys.stdout)
 
@@ -360,11 +364,11 @@ def print_help_on_errors():
     heading = "Getting further help:"
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
-    console.println("* Check the log file at %s for errors." % application_log_file_path())
+    console.println("* Check the log files in %s for errors." % application_log_dir_path())
     console.println("* Read the documentation at %s" % console.format.link(DOC_LINK))
     console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
-    console.println("* Raise an issue at %s and include the log file in %s." %
-                    (console.format.link("https://github.com/elastic/rally/issues"), application_log_file_path()))
+    console.println("* Raise an issue at %s and include the log files in %s." %
+                    (console.format.link("https://github.com/elastic/rally/issues"), application_log_dir_path()))
 
 
 def race(cfg):
