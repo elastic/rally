@@ -1,3 +1,29 @@
+### 0.5.3
+
+#### Highlights
+
+* [#251](https://github.com/elastic/rally/issues/251): Support for non-deterministic distribution of operations
+
+#### Enhancements
+
+* [#260](https://github.com/elastic/rally/issues/260): Have bulk parameter source provide the bulk size
+* [#249](https://github.com/elastic/rally/issues/249): Saving tournament report
+* [#155](https://github.com/elastic/rally/issues/155): Improve document count handling
+
+#### Bug Fixes
+
+* [#263](https://github.com/elastic/rally/issues/263): Race condition when rolling log files
+* [#261](https://github.com/elastic/rally/issues/261): Unable to determine valid external socket address
+* [#253](https://github.com/elastic/rally/issues/253): Cannot determine CPU info for POWER8 chips
+* [#242](https://github.com/elastic/rally/issues/242): Rally does not detect the distribution version correctly for externally provisioned clusters
+* [#235](https://github.com/elastic/rally/issues/235): Allow Python files in a track directory that are unrelated to the track plugin
+
+#### Doc Changes
+
+* [#256](https://github.com/elastic/rally/issues/256): Document additional decompression options
+* [#247](https://github.com/elastic/rally/issues/247): Description of available operation types in the docs
+* [#241](https://github.com/elastic/rally/issues/241): Clearly document which Elasticsearch versions are supported
+
 ### 0.5.2
 
 #### Enhancements
