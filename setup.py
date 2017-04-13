@@ -20,7 +20,7 @@ __versionstr__ = raw_version
 long_description = str_from_file("README.rst")
 
 install_requires = [
-    "elasticsearch==5.1.0",
+    "elasticsearch==5.3.0",
     "psutil==4.1.0",
     "py-cpuinfo==0.2.7",
     "tabulate==0.7.5",
