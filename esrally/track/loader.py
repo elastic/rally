@@ -124,13 +124,15 @@ def prepare_track(track, cfg):
                 if size_in_bytes:
                     size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
                     # ensure output appears immediately
-                    console.info("Downloading data from [%s] (%s MB) to [%s] ... " % (url, size_in_mb, local_path),
-                                 end='', flush=True, logger=logger)
+                    logger.info("Downloading data from [%s] (%s MB) to [%s]." % (url, size_in_mb, local_path))
                 else:
-                    console.info("Downloading data from [%s] to [%s] ... " % (url, local_path), end='', flush=True, logger=logger)
+                    logger.info("Downloading data from [%s] to [%s]." % (url, local_path))
 
-                net.download(url, local_path, size_in_bytes)
-                console.println("[OK]")
+                # we want to have a bit more accurate download progress as these files are typically very large
+                progress = net.Progress("[INFO] Downloading data for track %s" % track.name, accuracy=1)
+                net.download(url, local_path, size_in_bytes, progress_indicator=progress)
+                progress.finish()
+                logger.info("Downloaded data from [%s] to [%s]." % (url, local_path))
             except urllib.error.URLError:
                 logger.exception("Could not download [%s] to [%s]." % (url, local_path))
 

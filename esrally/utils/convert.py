@@ -10,6 +10,19 @@ def bytes_to_gb(b):
     return b / 1024.0 / 1024.0 / 1024.0 if b else b
 
 
+def bytes_to_human_string(b):
+    gb = bytes_to_gb(b)
+    if gb > 1.0:
+        return "%.1f GB" % gb
+    mb = bytes_to_mb(b)
+    if mb > 1.0:
+        return "%.1f MB" % mb
+    kb = bytes_to_kb(b)
+    if kb > 1.0:
+        return "%.1f kB" % kb
+    return "%d bytes"
+
+
 def mb_to_bytes(mb):
     return int(mb * 1024 * 1024) if mb else mb
 

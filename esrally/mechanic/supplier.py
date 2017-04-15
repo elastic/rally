@@ -47,9 +47,11 @@ def from_distribution(version, repo_name, distributions_root):
     logger.info("Resolved download URL [%s] for version [%s]" % (download_url, version))
     if not os.path.isfile(distribution_path) or repo.must_download:
         try:
-            console.info("Downloading Elasticsearch %s ... " % version, logger=logger, flush=True, end="")
-            net.download(download_url, distribution_path)
-            console.println("[OK]")
+            logger.info("Starting download of Elasticsearch [%s]" % version)
+            progress = net.Progress("[INFO] Downloading Elasticsearch %s" % version)
+            net.download(download_url, distribution_path, progress_indicator=progress)
+            progress.finish()
+            logger.info("Successfully downloaded Elasticsearch [%s]." % version)
         except urllib.error.HTTPError:
             console.println("[FAILED]")
             logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (version, download_url))
