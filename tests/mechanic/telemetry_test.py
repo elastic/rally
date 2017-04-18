@@ -1,3 +1,4 @@
+import random
 import collections
 import unittest.mock as mock
 from unittest import TestCase
@@ -117,6 +118,24 @@ class SubClient:
 
     def info(self, *args, **kwargs):
         return self._info
+
+
+class GcTests(TestCase):
+    def test_sets_options_for_pre_java_9(self):
+        gc = telemetry.Gc("/var/log", java_major_version=random.randint(0, 8))
+        env = gc.java_opts("/var/log/defaults-node-0.gc.log")
+        self.assertEqual(1, len(env))
+        self.assertEqual("-Xloggc:/var/log/defaults-node-0.gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+                         "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintTenuringDistribution",
+                         env["ES_JAVA_OPTS"])
+
+    def test_sets_options_for_java_9_or_above(self):
+        gc = telemetry.Gc("/var/log", java_major_version=random.randint(9, 999))
+        env = gc.java_opts("/var/log/defaults-node-0.gc.log")
+        self.assertEqual(1, len(env))
+        self.assertEqual(
+            "-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0",
+            env["ES_JAVA_OPTS"])
 
 
 class EnvironmentInfoTests(TestCase):

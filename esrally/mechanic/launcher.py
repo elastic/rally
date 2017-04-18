@@ -8,7 +8,7 @@ import shlex
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster
-from esrally.utils import versions, console, process
+from esrally.utils import versions, console, process, jvm
 
 logger = logging.getLogger("rally.launcher")
 
@@ -212,6 +212,7 @@ class InProcessLauncher:
         self._servers = []
         self.node_telemetry_dir = "%s/telemetry" % challenge_root_dir
         self.node_log_dir = "%s/server" % log_root_dir
+        self.java_home = self.cfg.opts("runtime", "java8.home")
 
     def start(self, car, binary, data_paths):
         hosts = self.cfg.opts("client", "hosts")
@@ -254,11 +255,12 @@ class InProcessLauncher:
         host_name = socket.gethostname()
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
-
+        major_version = jvm.major_version(self.java_home)
+        logger.info("Detected Java major version [%s] on node [%s]." % (major_version, node_name))
         node_telemetry = [
             telemetry.FlightRecorder(self.node_telemetry_dir),
             telemetry.JitCompiler(self.node_telemetry_dir),
-            telemetry.Gc(self.node_telemetry_dir),
+            telemetry.Gc(self.node_telemetry_dir, major_version),
             telemetry.PerfStat(self.node_telemetry_dir),
             telemetry.DiskIo(self.metrics_store),
             telemetry.CpuUsage(self.metrics_store),
@@ -280,22 +282,21 @@ class InProcessLauncher:
     def _prepare_env(self, car, node_name, t):
         env = {}
         env.update(os.environ)
-        java_home = self.cfg.opts("runtime", "java8.home")
         # Unix specific!:
-        self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
+        self._set_env(env, "PATH", "%s/bin" % self.java_home, separator=":")
         # Don't merge here!
-        env["JAVA_HOME"] = java_home
+        env["JAVA_HOME"] = self.java_home
 
         # we just blindly trust telemetry here...
         for k, v in t.instrument_candidate_env(car, node_name).items():
             self._set_env(env, k, v)
 
-        # probe if this JVM supports +ExitOnOutOfMemoryError
-        if process.run_subprocess_with_logging("%s/bin/java -XX:+ExitOnOutOfMemoryError -version" % java_home):
-            logger.info("JVM supports +ExitOnOutOfMemoryError. Setting this option to detect out of memory errors during the benchmark.")
-            java_opts = "-XX:+ExitOnOutOfMemoryError "
+        exit_on_oome_flag = "-XX:+ExitOnOutOfMemoryError"
+        if jvm.supports_option(self.java_home, exit_on_oome_flag):
+            logger.info("JVM supports [%s]. Setting this option to detect out of memory errors during the benchmark." % exit_on_oome_flag)
+            java_opts = "%s " % exit_on_oome_flag
         else:
-            logger.info("JVM does not support +ExitOnOutOfMemoryError. Cannot detect out of memory errors. Please consider a JDK upgrade.")
+            logger.info("JVM does not support [%s]. Cannot detect out of memory errors. Please consider a JDK upgrade." % exit_on_oome_flag)
             java_opts = ""
 
         if car.heap:

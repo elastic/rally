@@ -25,6 +25,8 @@ def list_facts(cfg):
 
 
 def _jvm_property(key):
+    # maybe we should use `java -XshowSettings:properties` and do a little bit of parsing.
+    # Also: We'd need to set JAVA_HOME to what's in the config!
     lines = process.run_subprocess_with_output("java -cp %s SysProps %s" % (os.path.join(os.path.dirname(__file__), "resources"), key))
     if len(lines) == 1:
         return lines[0].strip()

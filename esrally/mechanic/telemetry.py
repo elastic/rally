@@ -155,7 +155,6 @@ class JitCompiler(TelemetryDevice):
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jit.log" % (self.log_root, car.name, candidate_id)
-
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger)
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
@@ -167,19 +166,25 @@ class Gc(TelemetryDevice):
     human_name = "GC log"
     help = "Enables GC logs."
 
-    def __init__(self, log_root):
+    def __init__(self, log_root, java_major_version):
         super().__init__()
         self.log_root = log_root
+        self.java_major_version = java_major_version
 
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.gc.log" % (self.log_root, car.name, candidate_id)
-
         console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger)
-        # TODO dm: These options change in JDK 9!
-        return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps  "
-                                "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime  -XX:+PrintTenuringDistribution"
-                                % log_file}
+        return self.java_opts(log_file)
+
+    def java_opts(self, log_file):
+        if self.java_major_version < 9:
+            return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+                                    "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime "
+                                    "-XX:+PrintTenuringDistribution" % log_file}
+        else:
+            # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
+            return {"ES_JAVA_OPTS": "-Xlog:gc*=info,safepoint=info,age*=trace:file=%s:utctime,uptimemillis,level,tags:filecount=0" % log_file}
 
 
 class PerfStat(TelemetryDevice):

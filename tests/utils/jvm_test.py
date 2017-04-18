@@ -1,0 +1,16 @@
+from unittest import TestCase
+from esrally.utils import jvm
+
+
+class JvmTests(TestCase):
+    def test_extract_major_version_7(self):
+        self.assertEqual(7, jvm.major_version("1.7", lambda x, y: x))
+
+    def test_extract_major_version_8(self):
+        self.assertEqual(8, jvm.major_version("1.8", lambda x, y: x))
+
+    def test_extract_major_version_9(self):
+        self.assertEqual(9, jvm.major_version("9", lambda x, y: x))
+
+    def test_extract_major_version_10(self):
+        self.assertEqual(10, jvm.major_version("10", lambda x, y: x))
