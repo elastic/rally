@@ -21,7 +21,7 @@ def system_property(java_home, system_property_name):
     for line in lines:
         m = sys_prop_pattern.match(line)
         if m:
-            return m[1]
+            return m.group(1)
 
     return None
 
