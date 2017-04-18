@@ -348,8 +348,15 @@ class InProcessLauncher:
         t.setDaemon(True)
         t.start()
         if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            logger.info("Started node [%s] with PID [%s]" % (node_name, process.pid))
-            return process
+            process.poll()
+            # has the process terminated?
+            if process.returncode:
+                msg = "Node [%s] has terminated with exit code [%s]." % (node_name, str(process.returncode))
+                logger.error(msg)
+                raise exceptions.LaunchError(msg)
+            else:
+                logger.info("Started node [%s] with PID [%s]" % (node_name, process.pid))
+                return process
         else:
             msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
@@ -367,14 +374,15 @@ class InProcessLauncher:
         while True:
             l = server.stdout.readline().decode("utf-8")
             if len(l) == 0:
+                # no more output -> the process has terminated. We can give up now
+                startup_event.set()
                 break
             l = l.rstrip()
-
-            if l.find("Initialization Failed") != -1:
-                logger.warning("[%s] has started with initialization errors." % node_name)
-                startup_event.set()
-
             logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+
+            if l.find("Initialization Failed") != -1 or l.find("A fatal exception has occurred") != -1:
+                logger.warning("[%s] encountered initialization errors." % node_name)
+                startup_event.set()
             if l.endswith("started") and not startup_event.isSet():
                 startup_event.set()
                 logger.info("[%s] has successfully started." % node_name)
