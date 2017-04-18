@@ -14,7 +14,22 @@ def run_subprocess(command_line):
 
 def run_subprocess_with_output(command_line):
     logger.debug("Running subprocess [%s] with output." % command_line)
-    return os.popen(command_line).readlines()
+    command_line_args = shlex.split(command_line)
+    command_line_process = subprocess.Popen(
+        command_line_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    has_output = True
+    lines = []
+    while has_output:
+        line = command_line_process.stdout.readline()
+        if line:
+            lines.append(line.decode("UTF-8").strip())
+        else:
+            has_output = False
+    command_line_process.wait(timeout=5)
+    return lines
 
 
 def run_subprocess_with_logging(command_line, header=None, level=logging.INFO):
