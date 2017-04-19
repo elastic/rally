@@ -173,12 +173,21 @@ class IndexManagementTests(TestCase):
         index_settings = {
             "index.number_of_replicas": 0
         }
+        expected_body = {
+            "settings": {
+                "index.number_of_replicas": 0
+            },
+            "mappings": {
+                "test-type": {
+                    "mapping": "empty-for-test"
+                }
+            }
+        }
         driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
 
         es.indices.exists.assert_called_with(index="test-index")
         es.indices.delete.assert_not_called()
-        es.indices.create.assert_called_with(index="test-index", body=index_settings)
-        es.indices.put_mapping.assert_called_with(index="test-index", doc_type="test-type", body={"mapping": "empty-for-test"})
+        es.indices.create.assert_called_with(index="test-index", body=expected_body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_recreate_existing_managed_index(self, es):
@@ -190,12 +199,21 @@ class IndexManagementTests(TestCase):
         index_settings = {
             "index.number_of_replicas": 0
         }
+        expected_body = {
+            "settings": {
+                "index.number_of_replicas": 0
+            },
+            "mappings": {
+                "test-type": {
+                    "mapping": "empty-for-test"
+                }
+            }
+        }
         driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
 
         es.indices.exists.assert_called_with(index="test-index")
         es.indices.delete.assert_called_with(index="test-index")
-        es.indices.create.assert_called_with(index="test-index", body=index_settings)
-        es.indices.put_mapping.assert_called_with(index="test-index", doc_type="test-type", body={"mapping": "empty-for-test"})
+        es.indices.create.assert_called_with(index="test-index", body=expected_body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_do_not_change_manually_managed_index(self, es):
