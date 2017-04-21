@@ -300,12 +300,18 @@ class ForceMerge(Runner):
         logger.info("Force merging all indices.")
         import elasticsearch
         try:
-            es.indices.forcemerge(index="_all")
+            if ("max_num_segments" in params):
+                es.indices.forcemerge(index="_all", max_num_segments=params["max_num_segments"])
+            else:
+                es.indices.forcemerge(index="_all")
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
                 # es.indices.optimize(index="_all")
-                es.transport.perform_request("POST", "/_optimize")
+                if ("max_num_segments" in params):
+                    es.transport.perform_request("POST", "/_optimize?max_num_segments=%s" % (params["max_num_segments"]))
+                else:
+                    es.transport.perform_request("POST", "/_optimize")
             else:
                 raise e
 
