@@ -282,35 +282,45 @@ class DiskIo(InternalTelemetryDevice):
 
     def on_benchmark_start(self):
         if self.process is not None:
-            self.disk_start = sysstats.disk_io_counters()
             self.process_start = sysstats.process_io_counters(self.process)
             if self.process_start:
                 logger.info("Using more accurate process-based I/O counters.")
             else:
-                logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+                try:
+                    self.disk_start = sysstats.disk_io_counters()
+                    logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+                except RuntimeError:
+                    logger.exception("Could not determine I/O stats at benchmark start.")
 
     def on_benchmark_stop(self):
         if self.process is not None:
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
-            disk_end = sysstats.disk_io_counters()
-            process_end = sysstats.process_io_counters(self.process)
-            self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes",
-                                                    self.write_bytes(process_end, disk_end), "byte")
-            self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
-                                                    self.read_bytes(process_end, disk_end), "byte")
+            try:
+                process_end = sysstats.process_io_counters(self.process) if self.process_start else None
+                disk_end = sysstats.disk_io_counters() if self.disk_start else None
+                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes",
+                                                        self.write_bytes(process_end, disk_end), "byte")
+                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
+                                                        self.read_bytes(process_end, disk_end), "byte")
+            except RuntimeError:
+                logger.exception("Could not determine I/O stats at benchmark end.")
 
     def read_bytes(self, process_end, disk_end):
-        if self.process_start and process_end:
-            return process_end.read_bytes - self.process_start.read_bytes
-        else:
-            return disk_end.read_bytes - self.disk_start.read_bytes
+        start, end = self._io_counters(process_end, disk_end)
+        return end.read_bytes - start.read_bytes
 
     def write_bytes(self, process_end, disk_end):
+        start, end = self._io_counters(process_end, disk_end)
+        return end.write_bytes - start.write_bytes
+
+    def _io_counters(self, process_end, disk_end):
         if self.process_start and process_end:
-            return process_end.write_bytes - self.process_start.write_bytes
+            return self.process_start, process_end
+        elif self.disk_start and disk_end:
+            return self.disk_start, disk_end
         else:
-            return disk_end.write_bytes - self.disk_start.write_bytes
+            raise RuntimeError("Neither process nor disk I/O counters are available")
 
 
 class CpuUsage(InternalTelemetryDevice):
