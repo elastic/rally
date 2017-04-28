@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest.mock as mock
 from unittest import TestCase
@@ -18,7 +19,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "preserve.install", True)
         cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg, install_dir="es-bin", single_machine=True)
+        p = provisioner.Provisioner(cfg, cluster_settings=None, install_dir="es-bin", single_machine=True)
         p.cleanup()
 
         mock_path_exists.assert_not_called()
@@ -34,7 +35,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
         cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg, install_dir="es-bin", single_machine=True)
+        p = provisioner.Provisioner(cfg, cluster_settings={}, install_dir="es-bin", single_machine=True)
         p.data_paths = ["/tmp/some/data-path-dir"]
         p.cleanup()
 
@@ -56,11 +57,22 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
         cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/var/elasticsearch"])
 
-        p = provisioner.Provisioner(cfg, install_dir="es-bin", single_machine=True)
+        p = provisioner.Provisioner(cfg,
+                                    cluster_settings={"indices.query.bool.max_clause_count": 5000},
+                                    install_dir="es-bin",
+                                    single_machine=True)
         p.prepare("/data/builds/distributions/")
 
         self.assertEqual(p.binary_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
         self.assertEqual(p.data_paths, ["/var/elasticsearch/data"])
+        self.assertEqual(
+"""
+cluster.name: rally-benchmark
+node.max_local_storage_nodes: 1
+path.data: /var/elasticsearch/data
+http.port: 39200-39300
+transport.tcp.port: 39300-39400
+indices.query.bool.max_clause_count: 5000""", p._node_configuration())
 
 
 class DockerProvisionerTests(TestCase):
@@ -69,13 +81,50 @@ class DockerProvisionerTests(TestCase):
         total_memory.return_value = convert.gb_to_bytes(64)
         tmp = tempfile.gettempdir()
 
-        docker = provisioner.DockerProvisioner("defaults", "39200", tmp, "5.0.0", "../../")
+        rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../esrally"))
+
+        docker = provisioner.DockerProvisioner("defaults", {"indices.query.bool.max_clause_count": 5000}, "39200", tmp, "5.0.0", rally_root)
 
         self.assertEqual({
             "es_java_opts": "",
             "container_memory_gb": "32g",
             "es_data_dir": "%s/data" % tmp,
             "es_version": "5.0.0",
-            "http_port": "39200"
+            "http_port": "39200",
+            "cluster_settings": {
+                "indices.query.bool.max_clause_count": 5000
+            }
         }, docker.docker_vars)
+
+        docker_cfg = docker._render_template_from_file(docker.docker_vars)
+        self.assertEqual(
+"""version: '2'
+services:
+  elasticsearch1:
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - discovery.zen.minimum_master_nodes=1
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS="
+      - indices.query.bool.max_clause_count=5000
+    image: "docker.elastic.co/elasticsearch/elasticsearch:5.0.0"
+    mem_limit: 32g
+    ports:
+      - 39200:9200
+      - 9300
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - esdata1:%s/data
+volumes:
+  esdata1:
+    driver: local""" % tmp
+, docker_cfg
+        )
 

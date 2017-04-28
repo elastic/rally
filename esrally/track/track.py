@@ -234,6 +234,7 @@ class Challenge:
                  name,
                  description,
                  index_settings=None,
+                 cluster_settings=None,
                  default=False,
                  meta_data=None,
                  schedule=None):
@@ -241,6 +242,7 @@ class Challenge:
         self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.index_settings = index_settings if index_settings else {}
+        self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
         self.schedule = schedule if schedule else []
 
@@ -254,13 +256,13 @@ class Challenge:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.description) ^ hash(self.index_settings) ^ hash(self.default) ^ \
+        return hash(self.name) ^ hash(self.description) ^ hash(self.index_settings) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
                hash(self.meta_data) ^ hash(self.schedule)
 
     def __eq__(self, other):
         return (isinstance(other, type(self)) and 
-                (self.name, self.default, self.index_settings, self.default, self.meta_data, self.schedule) ==
-                (other.name, other.default, other.index_settings, other.default, other.meta_data, other.schedule))
+                (self.name, self.default, self.index_settings, self.cluster_settings, self.default, self.meta_data, self.schedule) ==
+                (other.name, other.default, other.index_settings, other.cluster_settings, other.default, other.meta_data, other.schedule))
 
 
 class OperationType(Enum):

@@ -82,9 +82,11 @@ class Benchmark:
                                                       targetActorRequirements={"coordinator": True},
                                                       globalName="/rally/mechanic/coordinator")
         logger.info("Asking mechanic to start the engine.")
+        # This can only work accurately if the user has already specified the correct version!
+        cluster_settings = self._find_challenge(self.track).cluster_settings
         result = self.actor_system.ask(self.mechanic,
                                        mechanic.StartEngine(
-                                           self.cfg, self.metrics_store.open_context,
+                                           self.cfg, self.metrics_store.open_context, cluster_settings,
                                            self.sources, self.build, self.distribution, self.external, self.docker))
         if isinstance(result, mechanic.EngineStarted):
             logger.info("Mechanic has started engine successfully.")

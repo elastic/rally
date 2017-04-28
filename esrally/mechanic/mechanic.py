@@ -22,9 +22,10 @@ class ClusterMetaInfo:
 
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, sources, build, distribution, external, docker, port=None):
+    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, port=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
+        self.cluster_settings = cluster_settings
         self.sources = sources
         self.build = build
         self.distribution = distribution
@@ -41,7 +42,8 @@ class StartEngine:
         :param port: The port number to set in the copy.
         :return: A shallow copy of this message with the specified port number.
         """
-        return StartEngine(self.cfg, self.open_metrics_context, self.sources, self.build, self.distribution, self.external, self.docker, port)
+        return StartEngine(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.build, self.distribution,
+                           self.external, self.docker, port)
 
 
 class EngineStarted:
@@ -239,8 +241,8 @@ class NodeMechanicActor(actor.RallyActor):
                 self.metrics_store = metrics.InMemoryMetricsStore(self.config)
                 self.metrics_store.open(ctx=msg.open_metrics_context)
 
-                self.mechanic = create(self.config, self.metrics_store, self.single_machine, msg.sources, msg.build, msg.distribution,
-                                       msg.external, msg.docker)
+                self.mechanic = create(self.config, self.metrics_store, self.single_machine, msg.cluster_settings, msg.sources, msg.build,
+                                       msg.distribution, msg.external, msg.docker)
                 cluster = self.mechanic.start_engine()
                 self.send(sender, EngineStarted(
                     ClusterMetaInfo(cluster.hosts, cluster.source_revision, cluster.distribution_version),
@@ -283,7 +285,7 @@ class RemoteNodeMechanicActor(NodeMechanicActor):
 # Internal API (only used by the actor and for tests)
 #####################################################
 
-def create(cfg, metrics_store, single_machine=True, sources=False, build=False, distribution=False, external=False, docker=False):
+def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sources=False, build=False, distribution=False, external=False, docker=False):
     challenge_root_path = paths.race_root(cfg)
     install_dir = "%s/install" % challenge_root_path
     log_dir = "%s/logs" % challenge_root_path
@@ -303,7 +305,7 @@ def create(cfg, metrics_store, single_machine=True, sources=False, build=False, 
         java_home = cfg.opts("runtime", "java8.home")
 
         s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build)
-        p = provisioner.local_provisioner(cfg, install_dir, single_machine)
+        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, single_machine)
         l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, log_dir)
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
@@ -311,15 +313,18 @@ def create(cfg, metrics_store, single_machine=True, sources=False, build=False, 
         distributions_root = "%s/%s" % (cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
 
         s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distributions_root=distributions_root)
-        p = provisioner.local_provisioner(cfg, install_dir, single_machine)
+        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, single_machine)
         l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, log_dir)
     elif external:
+        if cluster_settings:
+            logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "
+                           "that the cluster settings are present or the benchmark may fail or behave unexpectedly." % cluster_settings)
         s = lambda: None
         p = provisioner.no_op_provisioner(cfg)
         l = launcher.ExternalLauncher(cfg, metrics_store)
     elif docker:
         s = lambda: None
-        p = provisioner.docker_provisioner(cfg, install_dir)
+        p = provisioner.docker_provisioner(cfg, cluster_settings, install_dir)
         l = launcher.DockerLauncher(cfg, metrics_store)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters

@@ -227,7 +227,7 @@ class MetricsStore:
         assert self._car is not None, "Attempting to open metrics store without a car"
 
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
-                    (self._invocation, track_name, challenge_name, car_name))
+                    (self._invocation, self._track, self._challenge, self._car))
         user_tag = self._config.opts("race", "user.tag", mandatory=False)
         if user_tag and user_tag.strip() != "":
             try:

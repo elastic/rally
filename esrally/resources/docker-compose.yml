@@ -7,6 +7,9 @@ services:
       - discovery.zen.minimum_master_nodes=1
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS={{es_java_opts}}"
+      {%- for key, value in cluster_settings.items() %}
+      - {{key}}={{value}}
+      {%- endfor %}
     image: "docker.elastic.co/elasticsearch/elasticsearch:{{es_version}}"
     mem_limit: {{container_memory_gb}}
     ports:

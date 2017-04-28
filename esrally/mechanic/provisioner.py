@@ -12,19 +12,19 @@ from esrally.utils import io, versions, console, convert, sysstats
 logger = logging.getLogger("rally.provisioner")
 
 
-def local_provisioner(cfg, install_dir, single_machine):
-    return Provisioner(cfg, install_dir, single_machine)
+def local_provisioner(cfg, cluster_settings, install_dir, single_machine):
+    return Provisioner(cfg, cluster_settings, install_dir, single_machine)
 
 
 def no_op_provisioner(cfg):
     return NoOpProvisioner(cfg.opts("mechanic", "car.name"))
 
 
-def docker_provisioner(cfg, install_dir):
+def docker_provisioner(cfg, cluster_settings, install_dir):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
-    return DockerProvisioner(cfg.opts("mechanic", "car.name"), http_port, install_dir, distribution_version, rally_root)
+    return DockerProvisioner(cfg.opts("mechanic", "car.name"), cluster_settings, http_port, install_dir, distribution_version, rally_root)
 
 
 class Provisioner:
@@ -33,8 +33,9 @@ class Provisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cfg, install_dir, single_machine):
+    def __init__(self, cfg, cluster_settings, install_dir, single_machine):
         self._config = cfg
+        self._cluster_settings = cluster_settings
         self.preserve = self._config.opts("mechanic", "preserve.install")
         car_name = self._config.opts("mechanic", "car.name")
         self.car = car.select_car(car_name)
@@ -103,12 +104,16 @@ class Provisioner:
             raise exceptions.SystemSetupError("Unrecognized Elasticsearch log config file format")
 
     def _configure_node(self):
+        node_cfg = self._node_configuration(open("%s/config/elasticsearch.yml" % self.binary_path, "r").read())
+        open("%s/config/elasticsearch.yml" % self.binary_path, "w").write(node_cfg)
+
+    def _node_configuration(self, initial_config=""):
         logger.info("Using port [%d]" % self.http_port)
         additional_config = self.car.custom_config_snippet
         self.data_paths = self._data_paths()
         logger.info("Using data paths [%s]" % self.data_paths)
-        s = open("%s/config/elasticsearch.yml" % self.binary_path, "r").read()
-        s += "\ncluster.name: rally-benchmark\n"
+        s = initial_config
+        s += "\ncluster.name: rally-benchmark"
         s += self.number_of_nodes()
         if self.single_machine:
             logger.info("Binding node to 127.0.0.1 (single-machine benchmark).")
@@ -120,7 +125,10 @@ class Provisioner:
         s += "\ntransport.tcp.port: %d-%d" % (self.http_port + 100, self.http_port + 200)
         if additional_config:
             s += "\n%s" % additional_config
-        open("%s/config/elasticsearch.yml" % self.binary_path, "w").write(s)
+        if self._cluster_settings:
+            for k, v in self._cluster_settings.items():
+                s += "\n%s: %s" % (str(k), str(v))
+        return s
 
     def number_of_nodes(self):
         distribution_version = self._config.opts("mechanic", "distribution.version", mandatory=False)
@@ -158,8 +166,9 @@ class NoOpProvisioner:
 
 
 class DockerProvisioner:
-    def __init__(self, car_name, http_port, install_dir, distribution_version, rally_root):
+    def __init__(self, car_name, cluster_settings, http_port, install_dir, distribution_version, rally_root):
         self.car = car.select_car(car_name)
+        self._cluster_settings = cluster_settings
         self.http_port = http_port
         self.install_dir = install_dir
         self.distribution_version = distribution_version
@@ -191,7 +200,8 @@ class DockerProvisioner:
             "container_memory_gb": "%dg" % (convert.bytes_to_gb(sysstats.total_memory()) // 2),
             "es_data_dir": "%s/data" % self.install_dir,
             "es_version": self.distribution_version,
-            "http_port": self.http_port
+            "http_port": self.http_port,
+            "cluster_settings": self._cluster_settings
         }
 
     def cleanup(self):

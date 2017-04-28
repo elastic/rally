@@ -598,6 +598,7 @@ class TrackSpecificationReader:
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified
             default = number_of_challenges == 1 or self._r(challenge, "default", error_ctx=name, mandatory=False)
             index_settings = self._r(challenge, "index-settings", error_ctx=name, mandatory=False)
+            cluster_settings = self._r(challenge, "cluster-settings", error_ctx=name, mandatory=False)
 
             if default and default_challenge is not None:
                 self._error("Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
@@ -619,6 +620,7 @@ class TrackSpecificationReader:
                                             meta_data=meta_data,
                                             description=description,
                                             index_settings=index_settings,
+                                            cluster_settings=cluster_settings,
                                             default=default,
                                             schedule=schedule)
             if default:
