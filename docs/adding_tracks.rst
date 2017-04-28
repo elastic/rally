@@ -18,45 +18,46 @@ First of all, we need some data. There are a lot of public data sets available w
 You will note that the file is tab-delimited but we need JSON to bulk-index data with Elasticsearch. So we can use a small script to do the conversion for us::
 
     import json
-    import csv
-    
-    cols = (('geonameid', 'int'),
-           ('name', 'string'),
-           ('asciiname', 'string'),
-           ('alternatenames', 'string'),
-           ('latitude', 'double'),
-           ('longitude', 'double'),
-           ('feature_class', 'string'),
-           ('feature_code', 'string'),
-           ('country_code', 'string'),
-           ('cc2', 'string'),
-           ('admin1_code', 'string'),
-           ('admin2_code', 'string'),
-           ('admin3_code', 'string'),
-           ('admin4_code', 'string'),
-           ('population', 'long'),
-           ('elevation', 'int'),
-           ('dem', 'string'),
-           ('timezone', 'string'))
-           
-    with open('allCountries.txt') as f:
-     while True:
-       line = f.readline()
-       if line == '':
-         break
-       tup = line.strip().split('\t')
-       d = {}
-       for i in range(len(cols)):
-         name, type = cols[i]
-         if tup[i] != '':
-           if type in ('int', 'long'):
-             d[name] = int(tup[i])
-           elif type == 'double':
-             d[name] = float(tup[i])
-           else:
-             d[name] = tup[i]
-    
-       print(json.dumps(d))
+
+    cols = (("geonameid", "int"),
+            ("name", "string"),
+            ("asciiname", "string"),
+            ("alternatenames", "string"),
+            ("latitude", "double"),
+            ("longitude", "double"),
+            ("feature_class", "string"),
+            ("feature_code", "string"),
+            ("country_code", "string"),
+            ("cc2", "string"),
+            ("admin1_code", "string"),
+            ("admin2_code", "string"),
+            ("admin3_code", "string"),
+            ("admin4_code", "string"),
+            ("population", "long"),
+            ("elevation", "int"),
+            ("dem", "string"),
+            ("timezone", "string"))
+
+
+    def main():
+        with open("allCountries.txt", "rt", encoding="UTF-8") as f:
+            for line in f:
+                tup = line.strip().split("\t")
+                record = {}
+                for i in range(len(cols)):
+                    name, type = cols[i]
+                    if tup[i] != "":
+                        if type in ("int", "long"):
+                            record[name] = int(tup[i])
+                        elif type == "double":
+                            record[name] = float(tup[i])
+                        else:
+                            record[name] = tup[i]
+                print(json.dumps(record, ensure_ascii=False))
+
+
+    if __name__ == "__main__":
+        main()
 
 Go to ``~/.rally/benchmarks/data`` and create a folder "tutorial" there. Then invoke the script with ``python3 toJSON.py > ~/.rally/benchmarks/data/tutorial/documents.json``.
 
