@@ -534,7 +534,7 @@ In track.json specify an operation with type "percolate" (you can choose this na
     }
 
 
-Then create a file track.py next to track.json and implement the following two functions::
+Then create a file ``track.py`` next to ``track.json`` and implement the following two functions::
 
     def percolate(es, params):
         es.percolate(
@@ -560,6 +560,28 @@ This function can return either:
 * A ``dict`` with arbitrary keys. If the ``dict`` contains the key ``weight`` it is assumed to be numeric and chosen as weight as defined above. The key ``unit`` is treated similarly. All other keys are added to the ``meta`` section of the corresponding service time and latency metrics records.
 
 Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
+
+If you need more control, you can also implement a runner class. The example above, implemented as a class looks as follows::
+
+    class PercolateRunner:
+        def __enter__(self):
+            return self
+
+        def __call__(self, es, params):
+            es.percolate(
+                index="queries",
+                doc_type="content",
+                body=params["body"]
+            )
+
+        def __repr__(self, *args, **kwargs):
+            return "percolate"
+
+    def register(registry):
+        registry.register_runner("percolate", PercolateRunner())
+
+
+The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function. Runners also support Python's `context manager <https://docs.python.org/3/library/stdtypes.html#typecontextmanager>`_ interface. Rally uses a new context for each request. Implementing the context manager interface can be handy for cleanup of resources after executing an operation. Rally uses it for example to clear open scrolls.
 
 .. note::
 
