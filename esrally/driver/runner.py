@@ -254,17 +254,19 @@ class BulkIndex(Runner):
             if op not in ops:
                 ops[op] = Counter()
             ops[op]["item-count"] += 1
-            ops[op][data["result"]] += 1
+            if "result" in data:
+                ops[op][data["result"]] += 1
 
-            s = data["_shards"]
-            sk = "%d-%d-%d" % (s["total"], s["successful"], s["failed"])
-            if sk not in shards_histogram:
-                shards_histogram[sk] = {
-                    "item-count": 0,
-                    "shards": s
-                }
-            shards_histogram[sk]["item-count"] += 1
-            if data["status"] > 299 or data["_shards"]["failed"] > 0:
+            if "_shards" in data:
+                s = data["_shards"]
+                sk = "%d-%d-%d" % (s["total"], s["successful"], s["failed"])
+                if sk not in shards_histogram:
+                    shards_histogram[sk] = {
+                        "item-count": 0,
+                        "shards": s
+                    }
+                shards_histogram[sk]["item-count"] += 1
+            if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                 bulk_error_count += 1
         return {
             "success": bulk_error_count == 0,
