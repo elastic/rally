@@ -4,6 +4,41 @@ from unittest import TestCase
 from esrally.driver import runner
 
 
+class RegisterRunnerTest(TestCase):
+    def tearDown(self):
+        runner.remove_runner("unit_test")
+
+    def test_runner_function_should_be_wrapped(self):
+        def runner_function(es, params):
+            pass
+        runner.register_runner(operation_type="unit_test", runner=runner_function)
+        self.assertIsInstance(runner.runner_for("unit_test"), runner.DelegatingRunner)
+
+    def test_runner_class_with_context_manager_should_be_registered_as_is(self):
+        class UnitTestRunner:
+            def __enter__(self):
+                return self
+
+            def __call__(self, *args):
+                pass
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        test_runner = UnitTestRunner()
+        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        self.assertTrue(test_runner == runner.runner_for("unit_test"))
+
+    def test_runner_class_should_be_wrapped(self):
+        class UnitTestRunner:
+            def __call__(self, *args):
+                pass
+
+        test_runner = UnitTestRunner()
+        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        self.assertIsInstance(runner.runner_for("unit_test"), runner.DelegatingRunner)
+
+
 class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_success_with_metadata(self, es):

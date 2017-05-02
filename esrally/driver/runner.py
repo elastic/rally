@@ -20,11 +20,19 @@ def runner_for(operation_type):
 def register_runner(operation_type, runner):
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     if isinstance(runner, types.FunctionType):
-        logger.debug("Registering function [%s] for [%s]." % (str(runner), str(operation_type)))
+        logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = DelegatingRunner(runner)
-    else:
-        logger.debug("Registering object [%s] for [%s]." % (str(runner), str(operation_type)))
+    elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
+        logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = runner
+    else:
+        logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+        __RUNNERS[operation_type] = DelegatingRunner(runner)
+
+
+# Only intended for unit-testing!
+def remove_runner(operation_type):
+    del __RUNNERS[operation_type]
 
 
 class Runner:
