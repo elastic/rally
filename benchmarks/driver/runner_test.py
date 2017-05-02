@@ -4,7 +4,8 @@ from esrally.driver import runner
 
 bulk_index = runner.BulkIndex()
 
-BULK_SIZE=5000
+BULK_SIZE = 5000
+
 
 class ElasticsearchMock:
     def __init__(self, bulk_size):

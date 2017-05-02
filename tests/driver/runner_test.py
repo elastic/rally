@@ -27,6 +27,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = bulk(es, bulk_params)
 
+        self.assertIsNone(result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -56,6 +57,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = bulk(es, bulk_params)
 
+        self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -113,11 +115,13 @@ class BulkIndexRunnerTests(TestCase):
                 "index_line"
             ],
             "action_metadata_present": True,
-            "bulk-size": 3
+            "bulk-size": 3,
+            "index": "test"
         }
 
         result = bulk(es, bulk_params)
 
+        self.assertEqual("test", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -215,11 +219,13 @@ class BulkIndexRunnerTests(TestCase):
             ],
             "action_metadata_present": True,
             "detailed-results": False,
-            "bulk-size": 4
+            "bulk-size": 4,
+            "index": "test"
         }
 
         result = bulk(es, bulk_params)
 
+        self.assertEqual("test", result["index"])
         self.assertEqual(4, result["weight"])
         self.assertEqual(4, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -355,11 +361,13 @@ class BulkIndexRunnerTests(TestCase):
             ],
             "action_metadata_present": True,
             "bulk-size": 6,
-            "detailed-results": True
+            "detailed-results": True,
+            "index": "test"
         }
 
         result = bulk(es, bulk_params)
 
+        self.assertEqual("test", result["index"])
         self.assertEqual(6, result["weight"])
         self.assertEqual(6, result["bulk-size"])
         self.assertEqual("docs", result["unit"])

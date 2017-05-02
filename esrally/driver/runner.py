@@ -102,6 +102,7 @@ class BulkIndex(Runner):
         `
         The following meta data are always returned:
 
+        * ``index``: name of the affected index. May be `None` if it could not be derived.
         * ``bulk-size``: bulk size, e.g. 5.000.
         * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
         * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
@@ -124,6 +125,7 @@ class BulkIndex(Runner):
         If ``detailed-results`` is ``False`` a typical return value is::
 
             {
+                "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
@@ -135,6 +137,7 @@ class BulkIndex(Runner):
         Whereas the response will look as follow if there are bulk errors::
 
             {
+                "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
@@ -147,6 +150,7 @@ class BulkIndex(Runner):
 
 
             {
+                "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
@@ -175,6 +179,7 @@ class BulkIndex(Runner):
 
 
             {
+                "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
@@ -217,6 +222,8 @@ class BulkIndex(Runner):
             }
         """
         detailed_results = params.get("detailed-results", False)
+        index_name = params.get("index")
+
         bulk_params = {}
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
@@ -232,11 +239,12 @@ class BulkIndex(Runner):
             # only half of the lines are documents
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
-            response = es.bulk(body=params["body"], index=params["index"], doc_type=params["type"], params=bulk_params)
+            response = es.bulk(body=params["body"], index=index_name, doc_type=params["type"], params=bulk_params)
 
         stats = self.detailed_stats(bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
         meta_data = {
+            "index": index_name,
             "weight": bulk_size,
             "unit": "docs",
             "bulk-size": bulk_size,
