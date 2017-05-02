@@ -386,6 +386,7 @@ class Query(Runner):
             scroll="10s",
             size=params["items_per_page"],
             request_cache=params["use_request_cache"])
+
         if "_scroll_id" in r:
             self.scroll_id = r["_scroll_id"]
         else:
@@ -399,13 +400,23 @@ class Query(Runner):
             if hit_count == 0:
                 # We're done prematurely. Even if we are on page index zero, we still made one call.
                 return page + 1, "ops"
-            r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
+            # This does only work for ES 2.x and above
+            # r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
+            # This is the most compatible version to perform a scroll across all supported versions of Elasticsearch
+            # (1.x does not support a proper JSON body in search scroll requests).
+            r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
         return total_pages, "ops"
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:
             try:
-                self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
+                # This does only work for ES 2.x and above
+                # self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
+
+                # This is the most compatible version to clear one scroll id across all supported versions of Elasticsearch
+                # (1.x does not support a proper JSON body in clear scroll requests).
+                self.es.transport.perform_request("DELETE", "/_search/scroll/%s" % self.scroll_id)
+                pass
             except BaseException:
                 logger.exception("Could not clear scroll. This will lead to excessive resource usage in Elasticsearch and "
                                  "will skew your benchmark results.")
