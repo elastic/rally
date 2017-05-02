@@ -402,20 +402,31 @@ class LoadGenerator(actor.RallyActor):
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
                 if self.start_driving:
+                    logger.info("LoadGenerator[%s] starts driving now." % str(self.client_id))
                     self.start_driving = False
                     self.drive()
                 else:
-                    self.send_samples()
+                    current_samples = self.send_samples()
                     if self.cancel.is_set():
+                        logger.info("LoadGenerator[%s] has detected that benchmark has been cancelled. Notifying master..." %
+                                    str(self.client_id))
                         self.send(self.master, BenchmarkCancelled())
                     elif self.executor_future is not None and self.executor_future.done():
                         e = self.executor_future.exception(timeout=0)
                         if e:
+                            logger.info("LoadGenerator[%s] has detected a benchmark failure. Notifying master..." % str(self.client_id))
                             self.send(self.master, BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
                         else:
+                            logger.info("LoadGenerator[%s] is ready for the next task." % str(self.client_id))
                             self.executor_future = None
                             self.drive()
                     else:
+                        if current_samples and len(current_samples) > 0:
+                            most_recent_sample = current_samples[-1]
+                            logger.info("LoadGenerator[%s] is executing [%s] (%.2f%% complete)." %
+                                        (str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0))
+                        else:
+                            logger.info("LoadGenerator[%s] is executing (no samples)." % (str(self.client_id)))
                         self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest." % str(self.client_id))
@@ -462,6 +473,8 @@ class LoadGenerator(actor.RallyActor):
             samples = self.sampler.samples
             if len(samples) > 0:
                 self.send(self.master, UpdateSamples(self.client_id, samples))
+            return samples
+        return None
 
 
 class Sampler:
