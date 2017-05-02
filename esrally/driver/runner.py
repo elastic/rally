@@ -230,7 +230,7 @@ class BulkIndex(Runner):
             }
         """
         detailed_results = params.get("detailed-results", False)
-        index_name = params.get("index")
+        index = params.get("index")
 
         bulk_params = {}
         if "pipeline" in params:
@@ -247,12 +247,12 @@ class BulkIndex(Runner):
             # only half of the lines are documents
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
-            response = es.bulk(body=params["body"], index=index_name, doc_type=params["type"], params=bulk_params)
+            response = es.bulk(body=params["body"], index=index, doc_type=params["type"], params=bulk_params)
 
         stats = self.detailed_stats(bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
         meta_data = {
-            "index": index_name,
+            "index": str(index) if index else None,
             "weight": bulk_size,
             "unit": "docs",
             "bulk-size": bulk_size,
