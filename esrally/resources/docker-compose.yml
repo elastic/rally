@@ -6,6 +6,7 @@ services:
     environment:
       - discovery.zen.minimum_master_nodes=1
       - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
       - "ES_JAVA_OPTS={{es_java_opts}}"
       {%- for key, value in cluster_settings.items() %}
       - {{key}}={{value}}
