@@ -562,19 +562,15 @@ def setup_index(es, index, index_settings, source=io.FileSource):
         logger.info("Creating index [%s]" % index.name)
         # first we merge the index settings and the mappings for all types
         body = {}
-        if ('settings' not in index_settings):
-            body['settings'] = index_settings
-        else:
-            body = index_settings
+        body['settings'] = index_settings
         if ('mappings' not in body):
             body['mappings'] = {}
         for type in index.types:
             with source(type.mapping_file, "rt") as f:
                 mappings = f.read()
-            logger.info("add mapping for type [%s] in index [%s] with content:\n%s" % (type.name, index.name, mappings))
-            body['mappings'][type.name] = json.loads(mappings);
+            body['mappings'].update(json.loads(mappings))
         # create the index with mappings and settings
-        logger.info("create index with body [%s]" % (body))
+        logger.info("create index [%s] with body [%s]" % (index.name, body))
         es.indices.create(index=index.name, body=body)
     else:
         logger.info("Skipping index [%s] as it is managed by the user." % index.name)

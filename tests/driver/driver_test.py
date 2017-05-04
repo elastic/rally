@@ -169,7 +169,7 @@ class IndexManagementTests(TestCase):
 
         index = track.Index(name="test-index",
                             auto_managed=True,
-                            types=[track.Type(name="test-type", mapping_file=['{"mapping": "empty-for-test"}'])])
+                            types=[track.Type(name="test-type", mapping_file=['{"test-type": "empty-for-test"}'])])
         index_settings = {
             "index.number_of_replicas": 0
         }
@@ -178,9 +178,7 @@ class IndexManagementTests(TestCase):
                 "index.number_of_replicas": 0
             },
             "mappings": {
-                "test-type": {
-                    "mapping": "empty-for-test"
-                }
+                "test-type": "empty-for-test"
             }
         }
         driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
@@ -195,7 +193,7 @@ class IndexManagementTests(TestCase):
 
         index = track.Index(name="test-index",
                             auto_managed=True,
-                            types=[track.Type(name="test-type", mapping_file=['{"mapping": "empty-for-test"}'])])
+                            types=[track.Type(name="test-type", mapping_file=['{"test-type": "empty-for-test"}'])])
         index_settings = {
             "index.number_of_replicas": 0
         }
@@ -204,9 +202,7 @@ class IndexManagementTests(TestCase):
                 "index.number_of_replicas": 0
             },
             "mappings": {
-                "test-type": {
-                    "mapping": "empty-for-test"
-                }
+                "test-type": "empty-for-test"
             }
         }
         driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
