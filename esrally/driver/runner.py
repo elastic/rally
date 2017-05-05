@@ -21,13 +21,13 @@ def register_runner(operation_type, runner):
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     if isinstance(runner, types.FunctionType):
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = DelegatingRunner(runner)
+        __RUNNERS[operation_type] = DelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = runner
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = DelegatingRunner(runner)
+        __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
 
 
 # Only intended for unit-testing!
@@ -60,14 +60,15 @@ class Runner:
 
 
 class DelegatingRunner(Runner):
-    def __init__(self, runnable):
+    def __init__(self, runnable, name):
         self.runnable = runnable
+        self.name = name
 
     def __call__(self, *args):
         return self.runnable(*args)
 
     def __repr__(self, *args, **kwargs):
-        return "user-defined runner for [%s]" % self.runnable.__name__
+        return "user-defined runner for [%s]" % self.name
 
 
 class BulkIndex(Runner):

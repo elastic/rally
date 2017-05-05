@@ -12,7 +12,9 @@ class RegisterRunnerTest(TestCase):
         def runner_function(es, params):
             pass
         runner.register_runner(operation_type="unit_test", runner=runner_function)
-        self.assertIsInstance(runner.runner_for("unit_test"), runner.DelegatingRunner)
+        returned_runner = runner.runner_for("unit_test")
+        self.assertIsInstance(returned_runner, runner.DelegatingRunner)
+        self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
 
     def test_runner_class_with_context_manager_should_be_registered_as_is(self):
         class UnitTestRunner:
@@ -27,16 +29,22 @@ class RegisterRunnerTest(TestCase):
 
         test_runner = UnitTestRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
-        self.assertTrue(test_runner == runner.runner_for("unit_test"))
+        returned_runner = runner.runner_for("unit_test")
+        self.assertTrue(test_runner == returned_runner)
 
     def test_runner_class_should_be_wrapped(self):
         class UnitTestRunner:
             def __call__(self, *args):
                 pass
 
+            def __str__(self):
+                return "UnitTestRunner"
+
         test_runner = UnitTestRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
-        self.assertIsInstance(runner.runner_for("unit_test"), runner.DelegatingRunner)
+        returned_runner = runner.runner_for("unit_test")
+        self.assertIsInstance(returned_runner, runner.DelegatingRunner)
+        self.assertEqual("user-defined runner for [UnitTestRunner]", repr(returned_runner))
 
 
 class BulkIndexRunnerTests(TestCase):
