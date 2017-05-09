@@ -274,7 +274,7 @@ class MetricsAggregationTests(TestCase):
 class SchedulerTests(ScheduleTestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        self.test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+        self.test_track = track.Track(name="unittest", short_description="unittest track",
                                       source_root_url="http://example.org",
                                       indices=None,
                                       challenges=None)
@@ -384,7 +384,7 @@ class ExecutorTests(TestCase):
         }
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+        test_track = track.Track(name="unittest", short_description="unittest track",
                                  source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
@@ -429,7 +429,7 @@ class ExecutorTests(TestCase):
         }
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+        test_track = track.Track(name="unittest", short_description="unittest track",
                                  source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
@@ -465,7 +465,7 @@ class ExecutorTests(TestCase):
         }
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        test_track = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+        test_track = track.Track(name="unittest", short_description="unittest track",
                                  source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)

@@ -277,7 +277,7 @@ def parse_args():
             "--effective-start-date",
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
-            default=datetime.datetime.utcnow())
+            default=None)
         # This is a highly experimental option and will likely be removed
         p.add_argument(
             "--data-paths",
@@ -523,7 +523,13 @@ def main():
     sub_command = derive_sub_command(args, cfg)
     ensure_configuration_present(cfg, args, sub_command)
 
-    cfg.add(config.Scope.application, "system", "time.start", args.effective_start_date)
+    if args.effective_start_date:
+        cfg.add(config.Scope.application, "system", "time.start", args.effective_start_date)
+        cfg.add(config.Scope.application, "system", "time.start.user_provided", True)
+    else:
+        cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
+        cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
+
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
 
     # per node?

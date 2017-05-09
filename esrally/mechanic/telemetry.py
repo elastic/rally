@@ -7,7 +7,7 @@ import threading
 
 import tabulate
 from esrally import metrics, time
-from esrally.utils import io, sysstats, process, console
+from esrally.utils import io, sysstats, process, console, versions
 
 logger = logging.getLogger("rally.telemetry")
 
@@ -339,7 +339,7 @@ class CpuUsage(InternalTelemetryDevice):
     def on_benchmark_start(self):
         if self.node:
             self.sampler = SampleCpuUsage(self.node, self.metrics_store)
-            self.sampler.daemon = True
+            self.sampler.setDaemon(True)
             self.sampler.start()
 
     def on_benchmark_stop(self):
@@ -386,6 +386,17 @@ def store_node_attribute_metadata(metrics_store, nodes_info):
             metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, k, next(iter(v)))
 
 
+def extract_value(node, path, fallback="unknown"):
+    value = node
+    try:
+        for k in path:
+            value = value[k]
+    except KeyError:
+        logger.warning("Could not determine meta-data at path [%s]." % ",".join(path))
+        value = fallback
+    return value
+
+
 class EnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
@@ -397,13 +408,11 @@ class EnvironmentInfo(InternalTelemetryDevice):
         self._t = None
 
     def attach_to_cluster(self, cluster):
-        revision = self.client.info()["version"]["build_hash"]
-        distribution_version = self.client.info()["version"]["number"]
+        client_info = self.client.info()
+        revision = client_info["version"]["build_hash"]
+        distribution_version = client_info["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
-
-        cluster.distribution_version = distribution_version
-        cluster.source_revision = revision
 
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
@@ -415,15 +424,12 @@ class EnvironmentInfo(InternalTelemetryDevice):
         store_node_attribute_metadata(self.metrics_store, nodes_info)
 
     def attach_to_node(self, node):
-        # we gather also host level metrics here although they will just be overridden for multiple nodes on the same node (which is no
-        # problem as the values are identical anyway).
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_version", sysstats.os_version())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_physical_cores", sysstats.physical_cpu_cores())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_model", sysstats.cpu_model())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "node_name", node.node_name)
-        # This is actually the only node level metric, but it is easier to implement this way
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "host_name", node.host_name)
 
 
@@ -438,46 +444,99 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         self._t = None
 
     def attach_to_cluster(self, cluster):
-        revision = self.client.info()["version"]["build_hash"]
-        distribution_version = self.client.info()["version"]["number"]
+        client_info = self.client.info()
+        revision = client_info["version"]["build_hash"]
+        distribution_version = client_info["version"]["number"]
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
-
-        cluster.distribution_version = distribution_version
-        cluster.source_revision = revision
 
         stats = self.client.nodes.stats(metric="_all")
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
-            try:
-                host = node["host"]
-            except KeyError:
-                host = "unknown"
+            host = node.get("host", "unknown")
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host)
 
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
         for node in nodes_info:
-            self.try_store_node_info(node, "os_name", ["os", "name"])
-            self.try_store_node_info(node, "os_version", ["os", "version"])
-            self.try_store_node_info(node, "cpu_logical_cores", ["os", "available_processors"])
-            self.try_store_node_info(node, "jvm_vendor", ["jvm", "vm_vendor"])
-            self.try_store_node_info(node, "jvm_version", ["jvm", "version"])
-
+            node_name = node["name"]
+            self.store_node_info(node_name, "os_name", node, ["os", "name"])
+            self.store_node_info(node_name, "os_version", node, ["os", "version"])
+            self.store_node_info(node_name, "cpu_logical_cores", node, ["os", "available_processors"])
+            self.store_node_info(node_name, "jvm_vendor", node, ["jvm", "vm_vendor"])
+            self.store_node_info(node_name, "jvm_version", node, ["jvm", "version"])
         store_node_attribute_metadata(self.metrics_store, nodes_info)
 
-    def try_store_node_info(self, node, metric_key, path):
-        node_name = node["name"]
-        value = node
-        try:
-            for k in path:
-                value = value[k]
-        except KeyError:
-            logger.warning("Could not determine metric [%s] for node [%s] at path [%s]." % (metric_key, node_name, ",".join(path)))
-            value = "unknown"
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, metric_key, value)
+    def store_node_info(self, node_name, metric_key, node, path):
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, metric_key, extract_value(node, path))
+
+
+class ClusterMetaDataInfo(InternalTelemetryDevice):
+    """
+    Enriches the cluster with meta-data about it and its nodes.
+    """
+    def __init__(self, client):
+        super().__init__()
+        self.client = client
+
+    def attach_to_cluster(self, cluster):
+        client_info = self.client.info()
+        revision = client_info["version"]["build_hash"]
+        distribution_version = client_info["version"]["number"]
+
+        cluster.distribution_version = distribution_version
+        cluster.source_revision = revision
+
+        for node_stats in self.client.nodes.stats(metric="_all")["nodes"].values():
+            node_name = node_stats["name"]
+            if cluster.has_node(node_name):
+                cluster_node = cluster.node(node_name)
+            else:
+                host = node_stats.get("host", "unknown")
+                cluster_node = cluster.add_node(host, node_name)
+            self.add_node_stats(cluster, cluster_node, node_stats)
+
+        for node_info in self.client.nodes.info(node_id="_all")["nodes"].values():
+            self.add_node_info(cluster, node_info)
+
+    def add_node_info(self, cluster, node_info):
+        node_name = node_info["name"]
+        cluster_node = cluster.node(node_name)
+        if cluster_node:
+            cluster_node.ip = extract_value(node_info, ["ip"])
+            cluster_node.os = {
+                "name": extract_value(node_info, ["os", "name"]),
+                "version": extract_value(node_info, ["os", "version"])
+            }
+            cluster_node.jvm = {
+                "vendor": extract_value(node_info, ["jvm", "vm_vendor"]),
+                "version": extract_value(node_info, ["jvm", "version"])
+            }
+            cluster_node.cpu = {
+                "available_processors": extract_value(node_info, ["os", "available_processors"]),
+                "allocated_processors": extract_value(node_info, ["os", "allocated_processors"], fallback=None),
+            }
+            if versions.major_version(cluster.distribution_version) == 1:
+                cluster_node.memory = {
+                    "total_bytes": extract_value(node_info, ["os", "mem", "total_in_bytes"], fallback=None)
+                }
+
+    def add_node_stats(self, cluster, cluster_node, stats):
+        if cluster_node:
+            data_dirs = extract_value(stats, ["fs", "data"], fallback=[])
+            for data_dir in data_dirs:
+                fs_meta_data = {
+                    "mount": data_dir.get("mount", "unknown"),
+                    "type": data_dir.get("type", "unknown"),
+                    "spins": data_dir.get("spins", "unknown")
+                }
+                cluster_node.fs.append(fs_meta_data)
+            if versions.major_version(cluster.distribution_version) > 1:
+                cluster_node.memory = {
+                    "total_bytes": extract_value(stats, ["os", "mem", "total_in_bytes"], fallback=None)
+                }
 
 
 class NodeStats(InternalTelemetryDevice):
@@ -501,8 +560,8 @@ class NodeStats(InternalTelemetryDevice):
         for node_name, gc_times_end in gc_times_at_end.items():
             if node_name in self.gc_times_per_node:
                 gc_times_start = self.gc_times_per_node[node_name]
-                young_gc_time = gc_times_end[0] - gc_times_start[0]
-                old_gc_time = gc_times_end[1] - gc_times_start[1]
+                young_gc_time = max(gc_times_end[0] - gc_times_start[0], 0)
+                old_gc_time = max(gc_times_end[1] - gc_times_start[1], 0)
 
                 total_young_gen_collection_time += young_gc_time
                 total_old_gen_collection_time += old_gc_time
@@ -559,7 +618,7 @@ class IndexStats(InternalTelemetryDevice):
 
         for metric_key, value_at_end in index_time_at_end.items():
             value_at_start = self.index_times_at_start[metric_key]
-            self.add_metrics(value_at_end - value_at_start, metric_key, "ms")
+            self.add_metrics(max(value_at_end - value_at_start, 0), metric_key, "ms")
         self.index_times_at_start = {}
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")

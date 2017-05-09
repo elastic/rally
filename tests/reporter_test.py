@@ -9,9 +9,18 @@ class StatsTests(TestCase):
     def test_calculate_simple_index_stats(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now())
+        cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
+        cfg.add(config.Scope.application, "mechanic", "car.name", "unittest_car")
+        cfg.add(config.Scope.application, "race", "laps", 1)
+        cfg.add(config.Scope.application, "race", "user.tag", "")
+        cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
 
-        store = metrics.InMemoryMetricsStore(cfg=cfg)
-        store.open(datetime.datetime.now(), "test", "unittest", "unittest_car")
+        index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
+        challenge = track.Challenge(name="unittest", description="", index_settings=None, schedule=[index], default=True)
+        t = track.Track("unittest", "unittest-track", challenges=[challenge])
+
+        store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
         store.lap = 1
 
         store.put_value_cluster_level("throughput", 500, unit="docs/s", operation="index", operation_type=track.OperationType.Index)
@@ -33,17 +42,15 @@ class StatsTests(TestCase):
         store.put_value_cluster_level("service_time", 215, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       meta_data={"success": True})
 
-        index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
-        challenge = track.Challenge(name="unittest", description="", index_settings=None, schedule=[index])
-
-        stats = reporter.Stats(store, challenge)
+        stats = reporter.calculate_results(store, metrics.create_race(cfg, t, challenge))
 
         del store
 
-        self.assertEqual((500, 1000, 2000, "docs/s"), stats.op_metrics["index"]["throughput"])
-        self.assertEqual(collections.OrderedDict([(50.0, 220), (100, 225)]), stats.op_metrics["index"]["latency"])
-        self.assertEqual(collections.OrderedDict([(50.0, 200), (100, 215)]), stats.op_metrics["index"]["service_time"])
-        self.assertAlmostEqual(0.3333333333333333, stats.op_metrics["index"]["error_rate"])
+        opm = stats.metrics("index")
+        self.assertEqual(collections.OrderedDict([("min", 500), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
+        self.assertEqual(collections.OrderedDict([("50", 220), ("100", 225)]), opm["latency"])
+        self.assertEqual(collections.OrderedDict([("50", 200), ("100", 215)]), opm["service_time"])
+        self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
 
 class ComparisonReporterTests(TestCase):

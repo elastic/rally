@@ -151,7 +151,7 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description, source_root_url=None, meta_data=None, challenges=None, indices=None,
+    def __init__(self, name, short_description, description=None, source_root_url=None, meta_data=None, challenges=None, indices=None,
                  templates=None):
         """
 
@@ -171,7 +171,7 @@ class Track:
         self.name = name
         self.meta_data = meta_data if meta_data else {}
         self.short_description = short_description
-        self.description = description
+        self.description = description if description else short_description
         self.source_root_url = source_root_url
         self.challenges = challenges if challenges else []
         self.indices = indices

@@ -4,7 +4,7 @@ Metrics
 Metrics Records
 ---------------
 
-At the end of a race, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster.
+At the end of a race, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster. Rally store the metrics in the indices ``rally-metrics-*`` and it will create a new index for each month.
 
 Here is a typical metrics record::
 

@@ -47,12 +47,15 @@ class Benchmark:
         self.cfg = cfg
         # we preload the track here but in rare cases (external pipeline and user did not specify the distribution version) we might need
         # to reload the track again. We are assuming that a track always specifies the same challenges for each version (i.e. branch).
-        self.track = self._load_track()
-        challenge = self._find_challenge(self.track)
+        t = self._load_track()
+        challenge = self._find_challenge(t)
+
+        self.race = metrics.create_race(self.cfg, t, challenge)
+
         self.metrics_store = metrics.metrics_store(
             self.cfg,
-            track=self.track.name,
-            challenge=challenge.name,
+            track=self.race.track_name,
+            challenge=self.race.challenge_name,
             read_only=False
         )
         self.race_store = metrics.race_store(self.cfg)
@@ -83,7 +86,7 @@ class Benchmark:
                                                       globalName="/rally/mechanic/coordinator")
         logger.info("Asking mechanic to start the engine.")
         # This can only work accurately if the user has already specified the correct version!
-        cluster_settings = self._find_challenge(self.track).cluster_settings
+        cluster_settings = self.race.challenge.cluster_settings
         result = self.actor_system.ask(self.mechanic,
                                        mechanic.StartEngine(
                                            self.cfg, self.metrics_store.open_context, cluster_settings,
@@ -92,18 +95,16 @@ class Benchmark:
             logger.info("Mechanic has started engine successfully.")
             self.metrics_store.meta_info = result.system_meta_info
             cluster = result.cluster_meta_info
+            self.race.cluster = cluster
             if not self.cfg.exists("mechanic", "distribution.version"):
                 self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", cluster.distribution_version)
                 logger.info("Reloading track based for distribution version [%s]" % cluster.distribution_version)
-                self.track = self._load_track()
+                t = self._load_track()
+                self.race.track = t
+                self.race.challenge = self._find_challenge(t)
 
-            challenge = self._find_challenge(self.track)
-            console.info("Racing on track [%s], challenge [%s] and car [%s]"
-                         % (self.track, challenge, self.cfg.opts("mechanic", "car.name")))
-            # just ensure it is optically separated
-            console.println("")
-
-            self.race_store.store_race(self.track, cluster.hosts, cluster.revision, cluster.distribution_version)
+            console.info("Racing on track [%s], challenge [%s] and car [%s]\n"
+                         % (self.race.track_name, self.race.challenge_name, self.race.car))
         elif isinstance(result, mechanic.Failure):
             logger.info("Starting engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message)
@@ -128,7 +129,7 @@ class Benchmark:
                                                     globalName="/rally/driver/coordinator")
         try:
             result = self.actor_system.ask(main_driver,
-                                           driver.StartBenchmark(self.cfg, self.track, self.metrics_store.meta_info, lap))
+                                           driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info, lap))
         except KeyboardInterrupt:
             result = self.actor_system.ask(main_driver, driver.BenchmarkCancelled())
             logger.info("User has cancelled the benchmark.")
@@ -173,40 +174,43 @@ class Benchmark:
 
         self.metrics_store.flush()
         if not cancelled and not error:
-            reporter.summarize(self.race_store, self.metrics_store, self.cfg, self.track)
+            final_results = reporter.calculate_results(self.metrics_store, self.race)
+            self.race.add_final_results(final_results)
+            reporter.summarize(self.race, self.cfg)
+            self.race_store.store_race(self.race)
         else:
             logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r]." % (cancelled, error))
         self.metrics_store.close()
 
 
 class LapCounter:
-    def __init__(self, race_store, metrics_store, track, laps, cfg):
-        self.race_store = race_store
+    def __init__(self, current_race, metrics_store, cfg):
+        self.race = current_race
         self.metrics_store = metrics_store
-        self.track = track
-        self.laps = laps
         self.cfg = cfg
         self.lap_timer = time.Clock.stop_watch()
         self.lap_timer.start()
         self.lap_times = 0
 
     def before_lap(self, lap):
-        logger.info("Starting lap [%d/%d]" % (lap, self.laps))
-        if self.laps > 1:
-            msg = "Lap [%d/%d]" % (lap, self.laps)
+        logger.info("Starting lap [%d/%d]" % (lap, self.race.total_laps))
+        if self.race.total_laps > 1:
+            msg = "Lap [%d/%d]" % (lap, self.race.total_laps)
             console.println(console.format.bold(msg))
             console.println(console.format.underline_for(msg))
 
     def after_lap(self, lap):
-        logger.info("Finished lap [%d/%d]" % (lap, self.laps))
-        if self.laps > 1:
+        logger.info("Finished lap [%d/%d]" % (lap, self.race.total_laps))
+        if self.race.total_laps > 1:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
             hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
-            reporter.summarize(self.race_store, self.metrics_store, self.cfg, track=self.track, lap=lap)
+            lap_results = reporter.calculate_results(self.metrics_store, self.race, lap)
+            self.race.add_lap_results(lap_results)
+            reporter.summarize(self.race, self.cfg, lap=lap)
             console.println("")
-            if lap < self.laps:
-                remaining = (self.laps - lap) * self.lap_times / lap
+            if lap < self.race.total_laps:
+                remaining = (self.race.total_laps - lap) * self.lap_times / lap
                 hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
                 console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=logger)
             else:
@@ -216,9 +220,9 @@ class LapCounter:
 
 def race(benchmark):
     cfg = benchmark.cfg
-    laps = cfg.opts("race", "laps")
+    laps = benchmark.race.total_laps
     benchmark.setup()
-    lap_counter = LapCounter(benchmark.race_store, benchmark.metrics_store, benchmark.track, laps, cfg)
+    lap_counter = LapCounter(benchmark.race, benchmark.metrics_store, cfg)
     cancelled = False
     error = True
     try:
@@ -310,6 +314,7 @@ def run(cfg):
         else:
             name = "from-sources-complete"
         logger.info("User specified no pipeline. Automatically derived pipeline [%s]." % name)
+        cfg.add(config.Scope.applicationOverride, "race", "pipeline", name)
     else:
         logger.info("User specified pipeline [%s]." % name)
 

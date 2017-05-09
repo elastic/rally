@@ -30,6 +30,11 @@ class VersionsTests(TestCase):
         self.assertEqual((25, None, None, None), versions.components("25", strict=False))
         self.assertEqual((5, 1, None, None), versions.components("5.1", strict=False))
 
+    def test_major_version(self):
+        self.assertEqual(5, versions.major_version("5.0.3"))
+        self.assertEqual(5, versions.major_version("5.0.3-SNAPSHOT"))
+        self.assertEqual(25, versions.major_version("25.0.3"))
+
     def test_components_ignores_invalid_versions(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             versions.components("5.0.0a")

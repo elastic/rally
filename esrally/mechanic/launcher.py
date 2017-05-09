@@ -53,15 +53,14 @@ class DockerLauncher:
         t = telemetry.Telemetry(devices=[
             # Be aware that some the meta-data are taken from the host system, not the container (e.g. number of CPU cores) so if the
             # Docker container constrains these, the metrics are actually wrong.
+            telemetry.ClusterMetaDataInfo(es),
             telemetry.EnvironmentInfo(es, self.metrics_store),
             telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store),
-            telemetry.DiskIo(self.metrics_store),
-            telemetry.CpuUsage(self.metrics_store)
+            telemetry.IndexStats(es, self.metrics_store)
         ])
 
-        c = cluster.Cluster(hosts, [], t)
-        self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name="rally0")
+        c = cluster.Cluster(hosts, [self._start_node(hosts[0], 0, es)], t)
+
         logger.info("Docker container has successfully started. Checking if REST API is available.")
         if wait_for_rest_layer(es):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
@@ -72,6 +71,18 @@ class DockerLauncher:
             self.stop(c)
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
+
+    def _start_node(self, host, node, es):
+        node_name = self._node_name(node)
+        p = self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name=node_name)
+        # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
+        node_telemetry = [
+            telemetry.DiskIo(self.metrics_store),
+            telemetry.CpuUsage(self.metrics_store),
+            telemetry.EnvironmentInfo(es, self.metrics_store)
+        ]
+        t = telemetry.Telemetry(devices=node_telemetry)
+        return cluster.Node(p, host["host"], node_name, t)
 
     def _start_process(self, cmd, node_name):
         startup_event = threading.Event()
@@ -152,10 +163,12 @@ the index size).
 
         # cannot enable custom telemetry devices here
         t = telemetry.Telemetry(devices=[
+            telemetry.ClusterMetaDataInfo(es),
             telemetry.ExternalEnvironmentInfo(es, self.metrics_store),
             telemetry.NodeStats(es, self.metrics_store),
             telemetry.IndexStats(es, self.metrics_store)
         ])
+        # cluster nodes will be populated by the external environment info telemetry device. We cannot know this upfront.
         c = cluster.Cluster(hosts, [], t)
         user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
         distribution_version = es.info()["version"]["number"]
@@ -170,7 +183,7 @@ the index size).
         return c
 
     def stop(self, cluster):
-        pass
+        cluster.telemetry.detach_from_cluster(cluster)
 
 
 class InProcessLauncher:
@@ -225,10 +238,11 @@ class InProcessLauncher:
 
         logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
 
-        # TODO dm: Get rid of these...
+        # TODO dm: Get rid of this config setting and replace it with a proper list
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
 
         cluster_telemetry = [
+            telemetry.ClusterMetaDataInfo(es),
             # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
             telemetry.MergeParts(self.metrics_store, self.node_log_dir),
             telemetry.EnvironmentInfo(es, self.metrics_store),

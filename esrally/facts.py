@@ -6,7 +6,7 @@ from esrally.utils import sysstats, console, convert, process
 
 
 def list_facts(cfg):
-    console.info("This is an experimental command and subject to change.")
+    console.warn("This command is deprecated and will be removed with the next release of Rally.", overline="!", underline="!")
     # provide a custom error message
     target_hosts = cfg.opts("facts", "hosts", mandatory=False)
     if not target_hosts:

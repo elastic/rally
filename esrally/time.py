@@ -20,6 +20,16 @@ def to_iso8601(dt):
     return "%04d%02d%02dT%02d%02d%02dZ" % (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
 
+def from_is8601(ts):
+    """
+    Convert an ISO-8601 compliant string (as created by ``to_iso8601(dt)``) to a datetime instance.
+
+    :param ts: an ISO-8601 compliant string
+    :return: The corresponding datetime instance.
+    """
+    return datetime.strptime(ts, "%Y%m%dT%H%M%SZ")
+
+
 def sleep(seconds):
     time.sleep(seconds)
 

@@ -1,5 +1,4 @@
 import collections
-import datetime
 import logging
 import math
 import pickle
@@ -10,8 +9,8 @@ from enum import Enum, IntEnum
 
 import certifi
 import tabulate
-from esrally import time, exceptions, config
-from esrally.utils import console
+from esrally import time, exceptions, config, version, paths
+from esrally.utils import console, io
 
 logger = logging.getLogger("rally.metrics")
 
@@ -26,6 +25,12 @@ class EsClient:
 
     def put_template(self, name, template):
         return self.guarded(self._client.indices.put_template, name, template)
+
+    def template_exists(self, name):
+        return self.guarded(self._client.indices.exists_template, name)
+
+    def delete_template(self,  name):
+        self.guarded(self._client.indices.delete_template, name)
 
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
@@ -113,13 +118,17 @@ class IndexTemplateProvider:
     Abstracts how the Rally index template is retrieved. Intended for testing.
     """
 
-    def __init__(self, config):
-        self._config = config
+    def __init__(self, cfg):
+        self.script_dir = cfg.opts("node", "rally.root")
 
-    def template(self):
-        script_dir = self._config.opts("node", "rally.root")
-        mapping_template = "%s/resources/rally-mapping.json" % script_dir
-        return open(mapping_template).read()
+    def metrics_template(self):
+        return self._read("metrics-template")
+
+    def races_template(self):
+        return self._read("races-template")
+
+    def _read(self, template_name):
+        return open("%s/resources/%s.json" % (self.script_dir, template_name)).read()
 
 
 class MetaInfoScope(Enum):
@@ -573,10 +582,6 @@ class MetricsStore:
         return percentiles[median] if percentiles else None
 
 
-def index_name(ts):
-    return "rally-%04d" % ts.year
-
-
 class EsMetricsStore(MetricsStore):
     """
     A metrics store backed by Elasticsearch.
@@ -607,18 +612,25 @@ class EsMetricsStore(MetricsStore):
     def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
         MetricsStore.open(self, invocation, track_name, challenge_name, car_name, ctx, create)
-        self._index = index_name(invocation)
+        self._index = self.index_name(invocation)
         # reduce a bit of noise in the metrics cluster log
         if create:
+            # Remove the old index template, named "rally"
+            #TODO dm: Remove this fallback after some grace period
+            if self._client.template_exists("rally"):
+                self._client.delete_template("rally")
             # always update the mapping to the latest version
-            self._client.put_template("rally", self._get_template())
+            self._client.put_template("rally-metrics", self._get_template())
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
 
+    def index_name(self, ts):
+        return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
+
     def _get_template(self):
-        return self._index_template_provider.template()
+        return self._index_template_provider.metrics_template()
 
     def flush(self):
         self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
@@ -910,15 +922,15 @@ class InMemoryMetricsStore(MetricsStore):
 def race_store(cfg):
     """
     Creates a proper race store based on the current configuration.
-    :param config: Config object. Mandatory.
+    :param cfg: Config object. Mandatory.
     :return: A race store implementation.
     """
     if cfg.opts("reporting", "datastore.type") == "elasticsearch":
         logger.info("Creating ES race store")
-        return EsRaceStore(cfg)
+        return CompositeRaceStore(EsRaceStore(cfg), FileRaceStore(cfg))
     else:
-        logger.info("Creating in-memory race store")
-        return InMemoryRaceStore(cfg)
+        logger.info("Creating file race store")
+        return FileRaceStore(cfg)
 
 
 def list_races(cfg):
@@ -934,76 +946,200 @@ def list_races(cfg):
         console.println("No recent races found.")
 
 
+def create_race(cfg, track, challenge):
+    car = cfg.opts("mechanic", "car.name")
+    environment_name = cfg.opts("system", "env.name")
+    trial_timestamp = cfg.opts("system", "time.start")
+    total_laps = cfg.opts("race", "laps")
+    user_tag = cfg.opts("race", "user.tag")
+    pipeline = cfg.opts("race", "pipeline")
+    rally_version = version.version()
+
+    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, challenge, car, total_laps)
+
+
+class Race:
+    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, challenge, car, total_laps,
+                 cluster=None, lap_results=None, results=None):
+        if results is None:
+            results = {}
+        if lap_results is None:
+            lap_results = []
+        self.rally_version = rally_version
+        self.environment_name = environment_name
+        self.trial_timestamp = trial_timestamp
+        self.pipeline = pipeline
+        self.user_tag = user_tag
+        self.track = track
+        self.challenge = challenge
+        self.car = car
+        self.total_laps = total_laps
+        # will be set later - contains hosts, revision and distribution_version - maybe add more data later (-> gather facts)
+        self.cluster = cluster
+        self.lap_results = lap_results
+        self.results = results
+
+    @property
+    def track_name(self):
+        return str(self.track)
+
+    @property
+    def challenge_name(self):
+        return str(self.challenge)
+
+    @property
+    def revision(self):
+        # minor simplification for reporter
+        return self.cluster.revision
+
+    def add_lap_results(self, results):
+        self.lap_results.append(results)
+
+    def add_final_results(self, results):
+        self.results = results
+
+    def results_of_lap_number(self, lap):
+        # laps are 1 indexed but we store the data zero indexed
+        return self.lap_results[lap - 1]
+
+    def as_dict(self):
+        return {
+            "rally-version": self.rally_version,
+            "environment": self.environment_name,
+            "trial-timestamp": time.to_iso8601(self.trial_timestamp),
+            "pipeline": self.pipeline,
+            "user-tag": self.user_tag,
+            "track": self.track_name,
+            "challenge": self.challenge_name,
+            "car": self.car,
+            "total-laps": self.total_laps,
+            "cluster": self.cluster.as_dict(),
+            "results": self.results.as_dict()
+        }
+
+    @classmethod
+    def from_dict(cls, d):
+        # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
+        # and (b) it is not necessary for this use case.
+        return Race(d["rally-version"], d["environment"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], d["user-tag"],
+                    d["track"], d["challenge"], d["car"], d["total-laps"], results=d["results"])
+
+
 class RaceStore:
     def __init__(self, cfg):
-        self.config = cfg
+        self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
         self.trial_timestamp = cfg.opts("system", "time.start")
         self.current_race = None
 
-    def store_race(self, track, hosts, revision, distribution_version):
-        laps = self.config.opts("race", "laps")
-        challenge = track.find_challenge_or_default(self.config.opts("track", "challenge.name"))
+    def find_by_timestamp(self, timestamp):
+        raise NotImplementedError("abstract method")
 
-        selected_challenge = {
-            "name": challenge.name,
-            "operations": []
-        }
-        for tasks in challenge.schedule:
-            for task in tasks:
-                selected_challenge["operations"].append(task.operation.name)
-        doc = {
-            "environment": self.environment_name,
-            "trial-timestamp": time.to_iso8601(self.trial_timestamp),
-            "pipeline": self.config.opts("race", "pipeline"),
-            "revision": revision,
-            "distribution-version": distribution_version,
-            "laps": laps,
-            "track": track.name,
-            "selected-challenge": selected_challenge,
-            "car": self.config.opts("mechanic", "car.name"),
-            "target-hosts": ["%s:%s" % (i["host"], i["port"]) for i in hosts],
-            "user-tag": self.config.opts("race", "user.tag")
-        }
-        self.current_race = Race(doc)
-        self._store(doc)
+    def list(self):
+        raise NotImplementedError("abstract method")
+
+    def store_race(self, race):
+        self._store(race.as_dict())
 
     def _store(self, doc):
         raise NotImplementedError("abstract method")
 
+    def _max_results(self):
+        return int(self.cfg.opts("system", "list.races.max_results"))
 
-class InMemoryRaceStore(RaceStore):
-    def __init__(self, cfg):
-        super().__init__(cfg)
 
-    def _store(self, doc):
-        pass
-
-    def list(self):
-        return []
+# Does not inherit from RaceStore as it is only a delegator with the same API.
+class CompositeRaceStore:
+    """
+    Internal helper class to store races as file and to Elasticsearch in case users want Elasticsearch as a race store.
+    
+    It provides the same API as RaceStore. It delegates writes to both stores and all read operations only the Elasticsearch race store.
+    """
+    def __init__(self, es_store, file_store):
+        self.es_store = es_store
+        self.file_store = file_store
 
     def find_by_timestamp(self, timestamp):
+        return self.es_store.find_by_timestamp(timestamp)
+
+    def store_race(self, race):
+        self.file_store.store_race(race)
+        self.es_store.store_race(race)
+
+    def list(self):
+        return self.es_store.list()
+
+
+class FileRaceStore(RaceStore):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.user_provided_start_timestamp = self.cfg.opts("system", "time.start.user_provided", mandatory=False, default_value=False)
+        self.races_path = paths.races_root(self.cfg)
+        self.race_path = paths.race_root(self.cfg)
+
+    def _store(self, doc):
+        import json
+        io.ensure_dir(self.race_path)
+        # if the user has overridden the effective start date we guarantee a unique file name but do not let them use them for tournaments.
+        with open(self._output_file_name(doc), mode="w", encoding="UTF-8") as f:
+            f.write(json.dumps(doc, indent=True))
+
+    def _output_file_name(self, doc):
+        if self.user_provided_start_timestamp:
+            suffix = "_%s_%s_%s" % (doc["track"], doc["challenge"], doc["car"])
+        else:
+            suffix = ""
+        return "%s/race%s.json" % (self.race_path, suffix)
+
+    def list(self):
+        import glob
+        results = glob.glob("%s/*/race.json" % self.races_path)
+        all_races = self._to_races(results)
+        return all_races[:self._max_results()]
+
+    def find_by_timestamp(self, timestamp):
+        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, start=time.from_is8601(timestamp))
+        if io.exists(race_file):
+            races = self._to_races([race_file])
+            if races:
+                return races[0]
         return None
+
+    def _to_races(self, results):
+        import json
+        races = []
+        for result in results:
+            # noinspection PyBroadException
+            try:
+                with open(result) as f:
+                    races.append(Race.from_dict(json.loads(f.read())))
+            except BaseException:
+                logger.exception("Could not load race file [%s] (incompatible format?) Skipping..." % result)
+        return sorted(races, key=lambda r: r.trial_timestamp, reverse=True)
 
 
 class EsRaceStore(RaceStore):
+    INDEX_PREFIX = "rally-races-"
     RACE_DOC_TYPE = "races"
 
-    def __init__(self, config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new metrics store.
 
-        :param config: The config object. Mandatory.
+        :param cfg: The config object. Mandatory.
         :param client_factory_class: This parameter is optional and needed for testing.
         """
-        super().__init__(config)
-        self.client = client_factory_class(config).create()
-        self.index_template_provider = index_template_provider_class(config)
+        super().__init__(cfg)
+        self.client = client_factory_class(cfg).create()
+        self.index_template_provider = index_template_provider_class(cfg)
 
     def _store(self, doc):
         # always update the mapping to the latest version
-        self.client.put_template("rally", self.index_template_provider.template())
-        self.client.index(index_name(self.trial_timestamp), EsRaceStore.RACE_DOC_TYPE, doc)
+        self.client.put_template("rally-races", self.index_template_provider.races_template())
+        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
+
+    def index_name(self):
+        return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.trial_timestamp.year, self.trial_timestamp.month)
 
     def list(self):
         filters = [{
@@ -1018,7 +1154,7 @@ class EsRaceStore(RaceStore):
                     "filter": filters
                 }
             },
-            "size": int(self.config.opts("system", "list.races.max_results")),
+            "size": self._max_results(),
             "sort": [
                 {
                     "trial-timestamp": {
@@ -1027,9 +1163,9 @@ class EsRaceStore(RaceStore):
                 }
             ]
         }
-        result = self.client.search(index="rally-*", doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
+        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
         if result["hits"]["total"] > 0:
-            return [Race(v["_source"]) for v in result["hits"]["hits"]]
+            return [Race.from_dict(v["_source"]) for v in result["hits"]["hits"]]
         else:
             return []
 
@@ -1052,50 +1188,8 @@ class EsRaceStore(RaceStore):
                 }
             }
         }
-        result = self.client.search(index="rally-*", doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
+        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
         if result["hits"]["total"] == 1:
-            return Race(result["hits"]["hits"][0]["_source"])
+            return Race.from_dict(result["hits"]["hits"][0]["_source"])
         else:
             return None
-
-
-class Race:
-    def __init__(self, source):
-        self.environment = source["environment"]
-        self.trial_timestamp = datetime.datetime.strptime(source["trial-timestamp"], "%Y%m%dT%H%M%SZ")
-        self.pipeline = source["pipeline"]
-        self.revision = source["revision"]
-        self.distribution_version = source["distribution-version"]
-        self.laps = source["laps"]
-        self.track = source["track"]
-        self.challenge = SelectedChallenge(source["selected-challenge"])
-        self.car = source["car"]
-        self.target_hosts = source["target-hosts"]
-        self.user_tag = source["user-tag"]
-
-
-class SelectedChallenge:
-    def __init__(self, source):
-        self.name = source["name"]
-        self.schedule = []
-        for operation in source["operations"]:
-            self.schedule.append(Task(Operation(operation)))
-
-    def __str__(self):
-        return self.name
-
-
-class Task:
-    def __init__(self, operation):
-        self.operation = operation
-
-    def __iter__(self):
-        return iter([self])
-
-
-class Operation:
-    def __init__(self, name):
-        self.name = name
-
-    def __str__(self, *args, **kwargs):
-        return self.name

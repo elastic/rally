@@ -10,6 +10,9 @@ from esrally.mechanic import telemetry, car, cluster
 def create_config():
     cfg = config.Config()
     cfg.add(config.Scope.application, "system", "env.name", "unittest")
+    # concrete path does not matter
+    cfg.add(config.Scope.application, "node", "rally.root", "/some/root/path")
+
     cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
     cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
     cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
@@ -99,8 +102,7 @@ class MergePartsDeviceTests(TestCase):
 
 
 class Client:
-    def __init__(self, cluster=None, nodes=None, info=None, indices=None):
-        self.cluster = cluster
+    def __init__(self, nodes=None, info=None, indices=None):
         self.nodes = nodes
         self._info = info
         self.indices = indices
@@ -110,11 +112,12 @@ class Client:
 
 
 class SubClient:
-    def __init__(self, info):
+    def __init__(self, stats=None, info=None):
+        self._stats = stats
         self._info = info
 
     def stats(self, *args, **kwargs):
-        return self._info
+        return self._stats
 
     def info(self, *args, **kwargs):
         return self._info
@@ -186,7 +189,7 @@ class EnvironmentInfoTests(TestCase):
                 }
         }
 
-        client = Client(nodes=SubClient(nodes_info), info=cluster_info)
+        client = Client(nodes=SubClient(info=nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.EnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
@@ -279,7 +282,7 @@ class ExternalEnvironmentInfoTests(TestCase):
 
                 }
         }
-        client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
+        client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(devices=[env_device])
@@ -334,7 +337,7 @@ class ExternalEnvironmentInfoTests(TestCase):
 
                 }
         }
-        client = Client(cluster=SubClient(nodes_stats), nodes=SubClient(nodes_info), info=cluster_info)
+        client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
@@ -352,6 +355,176 @@ class ExternalEnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74")
         ]
         metrics_store_add_meta_info.assert_has_calls(calls)
+
+
+class ClusterMetaDataInfoTests(TestCase):
+    def setUp(self):
+        self.cfg = create_config()
+
+    def test_enriches_cluster_nodes_for_elasticsearch_after_1_x(self):
+        nodes_stats = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "os": {
+                        "mem": {
+                            "total_in_bytes": 17179869184
+                        }
+                    },
+                    "fs": {
+                        "data": [
+                            {
+                                "mount": "/usr/local/var/elasticsearch/data1",
+                                "type": "hfs"
+                            },
+                            {
+                                "mount": "/usr/local/var/elasticsearch/data2",
+                                "type": "ntfs"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        nodes_info = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "ip": "127.0.0.1",
+                    "os": {
+                        "name": "Mac OS X",
+                        "version": "10.11.4",
+                        "available_processors": 8,
+                        "allocated_processors": 4
+                    },
+                    "jvm": {
+                        "version": "1.8.0_74",
+                        "vm_vendor": "Oracle Corporation"
+                    }
+                }
+            }
+        }
+        cluster_info = {
+            "version":
+                {
+                    "build_hash": "253032b",
+                    "number": "5.0.0"
+                }
+        }
+        client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
+
+        t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
+
+        c = cluster.Cluster(hosts=[{"host": "localhost", "port": 39200}],
+                            nodes=[cluster.Node(process=None, host_name="local", node_name="rally0", telemetry=None)],
+                            telemetry=t)
+
+        t.attach_to_cluster(c)
+
+        self.assertEqual("5.0.0", c.distribution_version)
+        self.assertEqual("253032b", c.source_revision)
+        self.assertEqual(1, len(c.nodes))
+        n = c.nodes[0]
+        self.assertEqual("127.0.0.1", n.ip)
+        self.assertEqual("Mac OS X", n.os["name"])
+        self.assertEqual("10.11.4", n.os["version"])
+        self.assertEqual("Oracle Corporation", n.jvm["vendor"])
+        self.assertEqual("1.8.0_74", n.jvm["version"])
+        self.assertEqual(8, n.cpu["available_processors"])
+        self.assertEqual(4, n.cpu["allocated_processors"])
+        self.assertEqual(17179869184, n.memory["total_bytes"])
+
+        self.assertEqual(2, len(n.fs))
+        self.assertEqual("/usr/local/var/elasticsearch/data1", n.fs[0]["mount"])
+        self.assertEqual("hfs", n.fs[0]["type"])
+        self.assertEqual("unknown", n.fs[0]["spins"])
+        self.assertEqual("/usr/local/var/elasticsearch/data2", n.fs[1]["mount"])
+        self.assertEqual("ntfs", n.fs[1]["type"])
+        self.assertEqual("unknown", n.fs[1]["spins"])
+
+    def test_enriches_cluster_nodes_for_elasticsearch_1_x(self):
+        nodes_stats = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "fs": {
+                        "data": [
+                            {
+                                "mount": "/usr/local/var/elasticsearch/data1",
+                                "type": "hfs"
+                            },
+                            {
+                                "mount": "/usr/local/var/elasticsearch/data2",
+                                "type": "ntfs"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        nodes_info = {
+            "nodes": {
+                "FCFjozkeTiOpN-SI88YEcg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "ip": "127.0.0.1",
+                    "os": {
+                        "name": "Mac OS X",
+                        "version": "10.11.4",
+                        "available_processors": 8,
+                        "mem": {
+                            "total_in_bytes": 17179869184
+                        }
+                    },
+                    "jvm": {
+                        "version": "1.8.0_74",
+                        "vm_vendor": "Oracle Corporation"
+                    }
+                }
+            }
+        }
+        cluster_info = {
+            "version":
+                {
+                    "build_hash": "c730b59357f8ebc555286794dcd90b3411f517c9",
+                    "number": "1.7.5"
+                }
+        }
+        client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
+
+        t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
+
+        c = cluster.Cluster(hosts=[{"host": "localhost", "port": 39200}],
+                            nodes=[cluster.Node(process=None, host_name="local", node_name="rally0", telemetry=None)],
+                            telemetry=t)
+
+        t.attach_to_cluster(c)
+
+        self.assertEqual("1.7.5", c.distribution_version)
+        self.assertEqual("c730b59357f8ebc555286794dcd90b3411f517c9", c.source_revision)
+        self.assertEqual(1, len(c.nodes))
+        n = c.nodes[0]
+        self.assertEqual("127.0.0.1", n.ip)
+        self.assertEqual("Mac OS X", n.os["name"])
+        self.assertEqual("10.11.4", n.os["version"])
+        self.assertEqual("Oracle Corporation", n.jvm["vendor"])
+        self.assertEqual("1.8.0_74", n.jvm["version"])
+        self.assertEqual(8, n.cpu["available_processors"])
+        self.assertIsNone(n.cpu["allocated_processors"])
+        self.assertEqual(17179869184, n.memory["total_bytes"])
+
+        self.assertEqual(2, len(n.fs))
+        self.assertEqual("/usr/local/var/elasticsearch/data1", n.fs[0]["mount"])
+        self.assertEqual("hfs", n.fs[0]["type"])
+        self.assertEqual("unknown", n.fs[0]["spins"])
+        self.assertEqual("/usr/local/var/elasticsearch/data2", n.fs[1]["mount"])
+        self.assertEqual("ntfs", n.fs[1]["type"])
+        self.assertEqual("unknown", n.fs[1]["spins"])
 
 
 class NodeStatsTests(TestCase):

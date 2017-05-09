@@ -24,7 +24,7 @@ The ``list`` subcommand is used to list different configuration options:
 * telemetry: Will show all :doc:`telemetry devices </telemetry>` that are supported by Rally.
 * tracks: Will show all tracks that are supported by Rally. As this *may* depend on the Elasticsearch version that you want to benchmark, you can specify ``--distribution-version`` and also ``--distribution-repository`` as additional options.
 * pipelines: Will show all :doc:`pipelines </pipelines>` that are supported by Rally.
-* races: Will show all races that are currently stored. This is only needed for the :doc:`tournament mode </tournament>` and it will also only work if you have setup Rally so it supports tournaments.
+* races: Will show all races that are currently stored. This is needed for the :doc:`tournament mode </tournament>`.
 * cars: Will show all cars that are supported by Rally (i.e. Elasticsearch configurations).
 * facts: Will show facts about the hardware and software configuration. This helps you sharing the results with others via https://github.com/elastic/rally-results.
 
@@ -40,6 +40,10 @@ The ``facts`` subcommand requires one target host. If you have started a Rally d
 
 
 This will gather facts about the target host with the IP ``10.17.20.3`` but requires that you have started the Rally daemon first (see :doc:`recipes </recipes>` on how to do that).
+
+.. warning::
+
+    Rally stores all machine facts automatically on the ``race``. Hence, the ``facts`` command is deprecated and will be removed in the next release of Rally.
 
 
 ``compare``

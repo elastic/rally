@@ -95,8 +95,7 @@ class Provisioner:
         elif os.path.isfile(log4j2_properties_path):
             distribution_version = self._config.opts("mechanic", "distribution.version", mandatory=False)
             if versions.is_version_identifier(distribution_version):
-                major, _, _, _ = versions.components(distribution_version)
-                if major == 5:
+                if versions.major_version(distribution_version) == 5:
                     return "log4j2.properties.5", log4j2_properties_path
             else:
                 return "log4j2.properties", log4j2_properties_path
@@ -134,7 +133,7 @@ class Provisioner:
         distribution_version = self._config.opts("mechanic", "distribution.version", mandatory=False)
         configure = False
         if versions.is_version_identifier(distribution_version):
-            major, _, _, _ = versions.components(distribution_version)
+            major = versions.major_version(distribution_version)
             if major >= 2:
                 configure = True
         else:

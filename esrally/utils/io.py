@@ -202,6 +202,10 @@ def basename(path):
     return os.path.basename(path)
 
 
+def exists(path):
+    return os.path.exists(path)
+
+
 def normalize_path(path, cwd="."):
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.

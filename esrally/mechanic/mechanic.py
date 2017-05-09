@@ -15,10 +15,32 @@ logger = logging.getLogger("rally.mechanic")
 ##########
 
 class ClusterMetaInfo:
-    def __init__(self, hosts, revision, distribution_version):
-        self.hosts = hosts
+    def __init__(self, nodes, revision, distribution_version):
+        self.nodes = nodes
         self.revision = revision
         self.distribution_version = distribution_version
+
+    def as_dict(self):
+        return {
+            "nodes": [n.as_dict() for n in self.nodes],
+            "revision": self.revision,
+            "distribution-version": self.distribution_version
+        }
+
+
+class NodeMetaInfo:
+    def __init__(self, n):
+        self.host_name = n.host_name
+        self.node_name = n.node_name
+        self.ip = n.ip
+        self.os = n.os
+        self.jvm = n.jvm
+        self.cpu = n.cpu
+        self.memory = n.memory
+        self.fs = n.fs
+
+    def as_dict(self):
+        return self.__dict__
 
 
 class StartEngine:
@@ -245,7 +267,7 @@ class NodeMechanicActor(actor.RallyActor):
                                        msg.distribution, msg.external, msg.docker)
                 cluster = self.mechanic.start_engine()
                 self.send(sender, EngineStarted(
-                    ClusterMetaInfo(cluster.hosts, cluster.source_revision, cluster.distribution_version),
+                    ClusterMetaInfo([NodeMetaInfo(node) for node in cluster.nodes], cluster.source_revision, cluster.distribution_version),
                     self.metrics_store.meta_info))
             elif isinstance(msg, OnBenchmarkStart):
                 self.metrics_store.lap = msg.lap

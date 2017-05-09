@@ -1,10 +1,6 @@
 Tournaments
 ===========
 
-.. warning::
-
-   If you want to use tournaments, then Rally requires a dedicated metrics store as it needs to store data across multiple races. So ensure to run ``esrally configure --advanced-config`` first. For details please see the :doc:`configuration help page </configuration>`.
-
 Suppose, we want to analyze the impact of a performance improvement. First, we need a baseline measurement. We can use the command line parameter ``--user-tag`` to provide a key-value pair to document the intent of a race. After we've run both races, we want to know about the performance impact of a change. With Rally we can analyze differences of two given races easily. First of all, we need to find two races to compare by issuing ``esrally list races``::
 
     dm@io:~ $ esrally list races

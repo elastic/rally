@@ -8,7 +8,7 @@ from esrally import config, metrics, track, exceptions
 
 
 class MockClientFactory:
-    def __init__(self, config):
+    def __init__(self, cfg):
         self._es = mock.create_autospec(metrics.EsClient)
 
     def create(self):
@@ -16,11 +16,14 @@ class MockClientFactory:
 
 
 class DummyIndexTemplateProvider:
-    def __init__(self, config):
+    def __init__(self, cfg):
         pass
 
-    def template(self):
-        return "test-template"
+    def metrics_template(self):
+        return "metrics-test-template"
+
+    def races_template(self):
+        return "races-test-template"
 
 
 class StaticClock:
@@ -143,9 +146,9 @@ class EsMetricsTests(TestCase):
             "meta": {}
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-2016")
-        self.es_mock.create_index.assert_called_with(index="rally-2016")
-        self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
+        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -170,9 +173,9 @@ class EsMetricsTests(TestCase):
             "meta": {}
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-2016")
-        self.es_mock.create_index.assert_called_with(index="rally-2016")
-        self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
+        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -211,9 +214,9 @@ class EsMetricsTests(TestCase):
             }
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-2016")
-        self.es_mock.create_index.assert_called_with(index="rally-2016")
-        self.es_mock.bulk_index.assert_called_with(index="rally-2016", doc_type="metrics", items=[expected_doc])
+        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
 
     def test_get_value(self):
         throughput = 5000
@@ -280,7 +283,7 @@ class EsMetricsTests(TestCase):
 
         actual_throughput = self.metrics_store.get_one("indexing_throughput", lap=3)
 
-        self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", body=expected_query)
 
         self.assertEqual(throughput, actual_throughput)
 
@@ -357,7 +360,7 @@ class EsMetricsTests(TestCase):
 
         actual_median_throughput = self.metrics_store.get_median("indexing_throughput", lap=3)
 
-        self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", body=expected_query)
 
         self.assertEqual(median_throughput, actual_median_throughput)
 
@@ -514,12 +517,19 @@ class EsMetricsTests(TestCase):
         }
 
         actual_error_rate = self.metrics_store.get_error_rate("scroll_query", lap=3)
-        self.es_mock.search.assert_called_with(index="rally-2016", doc_type="metrics", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", body=expected_query)
         return actual_error_rate
 
 
 class EsRaceStoreTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+
+    class DictHolder:
+        def __init__(self, d):
+            self.d = d
+
+        def as_dict(self):
+            return self.d
 
     def setUp(self):
         self.cfg = config.Config()
@@ -533,52 +543,84 @@ class EsRaceStoreTests(TestCase):
         self.es_mock = self.race_store.client
 
     def test_store_race(self):
-        self.cfg.add(config.Scope.application, "race", "pipeline", "unittest-pipeline")
-        self.cfg.add(config.Scope.application, "race", "user.tag", "")
-        self.cfg.add(config.Scope.application, "track", "challenge.name", "index-and-search")
-        self.cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
-        self.cfg.add(config.Scope.application, "race", "laps", 1)
-        self.cfg.add(config.Scope.application, "launcher", "external.target.hosts", [{"host": "localhost", "port": "9200"}])
-        self.cfg.add(config.Scope.application, "mechanic", "source.revision", "latest")
-        self.cfg.add(config.Scope.application, "mechanic", "distribution.version", "5.0.0")
-
-        index = "tests"
-        type = "test-type"
-
         schedule = [
-            track.Task(track.Operation("index", track.OperationType.Index)),
-            track.Task(track.Operation("search-all", track.OperationType.Search)),
+            track.Task(track.Operation("index", track.OperationType.Index))
         ]
 
-        t = track.Track(name="unittest", short_description="unittest track", description="unittest track",
+        t = track.Track(name="unittest", short_description="unittest track",
                         source_root_url="http://example.org",
-                        indices=[track.Index(name=index, auto_managed=True, types=[track.Type(name=type, mapping_file=None)])],
+                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping_file=None)])],
                         challenges=[
-                            track.Challenge(name="index-and-search", description="Index & Search", index_settings=None, schedule=schedule)
+                            track.Challenge(name="index", description="Index", default=True, index_settings=None, schedule=schedule)
                         ])
-        self.race_store.store_race(t, [{"host": "localhost", "port": "9200"}], "latest", "5.0.0")
+
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
+                            pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
+                            total_laps=12,
+                            cluster=EsRaceStoreTests.DictHolder(
+                                {
+                                    "distribution-version": "5.0.0",
+                                    "nodes": [
+                                        {"node_name": "node0", "ip": "127.0.0.1"}
+                                    ]
+                                }),
+                            lap_results=[],
+                            results=EsRaceStoreTests.DictHolder(
+                                {
+                                    "young_gc_time": 100,
+                                    "old_gc_time": 5,
+                                    "op_metrics": [
+                                        {
+                                            "operation": "index",
+                                            "throughput": {
+                                                "min": 1000,
+                                                "median": 1250,
+                                                "max": 1500,
+                                                "unit": "docs/s"
+                                            }
+                                        }
+                                    ]
+                                })
+                            )
+
+        self.race_store.store_race(race)
 
         expected_doc = {
-            "environment": "unittest-env",
+            "rally-version": "0.4.4",
+            "environment": "unittest",
             "trial-timestamp": "20160131T000000Z",
-            "pipeline": "unittest-pipeline",
-            "revision": "latest",
-            "distribution-version": "5.0.0",
+            "pipeline": "from-sources",
+            "user-tag": "let-me-test",
             "track": "unittest",
-            "laps": 1,
-            "selected-challenge": {
-                "name": "index-and-search",
-                "operations": [
-                    "index",
-                    "search-all"
+            "challenge": "index",
+            "car": "4gheap",
+            "total-laps": 12,
+            "cluster": {
+                "distribution-version": "5.0.0",
+                "nodes": [
+                    {
+                        "node_name": "node0",
+                        "ip": "127.0.0.1"
+                    }
                 ]
             },
-            "car": "defaults",
-            "target-hosts": ["localhost:9200"],
-            "user-tag": ""
+            "results": {
+                "young_gc_time": 100,
+                "old_gc_time": 5,
+                "op_metrics": [
+                    {
+                        "operation": "index",
+                        "throughput": {
+                            "min": 1000,
+                            "median": 1250,
+                            "max": 1500,
+                            "unit": "docs/s"
+                        }
+                    }
+                ]
+            }
         }
-
-        self.es_mock.index.assert_called_with(index="rally-2016", doc_type="races", item=expected_doc)
+        self.es_mock.index.assert_called_with(index="rally-races-2016-01", doc_type="races", item=expected_doc)
 
 
 class InMemoryMetricsStoreTests(TestCase):
@@ -720,3 +762,72 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
         self.assertEqual(0.2, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
+
+
+class FileRaceStoreTests(TestCase):
+    TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+
+    class DictHolder:
+        def __init__(self, d):
+            self.d = d
+
+        def as_dict(self):
+            return self.d
+
+    def setUp(self):
+        import tempfile
+        import uuid
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
+        self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
+        self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.TRIAL_TIMESTAMP)
+        self.race_store = metrics.FileRaceStore(self.cfg)
+
+    def test_store_race(self):
+        from esrally import time
+        schedule = [
+            track.Task(track.Operation("index", track.OperationType.Index))
+        ]
+
+        t = track.Track(name="unittest", short_description="unittest track",
+                        source_root_url="http://example.org",
+                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping_file=None)])],
+                        challenges=[
+                            track.Challenge(name="index", description="Index", default=True, index_settings=None, schedule=schedule)
+                        ])
+
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
+                            pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
+                            total_laps=12,
+                            cluster=FileRaceStoreTests.DictHolder(
+                                {
+                                    "distribution-version": "5.0.0",
+                                    "nodes": [
+                                        {"node_name": "node0", "ip": "127.0.0.1"}
+                                    ]
+                                }),
+                            lap_results=[],
+                            results=FileRaceStoreTests.DictHolder(
+                                {
+                                    "young_gc_time": 100,
+                                    "old_gc_time": 5,
+                                    "op_metrics": [
+                                        {
+                                            "operation": "index",
+                                            "throughput": {
+                                                "min": 1000,
+                                                "median": 1250,
+                                                "max": 1500,
+                                                "unit": "docs/s"
+                                            }
+                                        }
+                                    ]
+                                })
+                            )
+
+        self.race_store.store_race(race)
+
+        retrieved_race = self.race_store.find_by_timestamp(timestamp=time.to_iso8601(FileRaceStoreTests.TRIAL_TIMESTAMP))
+        self.assertEqual(race.trial_timestamp, retrieved_race.trial_timestamp)
+        self.assertEqual(1, len(self.race_store.list()))

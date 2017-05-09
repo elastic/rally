@@ -1,0 +1,80 @@
+{
+  "template": "rally-metrics-*",
+  "settings": {
+    "index": {
+      "refresh_interval": "5s"
+    }
+  },
+  "mappings": {
+    "_default_": {
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ],
+      "_all": {
+        "enabled": false
+      },
+      "_source": {
+        "enabled": true
+      },
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "epoch_millis"
+        },
+        "relative-time": {
+          "type": "long"
+        },
+        "trial-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "track": {
+          "type": "keyword"
+        },
+        "challenge": {
+          "type": "keyword"
+        },
+        "car": {
+          "type": "keyword"
+        },
+        "lap": {
+          "type": "short"
+        },
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "float"
+        },
+        "unit": {
+          "type": "keyword"
+        },
+        "sample-type": {
+          "type": "keyword"
+        },
+        "operation": {
+          "type": "keyword"
+        },
+        "operation-type": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

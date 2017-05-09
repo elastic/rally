@@ -10,9 +10,15 @@ from esrally.utils import convert, io as rio, console
 logger = logging.getLogger("rally.reporting")
 
 
-def summarize(race_store, metrics_store, cfg, track, lap=None):
+def calculate_results(metrics_store, race, lap=None):
+    calc = StatsCalculator(metrics_store, race.challenge, lap)
+    return calc()
+
+
+def summarize(race, cfg, lap=None):
     logger.info("Summarizing results.")
-    SummaryReporter(race_store, metrics_store, cfg, lap).report(track)
+    results = race.results_of_lap_number(lap) if lap else race.results
+    SummaryReporter(results, cfg, race.revision, lap, race.total_laps).report()
 
 
 def compare(cfg):
@@ -34,8 +40,8 @@ def print_internal(message):
 def print_header(message):
     print_internal(console.format.bold(message))
 
+
 def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich, write_header=True, show_also_in_console=True):
-    
     if report_format == "markdown":
         formatter = format_as_markdown
     elif report_format == "csv":
@@ -54,6 +60,7 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
         with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
             f.writelines(formatter(headers, data_plain, write_header))
 
+
 def format_as_markdown(headers, data, write_header=True):
     rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
     if write_header:
@@ -61,6 +68,7 @@ def format_as_markdown(headers, data, write_header=True):
     else:
         # remove all header data (it's not possible to do so entirely with tabulate directly...)
         return "\n".join(rendered.splitlines()[2:]) + "\n"
+
 
 def format_as_csv(headers, data, write_header=True):
     with io.StringIO() as out:
@@ -71,58 +79,67 @@ def format_as_csv(headers, data, write_header=True):
             writer.writerow(metric_record)
         return out.getvalue()
 
-class Stats:
+
+class StatsCalculator:
     def __init__(self, store, challenge, lap=None):
         self.store = store
-        self.op_metrics = collections.OrderedDict()
+        self.challenge = challenge
         self.lap = lap
-        for tasks in challenge.schedule:
+
+    def __call__(self):
+        result = Stats()
+
+        for tasks in self.challenge.schedule:
             for task in tasks:
                 op = task.operation.name
                 logger.debug("Gathering request metrics for [%s]." % op)
-                self.op_metrics[op] = {}
-                self.op_metrics[op]["throughput"] = self.summary_stats("throughput", op)
-                self.op_metrics[op]["latency"] = self.single_latency(op)
-                self.op_metrics[op]["service_time"] = self.single_latency(op, metric_name="service_time")
-                self.op_metrics[op]["error_rate"] = self.error_rate(op)
+                result.add_op_metrics(
+                    op,
+                    self.summary_stats("throughput", op),
+                    self.single_latency(op),
+                    self.single_latency(op, metric_name="service_time"),
+                    self.error_rate(op)
+                )
 
         logger.debug("Gathering indexing metrics.")
-        self.total_time = self.sum("indexing_total_time")
-        self.merge_time = self.sum("merges_total_time")
-        self.refresh_time = self.sum("refresh_total_time")
-        self.flush_time = self.sum("flush_total_time")
-        self.merge_throttle_time = self.sum("merges_total_throttled_time")
+        result.total_time = self.sum("indexing_total_time")
+        result.merge_time = self.sum("merges_total_time")
+        result.refresh_time = self.sum("refresh_total_time")
+        result.flush_time = self.sum("flush_total_time")
+        result.merge_throttle_time = self.sum("merges_total_throttled_time")
 
         logger.debug("Gathering merge part metrics.")
-        self.merge_part_time_postings = self.sum("merge_parts_total_time_postings")
-        self.merge_part_time_stored_fields = self.sum("merge_parts_total_time_stored_fields")
-        self.merge_part_time_doc_values = self.sum("merge_parts_total_time_doc_values")
-        self.merge_part_time_norms = self.sum("merge_parts_total_time_norms")
-        self.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
-        self.merge_part_time_points = self.sum("merge_parts_total_time_points")
+        result.merge_part_time_postings = self.sum("merge_parts_total_time_postings")
+        result.merge_part_time_stored_fields = self.sum("merge_parts_total_time_stored_fields")
+        result.merge_part_time_doc_values = self.sum("merge_parts_total_time_doc_values")
+        result.merge_part_time_norms = self.sum("merge_parts_total_time_norms")
+        result.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
+        result.merge_part_time_points = self.sum("merge_parts_total_time_points")
 
         logger.debug("Gathering CPU usage metrics.")
-        self.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
+        result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
+
         logger.debug("Gathering garbage collection metrics.")
-        self.young_gc_time = self.sum("node_total_young_gen_gc_time")
-        self.old_gc_time = self.sum("node_total_old_gen_gc_time")
+        result.young_gc_time = self.sum("node_total_young_gen_gc_time")
+        result.old_gc_time = self.sum("node_total_old_gen_gc_time")
 
         logger.debug("Gathering segment memory metrics.")
-        self.memory_segments = self.median("segments_memory_in_bytes")
-        self.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
-        self.memory_terms = self.median("segments_terms_memory_in_bytes")
-        self.memory_norms = self.median("segments_norms_memory_in_bytes")
-        self.memory_points = self.median("segments_points_memory_in_bytes")
-        self.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
+        result.memory_segments = self.median("segments_memory_in_bytes")
+        result.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
+        result.memory_terms = self.median("segments_terms_memory_in_bytes")
+        result.memory_norms = self.median("segments_norms_memory_in_bytes")
+        result.memory_points = self.median("segments_points_memory_in_bytes")
+        result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
 
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         logger.debug("Gathering disk metrics.")
-        self.index_size = self.one("final_index_size_bytes")
-        self.bytes_written = self.sum("disk_io_write_bytes")
+        result.index_size = self.one("final_index_size_bytes")
+        result.bytes_written = self.sum("disk_io_write_bytes")
 
         # convert to int, fraction counts are senseless
         median_segment_count = self.median("segments_count")
-        self.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+        result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+        return result
 
     def sum(self, metric_name):
         values = self.store.get(metric_name, lap=self.lap)
@@ -139,12 +156,121 @@ class Stats:
         unit = self.store.get_unit(metric_name, operation=operation_name)
         stats = self.store.get_stats(metric_name, operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         if median and stats:
-            return stats["min"], median, stats["max"], unit
+            return {
+                "min": stats["min"],
+                "median": median,
+                "max": stats["max"],
+                "unit": unit
+            }
         else:
-            return None, None, None, unit
+            return {
+                "min": None,
+                "median": None,
+                "max": None,
+                "unit": unit
+            }
 
     def error_rate(self, operation_name):
         return self.store.get_error_rate(operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+
+    def median(self, metric_name, operation_name=None, operation_type=None, sample_type=None):
+        return self.store.get_median(metric_name, operation=operation_name, operation_type=operation_type, sample_type=sample_type,
+                                     lap=self.lap)
+
+    def single_latency(self, operation, metric_name="latency"):
+        sample_type = metrics.SampleType.Normal
+        sample_size = self.store.get_count(metric_name, operation=operation, sample_type=sample_type, lap=self.lap)
+        if sample_size > 0:
+            percentiles = self.store.get_percentiles(metric_name,
+                                                     operation=operation,
+                                                     sample_type=sample_type,
+                                                     percentiles=self.percentiles_for_sample_size(sample_size),
+                                                     lap=self.lap)
+            # safely encode so we don't have any dots in field names
+            safe_percentiles = collections.OrderedDict()
+            for k, v in percentiles.items():
+                safe_percentiles[self.safe_float_key(k)] = v
+            return safe_percentiles
+        else:
+            return {}
+
+    def safe_float_key(self, k):
+        return str(k).replace(".", "_")
+
+    def percentiles_for_sample_size(self, sample_size):
+        # if needed we can come up with something smarter but it'll do for now
+        if sample_size < 1:
+            raise AssertionError("Percentiles require at least one sample")
+        elif sample_size == 1:
+            return [100]
+        elif 1 < sample_size < 10:
+            return [50, 100]
+        elif 10 <= sample_size < 100:
+            return [50, 90, 100]
+        elif 100 <= sample_size < 1000:
+            return [50, 90, 99, 100]
+        elif 1000 <= sample_size < 10000:
+            return [50, 90, 99, 99.9, 100]
+        else:
+            return [50, 90, 99, 99.9, 99.99, 100]
+
+
+class Stats:
+    def __init__(self, d=None):
+        self.op_metrics = self.v(d, "op_metrics", default=[])
+        self.total_time = self.v(d, "total_time")
+        self.merge_time = self.v(d, "merge_time")
+        self.refresh_time = self.v(d, "refresh_time")
+        self.flush_time = self.v(d, "flush_time")
+        self.merge_throttle_time = self.v(d, "merge_throttle_time")
+
+        self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
+        self.merge_part_time_stored_fields = self.v(d, "merge_part_time_stored_fields")
+        self.merge_part_time_doc_values = self.v(d, "merge_part_time_doc_values")
+        self.merge_part_time_norms = self.v(d, "merge_part_time_norms")
+        self.merge_part_time_vectors = self.v(d, "merge_part_time_vectors")
+        self.merge_part_time_points = self.v(d, "merge_part_time_points")
+
+        self.median_cpu_usage = self.v(d, "median_cpu_usage")
+
+        self.young_gc_time = self.v(d, "young_gc_time")
+        self.old_gc_time = self.v(d, "old_gc_time")
+
+        self.memory_segments = self.v(d, "memory_segments")
+        self.memory_doc_values = self.v(d, "memory_doc_values")
+        self.memory_terms = self.v(d, "memory_terms")
+        self.memory_norms = self.v(d, "memory_norms")
+        self.memory_points = self.v(d, "memory_points")
+        self.memory_stored_fields = self.v(d, "memory_stored_fields")
+
+        self.index_size = self.v(d, "index_size")
+        self.bytes_written = self.v(d, "bytes_written")
+
+        self.segment_count = self.v(d, "segment_count")
+
+    def as_dict(self):
+        return self.__dict__
+
+    def v(self, d, k, default=None):
+        return d[k] if d else default
+
+    def add_op_metrics(self, operation, throughput, latency, service_time, error_rate):
+        self.op_metrics.append({
+            "operation": operation,
+            "throughput": throughput,
+            "latency": latency,
+            "service_time": service_time,
+            "error_rate": error_rate
+        })
+
+    def operations(self):
+        return [v["operation"] for v in self.op_metrics]
+
+    def metrics(self, operation):
+        for r in self.op_metrics:
+            if r["operation"] == operation:
+                return r
+        return None
 
     def has_merge_part_stats(self):
         return self.merge_part_time_postings or \
@@ -165,59 +291,26 @@ class Stats:
     def has_disk_usage_stats(self):
         return self.index_size and self.bytes_written
 
-    def median(self, metric_name, operation_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, operation=operation_name, operation_type=operation_type, sample_type=sample_type,
-                                     lap=self.lap)
-
-    def single_latency(self, operation, metric_name="latency"):
-        sample_type = metrics.SampleType.Normal
-        sample_size = self.store.get_count(metric_name, operation=operation, sample_type=sample_type, lap=self.lap)
-        if sample_size > 0:
-            return self.store.get_percentiles(metric_name,
-                                              operation=operation,
-                                              sample_type=sample_type,
-                                              percentiles=self.percentiles_for_sample_size(sample_size),
-                                              lap=self.lap)
-        else:
-            return {}
-
-    def percentiles_for_sample_size(self, sample_size):
-        # if needed we can come up with something smarter but it'll do for now
-        if sample_size < 1:
-            raise AssertionError("Percentiles require at least one sample")
-        elif sample_size == 1:
-            return [100]
-        elif 1 < sample_size < 10:
-            return [50.0, 100]
-        elif 10 <= sample_size < 100:
-            return [50.0, 90.0, 100]
-        elif 100 <= sample_size < 1000:
-            return [50.0, 90.0, 99.0, 100]
-        elif 1000 <= sample_size < 10000:
-            return [50.0, 90.0, 99.0, 99.9, 100]
-        else:
-            return [50.0, 90.0, 99.0, 99.9, 99.99, 100]
-
 
 class SummaryReporter:
-    def __init__(self, race_store, metrics_store, config, lap):
-        self._race_store = race_store
-        self._metrics_store = metrics_store
+    def __init__(self, results, config, revision, current_lap, total_laps):
+        self.results = results
         self._config = config
-        self._lap = lap
+        self.revision = revision
+        self.current_lap = current_lap
+        self.total_laps = total_laps
 
     def is_final_report(self):
-        return self._lap is None
+        return self.current_lap is None
 
     def needs_header(self):
-        laps = self._race_store.current_race.laps
-        return laps == 1 or self._lap == 1
+        return self.total_laps == 1 or self.current_lap == 1
 
     @property
     def lap(self):
-        return "All" if self.is_final_report() else str(self._lap)
+        return "All" if self.is_final_report() else str(self.current_lap)
 
-    def report(self, t):
+    def report(self):
         if self.is_final_report():
             print_internal("")
             print_header("------------------------------------------------------")
@@ -240,8 +333,7 @@ class SummaryReporter:
             print_header("--------------------------------------------------")
             print_internal("")
 
-        selected_challenge = t.find_challenge_or_default(self._config.opts("track", "challenge.name"))
-        stats = Stats(self._metrics_store, selected_challenge, self._lap)
+        stats = self.results
 
         metrics_table = []
         meta_info_table = []
@@ -255,12 +347,12 @@ class SummaryReporter:
         metrics_table += self.report_segment_memory(stats)
         metrics_table += self.report_segment_counts(stats)
 
-        for tasks in selected_challenge.schedule:
-            for task in tasks:
-                metrics_table += self.report_throughput(stats, task.operation)
-                metrics_table += self.report_latency(stats, task.operation)
-                metrics_table += self.report_service_time(stats, task.operation)
-                metrics_table += self.report_error_rate(stats, task.operation)
+        for record in stats.op_metrics:
+            operation = record["operation"]
+            metrics_table += self.report_throughput(record, operation)
+            metrics_table += self.report_latency(record, operation)
+            metrics_table += self.report_service_time(record, operation)
+            metrics_table += self.report_error_rate(record, operation)
 
         meta_info_table += self.report_meta_info()
 
@@ -270,40 +362,48 @@ class SummaryReporter:
         report_file = self._config.opts("reporting", "output.path")
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Operation", "Value", "Unit"], data_plain=metrics_table,
-                                 data_rich = metrics_table, write_header=self.needs_header())
+        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Operation", "Value", "Unit"],
+                            data_plain=metrics_table,
+                            data_rich=metrics_table, write_header=self.needs_header())
         if self.is_final_report() and len(report_file) > 0:
-            write_single_report("%s.meta" % report_file, report_format, cwd, headers=["Name", "Value"], data_plain = meta_info_table, data_rich = meta_info_table, show_also_in_console=False)
+            write_single_report("%s.meta" % report_file, report_format, cwd, headers=["Name", "Value"], data_plain=meta_info_table,
+                                data_rich=meta_info_table, show_also_in_console=False)
 
-    def report_throughput(self, stats, operation):
-        min, median, max, unit = stats.op_metrics[operation.name]["throughput"]
+    def report_throughput(self, values, operation):
+        min = values["throughput"]["min"]
+        median = values["throughput"]["median"]
+        max = values["throughput"]["max"]
+        unit = values["throughput"]["unit"]
         return [
-            [self.lap, "Min Throughput", operation.name, min, unit],
-            [self.lap, "Median Throughput", operation.name, median, unit],
-            [self.lap, "Max Throughput", operation.name, max, unit]
+            [self.lap, "Min Throughput", operation, min, unit],
+            [self.lap, "Median Throughput", operation, median, unit],
+            [self.lap, "Max Throughput", operation, max, unit]
         ]
 
-    def report_latency(self, stats, operation):
+    def report_latency(self, values, operation):
         lines = []
-        latency = stats.op_metrics[operation.name]["latency"]
+        latency = values["latency"]
         if latency:
             for percentile, value in latency.items():
-                lines.append([self.lap, "%sth percentile latency" % percentile, operation.name, value, "ms"])
+                lines.append([self.lap, "%sth percentile latency" % self.decode_percentile_key(percentile), operation, value, "ms"])
         return lines
 
-    def report_service_time(self, stats, operation):
+    def report_service_time(self, values, operation):
         lines = []
-        service_time = stats.op_metrics[operation.name]["service_time"]
+        service_time = values["service_time"]
         if service_time:
             for percentile, value in service_time.items():
-                lines.append([self.lap, "%sth percentile service time" % percentile, operation.name, value, "ms"])
+                lines.append([self.lap, "%sth percentile service time" % self.decode_percentile_key(percentile), operation, value, "ms"])
         return lines
 
-    def report_error_rate(self, stats, operation):
+    def decode_percentile_key(self, k):
+        return k.replace("_", ".")
+
+    def report_error_rate(self, values, operation):
         lines = []
-        error_rate = stats.op_metrics[operation.name]["error_rate"]
+        error_rate = values["error_rate"]
         if error_rate is not None:
-            lines.append([self.lap, "error rate", operation.name, "%.2f" % (error_rate * 100.0), "%"])
+            lines.append([self.lap, "error rate", operation, "%.2f" % (error_rate * 100.0), "%"])
         return lines
 
     def report_total_times(self, stats):
@@ -374,37 +474,33 @@ class SummaryReporter:
 
     def report_meta_info(self):
         return [
-            ["Elasticsearch source revision", self._race_store.current_race.revision]
+            ["Elasticsearch source revision", self.revision]
         ]
 
 
 class ComparisonReporter:
     def __init__(self, config):
         self._config = config
-    
+        self.plain = False
+
     def report(self, r1, r2):
         logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], challenge=[%s], car=[%s]) and "
                     "contender (invocation=[%s], track=[%s], challenge=[%s], car=[%s])" %
                     (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
                      r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_store = metrics.metrics_store(self._config,
-                                               invocation=r1.trial_timestamp, track=r1.track, challenge=r1.challenge.name, car=r1.car)
-        baseline_stats = Stats(baseline_store, r1.challenge)
-
-        contender_store = metrics.metrics_store(self._config,
-                                                invocation=r2.trial_timestamp, track=r2.track, challenge=r2.challenge.name, car=r2.car)
-        contender_stats = Stats(contender_store, r2.challenge)
+        baseline_stats = Stats(r1.results)
+        contender_stats = Stats(r2.results)
 
         print_internal("")
         print_internal("Comparing baseline")
         print_internal("  Race timestamp: %s" % r1.trial_timestamp)
-        print_internal("  Challenge: %s" % r1.challenge.name)
+        print_internal("  Challenge: %s" % r1.challenge_name)
         print_internal("  Car: %s" % r1.car)
         print_internal("")
         print_internal("with contender")
         print_internal("  Race timestamp: %s" % r2.trial_timestamp)
-        print_internal("  Challenge: %s" % r2.challenge.name)
+        print_internal("  Challenge: %s" % r2.challenge_name)
         print_internal("  Car: %s" % r2.car)
         print_internal("")
         print_header("------------------------------------------------------")
@@ -416,13 +512,13 @@ class ComparisonReporter:
         print_header("------------------------------------------------------")
         print_internal("")
 
-        metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain = True)
-        metric_table_rich = self.metrics_table(baseline_stats, contender_stats, plain = False)
+        metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain=True)
+        metric_table_rich = self.metrics_table(baseline_stats, contender_stats, plain=False)
         # Writes metric_table_rich to console, writes metric_table_plain to file
-        self.write_report(metric_table_plain,metric_table_rich)
+        self.write_report(metric_table_plain, metric_table_rich)
 
     def metrics_table(self, baseline_stats, contender_stats, plain):
-        self.plain=plain
+        self.plain = plain
         metrics_table = []
         metrics_table += self.report_total_times(baseline_stats, contender_stats)
         metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
@@ -432,8 +528,8 @@ class ComparisonReporter:
         metrics_table += self.report_segment_memory(baseline_stats, contender_stats)
         metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
 
-        for op in baseline_stats.op_metrics.keys():
-            if op in contender_stats.op_metrics:
+        for op in baseline_stats.operations():
+            if op in contender_stats.operations():
                 metrics_table += self.report_throughput(baseline_stats, contender_stats, op)
                 metrics_table += self.report_latency(baseline_stats, contender_stats, op)
                 metrics_table += self.report_service_time(baseline_stats, contender_stats, op)
@@ -449,12 +545,18 @@ class ComparisonReporter:
         report_file = self._config.opts("reporting", "output.path")
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"], 
-            data_plain= metrics_table, data_rich= metrics_table_console, write_header=True)
+        write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
+                            data_plain=metrics_table, data_rich=metrics_table_console, write_header=True)
 
     def report_throughput(self, baseline_stats, contender_stats, operation):
-        b_min, b_median, b_max, b_unit = baseline_stats.op_metrics[operation]["throughput"]
-        c_min, c_median, c_max, c_unit = contender_stats.op_metrics[operation]["throughput"]
+        b_min = baseline_stats.metrics(operation)["throughput"]["min"]
+        b_median = baseline_stats.metrics(operation)["throughput"]["median"]
+        b_max = baseline_stats.metrics(operation)["throughput"]["max"]
+        b_unit = baseline_stats.metrics(operation)["throughput"]["unit"]
+
+        c_min = contender_stats.metrics(operation)["throughput"]["min"]
+        c_median = contender_stats.metrics(operation)["throughput"]["median"]
+        c_max = contender_stats.metrics(operation)["throughput"]["max"]
 
         return self.join(
             self.line("Min Throughput", b_min, c_min, operation, b_unit, treat_increase_as_improvement=True),
@@ -465,32 +567,36 @@ class ComparisonReporter:
     def report_latency(self, baseline_stats, contender_stats, operation):
         lines = []
 
-        baseline_latency = baseline_stats.op_metrics[operation]["latency"]
-        contender_latency = contender_stats.op_metrics[operation]["latency"]
+        baseline_latency = baseline_stats.metrics(operation)["latency"]
+        contender_latency = contender_stats.metrics(operation)["latency"]
 
         for percentile, baseline_value in baseline_latency.items():
             if percentile in contender_latency:
                 contender_value = contender_latency[percentile]
-                lines.append(self.line("%sth percentile latency" % percentile, baseline_value, contender_value,
+                lines.append(self.line("%sth percentile latency" % self.decode_percentile_key(percentile), baseline_value, contender_value,
                                        operation, "ms", treat_increase_as_improvement=False))
         return lines
 
     def report_service_time(self, baseline_stats, contender_stats, operation):
         lines = []
 
-        baseline_service_time = baseline_stats.op_metrics[operation]["service_time"]
-        contender_service_time = contender_stats.op_metrics[operation]["service_time"]
+        baseline_service_time = baseline_stats.metrics(operation)["service_time"]
+        contender_service_time = contender_stats.metrics(operation)["service_time"]
 
         for percentile, baseline_value in baseline_service_time.items():
             if percentile in contender_service_time:
                 contender_value = contender_service_time[percentile]
-                self.append_if_present(lines, self.line("%sth percentile service time" % percentile, baseline_value, contender_value,
+                self.append_if_present(lines, self.line("%sth percentile service time" %
+                                                        self.decode_percentile_key(percentile), baseline_value, contender_value,
                                                         operation, "ms", treat_increase_as_improvement=False))
         return lines
 
+    def decode_percentile_key(self, k):
+        return k.replace("_", ".")
+
     def report_error_rate(self, baseline_stats, contender_stats, operation):
-        baseline_error_rate = baseline_stats.op_metrics[operation]["error_rate"]
-        contender_error_rate = contender_stats.op_metrics[operation]["error_rate"]
+        baseline_error_rate = baseline_stats.metrics(operation)["error_rate"]
+        contender_error_rate = contender_stats.metrics(operation)["error_rate"]
         return self.join(
             self.line("error rate", baseline_error_rate, contender_error_rate, operation, "%",
                       treat_increase_as_improvement=False, formatter=convert.factor(100.0))
@@ -544,14 +650,6 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
         )
 
-    # def report_cpu_usage(self, baseline_stats, contender_stats):
-    #     cpu_usage = []
-    #     for op, v in baseline_stats.median_cpu_usage.items():
-    #         if op in contender_stats.median_cpu_usage:
-    #             self.append_if_present(cpu_usage, self.line("Median CPU usage", baseline_stats.median_cpu_usage[op],
-    #                            contender_stats.median_cpu_usage[op], op, "%", treat_increase_as_improvement=True))
-    #     return cpu_usage
-
     def report_gc_times(self, baseline_stats, contender_stats):
         return self.join(
             self.line("Total Young Gen GC", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
@@ -584,7 +682,8 @@ class ComparisonReporter:
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
                 self.line("Heap used for points", baseline_stats.memory_points, contender_stats.memory_points, "", "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for stored fields", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "", "MB",
+                self.line("Heap used for stored fields", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "",
+                          "MB",
                           treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
             )
         else:
@@ -607,11 +706,14 @@ class ComparisonReporter:
             return []
 
     def diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
+        def identity(x):
+            return x
+
         diff = formatter(contender - baseline)
         if self.plain:
-            color_greater = lambda x: x
-            color_smaller = lambda x: x
-            color_neutral = lambda x: x
+            color_greater = identity
+            color_smaller = identity
+            color_neutral = identity
         elif treat_increase_as_improvement:
             color_greater = console.format.green
             color_smaller = console.format.red

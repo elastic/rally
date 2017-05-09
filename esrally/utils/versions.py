@@ -15,6 +15,17 @@ def is_version_identifier(text, strict=True):
     return text is not None and _versions_pattern(strict).match(text) is not None
 
 
+def major_version(version):
+    """
+    Determines the major version of a given version string.
+
+    :param version: A version string in the format major.minor.path-suffix (suffix is optional)
+    :return: The major version (as int). In case the version string is invalid, an ``exceptions.InvalidSyntax`` is raised.
+    """
+    major, _, _, _ = components(version)
+    return major
+
+
 def components(version, strict=True):
     """
     Determines components of a version string.
