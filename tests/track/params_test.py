@@ -397,8 +397,7 @@ class InvocationGeneratorTests(TestCase):
 
     @staticmethod
     def number_of_bulks(indices, partition_index, total_partitions, bulk_size):
-        return params.PartitionBulkIndexParamSource(
-            indices, partition_index, total_partitions, params.ActionMetaData.Generate, bulk_size, bulk_size).number_of_bulks()
+        return params.number_of_bulks(indices, partition_index, total_partitions, params.ActionMetaData.Generate, bulk_size)
 
     def test_build_conflicting_ids(self):
         self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
@@ -536,6 +535,95 @@ class BulkIndexParamSourceTests(TestCase):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             source.partition(0, 1)
         self.assertEqual("The provided index [does_not_exist] does not match any of the indices [index1].", ctx.exception.args[0])
+
+
+class BulkDataGeneratorTests(TestCase):
+    class TestBulkReader:
+        def __init__(self, index_name, type_name, bulks):
+            self.index_name = index_name
+            self.type_name = type_name
+            self.bulks = iter(bulks)
+
+        def __enter__(self):
+            return self
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            batch = []
+            bulk = next(self.bulks)
+            batch.append((len(bulk), bulk))
+            return self.index_name, self.type_name, batch
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    @classmethod
+    def create_test_reader(cls, batches):
+        def inner_create_test_reader(index, type, *args):
+            return BulkDataGeneratorTests.TestBulkReader(index, type, batches)
+
+        return inner_create_test_reader
+
+    def test_generate_two_bulks(self):
+        type1 = track.Type("type1", mapping_file="", number_of_documents=10)
+        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+
+        bulks = params.bulk_data_based(num_clients=1, client_index=0, indices=[index1], action_metadata=params.ActionMetaData.NoMetaData,
+                                       batch_size=5, bulk_size=5, id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
+                                       original_params={
+                                           "my-custom-parameter": "foo",
+                                           "my-custom-parameter-2": True
+                                       }, create_reader=BulkDataGeneratorTests.
+                                       create_test_reader([["1", "2", "3", "4", "5"], ["6", "7", "8"]]))
+        all_bulks = list(bulks)
+        self.assertEqual(2, len(all_bulks))
+        self.assertEqual({
+            "action_metadata_present": False,
+            "body": ["1", "2", "3", "4", "5"],
+            "bulk-id": "0-1",
+            "bulk-size": 5,
+            "index": index1,
+            "type": type1,
+            "my-custom-parameter": "foo",
+            "my-custom-parameter-2": True
+        }, all_bulks[0])
+
+        self.assertEqual({
+            "action_metadata_present": False,
+            "body": ["6", "7", "8"],
+            "bulk-id": "0-2",
+            "bulk-size": 3,
+            "index": index1,
+            "type": type1,
+            "my-custom-parameter": "foo",
+            "my-custom-parameter-2": True
+        }, all_bulks[1])
+
+    def test_internal_params_take_precedence(self):
+        type1 = track.Type("type1", mapping_file="", number_of_documents=3)
+        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+
+        bulks = params.bulk_data_based(num_clients=1, client_index=0, indices=[index1], action_metadata=params.ActionMetaData.NoMetaData,
+                                       batch_size=3, bulk_size=3, id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
+                                       original_params={
+                                           "body": "foo",
+                                           "custom-param": "bar"
+                                       }, create_reader=BulkDataGeneratorTests.
+                                       create_test_reader([["1", "2", "3"]]))
+        all_bulks = list(bulks)
+        self.assertEqual(1, len(all_bulks))
+        # body must not contain 'foo'!
+        self.assertEqual({
+            "action_metadata_present": False,
+            "body": ["1", "2", "3"],
+            "bulk-id": "0-1",
+            "bulk-size": 3,
+            "index": index1,
+            "type": type1,
+            "custom-param": "bar"
+        }, all_bulks[0])
 
 
 class ParamsRegistrationTests(TestCase):
