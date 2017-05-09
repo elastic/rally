@@ -210,6 +210,11 @@ def parse_args():
                  "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
             default=DEFAULT_CLIENT_OPTIONS)
         p.add_argument(
+            "--cluster-health",
+            choices=["red", "yellow", "green"],
+            help="Expected cluster health at the beginning of the benchmark (default: green)",
+            default="green")
+        p.add_argument(
             "--user-tag",
             help="define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
                  "Example: intention:baseline-ticket-12345",
@@ -287,11 +292,6 @@ def parse_args():
             "--override-src-dir",
             help=argparse.SUPPRESS,
             default=None)
-        p.add_argument(
-            "--cluster-health",
-            choices=["red", "yellow", "green"],
-            help=argparse.SUPPRESS,
-            default="green")
         p.add_argument(
             "--auto-manage-indices",
             choices=["true", "false"],

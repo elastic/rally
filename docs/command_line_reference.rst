@@ -275,6 +275,14 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 
 Rally checks whether the cluster health is "green" before it runs a benchmark against it. The main reason is that we don't want to benchmark a cluster which is shuffling shards around or might start doing so. If you really need to run a benchmark against a cluster that is "yellow" or "red", then you can explicitly override Rally's default behavior. But please think twice before doing so and rather eliminate the root cause.
 
+**Example**
+
+ ::
+
+   esrally --cluster-health=yellow
+
+
+
 ``advanced-config``
 ~~~~~~~~~~~~~~~~~~~
 
