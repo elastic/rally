@@ -184,7 +184,7 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``type`` (optional): Defines the type within the specified index for this query.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
 * ``body`` (mandatory): The query body.
-* ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed.
+* ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
 
 Example::

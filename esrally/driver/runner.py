@@ -1,3 +1,4 @@
+import sys
 import types
 import logging
 from collections import Counter, OrderedDict
@@ -411,7 +412,11 @@ class Query(Runner):
         else:
             # This should only happen if we concurrently create an index and start searching
             self.scroll_id = None
-        total_pages = params["pages"]
+        if params["pages"] == "all":
+            total_pages = sys.maxsize
+        else:
+            # explicitly convert to int to provoke an error otherwise
+            total_pages = int(params["pages"])
         # Note that starting with ES 2.0, the initial call to search() returns already the first result page
         # so we have to retrieve one page less
         for page in range(total_pages - 1):

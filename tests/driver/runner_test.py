@@ -4,7 +4,7 @@ from unittest import TestCase
 from esrally.driver import runner
 
 
-class RegisterRunnerTest(TestCase):
+class RegisterRunnerTests(TestCase):
     def tearDown(self):
         runner.remove_runner("unit_test")
 
@@ -459,3 +459,225 @@ class BulkIndexRunnerTests(TestCase):
             ], result["shards_histogram"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
+
+
+class QueryRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_query_match_all(self, es):
+        es.search.return_value = {
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    }
+                ]
+            }
+        }
+
+        query_runner = runner.Query()
+
+        params = {
+            "index": "unittest",
+            "type": "type",
+            "use_request_cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            num_ops, ops_unit = query_runner(es, params)
+
+        self.assertEqual(1, num_ops)
+        self.assertEqual("ops", ops_unit)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_only_one_page(self, es):
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # delete scroll id response
+            {
+                "acknowledged": True
+            }
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": 1,
+            "items_per_page": 100,
+            "index": "unittest",
+            "type": "type",
+            "use_request_cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            num_ops, ops_unit = query_runner(es, params)
+
+        self.assertEqual(1, num_ops)
+        self.assertEqual("ops", ops_unit)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_with_explicit_number_of_pages(self, es):
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # page 2
+            {
+                "_scroll_id": "some-scroll-id",
+                "hits": {
+                    "hits": [
+                        {
+                            "some-doc-2"
+                        }
+                    ]
+                }
+            },
+            # delete scroll id response
+            {
+                "acknowledged": True
+            }
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": 2,
+            "items_per_page": 100,
+            "index": "unittest",
+            "type": "type",
+            "use_request_cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            num_ops, ops_unit = query_runner(es, params)
+
+        self.assertEqual(2, num_ops)
+        self.assertEqual("ops", ops_unit)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_early_termination(self, es):
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # page 2 has no results
+            {
+                "_scroll_id": "some-scroll-id",
+                "hits": {
+                    "hits": []
+                }
+            },
+            # delete scroll id response
+            {
+                "acknowledged": True
+            }
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": 5,
+            "items_per_page": 100,
+            "index": "unittest",
+            "type": "type",
+            "use_request_cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            num_ops, ops_unit = query_runner(es, params)
+
+        self.assertEqual(2, num_ops)
+        self.assertEqual("ops", ops_unit)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_request_all_pages(self, es):
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # page 2 has no results
+            {
+                "_scroll_id": "some-scroll-id",
+                "hits": {
+                    "hits": []
+                }
+            },
+            # delete scroll id response
+            {
+                "acknowledged": True
+            }
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": "all",
+            "items_per_page": 100,
+            "index": "unittest",
+            "type": "type",
+            "use_request_cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            num_ops, ops_unit = query_runner(es, params)
+
+        self.assertEqual(2, num_ops)
+        self.assertEqual("ops", ops_unit)
