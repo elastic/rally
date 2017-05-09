@@ -106,6 +106,7 @@ services:
     environment:
       - discovery.zen.minimum_master_nodes=1
       - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
       - "ES_JAVA_OPTS="
       - indices.query.bool.max_clause_count=5000
     image: "docker.elastic.co/elasticsearch/elasticsearch:5.0.0"
