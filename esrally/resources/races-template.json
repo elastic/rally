@@ -57,6 +57,13 @@
         },
         "total-laps": {
           "type": "short"
+        },
+        "results": {
+          "properties": {
+            "op_metrics": {
+              "type": "nested"
+            }
+          }
         }
       }
     }
