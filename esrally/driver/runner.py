@@ -397,39 +397,43 @@ class Query(Runner):
         return 1, "ops"
 
     def scroll_query(self, es, params):
+        hits = 0
+        retrieved_pages = 0
         self.es = es
-        r = es.search(
-            index=params["index"],
-            doc_type=params["type"],
-            body=params["body"],
-            sort="_doc",
-            scroll="10s",
-            size=params["items_per_page"],
-            request_cache=params["use_request_cache"])
+        # explicitly convert to int to provoke an error otherwise
+        total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
 
-        if "_scroll_id" in r:
-            self.scroll_id = r["_scroll_id"]
-        else:
-            # This should only happen if we concurrently create an index and start searching
-            self.scroll_id = None
-        if params["pages"] == "all":
-            total_pages = sys.maxsize
-        else:
-            # explicitly convert to int to provoke an error otherwise
-            total_pages = int(params["pages"])
-        # Note that starting with ES 2.0, the initial call to search() returns already the first result page
-        # so we have to retrieve one page less
-        for page in range(total_pages - 1):
+        for page in range(total_pages):
+            if page == 0:
+                r = es.search(
+                    index=params["index"],
+                    doc_type=params["type"],
+                    body=params["body"],
+                    sort="_doc",
+                    scroll="10s",
+                    size=params["items_per_page"],
+                    request_cache=params["use_request_cache"])
+                # This should only happen if we concurrently create an index and start searching
+                self.scroll_id = r.get("_scroll_id", None)
+            else:
+                # This does only work for ES 2.x and above
+                # r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
+                # This is the most compatible version to perform a scroll across all supported versions of Elasticsearch
+                # (1.x does not support a proper JSON body in search scroll requests).
+                r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
             hit_count = len(r["hits"]["hits"])
+            hits += hit_count
+            retrieved_pages += 1
             if hit_count == 0:
                 # We're done prematurely. Even if we are on page index zero, we still made one call.
-                return page + 1, "ops"
-            # This does only work for ES 2.x and above
-            # r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
-            # This is the most compatible version to perform a scroll across all supported versions of Elasticsearch
-            # (1.x does not support a proper JSON body in search scroll requests).
-            r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
-        return total_pages, "ops"
+                break
+
+        return {
+            "weight": retrieved_pages,
+            "pages": retrieved_pages,
+            "hits": hits,
+            "unit": "ops",
+        }
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:

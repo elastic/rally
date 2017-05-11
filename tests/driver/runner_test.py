@@ -502,6 +502,9 @@ class QueryRunnerTests(TestCase):
                 "hits": [
                     {
                         "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
                     }
                 ]
             }
@@ -529,10 +532,12 @@ class QueryRunnerTests(TestCase):
         }
 
         with query_runner:
-            num_ops, ops_unit = query_runner(es, params)
+            results = query_runner(es, params)
 
-        self.assertEqual(1, num_ops)
-        self.assertEqual("ops", ops_unit)
+        self.assertEqual(1, results["weight"])
+        self.assertEqual(1, results["pages"])
+        self.assertEqual(2, results["hits"])
+        self.assertEqual("ops", results["unit"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_with_explicit_number_of_pages(self, es):
@@ -543,6 +548,9 @@ class QueryRunnerTests(TestCase):
                 "hits": [
                     {
                         "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
                     }
                 ]
             }
@@ -554,7 +562,7 @@ class QueryRunnerTests(TestCase):
                 "hits": {
                     "hits": [
                         {
-                            "some-doc-2"
+                            "some-doc-3"
                         }
                     ]
                 }
@@ -581,10 +589,12 @@ class QueryRunnerTests(TestCase):
         }
 
         with query_runner:
-            num_ops, ops_unit = query_runner(es, params)
+            results = query_runner(es, params)
 
-        self.assertEqual(2, num_ops)
-        self.assertEqual("ops", ops_unit)
+        self.assertEqual(2, results["weight"])
+        self.assertEqual(2, results["pages"])
+        self.assertEqual(3, results["hits"])
+        self.assertEqual("ops", results["unit"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_early_termination(self, es):
@@ -629,10 +639,12 @@ class QueryRunnerTests(TestCase):
         }
 
         with query_runner:
-            num_ops, ops_unit = query_runner(es, params)
+            results = query_runner(es, params)
 
-        self.assertEqual(2, num_ops)
-        self.assertEqual("ops", ops_unit)
+        self.assertEqual(2, results["weight"])
+        self.assertEqual(2, results["pages"])
+        self.assertEqual(1, results["hits"])
+        self.assertEqual("ops", results["unit"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_request_all_pages(self, es):
@@ -643,6 +655,15 @@ class QueryRunnerTests(TestCase):
                 "hits": [
                     {
                         "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    },
+                    {
+                        "some-doc-3"
+                    },
+                    {
+                        "some-doc-4"
                     }
                 ]
             }
@@ -677,7 +698,9 @@ class QueryRunnerTests(TestCase):
         }
 
         with query_runner:
-            num_ops, ops_unit = query_runner(es, params)
+            results = query_runner(es, params)
 
-        self.assertEqual(2, num_ops)
-        self.assertEqual("ops", ops_unit)
+        self.assertEqual(2, results["weight"])
+        self.assertEqual(2, results["pages"])
+        self.assertEqual(4, results["hits"])
+        self.assertEqual("ops", results["unit"])
