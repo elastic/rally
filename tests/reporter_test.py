@@ -5,7 +5,7 @@ from unittest import TestCase
 from esrally import reporter, metrics, config, track
 
 
-class StatsTests(TestCase):
+class StatsCalculatorTests(TestCase):
     def test_calculate_simple_index_stats(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -51,6 +51,94 @@ class StatsTests(TestCase):
         self.assertEqual(collections.OrderedDict([("50", 220), ("100", 225)]), opm["latency"])
         self.assertEqual(collections.OrderedDict([("50", 200), ("100", 215)]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
+
+
+def select(l, name, operation=None):
+    for item in l:
+        if item["name"] == name and item.get("operation") == operation:
+            return item
+    return None
+
+
+class StatsTests(TestCase):
+    def test_as_flat_list(self):
+        d = {
+            "op_metrics": [
+                {
+                    "operation": "index",
+                    "throughput": {
+                        "min": 450,
+                        "median": 450,
+                        "max": 452,
+                        "unit": "docs/s"
+                    },
+                    "latency": {
+                        "50": 340,
+                        "100": 376,
+                    },
+                    "service_time": {
+                        "50": 341,
+                        "100": 376
+                    },
+                    "error_rate": 0.0
+                }
+            ],
+            "young_gc_time": 68,
+            "old_gc_time": 0
+        }
+
+        s = reporter.Stats(d)
+        metric_list = s.as_flat_list()
+        self.assertEqual({
+            "name": "throughput",
+            "operation": "index",
+            "value": {
+                "min": 450,
+                "median": 450,
+                "max": 452,
+                "unit": "docs/s"
+            }
+        }, select(metric_list, "throughput", "index"))
+
+        self.assertEqual({
+            "name": "service_time",
+            "operation": "index",
+            "value": {
+                "50": 341,
+                "100": 376
+            }
+        }, select(metric_list, "service_time", "index"))
+
+        self.assertEqual({
+            "name": "latency",
+            "operation": "index",
+            "value": {
+                "50": 340,
+                "100": 376
+            }
+        }, select(metric_list, "latency", "index"))
+
+        self.assertEqual({
+            "name": "error_rate",
+            "operation": "index",
+            "value": {
+                "single": 0.0
+            }
+        }, select(metric_list, "error_rate", "index"))
+
+        self.assertEqual({
+            "name": "young_gc_time",
+            "value": {
+                "single": 68
+            }
+        }, select(metric_list, "young_gc_time"))
+
+        self.assertEqual({
+            "name": "old_gc_time",
+            "value": {
+                "single": 0
+            }
+        }, select(metric_list, "old_gc_time"))
 
 
 class ComparisonReporterTests(TestCase):

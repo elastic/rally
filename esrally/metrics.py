@@ -127,6 +127,9 @@ class IndexTemplateProvider:
     def races_template(self):
         return self._read("races-template")
 
+    def results_template(self):
+        return self._read("results-template")
+
     def _read(self, template_name):
         return open("%s/resources/%s.json" % (self.script_dir, template_name)).read()
 
@@ -927,7 +930,7 @@ def race_store(cfg):
     """
     if cfg.opts("reporting", "datastore.type") == "elasticsearch":
         logger.info("Creating ES race store")
-        return CompositeRaceStore(EsRaceStore(cfg), FileRaceStore(cfg))
+        return CompositeRaceStore(EsRaceStore(cfg), EsResultsStore(cfg), FileRaceStore(cfg))
     else:
         logger.info("Creating file race store")
         return FileRaceStore(cfg)
@@ -1003,6 +1006,9 @@ class Race:
         return self.lap_results[lap - 1]
 
     def as_dict(self):
+        """
+        :return: A dict representation suitable for persisting this race instance as JSON.
+        """
         return {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
@@ -1016,6 +1022,30 @@ class Race:
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
+
+    def to_result_dicts(self):
+        """
+        :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
+        """
+        result_template = {
+            "environment": self.environment_name,
+            "trial-timestamp": time.to_iso8601(self.trial_timestamp),
+            "distribution-version": self.cluster.distribution_version,
+            "user-tag": self.user_tag,
+            "track": self.track_name,
+            "challenge": self.challenge_name,
+            "car": self.car,
+            # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
+            "active": True
+        }
+        all_results = []
+
+        for item in self.results.as_flat_list():
+            result = result_template.copy()
+            result.update(item)
+            all_results.append(result)
+
+        return all_results
 
     @classmethod
     def from_dict(cls, d):
@@ -1053,10 +1083,11 @@ class CompositeRaceStore:
     """
     Internal helper class to store races as file and to Elasticsearch in case users want Elasticsearch as a race store.
     
-    It provides the same API as RaceStore. It delegates writes to both stores and all read operations only the Elasticsearch race store.
+    It provides the same API as RaceStore. It delegates writes to all stores and all read operations only the Elasticsearch race store.
     """
-    def __init__(self, es_store, file_store):
+    def __init__(self, es_store, es_results_store, file_store):
         self.es_store = es_store
+        self.es_results_store = es_results_store
         self.file_store = file_store
 
     def find_by_timestamp(self, timestamp):
@@ -1065,6 +1096,7 @@ class CompositeRaceStore:
     def store_race(self, race):
         self.file_store.store_race(race)
         self.es_store.store_race(race)
+        self.es_results_store.store_results(race)
 
     def list(self):
         return self.es_store.list()
@@ -1128,6 +1160,7 @@ class EsRaceStore(RaceStore):
 
         :param cfg: The config object. Mandatory.
         :param client_factory_class: This parameter is optional and needed for testing.
+        :param index_template_provider_class: This parameter is optional and needed for testing.
         """
         super().__init__(cfg)
         self.client = client_factory_class(cfg).create()
@@ -1193,3 +1226,32 @@ class EsRaceStore(RaceStore):
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
         else:
             return None
+
+
+class EsResultsStore:
+    """
+    Stores the results of a race in a format that is better suited for reporting with Kibana.
+    """
+    INDEX_PREFIX = "rally-results-"
+    RESULTS_DOC_TYPE = "results"
+
+    def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+        """
+        Creates a new results store.
+
+        :param cfg: The config object. Mandatory.
+        :param client_factory_class: This parameter is optional and needed for testing.
+        :param index_template_provider_class: This parameter is optional and needed for testing.
+        """
+        self.cfg = cfg
+        self.trial_timestamp = cfg.opts("system", "time.start")
+        self.client = client_factory_class(cfg).create()
+        self.index_template_provider = index_template_provider_class(cfg)
+
+    def store_results(self, race):
+        # always update the mapping to the latest version
+        self.client.put_template("rally-results", self.index_template_provider.results_template())
+        self.client.bulk_index(index=self.index_name(), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
+
+    def index_name(self):
+        return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.trial_timestamp.year, self.trial_timestamp.month)

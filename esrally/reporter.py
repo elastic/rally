@@ -251,8 +251,32 @@ class Stats:
     def as_dict(self):
         return self.__dict__
 
+    def as_flat_list(self):
+        all_results = []
+        for metric, value in self.as_dict().items():
+            if metric == "op_metrics":
+                for item in value:
+                    if "throughput" in item:
+                        all_results.append({"operation": item["operation"], "name": "throughput", "value": item["throughput"]})
+                    if "latency" in item:
+                        all_results.append({"operation": item["operation"], "name": "latency", "value": item["latency"]})
+                    if "service_time" in item:
+                        all_results.append({"operation": item["operation"], "name": "service_time", "value": item["service_time"]})
+                    if "error_rate" in item:
+                        all_results.append({"operation": item["operation"], "name": "error_rate", "value": {"single": item["error_rate"]}})
+            elif value is not None:
+                result = {
+                    "name": metric,
+                    "value": {
+                        "single": value
+                    }
+                }
+                all_results.append(result)
+        # sorting is just necessary to have a stable order for tests. As we just have a small number of metrics, the overhead is neglible.
+        return sorted(all_results, key=lambda m: m["name"])
+
     def v(self, d, k, default=None):
-        return d[k] if d else default
+        return d.get(k, default) if d else default
 
     def add_op_metrics(self, operation, throughput, latency, service_time, error_rate):
         self.op_metrics.append({

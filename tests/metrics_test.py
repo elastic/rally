@@ -25,6 +25,9 @@ class DummyIndexTemplateProvider:
     def races_template(self):
         return "races-test-template"
 
+    def results_template(self):
+        return "results-test-template"
+
 
 class StaticClock:
     NOW = 1453362707
@@ -623,6 +626,115 @@ class EsRaceStoreTests(TestCase):
         self.es_mock.index.assert_called_with(index="rally-races-2016-01", doc_type="races", item=expected_doc)
 
 
+class EsResultsStoreTests(TestCase):
+    TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+
+    def setUp(self):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.TRIAL_TIMESTAMP)
+        self.race_store = metrics.EsResultsStore(self.cfg,
+                                                 client_factory_class=MockClientFactory,
+                                                 index_template_provider_class=DummyIndexTemplateProvider,
+                                                 )
+        # get hold of the mocked client...
+        self.es_mock = self.race_store.client
+
+    def test_store_results(self):
+        # here we need the real thing
+        from esrally import reporter
+        from esrally.mechanic import cluster
+
+        schedule = [
+            track.Task(track.Operation("index", track.OperationType.Index))
+        ]
+
+        t = track.Track(name="unittest-track", short_description="unittest track",
+                        source_root_url="http://example.org",
+                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping_file=None)])],
+                        challenges=[
+                            track.Challenge(name="index", description="Index", default=True, index_settings=None, schedule=schedule)
+                        ])
+
+        c = cluster.Cluster([], [], None)
+        c.distribution_version = "5.0.0"
+
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
+                            pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
+                            total_laps=12,
+                            cluster=c,
+                            lap_results=[],
+                            results=reporter.Stats(
+                                {
+                                    "young_gc_time": 100,
+                                    "old_gc_time": 5,
+                                    "op_metrics": [
+                                        {
+                                            "operation": "index",
+                                            "throughput": {
+                                                "min": 1000,
+                                                "median": 1250,
+                                                "max": 1500,
+                                                "unit": "docs/s"
+                                            }
+                                        }
+                                    ]
+                                })
+                            )
+
+        self.race_store.store_results(race)
+
+        expected_docs = [
+            {
+                "environment": "unittest",
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-version": "5.0.0",
+                "user-tag": "let-me-test",
+                "track": "unittest-track",
+                "challenge": "index",
+                "car": "4gheap",
+                "active": True,
+                "name": "old_gc_time",
+                "value": {
+                    "single": 5
+                }
+            },
+            {
+                "environment": "unittest",
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-version": "5.0.0",
+                "user-tag": "let-me-test",
+                "track": "unittest-track",
+                "challenge": "index",
+                "car": "4gheap",
+                "active": True,
+                "name": "throughput",
+                "operation": "index",
+                "value": {
+                    "min": 1000,
+                    "median": 1250,
+                    "max": 1500,
+                    "unit": "docs/s"
+                }
+            },
+            {
+                "environment": "unittest",
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-version": "5.0.0",
+                "user-tag": "let-me-test",
+                "track": "unittest-track",
+                "challenge": "index",
+                "car": "4gheap",
+                "active": True,
+                "name": "young_gc_time",
+                "value": {
+                    "single": 100
+                }
+            }
+        ]
+        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="results", items=expected_docs)
+
+
 class InMemoryMetricsStoreTests(TestCase):
     def setUp(self):
         self.cfg = config.Config()
@@ -737,8 +849,10 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_by_sample_type(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Warmup,
+                                                   meta_data={"success": False})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+                                                   meta_data={"success": True})
 
         self.metrics_store.close()
 
@@ -750,11 +864,16 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_mixed(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": False})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal, meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+                                                   meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+                                                   meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+                                                   meta_data={"success": False})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+                                                   meta_data={"success": True})
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+                                                   meta_data={"success": True})
 
         self.metrics_store.close()
 

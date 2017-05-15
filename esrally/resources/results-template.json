@@ -1,0 +1,75 @@
+{
+  "template": "rally-results-*",
+  "settings": {
+    "index": {
+      "refresh_interval": "5s"
+    }
+  },
+  "mappings": {
+    "_default_": {
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ],
+      "_all": {
+        "enabled": false
+      },
+      "_source": {
+        "enabled": true
+      },
+      "properties": {
+        "trial-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "user-tag": {
+          "type": "keyword"
+        },
+        "track": {
+          "type": "keyword"
+        },
+        "challenge": {
+          "type": "keyword"
+        },
+        "car": {
+          "type": "keyword"
+        },
+        "distribution-version": {
+          "type": "keyword"
+        },
+        "operation": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "single": {
+              "type": "float"
+            }
+          }
+        }
+      }
+    }
+  }
+}
