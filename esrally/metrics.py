@@ -10,7 +10,7 @@ from enum import Enum, IntEnum
 import certifi
 import tabulate
 from esrally import time, exceptions, config, version, paths
-from esrally.utils import console, io
+from esrally.utils import console, io, versions
 
 logger = logging.getLogger("rally.metrics")
 
@@ -1031,6 +1031,7 @@ class Race:
             "environment": self.environment_name,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "distribution-version": self.cluster.distribution_version,
+            "distribution-major-version": versions.major_version(self.cluster.distribution_version),
             "user-tag": self.user_tag,
             "track": self.track_name,
             "challenge": self.challenge_name,

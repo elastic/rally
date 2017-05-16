@@ -55,6 +55,9 @@
         "distribution-version": {
           "type": "keyword"
         },
+        "distribution-major-version": {
+          "type": "short"
+        },
         "operation": {
           "type": "keyword"
         },
