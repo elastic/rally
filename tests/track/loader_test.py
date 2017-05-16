@@ -277,14 +277,11 @@ class TrackSpecificationReaderTests(TestCase):
             reader("unittest", track_specification, "/mappings", "/data")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'short-description' is missing.", ctx.exception.args[0])
 
-    def test_can_read_track_info_from_meta_block(self):
-        # This test checks for the old syntax where track info was contained in a meta-block
+    def test_can_read_track_info(self):
         track_specification = {
-            "meta": {
-                "short-description": "short description for unit test",
-                "description": "longer description of this track for unit test",
-                "data-url": "https://localhost/data"
-            },
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [],
             "challenges": []
