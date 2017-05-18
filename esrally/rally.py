@@ -402,8 +402,17 @@ def with_actor_system(runnable, cfg):
                 try:
                     logger.info("Attempting to shutdown internal actor system.")
                     actors.shutdown()
-                    shutdown_complete = True
-                    logger.info("Shutdown completed.")
+                    # note that this check will only evaluate to True for a TCP-based actor system.
+                    timeout = 15
+                    while actor.actor_system_already_running() and timeout > 0:
+                        logger.info("Actor system is still running. Waiting...")
+                        time.sleep(1)
+                        timeout -= 1
+                    if timeout > 0:
+                        shutdown_complete = True
+                        logger.info("Shutdown completed.")
+                    else:
+                        logger.warning("Shutdown timed out. Actor system is still running.")
                 except KeyboardInterrupt:
                     times_interrupted += 1
                     logger.warning("User interrupted shutdown of internal actor system.")
