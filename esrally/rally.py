@@ -51,7 +51,7 @@ def configure_logging(cfg):
 
     log_level = logging.INFO
     ch.setLevel(log_level)
-    formatter = logging.Formatter("%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter("%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     formatter.converter = time.gmtime
     ch.setFormatter(formatter)
 
