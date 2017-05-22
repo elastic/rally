@@ -448,16 +448,30 @@ class MetricsStore:
         assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
         self._add(doc)
 
-    def bulk_add(self, docs):
+    def bulk_add(self, memento):
         """
-
         Adds raw metrics store documents previously created with #to_externalizable()
 
-        :param docs:
-        :return:
+        :param memento: The external representation as returned by #to_externalizable().
         """
-        for doc in pickle.loads(zlib.decompress(docs)):
-            self._add(doc)
+        import json
+
+        approach, param = memento
+        if approach == "mem":
+            logger.info("Restoring in-memory representation of metrics store.")
+            for doc in pickle.loads(zlib.decompress(param)):
+                self._add(doc)
+        elif approach == "file":
+            logger.info("Restoring file representation of metrics store from [%s]." % param)
+            try:
+                with open(param, mode="rt", encoding="UTF-8") as f:
+                    for doc in json.load(f):
+                        self._add(doc)
+            except IOError:
+                logger.exception("Could not restore metrics from [%s]." % param)
+                raise exceptions.DataError("Could not transfer metrics.")
+        else:
+            raise ValueError("Unrecognized externalization approach [%s]" % approach)
 
     def _add(self, doc):
         """
@@ -831,21 +845,32 @@ class InMemoryMetricsStore(MetricsStore):
     def flush(self):
         pass
 
-    def to_externalizable(self, clear=False):
+    def to_externalizable(self, clear=False, spill_to_disk=False):
         docs = self.docs
         if clear:
             self.docs = []
-        compressed = zlib.compress(pickle.dumps(docs))
-        logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
-                    (sys.getsizeof(docs), sys.getsizeof(compressed)))
-        return compressed
+        if spill_to_disk:
+            import os
+            import json
+            import tempfile
 
-    def bulk_add(self, docs):
-        if docs == self.docs:
+            path = os.path.join(tempfile.mkdtemp(prefix="rally"), "metrics.json")
+            logger.info("Writing [%d] metrics records temporarily to [%s]." % (len(docs), path))
+            with open(path, "wt", encoding="UTF-8") as f:
+                json.dump(docs, f)
+            return "file", path
+        else:
+            compressed = zlib.compress(pickle.dumps(docs))
+            logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
+                        (sys.getsizeof(docs), sys.getsizeof(compressed)))
+            return "mem", compressed
+
+    def bulk_add(self, memento):
+        approach, docs = memento
+        if approach == "mem" and docs == self.docs:
             return
         else:
-            for doc in pickle.loads(zlib.decompress(docs)):
-                self._add(doc)
+            super().bulk_add(memento)
 
     def get_percentiles(self, name, operation=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
         if percentiles is None:

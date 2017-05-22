@@ -257,7 +257,9 @@ class Driver(actor.RallyActor):
                 logger.info("Postprocessing samples...")
                 self.post_process_samples()
                 logger.info("Sending benchmark results...")
-                self.send(self.start_sender, BenchmarkComplete(self.metrics_store.to_externalizable()))
+                # TODO #257: In case we are not on a single machine, spilling to disk will not work. Check and reimplement if necessary.
+                # Spill to disk to guard against a too large representation of metrics store.
+                self.send(self.start_sender, BenchmarkComplete(self.metrics_store.to_externalizable(spill_to_disk=True)))
                 logger.info("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
