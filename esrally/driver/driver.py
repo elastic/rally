@@ -172,6 +172,7 @@ class Driver(actor.RallyActor):
                 logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
                 for driver in self.drivers:
                     self.send(driver, thespian.actors.ActorExitRequest())
+                logger.info("Main driver has notified all load generators of termination.")
             else:
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:

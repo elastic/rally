@@ -73,12 +73,12 @@ def configure_actor_logging():
         "version": 1,
         "formatters": {
             "normal": {
-                "fmt": "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+                "fmt": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 "()": configure_utc_formatter
             },
             "actor": {
-                "fmt": "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(actorAddress)s => %(message)s",
+                "fmt": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(actorAddress)s => %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 "()": configure_utc_formatter
             }
