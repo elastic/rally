@@ -102,7 +102,7 @@ class BenchmarkFailure:
     Indicates a failure in the benchmark execution due to an exception
     """
 
-    def __init__(self, message, cause):
+    def __init__(self, message, cause=None):
         self.message = message
         self.cause = cause
 
@@ -143,6 +143,7 @@ class Driver(actor.RallyActor):
         self.progress_counter = 0
         self.quiet = False
         self.most_recent_sample_per_client = {}
+        self.status = "init"
 
     def receiveMessage(self, msg, sender):
         try:
@@ -170,15 +171,25 @@ class Driver(actor.RallyActor):
                 self.send(self.myAddress, thespian.actors.ActorExitRequest())
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
+                self.status = "exiting"
                 for driver in self.drivers:
                     self.send(driver, thespian.actors.ActorExitRequest())
                 logger.info("Main driver has notified all load generators of termination.")
+            elif isinstance(msg, thespian.actors.ChildActorExited):
+                driver_index = self.drivers.index(msg.childAddress)
+                if self.status == "exiting":
+                    logger.info("Load generator [%d] has exited." % driver_index)
+                else:
+                    logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
+                    self.send(self.start_sender, BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
+                    self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
             logger.exception("Main driver encountered a fatal exception. Shutting down.")
             if self.metrics_store:
                 self.metrics_store.close()
+            self.status = "exiting"
             for driver in self.drivers:
                 self.send(driver, thespian.actors.ActorExitRequest())
             self.send(self.start_sender, BenchmarkFailure("Could not execute benchmark", e))
