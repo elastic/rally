@@ -8,7 +8,7 @@ import shlex
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster
-from esrally.utils import versions, console, process, jvm
+from esrally.utils import console, process, jvm
 
 logger = logging.getLogger("rally.launcher")
 
@@ -41,9 +41,11 @@ class DockerLauncher:
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
         self.binary_path = None
+        self.node_name = None
 
-    def start(self, car, binary, data_paths):
-        self.binary_path = binary
+    def start(self, node_configuration):
+        self.binary_path = node_configuration.binary_path
+        node_name = node_configuration.node_name
 
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
@@ -59,7 +61,7 @@ class DockerLauncher:
             telemetry.IndexStats(es, self.metrics_store)
         ])
 
-        c = cluster.Cluster(hosts, [self._start_node(hosts[0], 0, es)], t)
+        c = cluster.Cluster(hosts, [self._start_node(hosts[0], node_name, es)], t)
 
         logger.info("Docker container has successfully started. Checking if REST API is available.")
         if wait_for_rest_layer(es):
@@ -72,8 +74,7 @@ class DockerLauncher:
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
 
-    def _start_node(self, host, node, es):
-        node_name = self._node_name(node)
+    def _start_node(self, host, node_name, es):
         p = self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name=node_name)
         # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
         node_telemetry = [
@@ -99,10 +100,6 @@ class DockerLauncher:
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
             raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
-
-    def _node_name(self, node):
-        prefix = self.cfg.opts("provisioning", "node.name.prefix")
-        return "%s%d" % (prefix, node)
 
     def _read_output(self, node_name, server, startup_event):
         """
@@ -155,7 +152,7 @@ the index size).
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
 
-    def start(self, car=None, binary=None, data_paths=None):
+    def start(self, node_configuration=None):
         console.println(ExternalLauncher.BOGUS_RESULTS_WARNING)
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
@@ -194,40 +191,21 @@ class InProcessLauncher:
     """
     PROCESS_WAIT_TIMEOUT_SECONDS = 60.0
 
-    # TODO 68: We should externalize this (see #68)
-    ES_CMD_LINE_OPTS_PER_VERSION = {
-        "1": {
-            "processors": "-Des.processors",
-            "log_path": "-Des.path.logs",
-            "node_name": "-Des.node.name"
-        },
-        "2": {
-            "processors": "-Des.processors",
-            "log_path": "-Des.path.logs",
-            "node_name": "-Des.node.name"
-        },
-        "5": {
-            "processors": "-Eprocessors",
-            "log_path": "-Epath.logs",
-            "node_name": "-Enode.name"
-        },
-        "master": {
-            "processors": "-Eprocessors",
-            "log_path": "-Epath.logs",
-            "node_name": "-Enode.name"
-        }
-    }
-
-    def __init__(self, cfg, metrics_store, challenge_root_dir, log_root_dir, clock=time.Clock):
+    # TODO dm: Remove node_log_dir as parameter here -> NodeConfiguration
+    def __init__(self, cfg, metrics_store, challenge_root_dir, node_log_dir, clock=time.Clock):
         self.cfg = cfg
         self.metrics_store = metrics_store
         self._clock = clock
         self._servers = []
         self.node_telemetry_dir = "%s/telemetry" % challenge_root_dir
-        self.node_log_dir = "%s/server" % log_root_dir
+        self.node_log_dir = node_log_dir
         self.java_home = self.cfg.opts("runtime", "java8.home")
 
-    def start(self, car, binary, data_paths):
+    def start(self, node_configuration):
+        car = node_configuration.car
+        binary = node_configuration.binary_path
+        data_paths = node_configuration.data_paths
+
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
         es = client.EsClientFactory(hosts, client_options).create()
@@ -252,7 +230,7 @@ class InProcessLauncher:
             telemetry.IndexSize(data_paths, self.metrics_store)
         ]
         t = telemetry.Telemetry(enabled_devices, devices=cluster_telemetry)
-        c = cluster.Cluster(hosts, [self._start_node(node, car, es, binary) for node in range(car.nodes)], t)
+        c = cluster.Cluster(hosts, [self._start_node(node_configuration.node_name, car, es, binary) for node in range(car.nodes)], t)
         logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
         if wait_for_rest_layer(es):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
@@ -264,8 +242,7 @@ class InProcessLauncher:
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
 
-    def _start_node(self, node, car, es, binary_path):
-        node_name = self._node_name(node)
+    def _start_node(self, node_name, car, es, binary_path):
         host_name = socket.gethostname()
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
@@ -284,8 +261,7 @@ class InProcessLauncher:
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
 
         env = self._prepare_env(car, node_name, t)
-        cmd = self.prepare_cmd(car, node_name)
-        process = self._start_process(cmd, env, node_name, binary_path)
+        process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(process, host_name, node_name, t)
         logger.info("Cluster node [%s] has successfully started. Attaching telemetry devices to node." % node_name)
         t.attach_to_node(node)
@@ -296,6 +272,7 @@ class InProcessLauncher:
     def _prepare_env(self, car, node_name, t):
         env = {}
         env.update(os.environ)
+        env.update(car.env)
         # Unix specific!:
         self._set_env(env, "PATH", "%s/bin" % self.java_home, separator=":")
         # Don't merge here!
@@ -308,18 +285,9 @@ class InProcessLauncher:
         exit_on_oome_flag = "-XX:+ExitOnOutOfMemoryError"
         if jvm.supports_option(self.java_home, exit_on_oome_flag):
             logger.info("JVM supports [%s]. Setting this option to detect out of memory errors during the benchmark." % exit_on_oome_flag)
-            java_opts = "%s " % exit_on_oome_flag
+            self._set_env(env, "ES_JAVA_OPTS", exit_on_oome_flag)
         else:
             logger.info("JVM does not support [%s]. Cannot detect out of memory errors. Please consider a JDK upgrade." % exit_on_oome_flag)
-            java_opts = ""
-
-        if car.heap:
-            java_opts += "-Xms%s -Xmx%s " % (car.heap, car.heap)
-        if car.java_opts:
-            java_opts += car.java_opts
-        if len(java_opts) > 0:
-            self._set_env(env, "ES_JAVA_OPTS", java_opts)
-        self._set_env(env, "ES_GC_OPTS", car.gc_opts)
 
         logger.info("ENV: %s" % str(env))
         return env
@@ -331,33 +299,12 @@ class InProcessLauncher:
             else:  # merge
                 env[k] = v + separator + env[k]
 
-    def prepare_cmd(self, car, node_name):
-        distribution_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
-
-        cmd = ["bin/elasticsearch",
-               "%s=%s" % (self.cmd_line_opt(distribution_version, "node_name"), node_name),
-               "%s=%s" % (self.cmd_line_opt(distribution_version, "log_path"), self.node_log_dir)
-               ]
-        processor_count = car.processors
-        if processor_count is not None and processor_count > 1:
-            cmd.append("%s=%s" % (self.cmd_line_opt(distribution_version, "processors"), processor_count))
-        logger.info("ES launch: %s" % str(cmd))
-        return cmd
-
-    def cmd_line_opt(self, distribution_version, key):
-        best_version = versions.best_match(InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION.keys(), distribution_version)
-        if best_version:
-            return InProcessLauncher.ES_CMD_LINE_OPTS_PER_VERSION[best_version][key]
-        else:
-            raise exceptions.LaunchError("Cannot start cluster. Unsupported distribution version %s. "
-                                         "Please raise a bug at %s." %
-                                         (distribution_version, console.format.link("https://github.com/elastic/rally")))
-
-    def _start_process(self, cmd, env, node_name, binary_path):
+    def _start_process(self, env, node_name, binary_path):
         if os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
         startup_event = threading.Event()
+        cmd = ["bin/elasticsearch"]
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
         t = threading.Thread(target=self._read_output, args=(node_name, process, startup_event))
         t.setDaemon(True)
@@ -377,10 +324,6 @@ class InProcessLauncher:
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
             raise exceptions.LaunchError(msg)
-
-    def _node_name(self, node):
-        prefix = self.cfg.opts("provisioning", "node.name.prefix")
-        return "%s%d" % (prefix, node)
 
     def _read_output(self, node_name, server, startup_event):
         """

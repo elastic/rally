@@ -47,7 +47,7 @@ class TelemetryTests(TestCase):
 
         t = telemetry.Telemetry(enabled_devices=None, devices=devices)
 
-        default_car = car.Car(name="default-car")
+        default_car = car.Car(name="default-car", config_paths=["/tmp/rally-config"])
         opts = t.instrument_candidate_env(default_car, "default-node")
 
         self.assertTrue(opts)

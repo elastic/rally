@@ -312,13 +312,14 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
     install_dir = "%s/install" % challenge_root_path
     log_dir = "%s/logs" % challenge_root_path
     io.ensure_dir(log_dir)
+    node_log_dir = "%s/server" % log_dir
 
     if sources:
         try:
             src_dir = cfg.opts("source", "local.src.dir")
         except config.ConfigError:
             logger.exception("Cannot determine source directory")
-            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Are you missing Gradle? Please install"
+            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
                                               " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
         remote_url = cfg.opts("source", "remote.repo.url")
@@ -327,16 +328,16 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
         java_home = cfg.opts("runtime", "java8.home")
 
         s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build)
-        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, single_machine)
-        l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, log_dir)
+        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
+        l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, node_log_dir)
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
         repo_name = cfg.opts("mechanic", "distribution.repository")
         distributions_root = "%s/%s" % (cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
 
         s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distributions_root=distributions_root)
-        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, single_machine)
-        l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, log_dir)
+        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
+        l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, node_log_dir)
     elif external:
         if cluster_settings:
             logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "
@@ -369,9 +370,8 @@ class Mechanic:
 
     def start_engine(self):
         binary = self.supply()
-        self.provisioner.prepare(binary)
         logger.info("Starting engine.")
-        self.cluster = self.launcher.start(self.provisioner.car, self.provisioner.binary_path, self.provisioner.data_paths)
+        self.cluster = self.launcher.start(self.provisioner.prepare(binary))
         return self.cluster
 
     def on_benchmark_start(self):

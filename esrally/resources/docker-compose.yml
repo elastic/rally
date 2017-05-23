@@ -3,14 +3,6 @@ services:
   elasticsearch1:
     cap_add:
       - IPC_LOCK
-    environment:
-      - discovery.zen.minimum_master_nodes=1
-      - bootstrap.memory_lock=true
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS={{es_java_opts}}"
-      {%- for key, value in cluster_settings.items() %}
-      - {{key}}={{value}}
-      {%- endfor %}
     image: "docker.elastic.co/elasticsearch/elasticsearch:{{es_version}}"
     mem_limit: {{container_memory_gb}}
     ports:
@@ -25,6 +17,9 @@ services:
         hard: 65536
     volumes:
       - esdata1:{{es_data_dir}}
+      - full_path_to/custom_elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
 volumes:
   esdata1:
     driver: local
+
+

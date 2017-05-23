@@ -19,7 +19,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "preserve.install", True)
         cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg, cluster_settings=None, install_dir="es-bin", single_machine=True)
+        p = provisioner.Provisioner(cfg, cluster_settings=None, install_dir="es-bin", node_log_dir="rally-logs", single_machine=True)
         p.cleanup()
 
         mock_path_exists.assert_not_called()
@@ -35,7 +35,7 @@ class ProvisionerTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.name", "defaults")
         cfg.add(config.Scope.application, "mechanic", "node.datapaths", ["/tmp/some/data-path-dir"])
 
-        p = provisioner.Provisioner(cfg, cluster_settings={}, install_dir="es-bin", single_machine=True)
+        p = provisioner.Provisioner(cfg, cluster_settings={}, install_dir="es-bin", node_log_dir="rally-logs", single_machine=True)
         p.data_paths = ["/tmp/some/data-path-dir"]
         p.cleanup()
 
@@ -60,6 +60,7 @@ class ProvisionerTests(TestCase):
         p = provisioner.Provisioner(cfg,
                                     cluster_settings={"indices.query.bool.max_clause_count": 5000},
                                     install_dir="es-bin",
+                                    node_log_dir="rally-logs",
                                     single_machine=True)
         p.prepare("/data/builds/distributions/")
 
