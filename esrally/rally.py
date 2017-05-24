@@ -413,6 +413,7 @@ def with_actor_system(runnable, cfg):
                         logger.info("Shutdown completed.")
                     else:
                         logger.warning("Shutdown timed out. Actor system is still running.")
+                        break
                 except KeyboardInterrupt:
                     times_interrupted += 1
                     logger.warning("User interrupted shutdown of internal actor system.")
@@ -426,6 +427,8 @@ def with_actor_system(runnable, cfg):
                 console.println("")
                 console.println(SKULL)
                 console.println("")
+            elif not shutdown_complete:
+                console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes.")
 
 
 def dispatch_sub_command(cfg, sub_command):
