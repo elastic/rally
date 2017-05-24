@@ -27,31 +27,46 @@ Use our `Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ to p
 Source Code
 -----------
 
-Rally's source code is available on `Github <https://github.com/elastic/rally>`_.
-
-Contents
---------
+Rally's source code is available on `Github <https://github.com/elastic/rally>`_. You can also check the `changelog <https://github.com/elastic/rally/releases>`_ and the `roadmap <https://github.com/elastic/rally/milestones>`_ there.
 
 .. toctree::
-   :maxdepth: 1
+   :caption: Getting Started with Rally
+   :maxdepth: 2
 
    quickstart
    install
    configuration
    race
+   tournament
+   recipes
+
+.. toctree::
+   :caption: Extending Rally
+   :maxdepth: 2
+
+   developing
    adding_tracks
+
+.. toctree::
+   :caption: Reference Documentation
+   :maxdepth: 2
+
+   command_line_reference
    track
    car
    telemetry
    pipelines
    metrics
-   tournament
-   recipes
-   command_line_reference
-   developing
+
+.. toctree::
+   :caption: Additional Information
+   :maxdepth: 2
+
    faq
    glossary
    community
+
+
 
 License
 -------
