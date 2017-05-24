@@ -12,7 +12,7 @@ By default, Rally will run a simpler configuration routine and autodetect as muc
 
 Rally can build Elasticsearch either from sources or use an `official binary distribution <https://www.elastic.co/downloads/elasticsearch>`_. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
 
-If you want to build Elasticsearch from sources, Gradle 2.13 needs to be installed prior to running the configuration routine.
+If you want to build Elasticsearch from sources, Gradle needs to be installed prior to running the configuration routine.
 
 Let's go through an example step by step: First run ``esrally``::
 

@@ -10,7 +10,7 @@ Please ensure that the following packages are installed before installing Rally 
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8
 * git 1.9 or better
-* Gradle 2.13
+* Gradle 3.3 or better
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 

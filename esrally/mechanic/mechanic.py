@@ -318,7 +318,7 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
             src_dir = cfg.opts("source", "local.src.dir")
         except config.ConfigError:
             logger.exception("Cannot determine source directory")
-            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Are you missing Gradle 2.13? Please install"
+            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Are you missing Gradle? Please install"
                                               " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
         remote_url = cfg.opts("source", "remote.repo.url")
