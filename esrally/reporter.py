@@ -359,6 +359,7 @@ class SummaryReporter:
 
         stats = self.results
 
+        warnings = []
         metrics_table = []
         meta_info_table = []
         metrics_table += self.report_total_times(stats)
@@ -377,10 +378,24 @@ class SummaryReporter:
             metrics_table += self.report_latency(record, operation)
             metrics_table += self.report_service_time(record, operation)
             metrics_table += self.report_error_rate(record, operation)
+            self.add_warnings(warnings, record, operation)
 
         meta_info_table += self.report_meta_info()
 
         self.write_report(metrics_table, meta_info_table)
+
+        if warnings:
+            for warning in warnings:
+                console.warn(warning, logger=logger)
+
+    def add_warnings(self, warnings, values, op):
+        if values["throughput"]["median"] is None:
+            error_rate = values["error_rate"]
+            if error_rate:
+                warnings.append("No throughput metrics available for [%s]. Likely cause: Error rate is %.1f%%. Please check the logs."
+                                % (op, error_rate * 100))
+            else:
+                warnings.append("No throughput metrics available for [%s]. Likely cause: The benchmark ended already during warmup." % op)
 
     def write_report(self, metrics_table, meta_info_table):
         report_file = self._config.opts("reporting", "output.path")
