@@ -112,9 +112,9 @@ class Type:
         :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
          a document_archive is given.
         :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
-         user reporting. Only needed if a document_archive is given.
-        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only needed if a
-        document_archive is given.
+         user reporting. Only useful if a document_archive is given (optional but recommended to be set).
+        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only useful if a
+        document_archive is given (optional but recommended to be set).
         """
         self.name = name
         self.mapping_file = mapping_file
@@ -126,9 +126,7 @@ class Type:
 
     def has_valid_document_data(self):
         return self.document_file is not None and \
-               self.number_of_documents > 0 and \
-               self.compressed_size_in_bytes > 0 and \
-               self.uncompressed_size_in_bytes > 0
+               self.number_of_documents > 0
 
     def __str__(self, *args, **kwargs):
         return self.name

@@ -549,18 +549,23 @@ class TrackSpecificationReader:
         if compressed_docs:
             document_archive = "%s/%s" % (data_dir, compressed_docs)
             document_file = "%s/%s" % (data_dir, io.splitext(compressed_docs)[0])
+            number_of_documents = self._r(type_spec, "document-count")
+            compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
+            uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
         else:
             document_archive = None
             document_file = None
+            number_of_documents = 0
+            compressed_bytes = 0
+            uncompressed_bytes = 0
 
         return track.Type(name=self._r(type_spec, "name"),
                           mapping_file="%s/%s" % (mapping_dir, self._r(type_spec, "mapping")),
                           document_file=document_file,
                           document_archive=document_archive,
-                          number_of_documents=self._r(type_spec, "document-count", mandatory=False, default_value=0),
-                          compressed_size_in_bytes=self._r(type_spec, "compressed-bytes", mandatory=False),
-                          uncompressed_size_in_bytes=self._r(type_spec, "uncompressed-bytes", mandatory=False)
-                          )
+                          number_of_documents=number_of_documents,
+                          compressed_size_in_bytes=compressed_bytes,
+                          uncompressed_size_in_bytes=uncompressed_bytes)
 
     def _create_challenges(self, track_spec):
         ops = self.parse_operations(self._r(track_spec, "operations"))

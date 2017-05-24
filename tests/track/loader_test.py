@@ -293,6 +293,20 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("longer description of this track for unit test", resulting_track.description)
         self.assertEqual("https://localhost/data", resulting_track.source_root_url)
 
+    def test_document_count_mandatory_if_file_present(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
+            "indices": [{"name": "test-index", "types": [{"name": "docs", "documents": "documents.json.bz2"}]}],
+            "operations": [],
+            "challenges": []
+        }
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'document-count' is missing.", ctx.exception.args[0])
+
     def test_parse_with_mixed_warmup_iterations_and_measurement(self):
         track_specification = {
             "short-description": "short description for unit test",
