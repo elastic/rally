@@ -5,10 +5,6 @@ Rally has to be configured once after installation. If you just run ``esrally`` 
 
 If you want to reconfigure Rally at any later time, just run ``esrally configure`` again.
 
-.. note::
-
-   If you get the error ``UnicodeEncodeError: 'ascii' codec can't encode character``, please configure your shell so it supports UTF-8 encoding. You can check the output of ``locale`` which should show UTF-8 as sole encoding. If in doubt, add ``export LC_ALL=en_US.UTF-8`` to your shell init file (e.g. ``~/.bashrc`` if you use Bash) and relogin.
-
 Simple Configuration
 --------------------
 
@@ -33,12 +29,12 @@ Let's go through an example step by step: First run ``esrally``::
 
       esrally configure --advanced-config
 
-    [✓] Autodetecting available third-party software
-      git    : [✓]
-      gradle : [✓]
-      JDK 8  : [✓]
+    * Autodetecting available third-party software
+      git    : [OK]
+      gradle : [OK]
+      JDK 8  : [OK]
 
-    [✓] Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
+    * Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
 
 As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. If you don't have Gradle, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you don't have Gradle installed::
 
@@ -55,10 +51,10 @@ As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. 
 
       esrally configure --advanced-config
 
-    [✓] Autodetecting available third-party software
-      git    : [✓]
-      gradle : [✕]
-      JDK 8  : [✓]
+    * Autodetecting available third-party software
+      git    : [OK]
+      gradle : [MISSING]
+      JDK 8  : [OK]
 
     **********************************************************************************
     You don't have the necessary software to benchmark source builds of Elasticsearch.
@@ -74,11 +70,11 @@ It's also possible that Rally cannot automatically find your JDK 8 home director
 
 After the initial detection, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``). If all goes well, then you will see this::
 
-    [✓] Autodetected Elasticsearch project directory at [/Users/dm/elasticsearch].
+    Autodetected Elasticsearch project directory at [/Users/dm/elasticsearch].
 
 Otherwise, Rally will choose a default directory and ask you for confirmation::
 
-    [✓] Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
+    * Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
     Enter your Elasticsearch project directory: [default: '/Users/dm/.rally/benchmarks/src']:
 
 If you are ok with this default, just press "Enter" and Rally will take care of the rest. Otherwise, provide your Elasticsearch project directory here. Please keep in mind that Rally will run builds with Gradle in this directory if you start a benchmark.
@@ -87,7 +83,7 @@ If Rally has not found Gradle in the first step, it will not ask you for a sourc
 
 Now Rally is done::
 
-    [✓] Configuration successfully written to [/Users/dm/.rally/rally.ini]. Happy benchmarking!
+    Configuration successfully written to [/Users/dm/.rally/rally.ini]. Happy benchmarking!
 
     To benchmark the latest version of Elasticsearch with the default benchmark run:
 

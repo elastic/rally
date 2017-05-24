@@ -237,7 +237,7 @@ class ConfigFactory:
             logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine." % config_file.location)
 
         # Autodetect settings
-        self.o("[✓] Autodetecting available third-party software")
+        self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
         gradle_bin = io.guess_install_location("gradle")
         default_jdk_8 = io.guess_java_home(major_version=8)
@@ -267,14 +267,14 @@ class ConfigFactory:
         if advanced_config:
             root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory:", default_value=root_dir))
         else:
-            self.o("[✓] Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
+            self.o("* Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
 
         if benchmark_from_sources:
             # We try to autodetect an existing ES source directory
             guess = self._guess_es_src_dir()
             if guess:
                 source_dir = guess
-                self.o("[✓] Autodetected Elasticsearch project directory at [%s]." % source_dir)
+                self.o("Autodetected Elasticsearch project directory at [%s]." % source_dir)
                 logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
             else:
                 default_src_dir = "%s/src" % root_dir
@@ -345,7 +345,7 @@ class ConfigFactory:
 
         config_file.store(config)
 
-        self.o("[✓] Configuration successfully written to [%s]. Happy benchmarking!" % config_file.location)
+        self.o("Configuration successfully written to [%s]. Happy benchmarking!" % config_file.location)
         self.o("")
         if benchmark_from_sources:
             self.o("To benchmark Elasticsearch with the default benchmark run:")
@@ -368,11 +368,11 @@ class ConfigFactory:
             message = ""
 
         if result:
-            self.o("  %s: [%s]" % (what, console.format.green("✓")))
+            self.o("  %s: [%s]" % (what, console.format.green("OK")))
         elif warn_if_missing:
-            self.o("  %s: [%s]%s" % (what, console.format.yellow("✕"), message))
+            self.o("  %s: [%s]%s" % (what, console.format.yellow("MISSING"), message))
         else:
-            self.o("  %s: [%s]%s" % (what, console.format.red("✕"), message))
+            self.o("  %s: [%s]%s" % (what, console.format.red("MISSING"), message))
 
     def _guess_es_src_dir(self):
         current_dir = os.getcwd()

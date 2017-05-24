@@ -2,6 +2,9 @@ clean:
 	rm -rf .benchmarks .eggs .tox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml
 	cd docs && $(MAKE) clean
 
+docs:
+	cd docs && $(MAKE) html
+
 test:
 	python3 setup.py test
 
@@ -15,4 +18,4 @@ coverage:
 	coverage run setup.py test
 	coverage html
 
-.PHONY: clean test integration-test benchmark coverage
+.PHONY: clean docs test integration-test benchmark coverage
