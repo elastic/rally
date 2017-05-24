@@ -57,6 +57,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    telemetry
    pipelines
    metrics
+   summary_report
 
 .. toctree::
    :caption: Additional Information
