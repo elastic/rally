@@ -784,10 +784,16 @@ All track repositories are located in ``~/.rally/benchmarks/tracks``. If you wan
     cd private
     git init
     # add your track now
-    git commit -a -m "Initial commit"
+    git add .
+    git commit -m "Initial commit"
 
 
-If you also have a remote for this repository, open ``~/.rally/rally.ini`` in your editor of choice and add the following line in the section ``tracks``, otherwise just skip this step::
+If you want to share your tracks with others you need to add a remote and push it::
+
+    git remote add origin git@git-repos.acme.com:acme/rally-tracks.git
+    git push -u origin master
+
+If you have added a remote you should also add it in ``~/.rally/rally.ini``, otherwise you can skip this step. Open the file in your editor of choice and add the following line in the section ``tracks``::
 
     private.url = <<URL_TO_YOUR_ORIGIN>>
 
