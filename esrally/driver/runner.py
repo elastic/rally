@@ -114,6 +114,8 @@ class BulkIndex(Runner):
 
         * ``index``: name of the affected index. May be `None` if it could not be derived.
         * ``bulk-size``: bulk size, e.g. 5.000.
+        * ``bulk-request-size-bytes``: size of the full bulk requset in bytes
+        * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
         * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
         * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
         * ``success``: A boolean indicating whether the bulk request has succeeded.
@@ -139,6 +141,8 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0
@@ -151,6 +155,8 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000
@@ -164,6 +170,8 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0,
@@ -193,6 +201,8 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000,
@@ -245,6 +255,18 @@ class BulkIndex(Runner):
             raise exceptions.DataError(
                 "Bulk parameter source did not provide a 'bulk-size' parameter. Please add it to your parameter source.")
 
+        bulk_request_size_bytes = 0
+        total_document_size_bytes = 0
+
+        for i in range(len(params["body"])):
+            if params["action_metadata_present"]:
+                if i % 2 == 1:
+                    total_document_size_bytes += len(params["body"][i])
+            else:
+                total_document_size_bytes += len(params["body"][i])
+
+            bulk_request_size_bytes += len(params["body"][i])
+
         if with_action_metadata:
             # only half of the lines are documents
             response = es.bulk(body=params["body"], params=bulk_params)
@@ -258,6 +280,8 @@ class BulkIndex(Runner):
             "weight": bulk_size,
             "unit": "docs",
             "bulk-size": bulk_size,
+            "bulk-request-size-bytes": bulk_request_size_bytes,
+            "total-document-size-bytes": total_document_size_bytes
         }
         meta_data.update(stats)
         return meta_data
