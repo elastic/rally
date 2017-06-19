@@ -114,9 +114,12 @@ class DelegatingParamSource(ParamSource):
 class SearchParamSource(ParamSource):
     def __init__(self, indices, params):
         super().__init__(indices, params)
-        if len(indices) == 1 and len(indices[0].types) == 1:
+        if len(indices) == 1:
             default_index = indices[0].name
-            default_type = indices[0].types[0].name
+            if len(indices[0].types) == 1:
+                default_type = indices[0].types[0].name
+            else:
+                default_type = None
         else:
             default_index = None
             default_type = None
