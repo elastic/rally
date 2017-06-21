@@ -1,3 +1,37 @@
+### 0.6.0
+
+#### Highlights
+
+* [#258](https://github.com/elastic/rally/issues/258): Make 'race' self-contained
+
+#### Enhancements
+
+* [#284](https://github.com/elastic/rally/issues/284) (Breaking): Disallow previously deprecated usage of track properties in meta block
+* [#283](https://github.com/elastic/rally/issues/283): Store race results in a format optimized for reporting
+* [#279](https://github.com/elastic/rally/issues/279) (Breaking): Separate race and metrics indices
+* [#276](https://github.com/elastic/rally/issues/276): Add affected index to meta-data returned by bulk index runner
+* [#275](https://github.com/elastic/rally/issues/275): Allow to define per-challenge cluster-settings
+* [#267](https://github.com/elastic/rally/issues/267): Provide a progress-indication for downloads
+* [#266](https://github.com/elastic/rally/issues/266): Make the gc telemetry device Java 9 compatible
+* [#246](https://github.com/elastic/rally/issues/246): Rally should print a warning if there are no measurement samples
+* [#223](https://github.com/elastic/rally/issues/223): Allow unlimited number of pages for scroll queries
+* [#222](https://github.com/elastic/rally/issues/222): Report number of hits, not just pages, for scroll queries
+* [#220](https://github.com/elastic/rally/issues/220) (Breaking): Allow monthly indices for metrics
+* [#138](https://github.com/elastic/rally/issues/138) (Breaking): Improve support Elasticsearch 5 as metrics store
+
+#### Bug Fixes
+
+* [#285](https://github.com/elastic/rally/issues/285): Rally is stuck for benchmarks with a very large number of requests
+* [#280](https://github.com/elastic/rally/issues/280): The file-reader parameter source does not seem to pass additional parameters
+
+#### Doc Changes
+
+* [#288](https://github.com/elastic/rally/issues/288): Clarify usage of remote track repositories in docs
+* [#287](https://github.com/elastic/rally/issues/287): Document throughput semantics for each operation
+* [#274](https://github.com/elastic/rally/issues/274): Explain summary report output
+* [#271](https://github.com/elastic/rally/issues/271): Document how to implement custom runner classes
+* [#264](https://github.com/elastic/rally/issues/264): Documentation on settings and warning message when using a documents archive file
+
 ### 0.5.3
 
 #### Highlights
