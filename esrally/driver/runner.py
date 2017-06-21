@@ -283,7 +283,7 @@ class BulkIndex(Runner):
 
             line_size = len(data.encode('utf-8'))
             if params["action_metadata_present"]:
-                if i % 2 == 1:
+                if line_number % 2 == 1:
                     total_document_size_bytes += line_size
             else:
                 total_document_size_bytes += line_size
