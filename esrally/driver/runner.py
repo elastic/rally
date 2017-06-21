@@ -255,41 +255,41 @@ class BulkIndex(Runner):
             raise exceptions.DataError(
                 "Bulk parameter source did not provide a 'bulk-size' parameter. Please add it to your parameter source.")
 
-        bulk_request_size_bytes = 0
-        total_document_size_bytes = 0
-
-        for i in range(len(params["body"])):
-            if params["action_metadata_present"]:
-                if i % 2 == 1:
-                    total_document_size_bytes += len(params["body"][i])
-            else:
-                total_document_size_bytes += len(params["body"][i])
-
-            bulk_request_size_bytes += len(params["body"][i])
-
         if with_action_metadata:
             # only half of the lines are documents
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
             response = es.bulk(body=params["body"], index=index, doc_type=params["type"], params=bulk_params)
 
-        stats = self.detailed_stats(bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
+        stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
         meta_data = {
             "index": str(index) if index else None,
             "weight": bulk_size,
             "unit": "docs",
-            "bulk-size": bulk_size,
-            "bulk-request-size-bytes": bulk_request_size_bytes,
-            "total-document-size-bytes": total_document_size_bytes
+            "bulk-size": bulk_size
         }
         meta_data.update(stats)
         return meta_data
 
-    def detailed_stats(self, bulk_size, response):
+    def detailed_stats(self, params, bulk_size, response):
         ops = {}
         shards_histogram = OrderedDict()
         bulk_error_count = 0
+        bulk_request_size_bytes = 0
+        total_document_size_bytes = 0
+
+        for line_number, data in enumerate(params["body"]):
+
+            line_size = len(data.encode('utf-8'))
+            if params["action_metadata_present"]:
+                if i % 2 == 1:
+                    total_document_size_bytes += line_size
+            else:
+                total_document_size_bytes += line_size
+
+            bulk_request_size_bytes += line_size
+
         for idx, item in enumerate(response["items"]):
             # there is only one (top-level) item
             op, data = next(iter(item.items()))
@@ -315,7 +315,9 @@ class BulkIndex(Runner):
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count,
             "ops": ops,
-            "shards_histogram": list(shards_histogram.values())
+            "shards_histogram": list(shards_histogram.values()),
+            "bulk-request-size-bytes": bulk_request_size_bytes,
+            "total-document-size-bytes": total_document_size_bytes
         }
 
     def simple_stats(self, bulk_size, response):
