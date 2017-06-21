@@ -9,7 +9,7 @@ import time
 import faulthandler
 import signal
 
-from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, facts, time as rtime
+from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL
 from esrally.mechanic import car, telemetry
 from esrally.utils import io, convert, process, console, net
@@ -121,16 +121,12 @@ def parse_args():
         "configuration",
         metavar="configuration",
         help="The configuration for which Rally should show the available options. "
-             "Possible values are: telemetry, tracks, pipelines, races, cars, facts",
-        choices=["telemetry", "tracks", "pipelines", "races", "cars", "facts"])
+             "Possible values are: telemetry, tracks, pipelines, races, cars",
+        choices=["telemetry", "tracks", "pipelines", "races", "cars"])
     list_parser.add_argument(
         "--limit",
         help="Limit the number of search results for recent races (default: 10).",
         default=10,
-    )
-    list_parser.add_argument(
-        "--target-hosts",
-        help="A comma-separated list of IP addresses of the target hosts from which to gather facts."
     )
 
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
@@ -358,8 +354,6 @@ def list(cfg):
         metrics.list_races(cfg)
     elif what == "cars":
         car.list_cars(cfg)
-    elif what == "facts":
-        with_actor_system(lambda c: facts.list_facts(cfg), cfg)
     else:
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
@@ -602,7 +596,6 @@ def main():
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-        cfg.add(config.Scope.applicationOverride, "facts", "hosts", csv_to_list(args.target_hosts))
 
     configure_logging(cfg)
     logger.info("OS [%s]" % str(os.uname()))

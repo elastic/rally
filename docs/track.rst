@@ -159,21 +159,29 @@ Example::
     }
 
 
+Throughput will be reported as number of indexed documents per second.
+
 force-merge
 ~~~~~~~~~~~
 
 With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It support the following parameter:
 * ``max_num_segments`` (optional)  The number of segments the index should be merged into. Defaults to simply checking if a merge needs to execute, and if so, executes it.
 
+Throughput metrics are not necessarily very useful but will be reported in the number of completed force-merge operations per second.
+
 index-stats
 ~~~~~~~~~~~
 
 With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_. It does not support any parameters.
 
+Throughput will be reported as number of completed `index-stats` operations per second.
+
 node-stats
 ~~~~~~~~~~
 
 With the operation type ``nodes-stats`` you can execute `nodes stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_. It does not support any parameters.
+
+Throughput will be reported as number of completed `node-stats` operations per second.
 
 search
 ~~~~~~
@@ -198,6 +206,10 @@ Example::
         }
       }
     }
+
+For scroll queries, throughput will be reported as number of retrieved scroll pages per second. The unit is ops/s, where one op(eration) is one page that has been retrieved. The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+
+For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
 
 challenges
 ..........
