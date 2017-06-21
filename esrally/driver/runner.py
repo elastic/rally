@@ -130,7 +130,8 @@ class BulkIndex(Runner):
         * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a shard
           distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and ``failed``
           shards (see examples below).
-
+        * ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
+        * ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
 
         Here are a few examples:
 
@@ -141,8 +142,6 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
-                "bulk-request-size-bytes": 2250000,
-                "total-document-size-bytes": 2000000,
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0
@@ -155,8 +154,6 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
-                "bulk-request-size-bytes": 2250000,
-                "total-document-size-bytes": 2000000,
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000
