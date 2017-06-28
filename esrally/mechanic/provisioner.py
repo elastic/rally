@@ -6,7 +6,7 @@ import logging
 import jinja2
 
 from esrally.mechanic import car
-from esrally.utils import io, console, convert, sysstats
+from esrally.utils import io, console
 
 logger = logging.getLogger("rally.provisioner")
 
@@ -19,7 +19,7 @@ def no_op_provisioner(cfg):
     return NoOpProvisioner(cfg.opts("mechanic", "car.name"))
 
 
-def docker_provisioner(cfg, cluster_settings, install_dir):
+def docker_provisioner(cfg, cluster_settings, install_dir, node_log_dir):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
@@ -27,7 +27,7 @@ def docker_provisioner(cfg, cluster_settings, install_dir):
 
     c = car.load_car(cfg, cfg.opts("mechanic", "car.name"))
 
-    return DockerProvisioner(c, node_name_prefix, cluster_settings, http_port, install_dir, distribution_version, rally_root)
+    return DockerProvisioner(c, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version, rally_root)
 
 
 class NodeConfiguration:
@@ -44,6 +44,11 @@ class ConfigLoader:
 
     def load(self):
         pass
+
+
+def _render_template(env, variables, file_name):
+    template = env.get_template(io.basename(file_name))
+    return template.render(variables)
 
 
 class Provisioner:
@@ -139,13 +144,9 @@ class Provisioner:
                 target_file = os.path.join(absolute_target_root, name)
                 logger.info("Writing config file [%s]" % target_file)
                 with open(target_file, "w") as f:
-                    f.write(self.render_template(env, variables, source_file))
+                    f.write(_render_template(env, variables, source_file))
 
         return NodeConfiguration(self.car, node_name, self.binary_path, self.data_paths)
-
-    def render_template(self, env, variables, file_name):
-        template = env.get_template(io.basename(file_name))
-        return template.render(variables)
 
     def _node_name(self, node):
         return "%s%d" % (self.node_name_prefix, node)
@@ -169,40 +170,74 @@ class NoOpProvisioner:
 
 
 class DockerProvisioner:
-    def __init__(self, car, node_name_prefix, cluster_settings, http_port, install_dir, distribution_version, rally_root):
+    def __init__(self, car, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version, rally_root):
         self.car = car
         self._cluster_settings = cluster_settings
         self.http_port = http_port
         self.install_dir = install_dir
+        self.node_log_dir = node_log_dir
         self.distribution_version = distribution_version
         self.rally_root = rally_root
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
         self.data_path = "%s/data" % self.install_dir
+        self.data_paths = [self.data_path]
         self.node_name = "%s0" % node_name_prefix
 
     def prepare(self, binary):
         io.ensure_dir(self.install_dir)
+        node_name = "rally-docker"
+        provisioner_defaults = {
+            "cluster_name": "rally-benchmark",
+            "node_name": node_name,
+            # we bind-mount the directories below on the host to these ones.
+            "data_paths": ["/usr/share/elasticsearch/data"],
+            "log_path": "/var/log/elasticsearch",
+            # Docker container needs to expose service on external interfaces
+            "network_host": "0.0.0.0",
+            "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
+            "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
+            "node_count_per_host": 1,
+            # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
+            "cluster_settings": self._cluster_settings
+        }
 
-        # TODO dm: 1. Provide custom Elasticsearch config
-        # TODO dm: 2. Provide variable for Bind mount for config directory
+        variables = {}
+        variables.update(self.car.variables)
+        variables.update(provisioner_defaults)
 
-        #TODO #196: Can we provide a custom elasticsearch.yml here? Yes, we can: https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#_b_bind_mounted_configuration
-        docker_cfg = self._render_template_from_file(self.docker_vars)
+        mounts = {}
+
+        car_config_path = self.car.config_path
+        for root, dirs, files in os.walk(car_config_path):
+            env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
+
+            relative_root = root[len(car_config_path) + 1:]
+            absolute_target_root = os.path.join(self.install_dir, relative_root)
+            io.ensure_dir(absolute_target_root)
+
+            for name in files:
+                source_file = os.path.join(root, name)
+                target_file = os.path.join(absolute_target_root, name)
+                mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
+                logger.info("Writing config file [%s]" % target_file)
+                with open(target_file, "w") as f:
+                    f.write(_render_template(env, variables, source_file))
+
+        docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
 
         with open(self.binary_path, "wt") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration(self.car, self.node_name, self.binary_path, [self.data_path])
+        return NodeConfiguration(self.car, self.node_name, self.binary_path, self.data_paths)
 
-    @property
-    def docker_vars(self):
+    def docker_vars(self, mounts):
         return {
-            "container_memory_gb": "%dg" % (convert.bytes_to_gb(sysstats.total_memory()) // 2),
-            "es_data_dir": self.data_path,
             "es_version": self.distribution_version,
             "http_port": self.http_port,
-            "cluster_settings": self._cluster_settings
+            "es_data_dir": self.data_path,
+            "es_log_dir": self.node_log_dir,
+            "mounts": mounts
         }
 
     def cleanup(self):

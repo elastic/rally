@@ -238,6 +238,7 @@ class NodeMechanicActor(actor.RallyActor):
         self.metrics_store = None
         self.mechanic = None
         self.single_machine = single_machine
+        self.running = False
 
     def receiveMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
@@ -266,6 +267,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.mechanic = create(self.config, self.metrics_store, self.single_machine, msg.cluster_settings, msg.sources, msg.build,
                                        msg.distribution, msg.external, msg.docker)
                 cluster = self.mechanic.start_engine()
+                self.running = True
                 self.send(sender, EngineStarted(
                     ClusterMetaInfo([NodeMetaInfo(node) for node in cluster.nodes], cluster.source_revision, cluster.distribution_version),
                     self.metrics_store.meta_info))
@@ -282,10 +284,17 @@ class NodeMechanicActor(actor.RallyActor):
                 self.mechanic.stop_engine()
                 self.send(sender, EngineStopped(self.metrics_store.to_externalizable()))
                 # clear all state as the mechanic might get reused later
+                self.running = False
                 self.config = None
                 self.mechanic = None
                 self.metrics_store = None
+            elif isinstance(msg, thespian.actors.ActorExitRequest):
+                if self.running:
+                    logger.info("Stopping engine (due to ActorExitRequest)")
+                    self.mechanic.stop_engine()
+                    self.running = False
         except BaseException:
+            self.running = False
             logger.exception("Cannot process message [%s]" % msg)
             # avoid "can't pickle traceback objects"
             import traceback
@@ -313,6 +322,7 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
     log_dir = "%s/logs" % challenge_root_path
     io.ensure_dir(log_dir)
     node_log_dir = "%s/server" % log_dir
+    io.ensure_dir(node_log_dir)
 
     if sources:
         try:
@@ -347,7 +357,7 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
         l = launcher.ExternalLauncher(cfg, metrics_store)
     elif docker:
         s = lambda: None
-        p = provisioner.docker_provisioner(cfg, cluster_settings, install_dir)
+        p = provisioner.docker_provisioner(cfg, cluster_settings, install_dir, node_log_dir)
         l = launcher.DockerLauncher(cfg, metrics_store)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters
