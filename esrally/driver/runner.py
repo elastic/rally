@@ -393,10 +393,17 @@ class Query(Runner):
             return self.request_body_query(es, params)
 
     def request_body_query(self, es, params):
-        es.search(index=params["index"], doc_type=params["type"], request_cache=params["use_request_cache"], body=params["body"])
+        request_params = params.get("request_params", {})
+        es.search(
+            index=params["index"],
+            doc_type=params["type"],
+            request_cache=params["use_request_cache"],
+            body=params["body"],
+            **request_params)
         return 1, "ops"
 
     def scroll_query(self, es, params):
+        request_params = params.get("request_params", {})
         hits = 0
         retrieved_pages = 0
         self.es = es
@@ -412,7 +419,9 @@ class Query(Runner):
                     sort="_doc",
                     scroll="10s",
                     size=params["items_per_page"],
-                    request_cache=params["use_request_cache"])
+                    request_cache=params["use_request_cache"],
+                    **request_params
+                )
                 # This should only happen if we concurrently create an index and start searching
                 self.scroll_id = r.get("_scroll_id", None)
             else:

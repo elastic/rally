@@ -130,11 +130,13 @@ class SearchParamSource(ParamSource):
         query_body = params.get("body", None)
         pages = params.get("pages", None)
         items_per_page = params.get("results-per-page", None)
+        request_params = params.get("request-params", {})
 
         self.query_params = {
             "index": index_name,
             "type": type_name,
             "use_request_cache": request_cache,
+            "request_params": request_params,
             "body": query_body
         }
 
