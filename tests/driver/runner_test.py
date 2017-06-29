@@ -457,6 +457,8 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ], result["shards_histogram"])
+        self.assertEqual(158, result["bulk-request-size-bytes"])
+        self.assertEqual(62, result["total-document-size-bytes"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
