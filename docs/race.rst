@@ -12,15 +12,15 @@ Start by finding out which tracks are available::
 
 This will show the following list::
 
-    Name        Description                                                           Challenges
-    ----------  --------------------------------------------------------------------  ------------------------------------------------------------------------------------------------------
-    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)                 append-no-conflicts,append-no-conflicts-index-only,append-fast-no-conflicts,append-fast-with-conflicts
-    geopoint    60.8M POIs from PlanetOSM                                             append-no-conflicts,append-no-conflicts-index-only,append-fast-no-conflicts,append-fast-with-conflicts
-    logging     Logging benchmark                                                     append-no-conflicts,append-no-conflicts-index-only,append-fast-no-conflicts,append-fast-with-conflicts
-    nyc_taxis   Trip records completed in yellow and green taxis in New York in 2015  append-no-conflicts,append-no-conflicts-index-only
-    percolator  Percolator benchmark based on 2M AOL queries                          append-no-conflicts
-    pmc         Full text benchmark containing 574.199 papers from PMC                append-no-conflicts,append-no-conflicts-index-only,append-fast-no-conflicts,append-fast-with-conflicts
-    tiny        First 2k documents of the geonames track for local tests              append-no-conflicts,append-no-conflicts-index-only,append-fast-no-conflicts,append-fast-with-conflicts
+    Name        Description                                                                   Number of Documents  Default Challenge        All Challenges
+    ----------  --------------------------------------------------------------------------  ---------------------  -----------------------  ----------------------------------------...
+    geonames    Standard track in Rally (11.4M POIs from Geonames)                                       11396505  append-no-conflicts      append-no-conflicts,append-no-conflicts-...
+    geopoint    60.8M POIs from PlanetOSM                                                                60844404  append-no-conflicts      append-no-conflicts,append-no-conflicts-...
+    logging     Logging benchmark                                                                       247249096  append-no-conflicts      append-no-conflicts,append-no-conflicts-...
+    nested      Nested query benchmark using up to 11,203,029 questions from StackOverflow               11203029  nested-search-challenge  nested-search-challenge,index-only
+    nyc_taxis   Trip records completed in yellow and green taxis in New York in 2015                    165346692  append-no-conflicts      append-no-conflicts,append-no-conflicts-...
+    percolator  Percolator benchmark based on 2M AOL queries                                              2000000  append-no-conflicts      append-no-conflicts,append-no-conflicts-...
+    pmc         Full text benchmark containing 574.199 papers from PMC                                     574199  append-no-conflicts      append-no-conflicts,append-no-conflicts-...
 
 The first two columns show the name and a short description of each track. A track also specifies one or more challenges which basically defines the operations that will be run.
 

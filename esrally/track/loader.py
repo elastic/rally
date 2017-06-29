@@ -49,8 +49,10 @@ def tracks(cfg):
 def list_tracks(cfg):
     console.println("Available tracks:\n")
     console.println(tabulate.tabulate(
-        tabular_data=[[t.name, t.short_description, t.default_challenge, ",".join(map(str, t.challenges))] for t in tracks(cfg)],
-        headers=["Name", "Description", "Default Challenge", "All Challenges"]))
+        tabular_data=[
+            [t.name, t.short_description, t.number_of_documents, t.default_challenge, ",".join(map(str, t.challenges))] for t in tracks(cfg)
+        ],
+        headers=["Name", "Description", "Number of Documents", "Default Challenge", "All Challenges"]))
 
 
 def load_track(cfg):
