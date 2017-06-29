@@ -114,6 +114,8 @@ class BulkIndex(Runner):
 
         * ``index``: name of the affected index. May be `None` if it could not be derived.
         * ``bulk-size``: bulk size, e.g. 5.000.
+        * ``bulk-request-size-bytes``: size of the full bulk requset in bytes
+        * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
         * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
         * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
         * ``success``: A boolean indicating whether the bulk request has succeeded.
@@ -128,7 +130,8 @@ class BulkIndex(Runner):
         * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a shard
           distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and ``failed``
           shards (see examples below).
-
+        * ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
+        * ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
 
         Here are a few examples:
 
@@ -164,6 +167,8 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0,
@@ -193,6 +198,8 @@ class BulkIndex(Runner):
                 "weight": 5000,
                 "unit": "docs",
                 "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000,
@@ -251,21 +258,35 @@ class BulkIndex(Runner):
         else:
             response = es.bulk(body=params["body"], index=index, doc_type=params["type"], params=bulk_params)
 
-        stats = self.detailed_stats(bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
+        stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
         meta_data = {
             "index": str(index) if index else None,
             "weight": bulk_size,
             "unit": "docs",
-            "bulk-size": bulk_size,
+            "bulk-size": bulk_size
         }
         meta_data.update(stats)
         return meta_data
 
-    def detailed_stats(self, bulk_size, response):
+    def detailed_stats(self, params, bulk_size, response):
         ops = {}
         shards_histogram = OrderedDict()
         bulk_error_count = 0
+        bulk_request_size_bytes = 0
+        total_document_size_bytes = 0
+
+        for line_number, data in enumerate(params["body"]):
+
+            line_size = len(data.encode('utf-8'))
+            if params["action_metadata_present"]:
+                if line_number % 2 == 1:
+                    total_document_size_bytes += line_size
+            else:
+                total_document_size_bytes += line_size
+
+            bulk_request_size_bytes += line_size
+
         for idx, item in enumerate(response["items"]):
             # there is only one (top-level) item
             op, data = next(iter(item.items()))
@@ -291,7 +312,9 @@ class BulkIndex(Runner):
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count,
             "ops": ops,
-            "shards_histogram": list(shards_histogram.values())
+            "shards_histogram": list(shards_histogram.values()),
+            "bulk-request-size-bytes": bulk_request_size_bytes,
+            "total-document-size-bytes": total_document_size_bytes
         }
 
     def simple_stats(self, bulk_size, response):
