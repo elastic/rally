@@ -17,5 +17,3 @@ services:
 {%- for host_path, docker_path in mounts.items() %}
       - {{host_path}}:{{docker_path}}
 {%- endfor %}
-
-

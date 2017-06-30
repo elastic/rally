@@ -16,14 +16,6 @@ def list_cars(cfg):
     console.println(tabulate.tabulate([[str(c)] for c in cars(cfg)], headers=["Name"]))
 
 
-# TODO #196: Remove this - it should not be needed anymore
-def select_car(name):
-    for c in cars():
-        if c.name == name:
-            return c
-    raise exceptions.SystemSetupError("Unknown car [%s]. List the available cars with %s list cars." % (name, PROGRAM_NAME))
-
-
 def load_car(cfg, name):
     repo = TeamRepository(cfg)
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
