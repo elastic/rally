@@ -4,7 +4,7 @@ set -e
 
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
-readonly DISTRIBUTIONS=(1.7.6 2.4.5 5.4.0)
+readonly DISTRIBUTIONS=(1.7.6 2.4.5 5.4.3)
 readonly TRACKS=(geonames geopoint nyc_taxis pmc logging nested)
 
 ES_PID=-1
@@ -84,8 +84,8 @@ function test_sources() {
 
     info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap]"
     esrally --logging=console --configuration-name="${cfg}" --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap
-    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=two_nodes], [--laps=2]"
-    esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car=two_nodes --laps=2
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=verbose_iw], [--laps=2]"
+    esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car=verbose_iw --laps=2
 }
 
 function test_distributions() {

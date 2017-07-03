@@ -59,6 +59,11 @@ def _render_template(env, variables, file_name):
     return template.render(variables)
 
 
+def plain_text(file):
+    _, ext = io.splitext(file)
+    return ext in [".ini", ".txt", ".json", ".yml", ".yaml", ".options", ".properties"]
+
+
 class Provisioner:
     """
     The provisioner prepares the runtime environment for running the benchmark. It prepares all configuration files and copies the binary
@@ -133,9 +138,13 @@ class BareProvisioner(Provisioner):
             for name in files:
                 source_file = os.path.join(root, name)
                 target_file = os.path.join(absolute_target_root, name)
-                logger.info("Writing config file [%s]" % target_file)
-                with open(target_file, "w") as f:
-                    f.write(_render_template(env, self._provisioner_variables(), source_file))
+                if plain_text(source_file):
+                    logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
+                    with open(target_file, "w") as f:
+                        f.write(_render_template(env, self._provisioner_variables(), source_file))
+                else:
+                    logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
+                    shutil.copy(source_file, target_file)
 
         return NodeConfiguration(self.car, self.node_name, self.binary_path, self.data_paths)
 
@@ -227,9 +236,13 @@ class DockerProvisioner(Provisioner):
                 source_file = os.path.join(root, name)
                 target_file = os.path.join(absolute_target_root, name)
                 mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
-                logger.info("Writing config file [%s]" % target_file)
-                with open(target_file, "w") as f:
-                    f.write(_render_template(env, self.config_vars, source_file))
+                if plain_text(source_file):
+                    logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
+                    with open(target_file, "w") as f:
+                        f.write(_render_template(env, self.config_vars, source_file))
+                else:
+                    logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
+                    shutil.copy(source_file, target_file)
 
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
