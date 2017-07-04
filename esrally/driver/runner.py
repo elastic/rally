@@ -403,6 +403,18 @@ class Query(Runner):
                pages we will terminate earlier.
     * `items_per_page`: Number of items to retrieve per page.
 
+    Returned meta data
+
+    The following meta data are always returned:
+
+    * ``weight``: operation-agnostic representation of the "weight" of an operation (used internally by Rally for throughput calculation).
+                  Always 1 for normal queries and the number of retrieved pages for scroll queries.
+    * ``unit``: The unit in which to interpret ``weight``. Always "ops".
+    * ``hits``: Total number of hits for this operation.
+
+    For scroll queries we also return:
+
+    * ``pages``: Total number of pages that have been retrieved.
     """
 
     def __init__(self):
@@ -417,13 +429,18 @@ class Query(Runner):
 
     def request_body_query(self, es, params):
         request_params = params.get("request_params", {})
-        es.search(
+        r = es.search(
             index=params["index"],
             doc_type=params["type"],
             request_cache=params["use_request_cache"],
             body=params["body"],
             **request_params)
-        return 1, "ops"
+        hits = r["hits"]["total"]
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "hits": hits,
+        }
 
     def scroll_query(self, es, params):
         request_params = params.get("request_params", {})
