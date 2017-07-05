@@ -43,7 +43,9 @@ def is_issue(issue):
     :param issue: an issue. May also be a PR.
     :return: True iff the issue is a "real" issue.
     """
-    return issue.html_url and "issue" in issue.html_url
+    # return issue.html_url and "issue" in issue.html_url
+    # treat everything as issue
+    return True
 
 
 def issue_list(i):
