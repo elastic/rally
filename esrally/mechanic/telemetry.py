@@ -296,6 +296,7 @@ class DiskIo(InternalTelemetryDevice):
         if self.process is not None:
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
+            # noinspection PyBroadException
             try:
                 process_end = sysstats.process_io_counters(self.process) if self.process_start else None
                 disk_end = sysstats.disk_io_counters() if self.disk_start else None
@@ -303,7 +304,8 @@ class DiskIo(InternalTelemetryDevice):
                                                         self.write_bytes(process_end, disk_end), "byte")
                 self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
                                                         self.read_bytes(process_end, disk_end), "byte")
-            except RuntimeError:
+            # Catching RuntimeException is not sufficient as psutil might raise AccessDenied et.al. which is derived from Exception
+            except BaseException:
                 logger.exception("Could not determine I/O stats at benchmark end.")
 
     def read_bytes(self, process_end, disk_end):
