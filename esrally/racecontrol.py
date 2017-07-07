@@ -131,8 +131,9 @@ class Benchmark:
             result = self.actor_system.ask(main_driver,
                                            driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info, lap))
         except KeyboardInterrupt:
-            result = self.actor_system.ask(main_driver, driver.BenchmarkCancelled())
             logger.info("User has cancelled the benchmark.")
+            self.actor_system.send(main_driver, driver.BenchmarkCancelled())
+            return False
 
         if isinstance(result, driver.BenchmarkComplete):
             logger.info("Benchmark is complete.")
@@ -149,6 +150,7 @@ class Benchmark:
             logger.info("Flushing metrics data...")
             self.metrics_store.flush()
             logger.info("Flushing done")
+        # may happen if one of the load generators has detected that the user has cancelled the benchmark.
         elif isinstance(result, driver.BenchmarkCancelled):
             logger.info("User has cancelled the benchmark.")
             return False
