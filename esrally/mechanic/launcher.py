@@ -375,6 +375,12 @@ class InProcessLauncher:
         else:
             msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
+            # check if the process has terminated already
+            process.poll()
+            if process.returncode:
+                msg += " The process has already terminated with exit code [%s]." % str(process.returncode)
+            else:
+                msg += " The process seems to be still running with PID [%s]." % process.pid
             logger.error(msg)
             raise exceptions.LaunchError(msg)
 
