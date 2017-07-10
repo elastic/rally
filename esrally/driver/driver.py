@@ -162,13 +162,11 @@ class Driver(actor.RallyActor):
                 logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
                 self.metrics_store.close()
                 self.send(self.start_sender, msg)
-                self.send(self.myAddress, thespian.actors.ActorExitRequest())
             elif isinstance(msg, BenchmarkCancelled):
-                logger.info("Main driver received a notification that the benchmark has been cancelled. Shutting down.")
+                logger.info("Main driver received a notification that the benchmark has been cancelled.")
                 self.progress_reporter.finish()
                 self.metrics_store.close()
                 self.send(self.start_sender, msg)
-                self.send(self.myAddress, thespian.actors.ActorExitRequest())
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
                 self.status = "exiting"
@@ -182,7 +180,6 @@ class Driver(actor.RallyActor):
                 else:
                     logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
                     self.send(self.start_sender, BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
-                    self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
@@ -193,7 +190,6 @@ class Driver(actor.RallyActor):
             for driver in self.drivers:
                 self.send(driver, thespian.actors.ActorExitRequest())
             self.send(self.start_sender, BenchmarkFailure("Could not execute benchmark", e))
-            self.send(self.myAddress, thespian.actors.ActorExitRequest())
 
     def start_benchmark(self, msg, sender):
         self.start_sender = sender
@@ -262,10 +258,8 @@ class Driver(actor.RallyActor):
             self.most_recent_sample_per_client = {}
             self.current_step += 1
             if self.finished():
-                logger.info("All steps completed. Shutting down.")
-                # we're done here
-                for driver in self.drivers:
-                    self.send(driver, thespian.actors.ActorExitRequest())
+                logger.info("All steps completed.")
+                # Don't terminate any actors here; this will be triggered from outside. We shutdown child actors in our shutdown procedure.
                 logger.info("Postprocessing samples...")
                 self.post_process_samples()
                 logger.info("Sending benchmark results...")
@@ -276,8 +270,6 @@ class Driver(actor.RallyActor):
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
                 del self.metrics_store
-                logger.info("Terminating main driver actor.")
-                self.send(self.myAddress, thespian.actors.ActorExitRequest())
             else:
                 if self.config.opts("track", "test.mode.enabled"):
                     # don't wait if test mode is enabled and start the next task immediately.

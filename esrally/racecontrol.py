@@ -134,6 +134,10 @@ class Benchmark:
             logger.info("User has cancelled the benchmark.")
             self.actor_system.send(main_driver, driver.BenchmarkCancelled())
             return False
+        finally:
+            logger.info("Race control has received a benchmark result message. Terminating main driver actor.")
+            import thespian.actors
+            self.actor_system.tell(main_driver, thespian.actors.ActorExitRequest())
 
         if isinstance(result, driver.BenchmarkComplete):
             logger.info("Benchmark is complete.")
