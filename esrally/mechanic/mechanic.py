@@ -143,8 +143,12 @@ class MechanicActor(actor.RallyActor):
                     if len(hosts) == 0:
                         raise exceptions.LaunchError("No target hosts are configured.")
                     for host in hosts:
-                        host_or_ip = host["host"]
-                        port = int(host["port"])
+                        host = host.copy()
+                        host_or_ip = host.pop("host")
+                        port = host.pop("port", 9200)
+                        if host:
+                            raise exceptions.SystemSetupError("When specifying nodes to be managed by rally you can only supply hostname:port "
+                                                              "pairs (e.g. 'localhost:9200'), any additional options cannot be supported.")
                         # user may specify "localhost" on the command line but the problem is that we auto-register the actor system
                         # with "ip": "127.0.0.1" so we convert this special case automatically. In all other cases the user needs to
                         # start the actor system on the other host and is aware that the parameter for the actor system and the
