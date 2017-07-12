@@ -14,6 +14,8 @@ from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL
 from esrally.mechanic import car, telemetry
 from esrally.utils import io, convert, process, console, net
 
+from elasticsearch.client import _normalize_hosts
+
 logger = logging.getLogger("rally.main")
 
 DEFAULT_CLIENT_OPTIONS = "timeout:60000,request_timeout:60000"
@@ -568,7 +570,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        cfg.add(config.Scope.applicationOverride, "client", "hosts", csv_to_list(args.target_hosts))
+        cfg.add(config.Scope.applicationOverride, "client", "hosts", _normalize_hosts(csv_to_list(args.target_hosts)))
         client_options = kv_to_map(csv_to_list(args.client_options))
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
         if "timeout" not in client_options:
