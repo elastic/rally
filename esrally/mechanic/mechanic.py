@@ -317,6 +317,7 @@ class RemoteNodeMechanicActor(NodeMechanicActor):
 #####################################################
 
 def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sources=False, build=False, distribution=False, external=False, docker=False):
+    races_root = paths.races_root(cfg)
     challenge_root_path = paths.race_root(cfg)
     install_dir = "%s/install" % challenge_root_path
     log_dir = "%s/logs" % challenge_root_path
@@ -339,7 +340,7 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
 
         s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build)
         p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
-        l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, node_log_dir)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
         repo_name = cfg.opts("mechanic", "distribution.repository")
@@ -347,7 +348,7 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
 
         s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distributions_root=distributions_root)
         p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
-        l = launcher.InProcessLauncher(cfg, metrics_store, challenge_root_path, node_log_dir)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
     elif external:
         if cluster_settings:
             logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "

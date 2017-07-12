@@ -192,11 +192,12 @@ class InProcessLauncher:
     PROCESS_WAIT_TIMEOUT_SECONDS = 60.0
 
     # TODO dm: Remove node_log_dir as parameter here -> NodeConfiguration
-    def __init__(self, cfg, metrics_store, challenge_root_dir, node_log_dir, clock=time.Clock):
+    def __init__(self, cfg, metrics_store, races_root_dir, challenge_root_dir, node_log_dir, clock=time.Clock):
         self.cfg = cfg
         self.metrics_store = metrics_store
         self._clock = clock
         self._servers = []
+        self.races_root_dir = races_root_dir
         self.node_telemetry_dir = "%s/telemetry" % challenge_root_dir
         self.node_log_dir = node_log_dir
         self.java_home = self.cfg.opts("runtime", "java8.home")
@@ -211,8 +212,8 @@ class InProcessLauncher:
         es = client.EsClientFactory(hosts, client_options).create()
 
         # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
-        node_prefix = self.cfg.opts("provisioning", "node.name.prefix")
-        process.kill_running_es_instances(node_prefix)
+        # The only specific trait of a Rally-related process is that is started "somewhere" in the races root directory.
+        process.kill_running_es_instances(self.races_root_dir)
 
         logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
 
