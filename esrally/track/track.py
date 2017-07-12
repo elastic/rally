@@ -39,6 +39,20 @@ class Index:
             num_docs += t.number_of_documents
         return num_docs
 
+    @property
+    def compressed_size_in_bytes(self):
+        size = 0
+        for t in self.types:
+            size += t.compressed_size_in_bytes
+        return size
+
+    @property
+    def uncompressed_size_in_bytes(self):
+        size = 0
+        for t in self.types:
+            size += t.uncompressed_size_in_bytes
+        return size
+
     def __str__(self):
         return self.name
 
@@ -202,6 +216,22 @@ class Track:
             for index in self.indices:
                 num_docs += index.number_of_documents
         return num_docs
+
+    @property
+    def compressed_size_in_bytes(self):
+        size = 0
+        if self.indices:
+            for index in self.indices:
+                size += index.compressed_size_in_bytes
+        return size
+
+    @property
+    def uncompressed_size_in_bytes(self):
+        size = 0
+        if self.indices:
+            for index in self.indices:
+                size += index.uncompressed_size_in_bytes
+        return size
 
     def __str__(self):
         return self.name

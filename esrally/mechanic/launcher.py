@@ -189,7 +189,7 @@ class InProcessLauncher:
 
     Currently, only local launching is supported.
     """
-    PROCESS_WAIT_TIMEOUT_SECONDS = 60.0
+    PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
     # TODO dm: Remove node_log_dir as parameter here -> NodeConfiguration
     def __init__(self, cfg, metrics_store, races_root_dir, challenge_root_dir, node_log_dir, clock=time.Clock):
@@ -323,6 +323,12 @@ class InProcessLauncher:
         else:
             msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
+            # check if the process has terminated already
+            process.poll()
+            if process.returncode:
+                msg += " The process has already terminated with exit code [%s]." % str(process.returncode)
+            else:
+                msg += " The process seems to be still running with PID [%s]." % process.pid
             logger.error(msg)
             raise exceptions.LaunchError(msg)
 

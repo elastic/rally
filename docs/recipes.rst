@@ -19,14 +19,15 @@ Consider the following configuration: You have an existing benchmarking cluster,
 
 First of all, we need to decide on a track. So, we run ``esrally list tracks``::
 
-    Name        Description                                                           Challenges
-    ----------  --------------------------------------------------------------------  -----------------------------------------------------------------------------------------------------------------------------------------------
-    geonames    Standard benchmark in Rally (8.6M POIs from Geonames)                 append-no-conflicts,append-no-conflicts-index-only,append-no-conflicts-index-only-1-replica,append-fast-no-conflicts,append-fast-with-conflicts
-    geopoint    60.8M POIs from PlanetOSM                                             append-no-conflicts,append-no-conflicts-index-only,append-no-conflicts-index-only-1-replica,append-fast-no-conflicts,append-fast-with-conflicts
-    logging     Logging benchmark                                                     append-no-conflicts,append-no-conflicts-index-only,append-no-conflicts-index-only-1-replica,append-fast-no-conflicts,append-fast-with-conflicts
-    nyc_taxis   Trip records completed in yellow and green taxis in New York in 2015  append-no-conflicts,append-no-conflicts-index-only,append-no-conflicts-index-only-1-replica
-    percolator  Percolator benchmark based on 2M AOL queries                          append-no-conflicts
-    pmc         Full text benchmark containing 574.199 papers from PMC                append-no-conflicts,append-no-conflicts-index-only,append-no-conflicts-index-only-1-replica,append-fast-no-conflicts,append-fast-with-conflicts
+   Name        Description                                                                   Documents  Compressed Size    Uncompressed Size    Default Challenge        All Challenges
+   ----------  --------------------------------------------------------------------------  -----------  -----------------  -------------------  -----------------------  --------------------------
+   geonames    Standard track in Rally (11.4M POIs from Geonames)                             11396505  252.4 MB           3.3 GB               append-no-conflicts      append-no-conflicts,app...
+   geopoint    60.8M POIs from PlanetOSM                                                      60844404  481.9 MB           2.3 GB               append-no-conflicts      append-no-conflicts,app...
+   logging     Logging benchmark                                                             247249096  1.2 GB             31.1 GB              append-no-conflicts      append-no-conflicts,app...
+   nested      Nested query benchmark using up to 11,203,029 questions from StackOverflow     11203029  663.1 MB           3.4 GB               nested-search-challenge  nested-search-challenge...
+   nyc_taxis   Trip records completed in yellow and green taxis in New York in 2015          165346692  4.5 GB             74.3 GB              append-no-conflicts      append-no-conflicts,app...
+   percolator  Percolator benchmark based on 2M AOL queries                                    2000000  102.7 kB           104.9 MB             append-no-conflicts      append-no-conflicts,app...
+   pmc         Full text benchmark containing 574.199 papers from PMC                           574199  5.5 GB             21.7 GB              append-no-conflicts      append-no-conflicts,app...
 
 We're interested in a full text benchmark, so we'll choose to run ``pmc``. If you have your own data that you want to use for benchmarks, then please :doc:`create your own track</adding_tracks>` instead; the metrics you'll gather which be representative and much more useful than some default track.
 

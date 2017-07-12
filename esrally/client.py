@@ -18,6 +18,13 @@ class EsClientFactory:
 
         if self._is_set(client_options, "use_ssl") and self._is_set(client_options, "verify_certs") and "ca_certs" not in client_options:
             self.client_options["ca_certs"] = certifi.where()
+        elif self._is_set(client_options, "use_ssl") and not self._is_set(client_options, "verify_certs"):
+            logger.warning("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark. "
+                           "Disabling urllib warnings now to avoid a logging storm. "
+                           "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details.")
+            # disable:  "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly \
+            # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
+            urllib3.disable_warnings()
         if self._is_set(client_options, "basic_auth_user") and self._is_set(client_options, "basic_auth_password"):
             # Maybe we should remove these keys from the dict?
             self.client_options["http_auth"] = (client_options["basic_auth_user"], client_options["basic_auth_password"])

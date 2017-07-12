@@ -166,9 +166,9 @@ When you invoke ``esrally list tracks``, the new track should now appear::
                     /____/
     Available tracks:
     
-    Name        Description                   Default Challenge  All Challenges
-    ----------  ----------------------------  -----------------  ---------------
-    tutorial    Tutorial benchmark for Rally  index-and-query    index-and-query
+    Name        Description                   Documents    Compressed Size  Uncompressed Size  Default Challenge  All Challenges
+    ----------  ----------------------------- -----------  ---------------  -----------------  -----------------  ---------------
+    tutorial    Tutorial benchmark for Rally      8647880  188.7 MB         2.6 GB             index-and-query    index-and-query
 
 Congratulations, you have created your first track! You can test it with ``esrally --track=tutorial --offline`` and run specific challenges with ``esrally --track=tutorial --challenge=index-and-query --offline``.
 

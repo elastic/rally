@@ -143,13 +143,13 @@ class MechanicActor(actor.RallyActor):
                     if len(hosts) == 0:
                         raise exceptions.LaunchError("No target hosts are configured.")
                     for host in hosts:
-                        ip = host["host"]
+                        host_or_ip = host["host"]
                         port = int(host["port"])
                         # user may specify "localhost" on the command line but the problem is that we auto-register the actor system
                         # with "ip": "127.0.0.1" so we convert this special case automatically. In all other cases the user needs to
                         # start the actor system on the other host and is aware that the parameter for the actor system and the
                         # --target-hosts parameter need to match.
-                        if ip == "localhost" or ip == "127.0.0.1":
+                        if host_or_ip == "localhost" or host_or_ip == "127.0.0.1":
                             m = self.createActor(LocalNodeMechanicActor,
                                                  globalName="/rally/mechanic/worker/localhost",
                                                  targetActorRequirements={"coordinator": True})
@@ -161,18 +161,19 @@ class MechanicActor(actor.RallyActor):
                             else:
                                 logger.error("User tried to benchmark against %s but no external Rally daemon has been started." % hosts)
                                 raise exceptions.SystemSetupError("To benchmark remote hosts (e.g. %s) you need to start the Rally daemon "
-                                                                  "on each machine including this one." % ip)
-                            already_running = actor.actor_system_already_running(ip=ip)
-                            logger.info("Actor system on [%s] already running? [%s]" % (ip, str(already_running)))
+                                                                  "on each machine including this one." % host_or_ip)
+                            already_running = actor.actor_system_already_running(ip=host_or_ip)
+                            logger.info("Actor system on [%s] already running? [%s]" % (host_or_ip, str(already_running)))
                             if not already_running:
-                                console.println("Waiting for Rally daemon on [%s] " % ip, end="", flush=True)
-                            while not actor.actor_system_already_running(ip=ip):
+                                console.println("Waiting for Rally daemon on [%s] " % host_or_ip, end="", flush=True)
+                            while not actor.actor_system_already_running(ip=host_or_ip):
                                 console.println(".", end="", flush=True)
                                 time.sleep(3)
                             if not already_running:
                                 console.println(" [OK]")
+                            ip = actor.resolve(host_or_ip)
                             m = self.createActor(RemoteNodeMechanicActor,
-                                                 globalName="/rally/mechanic/worker/%s" % ip,
+                                                 globalName="/rally/mechanic/worker/%s" % host_or_ip,
                                                  targetActorRequirements={"ip": ip})
                             mechanics_and_start_message.append((m, msg.with_port(port)))
                             self.mechanics.append(m)

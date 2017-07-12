@@ -18,8 +18,22 @@ function info() {
     log "INFO" "${1}"
 }
 
+function kill_rally_processes() {
+    # kill all lingering Rally instances that might still be hanging
+    set +e
+    killall -9 esrally
+    # killall matching ES instances - we cannot use killall as we also want to ensure "rally" is "somewhere" in the command line.
+    RUNNING_RALLY_ES_PROCESSES=$(jps -v | egrep ".*java.*rally" | awk '{print $1}')
+    for p in "${RUNNING_RALLY_ES_PROCESSES}"
+    do
+        kill -9 ${p}
+    done
+    set -e
+}
 function set_up() {
     info "setting up"
+    kill_rally_processes
+
     # configure for tests with an Elasticsearch metrics store
     esrally configure --assume-defaults --configuration-name=es-integration-test
     # configure Elasticsearch instead of in-memory after the fact
@@ -119,6 +133,8 @@ function tear_down() {
     rm -f ~/.rally/rally*integration-test.ini
     rm -rf .rally_it/cache/elasticsearch-5.0.0
     set -e
+    # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
+    kill_rally_processes
 }
 
 function main {

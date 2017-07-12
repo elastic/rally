@@ -457,6 +457,8 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ], result["shards_histogram"])
+        self.assertEqual(158, result["bulk-request-size-bytes"])
+        self.assertEqual(62, result["total-document-size-bytes"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -466,9 +468,13 @@ class QueryRunnerTests(TestCase):
     def test_query_match_all(self, es):
         es.search.return_value = {
             "hits": {
+                "total": 2,
                 "hits": [
                     {
                         "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
                     }
                 ]
             }
@@ -488,10 +494,11 @@ class QueryRunnerTests(TestCase):
         }
 
         with query_runner:
-            num_ops, ops_unit = query_runner(es, params)
+            result = query_runner(es, params)
 
-        self.assertEqual(1, num_ops)
-        self.assertEqual("ops", ops_unit)
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertEqual(2, result["hits"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_only_one_page(self, es):

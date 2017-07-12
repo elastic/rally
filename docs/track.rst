@@ -164,7 +164,8 @@ Throughput will be reported as number of indexed documents per second.
 force-merge
 ~~~~~~~~~~~
 
-With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It support the following parameter:
+With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It supports the following parameter:
+
 * ``max_num_segments`` (optional)  The number of segments the index should be merged into. Defaults to simply checking if a merge needs to execute, and if so, executes it.
 
 Throughput metrics are not necessarily very useful but will be reported in the number of completed force-merge operations per second.
@@ -191,6 +192,7 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this query. Only needed if the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use. If you have defined multiple indices and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Python ES client API docs <http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.Elasticsearch.search>`_. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
 * ``body`` (mandatory): The query body.
 * ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
@@ -204,6 +206,10 @@ Example::
         "query": {
           "match_all": {}
         }
+      },
+      "request-params": {
+        "_source_include": "some_field",
+        "analyze_wildcard": false
       }
     }
 

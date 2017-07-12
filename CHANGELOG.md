@@ -1,3 +1,13 @@
+### 0.6.1
+
+#### Enhancements
+
+* [#295](https://github.com/elastic/rally/issues/295): Provide number of query hits as metrics metadata
+* [#291](https://github.com/elastic/rally/issues/291): Show track size metrics when listing tracks
+* [#290](https://github.com/elastic/rally/issues/290): Allow to pass arbitrary request parameters for ES queries
+* [#286](https://github.com/elastic/rally/pull/286): Additional metrics for bulk requests
+* [#282](https://github.com/elastic/rally/issues/282) (Breaking): Remove list facts subcommand
+
 ### 0.6.0
 
 #### Highlights

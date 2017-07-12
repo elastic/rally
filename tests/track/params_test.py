@@ -666,3 +666,34 @@ class ParamsRegistrationTests(TestCase):
         self.assertEqual({"class-key": 42}, source.params())
 
         params._unregister_param_source_for_name(source_name)
+
+
+class SearchParamSourceTests(TestCase):
+    def test_passes_request_parameters(self):
+        type1 = track.Type("type1", mapping_file="", number_of_documents=3)
+        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+
+        source = params.SearchParamSource(indices=[index1], params={
+            "request-params": {
+                "_source_include": "some_field"
+            },
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        })
+        p = source.params()
+
+        self.assertEqual(5, len(p))
+        self.assertEqual("index1", p["index"])
+        self.assertEqual("type1", p["type"])
+        self.assertEqual({
+            "_source_include": "some_field"
+        }, p["request_params"])
+        self.assertFalse(p["use_request_cache"])
+        self.assertEqual({
+            "query": {
+                "match_all": {}
+            }
+        }, p["body"])
