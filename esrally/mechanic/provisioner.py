@@ -83,10 +83,16 @@ class Provisioner:
             logger.info("Wiping benchmark candidate installation at [%s]." % self.install_dir)
             for path in self.data_paths:
                 if os.path.exists(path):
-                    shutil.rmtree(path)
+                    try:
+                        shutil.rmtree(path)
+                    except OSError:
+                        logger.exception("Could not delete [%s]. Skipping..." % path)
 
             if os.path.exists(self.install_dir):
-                shutil.rmtree(self.install_dir)
+                try:
+                    shutil.rmtree(self.install_dir)
+                except OSError:
+                    logger.exception("Could not delete [%s]. Skipping..." % self.install_dir)
 
 
 class BareProvisioner(Provisioner):
