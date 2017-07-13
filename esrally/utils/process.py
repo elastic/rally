@@ -101,7 +101,7 @@ def kill_all(predicate):
                 logger.info("Skipping myself (PID [%s])." % p.pid)
             elif predicate(p):
                 logger.info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
-                os.kill(p.pid, signal.SIGKILL)
+                p.kill()
                 # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
                 # sockets that are still open.
                 for i in range(3):

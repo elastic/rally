@@ -22,13 +22,22 @@ class ProcessTests(TestCase):
         def kill(self):
             self.killed = True
 
+        def status(self):
+            if self.killed:
+                import psutil
+                raise psutil.NoSuchProcess(self.pid)
+            else:
+                return "running"
+
     @mock.patch("psutil.process_iter")
     def test_kills_only_rally_es_processes(self, process_iter):
         rally_es_5_process = ProcessTests.Process(100, "java",
-                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
+                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
+                                                   "-Ees.path.home=~/.rally/benchmarks/races/20170101",
                                                    "org.elasticsearch.bootstrap.Elasticsearch"])
         rally_es_1_process = ProcessTests.Process(101, "java",
-                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Des.node.name=rally-node0",
+                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
+                                                   "-Des.path.home=~/.rally/benchmarks/races/20170101",
                                                    "org.elasticsearch.bootstrap.Elasticsearch"])
         metrics_store_process = ProcessTests.Process(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
                                                                    "-Des.path.home=~/rally/metrics/",
@@ -52,7 +61,7 @@ class ProcessTests(TestCase):
             rally_process_mac
         ]
 
-        process.kill_running_es_instances("rally")
+        process.kill_running_es_instances("~/.rally/benchmarks/races")
 
         self.assertTrue(rally_es_5_process.killed)
         self.assertTrue(rally_es_1_process.killed)
