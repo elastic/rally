@@ -13,8 +13,7 @@ from esrally.utils import console, process, jvm
 logger = logging.getLogger("rally.launcher")
 
 
-def wait_for_rest_layer(es):
-    max_attempts = 10
+def wait_for_rest_layer(es, max_attempts=10):
     for attempt in range(max_attempts):
         import elasticsearch
         try:
@@ -64,7 +63,7 @@ class DockerLauncher:
         c = cluster.Cluster(hosts, [self._start_node(hosts[0], node_name, es)], t)
 
         logger.info("Docker container has successfully started. Checking if REST API is available.")
-        if wait_for_rest_layer(es):
+        if wait_for_rest_layer(es, max_attempts=20):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
             t.attach_to_cluster(c)
             logger.info("Telemetry devices are now attached to the cluster.")
