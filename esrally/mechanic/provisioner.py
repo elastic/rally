@@ -116,6 +116,7 @@ class BareProvisioner(Provisioner):
     def _install_binary(self, binary):
         logger.info("Preparing candidate locally in [%s]." % self.install_dir)
         io.ensure_dir(self.install_dir)
+        io.ensure_dir(self.node_log_dir)
         if not self.preserve:
             console.info("Rally will delete the benchmark candidate after the benchmark")
 
@@ -221,7 +222,18 @@ class DockerProvisioner(Provisioner):
         self.config_vars.update(provisioner_defaults)
 
     def prepare(self, binary):
-        io.ensure_dir(self.install_dir)
+        # we need to allow other users to write to these directories due to Docker.
+        #
+        # Although os.mkdir passes 0o777 by default, mkdir(2) uses `mode & ~umask & 0777` to determine the final flags and
+        # hence we need to modify the process' umask here. For details see https://linux.die.net/man/2/mkdir.
+        previous_umask = os.umask(0)
+        try:
+            io.ensure_dir(self.install_dir)
+            io.ensure_dir(self.node_log_dir)
+            io.ensure_dir(self.data_paths[0])
+        finally:
+            os.umask(previous_umask)
+
         mounts = {}
 
         car_config_path = self.car.config_path

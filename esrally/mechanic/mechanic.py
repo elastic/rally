@@ -322,9 +322,7 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
     challenge_root_path = paths.race_root(cfg)
     install_dir = "%s/install" % challenge_root_path
     log_dir = "%s/logs" % challenge_root_path
-    io.ensure_dir(log_dir)
     node_log_dir = "%s/server" % log_dir
-    io.ensure_dir(node_log_dir)
 
     if sources:
         try:
