@@ -107,17 +107,18 @@ class StringAsFileSource:
         return "StringAsFileSource"
 
 
-def ensure_dir(directory):
+def ensure_dir(directory, mode=0o777):
     """
     Ensure that the provided directory and all of its parent directories exist.
     This function is safe to execute on existing directories (no op).
 
     :param directory: The directory to create (if it does not exist).
+    :param mode: The permission flags to use (if it does not exist).
     """
     if directory:
         try:
             # avoid a race condition by trying to create the checkout directory
-            os.makedirs(directory)
+            os.makedirs(directory, mode)
         except OSError as exception:
             if exception.errno != errno.EEXIST:
                 raise

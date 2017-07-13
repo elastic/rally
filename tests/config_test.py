@@ -116,19 +116,47 @@ class ConfigFactoryTests(TestCase):
         config_store = InMemoryConfigStore("test")
         f.create_config(config_store)
         self.assertIsNotNone(config_store.config)
+
+        for section, _ in config_store.config.items():
+            for k, v in config_store.config[section].items():
+                print("%s::%s: %s" % (section, k, v))
+
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("8", config_store.config["meta"]["config.version"])
+        self.assertEqual("9", config_store.config["meta"]["config.version"])
+
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
+
+        self.assertTrue("node" in config_store.config)
+        self.assertEqual("in-memory/benchmarks", config_store.config["node"]["root.dir"])
+
         self.assertTrue("source" in config_store.config)
+        self.assertEqual("/Projects/elasticsearch/src", config_store.config["source"]["local.src.dir"])
+        self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
+
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
+
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+
         self.assertTrue("benchmarks" in config_store.config)
+        self.assertEqual("${node:root.dir}/data", config_store.config["benchmarks"]["local.dataset.cache"])
+
         self.assertTrue("reporting" in config_store.config)
         self.assertEqual("in-memory", config_store.config["reporting"]["datastore.type"])
+        self.assertEqual("", config_store.config["reporting"]["datastore.host"])
+        self.assertEqual("", config_store.config["reporting"]["datastore.port"])
+        self.assertEqual("", config_store.config["reporting"]["datastore.secure"])
+        self.assertEqual("", config_store.config["reporting"]["datastore.user"])
+        self.assertEqual("", config_store.config["reporting"]["datastore.password"])
+
         self.assertTrue("tracks" in config_store.config)
+        self.assertEqual("https://github.com/elastic/rally-tracks", config_store.config["tracks"]["default.url"])
+
+        self.assertTrue("teams" in config_store.config)
+        self.assertEqual("https://github.com/elastic/rally-teams", config_store.config["teams"]["default.url"])
+
         self.assertTrue("defaults" in config_store.config)
         self.assertEqual("False", config_store.config["defaults"]["preserve_benchmark_candidate"])
 
@@ -182,7 +210,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("8", config_store.config["meta"]["config.version"])
+        self.assertEqual("9", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
@@ -375,5 +403,29 @@ class ConfigMigrationTests(TestCase):
         self.assertEqual("local", config_file.config["system"]["environment.name"])
         self.assertEqual("${node:root.dir}/data", config_file.config["benchmarks"]["local.dataset.cache"])
         self.assertEqual("/data", config_file.config["benchmarks"]["some.other.cache"])
+
+    def test_migrate_from_8_to_9(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 8
+            },
+            "system": {
+                "root.dir": "~/.rally/benchmarks",
+                "environment.name": "local"
+            },
+            "benchmarks": {
+                "local.dataset.cache": "${system:root.dir}/data",
+                "some.other.cache": "/data"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 8, 9, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("9", config_file.config["meta"]["config.version"])
+        self.assertTrue("teams" in config_file.config)
+        self.assertEqual("https://github.com/elastic/rally-teams", config_file.config["teams"]["default.url"])
+
 
 

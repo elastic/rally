@@ -2,7 +2,9 @@ import shlex
 import logging
 import subprocess
 import os
+import signal
 import psutil
+import time
 
 logger = logging.getLogger("rally.process")
 
@@ -66,16 +68,16 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO):
         return False
 
 
-def kill_running_es_instances(node_prefix):
+def kill_running_es_instances(trait):
     """
     Kills all instances of Elasticsearch that are currently running on the local machine by sending SIGKILL.
 
-    :param node_prefix a prefix of the node names that should be killed.
+    :param trait some trait of the process in the command line.
     """
     def elasticsearch_process(p):
-        return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any("node.name=rally" in e for e in p.cmdline())
+        return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any(trait in e for e in p.cmdline())
 
-    logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % node_prefix)
+    logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % trait)
     kill_all(elasticsearch_process)
 
 
@@ -100,6 +102,14 @@ def kill_all(predicate):
             elif predicate(p):
                 logger.info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
                 p.kill()
+                # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
+                # sockets that are still open.
+                for i in range(3):
+                    try:
+                        p.status()
+                        time.sleep(1)
+                    except psutil.NoSuchProcess:
+                        break
             else:
                 logger.debug("Skipping [%s]" % p.cmdline())
         except (psutil.ZombieProcess, psutil.AccessDenied) as e:

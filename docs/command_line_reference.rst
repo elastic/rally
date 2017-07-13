@@ -46,7 +46,7 @@ Command Line Flags
 ``track-repository``
 ~~~~~~~~~~~~~~~~~~~~
 
-Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available on `Github <https://github.com/elastic/rally-tracks>`_. See :doc:`adding tracks </adding_tracks>` on how to add your own track repositories.
+Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See :doc:`adding tracks </adding_tracks>` on how to add your own track repositories.
 
 ``track``
 ~~~~~~~~~
@@ -57,6 +57,13 @@ Selects the track that Rally should run. By default the ``geonames`` track is ru
 ~~~~~~~~~~~~~
 
 A track consists of one or more challenges. With this flag you can specify which challenge should be run. If you don't specify a challenge, Rally derives the default challenge itself. To see the default challenge of a track, run ``esrally list tracks``.
+
+
+``team-repository``
+~~~~~~~~~~~~~~~~~~~
+
+Selects the team repository that Rally should use to resolve cars. By default the ``default`` team repository is used, which is available in the Github project `rally-teams <https://github.com/elastic/rally-teams>`_. See the documentation about :doc:`cars </car>` on how to add your own team repositories.
+
 
 ``car``
 ~~~~~~~

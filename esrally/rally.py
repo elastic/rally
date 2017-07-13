@@ -258,6 +258,10 @@ def parse_args():
             help="define the repository from where Rally will load tracks (default: default).",
             default="default")
         p.add_argument(
+            "--team-repository",
+            help="define the repository from where Rally will load teams and cars (default: default).",
+            default="default")
+        p.add_argument(
             "--offline",
             help="assume that Rally has no connection to the Internet (default: false)",
             default=False,
@@ -356,7 +360,7 @@ def list(cfg):
     elif what == "races":
         metrics.list_races(cfg)
     elif what == "cars":
-        car.list_cars()
+        car.list_cars(cfg)
     else:
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
@@ -547,6 +551,7 @@ def main():
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
+    cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.name", args.car)
     cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))

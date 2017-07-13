@@ -69,7 +69,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 8
+    CURRENT_CONFIG_VERSION = 9
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -158,6 +158,9 @@ class Config:
             (Scope.application, "benchmarks", "track.default.repository"): "default",
             (Scope.application, "provisioning", "node.name.prefix"): "rally-node",
             (Scope.application, "provisioning", "node.http.port"): 39200,
+            (Scope.application, "mechanic", "team.repository.dir"): "teams",
+            (Scope.application, "mechanic", "team.default.repository"): "default",
+
         }
 
     def _fill_from_config_file(self, config):
@@ -339,6 +342,9 @@ class ConfigFactory:
 
         config["tracks"] = {}
         config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
+
+        config["teams"] = {}
+        config["teams"]["default.url"] = "https://github.com/elastic/rally-teams"
 
         config["defaults"] = {}
         config["defaults"]["preserve_benchmark_candidate"] = str(preserve_install)
@@ -546,6 +552,11 @@ def migrate(config_file, current_version, target_version, out=print):
             for k, v in config[section].items():
                 config[section][k] = v.replace("${system:root.dir}", "${node:root.dir}")
         current_version = 8
+        config["meta"]["config.version"] = str(current_version)
+    if current_version == 8 and target_version > current_version:
+        config["teams"] = {}
+        config["teams"]["default.url"] = "https://github.com/elastic/rally-teams"
+        current_version = 9
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

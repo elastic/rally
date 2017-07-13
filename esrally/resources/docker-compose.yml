@@ -3,28 +3,17 @@ services:
   elasticsearch1:
     cap_add:
       - IPC_LOCK
-    environment:
-      - discovery.zen.minimum_master_nodes=1
-      - bootstrap.memory_lock=true
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS={{es_java_opts}}"
-      {%- for key, value in cluster_settings.items() %}
-      - {{key}}={{value}}
-      {%- endfor %}
     image: "docker.elastic.co/elasticsearch/elasticsearch:{{es_version}}"
-    mem_limit: {{container_memory_gb}}
     ports:
-      - {{http_port}}:9200
+      - {{http_port}}:{{http_port}}
       - 9300
     ulimits:
       memlock:
         soft: -1
         hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
     volumes:
-      - esdata1:{{es_data_dir}}
-volumes:
-  esdata1:
-    driver: local
+      - {{es_data_dir}}:/usr/share/elasticsearch/data
+      - {{es_log_dir}}:/var/log/elasticsearch
+{%- for host_path, docker_path in mounts.items() %}
+      - {{host_path}}:{{docker_path}}
+{%- endfor %}
