@@ -14,6 +14,8 @@ from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL
 from esrally.mechanic import car, telemetry
 from esrally.utils import io, convert, process, console, net
 
+from elasticsearch.client import _normalize_hosts
+
 logger = logging.getLogger("rally.main")
 
 DEFAULT_CLIENT_OPTIONS = "timeout:60000,request_timeout:60000"
@@ -504,19 +506,6 @@ def kv_to_map(kvs):
     return result
 
 
-def convert_hosts(configured_host_list):
-    hosts = []
-    try:
-        for authority in configured_host_list:
-            host, port = authority.split(":")
-            hosts.append({"host": host, "port": port})
-        return hosts
-    except ValueError:
-        msg = "Could not convert hosts [%s] (expected a list of host:port pairs e.g. host1:9200,host2:9200)." % configured_host_list
-        logger.exception(msg)
-        raise exceptions.SystemSetupError(msg)
-
-
 def main():
     start = time.time()
     # Early init of console output so we start to show everything consistently.
@@ -588,7 +577,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        cfg.add(config.Scope.applicationOverride, "client", "hosts", convert_hosts(csv_to_list(args.target_hosts)))
+        cfg.add(config.Scope.applicationOverride, "client", "hosts", _normalize_hosts(csv_to_list(args.target_hosts)))
         client_options = kv_to_map(csv_to_list(args.client_options))
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
         if "timeout" not in client_options:
