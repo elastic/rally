@@ -202,6 +202,11 @@ class DockerProvisioner(Provisioner):
         self.rally_root = rally_root
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
         self.node_name = "%s0" % node_name_prefix
+
+        # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
+        merged_cluster_settings = cluster_settings.copy()
+        merged_cluster_settings["xpack.security.enabled"] = "false"
+
         provisioner_defaults = {
             "cluster_name": "rally-benchmark",
             "node_name": self.node_name,
@@ -213,8 +218,7 @@ class DockerProvisioner(Provisioner):
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
             "node_count_per_host": 1,
-            # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
-            "cluster_settings": cluster_settings
+            "cluster_settings": merged_cluster_settings
         }
 
         self.config_vars = {}
