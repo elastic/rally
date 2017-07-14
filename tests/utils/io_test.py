@@ -58,6 +58,14 @@ class IoTests(TestCase):
         self.assertEqual("/not/normalized", io.normalize_path("/not/normalized/path/../"))
         self.assertEqual(os.path.expanduser("~"), io.normalize_path("~/Documents/.."))
 
+    def test_archive(self):
+        self.assertTrue(io.is_archive("/tmp/some-archive.tar.gz"))
+        self.assertTrue(io.is_archive("/tmp/some-archive.tgz"))
+        # Rally does not recognize .7z
+        self.assertFalse(io.is_archive("/tmp/some-archive.7z"))
+        self.assertFalse(io.is_archive("/tmp/some.log"))
+        self.assertFalse(io.is_archive("some.log"))
+
 
 class DecompressionTests(TestCase):
     def test_decompresses_supported_file_formats(self):

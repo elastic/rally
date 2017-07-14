@@ -235,16 +235,29 @@ class MergeParts(InternalTelemetryDevice):
         self._t = None
 
     def on_benchmark_stop(self):
+        logger.info("Analyzing merge times.")
+        # first decompress all logs. They have unique names so it's safe to do that. It's easier to first decompress everything
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
-            logger.debug("Analyzing merge parts in [%s]" % log_path)
-            with open(log_path) as f:
-                merge_times = self._extract_merge_times(f)
-                if merge_times:
-                    self._store_merge_times(merge_times)
+            if io.is_archive(log_path):
+                logger.info("Decompressing [%s] to analyze merge times..." % log_path)
+                io.decompress(log_path, self.node_log_dir)
 
-    def _extract_merge_times(self, file):
+        # we need to add up times from all files
         merge_times = {}
+        for log_file in os.listdir(self.node_log_dir):
+            log_path = "%s/%s" % (self.node_log_dir, log_file)
+            if not io.is_archive(log_file):
+                logger.debug("Analyzing merge parts in [%s]" % log_path)
+                with open(log_path) as f:
+                    self._extract_merge_times(f, merge_times)
+            else:
+                logger.debug("Skipping archived logs in [%s]." % log_path)
+        if merge_times:
+            self._store_merge_times(merge_times)
+        logger.info("Finished analyzing merge times. Extracted [%s] different merge time components." % len(merge_times))
+
+    def _extract_merge_times(self, file, merge_times):
         for line in file.readlines():
             match = MergeParts.MERGE_TIME_LINE.search(line)
             if match is not None:
@@ -254,7 +267,6 @@ class MergeParts(InternalTelemetryDevice):
                 l = merge_times[part]
                 l[0] += int(duration_ms)
                 l[1] += int(num_docs)
-        return merge_times
 
     def _store_merge_times(self, merge_times):
         for k, v in merge_times.items():

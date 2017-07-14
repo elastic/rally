@@ -132,6 +132,15 @@ def _zipdir(source_directory, archive):
                 arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, "..")))
 
 
+def is_archive(name):
+    """
+    :param name: File name to check. Can be either just the file name or optionally also an absolute path.
+    :return: True iff the given file name is an archive that is also recognized for decompression by Rally.
+    """
+    _, ext = splitext(name)
+    return ext in [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2"]
+
+
 def compress(source_directory, archive_name):
     """
     Compress a directory tree.
