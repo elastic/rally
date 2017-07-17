@@ -240,14 +240,15 @@ class MetricsStore:
 
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
                     (self._invocation, self._track, self._challenge, self._car))
-        user_tag = self._config.opts("race", "user.tag", mandatory=False)
-        if user_tag and user_tag.strip() != "":
+        user_tags = self._config.opts("race", "user.tag", mandatory=False)
+        if user_tags and user_tags.strip() != "":
             try:
-                user_tag_key, user_tag_value = user_tag.split(":")
-                # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
-                self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % user_tag_key, user_tag_value)
+                for user_tag in user_tags.split(","):
+                    user_tag_key, user_tag_value = user_tag.split(":")
+                    # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
+                    self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % user_tag_key, user_tag_value)
             except ValueError:
-                msg = "User tag key and value have to separated by a ':'. Invalid value [%s]" % user_tag
+                msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
                 logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
         self._stop_watch.start()

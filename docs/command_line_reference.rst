@@ -308,7 +308,16 @@ The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``valu
 
  ::
 
-   esrally --user-tag=intention:github-issue-1234-baseline
+   esrally --user-tag="intention:github-issue-1234-baseline"
+
+You can also specify multiple tags. They need to be separated by a comma::
+
+**Example**
+
+ ::
+
+   esrally --user-tag="disk:SSD,data_node_count:4"
+
 
 
 When you run ``esrally list races``, this will show up again::
@@ -326,5 +335,6 @@ When you run ``esrally list races``, this will show up again::
     Race Timestamp    Track    Challenge            Car       User Tag
     ----------------  -------  -------------------  --------  ------------------------------------
     20160518T122341Z  pmc      append-no-conflicts  defaults  intention:github-issue-1234-baseline
+    20160518T112341Z  pmc      append-no-conflicts  defaults  disk:SSD,data_node_count:4
 
 This will help you recognize a specific race when running ``esrally compare``.

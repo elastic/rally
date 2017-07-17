@@ -262,6 +262,8 @@ class NodeMechanicActor(actor.RallyActor):
                 self.config.add_all(msg.cfg, "client")
                 self.config.add_all(msg.cfg, "track")
                 self.config.add_all(msg.cfg, "mechanic")
+                # allow metrics store to extract race meta-data
+                self.config.add_all(msg.cfg, "race")
                 if msg.port is not None:
                     # we need to override the port with the value that the user has specified instead of using the default value (39200)
                     self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)

@@ -184,7 +184,7 @@ class EsMetricsTests(TestCase):
     def test_put_value_with_meta_info(self):
         throughput = 5000
         # add a user-defined tag
-        self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing")
+        self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
 
@@ -212,6 +212,7 @@ class EsMetricsTests(TestCase):
             "unit": "docs/s",
             "meta": {
                 "tag_intention": "testing",
+                "tag_disk_type": "hdd",
                 "source_revision": "abc123",
                 "os_name": "Darwin",
                 "os_version": "15.4.0"
