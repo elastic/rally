@@ -1,3 +1,15 @@
+### 0.6.2
+
+#### Enhancements
+
+* [#299](https://github.com/elastic/rally/pull/299): Leave the host parsing on elasticsearch-py
+* [#227](https://github.com/elastic/rally/issues/227): Enhance flexibility of user tagging
+* [#196](https://github.com/elastic/rally/issues/196) (Breaking): Externalize car configuration
+
+#### Bug Fixes
+
+* [#298](https://github.com/elastic/rally/issues/298): Rally froze at the end of a race, did not produce results
+
 ### 0.6.1
 
 #### Enhancements
