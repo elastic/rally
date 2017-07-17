@@ -921,3 +921,141 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(4, len(parallel_tasks))
         for task in parallel_tasks:
             self.assertEqual(1, task.clients)
+
+    def test_parallel_tasks_with_completed_by_set(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "warmup-time-period": 2400,
+                                "time-period": 36000,
+                                "completed-by": "index-2",
+                                "tasks": [
+                                    {
+                                        "operation": "index-1"
+                                    },
+                                    {
+                                        "operation": "index-2"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        parallel_element = resulting_track.challenges[0].schedule[0]
+        parallel_tasks = parallel_element.tasks
+
+        # we will only have two clients *in total*
+        self.assertEqual(2, parallel_element.clients)
+        self.assertEqual(2, len(parallel_tasks))
+
+        self.assertEqual("index-1", parallel_tasks[0].operation.name)
+        self.assertFalse(parallel_tasks[0].completes_parent)
+
+        self.assertEqual("index-2", parallel_tasks[1].operation.name)
+        self.assertTrue(parallel_tasks[1].completes_parent)
+
+    def test_parallel_tasks_with_completed_by_set_no_task_matches(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "completed-by": "non-existing-task",
+                                "tasks": [
+                                    {
+                                        "operation": "index-1"
+                                    },
+                                    {
+                                        "operation": "index-2"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' is marked with 'completed-by' "
+                         "with task name 'non-existing-task' but no task with this name exists.", ctx.exception.args[0])
+
+    def test_parallel_tasks_with_completed_by_set_multiple_tasks_match(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "index"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "completed-by": "index-1",
+                                "tasks": [
+                                    {
+                                        "operation": "index-1"
+                                    },
+                                    {
+                                        "operation": "index-1"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
+                         "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.", ctx.exception.args[0])

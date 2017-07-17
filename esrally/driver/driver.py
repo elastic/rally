@@ -66,6 +66,15 @@ class Drive:
         self.client_start_timestamp = client_start_timestamp
 
 
+class CompleteCurrentTask:
+    """
+    Tells a load generator to prematurely complete its current task. This is used to model task dependencies for parallel tasks (i.e. if a
+    specific task that is marked accordingly in the track finishes, it will also signal termination of all other tasks in the same parallel
+    element).
+    """
+    pass
+
+
 class UpdateSamples:
     """
     Used to send samples from a load generator node to the master.
@@ -144,6 +153,7 @@ class Driver(actor.RallyActor):
         self.quiet = False
         self.most_recent_sample_per_client = {}
         self.status = "init"
+        self.complete_current_task_sent = False
 
     def receiveMessage(self, msg, sender):
         try:
@@ -250,6 +260,7 @@ class Driver(actor.RallyActor):
                         (self.current_step + 1, self.number_of_steps))
             # we can go on to the next step
             self.currently_completed = 0
+            self.complete_current_task_sent = False
             # make a copy and reset early to avoid any race conditions from clients that reach a join point already while we are sending...
             clients_curr_step = self.clients_completed_current_step
             self.clients_completed_current_step = {}
@@ -286,6 +297,26 @@ class Driver(actor.RallyActor):
                     logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])" %
                                 (client_id, client_start_timestamp, start_next_task))
                     self.send(driver, Drive(client_start_timestamp))
+        else:
+            current_join_point = msg.task
+            # we need to actively send CompleteCurrentTask messages to all remaining clients.
+            if current_join_point.preceding_task_completes_parent and not self.complete_current_task_sent:
+                logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet."
+                            % (current_join_point, current_join_point.clients_executing_completing_task))
+                # are all clients executing said task already done? if so we need to notify the remaining clients
+                all_clients_finished = True
+                for client_id in current_join_point.clients_executing_completing_task:
+                    if client_id not in self.clients_completed_current_step:
+                        logger.info("Client id [%s] did not yet finish." % client_id)
+                        # do not break here so we can see all remaining clients in the log output.
+                        all_clients_finished = False
+                if all_clients_finished:
+                    # As we are waiting for other clients to finish, we would send this message over and over again. Hence we need to
+                    # memorize whether we have already sent it for the current step.
+                    self.complete_current_task_sent = True
+                    logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
+                    for client_id, driver in enumerate(self.drivers):
+                        self.send(driver, CompleteCurrentTask())
 
     def finished(self):
         return self.current_step == self.number_of_steps
@@ -371,11 +402,15 @@ class LoadGenerator(actor.RallyActor):
         self.config = None
         self.track = None
         self.tasks = None
-        self.current_task = 0
+        self.current_task_index = 0
+        self.current_task = None
         self.start_timestamp = None
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
+        # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation but a regular event in
+        # a benchmark and used to model task dependency of parallel tasks.
+        self.complete = threading.Event()
         self.executor_future = None
         self.sampler = None
         self.start_driving = False
@@ -392,8 +427,9 @@ class LoadGenerator(actor.RallyActor):
                 self.config = msg.config
                 self.track = msg.track
                 self.tasks = msg.tasks
-                self.current_task = 0
+                self.current_task_index = 0
                 self.cancel.clear()
+                self.current_task = None
                 # we need to wake up more often in test mode
                 if self.config.opts("track", "test.mode.enabled"):
                     self.wakeup_interval = 0.5
@@ -402,9 +438,19 @@ class LoadGenerator(actor.RallyActor):
                 self.drive()
             elif isinstance(msg, Drive):
                 logger.debug("LoadGenerator[%d] is continuing its work at task index [%d] on [%f]." %
-                             (self.client_id, self.current_task, msg.client_start_timestamp))
+                             (self.client_id, self.current_task_index, msg.client_start_timestamp))
                 self.start_driving = True
                 self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
+            elif isinstance(msg, CompleteCurrentTask):
+                # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
+                # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
+                if self.at_joinpoint():
+                    logger.info("LoadGenerator[%s] has received CompleteCurrentTask but is currently at [%s]. Ignoring."
+                                % (str(self.client_id), self.current_task))
+                else:
+                    logger.info("LoadGenerator[%s] has received CompleteCurrentTask. Completing current task [%s]."
+                                % (str(self.client_id), self.current_task))
+                    self.complete.set()
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
                 if self.start_driving:
@@ -447,11 +493,11 @@ class LoadGenerator(actor.RallyActor):
 
     def drive(self):
         profiling_enabled = self.config.opts("driver", "profiling")
-        task = None
+        task = self.current_task_and_advance()
         # skip non-tasks in the task list
         while task is None:
-            task = self.tasks[self.current_task]
-            self.current_task += 1
+            task = self.current_task_and_advance()
+        self.current_task = task
 
         if isinstance(task, JoinPoint):
             logger.info("LoadGenerator[%d] reached join point [%s]." % (self.client_id, task))
@@ -460,19 +506,36 @@ class LoadGenerator(actor.RallyActor):
                 self.executor_future.result()
             self.send_samples()
             self.cancel.clear()
+            self.complete.clear()
             self.executor_future = None
             self.sampler = None
             self.send(self.master, JoinPointReached(self.client_id, task))
         elif isinstance(task, track.Task):
-            logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
-            self.sampler = Sampler(self.client_id, task, self.start_timestamp)
-            schedule = schedule_for(self.track, task, self.client_id)
-            self.executor_future = self.pool.submit(execute_schedule,
-                                                    self.cancel, self.client_id, task.operation, schedule, self.es, self.sampler,
-                                                    profiling_enabled)
-            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+            # There may be a situation where there are more (parallel) tasks than clients. If we were asked to complete all tasks, we not
+            # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
+            if self.complete.is_set():
+                logger.info("LoadGenerator[%d] is skipping [%s] because it has been asked to complete all tasks until next join point." %
+                            (self.client_id, task))
+            else:
+                logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
+                self.sampler = Sampler(self.client_id, task, self.start_timestamp)
+                schedule = schedule_for(self.track, task, self.client_id)
+
+                executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete)
+                final_executor = Profiler(executor, self.client_id, task.operation) if profiling_enabled else executor
+
+                self.executor_future = self.pool.submit(final_executor)
+                self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
+
+    def at_joinpoint(self):
+        return isinstance(self.current_task, JoinPoint)
+
+    def current_task_and_advance(self):
+        current = self.tasks[self.current_task_index]
+        self.current_task_index += 1
+        return current
 
     def send_samples(self):
         if self.sampler:
@@ -734,64 +797,95 @@ def calculate_global_throughput(samples, bucket_interval_secs=1):
     return global_throughput
 
 
-def execute_schedule(cancel, client_id, op, schedule, es, sampler, enable_profiling=False):
-    """
-    Executes tasks according to the schedule for a given operation.
+class Profiler:
+    def __init__(self, target, client_id, operation):
+        """
+        :param target: The actual executor which should be profiled.
+        :param client_id: The id of the client that executes the operation.
+        :param operation: The operation that is executed.
+        """
+        self.target = target
+        self.client_id = client_id
+        self.operation = operation
 
-    :param cancel: A shared boolean that indicates we need to cancel execution.
-    :param client_id: The id of the client that executes the operation.
-    :param op: The operation that is executed.
-    :param schedule: The schedule for this operation.
-    :param es: Elasticsearch client that will be used to execute the operation.
-    :param sampler: A container to store raw samples.
-    :param enable_profiling: Enables a Python profiler for this execution (default: False).
-    """
-    if enable_profiling:
-        logger.debug("Enabling Python profiler for [%s]" % str(op))
-        import cProfile, pstats
+    def __call__(self, *args, **kwargs):
+        logger.debug("Enabling Python profiler for [%s]" % str(self.operation))
+        import cProfile
+        import pstats
         import io as python_io
         profiler = cProfile.Profile()
         profiler.enable()
-    else:
-        logger.debug("Python profiler for [%s] is disabled." % str(op))
-
-    total_start = time.perf_counter()
-    # noinspection PyBroadException
-    try:
-        for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
-            if cancel.is_set():
-                logger.info("User cancelled execution.")
-                break
-            absolute_expected_schedule_time = total_start + expected_scheduled_time
-            throughput_throttled = expected_scheduled_time > 0
-            if throughput_throttled:
-                rest = absolute_expected_schedule_time - time.perf_counter()
-                if rest > 0:
-                    time.sleep(rest)
-            start = time.perf_counter()
-            total_ops, total_ops_unit, request_meta_data = execute_single(runner, es, params)
-            stop = time.perf_counter()
-
-            service_time = stop - start
-            # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
-            latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
-            sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time), total_ops,
-                        total_ops_unit, (stop - total_start), percent_completed)
-    except BaseException:
-        logger.exception("Could not execute schedule")
-        raise
-    finally:
-        if enable_profiling:
+        try:
+            return self.target(*args, **kwargs)
+        finally:
             profiler.disable()
             s = python_io.StringIO()
             sortby = 'cumulative'
             ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
             ps.print_stats()
 
-            profile = "\n=== Profile START for client [%s] and operation [%s] ===\n" % (str(client_id), str(op))
+            profile = "\n=== Profile START for client [%s] and operation [%s] ===\n" % (str(self.client_id), str(self.operation))
             profile += s.getvalue()
-            profile += "=== Profile END for client [%s] and operation [%s] ===" % (str(client_id), str(op))
+            profile += "=== Profile END for client [%s] and operation [%s] ===" % (str(self.client_id), str(self.operation))
             profile_logger.info(profile)
+
+
+class Executor:
+    def __init__(self, task, schedule, es, sampler, cancel, complete):
+        """
+        Executes tasks according to the schedule for a given operation.
+
+        :param task: The task that is executed.
+        :param schedule: The schedule for this task.
+        :param es: Elasticsearch client that will be used to execute the operation.
+        :param sampler: A container to store raw samples.
+        :param cancel: A shared boolean that indicates we need to cancel execution.
+        :param complete: A shared boolean that indicates we need to prematurely complete execution.
+        """
+        self.task = task
+        self.op = task.operation
+        self.schedule = schedule
+        self.es = es
+        self.sampler = sampler
+        self.cancel = cancel
+        self.complete = complete
+
+    def __call__(self, *args, **kwargs):
+        total_start = time.perf_counter()
+        # noinspection PyBroadException
+        try:
+            for expected_scheduled_time, sample_type, percent_completed, runner, params in self.schedule:
+                if self.cancel.is_set():
+                    logger.info("User cancelled execution.")
+                    break
+                absolute_expected_schedule_time = total_start + expected_scheduled_time
+                throughput_throttled = expected_scheduled_time > 0
+                if throughput_throttled:
+                    rest = absolute_expected_schedule_time - time.perf_counter()
+                    if rest > 0:
+                        time.sleep(rest)
+                start = time.perf_counter()
+                total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params)
+                stop = time.perf_counter()
+
+                service_time = stop - start
+                # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
+                latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
+                # last sample should bump progress to 100% if externally completed.
+                completed = percent_completed if not self.complete.is_set() else 1.0
+                self.sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
+                                 total_ops, total_ops_unit, (stop - total_start), completed)
+
+                if self.complete.is_set():
+                    logger.info("Task is considered completed due to external event.")
+                    break
+        except BaseException:
+            logger.exception("Could not execute schedule")
+            raise
+        finally:
+            # Actively set it if this task completes its parent
+            if self.task.completes_parent:
+                self.complete.set()
 
 
 def execute_single(runner, es, params):
@@ -836,8 +930,19 @@ def execute_single(runner, es, params):
 
 
 class JoinPoint:
-    def __init__(self, id):
+    def __init__(self, id, clients_executing_completing_task=None):
+        """
+
+        :param id: The join point's id.
+        :param clients_executing_completing_task: An array of client indices which execute a task that can prematurely complete its parent
+        element. Provide 'None' or an empty array if no task satisfies this predicate.
+        """
+        if clients_executing_completing_task is None:
+            clients_executing_completing_task = []
         self.id = id
+        self.clients_executing_completing_task = clients_executing_completing_task
+        self.num_clients_executing_completing_task = len(clients_executing_completing_task)
+        self.preceding_task_completes_parent = self.num_clients_executing_completing_task > 0
 
     def __eq__(self, other):
         return self.id == other.id
@@ -881,9 +986,13 @@ class Allocator:
 
         for task in self.schedule:
             start_client_index = 0
+            clients_executing_completing_task = []
             for sub_task in task:
                 for client_index in range(start_client_index, start_client_index + sub_task.clients):
-                    allocations[client_index % max_clients].append(sub_task)
+                    final_client_index = client_index % max_clients
+                    if sub_task.completes_parent:
+                        clients_executing_completing_task.append(final_client_index)
+                    allocations[final_client_index].append(sub_task)
                 start_client_index += sub_task.clients
 
             # uneven distribution between tasks and clients, e.g. there are 5 (parallel) tasks but only 2 clients. Then, one of them
@@ -895,7 +1004,7 @@ class Allocator:
                     allocations[client_index].append(None)
 
             # let all clients join after each task, then we go on
-            next_join_point = JoinPoint(join_point_id)
+            next_join_point = JoinPoint(join_point_id, clients_executing_completing_task)
             for client_index in range(max_clients):
                 allocations[client_index].append(next_join_point)
             join_point_id += 1

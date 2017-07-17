@@ -353,7 +353,7 @@ class Parallel:
 
 class Task:
     def __init__(self, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1,
-                 schedule="deterministic", params=None):
+                 completes_parent=False, schedule="deterministic", params=None):
         self.operation = operation
         self.meta_data = meta_data if meta_data else {}
         self.warmup_iterations = warmup_iterations
@@ -361,20 +361,21 @@ class Task:
         self.warmup_time_period = warmup_time_period
         self.time_period = time_period
         self.clients = clients
+        self.completes_parent = completes_parent
         self.schedule = schedule
         self.params = params if params else {}
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
         return hash(self.operation) ^ hash(self.warmup_iterations) ^ hash(self.iterations) ^ hash(self.warmup_time_period) ^ \
-               hash(self.time_period) ^ hash(self.clients) ^ hash(self.schedule)
+               hash(self.time_period) ^ hash(self.clients) ^ hash(self.schedule) ^ hash(self.completes_parent)
 
     def __eq__(self, other):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
         return isinstance(other, type(self)) and (self.operation, self.warmup_iterations, self.iterations, self.warmup_time_period, 
-                                                  self.time_period, self.clients, self.schedule) == \
+                                                  self.time_period, self.clients, self.schedule, self.completes_parent) == \
                                                  (other.operation, other.warmup_iterations, other.iterations, other.warmup_time_period,
-                                                  other.time_period, other.clients, other.schedule)
+                                                  other.time_period, other.clients, other.schedule, other.completes_parent)
 
     def __iter__(self):
         return iter([self])

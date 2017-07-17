@@ -273,7 +273,8 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 * ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the same properties as defined above.
+* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list. As soon as this task has completed, the whole ``parallel`` task structure is considered completed. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed. A task is completed if and only if all associated clients have completed execution.
+* ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations`` and ``iterations``.
 
 .. note::
 
@@ -365,6 +366,32 @@ In this scenario, we run indexing and a few queries concurrently with a total of
                 "warmup-iterations": 50,
                 "iterations": 100,
                 "target-throughput": 200
+              }
+            ]
+          }
+        }
+      ]
+
+We can use ``completed-by`` to stop querying as soon as bulk-indexing has completed::
+
+      "schedule": [
+        {
+          "parallel": {
+            "completed-by": "bulk",
+            "tasks": [
+              {
+                "operation": "bulk",
+                "warmup-time-period": 120,
+                "time-period": 3600,
+                "clients": 8,
+                "target-throughput": 50
+              },
+              {
+                "operation": "default",
+                "clients": 2,
+                "warmup-time-period": 480,
+                "time-period": 7200,
+                "target-throughput": 50
               }
             ]
           }

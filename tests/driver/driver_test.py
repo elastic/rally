@@ -77,6 +77,27 @@ class AllocatorTests(TestCase):
         self.assertEqual(3, len(allocator.allocations[1]))
         self.assertEqual(2, len(allocator.join_points))
         self.assertEqual([{op}], allocator.operations_per_joinpoint)
+        for join_point in allocator.join_points:
+            self.assertFalse(join_point.preceding_task_completes_parent)
+            self.assertEqual(0, join_point.num_clients_executing_completing_task)
+
+    def test_a_task_completes_the_parallel_structure(self):
+        opA = track.Operation("index-completing", track.OperationType.Index, param_source="driver-test-param-source")
+        opB = track.Operation("index-non-completing", track.OperationType.Index, param_source="driver-test-param-source")
+        taskA = track.Task(opA, completes_parent=True)
+        taskB = track.Task(opB)
+
+        allocator = driver.Allocator([track.Parallel([taskA, taskB])])
+
+        self.assertEqual(2, allocator.clients)
+        self.assertEqual(3, len(allocator.allocations[0]))
+        self.assertEqual(3, len(allocator.allocations[1]))
+        self.assertEqual(2, len(allocator.join_points))
+        self.assertEqual([{opA, opB}], allocator.operations_per_joinpoint)
+        final_join_point = allocator.join_points[1]
+        self.assertTrue(final_join_point.preceding_task_completes_parent)
+        self.assertEqual(1, final_join_point.num_clients_executing_completing_task)
+        self.assertEqual([0], final_join_point.clients_executing_completing_task)
 
     def test_allocates_mixed_tasks(self):
         op1 = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
@@ -101,6 +122,9 @@ class AllocatorTests(TestCase):
         self.assertEqual(11, len(allocator.allocations[2]))
         self.assertEqual(6, len(allocator.join_points))
         self.assertEqual([{op1}, {op1, op2}, {op1}, {op1}, {op3}], allocator.operations_per_joinpoint)
+        for join_point in allocator.join_points:
+            self.assertFalse(join_point.preceding_task_completes_parent)
+            self.assertEqual(0, join_point.num_clients_executing_completing_task)
 
     def test_allocates_more_tasks_than_clients(self):
         op1 = track.Operation("index-a", track.OperationType.Index, param_source="driver-test-param-source")
@@ -110,7 +134,7 @@ class AllocatorTests(TestCase):
         op5 = track.Operation("index-e", track.OperationType.Index, param_source="driver-test-param-source")
 
         index_a = track.Task(op1)
-        index_b = track.Task(op2)
+        index_b = track.Task(op2, completes_parent=True)
         index_c = track.Task(op3)
         index_d = track.Task(op4)
         index_e = track.Task(op5)
@@ -121,6 +145,7 @@ class AllocatorTests(TestCase):
 
         allocations = allocator.allocations
 
+        # 2 clients
         self.assertEqual(2, len(allocations))
         # join_point, index_a, index_c, index_e, join_point
         self.assertEqual(5, len(allocations[0]))
@@ -131,6 +156,11 @@ class AllocatorTests(TestCase):
         self.assertEqual([allocations[1][0], index_b, index_d, None, allocations[1][4]], allocations[1])
 
         self.assertEqual([{op1, op2, op3, op4, op5}], allocator.operations_per_joinpoint)
+        self.assertEqual(2, len(allocator.join_points))
+        final_join_point = allocator.join_points[1]
+        self.assertTrue(final_join_point.preceding_task_completes_parent)
+        self.assertEqual(1, final_join_point.num_clients_executing_completing_task)
+        self.assertEqual([1], final_join_point.clients_executing_completing_task)
 
     def test_considers_number_of_clients_per_subtask(self):
         op1 = track.Operation("index-a", track.OperationType.Index, param_source="driver-test-param-source")
@@ -139,7 +169,7 @@ class AllocatorTests(TestCase):
 
         index_a = track.Task(op1)
         index_b = track.Task(op2)
-        index_c = track.Task(op3, clients=2)
+        index_c = track.Task(op3, clients=2, completes_parent=True)
 
         allocator = driver.Allocator([track.Parallel(tasks=[index_a, index_b, index_c], clients=3)])
 
@@ -147,6 +177,7 @@ class AllocatorTests(TestCase):
 
         allocations = allocator.allocations
 
+        # 3 clients
         self.assertEqual(3, len(allocations))
         # join_point, index_a, index_c, join_point
         self.assertEqual(4, len(allocations[0]))
@@ -160,6 +191,13 @@ class AllocatorTests(TestCase):
         self.assertEqual([allocations[2][0], index_c, None, allocations[2][3]], allocations[2])
 
         self.assertEqual([{op1, op2, op3}], allocator.operations_per_joinpoint)
+
+        self.assertEqual(2, len(allocator.join_points))
+        final_join_point = allocator.join_points[1]
+        self.assertTrue(final_join_point.preceding_task_completes_parent)
+        # task index_c has two clients, hence we have to wait for two clients to finish
+        self.assertEqual(2, final_join_point.num_clients_executing_completing_task)
+        self.assertEqual([2, 0], final_join_point.clients_executing_completing_task)
 
 
 class IndexManagementTests(TestCase):
@@ -400,11 +438,15 @@ class ExecutorTests(TestCase):
 
         sampler = driver.Sampler(client_id=2, task=task, start_timestamp=100)
         cancel = threading.Event()
-        driver.execute_schedule(cancel, 0, task.operation, schedule, es, sampler)
+        complete = threading.Event()
+
+        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+        execute_schedule()
 
         samples = sampler.samples
 
         self.assertTrue(len(samples) > 0)
+        self.assertFalse(complete.is_set(), "Executor should not auto-complete a normal task")
         previous_absolute_time = -1.0
         previous_relative_time = -1.0
         for sample in samples:
@@ -443,12 +485,16 @@ class ExecutorTests(TestCase):
             },
                                               param_source="driver-test-param-source"),
                               warmup_time_period=0.5, time_period=0.5, clients=4,
-                              params={"target-throughput": target_throughput, "clients": 4})
+                              params={"target-throughput": target_throughput, "clients": 4},
+                              completes_parent=True)
             schedule = driver.schedule_for(test_track, task, 0)
             sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
             cancel = threading.Event()
-            driver.execute_schedule(cancel, 0, task.operation, schedule, es, sampler)
+            complete = threading.Event()
+
+            execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+            execute_schedule()
 
             samples = sampler.samples
 
@@ -457,6 +503,7 @@ class ExecutorTests(TestCase):
             upper_bound = bounds[1]
             self.assertTrue(lower_bound <= sample_size <= upper_bound,
                             msg="Expected sample size to be between %d and %d but was %d" % (lower_bound, upper_bound, sample_size))
+            self.assertTrue(complete.is_set(), "Executor should auto-complete a task that terminates its parent")
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_cancel_execute_schedule(self, es):
@@ -484,8 +531,11 @@ class ExecutorTests(TestCase):
             sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
             cancel = threading.Event()
+            complete = threading.Event()
+            execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+
             cancel.set()
-            driver.execute_schedule(cancel, 0, task.operation, schedule, es, sampler)
+            execute_schedule()
 
             samples = sampler.samples
 
@@ -500,11 +550,19 @@ class ExecutorTests(TestCase):
         def run(*args, **kwargs):
             raise ExpectedUnitTestException()
 
+        task = track.Task(track.Operation("no-op", track.OperationType.Index.name, params={},
+                                          param_source="driver-test-param-source"),
+                          warmup_time_period=0.5, time_period=0.5, clients=4,
+                          params={"clients": 4})
+
         schedule = [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
         sampler = driver.Sampler(client_id=0, task=None, start_timestamp=0)
         cancel = threading.Event()
+        complete = threading.Event()
+        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+
         with self.assertRaises(ExpectedUnitTestException):
-            driver.execute_schedule(cancel, 0, "operation_name", schedule, es, sampler=sampler)
+            execute_schedule()
 
         es.assert_not_called()
 
@@ -605,6 +663,24 @@ class ExecutorTests(TestCase):
         self.assertEqual(
             "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing'].",
             ctx.exception.args[0])
+
+
+class ProfilerTests(TestCase):
+    def test_profiler_is_a_transparent_wrapper(self):
+        import time
+
+        def f(x):
+            time.sleep(x)
+            return x * 2
+
+        profiler = driver.Profiler(f, 0, "sleep-operation")
+        start = time.perf_counter()
+        # this should take roughly 1 second and should return something
+        return_value = profiler(1)
+        end = time.perf_counter()
+        self.assertEqual(2, return_value)
+        duration = end - start
+        self.assertTrue(0.9 <= duration <= 1.2, "Should sleep for roughly 1 second but took [%.2f] seconds." % duration)
 
 
 class ClusterHealthCheckTests(TestCase):

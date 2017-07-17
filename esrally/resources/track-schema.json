@@ -266,6 +266,10 @@
                       "minimum": 1,
                       "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
                     },
+                    "completed-by": {
+                      "type": "string",
+                      "description": "The name of an operation in the 'tasks' block. When this operation is completed, the whole parallel element is considered to be completed."
+                    },
                     "tasks": {
                       "type": "array",
                       "minItems": 1,

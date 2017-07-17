@@ -626,16 +626,28 @@ class TrackSpecificationReader:
         default_warmup_time_period = self._r(ops_spec, "warmup-time-period", error_ctx="parallel", mandatory=False)
         default_time_period = self._r(ops_spec, "time-period", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
+        completed_by = self._r(ops_spec, "completed-by", error_ctx="parallel", mandatory=False)
 
         # now descent to each operation
         tasks = []
         for task in self._r(ops_spec, "tasks", error_ctx="parallel"):
             tasks.append(self.parse_task(task, ops, challenge_name, default_warmup_iterations, default_iterations,
-                                         default_warmup_time_period, default_time_period))
+                                         default_warmup_time_period, default_time_period, completed_by))
+        if completed_by:
+            completion_task = None
+            for task in tasks:
+                if task.completes_parent and not completion_task:
+                    completion_task = task
+                elif task.completes_parent:
+                    self._error("'parallel' element for challenge '%s' contains multiple tasks with the name '%s' which are marked with "
+                                "'completed-by' but only task is allowed to match." % (challenge_name, completed_by))
+            if not completion_task:
+                self._error("'parallel' element for challenge '%s' is marked with 'completed-by' with task name '%s' but no task with "
+                            "this name exists." % (challenge_name, completed_by))
         return track.Parallel(tasks, clients)
 
     def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1,
-                   default_warmup_time_period=None, default_time_period=None):
+                   default_warmup_time_period=None, default_time_period=None, completed_by_name=None):
         op_name = task_spec["operation"]
         if op_name not in ops:
             self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
@@ -652,7 +664,10 @@ class TrackSpecificationReader:
                           time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False,
                                               default_value=default_time_period),
                           clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
-                          schedule=schedule, params=task_spec)
+                          # this will work because op_name must always be set, i.e. it is never `None`.
+                          completes_parent=(op_name == completed_by_name),
+                          schedule=schedule,
+                          params=task_spec)
         if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
                         "mix time periods and iterations." % (op_name, challenge_name, task.warmup_iterations, task.time_period))
