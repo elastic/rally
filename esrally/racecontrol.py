@@ -125,7 +125,7 @@ class Benchmark:
         # sends (see http://godaddy.github.io/Thespian/doc/using.html#sec-6-6-1).
         self.actor_system.ask(self.mechanic, mechanic.OnBenchmarkStart(lap))
         logger.info("Asking driver to start benchmark.")
-        main_driver = self.actor_system.createActor(driver.Driver,
+        main_driver = self.actor_system.createActor(driver.DriverActor,
                                                     targetActorRequirements={"coordinator": True},
                                                     globalName="/rally/driver/coordinator")
         try:

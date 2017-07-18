@@ -123,37 +123,18 @@ class BenchmarkCancelled:
     pass
 
 
-class Driver(actor.RallyActor):
+class DriverActor(actor.RallyActor):
     WAKEUP_INTERVAL_SECONDS = 1
     """
-    Coordinates all worker drivers.
+    Coordinates all worker drivers. This is actually only a thin actor wrapper layer around ``Driver`` which does the actual work.
     """
 
     def __init__(self):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
-        self.config = None
-        self.track = None
-        self.challenge = None
-        # Elasticsearch client
-        self.es = None
-        self.metrics_store = None
-        self.raw_samples = []
-        self.currently_completed = 0
-        self.clients_completed_current_step = {}
-        self.current_step = -1
-        self.number_of_steps = 0
         self.start_sender = None
-        self.allocations = None
-        self.join_points = None
-        self.ops_per_join_point = None
-        self.drivers = []
-        self.progress_reporter = console.progress()
-        self.progress_counter = 0
-        self.quiet = False
-        self.most_recent_sample_per_client = {}
+        self.coordinator = None
         self.status = "init"
-        self.complete_current_task_sent = False
 
     def receiveMessage(self, msg, sender):
         try:
@@ -161,30 +142,29 @@ class Driver(actor.RallyActor):
             if isinstance(msg, StartBenchmark):
                 self.start_benchmark(msg, sender)
             elif isinstance(msg, JoinPointReached):
-                self.joinpoint_reached(msg)
+                self.coordinator.joinpoint_reached(msg.client_id, msg.client_local_timestamp, msg.task)
             elif isinstance(msg, UpdateSamples):
                 self.update_samples(msg)
             elif isinstance(msg, thespian.actors.WakeupMessage):
-                if not self.finished():
-                    self.update_progress_message()
-                    self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
+                if not self.coordinator.finished():
+                    self.coordinator.update_progress_message()
+                    self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
             elif isinstance(msg, BenchmarkFailure):
                 logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
-                self.metrics_store.close()
+                self.coordinator.close()
                 self.send(self.start_sender, msg)
             elif isinstance(msg, BenchmarkCancelled):
                 logger.info("Main driver received a notification that the benchmark has been cancelled.")
-                self.progress_reporter.finish()
-                self.metrics_store.close()
+                self.coordinator.close()
                 self.send(self.start_sender, msg)
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
                 self.status = "exiting"
-                for driver in self.drivers:
+                for driver in self.coordinator.drivers:
                     self.send(driver, thespian.actors.ActorExitRequest())
                 logger.info("Main driver has notified all load generators of termination.")
             elif isinstance(msg, thespian.actors.ChildActorExited):
-                driver_index = self.drivers.index(msg.childAddress)
+                driver_index = self.coordinator.drivers.index(msg.childAddress)
                 if self.status == "exiting":
                     logger.info("Load generator [%d] has exited." % driver_index)
                 else:
@@ -194,42 +174,91 @@ class Driver(actor.RallyActor):
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
             logger.exception("Main driver encountered a fatal exception. Shutting down.")
-            if self.metrics_store:
-                self.metrics_store.close()
+            if self.coordinator:
+                self.coordinator.close()
             self.status = "exiting"
-            for driver in self.drivers:
+            for driver in self.coordinator.drivers:
                 self.send(driver, thespian.actors.ActorExitRequest())
             self.send(self.start_sender, BenchmarkFailure("Could not execute benchmark", e))
 
     def start_benchmark(self, msg, sender):
         self.start_sender = sender
-        self.config = msg.config
-        self.track = msg.track
+        self.coordinator = Driver(self, msg.config)
+        self.coordinator.start_benchmark(msg.track, msg.lap, msg.metrics_meta_info)
+        self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
+
+    def create_client(self, client_id):
+        return self.createActor(LoadGenerator,
+                                globalName="/rally/driver/worker/%s" % str(client_id),
+                                targetActorRequirements={"coordinator": True})
+
+    def start_load_generator(self, driver, client_id, cfg, track, allocations):
+        self.send(driver, StartLoadGenerator(client_id, cfg, track, allocations))
+
+    def drive_at(self, driver, client_start_timestamp):
+        self.send(driver, Drive(client_start_timestamp))
+
+    def complete_current_task(self, driver):
+        self.send(driver, CompleteCurrentTask())
+
+    def on_benchmark_complete(self, metrics):
+        self.send(self.start_sender, BenchmarkComplete(metrics))
+
+    def update_samples(self, msg):
+        self.coordinator.update_samples(msg.samples)
+
+
+class Driver:
+    def __init__(self, target, config):
+        """
+        Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
+        we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
+        appropriate messages.
+
+        :param target: A target that will be notified of important events.
+        :param config: The current config object.
+        """
+        self.target = target
+        self.config = config
+        self.track = None
+        self.challenge = None
+        self.metrics_store = None
+        self.drivers = []
+
+        self.progress_reporter = console.progress()
+        self.progress_counter = 0
+        self.quiet = False
+        self.allocations = None
+        self.raw_samples = []
+        self.most_recent_sample_per_client = {}
+
+        self.number_of_steps = 0
+        self.currently_completed = 0
+        self.clients_completed_current_step = {}
+        self.current_step = -1
+        self.ops_per_join_point = None
+        self.complete_current_task_sent = False
+
+    def start_benchmark(self, t, lap, metrics_meta_info):
+        self.track = t
+        self.challenge = select_challenge(self.config, self.track)
 
         track_name = self.track.name
-        challenge_name = self.track.find_challenge_or_default(self.config.opts("track", "challenge.name")).name
-        selected_car_name = self.config.opts("mechanic", "car.name")
+        challenge_name = self.challenge.name
+        car_name = self.config.opts("mechanic", "car.name")
 
         logger.info("Preparing track [%s]" % track_name)
         # TODO #257: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
         track.prepare_track(self.track, self.config)
 
-        logger.info("Benchmark for track [%s], challenge [%s] and car [%s] is about to start." %
-                    (track_name, challenge_name, selected_car_name))
+        logger.info("Benchmark for track [%s], challenge [%s] and car [%s] is about to start." % (track_name, challenge_name, car_name))
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
-        self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
-        self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=msg.metrics_meta_info, lap=msg.lap)
+        self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=metrics_meta_info, lap=lap)
         invocation = self.config.opts("system", "time.start")
-        expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
-        self.metrics_store.open(invocation, track_name, challenge_name, selected_car_name)
+        self.metrics_store.open(invocation, track_name, challenge_name, car_name)
 
-        self.challenge = select_challenge(self.config, self.track)
-        for template in self.track.templates:
-            setup_template(self.es, template)
+        self.prepare_cluster()
 
-        for index in self.track.indices:
-            setup_index(self.es, index, self.challenge.index_settings)
-        wait_for_status(self.es, expected_cluster_health)
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -239,20 +268,16 @@ class Driver(actor.RallyActor):
                     (self.number_of_steps, len(self.allocations), self.allocations))
 
         for client_id in range(allocator.clients):
-            self.drivers.append(
-                self.createActor(LoadGenerator,
-                                 globalName="/rally/driver/worker/%s" % str(client_id),
-                                 targetActorRequirements={"coordinator": True}))
+            self.drivers.append(self.target.create_client(client_id))
         for client_id, driver in enumerate(self.drivers):
             logger.info("Starting load generator [%d]." % client_id)
-            self.send(driver, StartLoadGenerator(client_id, self.config, self.track, self.allocations[client_id]))
+            self.target.start_load_generator(driver, client_id, self.config, self.track, self.allocations[client_id])
 
         self.update_progress_message()
-        self.wakeupAfter(datetime.timedelta(seconds=Driver.WAKEUP_INTERVAL_SECONDS))
 
-    def joinpoint_reached(self, msg):
+    def joinpoint_reached(self, client_id, client_local_timestamp, task):
         self.currently_completed += 1
-        self.clients_completed_current_step[msg.client_id] = (msg.client_local_timestamp, time.perf_counter())
+        self.clients_completed_current_step[client_id] = (client_local_timestamp, time.perf_counter())
         logger.info("[%d/%d] drivers reached join point [%d/%d]." %
                     (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
         if self.currently_completed == len(self.drivers):
@@ -273,14 +298,15 @@ class Driver(actor.RallyActor):
                 # Don't terminate any actors here; this will be triggered from outside. We shutdown child actors in our shutdown procedure.
                 logger.info("Postprocessing samples...")
                 self.post_process_samples()
-                logger.info("Sending benchmark results...")
                 # TODO #257: In case we are not on a single machine, spilling to disk will not work. Check and reimplement if necessary.
                 # Spill to disk to guard against a too large representation of metrics store.
-                self.send(self.start_sender, BenchmarkComplete(self.metrics_store.to_externalizable(spill_to_disk=True)))
+                m = self.metrics_store.to_externalizable(spill_to_disk=True)
                 logger.info("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
                 del self.metrics_store
+                logger.info("Sending benchmark results...")
+                self.target.on_benchmark_complete(m)
             else:
                 if self.config.opts("track", "test.mode.enabled"):
                     # don't wait if test mode is enabled and start the next task immediately.
@@ -296,9 +322,9 @@ class Driver(actor.RallyActor):
                     client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
                     logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])" %
                                 (client_id, client_start_timestamp, start_next_task))
-                    self.send(driver, Drive(client_start_timestamp))
+                    self.target.drive_at(driver, client_start_timestamp)
         else:
-            current_join_point = msg.task
+            current_join_point = task
             # we need to actively send CompleteCurrentTask messages to all remaining clients.
             if current_join_point.preceding_task_completes_parent and not self.complete_current_task_sent:
                 logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet."
@@ -316,16 +342,43 @@ class Driver(actor.RallyActor):
                     self.complete_current_task_sent = True
                     logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
                     for client_id, driver in enumerate(self.drivers):
-                        self.send(driver, CompleteCurrentTask())
+                        self.target.complete_current_task(driver)
 
     def finished(self):
         return self.current_step == self.number_of_steps
 
-    def update_samples(self, msg):
-        self.raw_samples += msg.samples
-        if len(msg.samples) > 0:
-            most_recent = msg.samples[-1]
+    def close(self):
+        self.progress_reporter.finish()
+        if self.metrics_store:
+            self.metrics_store.close()
+
+    def prepare_cluster(self):
+        expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
+        es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
+        for template in self.track.templates:
+            setup_template(es, template)
+        for index in self.track.indices:
+            setup_index(es, index, self.challenge.index_settings)
+        wait_for_status(es, expected_cluster_health)
+
+    def update_samples(self, samples):
+        self.raw_samples += samples
+        if len(samples) > 0:
+            most_recent = samples[-1]
             self.most_recent_sample_per_client[most_recent.client_id] = most_recent
+
+    def update_progress_message(self, task_finished=False):
+        if not self.quiet and self.current_step >= 0:
+            ops = ",".join([op.name for op in self.ops_per_join_point[self.current_step]])
+
+            if task_finished:
+                total_progress = 1.0
+            else:
+                num_clients = max(len(self.most_recent_sample_per_client), 1)
+                total_progress = sum([s.percent_completed for s in self.most_recent_sample_per_client.values()]) / num_clients
+            self.progress_reporter.print("Running %s" % ops, "[%3d%% done]" % (round(total_progress * 100)))
+            if task_finished:
+                self.progress_reporter.finish()
 
     def post_process_samples(self):
         logger.info("Storing latency and service time... ")
@@ -369,19 +422,6 @@ class Driver(actor.RallyActor):
             if arg is not None:
                 result.update(arg)
         return result
-
-    def update_progress_message(self, task_finished=False):
-        if not self.quiet and self.current_step >= 0:
-            ops = ",".join([op.name for op in self.ops_per_join_point[self.current_step]])
-
-            if task_finished:
-                total_progress = 1.0
-            else:
-                num_clients = max(len(self.most_recent_sample_per_client), 1)
-                total_progress = sum([s.percent_completed for s in self.most_recent_sample_per_client.values()]) / num_clients
-            self.progress_reporter.print("Running %s" % ops, "[%3d%% done]" % (round(total_progress * 100)))
-            if task_finished:
-                self.progress_reporter.finish()
 
 
 class LoadGenerator(actor.RallyActor):
