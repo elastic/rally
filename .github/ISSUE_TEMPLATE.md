@@ -1,8 +1,19 @@
 <!--
-GitHub is reserved for bug reports and feature requests. The best place
-to ask a general question is at the Elastic development Discourse forum at https://discuss.elastic.co/c/elasticsearch. If you are in fact posting 
-a bug report or a feature request, please include one and only one 
-of the below blocks in your new issue.
+
+*******************************************************************************
+
+Please ask questions in our forum at 
+
+https://discuss.elastic.co/c/elasticsearch/rally
+
+GitHub is reserved for bug reports and feature requests only and we will 
+close your issue immediately if it is just a question.
+ 
+*******************************************************************************
+
+If you are in fact posting a bug report or a feature request, please include 
+one and only one of the below blocks in your new issue.
+
 -->
 
 <!--
