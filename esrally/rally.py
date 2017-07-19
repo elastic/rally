@@ -251,7 +251,6 @@ def parse_args():
         p.add_argument(
             "--distribution-repository",
             help="define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-            choices=["snapshot", "release"],
             default="release")
         p.add_argument(
             "--track-repository",

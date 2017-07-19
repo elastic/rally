@@ -176,15 +176,24 @@ Additionally, Rally will always work with the current development version of Ela
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Rally does not only support benchmarking official distributions but can also benchmark snapshot builds. This is option is really just intended for `our benchmarks that are run in continuous integration <https://elasticsearch-benchmarks.elastic.co/>`_ but if you want to, you can use it too. The only supported values are ``release`` (default) and ``snapshot``.
+Rally does not only support benchmarking official distributions but can also benchmark snapshot builds. This is option is really just intended for `our benchmarks that are run in continuous integration <https://elasticsearch-benchmarks.elastic.co/>`_ but if you want to, you can use it too. The only supported value out of the box is ``release`` (default) but you can define an arbitrary repositories in ``~/.rally/rally.ini``.
 
 **Example**
 
- ::
+Say, you have an in-house repository where Elasticsearch snapshot builds get published. Then you can add the following in the ``distributions`` section of your Rally config file:
 
-   esrally --distribution-repository=snapshot --distribution-version=6.0.0-SNAPSHOT
+::
 
-This will benchmark the latest 6.0.0 snapshot build of Elasticsearch that is available in the Sonatype repository.
+   in_house_snapshot.url = https://www.example.org/snapshots/elasticsearch/elasticsearch-{{VERSION}}.tar.gz
+   in_house_snapshot.cache = false
+
+The ``url`` property defines the URL pattern for this repository. The ``cache`` property defines whether Rally should always download a new archive (``cache=false``) or just reuse a previously downloaded version (``cache=true``). Rally will replace the ``{{VERSION}}`` placeholder of in the ``url`` property with the value of ``distribution-version`` provided by the user on the command line.
+
+You can use this distribution repository with the name "in_house_snapshot" as follows::
+
+   esrally --distribution-repository=in_house_snapshot --distribution-version=6.0.0-SNAPSHOT
+
+This will benchmark the latest 6.0.0 snapshot build of Elasticsearch.
 
 ``report-format``
 ~~~~~~~~~~~~~~~~~

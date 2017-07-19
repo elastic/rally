@@ -2,10 +2,9 @@ import os
 import glob
 import logging
 import urllib.error
-import xml.etree.ElementTree
 
 from esrally import exceptions
-from esrally.utils import git, console, io, process, net, versions
+from esrally.utils import git, console, io, process, net, versions, convert
 from esrally.exceptions import BuildError, SystemSetupError
 
 logger = logging.getLogger("rally.supplier")
@@ -29,7 +28,7 @@ def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, buil
         raise
 
 
-def from_distribution(version, repo_name, distributions_root):
+def from_distribution(version, repo_name, distribution_config, distributions_root):
     if version.strip() == "":
         raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
                                           "to download with the command line parameter --distribution-version. "
@@ -37,15 +36,11 @@ def from_distribution(version, repo_name, distributions_root):
     io.ensure_dir(distributions_root)
     distribution_path = "%s/elasticsearch-%s.tar.gz" % (distributions_root, version)
 
-    try:
-        repo = distribution_repos[repo_name]
-    except KeyError:
-        raise exceptions.SystemSetupError("Unknown distribution repository [%s]. Valid values are: [%s]"
-                                          % (repo_name, ",".join(distribution_repos.keys())))
+    repo = DistributionRepository(repo_name, distribution_config, version)
 
-    download_url = repo.download_url(version)
+    download_url = repo.download_url
     logger.info("Resolved download URL [%s] for version [%s]" % (download_url, version))
-    if not os.path.isfile(distribution_path) or repo.must_download:
+    if not os.path.isfile(distribution_path) or not repo.cache:
         try:
             logger.info("Starting download of Elasticsearch [%s]" % version)
             progress = net.Progress("[INFO] Downloading Elasticsearch %s" % version)
@@ -140,53 +135,36 @@ class Builder:
             raise BuildError(msg)
 
 
-class ReleaseDistributionRepo:
-    def __init__(self):
-        self.must_download = False
+class DistributionRepository:
+    def __init__(self, name, distribution_config, version):
+        self.name = name
+        self.cfg = distribution_config
+        self.version = version
 
-    def download_url(self, version):
-        major_version, _, _, _ = versions.components(version)
-        if major_version > 1 and not self.on_or_after_5_0_0_beta1(version):
-            download_url = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/%s/" \
-                           "elasticsearch-%s.tar.gz" % (version, version)
-        elif self.on_or_after_5_0_0_beta1(version):
-            download_url = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-%s.tar.gz" % version
-        else:
-            download_url = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-%s.tar.gz" % version
-        return download_url
+    @property
+    def download_url(self):
+        major_version = versions.major_version(self.version)
+        version_url_key = "%s.%s.url" % (self.name, str(major_version))
+        default_url_key = "%s.url" % self.name
 
-    def on_or_after_5_0_0_beta1(self, version):
-        major, minor, patch, suffix = versions.components(version)
-        if major < 5:
-            return False
-        elif major == 5 and minor == 0 and patch == 0 and suffix and suffix.startswith("alpha"):
-            return False
-        return True
-
-
-class SnapshotDistributionRepo:
-    def __init__(self):
-        self.must_download = True
-
-    def download_url(self, version):
-        root_path = "https://oss.sonatype.org/content/repositories/snapshots/org/elasticsearch/distribution/tar/elasticsearch/%s" % version
-        metadata_url = "%s/maven-metadata.xml" % root_path
         try:
-            metadata = net.retrieve_content_as_string(metadata_url)
-            x = xml.etree.ElementTree.fromstring(metadata)
-            found_snapshot_versions = x.findall("./versioning/snapshotVersions/snapshotVersion/[extension='tar.gz']/value")
-        except Exception:
-            logger.exception("Could not retrieve a valid metadata.xml file from remote URL [%s]." % metadata_url)
-            raise exceptions.SystemSetupError("Cannot derive download URL for Elasticsearch %s" % version)
+            if version_url_key in self.cfg:
+                url_template = self.cfg[version_url_key]
+            else:
+                url_template = self.cfg[default_url_key]
+        except KeyError:
+            raise exceptions.SystemSetupError("Neither version specific distribution config key [%s] nor a default distribution config key "
+                                              "[%s] is defined." % (version_url_key, default_url_key))
+        return url_template.replace("{{VERSION}}", self.version)
 
-        if len(found_snapshot_versions) == 1:
-            snapshot_id = found_snapshot_versions[0].text
-            return "%s/elasticsearch-%s.tar.gz" % (root_path, snapshot_id)
-        else:
-            logger.error("Found [%d] version identifiers in [%s]. Contents: %s" % (len(found_snapshot_versions), metadata_url, metadata))
-            raise exceptions.SystemSetupError("Cannot derive download URL for Elasticsearch %s" % version)
-
-distribution_repos = {
-    "release": ReleaseDistributionRepo(),
-    "snapshot": SnapshotDistributionRepo()
-}
+    @property
+    def cache(self):
+        k = "%s.cache" % self.name
+        try:
+            raw_value = self.cfg[k]
+        except KeyError:
+            raise exceptions.SystemSetupError("Mandatory config key [%s] is undefined." % k)
+        try:
+            return convert.to_bool(raw_value)
+        except ValueError:
+            raise exceptions.SystemSetupError("Value [%s] for config key [%s] is not a valid boolean value." % (raw_value, k))

@@ -74,6 +74,39 @@ class ConfigTests(TestCase):
         cfg.add(config.Scope.applicationOverride, "tests", "sample.key", "override")
         self.assertEqual("override", cfg.opts("tests", "sample.key"))
 
+    def test_load_all_opts_in_section(self):
+        cfg = config.Config(config_file_class=InMemoryConfigStore)
+        self.assertFalse(cfg.config_present())
+
+        sample_config = {
+            "distributions": {
+                "release.url": "https://acme.com/releases",
+                "release.cache": "true",
+                "snapshot.url": "https://acme.com/snapshots",
+                "snapshot.cache": "false"
+            },
+            "system": {
+                "env.name": "local"
+            },
+            "meta": {
+                "config.version": config.Config.CURRENT_CONFIG_VERSION
+            }
+        }
+        cfg.config_file.store(sample_config)
+
+        self.assertTrue(cfg.config_present())
+        cfg.load_config()
+        # override a value so we can see that the scoping logic still works. Default is scope "application"
+        cfg.add(config.Scope.applicationOverride, "distributions", "snapshot.cache", "true")
+
+        self.assertEqual({
+            "release.url": "https://acme.com/releases",
+            "release.cache": "true",
+            "snapshot.url": "https://acme.com/snapshots",
+            # overridden!
+            "snapshot.cache": "true"
+        }, cfg.all_opts("distributions"))
+
     def test_add_all_in_section(self):
         source_cfg = config.Config(config_file_class=InMemoryConfigStore)
         sample_config = {
@@ -122,7 +155,7 @@ class ConfigFactoryTests(TestCase):
                 print("%s::%s: %s" % (section, k, v))
 
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("9", config_store.config["meta"]["config.version"])
+        self.assertEqual("10", config_store.config["meta"]["config.version"])
 
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
@@ -159,6 +192,16 @@ class ConfigFactoryTests(TestCase):
 
         self.assertTrue("defaults" in config_store.config)
         self.assertEqual("False", config_store.config["defaults"]["preserve_benchmark_candidate"])
+
+        self.assertTrue("distributions" in config_store.config)
+        self.assertEqual("https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                         config_store.config["distributions"]["release.1.url"])
+        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
+                         "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
+                         config_store.config["distributions"]["release.2.url"])
+        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                         config_store.config["distributions"]["release.url"])
+        self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
@@ -210,7 +253,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("9", config_store.config["meta"]["config.version"])
+        self.assertEqual("10", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
@@ -221,6 +264,7 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
         self.assertTrue("benchmarks" in config_store.config)
+
         self.assertTrue("reporting" in config_store.config)
         self.assertEqual("elasticsearch", config_store.config["reporting"]["datastore.type"])
         self.assertEqual("localhost", config_store.config["reporting"]["datastore.host"])
@@ -228,9 +272,26 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("True", config_store.config["reporting"]["datastore.secure"])
         self.assertEqual("user", config_store.config["reporting"]["datastore.user"])
         self.assertEqual("pw", config_store.config["reporting"]["datastore.password"])
+
         self.assertTrue("tracks" in config_store.config)
+        self.assertEqual("https://github.com/elastic/rally-tracks", config_store.config["tracks"]["default.url"])
+
+        self.assertTrue("teams" in config_store.config)
+        self.assertEqual("https://github.com/elastic/rally-teams", config_store.config["teams"]["default.url"])
+
         self.assertTrue("defaults" in config_store.config)
         self.assertEqual("True", config_store.config["defaults"]["preserve_benchmark_candidate"])
+
+        self.assertTrue("distributions" in config_store.config)
+        self.assertEqual("https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                         config_store.config["distributions"]["release.1.url"])
+        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
+                         "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
+                         config_store.config["distributions"]["release.2.url"])
+        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                         config_store.config["distributions"]["release.url"])
+        self.assertEqual("true", config_store.config["distributions"]["release.cache"])
+
 
 
 class ConfigMigrationTests(TestCase):
@@ -426,6 +487,37 @@ class ConfigMigrationTests(TestCase):
         self.assertEqual("9", config_file.config["meta"]["config.version"])
         self.assertTrue("teams" in config_file.config)
         self.assertEqual("https://github.com/elastic/rally-teams", config_file.config["teams"]["default.url"])
+
+    def test_migrate_from_9_to_10(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 9
+            },
+            "system": {
+                "root.dir": "~/.rally/benchmarks",
+                "environment.name": "local"
+            },
+            "benchmarks": {
+                "local.dataset.cache": "${system:root.dir}/data",
+                "some.other.cache": "/data"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 9, 10, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("10", config_file.config["meta"]["config.version"])
+        self.assertTrue("distributions" in config_file.config)
+        self.assertEqual("https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                         config_file.config["distributions"]["release.1.url"])
+        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
+                         "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
+                         config_file.config["distributions"]["release.2.url"])
+        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                         config_file.config["distributions"]["release.url"])
+        self.assertEqual("true",
+                         config_file.config["distributions"]["release.cache"])
 
 
 

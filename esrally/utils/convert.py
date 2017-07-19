@@ -63,4 +63,4 @@ def to_bool(value):
     elif value in ["False", "false", "No", "no", "f", "n", "0", False]:
         return False
     else:
-        return ValueError("Cannot convert [%s] to bool." % value)
+        raise ValueError("Cannot convert [%s] to bool." % value)

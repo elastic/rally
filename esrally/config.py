@@ -69,7 +69,7 @@ class ConfigFile:
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 9
+    CURRENT_CONFIG_VERSION = 10
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -125,6 +125,24 @@ class Config:
                 return default_value
             else:
                 raise ConfigError("No value for mandatory configuration: section='%s', key='%s'" % (section, key))
+
+    def all_opts(self, section):
+        """
+        Finds all options in a section and returns them in a dict.
+
+        :param section: The configuration section.
+        :return: A dict of matching key-value pairs. If the section is not found or no keys are in this section, an empty dict is returned.
+        """
+        opts_in_section = {}
+        scopes_per_key = {}
+        for k, v in self._opts.items():
+            scope, source_section, key = k
+            if source_section == section:
+                # check whether it's a new key OR we need to override
+                if key not in opts_in_section or scopes_per_key[key].value < scope.value:
+                    opts_in_section[key] = v
+                    scopes_per_key[key] = scope
+        return opts_in_section
 
     def exists(self, section, key):
         """
@@ -349,6 +367,14 @@ class ConfigFactory:
         config["defaults"] = {}
         config["defaults"]["preserve_benchmark_candidate"] = str(preserve_install)
 
+        config["distributions"] = {}
+        config["distributions"]["release.1.url"] = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-" \
+                                                   "{{VERSION}}.tar.gz"
+        config["distributions"]["release.2.url"] = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/" \
+                                                   "distribution/tar/elasticsearch/{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz"
+        config["distributions"]["release.url"] = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
+        config["distributions"]["release.cache"] = "true"
+
         config_file.store(config)
 
         self.o("Configuration successfully written to [%s]. Happy benchmarking!" % config_file.location)
@@ -557,6 +583,16 @@ def migrate(config_file, current_version, target_version, out=print):
         config["teams"] = {}
         config["teams"]["default.url"] = "https://github.com/elastic/rally-teams"
         current_version = 9
+        config["meta"]["config.version"] = str(current_version)
+    if current_version == 9 and target_version > current_version:
+        config["distributions"] = {}
+        config["distributions"]["release.1.url"] = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-" \
+                                                   "{{VERSION}}.tar.gz"
+        config["distributions"]["release.2.url"] = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/" \
+                                                   "distribution/tar/elasticsearch/{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz"
+        config["distributions"]["release.url"] = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
+        config["distributions"]["release.cache"] = "true"
+        current_version = 10
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

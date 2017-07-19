@@ -259,6 +259,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
                 # copy only the necessary configuration sections
                 self.config.add_all(msg.cfg, "system")
+                self.config.add_all(msg.cfg, "distributions")
                 self.config.add_all(msg.cfg, "client")
                 self.config.add_all(msg.cfg, "track")
                 self.config.add_all(msg.cfg, "mechanic")
@@ -350,8 +351,9 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
         version = cfg.opts("mechanic", "distribution.version")
         repo_name = cfg.opts("mechanic", "distribution.repository")
         distributions_root = "%s/%s" % (cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
+        distribution_cfg = cfg.all_opts("distributions")
 
-        s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distributions_root=distributions_root)
+        s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distribution_config=distribution_cfg, distributions_root=distributions_root)
         p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
         l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
     elif external:
