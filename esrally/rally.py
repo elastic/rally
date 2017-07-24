@@ -11,7 +11,7 @@ import signal
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL
-from esrally.mechanic import car, telemetry
+from esrally.mechanic import team, telemetry
 from esrally.utils import io, convert, process, console, net
 
 from elasticsearch.client import _normalize_hosts
@@ -123,8 +123,8 @@ def parse_args():
         "configuration",
         metavar="configuration",
         help="The configuration for which Rally should show the available options. "
-             "Possible values are: telemetry, tracks, pipelines, races, cars",
-        choices=["telemetry", "tracks", "pipelines", "races", "cars"])
+             "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins",
+        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins"])
     list_parser.add_argument(
         "--limit",
         help="Limit the number of search results for recent races (default: 10).",
@@ -196,7 +196,10 @@ def parse_args():
             "--car",
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
-
+        p.add_argument(
+            "--elasticsearch-plugins",
+            help="define the Elasticsearch plugins to install. (default: install no plugins).",
+            default="")
         p.add_argument(
             "--target-hosts",
             help="define a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
@@ -359,7 +362,9 @@ def list(cfg):
     elif what == "races":
         metrics.list_races(cfg)
     elif what == "cars":
-        car.list_cars(cfg)
+        team.list_cars(cfg)
+    elif what == "elasticsearch-plugins":
+        team.list_plugins(cfg)
     else:
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
@@ -552,6 +557,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.name", args.car)
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
     cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))

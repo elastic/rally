@@ -26,6 +26,7 @@ The ``list`` subcommand is used to list different configuration options:
 * pipelines: Will show all :doc:`pipelines </pipelines>` that are supported by Rally.
 * races: Will show all races that are currently stored. This is needed for the :doc:`tournament mode </tournament>`.
 * cars: Will show all cars that are supported by Rally (i.e. Elasticsearch configurations).
+* elasticsearch-plugins: Will show all Elasticsearch plugins and their configurations that are supported by Rally.
 
 To list a specific configuration option, place it after the ``list`` subcommand. For example, ``esrally list pipelines`` will list all pipelines known to Rally.
 
@@ -68,7 +69,19 @@ Selects the team repository that Rally should use to resolve cars. By default th
 ``car``
 ~~~~~~~
 
-A car defines the Elasticsearch configuration that will be used for the benchmark.
+A car defines the Elasticsearch configuration that will be used for the benchmark. To see a list of possible cars, issue ``esrally list cars``.
+
+``elasticsearch-plugins``
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A comma-separated list of Elasticsearch plugins to install for the benchmark. If a plugin supports multiple configurations you need to specify the configuration after the plugin name. To see a list of possible plugins anc configurations, issue ``esrally list elasticsearch-plugins``.
+
+Example::
+
+   esrally --elasticsearch-plugins="analysis-icu,xpack:security"
+
+In this example, Rally will install the ``analysis-icu`` plugin and the ``x-pack`` plugin with the ``security`` configuration. See the reference documentation about :doc:`benchmarking with plugins </benchmarking_plugins>` for more details.
+
 
 ``pipeline``
 ~~~~~~~~~~~~

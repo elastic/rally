@@ -240,6 +240,18 @@ def splitext(file_name):
         return os.path.splitext(file_name)
 
 
+def has_extension(file_name, extension):
+    """
+    Checks whether the given file name has the given extension.
+
+    :param file_name: A file name to check (either just the name or an absolute path name).
+    :param extension: The extension including the leading dot (i.e. it is ".txt", not "txt").
+    :return: True iff the given ``file_name`` has the given ``extension``.
+    """
+    _, ext = splitext(file_name)
+    return ext == extension
+
+
 def prepare_file_offset_table(data_file_path):
     """
     Creates a file that contains a mapping from line numbers to file offsets for the provided path. This file is used internally by

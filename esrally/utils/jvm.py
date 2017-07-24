@@ -11,7 +11,7 @@ def supports_option(java_home, option):
     :param option: The JVM option or combination of JVM options (separated by spaces) to check.
     :return: True iff the provided ``option`` is supported on this JVM.
     """
-    return process.run_subprocess_with_logging("%s/bin/java %s -version" % (java_home, option))
+    return process.exit_status_as_bool(lambda: process.run_subprocess_with_logging("%s/bin/java %s -version" % (java_home, option)))
 
 
 def system_property(java_home, system_property_name):

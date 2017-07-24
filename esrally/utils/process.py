@@ -2,7 +2,6 @@ import shlex
 import logging
 import subprocess
 import os
-import signal
 import psutil
 import time
 
@@ -34,38 +33,51 @@ def run_subprocess_with_output(command_line):
     return lines
 
 
-def run_subprocess_with_logging(command_line, header=None, level=logging.INFO):
-    logger.debug("Running subprocess [%s] with logging." % command_line)
+def exit_status_as_bool(runnable):
+    """
+
+    :param runnable: A runnable returning an int as exit status assuming ``0`` is meaning success.
+    :return: True iff the runnable has terminated successfully.
+    """
+    try:
+        return_code = runnable()
+        return return_code == 0 or return_code is None
+    except OSError:
+        logger.exception("Could not execute command.")
+        return False
+
+
+def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, env=None):
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
 
     :param command_line: The command line of the subprocess to launch.
-    :param header: An optional header line that should be logged (on info level)
-    :return: True iff the subprocess has terminated successfully.
+    :param header: An optional header line that should be logged (this will be logged on info level, regardless of the defined log level).
+    :param level: The log level to use for output (default: logging.INFO).
+    :param env: Use specific environment variables (default: None).
+    :return: The process exit code as an int.
     """
+    logger.debug("Running subprocess [%s] with logging." % command_line)
     command_line_args = shlex.split(command_line)
     if header is not None:
         logger.info(header)
     logger.debug("Invoking subprocess '%s'" % command_line)
-    try:
-        command_line_process = subprocess.Popen(
-            command_line_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-        has_output = True
-        while has_output:
-            line = command_line_process.stdout.readline()
-            if line:
-                logger.log(level=level, msg=line)
-            else:
-                has_output = False
-        command_line_process.wait(timeout=5)
-        logger.debug("Subprocess [%s] finished with return code [%s]." % (command_line, str(command_line_process.returncode)))
-        return command_line_process.returncode == 0 or command_line_process.returncode is None
-    except OSError:
-        logger.exception("Exception occurred when running [%s]." % command_line)
-        return False
+    command_line_process = subprocess.Popen(
+        command_line_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env
+    )
+    has_output = True
+    while has_output:
+        line = command_line_process.stdout.readline()
+        if line:
+            logger.log(level=level, msg=line)
+        else:
+            has_output = False
+    command_line_process.wait(timeout=5)
+    logger.debug("Subprocess [%s] finished with return code [%s]." % (command_line, str(command_line_process.returncode)))
+    return command_line_process.returncode
 
 
 def kill_running_es_instances(trait):

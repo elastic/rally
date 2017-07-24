@@ -4,7 +4,7 @@ import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import config, metrics
-from esrally.mechanic import telemetry, car, cluster
+from esrally.mechanic import telemetry, team, cluster
 
 
 def create_config():
@@ -47,7 +47,7 @@ class TelemetryTests(TestCase):
 
         t = telemetry.Telemetry(enabled_devices=None, devices=devices)
 
-        default_car = car.Car(name="default-car", config_paths=["/tmp/rally-config"])
+        default_car = team.Car(name="default-car", config_paths=["/tmp/rally-config"])
         opts = t.instrument_candidate_env(default_car, "default-node")
 
         self.assertTrue(opts)

@@ -66,6 +66,13 @@ class IoTests(TestCase):
         self.assertFalse(io.is_archive("/tmp/some.log"))
         self.assertFalse(io.is_archive("some.log"))
 
+    def test_has_extension(self):
+        self.assertTrue(io.has_extension("/tmp/some-archive.tar.gz", ".tar.gz"))
+        self.assertFalse(io.has_extension("/tmp/some-archive.tar.gz", ".gz"))
+        self.assertTrue(io.has_extension("/tmp/text.txt", ".txt"))
+        # no extension whatsoever
+        self.assertFalse(io.has_extension("/tmp/README", "README"))
+
 
 class DecompressionTests(TestCase):
     def test_decompresses_supported_file_formats(self):

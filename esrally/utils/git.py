@@ -8,7 +8,7 @@ from esrally.utils import io, process
 def probed(f):
     def probe(src, *args, **kwargs):
         # Probe for -C
-        if not process.run_subprocess_with_logging("git -C %s --version" % src, level=logging.DEBUG):
+        if not process.exit_status_as_bool(lambda: process.run_subprocess_with_logging("git -C %s --version" % src, level=logging.DEBUG)):
             version = process.run_subprocess_with_output("git --version")
             if version:
                 version = str(version).strip()
