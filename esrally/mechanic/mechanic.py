@@ -4,8 +4,8 @@ import logging
 import thespian.actors
 
 from esrally import actor, paths, config, metrics, exceptions, time, PROGRAM_NAME
-from esrally.utils import console, io
-from esrally.mechanic import supplier, provisioner, launcher
+from esrally.utils import console
+from esrally.mechanic import supplier, provisioner, launcher, team
 
 logger = logging.getLogger("rally.mechanic")
 
@@ -44,7 +44,7 @@ class NodeMetaInfo:
 
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, port=None):
+    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, ip=None, port=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.cluster_settings = cluster_settings
@@ -53,19 +53,21 @@ class StartEngine:
         self.distribution = distribution
         self.external = external
         self.docker = docker
+        self.ip = ip
         self.port = port
 
-    def with_port(self, port):
+    def with_ip_and_port(self, ip, port):
         """
 
-        Creates a copy of this StartEngine instance but with a modified port argument. This simplifies sending a customized ``StartEngine``
-        message to each of the worker mechanics.
+        Creates a copy of this StartEngine instance but with a modified IP and port argument. This simplifies sending a customized
+        ``StartEngine`` message to each of the worker mechanics.
 
+        :param ip: The IP to set in the copy.
         :param port: The port number to set in the copy.
-        :return: A shallow copy of this message with the specified port number.
+        :return: A shallow copy of this message with the specified IP and port number.
         """
         return StartEngine(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.build, self.distribution,
-                           self.external, self.docker, port)
+                           self.external, self.docker, ip, port)
 
 
 class EngineStarted:
@@ -131,7 +133,7 @@ class MechanicActor(actor.RallyActor):
                 if msg.external:
                     logger.info("Target node(s) will not be provisioned by Rally.")
                     # just create one actor for this special case and run it on the coordinator node (i.e. here)
-                    m = self.createActor(LocalNodeMechanicActor,
+                    m = self.createActor(NodeMechanicActor,
                                          globalName="/rally/mechanic/worker/external",
                                          targetActorRequirements={"coordinator": True})
                     self.mechanics.append(m)
@@ -147,18 +149,20 @@ class MechanicActor(actor.RallyActor):
                         host_or_ip = host.pop("host")
                         port = host.pop("port", 9200)
                         if host:
-                            raise exceptions.SystemSetupError("When specifying nodes to be managed by rally you can only supply hostname:port "
-                                                              "pairs (e.g. 'localhost:9200'), any additional options cannot be supported.")
+                            raise exceptions.SystemSetupError("When specifying nodes to be managed by Rally you can only supply "
+                                                              "hostname:port pairs (e.g. 'localhost:9200'), any additional options cannot "
+                                                              "be supported.")
                         # user may specify "localhost" on the command line but the problem is that we auto-register the actor system
                         # with "ip": "127.0.0.1" so we convert this special case automatically. In all other cases the user needs to
                         # start the actor system on the other host and is aware that the parameter for the actor system and the
                         # --target-hosts parameter need to match.
                         if host_or_ip == "localhost" or host_or_ip == "127.0.0.1":
-                            m = self.createActor(LocalNodeMechanicActor,
+                            m = self.createActor(NodeMechanicActor,
                                                  globalName="/rally/mechanic/worker/localhost",
                                                  targetActorRequirements={"coordinator": True})
                             self.mechanics.append(m)
-                            mechanics_and_start_message.append((m, msg.with_port(port)))
+                            ip = actor.resolve(host_or_ip)
+                            mechanics_and_start_message.append((m, msg.with_ip_and_port(ip, port)))
                         else:
                             if msg.cfg.opts("system", "remote.benchmarking.supported"):
                                 logger.info("Benchmarking against %s with external Rally daemon." % hosts)
@@ -176,10 +180,10 @@ class MechanicActor(actor.RallyActor):
                             if not already_running:
                                 console.println(" [OK]")
                             ip = actor.resolve(host_or_ip)
-                            m = self.createActor(RemoteNodeMechanicActor,
+                            m = self.createActor(NodeMechanicActor,
                                                  globalName="/rally/mechanic/worker/%s" % host_or_ip,
                                                  targetActorRequirements={"ip": ip})
-                            mechanics_and_start_message.append((m, msg.with_port(port)))
+                            mechanics_and_start_message.append((m, msg.with_ip_and_port(ip, port)))
                             self.mechanics.append(m)
                 for mechanic_actor, start_message in mechanics_and_start_message:
                     self.send(mechanic_actor, start_message)
@@ -236,13 +240,12 @@ class NodeMechanicActor(actor.RallyActor):
     """
     One instance of this actor is run on each target host and coordinates the actual work of starting / stopping nodes.
     """
-    def __init__(self, single_machine):
+    def __init__(self):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
         self.config = None
         self.metrics_store = None
         self.mechanic = None
-        self.single_machine = single_machine
         self.running = False
 
     def receiveMessage(self, msg, sender):
@@ -265,6 +268,8 @@ class NodeMechanicActor(actor.RallyActor):
                 self.config.add_all(msg.cfg, "mechanic")
                 # allow metrics store to extract race meta-data
                 self.config.add_all(msg.cfg, "race")
+                if msg.ip is not None:
+                    self.config.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
                 if msg.port is not None:
                     # we need to override the port with the value that the user has specified instead of using the default value (39200)
                     self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
@@ -272,7 +277,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.metrics_store = metrics.InMemoryMetricsStore(self.config)
                 self.metrics_store.open(ctx=msg.open_metrics_context)
 
-                self.mechanic = create(self.config, self.metrics_store, self.single_machine, msg.cluster_settings, msg.sources, msg.build,
+                self.mechanic = create(self.config, self.metrics_store, msg.cluster_settings, msg.sources, msg.build,
                                        msg.distribution, msg.external, msg.docker)
                 cluster = self.mechanic.start_engine()
                 self.running = True
@@ -310,26 +315,20 @@ class NodeMechanicActor(actor.RallyActor):
             self.send(sender, Failure(ex_value, traceback.format_exc()))
 
 
-class LocalNodeMechanicActor(NodeMechanicActor):
-    def __init__(self):
-        super().__init__(single_machine=True)
-
-
-class RemoteNodeMechanicActor(NodeMechanicActor):
-    def __init__(self):
-        super().__init__(single_machine=False)
-
-
 #####################################################
 # Internal API (only used by the actor and for tests)
 #####################################################
 
-def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sources=False, build=False, distribution=False, external=False, docker=False):
+def create(cfg, metrics_store, cluster_settings=None, sources=False, build=False, distribution=False, external=False, docker=False):
     races_root = paths.races_root(cfg)
     challenge_root_path = paths.race_root(cfg)
     install_dir = "%s/install" % challenge_root_path
     log_dir = "%s/logs" % challenge_root_path
     node_log_dir = "%s/server" % log_dir
+
+    repo = team.team_repo(cfg)
+    car = team.load_car(repo, cfg.opts("mechanic", "car.name"))
+    plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"))
 
     if sources:
         try:
@@ -344,8 +343,13 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
         gradle = cfg.opts("build", "gradle.bin")
         java_home = cfg.opts("runtime", "java8.home")
 
+        if len(plugins) > 0:
+            raise exceptions.RallyError("Source builds of plugins are not supported yet. For more details, please "
+                                        "check https://github.com/elastic/rally/issues/309 and upgrade Rally in case support has been "
+                                        "added in the meantime.")
+
         s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build)
-        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
+        p = provisioner.local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log_dir)
         l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
@@ -353,19 +357,27 @@ def create(cfg, metrics_store, single_machine=True, cluster_settings=None, sourc
         distributions_root = "%s/%s" % (cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
         distribution_cfg = cfg.all_opts("distributions")
 
-        s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distribution_config=distribution_cfg, distributions_root=distributions_root)
-        p = provisioner.local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine)
+        s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distribution_config=distribution_cfg,
+                                               distributions_root=distributions_root, plugins=plugins)
+        p = provisioner.local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log_dir)
         l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
     elif external:
         if cluster_settings:
             logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "
                            "that the cluster settings are present or the benchmark may fail or behave unexpectedly." % cluster_settings)
+        if len(plugins) > 0:
+            raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "
+                                              "\"--elasticsearch-plugins\" and try again.")
+
         s = lambda: None
-        p = provisioner.no_op_provisioner(cfg)
+        p = provisioner.no_op_provisioner()
         l = launcher.ExternalLauncher(cfg, metrics_store)
     elif docker:
+        if len(plugins) > 0:
+            raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
+                                              "\"--elasticsearch-plugins\" and try again.")
         s = lambda: None
-        p = provisioner.docker_provisioner(cfg, cluster_settings, install_dir, node_log_dir)
+        p = provisioner.docker_provisioner(cfg, car, cluster_settings, install_dir, node_log_dir)
         l = launcher.DockerLauncher(cfg, metrics_store)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters
@@ -387,9 +399,9 @@ class Mechanic:
         self.cluster = None
 
     def start_engine(self):
-        binary = self.supply()
+        binaries = self.supply()
         logger.info("Starting engine.")
-        self.cluster = self.launcher.start(self.provisioner.prepare(binary))
+        self.cluster = self.launcher.start(self.provisioner.prepare(binaries))
         return self.cluster
 
     def on_benchmark_start(self):

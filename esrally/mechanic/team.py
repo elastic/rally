@@ -35,6 +35,32 @@ def load_plugin(repo, name, config):
     return PluginLoader(repo).load_plugin(name, config)
 
 
+def load_plugins(repo, plugin_names):
+    def name_and_config(p):
+        plugin_spec = p.split(":")
+        if len(plugin_spec) == 1:
+            return plugin_spec[0], None
+        elif len(plugin_spec) == 2:
+            return plugin_spec[0], plugin_spec[1]
+        else:
+            raise ValueError("Unrecognized plugin specification [%s]. Use either 'PLUGIN_NAME' or 'PLUGIN_NAME:PLUGIN_CONFIG'." % plugin)
+
+    plugins = []
+    configs_per_plugin = {}
+
+    for plugin in plugin_names:
+        plugin_name, plugin_config = name_and_config(plugin)
+        # TODO: allow multiple configs per plugin
+        # verification that there is only one configuration per plugin. e.g. "xpack:security,xpack:monitoring" does *not* work
+        if plugin_name in configs_per_plugin:
+            raise exceptions.SystemSetupError("Only one config per plugin is allowed but [%s] has the configs [%s] and [%s]." %
+                                              (plugin_name, configs_per_plugin[plugin_name], plugin_config))
+        configs_per_plugin[plugin_name] = plugin_config
+        plugins.append(load_plugin(repo, plugin_name, plugin_config))
+
+    return plugins
+
+
 def team_repo(cfg, update=True):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     repo = TeamRepository(cfg)
@@ -238,8 +264,8 @@ class PluginLoader:
                 if official_plugin:
                     return official_plugin
                 else:
-                    raise exceptions.SystemSetupError("Unknown plugin [%s]. List the available plugins with %s list elasticsearch-plugins."
-                                                      % (name, PROGRAM_NAME))
+                    raise exceptions.SystemSetupError("Unknown plugin [%s]. List the available plugins with %s list elasticsearch-plugins "
+                                                      "--distribution-version=YOUR_VERSION." % (name, PROGRAM_NAME))
 
         config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
         # Do not modify the case of option keys but read them as is

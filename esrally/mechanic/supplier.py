@@ -21,14 +21,14 @@ def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, buil
         if build:
             builder.build()
             console.println(" [OK]")
-        return builder.binary
+        return {"elasticsearch": builder.binary}
     except BaseException:
         if build:
             console.println(" [FAILED]")
         raise
 
 
-def from_distribution(version, repo_name, distribution_config, distributions_root):
+def from_distribution(version, repo_name, distribution_config, distributions_root, plugins):
     if version.strip() == "":
         raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
                                           "to download with the command line parameter --distribution-version. "
@@ -54,7 +54,16 @@ def from_distribution(version, repo_name, distribution_config, distributions_roo
                                               "version [%s] is correct." % (download_url, version))
     else:
         logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (version, distribution_path))
-    return distribution_path
+
+    binaries = {"elasticsearch": distribution_path}
+    for plugin in plugins:
+        # if we have multiple plugin configurations for a plugin we will override entries here but as this is always the same
+        # key-value pair this is ok.
+        plugin_url = repo.plugin_download_url(plugin.name)
+        if plugin_url:
+            binaries[plugin.name] = plugin_url
+
+    return binaries
 
 
 class SourceRepository:
@@ -146,15 +155,26 @@ class DistributionRepository:
         major_version = versions.major_version(self.version)
         version_url_key = "%s.%s.url" % (self.name, str(major_version))
         default_url_key = "%s.url" % self.name
+        return self._url_for(version_url_key, default_url_key)
 
+    def plugin_download_url(self, plugin_name):
+        major_version = versions.major_version(self.version)
+        version_url_key = "plugin.%s.%s.%s.url" % (plugin_name, self.name, str(major_version))
+        default_url_key = "plugin.%s.%s.url" % (plugin_name, self.name)
+        return self._url_for(version_url_key, default_url_key, mandatory=False)
+
+    def _url_for(self, version_url_key, default_url_key, mandatory=True):
         try:
             if version_url_key in self.cfg:
                 url_template = self.cfg[version_url_key]
             else:
                 url_template = self.cfg[default_url_key]
         except KeyError:
-            raise exceptions.SystemSetupError("Neither version specific distribution config key [%s] nor a default distribution config key "
-                                              "[%s] is defined." % (version_url_key, default_url_key))
+            if mandatory:
+                raise exceptions.SystemSetupError("Neither version specific distribution config key [%s] nor a default distribution "
+                                                  "config key [%s] is defined." % (version_url_key, default_url_key))
+            else:
+                return None
         return url_template.replace("{{VERSION}}", self.version)
 
     @property

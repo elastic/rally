@@ -7,62 +7,36 @@ from enum import Enum
 import jinja2
 
 from esrally import exceptions
-from esrally.mechanic import team
 from esrally.utils import io, console, process, modules
 
 logger = logging.getLogger("rally.provisioner")
 
 
-def local_provisioner(cfg, cluster_settings, install_dir, node_log_dir, single_machine):
-    def name_and_config(plugin):
-        plugin_spec = plugin.split(":")
-        if len(plugin_spec) == 1:
-            return plugin_spec[0], None
-        elif len(plugin_spec) == 2:
-            return plugin_spec[0], plugin_spec[1]
-        else:
-            raise ValueError("Unrecognized plugin specification [%s]. Use either 'PLUGIN_NAME' or 'PLUGIN_NAME:PLUGIN_CONFIG'." % plugin)
-
+def local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log_dir):
+    ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     preserve = cfg.opts("mechanic", "preserve.install")
     data_root_paths = cfg.opts("mechanic", "node.datapaths")
 
-    repo = team.team_repo(cfg)
-    c = team.load_car(repo, cfg.opts("mechanic", "car.name"))
-
-    es_installer = ElasticsearchInstaller(c, install_dir, node_log_dir, data_root_paths, node_name_prefix, http_port, single_machine)
-
-    plugin_installers = []
-    configs_per_plugin = {}
-
-    for plugin in cfg.opts("mechanic", "car.plugins"):
-        plugin_name, plugin_config = name_and_config(plugin)
-        # verification that there is only one configuration per plugin. e.g. "xpack:security,xpack:monitoring" does *not* work
-        if plugin_name in configs_per_plugin:
-            raise exceptions.SystemSetupError("Only one config per plugin is allowed but [%s] has the configs [%s] and [%s]." %
-                                              (plugin_name, configs_per_plugin[plugin_name], plugin_config))
-        configs_per_plugin[plugin_name] = plugin_config
-        plugin_installers.append(PluginInstaller(plugin=team.load_plugin(repo, plugin_name, plugin_config)))
+    es_installer = ElasticsearchInstaller(car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port)
+    plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve)
 
 
-def no_op_provisioner(cfg):
-    return NoOpProvisioner(cfg.opts("mechanic", "car.name"))
+def no_op_provisioner():
+    return NoOpProvisioner()
 
 
-def docker_provisioner(cfg, cluster_settings, install_dir, node_log_dir):
+def docker_provisioner(cfg, car, cluster_settings, install_dir, node_log_dir):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     preserve = cfg.opts("mechanic", "preserve.install")
 
-    repo = team.team_repo(cfg)
-    c = team.load_car(repo, cfg.opts("mechanic", "car.name"))
-
-    return DockerProvisioner(c, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version,
+    return DockerProvisioner(car, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version,
                              rally_root, preserve)
 
 
@@ -168,18 +142,18 @@ class BareProvisioner:
     def cleanup(self):
         self.es_installer.cleanup(self.preserve)
 
-    def _install_binary(self, binary):
+    def _install_binary(self, binaries):
         if not self.preserve:
             console.info("Rally will delete the benchmark candidate after the benchmark")
-        self.es_installer.install(binary)
+        self.es_installer.install(binaries["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
 
         for installer in self.plugin_installers:
-            installer.install(self.es_installer.binary_path)
+            installer.install(self.es_installer.es_home_path, binaries.get(installer.plugin_name))
 
     def _configure(self):
-        target_root_path = self.es_installer.binary_path
+        target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
 
         self.apply_config(self.es_installer.config_source_path, target_root_path, provisioner_vars)
@@ -193,7 +167,7 @@ class BareProvisioner:
             installer.invoke_install_hook(ProvisioningPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_name,
-                                 self.es_installer.binary_path, self.es_installer.data_paths)
+                                 self.es_installer.es_home_path, self.es_installer.data_paths)
 
     def _provisioner_variables(self):
         plugin_variables = {}
@@ -222,16 +196,15 @@ class BareProvisioner:
 
 class ElasticsearchInstaller:
     # TODO #196: For now we assume that there is only one node (parameter `node` == 0. Provide it as parameter already (preparation for #71)
-    def __init__(self, car, install_dir, node_log_dir, data_root_paths, node_name_prefix, http_port, single_machine, node=0):
+    def __init__(self, car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port, node=0):
         self.car = car
         self.install_dir = install_dir
         self.node_log_dir = node_log_dir
         self.data_root_paths = data_root_paths
+        self.node_ip = ip
         self.http_port = http_port
         self.node_name = "%s%d" % (node_name_prefix, node)
-        self.single_machine = single_machine
-        # TODO dm: Consider renaming this to "root_path" because this is not the binary directory.
-        self.binary_path = None
+        self.es_home_path = None
         self.data_paths = None
 
     def install(self, binary):
@@ -241,11 +214,11 @@ class ElasticsearchInstaller:
 
         logger.info("Unzipping %s to %s" % (binary, self.install_dir))
         io.decompress(binary, self.install_dir)
-        self.binary_path = glob.glob("%s/elasticsearch*" % self.install_dir)[0]
+        self.es_home_path = glob.glob("%s/elasticsearch*" % self.install_dir)[0]
         self.data_paths = self._data_paths()
 
     def delete_pre_bundled_configuration(self):
-        config_path = os.path.join(self.binary_path, "config")
+        config_path = os.path.join(self.es_home_path, "config")
         logger.info("Deleting pre-bundled Elasticsearch configuration at [%s]" % config_path)
         shutil.rmtree(config_path)
 
@@ -254,20 +227,25 @@ class ElasticsearchInstaller:
 
     @property
     def variables(self):
-        network_host = "127.0.0.1" if self.single_machine else "0.0.0.0"
+        # bind as specifically as possible
+        network_host = self.node_ip
 
         defaults = {
             "cluster_name": "rally-benchmark",
             "node_name": self.node_name,
             "data_paths": self.data_paths,
             "log_path": self.node_log_dir,
+            # this is the node's IP address as specified by the user when invoking Rally
+            "node_ip": self.node_ip,
+            # this is the IP address that the node will be bound to. Rally will bind to the node's IP address (but not to 0.0.0.0). The
+            # reason is that we use the node's IP address as subject alternative name in x-pack.
             "network_host": network_host,
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
             # TODO dm: At the moment we will not allow multiple nodes per host - may change later again (the "problem" is that we need
             # to change the structure here: one provisioner per node, one launcher per node and we're not there yet)
             "node_count_per_host": 1,
-            "install_root_path": self.binary_path
+            "install_root_path": self.es_home_path
         }
         variables = {}
         variables.update(self.car.variables)
@@ -279,7 +257,7 @@ class ElasticsearchInstaller:
         return self.car.config_path
 
     def _data_paths(self):
-        roots = self.data_root_paths if self.data_root_paths else [self.binary_path]
+        roots = self.data_root_paths if self.data_root_paths else [self.es_home_path]
         return [os.path.join(root, "data") for root in roots]
 
 
@@ -321,7 +299,8 @@ class InstallHookHandler:
             logger.info("Invoking phase [%s] for plugin [%s] in config [%s]" % (phase, self.plugin.name, self.plugin.config))
             for hook in self.hooks[phase]:
                 logger.info("Invoking hook [%s]." % hook.__name__)
-                hook(self.plugin.config, variables)
+                # hooks should only take keyword arguments to be as forwards compatible with Rally!
+                hook(config_name=self.plugin.config, variables=variables)
         else:
             logger.debug("Plugin [%s] in config [%s] has no hook registered for phase [%s]." % (self.plugin.name, self.plugin.config, phase))
 
@@ -333,10 +312,16 @@ class PluginInstaller:
         if self.hook_handler.can_load():
             self.hook_handler.load()
 
-    def install(self, binary_path):
-        logger.info("Installing [%s] into [%s]" % (self.plugin_name, binary_path))
-        installer_binary_path = os.path.join(binary_path, "bin/elasticsearch-plugin")
-        return_code = process.run_subprocess_with_logging('%s install --batch "%s"' % (installer_binary_path, self.plugin_name))
+    def install(self, es_home_path, plugin_url=None):
+        installer_binary_path = os.path.join(es_home_path, "bin", "elasticsearch-plugin")
+        if plugin_url:
+            logger.info("Installing [%s] into [%s] from [%s]" % (self.plugin_name, es_home_path, plugin_url))
+            install_cmd = '%s install --batch "%s"' % (installer_binary_path, plugin_url)
+        else:
+            logger.info("Installing [%s] into [%s]" % (self.plugin_name, es_home_path))
+            install_cmd = '%s install --batch "%s"' % (installer_binary_path, self.plugin_name)
+
+        return_code = process.run_subprocess_with_logging(install_cmd)
         # see: https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html
         if return_code == 0:
             logger.info("Successfully installed [%s]." % self.plugin_name)
@@ -412,7 +397,7 @@ class DockerProvisioner:
         self.config_vars.update(self.car.variables)
         self.config_vars.update(provisioner_defaults)
 
-    def prepare(self, binary):
+    def prepare(self, binaries):
         # we need to allow other users to write to these directories due to Docker.
         #
         # Although os.mkdir passes 0o777 by default, mkdir(2) uses `mode & ~umask & 0777` to determine the final flags and
