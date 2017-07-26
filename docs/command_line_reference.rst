@@ -74,13 +74,13 @@ A car defines the Elasticsearch configuration that will be used for the benchmar
 ``elasticsearch-plugins``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A comma-separated list of Elasticsearch plugins to install for the benchmark. If a plugin supports multiple configurations you need to specify the configuration after the plugin name. To see a list of possible plugins anc configurations, issue ``esrally list elasticsearch-plugins``.
+A comma-separated list of Elasticsearch plugins to install for the benchmark. If a plugin supports multiple configurations you need to specify the configuration after the plugin name. To see a list of possible plugins and configurations, issue ``esrally list elasticsearch-plugins``.
 
 Example::
 
    esrally --elasticsearch-plugins="analysis-icu,xpack:security"
 
-In this example, Rally will install the ``analysis-icu`` plugin and the ``x-pack`` plugin with the ``security`` configuration. See the reference documentation about :doc:`benchmarking with plugins </benchmarking_plugins>` for more details.
+In this example, Rally will install the ``analysis-icu`` plugin and the ``x-pack`` plugin with the ``security`` configuration. See the reference documentation about :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
 
 
 ``pipeline``
@@ -332,7 +332,7 @@ The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``valu
 
    esrally --user-tag="intention:github-issue-1234-baseline"
 
-You can also specify multiple tags. They need to be separated by a comma::
+You can also specify multiple tags. They need to be separated by a comma.
 
 **Example**
 

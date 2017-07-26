@@ -54,7 +54,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    command_line_reference
    track
    car
-   benchmarking_plugins
+   elasticsearch_plugins
    telemetry
    pipelines
    metrics
