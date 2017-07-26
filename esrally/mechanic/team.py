@@ -23,8 +23,11 @@ def load_car(repo, name):
 
 def list_plugins(cfg):
     plugins = PluginLoader(team_repo(cfg)).plugins()
-    console.println("Available Elasticsearch plugins:\n")
-    console.println(tabulate.tabulate([[p.name, p.config] for p in plugins], headers=["Name", "Configuration"]))
+    if plugins:
+        console.println("Available Elasticsearch plugins:\n")
+        console.println(tabulate.tabulate([[p.name, p.config] for p in plugins], headers=["Name", "Configuration"]))
+    else:
+        console.println("No Elasticsearch plugins are available.\n")
 
 
 def load_plugin(repo, name, config):
@@ -212,7 +215,8 @@ class PluginLoader:
         if os.path.exists(official_plugins_path):
             with open(official_plugins_path, "rt") as f:
                 for line in f:
-                    official_plugins.append(PluginDescriptor(line.strip()))
+                    if not line.startswith("#"):
+                        official_plugins.append(PluginDescriptor(line.strip()))
         return official_plugins
 
     def _configured_plugins(self):
