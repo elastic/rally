@@ -86,6 +86,8 @@ function test_list() {
     esrally list races --configuration-name="${cfg}"
     info "test list cars [${cfg}]"
     esrally list cars --configuration-name="${cfg}"
+    info "test list Elasticsearch plugins [${cfg}]"
+    esrally list elasticsearch-plugins --configuration-name="${cfg}"
     info "test list tracks [${cfg}]"
     esrally list tracks --configuration-name="${cfg}"
     info "test list telemetry [${cfg}]"
