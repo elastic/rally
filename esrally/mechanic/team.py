@@ -8,7 +8,7 @@ import tabulate
 from esrally import exceptions, PROGRAM_NAME
 from esrally.utils import console, git, versions, io
 
-logger = logging.getLogger("rally.car")
+logger = logging.getLogger("rally.team")
 
 
 def list_cars(cfg):
@@ -29,9 +29,9 @@ def list_plugins(cfg):
 
 def load_plugin(repo, name, config):
     if config is not None:
-        logger.info("Registering plugin installer for [%s] with configuration [%s]." % (name, config))
+        logger.info("Loading plugin [%s] with configuration(s) [%s]." % (name, config))
     else:
-        logger.info("Registering plugin installer for [%s] with default configuration." % name)
+        logger.info("Loading plugin [%s] with default configuration." % name)
     return PluginLoader(repo).load_plugin(name, config)
 
 
@@ -41,23 +41,14 @@ def load_plugins(repo, plugin_names):
         if len(plugin_spec) == 1:
             return plugin_spec[0], None
         elif len(plugin_spec) == 2:
-            return plugin_spec[0], plugin_spec[1]
+            return plugin_spec[0], plugin_spec[1].split("+")
         else:
             raise ValueError("Unrecognized plugin specification [%s]. Use either 'PLUGIN_NAME' or 'PLUGIN_NAME:PLUGIN_CONFIG'." % plugin)
 
     plugins = []
-    configs_per_plugin = {}
-
     for plugin in plugin_names:
         plugin_name, plugin_config = name_and_config(plugin)
-        # TODO: allow multiple configs per plugin
-        # verification that there is only one configuration per plugin. e.g. "xpack:security,xpack:monitoring" does *not* work
-        if plugin_name in configs_per_plugin:
-            raise exceptions.SystemSetupError("Only one config per plugin is allowed but [%s] has the configs [%s] and [%s]." %
-                                              (plugin_name, configs_per_plugin[plugin_name], plugin_config))
-        configs_per_plugin[plugin_name] = plugin_config
         plugins.append(load_plugin(repo, plugin_name, plugin_config))
-
     return plugins
 
 
@@ -157,10 +148,13 @@ class CarLoader:
         # Do not modify the case of option keys but read them as is
         config.optionxform = lambda option: option
         config.read(car_config_file)
-        config_bases = config["config"]["base"].split(",")
         config_paths = []
-        for base in config_bases:
-            config_paths.append(os.path.join(self.cars_dir, base))
+        if "config" in config and "base" in config["config"]:
+            config_bases = config["config"]["base"].split(",")
+            for base in config_bases:
+                if base:
+                    config_paths.append(os.path.join(self.cars_dir, base))
+
         if len(config_paths) == 0:
             raise exceptions.SystemSetupError("At least one config base is required for car [%s]" % name)
 
@@ -225,9 +219,10 @@ class PluginLoader:
         configured_plugins = []
         # each directory is a plugin, each .ini is a config (just go one level deep)
         for entry in os.listdir(self.plugins_root_path):
-            if os.path.isdir(os.path.join(self.plugins_root_path, entry)):
-                for child_entry in os.listdir(os.path.join(self.plugins_root_path, entry)):
-                    if os.path.isfile(os.path.join(self.plugins_root_path, entry, child_entry)) and io.has_extension(child_entry, ".ini"):
+            plugin_path = os.path.join(self.plugins_root_path, entry)
+            if os.path.isdir(plugin_path):
+                for child_entry in os.listdir(plugin_path):
+                    if os.path.isfile(os.path.join(plugin_path, child_entry)) and io.has_extension(child_entry, ".ini"):
                         f, _ = io.splitext(child_entry)
                         plugin_name = self._file_to_plugin_name(entry)
                         config = io.basename(f)
@@ -251,41 +246,89 @@ class PluginLoader:
     def _plugin_name_to_file(self, plugin_name):
         return plugin_name.replace("-", "_")
 
-    def load_plugin(self, name, config_name):
-        config_file = self._plugin_file(name, config_name)
+    def _official_plugin(self, name):
+        return next((p for p in self._official_plugins() if p.name == name and p.config is None), None)
+
+    def load_plugin(self, name, config_names):
         root_path = self._plugin_root_path(name)
-        # Do we have an explicit configuration for this plugin?
-        if not io.exists(config_file):
+        if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
-            if io.exists(root_path) and config_name is None:
-                return PluginDescriptor(name, config_name, root_path)
+            if io.exists(root_path):
+                return PluginDescriptor(name, config_names, root_path)
             else:
-                official_plugin = next(p for p in self._official_plugins() if p.name == name and p.config == config_name)
+                official_plugin = self._official_plugin(name)
                 if official_plugin:
                     return official_plugin
+                # If we just have a plugin name then we assume that this is a community plugin and the user has specified a download URL
                 else:
-                    raise exceptions.SystemSetupError("Unknown plugin [%s]. List the available plugins with %s list elasticsearch-plugins "
-                                                      "--distribution-version=YOUR_VERSION." % (name, PROGRAM_NAME))
+                    logger.info("The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
+                                "plugin not requiring any configuration and you have set a proper download URL." % name)
+                    return PluginDescriptor(name)
+        else:
+            variables = {}
+            config_paths = []
+            # used for deduplication
+            known_config_bases = set()
 
-        config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-        # Do not modify the case of option keys but read them as is
-        config.optionxform = lambda option: option
-        config.read(config_file)
-        config_path = os.path.join(root_path, config["config"]["base"])
+            for config_name in config_names:
+                config_file = self._plugin_file(name, config_name)
+                # Do we have an explicit configuration for this plugin?
+                if not io.exists(config_file):
+                    official_plugin = self._official_plugin(name)
+                    if official_plugin:
+                        raise exceptions.SystemSetupError("Plugin [%s] does not provide configuration [%s]. List the available plugins "
+                                                          "and configurations with %s list elasticsearch-plugins "
+                                                          "--distribution-version=VERSION." % (name, config_name, PROGRAM_NAME))
+                    else:
+                        raise exceptions.SystemSetupError("Unknown plugin [%s]. List the available plugins with %s list "
+                                                          "elasticsearch-plugins --distribution-version=VERSION." % (name, PROGRAM_NAME))
 
-        variables = {}
-        if "variables" in config.sections():
-            for k, v in config["variables"].items():
-                variables[k] = v
-        return PluginDescriptor(name, config_name, root_path, config_path, variables)
+                config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+                # Do not modify the case of option keys but read them as is
+                config.optionxform = lambda option: option
+                config.read(config_file)
+                if "config" in config and "base" in config["config"]:
+                    config_bases = config["config"]["base"].split(",")
+                    for base in config_bases:
+                        if base and base not in known_config_bases:
+                            config_paths.append(os.path.join(root_path, base))
+                        known_config_bases.add(base)
+
+                if "variables" in config.sections():
+                    for k, v in config["variables"].items():
+                        variables[k] = v
+
+            # maybe one of the configs is really just for providing variables. However, we still require one config base overall.
+            if len(config_paths) == 0:
+                raise exceptions.SystemSetupError("At least one config base is required for plugin [%s]" % name)
+            return PluginDescriptor(name, config_names, root_path, config_paths, variables)
 
 
 class PluginDescriptor:
-    def __init__(self, name, config=None, root_path=None, config_path=None, variables=None):
+    def __init__(self, name, config=None, root_path=None, config_paths=None, variables=None):
+        if config_paths is None:
+            config_paths = []
         if variables is None:
             variables = {}
         self.name = name
         self.config = config
         self.root_path = root_path
-        self.config_path = config_path
+        self.config_paths = config_paths
         self.variables = variables
+
+    def __str__(self):
+        return "Plugin descriptor for [%s]" % self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name) ^ hash(self.config)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and (self.name, self.config) == (other.name, other.config)
+
+

@@ -58,7 +58,8 @@ class ConfigLoader:
 
 def _render_template(env, variables, file_name):
     template = env.get_template(io.basename(file_name))
-    return template.render(variables)
+    # force a new line at the end. Jinja seems to remove it.
+    return template.render(variables) + "\n"
 
 
 def plain_text(file):
@@ -158,8 +159,7 @@ class BareProvisioner:
 
         self.apply_config(self.es_installer.config_source_path, target_root_path, provisioner_vars)
         for installer in self.plugin_installers:
-            plugin_config_path = installer.config_source_path
-            if plugin_config_path:
+            for plugin_config_path in installer.config_source_paths:
                 self.apply_config(plugin_config_path, target_root_path, provisioner_vars)
 
         for installer in self.plugin_installers:
@@ -242,7 +242,7 @@ class ElasticsearchInstaller:
             "network_host": network_host,
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
-            # TODO dm: At the moment we will not allow multiple nodes per host - may change later again (the "problem" is that we need
+            # TODO #196: At the moment we will not allow multiple nodes per host - may change later again (the "problem" is that we need
             # to change the structure here: one provisioner per node, one launcher per node and we're not there yet)
             "node_count_per_host": 1,
             "install_root_path": self.es_home_path
@@ -299,8 +299,8 @@ class InstallHookHandler:
             logger.info("Invoking phase [%s] for plugin [%s] in config [%s]" % (phase, self.plugin.name, self.plugin.config))
             for hook in self.hooks[phase]:
                 logger.info("Invoking hook [%s]." % hook.__name__)
-                # hooks should only take keyword arguments to be as forwards compatible with Rally!
-                hook(config_name=self.plugin.config, variables=variables)
+                # hooks should only take keyword arguments to be forwards compatible with Rally!
+                hook(config_names=self.plugin.config, variables=variables)
         else:
             logger.debug("Plugin [%s] in config [%s] has no hook registered for phase [%s]." % (self.plugin.name, self.plugin.config, phase))
 
@@ -342,8 +342,8 @@ class PluginInstaller:
         return self.plugin.variables
 
     @property
-    def config_source_path(self):
-        return self.plugin.config_path
+    def config_source_paths(self):
+        return self.plugin.config_paths
 
     @property
     def plugin_name(self):

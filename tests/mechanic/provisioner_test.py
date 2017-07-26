@@ -203,15 +203,15 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.assert_called_with('/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"')
 
     def test_pass_plugin_properties(self):
-        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_path="/etc/plugin", variables={"active": True})
+        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_paths=["/etc/plugin"], variables={"active": True})
         installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
 
         self.assertEqual("unit-test-plugin", installer.plugin_name)
         self.assertEqual({"active": True}, installer.variables)
-        self.assertEqual("/etc/plugin", installer.config_source_path)
+        self.assertEqual(["/etc/plugin"], installer.config_source_paths)
 
     def test_invokes_hook(self):
-        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_path="/etc/plugin", variables={"active": True})
+        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_paths=["/etc/plugin"], variables={"active": True})
         installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
 
         self.assertEqual(0, len(installer.hook_handler.hook_calls))
@@ -236,7 +236,7 @@ class InstallHookHandlerTests(TestCase):
             self.phase = phase
             self.call_counter = 0
 
-        def post_install_hook(self, config_name, variables, **kwargs):
+        def post_install_hook(self, config_names, variables, **kwargs):
             self.call_counter += variables["increment"]
 
         def register(self, handler):
