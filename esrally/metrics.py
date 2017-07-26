@@ -435,6 +435,7 @@ class MetricsStore:
             "lap": self._lap,
             "challenge": self._challenge,
             "car": self._car,
+            #TODO dm: Add plugins?
             "name": name,
             "value": value,
             "unit": unit,
@@ -1003,7 +1004,7 @@ class Race:
         self.challenge = challenge
         self.car = car
         self.total_laps = total_laps
-        # will be set later - contains hosts, revision and distribution_version - maybe add more data later (-> gather facts)
+        # will be set later - contains hosts, revision, distribution_version, ...s
         self.cluster = cluster
         self.lap_results = lap_results
         self.results = results
@@ -1065,6 +1066,13 @@ class Race:
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
             "active": True
         }
+        plugins = set()
+        for node in self.cluster.nodes:
+            plugins.update(node.plugins)
+
+        if plugins:
+            result_template["plugins"] = list(plugins)
+
         all_results = []
 
         for item in self.results.as_flat_list():

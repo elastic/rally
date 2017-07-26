@@ -38,6 +38,7 @@ class NodeMetaInfo:
         self.cpu = n.cpu
         self.memory = n.memory
         self.fs = n.fs
+        self.plugins = n.plugins
 
     def as_dict(self):
         return self.__dict__

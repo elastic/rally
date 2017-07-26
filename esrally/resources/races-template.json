@@ -55,6 +55,9 @@
         "car": {
           "type": "keyword"
         },
+        "plugins": {
+          "type": "keyword"
+        },
         "total-laps": {
           "type": "short"
         },

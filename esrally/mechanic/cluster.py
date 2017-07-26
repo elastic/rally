@@ -28,6 +28,7 @@ class Node:
         self.cpu = {}
         self.memory = {}
         self.fs = []
+        self.plugins = []
 
     def on_benchmark_start(self):
         """

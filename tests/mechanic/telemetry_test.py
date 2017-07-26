@@ -162,7 +162,16 @@ class EnvironmentInfoTests(TestCase):
             "jvm": {
                 "version": "1.8.0_74",
                 "vm_vendor": "Oracle Corporation"
-            }
+            },
+            "plugins": [
+                {
+                    "name": "ingest-geoip",
+                    "version": "5.0.0",
+                    "description": "Ingest processor that uses looksup geo data ...",
+                    "classname": "org.elasticsearch.ingest.geoip.IngestGeoIpPlugin",
+                    "has_native_controller": False
+                }
+            ]
         }
         nodes_info["nodes"]["EEEjozkeTiOpN-SI88YEcg"] = {
             "name": "rally1",
@@ -178,7 +187,16 @@ class EnvironmentInfoTests(TestCase):
             "jvm": {
                 "version": "1.8.0_102",
                 "vm_vendor": "Oracle Corporation"
-            }
+            },
+            "plugins": [
+                {
+                    "name": "ingest-geoip",
+                    "version": "5.0.0",
+                    "description": "Ingest processor that uses looksup geo data ...",
+                    "classname": "org.elasticsearch.ingest.geoip.IngestGeoIpPlugin",
+                    "has_native_controller": False
+                }
+            ]
         }
 
         cluster_info = {
@@ -201,8 +219,12 @@ class EnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
             mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_vendor", "Oracle Corporation"),
             mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_version", "1.8.0_102"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "plugins", ["ingest-geoip"]),
+            mock.call(metrics.MetaInfoScope.node, "rally1", "plugins", ["ingest-geoip"]),
+            # can push up to cluster level as all nodes have the same plugins installed
+            mock.call(metrics.MetaInfoScope.cluster, None, "plugins", ["ingest-geoip"]),
             mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_group", "cold_nodes"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "attribute_group", "hot_nodes")
+            mock.call(metrics.MetaInfoScope.node, "rally1", "attribute_group", "hot_nodes"),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
@@ -270,7 +292,16 @@ class ExternalEnvironmentInfoTests(TestCase):
                     "jvm": {
                         "version": "1.8.0_74",
                         "vm_vendor": "Oracle Corporation"
-                    }
+                    },
+                    "plugins": [
+                        {
+                            "name": "ingest-geoip",
+                            "version": "5.0.0",
+                            "description": "Ingest processor that uses looksup geo data ...",
+                            "classname": "org.elasticsearch.ingest.geoip.IngestGeoIpPlugin",
+                            "has_native_controller": False
+                        }
+                    ]
                 }
             }
         }
@@ -298,8 +329,10 @@ class ExternalEnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_logical_cores", 8),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "plugins", ["ingest-geoip"]),
+            mock.call(metrics.MetaInfoScope.cluster, None, "plugins", ["ingest-geoip"]),
             mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_az", "us_east1"),
-            mock.call(metrics.MetaInfoScope.cluster, None, "attribute_az", "us_east1")
+            mock.call(metrics.MetaInfoScope.cluster, None, "attribute_az", "us_east1"),
         ]
         metrics_store_add_meta_info.assert_has_calls(calls)
 
@@ -403,7 +436,30 @@ class ClusterMetaDataInfoTests(TestCase):
                     "jvm": {
                         "version": "1.8.0_74",
                         "vm_vendor": "Oracle Corporation"
-                    }
+                    },
+                    "plugins": [
+                        {
+                            "name": "analysis-icu",
+                            "version": "5.0.0",
+                            "description": "The ICU Analysis plugin integrates Lucene ICU module ...",
+                            "classname": "org.elasticsearch.plugin.analysis.icu.AnalysisICUPlugin",
+                            "has_native_controller": False
+                        },
+                        {
+                            "name": "ingest-geoip",
+                            "version": "5.0.0",
+                            "description": "Ingest processor that uses looksup geo data ...",
+                            "classname": "org.elasticsearch.ingest.geoip.IngestGeoIpPlugin",
+                            "has_native_controller": False
+                        },
+                        {
+                            "name": "ingest-user-agent",
+                            "version": "5.0.0",
+                            "description": "Ingest processor that extracts information from a user agent",
+                            "classname": "org.elasticsearch.ingest.useragent.IngestUserAgentPlugin",
+                            "has_native_controller": False
+                        }
+                    ]
                 }
             }
         }
@@ -444,6 +500,7 @@ class ClusterMetaDataInfoTests(TestCase):
         self.assertEqual("/usr/local/var/elasticsearch/data2", n.fs[1]["mount"])
         self.assertEqual("ntfs", n.fs[1]["type"])
         self.assertEqual("unknown", n.fs[1]["spins"])
+        self.assertEqual(["analysis-icu", "ingest-geoip", "ingest-user-agent"], n.plugins)
 
     def test_enriches_cluster_nodes_for_elasticsearch_1_x(self):
         nodes_stats = {

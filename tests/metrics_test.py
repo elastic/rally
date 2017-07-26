@@ -566,7 +566,7 @@ class EsRaceStoreTests(TestCase):
                                 {
                                     "distribution-version": "5.0.0",
                                     "nodes": [
-                                        {"node_name": "node0", "ip": "127.0.0.1"}
+                                        {"node_name": "node0", "ip": "127.0.0.1", "plugins": ["analysis-icu", "x-pack"]}
                                     ]
                                 }),
                             lap_results=[],
@@ -605,7 +605,8 @@ class EsRaceStoreTests(TestCase):
                 "nodes": [
                     {
                         "node_name": "node0",
-                        "ip": "127.0.0.1"
+                        "ip": "127.0.0.1",
+                        "plugins": ["analysis-icu", "x-pack"]
                     }
                 ]
             },
@@ -660,6 +661,8 @@ class EsResultsStoreTests(TestCase):
 
         c = cluster.Cluster([], [], None)
         c.distribution_version = "5.0.0"
+        node = c.add_node("localhost", "rally-node-0")
+        node.plugins.append("x-pack")
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
@@ -696,6 +699,7 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugins": ["x-pack"],
                 "active": True,
                 "name": "old_gc_time",
                 "value": {
@@ -711,6 +715,7 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugins": ["x-pack"],
                 "active": True,
                 "name": "throughput",
                 "operation": "index",
@@ -730,6 +735,7 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugins": ["x-pack"],
                 "active": True,
                 "name": "young_gc_time",
                 "value": {

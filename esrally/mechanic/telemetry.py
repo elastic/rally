@@ -400,6 +400,27 @@ def store_node_attribute_metadata(metrics_store, nodes_info):
             metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, k, next(iter(v)))
 
 
+def store_plugin_metadata(metrics_store, nodes_info):
+    # push up all plugins to cluster level iff all nodes have the same ones
+    all_nodes_plugins = []
+    all_same = False
+
+    for node in nodes_info:
+        plugins = [p["name"] for p in extract_value(node, ["plugins"], fallback=[]) if "name" in p]
+        if not all_nodes_plugins:
+            all_nodes_plugins = plugins.copy()
+            all_same = True
+        else:
+            # order does not matter so we do a set comparison
+            all_same = all_same and set(all_nodes_plugins) == set(plugins)
+
+        if plugins:
+            metrics_store.add_meta_info(metrics.MetaInfoScope.node, node["name"], "plugins", plugins)
+
+    if all_same and all_nodes_plugins:
+        metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "plugins", all_nodes_plugins)
+
+
 def extract_value(node, path, fallback="unknown"):
     value = node
     try:
@@ -435,6 +456,7 @@ class EnvironmentInfo(InternalTelemetryDevice):
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
 
+        store_plugin_metadata(self.metrics_store, nodes_info)
         store_node_attribute_metadata(self.metrics_store, nodes_info)
 
     def attach_to_node(self, node):
@@ -481,6 +503,8 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
             self.store_node_info(node_name, "cpu_logical_cores", node, ["os", "available_processors"])
             self.store_node_info(node_name, "jvm_vendor", node, ["jvm", "vm_vendor"])
             self.store_node_info(node_name, "jvm_version", node, ["jvm", "version"])
+
+        store_plugin_metadata(self.metrics_store, nodes_info)
         store_node_attribute_metadata(self.metrics_store, nodes_info)
 
     def store_node_info(self, node_name, metric_key, node, path):
@@ -532,6 +556,10 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
                 "available_processors": extract_value(node_info, ["os", "available_processors"]),
                 "allocated_processors": extract_value(node_info, ["os", "allocated_processors"], fallback=None),
             }
+            for plugin in extract_value(node_info, ["plugins"], fallback=[]):
+                if "name" in plugin:
+                    cluster_node.plugins.append(plugin["name"])
+
             if versions.major_version(cluster.distribution_version) == 1:
                 cluster_node.memory = {
                     "total_bytes": extract_value(node_info, ["os", "mem", "total_in_bytes"], fallback=None)
