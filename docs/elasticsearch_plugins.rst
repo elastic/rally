@@ -7,7 +7,6 @@ You can have Rally setup an Elasticsearch cluster with plugins for you. However,
 * You cannot benchmark source-builds of plugins
 * Whereas Rally caches downloaded Elasticsearch distributions, plugins will always be installed via the Internet and thus each machine where an Elasticsearch node will be installed requires an active Internet connection.
 
-
 Listing plugins
 ---------------
 
@@ -63,10 +62,13 @@ As mentioned above, Rally also allows you to specify a plugin configuration and 
 * Run a benchmark with the ``x-pack`` plugin in the ``security`` configuration: ``--elasticsearch-plugins=xpack:security``
 * Run a benchmark with the ``x-pack`` plugin in the ``security`` and the ``graph`` configuration: ``--elasticsearch-plugins=xpack:security+graph``
 
+.. note::
+    To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --cluster-health=yellow``
+
 If you are behind a proxy, please set the environment variable ``ES_JAVA_OPTS`` accordingly on each target machine as described in the `Elasticsearch plugin documentation <https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html#_proxy_settings>`_.
 
-Anatomy of a plugin
--------------------
+Anatomy of a plugin specification
+---------------------------------
 
 Simple plugins
 ~~~~~~~~~~~~~~
@@ -78,8 +80,8 @@ You can use Rally to benchmark community-contributed or even your own plugins. I
 
 Then you can use ``--elasticsearch-plugins=my-plugin`` to run a benchmark with your plugin. Rally will also replace ``{{VERSION}}`` with the distribution version that you have specified on the command line.
 
-Plugins with configuration
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Plugins which require configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If the plugin needs a custom configuration we recommend to fork the `official Rally teams repository <https://github.com/elastic/rally-teams>`_ and add your plugin configuration there. Suppose, you want to benchmark "my-plugin" which has the following settings that can be configured in ``elasticsearch.yml``:
 

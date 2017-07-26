@@ -435,7 +435,6 @@ class MetricsStore:
             "lap": self._lap,
             "challenge": self._challenge,
             "car": self._car,
-            #TODO dm: Add plugins?
             "name": name,
             "value": value,
             "unit": unit,
