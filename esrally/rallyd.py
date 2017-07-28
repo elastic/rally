@@ -3,7 +3,7 @@ import time
 import logging
 import argparse
 
-from esrally import actor, version, exceptions, DOC_LINK, BANNER, PROGRAM_NAME
+from esrally import actor, version, exceptions, DOC_LINK, BANNER, PROGRAM_NAME, check_python_version
 from esrally.utils import console
 
 
@@ -50,6 +50,7 @@ def stop(raise_errors=True):
 
 
 def main():
+    check_python_version()
     console.init()
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,

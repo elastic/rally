@@ -10,7 +10,7 @@ import faulthandler
 import signal
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, time as rtime
-from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL
+from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
 from esrally.utils import io, convert, process, console, net
 
@@ -515,7 +515,10 @@ def kv_to_map(kvs):
 
 
 def main():
+    check_python_version()
+
     start = time.time()
+
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
     # allow to see a thread-dump on SIGQUIT
