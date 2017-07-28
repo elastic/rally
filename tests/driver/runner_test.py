@@ -389,18 +389,18 @@ class BulkIndexRunnerTests(TestCase):
 
         bulk_params = {
             "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "update_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "update_line"
+                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
+                '{"location" : [-0.1485188, 51.5250666]}',
+                '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "2" } }',
+                '{"location" : [-0.1479949, 51.5252071]}',
+                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
+                '{"location" : [-0.1458559, 51.5289059]}',
+                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
+                '{"location" : [-0.1498551, 51.5282564]}',
+                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
+                '{"location" : [-0.1487043, 51.5254843]}',
+                '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "3" } }',
+                '{"location" : [-0.1533367, 51.5261779]}'
             ],
             "action_metadata_present": True,
             "bulk-size": 6,
@@ -457,8 +457,8 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ], result["shards_histogram"])
-        self.assertEqual(158, result["bulk-request-size-bytes"])
-        self.assertEqual(62, result["total-document-size-bytes"])
+        self.assertEqual(582, result["bulk-request-size-bytes"])
+        self.assertEqual(234, result["total-document-size-bytes"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
