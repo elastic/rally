@@ -328,8 +328,13 @@ def create(cfg, metrics_store, cluster_settings=None, sources=False, build=False
     node_log_dir = "%s/server" % log_dir
 
     repo = team.team_repo(cfg)
-    car = team.load_car(repo, cfg.opts("mechanic", "car.name"))
-    plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"))
+    # externally provisioned clusters do not support cars / plugins
+    if external:
+        car = None
+        plugins = []
+    else:
+        car = team.load_car(repo, cfg.opts("mechanic", "car.name"))
+        plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"))
 
     if sources:
         try:
