@@ -7,7 +7,10 @@ readonly CONFIGURATIONS=(integration-test es-integration-test)
 readonly DISTRIBUTIONS=(1.7.6 2.4.5 5.4.3)
 readonly TRACKS=(geonames geopoint nyc_taxis pmc logging nested)
 
+readonly ES_METRICS_STORE_VERSION="5.0.0"
+
 ES_PID=-1
+
 
 function log() {
     local ts=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
@@ -47,11 +50,11 @@ function set_up() {
     pushd .
     mkdir -p .rally_it/cache
     cd .rally_it/cache
-    if [ ! -f elasticsearch-5.0.0.tar.gz ]; then
-        curl -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.0.0.tar.gz
+    if [ ! -f elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz ]; then
+        curl -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz
     fi
-    tar -xzf elasticsearch-5.0.0.tar.gz
-    cd elasticsearch-5.0.0
+    tar -xzf elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz
+    cd elasticsearch-"${ES_METRICS_STORE_VERSION}"
     bin/elasticsearch &
     # store PID so we can kill ES later
     ES_PID=$!
@@ -118,11 +121,23 @@ function test_distributions() {
     done
 }
 
+function test_benchmark_only() {
+    # we just use our metrics cluster for these benchmarks. It's not ideal but simpler.
+    local cfg
+    local dist
+    random_configuration cfg
+    dist="${ES_METRICS_STORE_VERSION}"
+
+    info "test benchmark-only [--configuration-name=${cfg}], [--distribution-version=${dist}]"
+    esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --distribution-version="${dist}" --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
+}
+
 function run_test() {
     test_configure
     test_list
     test_sources
     test_distributions
+    test_benchmark_only
 }
 
 function tear_down() {
@@ -133,7 +148,7 @@ function tear_down() {
     kill -9 ${ES_PID}
 
     rm -f ~/.rally/rally*integration-test.ini
-    rm -rf .rally_it/cache/elasticsearch-5.0.0
+    rm -rf .rally_it/cache/elasticsearch-"${ES_METRICS_STORE_VERSION}"
     set -e
     # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
     kill_rally_processes
