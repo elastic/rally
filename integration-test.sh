@@ -38,13 +38,13 @@ function set_up() {
     kill_rally_processes
 
     # configure for tests with an Elasticsearch metrics store
-    esrally configure --assume-defaults --configuration-name=es-integration-test
+    esrally configure --assume-defaults --configuration-name="es-integration-test"
     # configure Elasticsearch instead of in-memory after the fact
-    local config_file_path=~/.rally/rally-es-integration-test.ini
-    sed -i -e 's/datastore\.type.*/datastore.type = elasticsearch/g' ${config_file_path}
-    sed -i -e 's/datastore\.host.*/datastore.host = localhost/g'  ${config_file_path}
-    sed -i -e 's/datastore\.port.*/datastore.port = 9200/g'  ${config_file_path}
-    sed -i -e 's/datastore\.secure.*/datastore.secure = False/g'  ${config_file_path}
+    local config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
+    sed -i '' -e 's/datastore\.type.*/datastore.type = elasticsearch/g' ${config_file_path}
+    sed -i '' -e 's/datastore\.host.*/datastore.host = localhost/g'  ${config_file_path}
+    sed -i '' -e 's/datastore\.port.*/datastore.port = 9200/g'  ${config_file_path}
+    sed -i '' -e 's/datastore\.secure.*/datastore.secure = False/g'  ${config_file_path}
 
     # Download and Elasticsearch metrics store
     pushd .
