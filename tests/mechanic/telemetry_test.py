@@ -852,22 +852,24 @@ class IndexStatsTests(TestCase):
 
 class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_stores_index_size_for_data_paths(self, run_subprocess, metrics_store_cluster_count, get_size):
+    def test_stores_index_size_for_data_paths(self, run_subprocess, metrics_store_node_count, get_size):
         get_size.side_effect = [2048, 16384]
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"], metrics_store)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
-        t.attach_to_cluster(None)
+        node = cluster.Node(process=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        t.detach_from_cluster(None)
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
 
-        metrics_store_cluster_count.assert_has_calls([
-            mock.call("final_index_size_bytes", 18432, "byte")
+        metrics_store_node_count.assert_has_calls([
+            mock.call("rally-node-0", "final_index_size_bytes", 18432, "byte")
         ])
 
         run_subprocess.assert_has_calls([
@@ -886,10 +888,12 @@ class IndexSizeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexSize(data_paths=[], metrics_store=metrics_store)
         t = telemetry.Telemetry(devices=[device])
-        t.attach_to_cluster(None)
+        node = cluster.Node(process=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        t.detach_from_cluster(None)
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
 
         run_subprocess.assert_not_called()
         metrics_store_cluster_count.assert_not_called()

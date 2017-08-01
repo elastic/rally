@@ -51,10 +51,10 @@ class Telemetry:
             if self._enabled(device):
                 device.attach_to_node(node)
 
-    def detach_from_node(self, node):
+    def detach_from_node(self, node, running):
         for device in self.devices:
             if self._enabled(device):
-                device.detach_from_node(node)
+                device.detach_from_node(node, running)
 
     def on_benchmark_start(self):
         for device in self.devices:
@@ -91,7 +91,7 @@ class TelemetryDevice:
     def attach_to_node(self, node):
         pass
 
-    def detach_from_node(self, node):
+    def detach_from_node(self, node, running):
         pass
 
     def detach_from_cluster(self, cluster):
@@ -199,6 +199,7 @@ class PerfStat(TelemetryDevice):
         self.process = None
         self.node = None
         self.log = None
+        self.attached = False
 
     def attach_to_node(self, node):
         io.ensure_dir(self.log_root)
@@ -211,15 +212,18 @@ class PerfStat(TelemetryDevice):
         self.process = subprocess.Popen(["perf", "stat", "-p %s" % node.process.pid],
                                         stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
         self.node = node
+        self.attached = True
 
-    def detach_from_node(self, node):
-        logger.info("Dumping PMU counters for node [%s]" % node.node_name)
-        os.kill(self.process.pid, signal.SIGINT)
-        try:
-            self.process.wait(10.0)
-        except subprocess.TimeoutExpired:
-            logger.warning("perf stat did not terminate")
-        self.log.close()
+    def detach_from_node(self, node, running):
+        if self.attached and running:
+            logger.info("Dumping PMU counters for node [%s]" % node.node_name)
+            os.kill(self.process.pid, signal.SIGINT)
+            try:
+                self.process.wait(10.0)
+            except subprocess.TimeoutExpired:
+                logger.warning("perf stat did not terminate")
+            self.log.close()
+            self.attached = False
 
 
 class MergeParts(InternalTelemetryDevice):
@@ -716,15 +720,15 @@ class IndexSize(InternalTelemetryDevice):
         self.metrics_store = metrics_store
         self.attached = False
 
-    def attach_to_cluster(self, cluster):
+    def attach_to_node(self, node):
         self.attached = True
 
-    def detach_from_cluster(self, cluster):
-        if self.attached and self.data_paths:
+    def detach_from_node(self, node, running):
+        # we need to gather the file size after the node has terminated so we can be sure that it has written all its buffers.
+        if not running and self.attached and self.data_paths:
             self.attached = False
             index_size_bytes = 0
             for data_path in self.data_paths:
                 index_size_bytes += io.get_size(data_path)
                 process.run_subprocess_with_logging("find %s -ls" % data_path, header="index files:")
-            self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
-
+            self.metrics_store.put_count_node_level(node.node_name, "final_index_size_bytes", index_size_bytes, "byte")

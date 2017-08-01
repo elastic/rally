@@ -133,7 +133,7 @@ class StatsCalculator:
 
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         logger.debug("Gathering disk metrics.")
-        result.index_size = self.one("final_index_size_bytes")
+        result.index_size = self.sum("final_index_size_bytes")
         result.bytes_written = self.sum("disk_io_write_bytes")
 
         # convert to int, fraction counts are senseless

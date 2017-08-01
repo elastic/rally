@@ -415,7 +415,8 @@ class MetricsStore:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
         elif level == MetaInfoScope.node:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
-            meta.update(self._meta_info[MetaInfoScope.node][level_key])
+            if level_key in self._meta_info[MetaInfoScope.node]:
+                meta.update(self._meta_info[MetaInfoScope.node][level_key])
         else:
             raise exceptions.SystemSetupError("Unknown meta info level [%s] for metric [%s]" % (level, name))
         if meta_data:

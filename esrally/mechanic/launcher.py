@@ -164,8 +164,6 @@ class ExternalLauncher:
 class InProcessLauncher:
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
-
-    Currently, only local launching is supported.
     """
     PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
@@ -181,19 +179,14 @@ class InProcessLauncher:
         self.java_home = self.cfg.opts("runtime", "java8.home")
 
     def start(self, node_configuration):
-        car = node_configuration.car
-        binary = node_configuration.binary_path
-        data_paths = node_configuration.data_paths
-
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
         es = client.EsClientFactory(hosts, client_options).create()
 
         # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
         # The only specific trait of a Rally-related process is that is started "somewhere" in the races root directory.
+        # TODO dm: If we allow multiple nodes per host we can only do this once per host, not once per node.
         process.kill_running_es_instances(self.races_root_dir)
-
-        logger.info("Starting a cluster based on car [%s] with [%d] nodes." % (car, car.nodes))
 
         # TODO dm: Get rid of this config setting and replace it with a proper list
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
@@ -204,12 +197,11 @@ class InProcessLauncher:
             telemetry.MergeParts(self.metrics_store, self.node_log_dir),
             telemetry.EnvironmentInfo(es, self.metrics_store),
             telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store),
-            # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
-            telemetry.IndexSize(data_paths, self.metrics_store)
+            telemetry.IndexStats(es, self.metrics_store)
         ]
         t = telemetry.Telemetry(enabled_devices, devices=cluster_telemetry)
-        c = cluster.Cluster(hosts, [self._start_node(node_configuration.node_name, car, es, binary) for node in range(car.nodes)], t)
+        # TODO dm: We need to move this one level up. -> Starting a node and starting a cluster needs to be split.
+        c = cluster.Cluster(hosts, [self._start_node(node_configuration, es)], t)
         logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
         if wait_for_rest_layer(es):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
@@ -221,8 +213,14 @@ class InProcessLauncher:
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
 
-    def _start_node(self, node_name, car, es, binary_path):
+    def _start_node(self, node_configuration, es):
         host_name = socket.gethostname()
+        node_name = node_configuration.node_name
+        car = node_configuration.car
+        binary_path = node_configuration.binary_path
+        data_paths = node_configuration.data_paths
+
+        logger.info("Starting a node based on car [%s]." % car)
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         major_version = jvm.major_version(self.java_home)
@@ -235,6 +233,7 @@ class InProcessLauncher:
             telemetry.DiskIo(self.metrics_store),
             telemetry.CpuUsage(self.metrics_store),
             telemetry.EnvironmentInfo(es, self.metrics_store),
+            telemetry.IndexSize(data_paths, self.metrics_store)
         ]
 
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
@@ -242,7 +241,7 @@ class InProcessLauncher:
         env = self._prepare_env(car, node_name, t)
         process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(process, host_name, node_name, t)
-        logger.info("Cluster node [%s] has successfully started. Attaching telemetry devices to node." % node_name)
+        logger.info("Node [%s] has successfully started. Attaching telemetry devices." % node_name)
         t.attach_to_node(node)
         logger.info("Telemetry devices are now attached to node [%s]." % node_name)
 
@@ -338,7 +337,7 @@ class InProcessLauncher:
         stop_watch.start()
         for node in cluster.nodes:
             process = node.process
-            node.telemetry.detach_from_node(node)
+            node.telemetry.detach_from_node(node, running=True)
 
             os.kill(process.pid, signal.SIGINT)
 
@@ -351,20 +350,19 @@ class InProcessLauncher:
                 try:
                     os.kill(process.pid, signal.SIGQUIT)
                 except OSError:
-                    logger.warning("  no such process")
-                    return
-
+                    logger.warning("No process found with PID [%s]" % process.pid)
+                    break
                 try:
                     process.wait(120.0)
                     logger.info("Done shutdown node (%.1f sec)" % stop_watch.split_time())
-                    return
+                    break
                 except subprocess.TimeoutExpired:
                     pass
-
                 logger.info("kill -KILL node")
                 try:
                     process.kill()
                 except ProcessLookupError:
-                    logger.warning("No such process")
+                    logger.warning("No process found with PID [%s]" % process.pid)
+            node.telemetry.detach_from_node(node, running=False)
         cluster.telemetry.detach_from_cluster(cluster)
         self._servers = []

@@ -41,6 +41,8 @@ class StatsCalculatorTests(TestCase):
                                       meta_data={"success": False})
         store.put_value_cluster_level("service_time", 215, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       meta_data={"success": True})
+        store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
+        store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
 
         stats = reporter.calculate_results(store, metrics.create_race(cfg, t, challenge))
 
@@ -51,6 +53,8 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(collections.OrderedDict([("50", 220), ("100", 225)]), opm["latency"])
         self.assertEqual(collections.OrderedDict([("50", 200), ("100", 215)]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
+
+        self.assertEqual(6144, stats.index_size)
 
 
 def select(l, name, operation=None):
