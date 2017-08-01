@@ -89,14 +89,9 @@ class EngineStopped:
         self.system_metrics = system_metrics
 
 
-class StartNode:
-    def __init__(self):
-        pass
-
 class NodeStarted:
-    def __init__(self):
-        pass
-
+    def __init__(self, node_id):
+        self.node_id = node_id
 
 
 class Success:
@@ -271,8 +266,13 @@ class NodeMechanicActor(actor.RallyActor):
         try:
             logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartEngine):
-                logger.info("Starting node [%d] on [%s]." % (msg.node_id, msg.ip))
-                # Load node-specific configuration
+                # can be None for externally provisioned clusters
+                if msg.external:
+                    logger.info("Connecting to externally provisioned node on [%s]." % msg.ip)
+                else:
+                    logger.info("Starting node [%d] on [%s]." % (msg.node_id, msg.ip))
+
+# Load node-specific configuration
                 self.config = config.Config(config_name=msg.cfg.name)
                 self.config.load_config()
                 self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
@@ -284,12 +284,10 @@ class NodeMechanicActor(actor.RallyActor):
                 self.config.add_all(msg.cfg, "mechanic")
                 # allow metrics store to extract race meta-data
                 self.config.add_all(msg.cfg, "race")
-                if msg.ip is not None:
+                if not msg.external:
                     self.config.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
-                if msg.port is not None:
                     # we need to override the port with the value that the user has specified instead of using the default value (39200)
                     self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
-                if msg.node_id is not None:
                     self.config.add(config.Scope.benchmark, "provisioning", "node.id", msg.node_id)
 
                 self.metrics_store = metrics.InMemoryMetricsStore(self.config)
@@ -342,9 +340,13 @@ def create(cfg, metrics_store, cluster_settings=None, sources=False, build=False
     races_root = paths.races_root(cfg)
     challenge_root_path = paths.race_root(cfg)
     # completely isolate multiple nodes on the same host
-    node_id = cfg.opts("provisioning", "node.id")
-    install_dir = "%s/%d/install" % (challenge_root_path, node_id)
-    log_dir = "%s/%d/logs" % (challenge_root_path, node_id)
+    node_id = cfg.opts("provisioning", "node.id", mandatory=False)
+    if external:
+        node_root_dir = challenge_root_path
+    else:
+        node_root_dir ="%s/%d" % (challenge_root_path, node_id)
+    install_dir = "%s/install" % node_root_dir
+    log_dir = "%s/logs" % node_root_dir
     node_log_dir = "%s/server" % log_dir
 
     repo = team.team_repo(cfg)
@@ -373,10 +375,10 @@ def create(cfg, metrics_store, cluster_settings=None, sources=False, build=False
             raise exceptions.RallyError("Source builds of plugins are not supported yet. For more details, please "
                                         "check https://github.com/elastic/rally/issues/309 and upgrade Rally in case support has been "
                                         "added in the meantime.")
-
+        # TODO #71: The supplier should run only once if there are multiple nodes per host
         s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build)
         p = provisioner.local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log_dir)
-        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path)
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
         repo_name = cfg.opts("mechanic", "distribution.repository")
@@ -386,7 +388,7 @@ def create(cfg, metrics_store, cluster_settings=None, sources=False, build=False
         s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distribution_config=distribution_cfg,
                                                distributions_root=distributions_root, plugins=plugins)
         p = provisioner.local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log_dir)
-        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path, node_log_dir)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path)
     elif external:
         if cluster_settings:
             logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "

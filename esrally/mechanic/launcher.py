@@ -167,15 +167,13 @@ class InProcessLauncher:
     """
     PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
-    # TODO dm: Remove node_log_dir as parameter here -> NodeConfiguration
-    def __init__(self, cfg, metrics_store, races_root_dir, challenge_root_dir, node_log_dir, clock=time.Clock):
+    def __init__(self, cfg, metrics_store, races_root_dir, challenge_root_dir, clock=time.Clock):
         self.cfg = cfg
         self.metrics_store = metrics_store
         self._clock = clock
-        self._servers = []
         self.races_root_dir = races_root_dir
+        # TODO dm: This must be in a node-specific directory, not in a host-specific one
         self.node_telemetry_dir = "%s/telemetry" % challenge_root_dir
-        self.node_log_dir = node_log_dir
         self.java_home = self.cfg.opts("runtime", "java8.home")
 
     def start(self, node_configuration):
@@ -193,8 +191,6 @@ class InProcessLauncher:
 
         cluster_telemetry = [
             telemetry.ClusterMetaDataInfo(es),
-            # TODO dm: Once we do distributed launching, this needs to be done per node not per cluster
-            telemetry.MergeParts(self.metrics_store, self.node_log_dir),
             telemetry.EnvironmentInfo(es, self.metrics_store),
             telemetry.NodeStats(es, self.metrics_store),
             telemetry.IndexStats(es, self.metrics_store)
@@ -233,7 +229,8 @@ class InProcessLauncher:
             telemetry.DiskIo(self.metrics_store),
             telemetry.CpuUsage(self.metrics_store),
             telemetry.EnvironmentInfo(es, self.metrics_store),
-            telemetry.IndexSize(data_paths, self.metrics_store)
+            telemetry.IndexSize(data_paths, self.metrics_store),
+            telemetry.MergeParts(self.metrics_store, node_configuration.log_path),
         ]
 
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
@@ -365,4 +362,3 @@ class InProcessLauncher:
                     logger.warning("No process found with PID [%s]" % process.pid)
             node.telemetry.detach_from_node(node, running=False)
         cluster.telemetry.detach_from_cluster(cluster)
-        self._servers = []

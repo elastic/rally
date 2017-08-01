@@ -237,6 +237,10 @@ class MergeParts(InternalTelemetryDevice):
         self.node_log_dir = node_log_dir
         self.metrics_store = metrics_store
         self._t = None
+        self.node = None
+
+    def attach_to_node(self, node):
+        self.node = node
 
     def on_benchmark_stop(self):
         logger.info("Analyzing merge times.")
@@ -252,7 +256,7 @@ class MergeParts(InternalTelemetryDevice):
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if not io.is_archive(log_file):
-                logger.debug("Analyzing merge parts in [%s]" % log_path)
+                logger.debug("Analyzing merge times in [%s]" % log_path)
                 with open(log_path) as f:
                     self._extract_merge_times(f, merge_times)
             else:
@@ -275,9 +279,8 @@ class MergeParts(InternalTelemetryDevice):
     def _store_merge_times(self, merge_times):
         for k, v in merge_times.items():
             metric_suffix = k.replace(" ", "_")
-            # TODO dm: This is actually a node level metric (it is extracted from the *node's* log file), we have to add node info here)
-            self.metrics_store.put_value_cluster_level("merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
-            self.metrics_store.put_count_cluster_level("merge_parts_total_docs_%s" % metric_suffix, v[1])
+            self.metrics_store.put_value_node_level(self.node.node_name, "merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
+            self.metrics_store.put_count_node_level(self.node.node_name, "merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
 class DiskIo(InternalTelemetryDevice):

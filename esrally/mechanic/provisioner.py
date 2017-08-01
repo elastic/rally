@@ -43,10 +43,11 @@ def docker_provisioner(cfg, car, cluster_settings, install_dir, node_log_dir):
 
 
 class NodeConfiguration:
-    def __init__(self, car, node_name, binary_path, data_paths):
+    def __init__(self, car, node_name, binary_path, log_path, data_paths):
         self.car = car
         self.node_name = node_name
         self.binary_path = binary_path
+        self.log_path = log_path
         self.data_paths = data_paths
 
 
@@ -169,7 +170,7 @@ class BareProvisioner:
             installer.invoke_install_hook(ProvisioningPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_name,
-                                 self.es_installer.es_home_path, self.es_installer.data_paths)
+                                 self.es_installer.es_home_path, self.es_installer.node_log_dir, self.es_installer.data_paths)
 
     def _provisioner_variables(self):
         plugin_variables = {}
@@ -439,7 +440,7 @@ class DockerProvisioner:
         with open(self.binary_path, "wt") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration(self.car, self.node_name, self.binary_path, self.data_paths)
+        return NodeConfiguration(self.car, self.node_name, self.binary_path, self.node_log_dir, self.data_paths)
 
     def cleanup(self):
         cleanup(self.preserve, self.install_dir, self.data_paths)
