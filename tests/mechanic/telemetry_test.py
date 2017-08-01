@@ -854,12 +854,12 @@ class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_stores_index_size_for_data_path(self, run_subprocess, metrics_store_cluster_count, get_size):
-        get_size.return_value = 2048
+    def test_stores_index_size_for_data_paths(self, run_subprocess, metrics_store_cluster_count, get_size):
+        get_size.side_effect = [2048, 16384]
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(["/var/elasticsearch/data"], metrics_store)
+        device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"], metrics_store)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         t.attach_to_cluster(None)
         t.on_benchmark_start()
@@ -867,11 +867,12 @@ class IndexSizeTests(TestCase):
         t.detach_from_cluster(None)
 
         metrics_store_cluster_count.assert_has_calls([
-            mock.call("final_index_size_bytes", 2048, "byte")
+            mock.call("final_index_size_bytes", 18432, "byte")
         ])
 
         run_subprocess.assert_has_calls([
-            mock.call("find /var/elasticsearch/data -ls", header="index files:")
+            mock.call("find /var/elasticsearch/data/1 -ls", header="index files:"),
+            mock.call("find /var/elasticsearch/data/2 -ls", header="index files:")
         ])
 
     @mock.patch("esrally.utils.io.get_size")

@@ -722,7 +722,9 @@ class IndexSize(InternalTelemetryDevice):
     def detach_from_cluster(self, cluster):
         if self.attached and self.data_paths:
             self.attached = False
-            data_path = self.data_paths[0]
-            index_size_bytes = io.get_size(data_path)
+            index_size_bytes = 0
+            for data_path in self.data_paths:
+                index_size_bytes += io.get_size(data_path)
+                process.run_subprocess_with_logging("find %s -ls" % data_path, header="index files:")
             self.metrics_store.put_count_cluster_level("final_index_size_bytes", index_size_bytes, "byte")
-            process.run_subprocess_with_logging("find %s -ls" % data_path, header="index files:")
+
