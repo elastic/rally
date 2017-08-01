@@ -9,6 +9,26 @@ from esrally.utils import console, convert
 
 logger = logging.getLogger("rally.racecontrol")
 
+# benchmarks with external candidates are really scary and we should warn users.
+BOGUS_RESULTS_WARNING = """
+************************************************************************
+************** WARNING: A dark dungeon lies ahead of you  **************
+************************************************************************
+
+Rally does not have control over the configuration of the benchmarked
+Elasticsearch cluster.
+
+Be aware that results may be misleading due to problems with the setup.
+Rally is also not able to gather lots of metrics at all (like CPU usage
+of the benchmarked cluster) or may even produce misleading metrics (like
+the index size).
+
+************************************************************************
+****** Use this pipeline only if you are aware of the tradeoffs.  ******
+*************************** Watch your step! ***************************
+************************************************************************
+"""
+
 pipelines = collections.OrderedDict()
 
 
@@ -279,6 +299,7 @@ def from_distribution(cfg):
 
 
 def benchmark_only(cfg):
+    console.println(BOGUS_RESULTS_WARNING)
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.name", "external")

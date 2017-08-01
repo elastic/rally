@@ -126,33 +126,12 @@ class DockerLauncher:
 
 
 class ExternalLauncher:
-    # benchmarks with external candidates are really scary and we should warn users.
-    BOGUS_RESULTS_WARNING = """
-************************************************************************
-************** WARNING: A dark dungeon lies ahead of you  **************
-************************************************************************
-
-Rally does not have control over the configuration of the benchmarked
-Elasticsearch cluster.
-
-Be aware that results may be misleading due to problems with the setup.
-Rally is also not able to gather lots of metrics at all (like CPU usage
-of the benchmarked cluster) or may even produce misleading metrics (like
-the index size).
-
-************************************************************************
-****** Use this pipeline only if you are aware of the tradeoffs.  ******
-*************************** Watch your step! ***************************
-************************************************************************
-"""
-
     def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
         self.cfg = cfg
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
 
     def start(self, node_configuration=None):
-        console.println(ExternalLauncher.BOGUS_RESULTS_WARNING)
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
         es = self.client_factory(hosts, client_options).create()

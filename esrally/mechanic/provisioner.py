@@ -16,10 +16,11 @@ def local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
+    node_id = cfg.opts("provisioning", "node.id")
     preserve = cfg.opts("mechanic", "preserve.install")
     data_root_paths = cfg.opts("mechanic", "node.datapaths")
 
-    es_installer = ElasticsearchInstaller(car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port)
+    es_installer = ElasticsearchInstaller(car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port, node_id)
     plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve)
@@ -34,10 +35,11 @@ def docker_provisioner(cfg, car, cluster_settings, install_dir, node_log_dir):
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
+    node_id = cfg.opts("provisioning", "node.id")
     preserve = cfg.opts("mechanic", "preserve.install")
 
     return DockerProvisioner(car, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version,
-                             rally_root, preserve)
+                             rally_root, preserve, node_id)
 
 
 class NodeConfiguration:
@@ -195,8 +197,7 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    # TODO #196: For now we assume that there is only one node (parameter `node` == 0. Provide it as parameter already (preparation for #71)
-    def __init__(self, car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port, node=0):
+    def __init__(self, car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port, node):
         self.car = car
         self.install_dir = install_dir
         self.node_log_dir = node_log_dir
@@ -363,7 +364,7 @@ class NoOpProvisioner:
 
 class DockerProvisioner:
     def __init__(self, car, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version, rally_root,
-                 preserve):
+                 preserve, node):
         self.car = car
         self.http_port = http_port
         self.node_log_dir = node_log_dir
@@ -373,7 +374,7 @@ class DockerProvisioner:
         self.data_paths = ["%s/data" % install_dir]
         self.preserve = preserve
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
-        self.node_name = "%s0" % node_name_prefix
+        self.node_name = "%s%d" % (node_name_prefix, node)
 
         # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
         merged_cluster_settings = cluster_settings.copy()
