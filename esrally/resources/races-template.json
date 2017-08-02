@@ -55,6 +55,9 @@
         "car": {
           "type": "keyword"
         },
+        "node-count": {
+          "type": "short"
+        },
         "plugins": {
           "type": "keyword"
         },

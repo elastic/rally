@@ -8,7 +8,7 @@ import os
 import thespian.actors
 import thespian.system.messages.status
 from esrally import exceptions
-from esrally.utils import console, io
+from esrally.utils import console, io, net
 
 logger = logging.getLogger("rally.actor")
 
@@ -152,21 +152,6 @@ def use_offline_actor_system():
     __SYSTEM_BASE = "multiprocQueueBase"
 
 
-def resolve(hostname_or_ip):
-    if hostname_or_ip and hostname_or_ip.startswith("127"):
-        return hostname_or_ip
-
-    import socket
-    addrinfo = socket.getaddrinfo(hostname_or_ip, 22, 0, 0, socket.IPPROTO_TCP)
-    for family, socktype, proto, canonname, sockaddr in addrinfo:
-        # we're interested in the IPv4 address
-        if family == socket.AddressFamily.AF_INET:
-            ip, _ = sockaddr
-            if ip[:3] != "127":
-                return ip
-    return None
-
-
 def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None):
     system_base = __SYSTEM_BASE
     try:
@@ -194,8 +179,8 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
             if not local_ip:
                 raise exceptions.SystemSetupError("local IP is required")
             # always resolve the public IP here, even if a DNS name is given. Otherwise Thespian will be unhappy
-            local_ip = resolve(local_ip)
-            coordinator_ip = resolve(coordinator_ip)
+            local_ip = net.resolve(local_ip)
+            coordinator_ip = net.resolve(coordinator_ip)
 
             coordinator = local_ip == coordinator_ip
 

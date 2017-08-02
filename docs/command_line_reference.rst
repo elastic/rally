@@ -249,13 +249,13 @@ Default value: ``timeout:60000,request_timeout:60000``
 Here are a few common examples:
 
 * Enable HTTP compression: ``--client-options="compressed:true"``
-* Enable SSL (if you have Shield installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
+* Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Please avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
 
 ``target-hosts``
 ~~~~~~~~~~~~~~~~
 
-If you run the ``benchmark-only`` :doc:`pipeline </pipelines>`, then you can specify a comma-delimited list of hosts:port pairs to which Rally should connect. The default value is ``127.0.0.1:9200``.
+If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally to :doc:`benchmark a remote cluster </recipes>`, then you can specify a comma-delimited list of hosts:port pairs to which Rally should connect. The default value is ``127.0.0.1:9200``.
 
 **Example**
 
@@ -263,7 +263,7 @@ If you run the ``benchmark-only`` :doc:`pipeline </pipelines>`, then you can spe
 
    esrally --pipeline=benchmark-only --target-hosts=10.17.0.5:9200,10.17.0.6:9200
 
-This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use Shield and need to authenticate or Rally should use https.
+This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
 ``quiet``
 ~~~~~~~~~

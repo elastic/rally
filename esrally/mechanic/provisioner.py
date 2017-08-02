@@ -12,15 +12,17 @@ from esrally.utils import io, console, process, modules
 logger = logging.getLogger("rally.provisioner")
 
 
-def local_provisioner(cfg, car, plugins, cluster_settings, install_dir, node_log_dir):
+def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
-    node_id = cfg.opts("provisioning", "node.id")
     preserve = cfg.opts("mechanic", "preserve.install")
     data_root_paths = cfg.opts("mechanic", "node.datapaths")
 
-    es_installer = ElasticsearchInstaller(car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port, node_id)
+    node_name = "%s-%d" % (node_name_prefix, node_id)
+    node_root_dir = "%s/%s" % (target_root, node_name)
+
+    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, data_root_paths, all_node_ips, ip, http_port)
     plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve)
@@ -30,22 +32,27 @@ def no_op_provisioner():
     return NoOpProvisioner()
 
 
-def docker_provisioner(cfg, car, cluster_settings, install_dir, node_log_dir):
+def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
-    node_id = cfg.opts("provisioning", "node.id")
     preserve = cfg.opts("mechanic", "preserve.install")
 
-    return DockerProvisioner(car, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version,
-                             rally_root, preserve, node_id)
+    node_name = "%s-%d" % (node_name_prefix, node_id)
+    node_root_dir = "%s/%s" % (target_root, node_name)
+
+    return DockerProvisioner(car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version,
+                             rally_root, preserve)
 
 
 class NodeConfiguration:
-    def __init__(self, car, node_name, binary_path, log_path, data_paths):
+    def __init__(self, car, ip, node_name, node_root_path, binary_path, log_path, data_paths):
         self.car = car
+        self.ip = ip
         self.node_name = node_name
+        self.node_root_path = node_root_path
         self.binary_path = binary_path
         self.log_path = log_path
         self.data_paths = data_paths
@@ -169,8 +176,9 @@ class BareProvisioner:
             # Never let install hooks modify our original provisioner variables and just provide a copy!
             installer.invoke_install_hook(ProvisioningPhase.post_install, provisioner_vars.copy())
 
-        return NodeConfiguration(self.es_installer.car, self.es_installer.node_name,
-                                 self.es_installer.es_home_path, self.es_installer.node_log_dir, self.es_installer.data_paths)
+        return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
+                                 self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
+                                 self.es_installer.data_paths)
 
     def _provisioner_variables(self):
         plugin_variables = {}
@@ -198,14 +206,16 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, install_dir, node_log_dir, data_root_paths, node_name_prefix, ip, http_port, node):
+    def __init__(self, car, node_name, node_root_dir, data_root_paths, all_node_ips, ip, http_port):
         self.car = car
-        self.install_dir = install_dir
-        self.node_log_dir = node_log_dir
+        self.node_name = node_name
+        self.node_root_dir = node_root_dir
+        self.install_dir = "%s/install" % node_root_dir
+        self.node_log_dir = "%s/logs/server" % node_root_dir
         self.data_root_paths = data_root_paths
+        self.all_node_ips = all_node_ips
         self.node_ip = ip
         self.http_port = http_port
-        self.node_name = "%s%d" % (node_name_prefix, node)
         self.es_home_path = None
         self.data_paths = None
 
@@ -244,8 +254,10 @@ class ElasticsearchInstaller:
             "network_host": network_host,
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
-            # TODO #196: At the moment we will not allow multiple nodes per host - may change later again (the "problem" is that we need
-            # to change the structure here: one provisioner per node, one launcher per node and we're not there yet)
+            "all_node_ips": "[\"%s\"]" % "\",\"".join(self.all_node_ips),
+            # at the moment we are strict and enforce that all nodes are master eligible nodes
+            "minimum_master_nodes": len(self.all_node_ips),
+            # We allow multiple nodes per host but we do not allow that they share their data directories
             "node_count_per_host": 1,
             "install_root_path": self.es_home_path
         }
@@ -364,18 +376,19 @@ class NoOpProvisioner:
 
 
 class DockerProvisioner:
-    def __init__(self, car, node_name_prefix, cluster_settings, http_port, install_dir, node_log_dir, distribution_version, rally_root,
-                 preserve, node):
+    def __init__(self, car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version, rally_root, preserve):
         self.car = car
+        self.node_name = node_name
+        self.node_ip = ip
         self.http_port = http_port
-        self.node_log_dir = node_log_dir
+        self.node_root_dir = node_root_dir
+        self.node_log_dir = "%s/logs/server" % node_root_dir
         self.distribution_version = distribution_version
         self.rally_root = rally_root
-        self.install_dir = install_dir
-        self.data_paths = ["%s/data" % install_dir]
+        self.install_dir = "%s/install" % node_root_dir
+        self.data_paths = ["%s/data" % self.install_dir]
         self.preserve = preserve
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
-        self.node_name = "%s%d" % (node_name_prefix, node)
 
         # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
         merged_cluster_settings = cluster_settings.copy()
@@ -440,7 +453,8 @@ class DockerProvisioner:
         with open(self.binary_path, "wt") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration(self.car, self.node_name, self.binary_path, self.node_log_dir, self.data_paths)
+        return NodeConfiguration(self.car, self.node_ip, self.node_name, self.node_root_dir, self.binary_path,
+                                 self.node_log_dir, self.data_paths)
 
     def cleanup(self):
         cleanup(self.preserve, self.install_dir, self.data_paths)

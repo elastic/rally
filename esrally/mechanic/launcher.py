@@ -1,7 +1,6 @@
 import logging
 import os
 import signal
-import socket
 import subprocess
 import threading
 import shlex
@@ -31,6 +30,43 @@ def wait_for_rest_layer(es, max_attempts=10):
     return False
 
 
+class ClusterLauncher:
+    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
+        self.cfg = cfg
+        self.metrics_store = metrics_store
+        self.client_factory = client_factory_class
+
+    def start(self):
+        hosts = self.cfg.opts("client", "hosts")
+        client_options = self.cfg.opts("client", "options")
+        es = self.client_factory(hosts, client_options).create()
+
+        t = telemetry.Telemetry(devices=[
+            telemetry.ClusterMetaDataInfo(es),
+            telemetry.ClusterEnvironmentInfo(es, self.metrics_store),
+            telemetry.NodeStats(es, self.metrics_store),
+            telemetry.IndexStats(es, self.metrics_store)
+        ])
+
+        # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
+        c = cluster.Cluster(hosts, [], t)
+        logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
+        if wait_for_rest_layer(es, max_attempts=20):
+            logger.info("REST API is available. Attaching telemetry devices to cluster.")
+            t.attach_to_cluster(c)
+            logger.info("Telemetry devices are now attached to the cluster.")
+        else:
+            # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
+            logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
+            self.stop(c)
+            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
+
+        return c
+
+    def stop(self, c):
+        c.telemetry.detach_from_cluster(c)
+
+
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
@@ -39,50 +75,28 @@ class DockerLauncher:
         self.cfg = cfg
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
-        self.binary_path = None
+        self.binary_paths = {}
         self.node_name = None
 
-    def start(self, node_configuration):
-        self.binary_path = node_configuration.binary_path
-        node_name = node_configuration.node_name
+    def start(self, node_configurations):
+        nodes = []
+        for node_configuration in node_configurations:
 
-        hosts = self.cfg.opts("client", "hosts")
-        client_options = self.cfg.opts("client", "options")
-        es = self.client_factory(hosts, client_options).create()
+            node_name = node_configuration.node_name
+            host_name = node_configuration.ip
+            binary_path = node_configuration.binary_path
+            self.binary_paths[node_name] = binary_path
 
-        # Cannot enable custom telemetry devices here
-        t = telemetry.Telemetry(devices=[
-            # Be aware that some the meta-data are taken from the host system, not the container (e.g. number of CPU cores) so if the
-            # Docker container constrains these, the metrics are actually wrong.
-            telemetry.ClusterMetaDataInfo(es),
-            telemetry.EnvironmentInfo(es, self.metrics_store),
-            telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store)
-        ])
-
-        c = cluster.Cluster(hosts, [self._start_node(hosts[0], node_name, es)], t)
-
-        logger.info("Docker container has successfully started. Checking if REST API is available.")
-        if wait_for_rest_layer(es, max_attempts=20):
-            logger.info("REST API is available. Attaching telemetry devices to cluster.")
-            t.attach_to_cluster(c)
-            logger.info("Telemetry devices are now attached to the cluster.")
-        else:
-            logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
-            self.stop(c)
-            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
-        return c
-
-    def _start_node(self, host, node_name, es):
-        p = self._start_process(cmd="docker-compose -f %s up" % self.binary_path, node_name=node_name)
-        # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
-        node_telemetry = [
-            telemetry.DiskIo(self.metrics_store),
-            telemetry.CpuUsage(self.metrics_store),
-            telemetry.EnvironmentInfo(es, self.metrics_store)
-        ]
-        t = telemetry.Telemetry(devices=node_telemetry)
-        return cluster.Node(p, host["host"], node_name, t)
+            p = self._start_process(cmd="docker-compose -f %s up" % binary_path, node_name=node_name)
+            # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
+            node_telemetry = [
+                telemetry.DiskIo(self.metrics_store, len(node_configurations)),
+                telemetry.CpuUsage(self.metrics_store),
+                telemetry.NodeEnvironmentInfo(self.metrics_store)
+            ]
+            t = telemetry.Telemetry(devices=node_telemetry)
+            nodes.append(cluster.Node(p, host_name, node_name, t))
+        return nodes
 
     def _start_process(self, cmd, node_name):
         startup_event = threading.Event()
@@ -119,10 +133,12 @@ class DockerLauncher:
                 startup_event.set()
                 logger.info("[%s] has successfully started." % node_name)
 
-    def stop(self, cluster):
+    def stop(self, nodes):
         logger.info("Stopping Docker container")
-        process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_path)
-        cluster.telemetry.detach_from_cluster(cluster)
+        for node in nodes:
+            node.telemetry.detach_from_node(node, running=True)
+            process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_paths[node.node_name])
+            node.telemetry.detach_from_node(node, running=False)
 
 
 class ExternalLauncher:
@@ -131,18 +147,19 @@ class ExternalLauncher:
         self.metrics_store = metrics_store
         self.client_factory = client_factory_class
 
-    def start(self, node_configuration=None):
+    def start(self, node_configurations=None):
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
         es = self.client_factory(hosts, client_options).create()
 
         # cannot enable custom telemetry devices here
         t = telemetry.Telemetry(devices=[
+            # This is needed to actually populate the nodes
             telemetry.ClusterMetaDataInfo(es),
+            # will gather node specific meta-data for all nodes
             telemetry.ExternalEnvironmentInfo(es, self.metrics_store),
-            telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store)
         ])
+        # We create a pseudo-cluster here to get information about all nodes.
         # cluster nodes will be populated by the external environment info telemetry device. We cannot know this upfront.
         c = cluster.Cluster(hosts, [], t)
         user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
@@ -155,10 +172,11 @@ class ExternalLauncher:
                 "Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
                 (user_defined_version, distribution_version), logger=logger)
         t.attach_to_cluster(c)
-        return c
+        return c.nodes
 
-    def stop(self, cluster):
-        cluster.telemetry.detach_from_cluster(cluster)
+    def stop(self, nodes):
+        # nothing to do here, externally provisioned clusters / nodes don't have any specific telemetry devices attached.
+        pass
 
 
 class InProcessLauncher:
@@ -172,63 +190,39 @@ class InProcessLauncher:
         self.metrics_store = metrics_store
         self._clock = clock
         self.races_root_dir = races_root_dir
-        # TODO dm: This must be in a node-specific directory, not in a host-specific one
-        self.node_telemetry_dir = "%s/telemetry" % challenge_root_dir
         self.java_home = self.cfg.opts("runtime", "java8.home")
 
-    def start(self, node_configuration):
-        hosts = self.cfg.opts("client", "hosts")
-        client_options = self.cfg.opts("client", "options")
-        es = client.EsClientFactory(hosts, client_options).create()
-
+    def start(self, node_configurations):
         # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
         # The only specific trait of a Rally-related process is that is started "somewhere" in the races root directory.
-        # TODO dm: If we allow multiple nodes per host we can only do this once per host, not once per node.
+        #
+        # We also do this only once per host otherwise we would kill instances that we've just launched.
         process.kill_running_es_instances(self.races_root_dir)
+        java_major_version = jvm.major_version(self.java_home)
+        logger.info("Detected Java major version [%s]." % java_major_version)
 
-        # TODO dm: Get rid of this config setting and replace it with a proper list
-        enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
+        node_count_on_host = len(node_configurations)
+        return [self._start_node(node_configuration, node_count_on_host, java_major_version) for node_configuration in node_configurations]
 
-        cluster_telemetry = [
-            telemetry.ClusterMetaDataInfo(es),
-            telemetry.EnvironmentInfo(es, self.metrics_store),
-            telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store)
-        ]
-        t = telemetry.Telemetry(enabled_devices, devices=cluster_telemetry)
-        # TODO dm: We need to move this one level up. -> Starting a node and starting a cluster needs to be split.
-        c = cluster.Cluster(hosts, [self._start_node(node_configuration, es)], t)
-        logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-        if wait_for_rest_layer(es):
-            logger.info("REST API is available. Attaching telemetry devices to cluster.")
-            t.attach_to_cluster(c)
-            logger.info("Telemetry devices are now attached to the cluster.")
-        else:
-            logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
-            self.stop(c)
-            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
-        return c
-
-    def _start_node(self, node_configuration, es):
-        host_name = socket.gethostname()
+    def _start_node(self, node_configuration, node_count_on_host, java_major_version):
+        host_name = node_configuration.ip
         node_name = node_configuration.node_name
         car = node_configuration.car
         binary_path = node_configuration.binary_path
         data_paths = node_configuration.data_paths
+        node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
 
-        logger.info("Starting a node based on car [%s]." % car)
+        logger.info("Starting node [%s] based on car [%s]." % (node_name, car))
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
-        major_version = jvm.major_version(self.java_home)
-        logger.info("Detected Java major version [%s] on node [%s]." % (major_version, node_name))
         node_telemetry = [
-            telemetry.FlightRecorder(self.node_telemetry_dir),
-            telemetry.JitCompiler(self.node_telemetry_dir),
-            telemetry.Gc(self.node_telemetry_dir, major_version),
-            telemetry.PerfStat(self.node_telemetry_dir),
-            telemetry.DiskIo(self.metrics_store),
+            telemetry.FlightRecorder(node_telemetry_dir),
+            telemetry.JitCompiler(node_telemetry_dir),
+            telemetry.Gc(node_telemetry_dir, java_major_version),
+            telemetry.PerfStat(node_telemetry_dir),
+            telemetry.DiskIo(self.metrics_store, node_count_on_host),
             telemetry.CpuUsage(self.metrics_store),
-            telemetry.EnvironmentInfo(es, self.metrics_store),
+            telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.MergeParts(self.metrics_store, node_configuration.log_path),
         ]
@@ -236,8 +230,8 @@ class InProcessLauncher:
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
 
         env = self._prepare_env(car, node_name, t)
-        process = self._start_process(env, node_name, binary_path)
-        node = cluster.Node(process, host_name, node_name, t)
+        node_process = self._start_process(env, node_name, binary_path)
+        node = cluster.Node(node_process, host_name, node_name, t)
         logger.info("Node [%s] has successfully started. Attaching telemetry devices." % node_name)
         t.attach_to_node(node)
         logger.info("Telemetry devices are now attached to node [%s]." % node_name)
@@ -264,7 +258,7 @@ class InProcessLauncher:
         else:
             logger.info("JVM does not support [%s]. Cannot detect out of memory errors. Please consider a JDK upgrade." % exit_on_oome_flag)
 
-        logger.info("ENV: %s" % str(env))
+        logger.info("env for [%s]: %s" % (node_name, str(env)))
         return env
 
     def _set_env(self, env, k, v, separator=' '):
@@ -320,45 +314,43 @@ class InProcessLauncher:
             logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
 
             if l.find("Initialization Failed") != -1 or l.find("A fatal exception has occurred") != -1:
-                logger.warning("[%s] encountered initialization errors." % node_name)
+                logger.error("[%s] encountered initialization errors." % node_name)
                 startup_event.set()
             if l.endswith("started") and not startup_event.isSet():
                 startup_event.set()
                 logger.info("[%s] has successfully started." % node_name)
 
-    def stop(self, cluster):
-        logger.info("Shutting down ES cluster")
-
-        # Ask all nodes to shutdown:
+    def stop(self, nodes):
+        logger.info("Shutting down [%d] nodes on this host." % len(nodes))
         stop_watch = self._clock.stop_watch()
         stop_watch.start()
-        for node in cluster.nodes:
+        for node in nodes:
             process = node.process
+            node_name = node.node_name
             node.telemetry.detach_from_node(node, running=True)
 
             os.kill(process.pid, signal.SIGINT)
 
             try:
                 process.wait(10.0)
-                logger.info("Done shutdown node (%.1f sec)" % stop_watch.split_time())
+                logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
             except subprocess.TimeoutExpired:
                 # kill -9
-                logger.warning("Server %s did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node.node_name)
+                logger.warning("Node [%s] did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node_name)
                 try:
                     os.kill(process.pid, signal.SIGQUIT)
                 except OSError:
-                    logger.warning("No process found with PID [%s]" % process.pid)
+                    logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
                     break
                 try:
                     process.wait(120.0)
-                    logger.info("Done shutdown node (%.1f sec)" % stop_watch.split_time())
+                    logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
                     break
                 except subprocess.TimeoutExpired:
                     pass
-                logger.info("kill -KILL node")
+                logger.info("kill -KILL node [%s]" % node_name)
                 try:
                     process.kill()
                 except ProcessLookupError:
-                    logger.warning("No process found with PID [%s]" % process.pid)
+                    logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
             node.telemetry.detach_from_node(node, running=False)
-        cluster.telemetry.detach_from_cluster(cluster)

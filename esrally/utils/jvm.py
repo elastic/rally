@@ -26,17 +26,39 @@ def system_property(java_home, system_property_name):
     return None
 
 
+def version(java_home, sysprop_reader=system_property):
+    """
+    Determines the version number of JVM available at the provided JAVA_HOME directory.
+
+    :param java_home: The JAVA_HOME directory to check.
+    :param sysprop_reader: (Optional) only relevant for testing.
+    :return: The version number of the JVM available at ``java_home``.
+    """
+    return sysprop_reader(java_home, "java.version")
+
+
+def vendor(java_home, sysprop_reader=system_property):
+    """
+    Determines the version number of JVM available at the provided JAVA_HOME directory.
+
+    :param java_home: The JAVA_HOME directory to check.
+    :param sysprop_reader: (Optional) only relevant for testing.
+    :return: The version number of the JVM available at ``java_home``.
+    """
+    return sysprop_reader(java_home, "java.vm.specification.vendor")
+
+
 def major_version(java_home, sysprop_reader=system_property):
     """
-    Determines the major version number of JVM available at the provided JAVA_HOME directory. 
-    
+    Determines the major version number of JVM available at the provided JAVA_HOME directory.
+
     :param java_home: The JAVA_HOME directory to check.
-    :param sysprop_reader: (Optional) only relevant for testing. 
+    :param sysprop_reader: (Optional) only relevant for testing.
     :return: An int, representing the major version number of the JVM available at ``java_home``.
     """
-    version = sysprop_reader(java_home, "java.vm.specification.version")
+    v = sysprop_reader(java_home, "java.vm.specification.version")
     # are we under the "old" (pre Java 9) or the new (Java 9+) version scheme?
-    if version.startswith("1."):
-        return int(version[2])
+    if v.startswith("1."):
+        return int(v[2])
     else:
-        return int(version)
+        return int(v)

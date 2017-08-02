@@ -111,3 +111,18 @@ def __http():
     if not __HTTP:
         init()
     return __HTTP
+
+
+def resolve(hostname_or_ip):
+    if hostname_or_ip and hostname_or_ip.startswith("127"):
+        return hostname_or_ip
+
+    import socket
+    addrinfo = socket.getaddrinfo(hostname_or_ip, 22, 0, 0, socket.IPPROTO_TCP)
+    for family, socktype, proto, canonname, sockaddr in addrinfo:
+        # we're interested in the IPv4 address
+        if family == socket.AddressFamily.AF_INET:
+            ip, _ = sockaddr
+            if ip[:3] != "127":
+                return ip
+    return None

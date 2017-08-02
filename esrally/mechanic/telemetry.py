@@ -7,7 +7,7 @@ import threading
 
 import tabulate
 from esrally import metrics, time
-from esrally.utils import io, sysstats, process, console, versions
+from esrally.utils import io, sysstats, process, console, versions, jvm
 
 logger = logging.getLogger("rally.telemetry")
 
@@ -287,9 +287,10 @@ class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store):
+    def __init__(self, metrics_store, node_count_on_host):
         super().__init__()
         self.metrics_store = metrics_store
+        self.node_count_on_host = node_count_on_host
         self.node = None
         self.process = None
         self.disk_start = None
@@ -317,31 +318,28 @@ class DiskIo(InternalTelemetryDevice):
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
-                process_end = sysstats.process_io_counters(self.process) if self.process_start else None
-                disk_end = sysstats.disk_io_counters() if self.disk_start else None
-                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes",
-                                                        self.write_bytes(process_end, disk_end), "byte")
-                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes",
-                                                        self.read_bytes(process_end, disk_end), "byte")
+                # we have process-based disk counters, no need to worry how many nodes are on this host
+                if self.process_start:
+                    process_end = sysstats.process_io_counters(self.process)
+                    read_bytes = process_end.read_bytes - self.process_start.read_bytes
+                    write_bytes = process_end.write_bytes - self.process_start.write_bytes
+                elif self.disk_start:
+                    if self.node_count_on_host > 1:
+                        logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
+                                    "Attributing [1/%d] of total I/O to [%s]." %
+                                    (self.node_count_on_host, self.node_count_on_host, self.node.node_name))
+
+                    disk_end = sysstats.disk_io_counters()
+                    read_bytes = (disk_end.read_bytes - self.disk_start.read_bytes) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - self.disk_start.write_bytes) // self.node_count_on_host
+                else:
+                    raise RuntimeError("Neither process nor disk I/O counters are available")
+
+                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes", write_bytes, "byte")
+                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes", read_bytes, "byte")
             # Catching RuntimeException is not sufficient as psutil might raise AccessDenied et.al. which is derived from Exception
             except BaseException:
                 logger.exception("Could not determine I/O stats at benchmark end.")
-
-    def read_bytes(self, process_end, disk_end):
-        start, end = self._io_counters(process_end, disk_end)
-        return end.read_bytes - start.read_bytes
-
-    def write_bytes(self, process_end, disk_end):
-        start, end = self._io_counters(process_end, disk_end)
-        return end.write_bytes - start.write_bytes
-
-    def _io_counters(self, process_end, disk_end):
-        if self.process_start and process_end:
-            return self.process_start, process_end
-        elif self.disk_start and disk_end:
-            return self.disk_start, disk_end
-        else:
-            raise RuntimeError("Neither process nor disk I/O counters are available")
 
 
 class CpuUsage(InternalTelemetryDevice):
@@ -439,15 +437,14 @@ def extract_value(node, path, fallback="unknown"):
     return value
 
 
-class EnvironmentInfo(InternalTelemetryDevice):
+class ClusterEnvironmentInfo(InternalTelemetryDevice):
     """
-    Gathers static environment information like OS or CPU details for Rally-provisioned clusters.
+    Gathers static environment information on a cluster level (e.g. version numbers).
     """
     def __init__(self, client, metrics_store):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
-        self._t = None
 
     def attach_to_cluster(self, cluster):
         client_info = self.client.info()
@@ -460,11 +457,22 @@ class EnvironmentInfo(InternalTelemetryDevice):
         nodes_info = info["nodes"].values()
         for node in nodes_info:
             node_name = node["name"]
+            # while we could determine this for bare-metal nodes that are provisioned by Rally, there are other cases (Docker, externally
+            # provisioned clusters) where it's not that easy.
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
 
         store_plugin_metadata(self.metrics_store, nodes_info)
         store_node_attribute_metadata(self.metrics_store, nodes_info)
+
+
+class NodeEnvironmentInfo(InternalTelemetryDevice):
+    """
+    Gathers static environment information like OS or CPU details for Rally-provisioned nodes.
+    """
+    def __init__(self, metrics_store):
+        super().__init__()
+        self.metrics_store = metrics_store
 
     def attach_to_node(self, node):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
@@ -487,12 +495,6 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         self._t = None
 
     def attach_to_cluster(self, cluster):
-        client_info = self.client.info()
-        revision = client_info["version"]["build_hash"]
-        distribution_version = client_info["version"]["number"]
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
-
         stats = self.client.nodes.stats(metric="_all")
         nodes = stats["nodes"]
         for node in nodes.values():

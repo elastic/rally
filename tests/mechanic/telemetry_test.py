@@ -145,10 +145,7 @@ class GcTests(TestCase):
             env["ES_JAVA_OPTS"])
 
 
-class EnvironmentInfoTests(TestCase):
-    def setUp(self):
-        self.cfg = create_config()
-
+class ClusterEnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
         nodes_info = {"nodes": collections.OrderedDict()}
@@ -211,10 +208,11 @@ class EnvironmentInfoTests(TestCase):
                 }
         }
 
+        cfg = create_config()
         client = Client(nodes=SubClient(info=nodes_info), info=cluster_info)
-        metrics_store = metrics.EsMetricsStore(self.cfg)
-        env_device = telemetry.EnvironmentInfo(client, metrics_store)
-        t = telemetry.Telemetry(self.cfg, devices=[env_device])
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
         t.attach_to_cluster(cluster.Cluster([], [], t))
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
@@ -233,23 +231,25 @@ class EnvironmentInfoTests(TestCase):
 
         metrics_store_add_meta_info.assert_has_calls(calls)
 
+
+class NodeEnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     @mock.patch("esrally.utils.sysstats.os_name")
     @mock.patch("esrally.utils.sysstats.os_version")
     @mock.patch("esrally.utils.sysstats.logical_cpu_cores")
     @mock.patch("esrally.utils.sysstats.physical_cpu_cores")
     @mock.patch("esrally.utils.sysstats.cpu_model")
-    def test_stores_node_level_metrics_on_attach(self, cpu_model, physical_cpu_cores, logical_cpu_cores, os_version, os_name,
-                                                 metrics_store_add_meta_info):
+    def test_stores_node_level_metrics_on_attach(self, cpu_model, physical_cpu_cores, logical_cpu_cores,
+                                                 os_version, os_name, metrics_store_add_meta_info):
         cpu_model.return_value = "Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz"
         physical_cpu_cores.return_value = 4
         logical_cpu_cores.return_value = 8
         os_version.return_value = "4.2.0-18-generic"
         os_name.return_value = "Linux"
 
-        metrics_store = metrics.EsMetricsStore(self.cfg)
+        metrics_store = metrics.EsMetricsStore(create_config())
         node = cluster.Node(None, "io", "rally0", None)
-        env_device = telemetry.EnvironmentInfo(None, metrics_store)
+        env_device = telemetry.NodeEnvironmentInfo(metrics_store)
         env_device.attach_to_node(node)
 
         calls = [
@@ -270,7 +270,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         self.cfg = create_config()
 
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
-    def test_stores_cluster_level_metrics_on_attach(self, metrics_store_add_meta_info):
+    def test_stores_all_node_metrics_on_attach(self, metrics_store_add_meta_info):
         nodes_stats = {
             "nodes": {
                 "FCFjozkeTiOpN-SI88YEcg": {
@@ -324,8 +324,6 @@ class ExternalEnvironmentInfoTests(TestCase):
         t.attach_to_cluster(cluster.Cluster([], [], t))
 
         calls = [
-            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "253032b"),
-            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "5.0.0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "127.0.0.1"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Mac OS X"),
@@ -334,6 +332,7 @@ class ExternalEnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "plugins", ["ingest-geoip"]),
+            # these are automatically pushed up to cluster level (additionally) if all nodes match
             mock.call(metrics.MetaInfoScope.cluster, None, "plugins", ["ingest-geoip"]),
             mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_az", "us_east1"),
             mock.call(metrics.MetaInfoScope.cluster, None, "attribute_az", "us_east1"),
@@ -381,8 +380,6 @@ class ExternalEnvironmentInfoTests(TestCase):
         t.attach_to_cluster(cluster.Cluster([], [], t))
 
         calls = [
-            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "253032b"),
-            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "5.0.0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "unknown"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Mac OS X"),
