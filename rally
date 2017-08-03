@@ -13,6 +13,17 @@ else
     SELF_UPDATE=YES
 fi
 
+# inspect Rally's command line options and skip update also if the user has specified --offline. Note that we do NOT consume any of these
+# options as they need to be passed to Rally.
+for i in "$@"
+do
+case ${i} in
+    --offline)
+    SELF_UPDATE=NO
+    ;;
+esac
+done
+
 # We assume here that this script will stay in the Rally git root directory (it does not make sense in any other place anyway)
 
 # see http://stackoverflow.com/a/246128
