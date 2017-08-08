@@ -431,6 +431,7 @@ class TrackSpecificationReaderTests(TestCase):
                         {
                             "name": "secondary",
                             "documents": "documents-secondary.json.bz2",
+                            "includes-action-and-meta-data": True,
                             "document-count": 20,
                             "compressed-bytes": 200,
                             "uncompressed-bytes": 20000,
@@ -492,10 +493,12 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("index-historical", resulting_track.indices[0].name)
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0].name)
+        self.assertFalse(resulting_track.indices[0].types[0].includes_action_and_meta_data)
         self.assertEqual("/data/documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
         self.assertEqual("/data/documents-main.json", resulting_track.indices[0].types[0].document_file)
         self.assertEqual("/mappings/main-type-mappings.json", resulting_track.indices[0].types[0].mapping_file)
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
+        self.assertTrue(resulting_track.indices[0].types[1].includes_action_and_meta_data)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
         self.assertEqual(1, len(resulting_track.challenges[0].index_settings))

@@ -95,6 +95,10 @@
                   "minimum": 1,
                   "description": "Number of documents in the documents file. This number will be used to verify that all documents have been indexed successfully."
                 },
+                "includes-action-and-meta-data": {
+                  "type": "boolean",
+                  "description": "Whether or not the source file already contains an action-and-meta-data line (default: false)."
+                },
                 "compressed-bytes": {
                   "type": "integer",
                   "minimum": 1,

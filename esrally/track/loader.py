@@ -529,6 +529,8 @@ class TrackSpecificationReader:
                           mapping_file="%s/%s" % (mapping_dir, self._r(type_spec, "mapping")),
                           document_file=document_file,
                           document_archive=document_archive,
+                          includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data", mandatory=False,
+                                                                default_value=False),
                           number_of_documents=number_of_documents,
                           compressed_size_in_bytes=compressed_bytes,
                           uncompressed_size_in_bytes=uncompressed_bytes)

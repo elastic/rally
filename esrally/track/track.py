@@ -110,9 +110,8 @@ class Type:
     Defines a type in Elasticsearch.
     """
 
-    def __init__(self, name, mapping_file, document_file=None, document_archive=None, number_of_documents=0,
-                 compressed_size_in_bytes=0,
-                 uncompressed_size_in_bytes=0):
+    def __init__(self, name, mapping_file, document_file=None, document_archive=None, includes_action_and_meta_data=False,
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0):
         """
 
         Creates a new type. Mappings are mandatory but the document_archive (and associated properties) are optional.
@@ -123,6 +122,7 @@ class Type:
         just need a mapping but no documents)
         :param document_file: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for percolation we
         just need a mapping but no documents)
+        :param includes_action_and_meta_data: True, if the source file already includes the action and meta-data line. False, if it only contains documents.
         :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
          a document_archive is given.
         :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
@@ -134,6 +134,7 @@ class Type:
         self.mapping_file = mapping_file
         self.document_file = document_file
         self.document_archive = document_archive
+        self.includes_action_and_meta_data = includes_action_and_meta_data
         self.number_of_documents = number_of_documents
         self.compressed_size_in_bytes = compressed_size_in_bytes
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
