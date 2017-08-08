@@ -258,6 +258,7 @@ def prepare_file_offset_table(data_file_path):
     #skip_lines(data_file_path, data_file) to speed up line skipping.
 
     :param data_file_path: The path to a text file that is readable by this process.
+    :return The number of lines read or ``None`` if it did not have to build the file offset table.
     """
     offset_file_path = "%s.offset" % data_file_path
     # recreate only if necessary as this can be time-consuming
@@ -274,8 +275,10 @@ def prepare_file_offset_table(data_file_path):
                     if line_number % 50000 == 0:
                         print("%d;%d" % (line_number, data_file.tell()), file=offset_file)
         console.println("[OK]")
+        return line_number
     else:
         logger.info("Skipping creation of file offset table at [%s] as it is still valid." % offset_file_path)
+        return None
 
 
 def skip_lines(data_file_path, data_file, number_of_lines_to_skip):

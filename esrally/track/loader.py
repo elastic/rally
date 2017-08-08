@@ -199,7 +199,10 @@ def prepare_track(track, cfg):
                         raise exceptions.DataError("Track data file [%s] is missing." % type.document_archive)
                 decompressed_file_path, was_decompressed = decompress(type.document_archive, type.uncompressed_size_in_bytes)
                 # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-                io.prepare_file_offset_table(decompressed_file_path)
+                lines_read = io.prepare_file_offset_table(decompressed_file_path)
+                if lines_read and lines_read != type.number_of_lines:
+                    raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
+                                               % (decompressed_file_path, track, type.number_of_lines, lines_read))
             else:
                 logger.info("Type [%s] in index [%s] does not define a document archive. No data are indexed from a file for this type." %
                             (type.name, index.name))

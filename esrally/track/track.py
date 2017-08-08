@@ -143,6 +143,13 @@ class Type:
         return self.document_file is not None and \
                self.number_of_documents > 0
 
+    @property
+    def number_of_lines(self):
+        if self.includes_action_and_meta_data:
+            return self.number_of_documents * 2
+        else:
+            return self.number_of_documents
+
     def __str__(self, *args, **kwargs):
         return self.name
 
