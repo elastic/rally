@@ -1,12 +1,11 @@
 import os
-import sys
 import logging
 import configparser
 
 import tabulate
 
 from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import console, git, versions, io
+from esrally.utils import console, repo, io
 
 logger = logging.getLogger("rally.team")
 
@@ -57,78 +56,23 @@ def load_plugins(repo, plugin_names):
 
 def team_repo(cfg, update=True):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    repo = TeamRepository(cfg)
+    repo_name = cfg.opts("mechanic", "repository.name")
+    offline = cfg.opts("system", "offline.mode")
+    remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
+    root = cfg.opts("node", "root.dir")
+    team_repositories = cfg.opts("mechanic", "team.repository.dir")
+    teams_dir = os.path.join(root, team_repositories)
+
+    current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
     if update:
-        repo.update(distribution_version)
-    return repo
-
-
-# TODO #308: This is now generic enough to be merged with the track repo.
-class TeamRepository:
-    """
-    Manages teams (consisting of cars and their plugins).
-    """
-
-    def __init__(self, cfg, fetch=True):
-        self.cfg = cfg
-        self.name = cfg.opts("mechanic", "repository.name")
-        self.offline = cfg.opts("system", "offline.mode")
-        # If no URL is found, we consider this a local only repo (but still require that it is a git repo)
-        self.url = cfg.opts("teams", "%s.url" % self.name, mandatory=False)
-        self.remote = self.url is not None and self.url.strip() != ""
-        root = cfg.opts("node", "root.dir")
-        team_repositories = cfg.opts("mechanic", "team.repository.dir")
-        self.teams_dir = os.path.join(root, team_repositories, self.name)
-        if self.remote and not self.offline and fetch:
-            # a normal git repo with a remote
-            if not git.is_working_copy(self.teams_dir):
-                git.clone(src=self.teams_dir, remote=self.url)
-            else:
-                try:
-                    git.fetch(src=self.teams_dir)
-                except exceptions.SupplyError:
-                    console.warn("Could not update teams. Continuing with your locally available state.", logger=logger)
-        else:
-            if not git.is_working_copy(self.teams_dir):
-                raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
-                                                  .format(src=self.teams_dir))
-
-    def update(self, distribution_version):
-        try:
-            if self.remote and not self.offline:
-                branch = versions.best_match(git.branches(self.teams_dir, remote=self.remote), distribution_version)
-                if branch:
-                    # Allow uncommitted changes iff we do not have to change the branch
-                    logger.info(
-                        "Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.teams_dir, distribution_version))
-                    git.checkout(self.teams_dir, branch=branch)
-                    logger.info("Rebasing on [%s] in [%s] for distribution version [%s]." % (branch, self.teams_dir, distribution_version))
-                    try:
-                        git.rebase(self.teams_dir, branch=branch)
-                    except exceptions.SupplyError:
-                        logger.exception("Cannot rebase due to local changes in [%s]" % self.teams_dir)
-                        console.warn(
-                            "Local changes in [%s] prevent team update from remote. Please commit your changes." % self.teams_dir)
-                    return
-                else:
-                    msg = "Could not find team data remotely for distribution version [%s]. " \
-                          "Trying to find team data locally." % distribution_version
-                    logger.warning(msg)
-            branch = versions.best_match(git.branches(self.teams_dir, remote=False), distribution_version)
-            if branch:
-                logger.info("Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.teams_dir, distribution_version))
-                git.checkout(self.teams_dir, branch=branch)
-            else:
-                raise exceptions.SystemSetupError("Cannot find team data for distribution version %s" % distribution_version)
-        except exceptions.SupplyError:
-            tb = sys.exc_info()[2]
-            raise exceptions.DataError("Cannot update team data in [%s]." % self.teams_dir).with_traceback(tb)
+        current_team_repo.update(distribution_version)
+    return current_team_repo
 
 
 class CarLoader:
     def __init__(self, repo):
         self.repo = repo
-        self.cars_dir = os.path.join(self.repo.teams_dir, "cars")
+        self.cars_dir = os.path.join(self.repo.repo_dir, "cars")
 
     def car_names(self):
         def __car_name(path):
@@ -202,7 +146,7 @@ class Car:
 class PluginLoader:
     def __init__(self, repo):
         self.repo = repo
-        self.plugins_root_path = os.path.join(self.repo.teams_dir, "plugins")
+        self.plugins_root_path = os.path.join(self.repo.repo_dir, "plugins")
 
     def plugins(self):
         known_plugins = self._official_plugins() + self._configured_plugins()

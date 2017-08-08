@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import sys
 import glob
 import urllib.error
 
@@ -11,7 +10,7 @@ import jsonschema
 import tabulate
 from esrally import exceptions, time, PROGRAM_NAME
 from esrally.track import params, track
-from esrally.utils import io, convert, net, git, versions, console, modules
+from esrally.utils import io, convert, net, console, modules, repo
 
 logger = logging.getLogger("rally.track")
 
@@ -32,17 +31,19 @@ def tracks(cfg):
     :param cfg: The config object.
     :return: A list of tracks that are available for the provided distribution version or else for the master version.
     """
-    repo = TrackRepository(cfg)
+
+    def track_names(repo):
+        return filter(lambda p: os.path.exists(track_file(repo, p)), next(os.walk(repo.repo_dir))[1])
+
+    repo = track_repo(cfg)
     reader = TrackFileReader(cfg)
-    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     data_root = cfg.opts("benchmarks", "local.dataset.cache")
     return [reader.read(track_name,
-                        # avoid excessive fetch from remote repo
-                        repo.track_file(distribution_version, track_name, needs_update=False),
-                        repo.track_dir(track_name),
+                        track_file(repo, track_name),
+                        track_dir(repo, track_name),
                         "%s/%s" % (data_root, track_name.lower())
                         )
-            for track_name in repo.track_names(distribution_version)]
+            for track_name in track_names(repo)]
 
 
 def list_tracks(cfg):
@@ -66,12 +67,12 @@ def load_track(cfg):
     """
     track_name = cfg.opts("track", "track.name")
     try:
-        repo = TrackRepository(cfg)
+        repo = track_repo(cfg)
         reader = TrackFileReader(cfg)
-        distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         data_root = cfg.opts("benchmarks", "local.dataset.cache")
-        full_track = reader.read(track_name, repo.track_file(distribution_version, track_name), repo.track_dir(track_name),
-                                 "%s/%s" % (data_root, track_name.lower()))
+
+        full_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name),
+                                 os.path.join(data_root, track_name.lower()))
         if cfg.opts("track", "test.mode.enabled"):
             return post_process_for_test_mode(full_track)
         else:
@@ -85,8 +86,8 @@ def load_track(cfg):
 def load_track_plugins(cfg, register_runner, register_scheduler):
     track_name = cfg.opts("track", "track.name")
     # TODO #257: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
-    repo = TrackRepository(cfg, fetch=False)
-    track_plugin_path = repo.track_dir(track_name)
+    repo = track_repo(cfg, fetch=False, update=False)
+    track_plugin_path = track_dir(repo, track_name)
 
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler)
 
@@ -94,6 +95,29 @@ def load_track_plugins(cfg, register_runner, register_scheduler):
         plugin_reader.load()
     else:
         logger.debug("Track [%s] in path [%s] does not define any track plugins." % (track_name, track_plugin_path))
+
+
+def track_repo(cfg, fetch=True, update=True):
+    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    repo_name = cfg.opts("track", "repository.name")
+    offline = cfg.opts("system", "offline.mode")
+    remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)
+    root = cfg.opts("node", "root.dir")
+    track_repositories = cfg.opts("benchmarks", "track.repository.dir")
+    tracks_dir = os.path.join(root, track_repositories)
+
+    current_track_repo = repo.RallyRepository(remote_url, tracks_dir, repo_name, "tracks", offline, fetch)
+    if update:
+        current_track_repo.update(distribution_version)
+    return current_track_repo
+
+
+def track_dir(repo, track_name):
+    return os.path.join(repo.repo_dir, track_name)
+
+
+def track_file(repo, track_name):
+    return os.path.join(track_dir(repo, track_name), "track.json")
 
 
 def operation_parameters(t, op):
@@ -206,85 +230,6 @@ def prepare_track(track, cfg):
             else:
                 logger.info("Type [%s] in index [%s] does not define a document archive. No data are indexed from a file for this type." %
                             (type.name, index.name))
-
-
-class TrackRepository:
-    """
-    Manages track specifications.
-    """
-
-    def __init__(self, cfg, fetch=True):
-        self.cfg = cfg
-        self.name = cfg.opts("track", "repository.name")
-        self.offline = cfg.opts("system", "offline.mode")
-        # If no URL is found, we consider this a local only repo (but still require that it is a git repo)
-        self.url = cfg.opts("tracks", "%s.url" % self.name, mandatory=False)
-        self.remote = self.url is not None and self.url.strip() != ""
-        root = cfg.opts("node", "root.dir")
-        track_repositories = cfg.opts("benchmarks", "track.repository.dir")
-        self.tracks_dir = "%s/%s/%s" % (root, track_repositories, self.name)
-        if self.remote and not self.offline and fetch:
-            # a normal git repo with a remote
-            if not git.is_working_copy(self.tracks_dir):
-                git.clone(src=self.tracks_dir, remote=self.url)
-            else:
-                try:
-                    git.fetch(src=self.tracks_dir)
-                except exceptions.SupplyError:
-                    console.warn("Could not update tracks. Continuing with your locally available state.", logger=logger)
-        else:
-            if not git.is_working_copy(self.tracks_dir):
-                raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
-                                                  .format(src=self.tracks_dir))
-
-    def track_names(self, distribution_version):
-        self._update(distribution_version)
-        return filter(self._is_track, next(os.walk(self.tracks_dir))[1])
-
-    def _is_track(self, path):
-        return os.path.exists(self._track_file(path))
-
-    def track_dir(self, track_name):
-        return "%s/%s" % (self.tracks_dir, track_name)
-
-    def _track_file(self, track_name):
-        return "%s/track.json" % self.track_dir(track_name)
-
-    def track_file(self, distribution_version, track_name, needs_update=True):
-        if needs_update:
-            self._update(distribution_version)
-        return self._track_file(track_name)
-
-    def _update(self, distribution_version):
-        try:
-            if self.remote and not self.offline:
-                branch = versions.best_match(git.branches(self.tracks_dir, remote=self.remote), distribution_version)
-                if branch:
-                    # Allow uncommitted changes iff we do not have to change the branch
-                    logger.info(
-                        "Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
-                    git.checkout(self.tracks_dir, branch=branch)
-                    logger.info("Rebasing on [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
-                    try:
-                        git.rebase(self.tracks_dir, branch=branch)
-                    except exceptions.SupplyError:
-                        logger.exception("Cannot rebase due to local changes in [%s]" % self.tracks_dir)
-                        console.warn(
-                            "Local changes in [%s] prevent track update from remote. Please commit your changes." % self.tracks_dir)
-                    return
-                else:
-                    msg = "Could not find track data remotely for distribution version [%s]. " \
-                          "Trying to find track data locally." % distribution_version
-                    logger.warning(msg)
-            branch = versions.best_match(git.branches(self.tracks_dir, remote=False), distribution_version)
-            if branch:
-                logger.info("Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.tracks_dir, distribution_version))
-                git.checkout(self.tracks_dir, branch=branch)
-            else:
-                raise exceptions.SystemSetupError("Cannot find track data for distribution version %s" % distribution_version)
-        except exceptions.SupplyError:
-            tb = sys.exc_info()[2]
-            raise exceptions.DataError("Cannot update track data in [%s]." % self.tracks_dir).with_traceback(tb)
 
 
 def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.Clock):

@@ -8,8 +8,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 class UnitTestRepo:
-    def __init__(self, teams_dir):
-        self.teams_dir = teams_dir
+    def __init__(self, repo_dir):
+        self.repo_dir = repo_dir
 
 
 class CarLoaderTests(TestCase):
