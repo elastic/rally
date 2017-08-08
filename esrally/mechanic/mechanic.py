@@ -244,8 +244,9 @@ class MechanicActor(actor.RallyActor):
             elif isinstance(msg, StopEngine):
                 # detach from cluster and gather all system metrics
                 self.cluster_launcher.stop(self.cluster)
-                # we might have experienced a launch error, hence we need to allow to stop the cluster also after a launch
-                self.send_to_children_and_transition(sender, StopNodes(), ["nodes_started", "benchmark_stopped"], "cluster_stopping")
+                # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
+                # cluster from various states and we don't check here for a specific one.
+                self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
             elif isinstance(msg, NodesStopped):
                 self.metrics_store.bulk_add(msg.system_metrics)
                 self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
