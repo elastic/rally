@@ -95,7 +95,6 @@ class Benchmark:
         self.docker = docker
         self.actor_system = None
         self.mechanic = None
-        self.ignore_unknown_return = self.cfg.opts("system", "ignore.unknown.return")
 
     def _load_track(self):
         return track.load_track(self.cfg)
@@ -198,10 +197,7 @@ class Benchmark:
             logger.info("Stopping engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message, result.cause)
         else:
-            if self.ignore_unknown_return:
-                console.warn("Mechanic has not stopped engine but instead [%s]. Ignoring." % str(result), logger=logger)
-            else:
-                raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
+            raise exceptions.RallyError("Mechanic has not stopped engine but instead [%s]. Terminating race without result." % str(result))
 
         self.metrics_store.flush()
         if not cancelled and not error:

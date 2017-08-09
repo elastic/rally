@@ -304,11 +304,6 @@ def parse_args():
             choices=["true", "false"],
             help=argparse.SUPPRESS,
             default=None)
-        p.add_argument(
-            "--ignore-unknown-return-values",
-            help=argparse.SUPPRESS,
-            default=False,
-            action="store_true")
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -549,8 +544,6 @@ def main():
     # per node?
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
     cfg.add(config.Scope.applicationOverride, "system", "logging.output", args.logging)
-    # only temporary to ignore unknown actor messages
-    cfg.add(config.Scope.applicationOverride, "system", "ignore.unknown.return", args.ignore_unknown_return_values)
 
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
