@@ -3,6 +3,7 @@ from unittest import TestCase
 
 import jinja2
 
+from esrally import exceptions
 from esrally.track import loader
 
 
@@ -265,6 +266,116 @@ class TrackPostProcessingTests(TestCase):
     def as_track(self, track_specification):
         reader = loader.TrackSpecificationReader()
         return reader("unittest", track_specification, "/mappings", "/data")
+
+
+class TrackFilterTests(TestCase):
+    def test_create_filters_from_empty_included_tasks(self):
+        self.assertEqual(0, len(loader.filters_from_included_tasks(None)))
+        self.assertEqual(0, len(loader.filters_from_included_tasks([])))
+
+    def test_create_filters_from_mixed_included_tasks(self):
+        from esrally.track import track
+        filters = loader.filters_from_included_tasks(["force-merge", "type:search"])
+        self.assertListEqual([track.TaskOpNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
+
+    def test_rejects_invalid_syntax(self):
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            loader.filters_from_included_tasks(["valid", "a:b:c"])
+        self.assertEqual("Invalid format for included tasks: [a:b:c]", ctx.exception.args[0])
+
+    def test_rejects_unknown_filter_type(self):
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            loader.filters_from_included_tasks(["valid", "op-type:index"])
+        self.assertEqual("Invalid format for included tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
+
+    def test_filters_tasks(self):
+        from esrally.track import track
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-3",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "node-stats",
+                    "operation-type": "node-stats"
+                },
+                {
+                    "name": "cluster-stats",
+                    "operation-type": "custom-operation-type"
+                },
+                {
+                    "name": "match-all",
+                    "operation-type": "search",
+                    "body": {
+                        "query": {
+                            "match_all": {}
+                        }
+                    }
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "operation": "index-1",
+                                    },
+                                    {
+                                        "operation": "index-2",
+                                    },
+                                    {
+                                        "operation": "index-3",
+                                    },
+                                    {
+                                        "operation": "match-all",
+                                    },
+                                ]
+                            }
+                        },
+                        {
+                            "operation": "node-stats"
+                        },
+                        {
+                            "operation": "match-all"
+                        },
+                        {
+                            "operation": "cluster-stats"
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", track_specification, "/mappings", "/data")
+        self.assertEqual(4, len(full_track.challenges[0].schedule))
+
+        filtered = loader.filter_included_tasks(full_track, [track.TaskOpNameFilter("index-3"),
+                                                             track.TaskOpTypeFilter("search"),
+                                                             # Filtering should also work for non-core operation types.
+                                                             track.TaskOpTypeFilter("custom-operation-type")
+                                                             ])
+
+        schedule = filtered.challenges[0].schedule
+        self.assertEqual(3, len(schedule))
+        self.assertEqual(["index-3", "match-all"], [t.operation.name for t in schedule[0].tasks])
+        self.assertEqual("match-all", schedule[1].operation.name)
+        self.assertEqual("cluster-stats", schedule[2].operation.name)
 
 
 class TrackSpecificationReaderTests(TestCase):

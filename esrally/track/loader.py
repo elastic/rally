@@ -70,13 +70,16 @@ def load_track(cfg):
         repo = track_repo(cfg)
         reader = TrackFileReader(cfg)
         data_root = cfg.opts("benchmarks", "local.dataset.cache")
+        included_tasks = cfg.opts("track", "include.tasks")
 
-        full_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name),
+        current_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name),
                                  os.path.join(data_root, track_name.lower()))
+        current_track = filter_included_tasks(current_track, filters_from_included_tasks(included_tasks))
+
         if cfg.opts("track", "test.mode.enabled"):
-            return post_process_for_test_mode(full_track)
+            return post_process_for_test_mode(current_track)
         else:
-            return full_track
+            return current_track
     except FileNotFoundError:
         logger.exception("Cannot load track [%s]" % track_name)
         raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
@@ -267,6 +270,54 @@ def render_template_from_file(template_file_name):
     return render_template(loader=jinja2.FileSystemLoader(base_path),
                            template_name=io.basename(template_file_name),
                            glob_helper=lambda f: relative_glob(base_path, f))
+
+
+def filter_included_tasks(t, filters):
+    def match(task, filters):
+        for f in filters:
+            if task.matches(f):
+                return True
+        return False
+
+    if not filters:
+        return t
+    else:
+        for challenge in t.challenges:
+            # don't modify the schedule while iterating over it
+            tasks_to_remove = []
+            for task in challenge.schedule:
+                if not match(task, filters):
+                    tasks_to_remove.append(task)
+                else:
+                    leafs_to_remove = []
+                    for leaf_task in task:
+                        if not match(leaf_task, filters):
+                            leafs_to_remove.append(leaf_task)
+                    for leaf_task in leafs_to_remove:
+                        logger.info("Removing sub-task [%s] from challenge [%s] due to task filter." % (leaf_task, challenge))
+                        task.remove_task(leaf_task)
+            for task in tasks_to_remove:
+                logger.info("Removing task [%s] from challenge [%s] due to task filter." % (task, challenge))
+                challenge.remove_task(task)
+
+    return t
+
+
+def filters_from_included_tasks(included_tasks):
+    filters = []
+    if included_tasks:
+        for t in included_tasks:
+            spec = t.split(":")
+            if len(spec) == 1:
+                filters.append(track.TaskOpNameFilter(spec[0]))
+            elif len(spec) == 2:
+                if spec[0] == "type":
+                    filters.append(track.TaskOpTypeFilter(spec[1]))
+                else:
+                    raise exceptions.SystemSetupError("Invalid format for included tasks: [%s]. Expected [type] but got [%s]." % (t, spec[0]))
+            else:
+                raise exceptions.SystemSetupError("Invalid format for included tasks: [%s]" % t)
+    return filters
 
 
 def post_process_for_test_mode(t):
@@ -492,6 +543,7 @@ class TrackSpecificationReader:
         for challenge in self._r(track_spec, "challenges"):
             name = self._r(challenge, "name", error_ctx="challenges")
             description = self._r(challenge, "description", error_ctx=name)
+            user_info = self._r(challenge, "user-info", error_ctx=name, mandatory=False)
             meta_data = self._r(challenge, "meta", error_ctx=name, mandatory=False)
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified
             default = number_of_challenges == 1 or self._r(challenge, "default", error_ctx=name, mandatory=False)
@@ -517,6 +569,7 @@ class TrackSpecificationReader:
             new_challenge = track.Challenge(name=name,
                                             meta_data=meta_data,
                                             description=description,
+                                            user_info=user_info,
                                             index_settings=index_settings,
                                             cluster_settings=cluster_settings,
                                             default=default,

@@ -193,6 +193,9 @@ def parse_args():
             "--challenge",
             help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
         p.add_argument(
+            "--include-tasks",
+            help="defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
+        p.add_argument(
             "--car",
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
@@ -574,6 +577,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
     cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
+    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
     cfg.add(config.Scope.applicationOverride, "track", "auto_manage_indices", to_bool(args.auto_manage_indices))
 

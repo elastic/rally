@@ -269,6 +269,7 @@ class Challenge:
     def __init__(self,
                  name,
                  description,
+                 user_info=None,
                  index_settings=None,
                  cluster_settings=None,
                  default=False,
@@ -277,10 +278,14 @@ class Challenge:
         self.name = name
         self.meta_data = meta_data if meta_data else {}
         self.description = description
+        self.user_info = user_info
         self.index_settings = index_settings if index_settings else {}
         self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
         self.schedule = schedule if schedule else []
+
+    def remove_task(self, task):
+        self.schedule.remove(task)
 
     def __str__(self):
         return self.name
@@ -324,6 +329,44 @@ class OperationType(Enum):
             raise KeyError("No enum value for [%s]" % v)
 
 
+class TaskOpNameFilter:
+    def __init__(self, name):
+        self.name = name
+
+    def matches(self, operation):
+        return self.name == operation.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.name == other.name
+
+    def __str__(self, *args, **kwargs):
+        return "filter for operation name [%s]" % self.name
+
+
+class TaskOpTypeFilter:
+    def __init__(self, op_type_name):
+        # we need to use the string representation because users may define their own operation types via a custom runners.
+        try:
+            self.op_type = OperationType.from_hyphenated_string(op_type_name).name
+        except KeyError:
+            self.op_type = op_type_name
+
+    def matches(self, operation):
+        return self.op_type == operation.type
+
+    def __hash__(self):
+        return hash(self.op_type)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.op_type == other.op_type
+
+    def __str__(self, *args, **kwargs):
+        return "filter for operation type [%s]" % self.op_type
+
+
 # Schedule elements
 class Parallel:
     def __init__(self, tasks, clients=None):
@@ -339,6 +382,16 @@ class Parallel:
             for task in self.tasks:
                 num_clients += task.clients
             return num_clients
+
+    def matches(self, task_filter):
+        # a parallel element matches if any of its elements match
+        for task in self.tasks:
+            if task.matches(task_filter):
+                return True
+        return False
+
+    def remove_task(self, task):
+        self.tasks.remove(task)
 
     def __iter__(self):
         return iter(self.tasks)
@@ -372,6 +425,9 @@ class Task:
         self.completes_parent = completes_parent
         self.schedule = schedule
         self.params = params if params else {}
+
+    def matches(self, task_filter):
+        return task_filter.matches(self.operation)
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)

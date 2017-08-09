@@ -230,6 +230,9 @@ Each challenge consists of the following properties:
 * ``index-settings`` (optional): Defines the index settings of the benchmark candidate when an index is created. Note that these settings are only applied if the index is auto-managed.
 * ``schedule`` (mandatory): Defines the concrete execution order of operations. It is described in more detail below.
 
+.. note::
+   You should strive to minimize the number of challenges. If you just want to run a subset of the tasks in a challenge, use :ref:`task filtering <clr_include_tasks>`.
+
 schedule
 ~~~~~~~~
 

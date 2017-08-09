@@ -59,6 +59,20 @@ Selects the track that Rally should run. By default the ``geonames`` track is ru
 
 A track consists of one or more challenges. With this flag you can specify which challenge should be run. If you don't specify a challenge, Rally derives the default challenge itself. To see the default challenge of a track, run ``esrally list tracks``.
 
+.. _clr_include_tasks:
+
+``include-tasks``
+~~~~~~~~~~~~~~~~~
+
+Each challenge consists of one or more tasks but sometimes you are only interested to run a subset of all tasks. For example, you might have prepared an index already and want only to repeatedly run search benchmarks. Or you want to run only the indexing task but nothing else.
+
+You can use ``--include-tasks`` to specify a comma-separated list of tasks that you want to run. Each item in the list defines either the name of a task or the operation type of a task. Only the tasks that match will be executed. Currently there is also no command that shows a list of tasks per challenge so you need to look at the track source.
+
+**Examples**:
+
+* Execute only the tasks with the name ``index`` and ``term``: ``--include-tasks="index,term"``
+* Execute only tasks of type ``search``: ``--include-tasks="type:search"``
+* You can also mix and match these: ``--include-tasks="index,type:search"``
 
 ``team-repository``
 ~~~~~~~~~~~~~~~~~~~

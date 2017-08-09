@@ -69,7 +69,8 @@ class Benchmark:
         # to reload the track again. We are assuming that a track always specifies the same challenges for each version (i.e. branch).
         t = self._load_track()
         challenge = self._find_challenge(t)
-
+        if challenge.user_info:
+            console.info(challenge.user_info, logger=logger)
         self.race = metrics.create_race(self.cfg, t, challenge)
 
         self.metrics_store = metrics.metrics_store(
