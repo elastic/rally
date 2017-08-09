@@ -127,10 +127,9 @@ function test_benchmark_only() {
     local cfg
     local dist
     random_configuration cfg
-    dist="${ES_METRICS_STORE_VERSION}"
 
-    info "test benchmark-only [--configuration-name=${cfg}], [--distribution-version=${dist}]"
-    esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --distribution-version="${dist}" --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
+    info "test benchmark-only [--configuration-name=${cfg}]"
+    esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
 }
 
 function run_test() {

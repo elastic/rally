@@ -3,7 +3,7 @@ import logging
 
 import thespian.actors
 
-from esrally import actor, paths, config, metrics, exceptions, time, PROGRAM_NAME
+from esrally import actor, client, paths, config, metrics, exceptions, time, PROGRAM_NAME
 from esrally.utils import console, net
 from esrally.mechanic import supplier, provisioner, launcher, team
 
@@ -163,6 +163,25 @@ class ApplyMetricsMetaInfo:
 
 class MetricsMetaInfoApplied:
     pass
+
+
+def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
+    """
+    Attempt to get the cluster's distribution version even before it is actually started (which makes only sense for externally
+    provisioned clusters).
+
+    :param cfg: The current config object.
+    :param client_factory: Factory class that creates the Elasticsearch client.
+    :return: The distribution version or ``None`` if it could not determine it.
+    """
+    hosts = cfg.opts("client", "hosts")
+    client_options = cfg.opts("client", "options")
+    es = client_factory(hosts, client_options).create()
+    # noinspection PyBroadException
+    try:
+        return es.info()["version"]["number"]
+    except BaseException:
+        return None
 
 
 def to_ip_port(hosts):
@@ -552,7 +571,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         p = []
         for node_id in node_ids:
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
-        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root)
     elif distribution:
         version = cfg.opts("mechanic", "distribution.version")
         repo_name = cfg.opts("mechanic", "distribution.repository")
@@ -564,7 +583,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         p = []
         for node_id in node_ids:
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
-        l = launcher.InProcessLauncher(cfg, metrics_store, races_root, challenge_root_path)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         if cluster_settings:
             logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "

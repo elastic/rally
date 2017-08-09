@@ -65,8 +65,16 @@ class Pipeline:
 class Benchmark:
     def __init__(self, cfg, sources=False, build=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
-        # we preload the track here but in rare cases (external pipeline and user did not specify the distribution version) we might need
-        # to reload the track again. We are assuming that a track always specifies the same challenges for each version (i.e. branch).
+        # to load the track we need to know the correct cluster distribution version. Usually, this value should be set but there are rare
+        # cases (external pipeline and user did not specify the distribution version) where we need to derive it ourselves. For source
+        # builds we always assume "master"
+        if not sources and not self.cfg.exists("mechanic", "distribution.version"):
+            distribution_version = mechanic.cluster_distribution_version(self.cfg)
+            if not distribution_version:
+                raise exceptions.SystemSetupError("A distribution version is required. Please specify it with --distribution-version.")
+            logger.info("Automatically derived distribution version [%s]" % distribution_version)
+            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
+
         t = self._load_track()
         challenge = self._find_challenge(t)
         if challenge.user_info:
@@ -118,13 +126,6 @@ class Benchmark:
             self.metrics_store.meta_info = result.system_meta_info
             cluster = result.cluster_meta_info
             self.race.cluster = cluster
-            if not self.cfg.exists("mechanic", "distribution.version"):
-                self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", cluster.distribution_version)
-                logger.info("Reloading track based for distribution version [%s]" % cluster.distribution_version)
-                t = self._load_track()
-                self.race.track = t
-                self.race.challenge = self._find_challenge(t)
-
             console.info("Racing on track [%s], challenge [%s] and car [%s]\n"
                          % (self.race.track_name, self.race.challenge_name, self.race.car))
         elif isinstance(result, mechanic.Failure):

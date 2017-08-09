@@ -71,10 +71,9 @@ class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
 
-    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
+    def __init__(self, cfg, metrics_store):
         self.cfg = cfg
         self.metrics_store = metrics_store
-        self.client_factory = client_factory_class
         self.binary_paths = {}
         self.node_name = None
 
@@ -185,7 +184,7 @@ class InProcessLauncher:
     """
     PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
-    def __init__(self, cfg, metrics_store, races_root_dir, challenge_root_dir, clock=time.Clock):
+    def __init__(self, cfg, metrics_store, races_root_dir, clock=time.Clock):
         self.cfg = cfg
         self.metrics_store = metrics_store
         self._clock = clock
