@@ -90,12 +90,6 @@ class EngineStopped:
         self.system_metrics = system_metrics
 
 
-class Failure:
-    def __init__(self, message, cause):
-        self.message = message
-        self.cause = cause
-
-
 class OnBenchmarkStart:
     def __init__(self, lap):
         self.lap = lap
@@ -252,7 +246,7 @@ class MechanicActor(actor.RallyActor):
             elif isinstance(msg, BenchmarkStarted):
                 self.transition_when_all_children_responded(
                     sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
-            elif isinstance(msg, Failure):
+            elif isinstance(msg, actor.BenchmarkFailure):
                 self.send(self.race_control, msg)
             elif isinstance(msg, OnBenchmarkStop):
                 self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
@@ -289,7 +283,7 @@ class MechanicActor(actor.RallyActor):
             ex_type, ex_value, ex_traceback = sys.exc_info()
             # avoid "can't pickle traceback objects"
             import traceback
-            self.send(recipient, Failure("Could not execute command (%s)" % ex_value, traceback.format_exc()))
+            self.send(recipient, actor.BenchmarkFailure("Could not execute command (%s)" % ex_value, traceback.format_exc()))
 
     def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
         """
@@ -529,7 +523,7 @@ class NodeMechanicActor(actor.RallyActor):
             # avoid "can't pickle traceback objects"
             import traceback
             ex_type, ex_value, ex_traceback = sys.exc_info()
-            self.send(sender, Failure(ex_value, traceback.format_exc()))
+            self.send(sender, actor.BenchmarkFailure(ex_value, traceback.format_exc()))
 
 
 #####################################################

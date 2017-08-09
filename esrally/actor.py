@@ -16,6 +16,15 @@ root_log_level = logging.INFO
 es_log_level = logging.WARNING
 
 
+class BenchmarkFailure:
+    """
+    Indicates a failure in the benchmark execution due to an exception
+    """
+    def __init__(self, message, cause=None):
+        self.message = message
+        self.cause = cause
+
+
 class RallyActor(thespian.actors.Actor):
     def __init__(self):
         super().__init__()

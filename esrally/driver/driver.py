@@ -105,17 +105,6 @@ class BenchmarkComplete:
         self.metrics = metrics
 
 
-# Workaround for https://github.com/godaddy/Thespian/issues/22
-class BenchmarkFailure:
-    """
-    Indicates a failure in the benchmark execution due to an exception
-    """
-
-    def __init__(self, message, cause=None):
-        self.message = message
-        self.cause = cause
-
-
 class BenchmarkCancelled:
     """
     Indicates that the benchmark has been cancelled (by the user).
@@ -149,7 +138,7 @@ class DriverActor(actor.RallyActor):
                 if not self.coordinator.finished():
                     self.coordinator.update_progress_message()
                     self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
-            elif isinstance(msg, BenchmarkFailure):
+            elif isinstance(msg, actor.BenchmarkFailure):
                 logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
                 self.coordinator.close()
                 self.send(self.start_sender, msg)
@@ -169,7 +158,7 @@ class DriverActor(actor.RallyActor):
                     logger.info("Load generator [%d] has exited." % driver_index)
                 else:
                     logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
-                    self.send(self.start_sender, BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
+                    self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
             else:
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
@@ -179,7 +168,7 @@ class DriverActor(actor.RallyActor):
             self.status = "exiting"
             for driver in self.coordinator.drivers:
                 self.send(driver, thespian.actors.ActorExitRequest())
-            self.send(self.start_sender, BenchmarkFailure("Could not execute benchmark", e))
+            self.send(self.start_sender, actor.BenchmarkFailure("Could not execute benchmark", e))
 
     def start_benchmark(self, msg, sender):
         self.start_sender = sender
@@ -507,7 +496,7 @@ class LoadGenerator(actor.RallyActor):
                         e = self.executor_future.exception(timeout=0)
                         if e:
                             logger.info("LoadGenerator[%s] has detected a benchmark failure. Notifying master..." % str(self.client_id))
-                            self.send(self.master, BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
+                            self.send(self.master, actor.BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
                         else:
                             logger.info("LoadGenerator[%s] is ready for the next task." % str(self.client_id))
                             self.executor_future = None
@@ -529,7 +518,7 @@ class LoadGenerator(actor.RallyActor):
                 logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
         except Exception as e:
             logger.exception("Fatal error in LoadGenerator[%d]" % self.client_id)
-            self.send(self.master, BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
+            self.send(self.master, actor.BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
 
     def drive(self):
         profiling_enabled = self.config.opts("driver", "profiling")

@@ -115,7 +115,6 @@ class Benchmark:
                                                       targetActorRequirements={"coordinator": True},
                                                       globalName="/rally/mechanic/coordinator")
         logger.info("Asking mechanic to start the engine.")
-        # This can only work accurately if the user has already specified the correct version!
         cluster_settings = self.race.challenge.cluster_settings
         result = self.actor_system.ask(self.mechanic,
                                        mechanic.StartEngine(
@@ -128,7 +127,7 @@ class Benchmark:
             self.race.cluster = cluster
             console.info("Racing on track [%s], challenge [%s] and car [%s]\n"
                          % (self.race.track_name, self.race.challenge_name, self.race.car))
-        elif isinstance(result, mechanic.Failure):
+        elif isinstance(result, actor.BenchmarkFailure):
             logger.info("Starting engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message)
         else:
@@ -181,7 +180,7 @@ class Benchmark:
         elif isinstance(result, driver.BenchmarkCancelled):
             logger.info("User has cancelled the benchmark.")
             return False
-        elif isinstance(result, driver.BenchmarkFailure):
+        elif isinstance(result, actor.BenchmarkFailure):
             logger.info("Driver has reported a benchmark failure.")
             raise exceptions.RallyError(result.message, result.cause)
         else:
@@ -195,7 +194,7 @@ class Benchmark:
             logger.info("Mechanic has stopped engine successfully.")
             logger.info("Bulk adding system metrics to metrics store.")
             self.metrics_store.bulk_add(result.system_metrics)
-        elif isinstance(result, mechanic.Failure):
+        elif isinstance(result, actor.BenchmarkFailure):
             logger.info("Stopping engine has failed. Reason [%s]." % result.message)
             raise exceptions.RallyError(result.message, result.cause)
         else:
