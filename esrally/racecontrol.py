@@ -3,8 +3,7 @@ import logging
 import sys
 
 import tabulate
-from esrally import actor, config, exceptions, track, driver, reporter, metrics, time, PROGRAM_NAME
-from esrally.mechanic import mechanic
+from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, PROGRAM_NAME
 from esrally.utils import console, convert
 
 logger = logging.getLogger("rally.racecontrol")
