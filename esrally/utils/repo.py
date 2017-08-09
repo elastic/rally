@@ -50,7 +50,7 @@ class RallyRepository:
                         logger.exception("Cannot rebase due to local changes in [%s]" % self.repo_dir)
                         console.warn(
                             "Local changes in [%s] prevent %s update from remote. Please commit your changes." %
-                            (self.resource_name, self.repo_dir))
+                            (self.repo_dir, self.resource_name))
                     return
                 else:
                     msg = "Could not find %s remotely for distribution version [%s]. Trying to find %s locally." % \
