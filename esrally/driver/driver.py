@@ -105,6 +105,11 @@ class BenchmarkComplete:
         self.metrics = metrics
 
 
+class TaskFinished:
+    def __init__(self, next_task_scheduled_in):
+        self.next_task_scheduled_in = next_task_scheduled_in
+
+
 class DriverActor(actor.RallyActor):
     WAKEUP_INTERVAL_SECONDS = 1
     """
@@ -128,7 +133,11 @@ class DriverActor(actor.RallyActor):
             elif isinstance(msg, UpdateSamples):
                 self.update_samples(msg)
             elif isinstance(msg, thespian.actors.WakeupMessage):
-                if not self.coordinator.finished():
+                # workaround to detect multiple timers firing at different intervals. We should actually determine them via some other means
+                # e.g. a payload.
+                if msg.delayPeriod != datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS):
+                    self.coordinator.reset_relative_time()
+                elif not self.coordinator.finished():
                     self.coordinator.update_progress_message()
                     self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
             elif isinstance(msg, actor.BenchmarkFailure):
@@ -182,6 +191,15 @@ class DriverActor(actor.RallyActor):
 
     def complete_current_task(self, driver):
         self.send(driver, CompleteCurrentTask())
+
+    def on_task_finished(self, next_task_scheduled_in):
+        if next_task_scheduled_in > 0:
+            assert next_task_scheduled_in != DriverActor.WAKEUP_INTERVAL_SECONDS, \
+                "Due to a (temporary) workaround the task schedule interval must be different than the wakeup interval."
+            self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in))
+        else:
+            self.coordinator.reset_relative_time()
+        self.send(self.start_sender, TaskFinished(next_task_scheduled_in))
 
     def on_benchmark_complete(self, metrics):
         self.send(self.start_sender, BenchmarkComplete(metrics))
@@ -292,13 +310,15 @@ class Driver:
             else:
                 if self.config.opts("track", "test.mode.enabled"):
                     # don't wait if test mode is enabled and start the next task immediately.
-                    start_next_task = time.perf_counter()
+                    waiting_period = 0
                 else:
                     # start the next task in five seconds (relative to master's timestamp)
                     #
                     # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
                     #             (it doesn't matter too much if we're a few ms off).
-                    start_next_task = time.perf_counter() + 5.0
+                    waiting_period = 5.0
+                self.target.on_task_finished(waiting_period)
+                start_next_task = time.perf_counter() + waiting_period
                 for client_id, driver in enumerate(self.drivers):
                     client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
                     client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
@@ -325,6 +345,10 @@ class Driver:
                     logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
                     for client_id, driver in enumerate(self.drivers):
                         self.target.complete_current_task(driver)
+
+    def reset_relative_time(self):
+        logger.info("Resetting relative time of request metrics store.")
+        self.metrics_store.reset_relative_time()
 
     def finished(self):
         return self.current_step == self.number_of_steps
@@ -426,7 +450,6 @@ class LoadGenerator(actor.RallyActor):
         self.tasks = None
         self.current_task_index = 0
         self.current_task = None
-        self.start_timestamp = None
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
@@ -455,14 +478,14 @@ class LoadGenerator(actor.RallyActor):
                 # we need to wake up more often in test mode
                 if self.config.opts("track", "test.mode.enabled"):
                     self.wakeup_interval = 0.5
-                self.start_timestamp = time.perf_counter()
                 track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
                 self.drive()
             elif isinstance(msg, Drive):
-                logger.debug("LoadGenerator[%d] is continuing its work at task index [%d] on [%f]." %
-                             (self.client_id, self.current_task_index, msg.client_start_timestamp))
+                sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
+                logger.info("LoadGenerator[%d] is continuing its work at task index [%d] on [%f], that is in [%s]." %
+                            (self.client_id, self.current_task_index, msg.client_start_timestamp, sleep_time))
                 self.start_driving = True
-                self.wakeupAfter(datetime.timedelta(seconds=time.perf_counter() - msg.client_start_timestamp))
+                self.wakeupAfter(sleep_time)
             elif isinstance(msg, CompleteCurrentTask):
                 # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
                 # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
@@ -540,7 +563,7 @@ class LoadGenerator(actor.RallyActor):
                             (self.client_id, task))
             else:
                 logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
-                self.sampler = Sampler(self.client_id, task, self.start_timestamp)
+                self.sampler = Sampler(self.client_id, task, start_timestamp=time.perf_counter())
                 schedule = schedule_for(self.track, task, self.client_id)
 
                 executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete)

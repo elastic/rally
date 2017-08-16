@@ -108,6 +108,11 @@ class BenchmarkStopped:
         self.system_metrics = system_metrics
 
 
+class ResetRelativeTime:
+    def __init__(self, reset_in_seconds):
+        self.reset_in_seconds = reset_in_seconds
+
+
 ##############################
 # Mechanic internal messages
 ##############################
@@ -246,6 +251,13 @@ class MechanicActor(actor.RallyActor):
             elif isinstance(msg, BenchmarkStarted):
                 self.transition_when_all_children_responded(
                     sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
+            elif isinstance(msg, ResetRelativeTime):
+                if msg.reset_in_seconds > 0:
+                    self.wakeupAfter(msg.reset_in_seconds)
+                else:
+                    self.reset_relative_time()
+            elif isinstance(msg, thespian.actors.WakeupMessage):
+                self.reset_relative_time()
             elif isinstance(msg, actor.BenchmarkFailure):
                 self.send(self.race_control, msg)
             elif isinstance(msg, OnBenchmarkStop):
@@ -410,7 +422,8 @@ class MechanicActor(actor.RallyActor):
         self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
         self.cluster = self.cluster_launcher.start()
         # push down all meta data again
-        self.send_to_children_and_transition(self.myAddress, ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started", "apply_meta_info")
+        self.send_to_children_and_transition(self.myAddress,
+                                             ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started", "apply_meta_info")
 
     def on_cluster_started(self):
         # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
@@ -424,6 +437,12 @@ class MechanicActor(actor.RallyActor):
     def on_benchmark_started(self):
         self.cluster.on_benchmark_start()
         self.send(self.race_control, BenchmarkStarted())
+
+    def reset_relative_time(self):
+        logger.info("Resetting relative time of cluster system metrics store.")
+        self.metrics_store.reset_relative_time()
+        for m in self.mechanics:
+            self.send(m, ResetRelativeTime(0))
 
     def on_benchmark_stopped(self):
         self.cluster.on_benchmark_stop()
@@ -451,6 +470,7 @@ class NodeMechanicActor(actor.RallyActor):
         self.metrics_store = None
         self.mechanic = None
         self.running = False
+        self.host = None
 
     def receiveMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
@@ -459,6 +479,7 @@ class NodeMechanicActor(actor.RallyActor):
         try:
             logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartNodes):
+                self.host = msg.ip
                 if msg.external:
                     logger.info("Connecting to externally provisioned nodes on [%s]." % msg.ip)
                 else:
@@ -495,6 +516,9 @@ class NodeMechanicActor(actor.RallyActor):
             elif isinstance(msg, ApplyMetricsMetaInfo):
                 self.metrics_store.merge_meta_info(msg.meta_info)
                 self.send(sender, MetricsMetaInfoApplied())
+            elif isinstance(msg, ResetRelativeTime):
+                logger.info("Resetting relative time of system metrics store on host [%s]." % self.host)
+                self.metrics_store.reset_relative_time()
             elif isinstance(msg, OnBenchmarkStart):
                 self.metrics_store.lap = msg.lap
                 self.mechanic.on_benchmark_start()

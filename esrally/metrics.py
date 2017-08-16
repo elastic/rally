@@ -253,6 +253,12 @@ class MetricsStore:
                 raise exceptions.SystemSetupError(msg)
         self._stop_watch.start()
 
+    def reset_relative_time(self):
+        """
+        Resets the internal relative-time counter to zero.
+        """
+        self._stop_watch.start()
+
     @property
     def lap(self):
         return self._lap

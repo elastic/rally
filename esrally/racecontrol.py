@@ -107,6 +107,10 @@ class BenchmarkActor(actor.RallyActor):
                              % (self.race.track_name, self.race.challenge_name, self.race.car))
                 # start running we assume that each race has at least one lap
                 self.run()
+            elif isinstance(msg, driver.TaskFinished):
+                # We choose *NOT* to reset our own metrics store's timer as this one is only used to collect complete metrics records from
+                # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
+                self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
             elif isinstance(msg, actor.BenchmarkCancelled):
                 self.cancelled = True
                 # no need to tell the obvious
