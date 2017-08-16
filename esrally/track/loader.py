@@ -73,7 +73,7 @@ def load_track(cfg):
         included_tasks = cfg.opts("track", "include.tasks")
 
         current_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name),
-                                 os.path.join(data_root, track_name.lower()))
+                                    os.path.join(data_root, track_name.lower()))
         current_track = filter_included_tasks(current_track, filters_from_included_tasks(included_tasks))
 
         if cfg.opts("track", "test.mode.enabled"):

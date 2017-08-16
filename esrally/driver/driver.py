@@ -105,13 +105,6 @@ class BenchmarkComplete:
         self.metrics = metrics
 
 
-class BenchmarkCancelled:
-    """
-    Indicates that the benchmark has been cancelled (by the user).
-    """
-    pass
-
-
 class DriverActor(actor.RallyActor):
     WAKEUP_INTERVAL_SECONDS = 1
     """
@@ -142,7 +135,7 @@ class DriverActor(actor.RallyActor):
                 logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
                 self.coordinator.close()
                 self.send(self.start_sender, msg)
-            elif isinstance(msg, BenchmarkCancelled):
+            elif isinstance(msg, actor.BenchmarkCancelled):
                 logger.info("Main driver received a notification that the benchmark has been cancelled.")
                 self.coordinator.close()
                 self.send(self.start_sender, msg)
@@ -491,7 +484,7 @@ class LoadGenerator(actor.RallyActor):
                     if self.cancel.is_set():
                         logger.info("LoadGenerator[%s] has detected that benchmark has been cancelled. Notifying master..." %
                                     str(self.client_id))
-                        self.send(self.master, BenchmarkCancelled())
+                        self.send(self.master, actor.BenchmarkCancelled())
                     elif self.executor_future is not None and self.executor_future.done():
                         e = self.executor_future.exception(timeout=0)
                         if e:

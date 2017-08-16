@@ -25,6 +25,13 @@ class BenchmarkFailure:
         self.cause = cause
 
 
+class BenchmarkCancelled:
+    """
+    Indicates that the benchmark has been cancelled (by the user).
+    """
+    pass
+
+
 class RallyActor(thespian.actors.Actor):
     def __init__(self):
         super().__init__()

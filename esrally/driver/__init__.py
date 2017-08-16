@@ -1,2 +1,2 @@
 # expose only the minimum API
-from .driver import DriverActor, StartBenchmark, BenchmarkComplete, BenchmarkCancelled
+from .driver import DriverActor, StartBenchmark, BenchmarkComplete
