@@ -1,3 +1,21 @@
+### 0.7.0
+
+#### Highlights
+
+* [#71](https://github.com/elastic/rally/issues/71): Allow to benchmark multi-machine clusters
+* [#60](https://github.com/elastic/rally/issues/60): Allow benchmarking with plugins
+
+#### Enhancements
+
+* [#314](https://github.com/elastic/rally/issues/314): Allow to filter executed tasks
+* [#312](https://github.com/elastic/rally/issues/312) (Breaking): Move action-and-meta-data to (indexing) type definition
+* [#308](https://github.com/elastic/rally/issues/308): Unify implementation of track and team repositories
+* [#307](https://github.com/elastic/rally/issues/307): Check Python version on startup and fail if it does not meet requirements
+* [#304](https://github.com/elastic/rally/issues/304): Make distribution repositories configurable
+* [#296](https://github.com/elastic/rally/issues/296): Verify whether the number of documents in the track is correct
+* [#278](https://github.com/elastic/rally/issues/278): relative-time should be reset per task
+* [#228](https://github.com/elastic/rally/issues/228): Increased flexibility for termination of parallel tasks
+
 ### 0.6.2
 
 #### Enhancements
