@@ -113,9 +113,9 @@ class BenchmarkActor(actor.RallyActor):
                 self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
             elif isinstance(msg, actor.BenchmarkCancelled):
                 self.cancelled = True
-                # no need to tell the obvious
-                if sender != self.start_sender:
-                    self.send(self.start_sender, msg)
+                # even notify the start sender if it is the originator. The reason is that we call #ask() which waits for a reply.
+                # We also need to ask in order to avoid races between this notification and the following ActorExitRequest.
+                self.send(self.start_sender, msg)
             elif isinstance(msg, actor.BenchmarkFailure):
                 self.error = True
                 self.send(self.start_sender, msg)
@@ -271,14 +271,14 @@ def race(cfg, sources=False, build=False, distribution=False, external=False, do
             logger.info("Benchmark has finished successfully.")
         # may happen if one of the load generators has detected that the user has cancelled the benchmark.
         elif isinstance(result, actor.BenchmarkCancelled):
-            logger.info("User has cancelled the benchmark.")
+            logger.info("User has cancelled the benchmark (detected by actor).")
         elif isinstance(result, actor.BenchmarkFailure):
             logger.error("A benchmark failure has occurred")
             raise exceptions.RallyError(result.message, result.cause)
         else:
             raise exceptions.RallyError("Got an unexpected result during benchmarking: [%s]." % str(result))
     except KeyboardInterrupt:
-        logger.info("User has cancelled the benchmark.")
+        logger.info("User has cancelled the benchmark (detected by race control).")
         # notify the coordinator so it can properly handle this state. Do it blocking so we don't have a race between this message
         # and the actor exit request.
         actor_system.ask(benchmark_actor, actor.BenchmarkCancelled())
