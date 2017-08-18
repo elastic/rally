@@ -467,6 +467,7 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_query_match_all(self, es):
         es.search.return_value = {
+            "timed_out": False,
             "hits": {
                 "total": 2,
                 "hits": [
@@ -499,12 +500,14 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
         self.assertEqual(2, result["hits"])
+        self.assertFalse(result["timed_out"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_only_one_page(self, es):
         # page 1
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
+            "timed_out": False,
             "hits": {
                 "hits": [
                     {
@@ -545,12 +548,14 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["pages"])
         self.assertEqual(2, results["hits"])
         self.assertEqual("ops", results["unit"])
+        self.assertFalse(results["timed_out"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_with_explicit_number_of_pages(self, es):
         # page 1
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
+            "timed_out": False,
             "hits": {
                 "hits": [
                     {
@@ -566,6 +571,7 @@ class QueryRunnerTests(TestCase):
             # page 2
             {
                 "_scroll_id": "some-scroll-id",
+                "timed_out": True,
                 "hits": {
                     "hits": [
                         {
@@ -602,12 +608,14 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["pages"])
         self.assertEqual(3, results["hits"])
         self.assertEqual("ops", results["unit"])
+        self.assertTrue(results["timed_out"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_early_termination(self, es):
         # page 1
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
+            "timed_out": False,
             "hits": {
                 "hits": [
                     {
@@ -620,6 +628,7 @@ class QueryRunnerTests(TestCase):
             # page 2 has no results
             {
                 "_scroll_id": "some-scroll-id",
+                "timed_out": False,
                 "hits": {
                     "hits": []
                 }
@@ -658,6 +667,7 @@ class QueryRunnerTests(TestCase):
         # page 1
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
+            "timed_out": False,
             "hits": {
                 "hits": [
                     {
@@ -679,6 +689,7 @@ class QueryRunnerTests(TestCase):
             # page 2 has no results
             {
                 "_scroll_id": "some-scroll-id",
+                "timed_out": False,
                 "hits": {
                     "hits": []
                 }
@@ -711,3 +722,4 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["pages"])
         self.assertEqual(4, results["hits"])
         self.assertEqual("ops", results["unit"])
+        self.assertFalse(results["timed_out"])

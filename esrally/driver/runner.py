@@ -411,6 +411,8 @@ class Query(Runner):
                   Always 1 for normal queries and the number of retrieved pages for scroll queries.
     * ``unit``: The unit in which to interpret ``weight``. Always "ops".
     * ``hits``: Total number of hits for this operation.
+    * ``timed_out``: Whether the search has timed out. For scroll queries, this flag is ``True`` if the flag was ``True`` for any of the
+                     queries issued.
 
     For scroll queries we also return:
 
@@ -440,12 +442,14 @@ class Query(Runner):
             "weight": 1,
             "unit": "ops",
             "hits": hits,
+            "timed_out": r["timed_out"]
         }
 
     def scroll_query(self, es, params):
         request_params = params.get("request_params", {})
         hits = 0
         retrieved_pages = 0
+        timed_out = False
         self.es = es
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
@@ -471,6 +475,7 @@ class Query(Runner):
                 # (1.x does not support a proper JSON body in search scroll requests).
                 r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
             hit_count = len(r["hits"]["hits"])
+            timed_out = timed_out or r["timed_out"]
             hits += hit_count
             retrieved_pages += 1
             if hit_count == 0:
@@ -482,6 +487,7 @@ class Query(Runner):
             "pages": retrieved_pages,
             "hits": hits,
             "unit": "ops",
+            "timed_out": timed_out
         }
 
     def __exit__(self, exc_type, exc_val, exc_tb):
