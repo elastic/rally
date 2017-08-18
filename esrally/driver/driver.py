@@ -92,6 +92,8 @@ class JoinPointReached:
 
     def __init__(self, client_id, task):
         self.client_id = client_id
+        # Using perf_counter here is fine even in the distributed case. Although we "leak" this value to other machines, we will only
+        # ever interpret this value on the same machine (see `Drive` and the implementation in `Driver#joinpoint_reached()`).
         self.client_local_timestamp = time.perf_counter()
         self.task = task
 
@@ -106,7 +108,8 @@ class BenchmarkComplete:
 
 
 class TaskFinished:
-    def __init__(self, next_task_scheduled_in):
+    def __init__(self, metrics, next_task_scheduled_in):
+        self.metrics = metrics
         self.next_task_scheduled_in = next_task_scheduled_in
 
 
@@ -192,14 +195,14 @@ class DriverActor(actor.RallyActor):
     def complete_current_task(self, driver):
         self.send(driver, CompleteCurrentTask())
 
-    def on_task_finished(self, next_task_scheduled_in):
+    def on_task_finished(self, metrics, next_task_scheduled_in):
         if next_task_scheduled_in > 0:
             assert next_task_scheduled_in != DriverActor.WAKEUP_INTERVAL_SECONDS, \
                 "Due to a (temporary) workaround the task schedule interval must be different than the wakeup interval."
             self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in))
         else:
             self.coordinator.reset_relative_time()
-        self.send(self.start_sender, TaskFinished(next_task_scheduled_in))
+        self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
 
     def on_benchmark_complete(self, metrics):
         self.send(self.start_sender, BenchmarkComplete(metrics))
@@ -293,14 +296,16 @@ class Driver:
             # clear per step
             self.most_recent_sample_per_client = {}
             self.current_step += 1
+
+            # TODO #217: We still should postprocess samples only at the end of a task but maybe we can send latency and service_time
+            # samples in microbatches.
+            logger.info("Postprocessing samples...")
+            self.post_process_samples()
+            m = self.metrics_store.to_externalizable(clear=True)
+            self.raw_samples = []
+
             if self.finished():
                 logger.info("All steps completed.")
-                # Don't terminate any actors here; this will be triggered from outside. We shutdown child actors in our shutdown procedure.
-                logger.info("Postprocessing samples...")
-                self.post_process_samples()
-                # TODO #257: In case we are not on a single machine, spilling to disk will not work. Check and reimplement if necessary.
-                # Spill to disk to guard against a too large representation of metrics store.
-                m = self.metrics_store.to_externalizable(spill_to_disk=True)
                 logger.info("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
@@ -317,7 +322,9 @@ class Driver:
                     # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
                     #             (it doesn't matter too much if we're a few ms off).
                     waiting_period = 5.0
-                self.target.on_task_finished(waiting_period)
+                self.target.on_task_finished(m, waiting_period)
+                # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
+                # a relative instead of an absolute value.
                 start_next_task = time.perf_counter() + waiting_period
                 for client_id, driver in enumerate(self.drivers):
                     client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]

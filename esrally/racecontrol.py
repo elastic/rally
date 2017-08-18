@@ -108,6 +108,9 @@ class BenchmarkActor(actor.RallyActor):
                 # start running we assume that each race has at least one lap
                 self.run()
             elif isinstance(msg, driver.TaskFinished):
+                logger.info("Task has finished.")
+                logger.info("Bulk adding request metrics to metrics store.")
+                self.metrics_store.bulk_add(msg.metrics)
                 # We choose *NOT* to reset our own metrics store's timer as this one is only used to collect complete metrics records from
                 # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
                 self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
