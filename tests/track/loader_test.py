@@ -4,6 +4,7 @@ from unittest import TestCase
 import jinja2
 
 from esrally import exceptions
+from esrally.utils import io
 from esrally.track import loader
 
 
@@ -264,8 +265,38 @@ class TrackPostProcessingTests(TestCase):
                          loader.post_process_for_test_mode(self.as_track(track_specification)))
 
     def as_track(self, track_specification):
-        reader = loader.TrackSpecificationReader()
-        return reader("unittest", track_specification, "/mappings", "/data")
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/type-mappings.json": ['{"test-type": "empty-for-test"}']
+        }))
+        return reader("unittest", track_specification, "/mappings")
+
+
+class TrackPathTests(TestCase):
+    def test_sets_absolute_path(self):
+        from esrally import config
+        from esrally.track import track
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
+
+        default_challenge = track.Challenge("default", description="default challenge", default=True, schedule=[
+            track.Task(operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
+        ])
+        another_challenge = track.Challenge("other", description="non-default challenge", default=False)
+        t = track.Track(name="unittest", short_description="unittest track", challenges=[another_challenge, default_challenge],
+                        indices=[
+                            track.Index(name="test",
+                                        auto_managed=True,
+                                        types=[track.Type("docs",
+                                                          mapping={},
+                                                          document_file="docs/documents.json",
+                                                          document_archive="docs/documents.json.bz2")])
+                        ])
+
+        loader.set_absolute_data_path(cfg, t)
+
+        self.assertEqual("/data/docs/documents.json", t.indices[0].types[0].document_file)
+        self.assertEqual("/data/docs/documents.json.bz2", t.indices[0].types[0].document_archive)
 
 
 class TrackFilterTests(TestCase):
@@ -362,7 +393,7 @@ class TrackFilterTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        full_track = reader("unittest", track_specification, "/mappings", "/data")
+        full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(4, len(full_track.challenges[0].schedule))
 
         filtered = loader.filter_included_tasks(full_track, [track.TaskOpNameFilter("index-3"),
@@ -385,7 +416,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'short-description' is missing.", ctx.exception.args[0])
 
     def test_can_read_track_info(self):
@@ -398,7 +429,7 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": []
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)
         self.assertEqual("longer description of this track for unit test", resulting_track.description)
@@ -415,7 +446,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'document-count' is missing.", ctx.exception.args[0])
 
     def test_parse_with_mixed_warmup_iterations_and_measurement(self):
@@ -463,14 +494,16 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
 
-        reader = loader.TrackSpecificationReader()
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+        }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines '3' warmup "
                          "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
                          ctx.exception.args[0])
 
-    def test_parse_with_mixed_warmup_timeperiod_and_iterations(self):
+    def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
             "short-description": "short description for unit test",
             "description": "longer description of this track for unit test",
@@ -515,9 +548,11 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
 
-        reader = loader.TrackSpecificationReader()
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+        }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines a warmup time "
                          "period of '20' seconds and '1000' iterations. Please do not mix time periods and iterations.",
                          ctx.exception.args[0])
@@ -595,8 +630,11 @@ class TrackSpecificationReaderTests(TestCase):
 
             ]
         }
-        reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+            "/mappings/secondary-type-mappings.json": ['{"secondary": "empty-for-test"}'],
+        }))
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)
         self.assertEqual("longer description of this track for unit test", resulting_track.description)
@@ -605,10 +643,11 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0].name)
         self.assertFalse(resulting_track.indices[0].types[0].includes_action_and_meta_data)
-        self.assertEqual("/data/documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
-        self.assertEqual("/data/documents-main.json", resulting_track.indices[0].types[0].document_file)
-        self.assertEqual("/mappings/main-type-mappings.json", resulting_track.indices[0].types[0].mapping_file)
+        self.assertEqual("unittest/documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
+        self.assertEqual("unittest/documents-main.json", resulting_track.indices[0].types[0].document_file)
+        self.assertDictEqual({"main": "empty-for-test"}, resulting_track.indices[0].types[0].mapping)
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
+        self.assertDictEqual({"secondary": "empty-for-test"}, resulting_track.indices[0].types[1].mapping)
         self.assertTrue(resulting_track.indices[0].types[1].includes_action_and_meta_data)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
@@ -632,8 +671,10 @@ class TrackSpecificationReaderTests(TestCase):
             "operations": [],
             "challenges": []
         }
-        reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/default-template.json": ['{"some-index-template": "empty-for-test"}'],
+        }))
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)
         self.assertEqual("longer description of this track for unit test", resulting_track.description)
@@ -641,7 +682,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(1, len(resulting_track.templates))
         self.assertEqual("my-index-template", resulting_track.templates[0].name)
         self.assertEqual("*", resulting_track.templates[0].pattern)
-        self.assertEqual("/mappings/default-template.json", resulting_track.templates[0].template_file)
+        self.assertEqual({"some-index-template": "empty-for-test"}, resulting_track.templates[0].content)
         self.assertEqual(0, len(resulting_track.challenges))
 
     def test_types_are_optional_for_user_managed_indices(self):
@@ -653,7 +694,7 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": []
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("short description for unit test", resulting_track.short_description)
         self.assertEqual("longer description of this track for unit test", resulting_track.description)
@@ -698,7 +739,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Duplicate challenge with name 'test-challenge'.", ctx.exception.args[0])
 
     def test_not_more_than_one_default_challenge_possible(self):
@@ -738,7 +779,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Both 'default-challenge' and 'another-challenge' are defined as default challenges. "
                          "Please define only one of them as default.", ctx.exception.args[0])
 
@@ -777,7 +818,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. No default challenge specified. Please edit the track and add \"default\": true "
                          "to one of the challenges challenge, another-challenge.", ctx.exception.args[0])
 
@@ -816,7 +857,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(2, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
@@ -846,7 +887,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
@@ -876,7 +917,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(10, resulting_track.challenges[0].schedule[0].params["target-throughput"])
 
     def test_supports_target_interval(self):
@@ -904,7 +945,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(5, resulting_track.challenges[0].schedule[0].params["target-interval"])
 
     def test_parallel_tasks_with_default_values(self):
@@ -959,7 +1000,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         parallel_element = resulting_track.challenges[0].schedule[0]
         parallel_tasks = parallel_element.tasks
 
@@ -1026,7 +1067,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         parallel_element = resulting_track.challenges[0].schedule[0]
         parallel_tasks = parallel_element.tasks
 
@@ -1076,7 +1117,7 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings", "/data")
+        resulting_track = reader("unittest", track_specification, "/mappings")
         parallel_element = resulting_track.challenges[0].schedule[0]
         parallel_tasks = parallel_element.tasks
 
@@ -1130,7 +1171,7 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
 
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' is marked with 'completed-by' "
                          "with task name 'non-existing-task' but no task with this name exists.", ctx.exception.args[0])
 
@@ -1170,6 +1211,6 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
 
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings", "/data")
+            reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
                          "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.", ctx.exception.args[0])

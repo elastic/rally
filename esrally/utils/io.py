@@ -52,6 +52,19 @@ class FileSource:
         return self.file_name
 
 
+class DictStringFileSourceFactory:
+    """
+    Factory that can create `StringAsFileSource` for tests. Based on the provided dict, it will create a proper `StringAsFileSource`.
+
+    It is intended for scenarios where multiple files may be read by client code.
+    """
+    def __init__(self, name_to_contents):
+        self.name_to_contents = name_to_contents
+
+    def __call__(self, name, mode):
+        return StringAsFileSource(self.name_to_contents[name], mode)
+
+
 class StringAsFileSource:
     """
     Implementation of ``FileSource`` intended for tests. It's kept close to ``FileSource`` to simplify maintenance but it is not meant to

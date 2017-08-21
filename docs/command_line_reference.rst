@@ -266,6 +266,20 @@ Here are a few common examples:
 * Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Please avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
 
+``load-driver-hosts``
+~~~~~~~~~~~~~~~~~~~~~
+
+By default, Rally will run its load driver on the same machine where you start the benchmark. However, if you benchmark larger clusters one machine may not be enough to generate sufficient load. Hence, you can specify a comma-separated list of hosts which should be used to generate load with ``--load-driver-hosts``.
+
+**Example**
+
+ ::
+
+   esrally --load-driver-hosts=10.17.20.5,10.17.20.6
+
+In the example, above Rally will generate load from the hosts ``10.17.20.5`` and ``10.17.20.6``. For this to work, you need to start a Rally daemon on these machines, see :ref:`distributing the load test driver <recipe_distributed_load_driver>` for a complete example.
+
+
 ``target-hosts``
 ~~~~~~~~~~~~~~~~
 

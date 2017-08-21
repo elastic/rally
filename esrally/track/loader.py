@@ -37,12 +37,9 @@ def tracks(cfg):
 
     repo = track_repo(cfg)
     reader = TrackFileReader(cfg)
-    data_root = cfg.opts("benchmarks", "local.dataset.cache")
     return [reader.read(track_name,
                         track_file(repo, track_name),
-                        track_dir(repo, track_name),
-                        "%s/%s" % (data_root, track_name.lower())
-                        )
+                        track_dir(repo, track_name))
             for track_name in track_names(repo)]
 
 
@@ -69,11 +66,9 @@ def load_track(cfg):
     try:
         repo = track_repo(cfg)
         reader = TrackFileReader(cfg)
-        data_root = cfg.opts("benchmarks", "local.dataset.cache")
         included_tasks = cfg.opts("track", "include.tasks")
 
-        current_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name),
-                                    os.path.join(data_root, track_name.lower()))
+        current_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name))
         current_track = filter_included_tasks(current_track, filters_from_included_tasks(included_tasks))
 
         if cfg.opts("track", "test.mode.enabled"):
@@ -88,7 +83,6 @@ def load_track(cfg):
 
 def load_track_plugins(cfg, register_runner, register_scheduler):
     track_name = cfg.opts("track", "track.name")
-    # TODO #257: If we distribute drivers we need to ensure that the correct branch in the track repo is checked out
     repo = track_repo(cfg, fetch=False, update=False)
     track_plugin_path = track_dir(repo, track_name)
 
@@ -98,6 +92,24 @@ def load_track_plugins(cfg, register_runner, register_scheduler):
         plugin_reader.load()
     else:
         logger.debug("Track [%s] in path [%s] does not define any track plugins." % (track_name, track_plugin_path))
+
+
+def set_absolute_data_path(cfg, t):
+    """
+    Sets an absolute data path on all document files in this track. Internally we store only relative paths in the track as long as possible
+    as the data root directory may be different on each host. In the end we need to have an absolute path though when we want to read the
+    file on the target host.
+
+    :param cfg: The config object.
+    :param t: The track to modify.
+    """
+    data_root = cfg.opts("benchmarks", "local.dataset.cache")
+    for index in t.indices:
+        for t in index.types:
+            if t.document_archive:
+                t.document_archive = os.path.join(data_root, t.document_archive)
+            if t.document_file:
+                t.document_file = os.path.join(data_root, t.document_file)
 
 
 def track_repo(cfg, fetch=True, update=True):
@@ -209,22 +221,24 @@ def prepare_track(track, cfg):
     if not track.source_root_url:
         logger.info("Track [%s] does not specify a source root URL. Assuming data are available locally." % track.name)
 
+    data_root = cfg.opts("benchmarks", "local.dataset.cache")
     for index in track.indices:
         for type in index.types:
             if type.document_archive:
+                absolute_archive_path = os.path.join(data_root, type.document_archive)
                 if track.source_root_url:
-                    data_url = "%s/%s" % (track.source_root_url, os.path.basename(type.document_archive))
-                    download(cfg, data_url, type.document_archive, type.compressed_size_in_bytes)
-                if not os.path.exists(type.document_archive):
+                    data_url = "%s/%s" % (track.source_root_url, os.path.basename(absolute_archive_path))
+                    download(cfg, data_url, absolute_archive_path, type.compressed_size_in_bytes)
+                if not os.path.exists(absolute_archive_path):
                     if cfg.opts("track", "test.mode.enabled"):
                         logger.error("[%s] does not exist so assuming that track [%s] does not support test mode." %
-                                     (type.document_archive, track))
+                                     (absolute_archive_path, track))
                         raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
                                                    "disable test mode and retry." % track)
                     else:
-                        logger.error("[%s] does not exist." % type.document_archive)
-                        raise exceptions.DataError("Track data file [%s] is missing." % type.document_archive)
-                decompressed_file_path, was_decompressed = decompress(type.document_archive, type.uncompressed_size_in_bytes)
+                        logger.error("[%s] does not exist." % absolute_archive_path)
+                        raise exceptions.DataError("Track data file [%s] is missing." % absolute_archive_path)
+                decompressed_file_path, was_decompressed = decompress(absolute_archive_path, type.uncompressed_size_in_bytes)
                 # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
                 lines_read = io.prepare_file_offset_table(decompressed_file_path)
                 if lines_read and lines_read != type.number_of_lines:
@@ -370,14 +384,13 @@ class TrackFileReader:
         override_auto_manage_indices = cfg.opts("track", "auto_manage_indices")
         self.read_track = TrackSpecificationReader(override_auto_manage_indices)
 
-    def read(self, track_name, track_spec_file, mapping_dir, data_dir):
+    def read(self, track_name, track_spec_file, mapping_dir):
         """
         Reads a track file, verifies it against the JSON schema and if valid, creates a track.
 
         :param track_name: The name of the track.
         :param track_spec_file: The complete path to the track specification file.
         :param mapping_dir: The directory where the mapping files for this track are stored locally.
-        :param data_dir: The directory where the data file for this track are stored locally.
         :return: A corresponding track instance if the track file is valid.
         """
 
@@ -396,7 +409,7 @@ class TrackFileReader:
                 "Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
                 % (track_name, ve.message,
                    json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
-        return self.read_track(track_name, track_spec, mapping_dir, data_dir)
+        return self.read_track(track_name, track_spec, mapping_dir)
 
 
 class TrackPluginReader:
@@ -436,17 +449,18 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, override_auto_manage_indices=None):
+    def __init__(self, override_auto_manage_indices=None, source=io.FileSource):
         self.name = None
         self.override_auto_manage_indices = override_auto_manage_indices
+        self.source = source
 
-    def __call__(self, track_name, track_specification, mapping_dir, data_dir):
+    def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
         short_description = self._r(track_specification, "short-description")
         description = self._r(track_specification, "description")
         source_root_url = self._r(track_specification, "data-url", mandatory=False)
         meta_data = self._r(track_specification, "meta", mandatory=False)
-        indices = [self._create_index(idx, mapping_dir, data_dir)
+        indices = [self._create_index(idx, mapping_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
         templates = [self._create_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
@@ -480,7 +494,7 @@ class TrackSpecificationReader:
             else:
                 return default_value
 
-    def _create_index(self, index_spec, mapping_dir, data_dir):
+    def _create_index(self, index_spec, mapping_dir):
         index_name = self._r(index_spec, "name")
         if self.override_auto_manage_indices is not None:
             auto_managed = self.override_auto_manage_indices
@@ -489,7 +503,7 @@ class TrackSpecificationReader:
             auto_managed = self._r(index_spec, "auto-managed", mandatory=False, default_value=True)
             logger.info("Using index auto-management setting from track which is set to [%s]." % str(auto_managed))
 
-        types = [self._create_type(type_spec, mapping_dir, data_dir)
+        types = [self._create_type(type_spec, mapping_dir)
                  for type_spec in self._r(index_spec, "types", mandatory=auto_managed, default_value=[])]
         valid_document_data = False
         for type in types:
@@ -506,14 +520,17 @@ class TrackSpecificationReader:
         name = self._r(tpl_spec, "name")
         index_pattern = self._r(tpl_spec, "index-pattern")
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
-        template_file = "%s/%s" % (mapping_dir, self._r(tpl_spec, "template"))
-        return track.IndexTemplate(name, index_pattern, template_file, delete_matching_indices)
+        template_file = os.path.join(mapping_dir, self._r(tpl_spec, "template"))
+        with self.source(template_file, "rt") as f:
+            template_content = json.load(f)
+        return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
-    def _create_type(self, type_spec, mapping_dir, data_dir):
+    def _create_type(self, type_spec, mapping_dir):
         compressed_docs = self._r(type_spec, "documents", mandatory=False)
         if compressed_docs:
-            document_archive = "%s/%s" % (data_dir, compressed_docs)
-            document_file = "%s/%s" % (data_dir, io.splitext(compressed_docs)[0])
+            relative_data_dir = self.name.lower()
+            document_archive = os.path.join(relative_data_dir, compressed_docs)
+            document_file = os.path.join(relative_data_dir, io.splitext(compressed_docs)[0])
             number_of_documents = self._r(type_spec, "document-count")
             compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
             uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
@@ -524,8 +541,12 @@ class TrackSpecificationReader:
             compressed_bytes = 0
             uncompressed_bytes = 0
 
+        mapping_file = os.path.join(mapping_dir, self._r(type_spec, "mapping"))
+        with self.source(mapping_file, "rt") as f:
+            mapping = json.load(f)
+
         return track.Type(name=self._r(type_spec, "name"),
-                          mapping_file="%s/%s" % (mapping_dir, self._r(type_spec, "mapping")),
+                          mapping=mapping,
                           document_file=document_file,
                           document_archive=document_archive,
                           includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data", mandatory=False,

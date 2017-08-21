@@ -553,7 +553,7 @@ class EsRaceStoreTests(TestCase):
 
         t = track.Track(name="unittest", short_description="unittest track",
                         source_root_url="http://example.org",
-                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping_file=None)])],
+                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping={})])],
                         challenges=[
                             track.Challenge(name="index", description="Index", default=True, index_settings=None, schedule=schedule)
                         ])
@@ -653,7 +653,7 @@ class EsResultsStoreTests(TestCase):
 
         t = track.Track(name="unittest-track", short_description="unittest track",
                         source_root_url="http://example.org",
-                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping_file=None)])],
+                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping={})])],
                         challenges=[
                             track.Challenge(name="index", description="Index", default=True, index_settings=None, schedule=schedule)
                         ])
@@ -924,7 +924,7 @@ class FileRaceStoreTests(TestCase):
 
         t = track.Track(name="unittest", short_description="unittest track",
                         source_root_url="http://example.org",
-                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping_file=None)])],
+                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping={})])],
                         challenges=[
                             track.Challenge(name="index", description="Index", default=True, index_settings=None, schedule=schedule)
                         ])

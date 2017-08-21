@@ -2,11 +2,11 @@ import unittest.mock as mock
 import threading
 import collections
 from unittest import TestCase
+from datetime import datetime
 
-from esrally import metrics, track, exceptions
+from esrally import metrics, track, exceptions, config
 from esrally.driver import driver
 from esrally.track import params
-from esrally.utils import io
 
 
 class DriverTestParamSource:
@@ -24,6 +24,154 @@ class DriverTestParamSource:
 
     def params(self):
         return self._params
+
+
+class DriverTests(TestCase):
+    def __init__(self, methodName='runTest'):
+        super().__init__(methodName)
+        self.cfg = None
+        self.track = None
+
+    def setUp(self):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "system", "time.start", datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
+        self.cfg.add(config.Scope.application, "track", "challenge.name", "default")
+        self.cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
+        self.cfg.add(config.Scope.application, "mechanic", "car.name", "default")
+        self.cfg.add(config.Scope.application, "client", "hosts", ["localhost:9200"])
+        self.cfg.add(config.Scope.application, "client", "options", {})
+        self.cfg.add(config.Scope.application, "driver", "cluster.health", "green")
+        self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
+
+        default_challenge = track.Challenge("default", description="default challenge", default=True, schedule=[
+            track.Task(operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
+        ])
+        another_challenge = track.Challenge("other", description="non-default challenge", default=False)
+        self.track = track.Track(name="unittest", short_description="unittest track", challenges=[another_challenge, default_challenge])
+
+    def create_test_driver_target(self):
+        track_preparator = "track_preparator_marker"
+        client = "client_marker"
+        attrs = {
+            "create_track_preparator.return_value": track_preparator,
+            "create_client.return_value": client
+        }
+        return mock.Mock(**attrs)
+
+    @mock.patch("esrally.driver.driver.setup_template")
+    @mock.patch("esrally.driver.driver.setup_index")
+    @mock.patch("esrally.driver.driver.wait_for_status")
+    @mock.patch("esrally.utils.net.resolve")
+    def test_start_benchmark_and_prepare_track(self, resolve, wait_for_status, setup_index, setup_template):
+        # override load driver host
+        self.cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", ["10.5.5.1", "10.5.5.2"])
+        resolve.side_effect = ["10.5.5.1", "10.5.5.2"]
+
+        target = self.create_test_driver_target()
+        d = driver.Driver(target, self.cfg)
+
+        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+
+        target.create_track_preparator.assert_has_calls(calls=[
+            mock.call("10.5.5.1"),
+            mock.call("10.5.5.2"),
+        ])
+
+        target.on_prepare_track.assert_called_once_with(["track_preparator_marker", "track_preparator_marker"], self.cfg, self.track)
+
+        d.after_track_prepared()
+
+        target.create_client.assert_has_calls(calls=[
+            mock.call(0, "10.5.5.1"),
+            mock.call(1, "10.5.5.2"),
+            mock.call(2, "10.5.5.1"),
+            mock.call(3, "10.5.5.2"),
+        ])
+
+        # Did we start all load generators? There is no specific mock assert for this...
+        self.assertEqual(4, target.start_load_generator.call_count)
+
+    @mock.patch("esrally.driver.driver.setup_template")
+    @mock.patch("esrally.driver.driver.setup_index")
+    @mock.patch("esrally.driver.driver.wait_for_status")
+    def test_assign_drivers_round_robin(self, wait_for_status, setup_index, setup_template):
+        target = self.create_test_driver_target()
+        d = driver.Driver(target, self.cfg)
+
+        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+
+        target.create_track_preparator.assert_called_once_with("localhost")
+        target.on_prepare_track.assert_called_once_with(["track_preparator_marker"], self.cfg, self.track)
+
+        d.after_track_prepared()
+
+        target.create_client.assert_has_calls(calls=[
+            mock.call(0, "localhost"),
+            mock.call(1, "localhost"),
+            mock.call(2, "localhost"),
+            mock.call(3, "localhost"),
+        ])
+
+        # Did we start all load generators? There is no specific mock assert for this...
+        self.assertEqual(4, target.start_load_generator.call_count)
+
+    @mock.patch("esrally.driver.driver.setup_template")
+    @mock.patch("esrally.driver.driver.setup_index")
+    @mock.patch("esrally.driver.driver.wait_for_status")
+    def test_client_reaches_join_point_others_still_executing(self, wait_for_status, setup_index, setup_template):
+        target = self.create_test_driver_target()
+        d = driver.Driver(target, self.cfg)
+
+        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+        d.after_track_prepared()
+
+        self.assertEqual(0, len(d.clients_completed_current_step))
+
+        d.joinpoint_reached(client_id=0, client_local_timestamp=10, task=driver.JoinPoint(id=0))
+
+        self.assertEqual(1, len(d.clients_completed_current_step))
+
+        target.on_task_finished.assert_not_called()
+        target.drive_at.assert_not_called()
+
+    @mock.patch("esrally.driver.driver.setup_template")
+    @mock.patch("esrally.driver.driver.setup_index")
+    @mock.patch("esrally.driver.driver.wait_for_status")
+    def test_client_reaches_join_point_which_completes_parent(self, wait_for_status, setup_index, setup_template):
+        target = self.create_test_driver_target()
+        d = driver.Driver(target, self.cfg)
+
+        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+        d.after_track_prepared()
+
+        self.assertEqual(0, len(d.clients_completed_current_step))
+
+        # it does not matter what we put into `clients_executing_completing_task` We choose to put the client id into it.
+        d.joinpoint_reached(client_id=0, client_local_timestamp=10, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+
+        self.assertEqual(-1, d.current_step)
+        self.assertEqual(1, len(d.clients_completed_current_step))
+        # notified all drivers that they should complete the current task ASAP
+        self.assertEqual(4, target.complete_current_task.call_count)
+
+        # awaiting responses of other clients
+        d.joinpoint_reached(client_id=1, client_local_timestamp=11, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        self.assertEqual(-1, d.current_step)
+        self.assertEqual(2, len(d.clients_completed_current_step))
+
+        d.joinpoint_reached(client_id=2, client_local_timestamp=12, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        self.assertEqual(-1, d.current_step)
+        self.assertEqual(3, len(d.clients_completed_current_step))
+
+        d.joinpoint_reached(client_id=3, client_local_timestamp=13, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+
+        # by now the previous step should be considered completed and we are at the next one
+        self.assertEqual(0, d.current_step)
+        self.assertEqual(0, len(d.clients_completed_current_step))
+
+        target.on_task_finished.assert_called_once()
+        self.assertEqual(4, target.drive_at.call_count)
 
 
 class ScheduleTestCase(TestCase):
@@ -207,7 +355,7 @@ class IndexManagementTests(TestCase):
 
         index = track.Index(name="test-index",
                             auto_managed=True,
-                            types=[track.Type(name="test-type", mapping_file=['{"test-type": "empty-for-test"}'])])
+                            types=[track.Type(name="test-type", mapping={"test-type": "empty-for-test"})])
         index_settings = {
             "index.number_of_replicas": 0
         }
@@ -219,7 +367,7 @@ class IndexManagementTests(TestCase):
                 "test-type": "empty-for-test"
             }
         }
-        driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
+        driver.setup_index(es, index, index_settings)
 
         es.indices.exists.assert_called_with(index="test-index")
         es.indices.delete.assert_not_called()
@@ -231,7 +379,7 @@ class IndexManagementTests(TestCase):
 
         index = track.Index(name="test-index",
                             auto_managed=True,
-                            types=[track.Type(name="test-type", mapping_file=['{"test-type": "empty-for-test"}'])])
+                            types=[track.Type(name="test-type", mapping={"test-type": "empty-for-test"})])
         index_settings = {
             "index.number_of_replicas": 0
         }
@@ -243,7 +391,7 @@ class IndexManagementTests(TestCase):
                 "test-type": "empty-for-test"
             }
         }
-        driver.setup_index(es, index, index_settings, source=io.StringAsFileSource)
+        driver.setup_index(es, index, index_settings)
 
         es.indices.exists.assert_called_with(index="test-index")
         es.indices.delete.assert_called_with(index="test-index")

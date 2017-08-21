@@ -418,7 +418,7 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("'batch-size' must be a multiple of 'bulk-size'", ctx.exception.args[0])
 
     def test_create_with_metadata_in_source_file_but_conflicts(self):
-        type1 = track.Type("type1", mapping_file="", number_of_documents=10, includes_action_and_meta_data=True)
+        type1 = track.Type("type1", mapping={}, number_of_documents=10, includes_action_and_meta_data=True)
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
@@ -536,7 +536,7 @@ class BulkDataGeneratorTests(TestCase):
 
     def test_generate_two_bulks(self):
         self.maxDiff = None
-        type1 = track.Type("type1", mapping_file="", number_of_documents=10)
+        type1 = track.Type("type1", mapping={}, number_of_documents=10)
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, indices=[index1],
@@ -571,7 +571,7 @@ class BulkDataGeneratorTests(TestCase):
         }, all_bulks[1])
 
     def test_internal_params_take_precedence(self):
-        type1 = track.Type("type1", mapping_file="", number_of_documents=3)
+        type1 = track.Type("type1", mapping={}, number_of_documents=3)
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, indices=[index1], batch_size=3, bulk_size=3,
@@ -639,7 +639,7 @@ class ParamsRegistrationTests(TestCase):
 
 class SearchParamSourceTests(TestCase):
     def test_passes_request_parameters(self):
-        type1 = track.Type("type1", mapping_file="", number_of_documents=3)
+        type1 = track.Type("type1", mapping={}, number_of_documents=3)
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
         source = params.SearchParamSource(indices=[index1], params={

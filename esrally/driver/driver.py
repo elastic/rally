@@ -1,16 +1,15 @@
 import concurrent.futures
 import threading
 import datetime
-import json
 import logging
 import queue
 import socket
 import time
 
 import thespian.actors
-from esrally import actor, exceptions, metrics, track, client, PROGRAM_NAME
+from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME
 from esrally.driver import runner, scheduler
-from esrally.utils import convert, console, versions, io
+from esrally.utils import convert, console, versions, net
 
 logger = logging.getLogger("rally.driver")
 profile_logger = logging.getLogger("rally.profile")
@@ -37,6 +36,24 @@ class StartBenchmark:
         self.config = config
         self.track = track
         self.metrics_meta_info = metrics_meta_info
+
+
+class PrepareTrack:
+    """
+    Initiates preparation of a track.
+
+    """
+    def __init__(self, cfg, track):
+        """
+        :param cfg: Rally internal configuration object.
+        :param track: The track to use.
+        """
+        self.config = cfg
+        self.track = track
+
+
+class TrackPrepared:
+    pass
 
 
 class StartLoadGenerator:
@@ -131,6 +148,9 @@ class DriverActor(actor.RallyActor):
             logger.debug("Driver#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartBenchmark):
                 self.start_benchmark(msg, sender)
+            elif isinstance(msg, TrackPrepared):
+                self.transition_when_all_children_responded(sender, msg,
+                                                            expected_status=None, new_status=None, transition=self.after_track_prepared)
             elif isinstance(msg, JoinPointReached):
                 self.coordinator.joinpoint_reached(msg.client_id, msg.client_local_timestamp, msg.task)
             elif isinstance(msg, UpdateSamples):
@@ -158,12 +178,16 @@ class DriverActor(actor.RallyActor):
                     self.send(driver, thespian.actors.ActorExitRequest())
                 logger.info("Main driver has notified all load generators of termination.")
             elif isinstance(msg, thespian.actors.ChildActorExited):
-                driver_index = self.coordinator.drivers.index(msg.childAddress)
-                if self.status == "exiting":
-                    logger.info("Load generator [%d] has exited." % driver_index)
+                # is it a driver?
+                if msg.childAddress in self.coordinator.drivers:
+                    driver_index = self.coordinator.drivers.index(msg.childAddress)
+                    if self.status == "exiting":
+                        logger.info("Load generator [%d] has exited." % driver_index)
+                    else:
+                        logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
+                        self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
                 else:
-                    logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
-                    self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
+                    logger.info("A track preparator has exited.")
             else:
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
@@ -181,10 +205,10 @@ class DriverActor(actor.RallyActor):
         self.coordinator.start_benchmark(msg.track, msg.lap, msg.metrics_meta_info)
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, client_id):
+    def create_client(self, client_id, host):
         return self.createActor(LoadGenerator,
                                 globalName="/rally/driver/worker/%s" % str(client_id),
-                                targetActorRequirements={"coordinator": True})
+                                targetActorRequirements=self._requirements(host))
 
     def start_load_generator(self, driver, client_id, cfg, track, allocations):
         self.send(driver, StartLoadGenerator(client_id, cfg, track, allocations))
@@ -204,11 +228,66 @@ class DriverActor(actor.RallyActor):
             self.coordinator.reset_relative_time()
         self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
 
+    def create_track_preparator(self, host):
+        return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
+
+    def _requirements(self, host):
+        if host == "localhost":
+            return {"coordinator": True}
+        else:
+            return {"ip": host}
+
+    def on_prepare_track(self, preparators, cfg, track):
+        self.children = preparators
+        msg = PrepareTrack(cfg, track)
+        for child in self.children:
+            self.send(child, msg)
+
+    def after_track_prepared(self):
+        for child in self.children:
+            self.send(child, thespian.actors.ActorExitRequest())
+        self.children = []
+        self.coordinator.after_track_prepared()
+
     def on_benchmark_complete(self, metrics):
         self.send(self.start_sender, BenchmarkComplete(metrics))
 
     def update_samples(self, msg):
         self.coordinator.update_samples(msg.samples)
+
+
+def load_local_config(coordinator_config):
+    cfg = config.Config(config_name=coordinator_config.name)
+    cfg.load_config()
+    cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+    # only copy the relevant bits
+    cfg.add_all(coordinator_config, "system")
+    cfg.add_all(coordinator_config, "track")
+    cfg.add_all(coordinator_config, "driver")
+    cfg.add_all(coordinator_config, "client")
+    # due to distribution version...
+    cfg.add_all(coordinator_config, "mechanic")
+    return cfg
+
+
+class TrackPreparationActor(actor.RallyActor):
+    def __init__(self):
+        super().__init__()
+        actor.RallyActor.configure_logging(logger)
+        self.start_sender = None
+
+    def receiveMessage(self, msg, sender):
+        try:
+            if isinstance(msg, PrepareTrack):
+                self.start_sender = sender
+                # load node-specific config to have correct paths available
+                cfg = load_local_config(msg.config)
+                logger.info("Preparing track [%s]" % msg.track.name)
+                track.prepare_track(msg.track, cfg)
+                self.send(sender, TrackPrepared())
+        except BaseException as e:
+            logger.exception("TrackPreparationActor encountered a fatal exception. Shutting down.")
+            self.send(self.start_sender, actor.BenchmarkFailure("Could not prepare track", e))
 
 
 class Driver:
@@ -226,6 +305,7 @@ class Driver:
         self.track = None
         self.challenge = None
         self.metrics_store = None
+        self.load_driver_hosts = []
         self.drivers = []
 
         self.progress_reporter = console.progress()
@@ -245,18 +325,24 @@ class Driver:
     def start_benchmark(self, t, lap, metrics_meta_info):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
+        self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
+        # create - but do not yet open - the metrics store as an internal timer starts when we open it.
+        self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=metrics_meta_info, lap=lap)
+        for host in self.config.opts("driver", "load_driver_hosts"):
+            if host != "localhost":
+                self.load_driver_hosts.append(net.resolve(host))
+            else:
+                self.load_driver_hosts.append(host)
 
+        preps = [self.target.create_track_preparator(h) for h in self.load_driver_hosts]
+        self.target.on_prepare_track(preps, self.config, self.track)
+
+    def after_track_prepared(self):
         track_name = self.track.name
         challenge_name = self.challenge.name
         car_name = self.config.opts("mechanic", "car.name")
 
-        logger.info("Preparing track [%s]" % track_name)
-        # TODO #257: Reconsider this in case we distribute drivers. *For now* the driver will only be on a single machine, so we're safe.
-        track.prepare_track(self.track, self.config)
-
         logger.info("Benchmark for track [%s], challenge [%s] and car [%s] is about to start." % (track_name, challenge_name, car_name))
-        self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
-        self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=metrics_meta_info, lap=lap)
         invocation = self.config.opts("system", "time.start")
         self.metrics_store.open(invocation, track_name, challenge_name, car_name)
 
@@ -271,7 +357,10 @@ class Driver:
                     (self.number_of_steps, len(self.allocations), self.allocations))
 
         for client_id in range(allocator.clients):
-            self.drivers.append(self.target.create_client(client_id))
+            # allocate clients round-robin to all defined hosts
+            host = self.load_driver_hosts[client_id % len(self.load_driver_hosts)]
+            logger.info("Allocating load generator [%d] on [%s]" % (client_id, host))
+            self.drivers.append(self.target.create_client(client_id, host))
         for client_id, driver in enumerate(self.drivers):
             logger.info("Starting load generator [%d]." % client_id)
             self.target.start_load_generator(driver, client_id, self.config, self.track, self.allocations[client_id])
@@ -297,7 +386,7 @@ class Driver:
             self.most_recent_sample_per_client = {}
             self.current_step += 1
 
-            # TODO #217: We still should postprocess samples only at the end of a task but maybe we can send latency and service_time
+            # TODO #217: We should still postprocess samples only at the end of a task but maybe we can send latency and service_time
             # samples in microbatches.
             logger.info("Postprocessing samples...")
             self.post_process_samples()
@@ -366,7 +455,7 @@ class Driver:
             self.metrics_store.close()
 
     def prepare_cluster(self):
-        expected_cluster_health = self.config.opts("benchmarks", "cluster.health")
+        expected_cluster_health = self.config.opts("driver", "cluster.health")
         es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
         for template in self.track.templates:
             setup_template(es, template)
@@ -475,9 +564,10 @@ class LoadGenerator(actor.RallyActor):
                 logger.info("LoadGenerator[%d] is about to start." % msg.client_id)
                 self.master = sender
                 self.client_id = msg.client_id
-                self.es = client.EsClientFactory(msg.config.opts("client", "hosts"), msg.config.opts("client", "options")).create()
-                self.config = msg.config
+                self.config = load_local_config(msg.config)
+                self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
                 self.track = msg.track
+                track.set_absolute_data_path(self.config, self.track)
                 self.tasks = msg.tasks
                 self.current_task_index = 0
                 self.cancel.clear()
@@ -664,32 +754,28 @@ def select_challenge(config, t):
     return selected_challenge
 
 
-def setup_template(es, template, source=io.FileSource):
+def setup_template(es, template):
     if es.indices.exists_template(template.name):
         es.indices.delete_template(template.name)
     if template.delete_matching_indices:
         es.indices.delete(index=template.pattern)
-    with source(template.template_file, "rt") as f:
-        template_content = f.read()
-    logger.info("create index template [%s] matching indices [%s] with content:\n%s" % (template.name, template.pattern, template_content))
-    es.indices.put_template(name=template.name, body=template_content)
+    logger.info("create index template [%s] matching indices [%s] with content:\n%s" % (template.name, template.pattern, template.content))
+    es.indices.put_template(name=template.name, body=template.content)
 
 
-def setup_index(es, index, index_settings, source=io.FileSource):
+def setup_index(es, index, index_settings):
     if index.auto_managed:
         if es.indices.exists(index=index.name):
             logger.warning("Index [%s] already exists. Deleting it." % index.name)
             es.indices.delete(index=index.name)
         logger.info("Creating index [%s]" % index.name)
         # first we merge the index settings and the mappings for all types
-        body = {}
-        body['settings'] = index_settings
-        if ('mappings' not in body):
-            body['mappings'] = {}
+        body = {
+            "settings": index_settings,
+            "mappings": {}
+        }
         for type in index.types:
-            with source(type.mapping_file, "rt") as f:
-                mappings = f.read()
-            body['mappings'].update(json.loads(mappings))
+            body["mappings"].update(type.mapping)
         # create the index with mappings and settings
         logger.info("create index [%s] with body [%s]" % (index.name, body))
         es.indices.create(index=index.name, body=body)

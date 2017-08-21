@@ -209,6 +209,10 @@ def parse_args():
                  "(default: localhost:9200).",
             default="")  # actually the default is pipeline specific and it is set later
         p.add_argument(
+            "--load-driver-hosts",
+            help="define a comma-separated list of hosts which should generate load (default: localhost).",
+            default="localhost")
+        p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
                  "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
@@ -583,8 +587,9 @@ def main():
     ################################
     # new section name: driver
     ################################
-    cfg.add(config.Scope.applicationOverride, "benchmarks", "cluster.health", args.cluster_health)
+    cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
+    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
         cfg.add(config.Scope.applicationOverride, "client", "hosts", _normalize_hosts(csv_to_list(args.target_hosts)))

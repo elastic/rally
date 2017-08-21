@@ -37,6 +37,9 @@ class RallyActor(thespian.actors.Actor):
         super().__init__()
         # allow to see a thread-dump on SIGQUIT
         faulthandler.register(signal.SIGQUIT, file=sys.stderr)
+        self.children = []
+        self.received_responses = []
+        self.status = None
 
     @staticmethod
     def configure_logging(actor_logger):
@@ -57,6 +60,68 @@ class RallyActor(thespian.actors.Actor):
                 return False
         logger.info("Capabilities [%s] match requirements [%s]." % (capabilities, requirements))
         return True
+
+    def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
+        """
+
+        Waits until all children have sent a specific response message and then transitions this actor to a new status.
+
+        :param sender: The child actor that has responded.
+        :param msg: The response message.
+        :param expected_status: The status in which this actor should be upon calling this method.
+        :param new_status: The new status once all child actors have responded.
+        :param transition: A parameter-less function to call immediately after changing the status.
+        """
+        if self.is_current_status_expected(expected_status):
+            self.received_responses.append(msg)
+            response_count = len(self.received_responses)
+            expected_count = len(self.children)
+
+            logger.info("[%d] of [%d] child actors have responded for transition from [%s] to [%s]." %
+                        (response_count, expected_count, self.status, new_status))
+            if response_count == expected_count:
+                logger.info("All [%d] child actors have responded. Transitioning now from [%s] to [%s]." %
+                            (expected_count, self.status, new_status))
+                # all nodes have responded, change status
+                self.status = new_status
+                self.received_responses = []
+                transition()
+            elif response_count > expected_count:
+                raise exceptions.RallyAssertionError(
+                    "Received [%d] responses but only [%d] were expected to transition from [%s] to [%s]. The responses are: %s" %
+                    (response_count, expected_count, self.status, new_status, self.received_responses))
+        else:
+            raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
+                                                 (type(msg), sender, self.status, expected_status))
+
+    def send_to_children_and_transition(self, sender, msg, expected_status, new_status):
+        """
+
+        Sends the provided message to all child actors and immediately transitions to the new status.
+
+        :param sender: The actor from which we forward this message (in case it is message forwarding). Otherwise our own address.
+        :param msg: The message to send.
+        :param expected_status: The status in which this actor should be upon calling this method.
+        :param new_status: The new status.
+        """
+        if self.is_current_status_expected(expected_status):
+            logger.info("Transitioning from [%s] to [%s]." % (self.status, new_status))
+            self.status = new_status
+            for m in self.children:
+                self.send(m, msg)
+        else:
+            raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
+                                                 (type(msg), sender, self.status, expected_status))
+
+    def is_current_status_expected(self, expected_status):
+        # if we don't expect anything, we're always in the right status
+        if not expected_status:
+            return True
+        # do an explicit check for a list here because strings are also iterable and we have very tight control over this code anyway.
+        elif isinstance(expected_status, list):
+            return self.status in expected_status
+        else:
+            return self.status == expected_status
 
 
 # Defined on top-level to allow pickling

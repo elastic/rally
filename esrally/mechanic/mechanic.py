@@ -223,15 +223,12 @@ class MechanicActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
-        self.mechanics = []
         self.node_ids = []
         self.cfg = None
         self.metrics_store = None
         self.race_control = None
         self.cluster_launcher = None
         self.cluster = None
-        self.status = None
-        self.received_responses = []
 
     def receiveMessage(self, msg, sender):
         try:
@@ -275,6 +272,10 @@ class MechanicActor(actor.RallyActor):
             elif isinstance(msg, NodesStopped):
                 self.metrics_store.bulk_add(msg.system_metrics)
                 self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
+            elif isinstance(msg, thespian.actors.ActorExitRequest):
+                # due to early termination by race control. If it's self-initiated we already took care of the rest.
+                if sender != self.myAddress:
+                    self.send_to_children_and_transition(self.myAddress, msg, expected_status=None, new_status="cluster_stopping")
             elif isinstance(msg, thespian.actors.ChildActorExited):
                 if self.is_current_status_expected("cluster_stopping"):
                     logger.info("Child actor exited while engine is stopping: [%s]" % msg)
@@ -291,73 +292,11 @@ class MechanicActor(actor.RallyActor):
             logger.exception("Cannot process message [%s]" % msg)
             # usually, we'll notify the sender but in case a child sent something that caused an exception we'd rather
             # have it bubble up to race control. Otherwise, we could play ping-pong with our child actor.
-            recipient = self.race_control if sender in self.mechanics else sender
+            recipient = self.race_control if sender in self.children else sender
             ex_type, ex_value, ex_traceback = sys.exc_info()
             # avoid "can't pickle traceback objects"
             import traceback
             self.send(recipient, actor.BenchmarkFailure("Could not execute command (%s)" % ex_value, traceback.format_exc()))
-
-    def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
-        """
-
-        Waits until all children have sent a specific response message and then transitions this actor to a new status.
-
-        :param sender: The child actor that has responded.
-        :param msg: The response message.
-        :param expected_status: The status in which this actor should be upon calling this method.
-        :param new_status: The new status once all child actors have responded.
-        :param transition: A parameter-less function to call immediately after changing the status.
-        """
-        if self.is_current_status_expected(expected_status):
-            self.received_responses.append(msg)
-            response_count = len(self.received_responses)
-            expected_count = len(self.mechanics)
-
-            logger.info("[%d] of [%d] child actors have responded for transition from [%s] to [%s]." %
-                        (response_count, expected_count, self.status, new_status))
-            if response_count == expected_count:
-                logger.info("All [%d] child actors have responded. Transitioning now from [%s] to [%s]." %
-                            (expected_count, self.status, new_status))
-                # all nodes have responded, change status
-                self.status = new_status
-                self.received_responses = []
-                transition()
-            elif response_count > expected_count:
-                raise exceptions.RallyAssertionError(
-                    "Received [%d] responses but only [%d] were expected to transition from [%s] to [%s]. The responses are: %s" %
-                    (response_count, expected_count, self.status, new_status, self.received_responses))
-        else:
-            raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
-                                                 (type(msg), sender, self.status, expected_status))
-
-    def send_to_children_and_transition(self, sender, msg, expected_status, new_status):
-        """
-
-        Sends the provided message to all child actors and immediately transitions to the new status.
-
-        :param sender: The actor from which we forward this message (in case it is message forwarding). Otherwise our own address.
-        :param msg: The message to send.
-        :param expected_status: The status in which this actor should be upon calling this method.
-        :param new_status: The new status.
-        """
-        if self.is_current_status_expected(expected_status):
-            logger.info("Transitioning from [%s] to [%s]." % (self.status, new_status))
-            self.status = new_status
-            for m in self.mechanics:
-                self.send(m, msg)
-        else:
-            raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
-                                                 (type(msg), sender, self.status, expected_status))
-
-    def is_current_status_expected(self, expected_status):
-        # if we don't expect anything, we're always in the right status
-        if not expected_status:
-            return True
-        # do an explicit check for a list here because strings are also iterable and we have very tight control over this code anyway.
-        elif isinstance(expected_status, list):
-            return self.status in expected_status
-        else:
-            return self.status == expected_status
 
     def on_start_engine(self, msg, sender):
         logger.info("Received signal from race control to start engine.")
@@ -378,7 +317,7 @@ class MechanicActor(actor.RallyActor):
             m = self.createActor(NodeMechanicActor,
                                  globalName="/rally/mechanic/worker/external",
                                  targetActorRequirements={"coordinator": True})
-            self.mechanics.append(m)
+            self.children.append(m)
             mechanics_and_start_message.append((m, msg.for_nodes(ip=hosts)))
         else:
             logger.info("Cluster consisting of %s will be provisioned by Rally." % hosts)
@@ -390,7 +329,7 @@ class MechanicActor(actor.RallyActor):
                     m = self.createActor(NodeMechanicActor,
                                          globalName="/rally/mechanic/worker/localhost",
                                          targetActorRequirements={"coordinator": True})
-                    self.mechanics.append(m)
+                    self.children.append(m)
                     mechanics_and_start_message.append((m, msg.for_nodes(all_node_ips, ip, port, nodes)))
                 else:
                     if self.cfg.opts("system", "remote.benchmarking.supported"):
@@ -412,7 +351,7 @@ class MechanicActor(actor.RallyActor):
                                          globalName="/rally/mechanic/worker/%s" % ip,
                                          targetActorRequirements={"ip": ip})
                     mechanics_and_start_message.append((m, msg.for_nodes(all_node_ips, ip, port, nodes)))
-                    self.mechanics.append(m)
+                    self.children.append(m)
         self.status = "starting"
         self.received_responses = []
         for mechanic_actor, start_message in mechanics_and_start_message:
@@ -441,7 +380,7 @@ class MechanicActor(actor.RallyActor):
     def reset_relative_time(self):
         logger.info("Resetting relative time of cluster system metrics store.")
         self.metrics_store.reset_relative_time()
-        for m in self.mechanics:
+        for m in self.children:
             self.send(m, ResetRelativeTime(0))
 
     def on_benchmark_stopped(self):
@@ -451,9 +390,9 @@ class MechanicActor(actor.RallyActor):
     def on_all_nodes_stopped(self):
         self.send(self.race_control, EngineStopped(self.metrics_store.to_externalizable()))
         # clear all state as the mechanic might get reused later
-        for m in self.mechanics:
+        for m in self.children:
             self.send(m, thespian.actors.ActorExitRequest())
-        self.mechanics = []
+        self.children = []
         # self terminate + slave nodes
         self.send(self.myAddress, thespian.actors.ActorExitRequest())
 

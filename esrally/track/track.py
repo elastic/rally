@@ -74,19 +74,19 @@ class IndexTemplate:
     Defines an index template in Elasticsearch.
     """
 
-    def __init__(self, name, pattern, template_file, delete_matching_indices):
+    def __init__(self, name, pattern, content, delete_matching_indices):
         """
 
         Creates a new index template.
 
         :param name: Name of the index template. Mandatory.
         :param pattern: The index pattern to which the index template applies. Mandatory.
-        :param template_file: The name of the corresponding template file. Mandatory.
+        :param content: The content of the corresponding template. Mandatory.
         :param delete_matching_indices: Delete all indices that match the pattern before the benchmark iff True.
         """
         self.name = name
         self.pattern = pattern
-        self.template_file = template_file
+        self.content = content
         self.delete_matching_indices = delete_matching_indices
 
     def __str__(self, *args, **kwargs):
@@ -110,19 +110,20 @@ class Type:
     Defines a type in Elasticsearch.
     """
 
-    def __init__(self, name, mapping_file, document_file=None, document_archive=None, includes_action_and_meta_data=False,
+    def __init__(self, name, mapping, document_file=None, document_archive=None, includes_action_and_meta_data=False,
                  number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0):
         """
 
         Creates a new type. Mappings are mandatory but the document_archive (and associated properties) are optional.
 
         :param name: The name of this type. Mandatory.
-        :param mapping_file: The file name of the mapping file on the remote server. Mandatory.
+        :param mapping: The type's mapping. Mandatory.
         :param document_file: The file name of benchmark documents after decompression. Optional (e.g. for percolation we
         just need a mapping but no documents)
-        :param document_file: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for percolation we
-        just need a mapping but no documents)
-        :param includes_action_and_meta_data: True, if the source file already includes the action and meta-data line. False, if it only contains documents.
+        :param document_archive: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for
+        percolation we just need a mapping but no documents)
+        :param includes_action_and_meta_data: True, if the source file already includes the action and meta-data line. False, if it only
+        contains documents.
         :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
          a document_archive is given.
         :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
@@ -131,7 +132,7 @@ class Type:
         document_archive is given (optional but recommended to be set).
         """
         self.name = name
-        self.mapping_file = mapping_file
+        self.mapping = mapping
         self.document_file = document_file
         self.document_archive = document_archive
         self.includes_action_and_meta_data = includes_action_and_meta_data
@@ -140,8 +141,7 @@ class Type:
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
 
     def has_valid_document_data(self):
-        return self.document_file is not None and \
-               self.number_of_documents > 0
+        return self.document_archive is not None and self.number_of_documents > 0
 
     @property
     def number_of_lines(self):
@@ -194,8 +194,8 @@ class Track:
         self.description = description if description else short_description
         self.source_root_url = source_root_url
         self.challenges = challenges if challenges else []
-        self.indices = indices
-        self.templates = templates
+        self.indices = indices if indices else []
+        self.templates = templates if templates else []
 
     @property
     def default_challenge(self):
