@@ -70,8 +70,8 @@ def plot_service_time(raw_data):
         # ax.set_xscale('log')
 
         ax.set_ylabel("Service Time [ms]")
+        ax.set_xlabel("Percentile")
         ax.set_title("Service Time of %s" % op)
-        ax.set_title("Percentile")
 
         box = ax.get_position()
         ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
