@@ -15,7 +15,11 @@
 import json
 import sys
 
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    print("This script requires matplotlib. Please install with 'pip3 install matplotlib' and retry.", file=sys.stderr)
+    exit(1)
 
 
 def present(a_plot, name):
@@ -65,9 +69,6 @@ def plot_service_time(raw_data):
             series = ax.plot(candidate["percentiles"], candidate["percentile_values"], marker='.', label=label)
             legend_handles.append(series[0])
             legend_labels.append(label)
-
-        # makes matters even worse because it compresses higher values.
-        # ax.set_xscale('log')
 
         ax.set_ylabel("Service Time [ms]")
         ax.set_xlabel("Percentile")
