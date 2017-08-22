@@ -170,7 +170,9 @@ class DriverTests(TestCase):
         self.assertEqual(0, d.current_step)
         self.assertEqual(0, len(d.clients_completed_current_step))
 
-        target.on_task_finished.assert_called_once()
+        # this requires at least Python 3.6
+        #target.on_task_finished.assert_called_once()
+        self.assertEqual(1, target.on_task_finished.call_count)
         self.assertEqual(4, target.drive_at.call_count)
 
 
