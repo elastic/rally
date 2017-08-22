@@ -99,7 +99,7 @@ def has_internet_connection():
         logger.debug("Checking for internet connection against [%s]" % probing_url)
         # We do a HTTP request here to respect the HTTP proxy setting. If we'd open a plain socket connection we circumvent the
         # proxy and erroneously conclude we don't have an Internet connection.
-        response = __http().request("GET", probing_url)
+        response = __http().request("GET", probing_url, timeout=2.0)
         status = response.status
         logger.debug("Probing result is HTTP status [%s]" % str(status))
         return status == 200
