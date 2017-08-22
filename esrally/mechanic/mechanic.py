@@ -171,16 +171,12 @@ def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
 
     :param cfg: The current config object.
     :param client_factory: Factory class that creates the Elasticsearch client.
-    :return: The distribution version or ``None`` if it could not determine it.
+    :return: The distribution version.
     """
     hosts = cfg.opts("client", "hosts")
     client_options = cfg.opts("client", "options")
     es = client_factory(hosts, client_options).create()
-    # noinspection PyBroadException
-    try:
-        return es.info()["version"]["number"]
-    except BaseException:
-        return None
+    return es.info()["version"]["number"]
 
 
 def to_ip_port(hosts):
