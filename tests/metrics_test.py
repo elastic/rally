@@ -1,5 +1,4 @@
 import os
-import random
 import datetime
 import unittest.mock as mock
 from unittest import TestCase
@@ -816,8 +815,7 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
 
         self.assertEqual(1, len(self.metrics_store.docs))
-        spill = random.choice([True, False])
-        memento = self.metrics_store.to_externalizable(spill_to_disk=spill)
+        memento = self.metrics_store.to_externalizable()
 
         self.metrics_store.close()
         del self.metrics_store
