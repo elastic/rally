@@ -459,8 +459,8 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             node_name = node["name"]
             # while we could determine this for bare-metal nodes that are provisioned by Rally, there are other cases (Docker, externally
             # provisioned clusters) where it's not that easy.
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", node["jvm"]["vm_vendor"])
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", node["jvm"]["version"])
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", extract_value(node, ["jvm", "vm_vendor"]))
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", extract_value(node, ["jvm", "version"]))
 
         store_plugin_metadata(self.metrics_store, nodes_info)
         store_node_attribute_metadata(self.metrics_store, nodes_info)
