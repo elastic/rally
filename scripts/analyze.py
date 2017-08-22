@@ -14,12 +14,20 @@
 
 import json
 import sys
+import argparse
 
 try:
     import matplotlib.pyplot as plt
 except ImportError:
     print("This script requires matplotlib. Please install with 'pip3 install matplotlib' and retry.", file=sys.stderr)
     exit(1)
+
+
+def create_plot():
+    plt.rcdefaults()
+    fig, ax = plt.subplots()
+    fig.set_size_inches(18, 10)
+    return fig, ax
 
 
 def present(a_plot, name):
@@ -33,19 +41,19 @@ def decode_percentile_key(k):
     return float(k.replace("_", "."))
 
 
-def data_series_name(d):
-    return d["car"]
+def data_series_name(d, label_key):
+    return d[label_key]
 
 
 def include(series):
     return True
 
 
-def plot_service_time(raw_data):
+def plot_service_time(raw_data, label_key):
     service_time_per_op = {}
 
     for d in raw_data:
-        data_series = data_series_name(d)
+        data_series = data_series_name(d, label_key)
         for op_metrics in d["results"]["op_metrics"]:
             operation = op_metrics["operation"]
             service_time_metrics = op_metrics["service_time"]
@@ -58,9 +66,7 @@ def plot_service_time(raw_data):
             })
 
     for op, results in service_time_per_op.items():
-        plt.rcdefaults()
-        fig, ax = plt.subplots()
-
+        fig, ax = create_plot()
         legend_handles = []
         legend_labels = []
 
@@ -81,12 +87,12 @@ def plot_service_time(raw_data):
         present(plt, "service_time_%s" % op)
 
 
-def plot_throughput(raw_data):
+def plot_throughput(raw_data, label_key):
     throughput_per_op = {}
     unit = ""
 
     for d in raw_data:
-        data_series = data_series_name(d)
+        data_series = data_series_name(d, label_key)
         for op_metrics in d["results"]["op_metrics"]:
             operation = op_metrics["operation"]
             throughput_metrics = op_metrics["throughput"]
@@ -102,8 +108,7 @@ def plot_throughput(raw_data):
             unit = throughput_metrics["unit"]
 
     for op, results in throughput_per_op.items():
-        plt.rcdefaults()
-        fig, ax = plt.subplots()
+        fig, ax = create_plot()
         x_tick_labels = []
         throughput = []
         min_throughput = []
@@ -127,9 +132,8 @@ def plot_throughput(raw_data):
         present(plt, "throughput_%s" % op)
 
 
-def plot_gc_times(raw_data):
-    plt.rcdefaults()
-    fig, ax = plt.subplots()
+def plot_gc_times(raw_data, label_key):
+    fig, ax = create_plot()
 
     x_tick_labels = []
     old_gc_times = []
@@ -137,7 +141,7 @@ def plot_gc_times(raw_data):
     width = 0.35
 
     for d in raw_data:
-        data_series = data_series_name(d)
+        data_series = data_series_name(d, label_key)
 
         x_tick_labels.append(data_series)
 
@@ -163,20 +167,37 @@ def plot_gc_times(raw_data):
     present(plt, "gc_times")
 
 
-def plot(raw_data):
-    plot_gc_times(raw_data)
-    plot_throughput(raw_data)
-    plot_service_time(raw_data)
+def plot(raw_data, label_key):
+    plot_gc_times(raw_data, label_key)
+    plot_throughput(raw_data, label_key)
+    plot_service_time(raw_data, label_key)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Turns race.json files into graphs")
+
+    parser.add_argument(
+        "--label",
+        help="defines which attribute to use for labelling data series (default: trial-timestamp).",
+        choices=["environment", "trial-timestamp", "user-tag", "challenge", "car"],
+        default="trial-timestamp")
+
+    parser.add_argument("path",
+                        nargs="+",
+                        help="Full path to one or more race.json files")
+
+    return parser.parse_args()
 
 
 def main():
+    args = parse_args()
     series = []
 
-    for f in sys.argv[1:]:
+    for f in args.path:
         a_series = json.load(open(f, "rt"))
         if include(a_series):
             series.append(a_series)
-    plot(series)
+    plot(series, args.label)
 
 
 if __name__ == '__main__':
