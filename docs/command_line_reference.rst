@@ -264,6 +264,7 @@ Here are a few common examples:
 
 * Enable HTTP compression: ``--client-options="compressed:true"``
 * Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
+* Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the [Elasticsearch Python client docs](http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication))
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Please avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
 
 ``load-driver-hosts``
