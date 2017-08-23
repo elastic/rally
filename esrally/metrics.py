@@ -107,7 +107,8 @@ class EsClientFactory:
         logger.info("Creating connection to metrics store at %s:%s" % (host, port))
         import elasticsearch
         self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
-                                                   use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where())
+                                                   use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where(),
+                                                   timeout=60000, request_timeout=60000)
 
     def create(self):
         return EsClient(self._client)
