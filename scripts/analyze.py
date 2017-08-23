@@ -5,10 +5,10 @@
 # It requires matplotlib (install with pip3 install matplotlib).
 #
 #
-# Usage: python3 analyze.py /path1/to/race.json /path2/to/race.json.
+# Usage: python3 analyze.py [--label=LABEL] /path1/to/race.json /path2/to/race.json
 #
-# Output: A bunch of .png files in the current directory. Each graph shows one data series per race and we use the chosen car as label. If
-#         you want to change that you need to choose a different key in `#data_series_name()`.
+# Output: A bunch of .png files in the current directory. Each graph shows one data series per race. The label key is chosen based on the
+#         command line parameter `--label`
 #
 
 
@@ -79,6 +79,7 @@ def plot_service_time(raw_data, label_key):
         ax.set_ylabel("Service Time [ms]")
         ax.set_xlabel("Percentile")
         ax.set_title("Service Time of %s" % op)
+        ax.set_ylim(ymin=0)
 
         box = ax.get_position()
         ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
@@ -128,6 +129,7 @@ def plot_throughput(raw_data, label_key):
         ax.set_xticklabels(x_tick_labels)
         ax.set_ylabel("Throughput [%s]" % unit)
         ax.set_title("Throughput of %s" % op)
+        ax.set_ylim(ymin=0)
 
         present(plt, "throughput_%s" % op)
 
@@ -163,6 +165,7 @@ def plot_gc_times(raw_data, label_key):
     ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
 
     ax.legend([old_bar[0], young_bar[0]], ["Old GC", "Young GC"], loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.set_ylim(ymin=0)
 
     present(plt, "gc_times")
 
