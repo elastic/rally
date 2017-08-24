@@ -1,3 +1,13 @@
+### 0.7.1
+
+#### Highlights
+
+* [#257](https://github.com/elastic/rally/issues/257): Distribute load-test driver
+
+#### Bug Fixes
+
+* [#316](https://github.com/elastic/rally/issues/316): KeyError: 'vm_vendor' when running benchmark against single host cluster with 0.7.0
+
 ### 0.7.0
 
 #### Highlights
