@@ -466,8 +466,9 @@ class TrackSpecificationReader:
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         challenges = self._create_challenges(track_specification)
 
-        if len(indices) == 0 and len(templates) == 0:
-            self._error("Specify at least one index or one template.")
+        # This can be valid, e.g. for a search only benchmark
+        # if len(indices) == 0 and len(templates) == 0:
+        #    self._error("Specify at least one index or one template.")
 
         return track.Track(name=self.name, meta_data=meta_data, short_description=short_description, description=description,
                            source_root_url=source_root_url,
