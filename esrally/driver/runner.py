@@ -442,7 +442,8 @@ class Query(Runner):
             "weight": 1,
             "unit": "ops",
             "hits": hits,
-            "timed_out": r["timed_out"]
+            "timed_out": r["timed_out"],
+            "took": r["took"]
         }
 
     def scroll_query(self, es, params):
@@ -450,6 +451,7 @@ class Query(Runner):
         hits = 0
         retrieved_pages = 0
         timed_out = False
+        took = 0
         self.es = es
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
@@ -476,6 +478,7 @@ class Query(Runner):
                 r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
             hit_count = len(r["hits"]["hits"])
             timed_out = timed_out or r["timed_out"]
+            took += r["took"]
             hits += hit_count
             retrieved_pages += 1
             if hit_count == 0:
@@ -487,7 +490,8 @@ class Query(Runner):
             "pages": retrieved_pages,
             "hits": hits,
             "unit": "ops",
-            "timed_out": timed_out
+            "timed_out": timed_out,
+            "took": took
         }
 
     def __exit__(self, exc_type, exc_val, exc_tb):

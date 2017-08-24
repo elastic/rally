@@ -468,6 +468,7 @@ class QueryRunnerTests(TestCase):
     def test_query_match_all(self, es):
         es.search.return_value = {
             "timed_out": False,
+            "took": 5,
             "hits": {
                 "total": 2,
                 "hits": [
@@ -501,12 +502,14 @@ class QueryRunnerTests(TestCase):
         self.assertEqual("ops", result["unit"])
         self.assertEqual(2, result["hits"])
         self.assertFalse(result["timed_out"])
+        self.assertEqual(5, result["took"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_only_one_page(self, es):
         # page 1
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
+            "took": 4,
             "timed_out": False,
             "hits": {
                 "hits": [
@@ -547,6 +550,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["weight"])
         self.assertEqual(1, results["pages"])
         self.assertEqual(2, results["hits"])
+        self.assertEqual(4, results["took"])
         self.assertEqual("ops", results["unit"])
         self.assertFalse(results["timed_out"])
 
@@ -556,6 +560,7 @@ class QueryRunnerTests(TestCase):
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
+            "took": 54,
             "hits": {
                 "hits": [
                     {
@@ -572,6 +577,7 @@ class QueryRunnerTests(TestCase):
             {
                 "_scroll_id": "some-scroll-id",
                 "timed_out": True,
+                "took": 25,
                 "hits": {
                     "hits": [
                         {
@@ -607,6 +613,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(3, results["hits"])
+        self.assertEqual(79, results["took"])
         self.assertEqual("ops", results["unit"])
         self.assertTrue(results["timed_out"])
 
@@ -616,6 +623,7 @@ class QueryRunnerTests(TestCase):
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
+            "took": 53,
             "hits": {
                 "hits": [
                     {
@@ -629,6 +637,7 @@ class QueryRunnerTests(TestCase):
             {
                 "_scroll_id": "some-scroll-id",
                 "timed_out": False,
+                "took": 2,
                 "hits": {
                     "hits": []
                 }
@@ -661,6 +670,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["pages"])
         self.assertEqual(1, results["hits"])
         self.assertEqual("ops", results["unit"])
+        self.assertEqual(55, results["took"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_request_all_pages(self, es):
@@ -668,6 +678,7 @@ class QueryRunnerTests(TestCase):
         es.search.return_value = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
+            "took": 876,
             "hits": {
                 "hits": [
                     {
@@ -689,6 +700,7 @@ class QueryRunnerTests(TestCase):
             # page 2 has no results
             {
                 "_scroll_id": "some-scroll-id",
+                "took": 24,
                 "timed_out": False,
                 "hits": {
                     "hits": []
@@ -721,5 +733,6 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(4, results["hits"])
+        self.assertEqual(900, results["took"])
         self.assertEqual("ops", results["unit"])
         self.assertFalse(results["timed_out"])
