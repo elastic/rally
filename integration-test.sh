@@ -4,8 +4,8 @@ set -e
 
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
-readonly DISTRIBUTIONS=(1.7.6 2.4.5 5.4.3)
-readonly TRACKS=(geonames geopoint nyc_taxis pmc logging nested)
+readonly DISTRIBUTIONS=(1.7.6 2.4.5 5.5.2)
+readonly TRACKS=(geonames nyc_taxis logging nested)
 
 readonly ES_METRICS_STORE_VERSION="5.0.0"
 
