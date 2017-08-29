@@ -414,11 +414,11 @@ class SummaryReporter:
         max = values["throughput"]["max"]
         unit = values["throughput"]["unit"]
 
-        return [
-            [self.lap, "Min Throughput", operation, "%.2f" % min, unit],
-            [self.lap, "Median Throughput", operation, "%.2f" % median, unit],
-            [self.lap, "Max Throughput", operation, "%.2f" % max, unit]
-        ]
+        throughput = []
+        self.append_if_present(throughput, "Min Throughput", operation, min, unit, lambda v: "%.2f" % v)
+        self.append_if_present(throughput, "Median Throughput", operation, median, unit, lambda v: "%.2f" % v)
+        self.append_if_present(throughput, "Max Throughput", operation, max, unit, lambda v: "%.2f" % v)
+        return throughput
 
     def report_latency(self, values, operation):
         lines = []
