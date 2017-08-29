@@ -283,6 +283,10 @@ class TrackPreparationActor(actor.RallyActor):
                 # load node-specific config to have correct paths available
                 cfg = load_local_config(msg.config)
                 logger.info("Preparing track [%s]" % msg.track.name)
+                # TODO #292: Can we get rid of this in the simple case?
+                # we also need to attempt to checkout the track without actually reading it completely. Otherwise reading
+                # track plugins later on will fail on the load generator. We should revisit this in #292.
+                track.track_repo(cfg, fetch=True, update=True)
                 track.prepare_track(msg.track, cfg)
                 self.send(sender, TrackPrepared())
         except BaseException as e:
