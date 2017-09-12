@@ -20,7 +20,7 @@ class DriverTestParamSource:
         return self
 
     def size(self):
-        return self._params["size"] if "size" in self._params else 1
+        return self._params["size"] if "size" in self._params else None
 
     def params(self):
         return self._params
@@ -177,16 +177,19 @@ class DriverTests(TestCase):
 
 
 class ScheduleTestCase(TestCase):
-    def assert_schedule(self, expected_schedule, schedule):
+    def assert_schedule(self, expected_schedule, schedule, eternal_schedule=False):
         idx = 0
         for invocation_time, sample_type, progress_percent, runner, params in schedule:
             exp_invocation_time, exp_sample_type, exp_progress_percent, exp_params = expected_schedule[idx]
-            self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Expected invocation time does not match")
-            self.assertEqual(exp_sample_type, sample_type, "Sample type does not match")
-            self.assertEqual(exp_progress_percent, progress_percent, "Current progress does not match")
+            self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Invocation time for sample at index %d does not match" % idx)
+            self.assertEqual(exp_sample_type, sample_type, "Sample type for sample at index %d does not match" % idx)
+            self.assertEqual(exp_progress_percent, progress_percent, "Current progress for sample at index %d does not match" % idx)
             self.assertIsNotNone(runner, "runner must be defined")
             self.assertEqual(exp_params, params, "Parameters do not match")
             idx += 1
+            # for eternal schedules we only check the first few elements
+            if eternal_schedule and idx == len(expected_schedule):
+                break
 
 
 class AllocatorTests(TestCase):
@@ -520,6 +523,21 @@ class SchedulerTests(ScheduleTestCase):
             (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "size": 11}),
         ], list(invocations))
 
+    def test_eternal_schedule(self):
+        task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"]},
+                                          param_source="driver-test-param-source"),
+                          warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
+
+        invocations = driver.schedule_for(self.test_track, task, 0)
+
+        self.assert_schedule([
+            (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (1.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+        ], invocations, eternal_schedule=True)
+
     def test_schedule_for_time_based(self):
         task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"], "size": 11},
                                           param_source="driver-test-param-source"), warmup_time_period=0.1, time_period=0.1, clients=1)
@@ -580,7 +598,9 @@ class ExecutorTests(TestCase):
         task = track.Task(track.Operation("time-based", track.OperationType.Index.name, params={
             "body": ["action_metadata_line", "index_line"],
             "action_metadata_present": True,
-            "bulk-size": 1
+            "bulk-size": 1,
+            # we need this because DriverTestParamSource does not know that we only have one bulk and hence size() returns incorrect results
+            "size": 1
         },
                                           param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4)

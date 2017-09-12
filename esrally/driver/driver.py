@@ -480,8 +480,14 @@ class Driver:
             if task_finished:
                 total_progress = 1.0
             else:
-                num_clients = max(len(self.most_recent_sample_per_client), 1)
-                total_progress = sum([s.percent_completed for s in self.most_recent_sample_per_client.values()]) / num_clients
+                # we only count clients which actually contribute to progress. If clients are executing tasks eternally in a parallel
+                # structure, we should not count them. The reason is that progress depends entirely on the client(s) that execute the
+                # task that is completing the parallel structure.
+                progress_per_client = [s.percent_completed
+                                       for s in self.most_recent_sample_per_client.values() if s.percent_completed is not None]
+
+                num_clients = max(len(progress_per_client), 1)
+                total_progress = sum(progress_per_client) / num_clients
             self.progress_reporter.print("Running %s" % ops, "[%3d%% done]" % (round(total_progress * 100)))
             if task_finished:
                 self.progress_reporter.finish()
@@ -621,8 +627,12 @@ class LoadGenerator(actor.RallyActor):
                     else:
                         if current_samples and len(current_samples) > 0:
                             most_recent_sample = current_samples[-1]
-                            logger.info("LoadGenerator[%s] is executing [%s] (%.2f%% complete)." %
-                                        (str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0))
+                            if most_recent_sample.percent_completed is not None:
+                                logger.info("LoadGenerator[%s] is executing [%s] (%.2f%% complete)." %
+                                            (str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0))
+                            else:
+                                logger.info("LoadGenerator[%s] is executing [%s] (dependent eternal task)." %
+                                            (str(self.client_id), most_recent_sample.task))
                         else:
                             logger.info("LoadGenerator[%s] is executing (no samples)." % (str(self.client_id)))
                         self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
@@ -736,6 +746,7 @@ class Sample:
         self.total_ops = total_ops
         self.total_ops_unit = total_ops_unit
         self.time_period = time_period
+        # may be None for eternal tasks!
         self.percent_completed = percent_completed
 
     @property
@@ -1255,11 +1266,19 @@ def time_period_based(sched, warmup_time_period, time_period, runner, params):
     start = time.perf_counter()
     if time_period is None:
         iterations = params.size()
-        for it in range(0, iterations):
-            sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
-            percent_completed = (it + 1) / iterations
-            yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-            next_scheduled = sched.next(next_scheduled)
+        if iterations:
+            for it in range(0, iterations):
+                sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
+                percent_completed = (it + 1) / iterations
+                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+                next_scheduled = sched.next(next_scheduled)
+        else:
+            while True:
+                sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
+                # does not contribute at all to completion. Hence, we cannot define completion.
+                percent_completed = None
+                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+                next_scheduled = sched.next(next_scheduled)
     else:
         end = start + warmup_time_period + time_period
         it = 0

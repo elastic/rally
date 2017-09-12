@@ -90,9 +90,9 @@ class ParamSource:
         In the former case, return just 1. In the latter case, you should determine the number of times that `#params()` will be invoked.
         With that number, Rally can show the progress made so far to the user.
 
-        :return:  The "size" of this parameter source.
+        :return:  The "size" of this parameter source or ``None`` if should run eternally.
         """
-        return 1
+        return None
 
     def params(self):
         """
