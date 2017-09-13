@@ -103,7 +103,7 @@ class BenchmarkActor(actor.RallyActor):
                 self.metrics_store.meta_info = msg.system_meta_info
                 cluster = msg.cluster_meta_info
                 self.race.cluster = cluster
-                console.info("Racing on track [%s], challenge [%s] and car [%s]\n"
+                console.info("Racing on track [%s], challenge [%s] and car %s\n"
                              % (self.race.track_name, self.race.challenge_name, self.race.car))
                 # start running we assume that each race has at least one lap
                 self.run()
@@ -322,7 +322,7 @@ def benchmark_only(cfg):
     console.println(BOGUS_RESULTS_WARNING)
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
-    cfg.add(config.Scope.benchmark, "mechanic", "car.name", "external")
+    cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     return race(cfg, external=True)
 
 

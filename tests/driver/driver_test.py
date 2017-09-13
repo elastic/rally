@@ -38,7 +38,7 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "time.start", datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
         self.cfg.add(config.Scope.application, "track", "challenge.name", "default")
         self.cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
-        self.cfg.add(config.Scope.application, "mechanic", "car.name", "default")
+        self.cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
         self.cfg.add(config.Scope.application, "client", "hosts", ["localhost:9200"])
         self.cfg.add(config.Scope.application, "client", "options", {})
         self.cfg.add(config.Scope.application, "driver", "cluster.health", "green")

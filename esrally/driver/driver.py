@@ -344,9 +344,9 @@ class Driver:
     def after_track_prepared(self):
         track_name = self.track.name
         challenge_name = self.challenge.name
-        car_name = self.config.opts("mechanic", "car.name")
+        car_name = self.config.opts("mechanic", "car.names")
 
-        logger.info("Benchmark for track [%s], challenge [%s] and car [%s] is about to start." % (track_name, challenge_name, car_name))
+        logger.info("Benchmark for track [%s], challenge [%s] and car %s is about to start." % (track_name, challenge_name, car_name))
         invocation = self.config.opts("system", "time.start")
         self.metrics_store.open(invocation, track_name, challenge_name, car_name)
 

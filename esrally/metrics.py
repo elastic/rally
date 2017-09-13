@@ -170,7 +170,7 @@ def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=No
         store = InMemoryMetricsStore(cfg)
 
     selected_invocation = cfg.opts("system", "time.start") if invocation is None else invocation
-    selected_car = cfg.opts("mechanic", "car.name") if car is None else car
+    selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
     store.open(selected_invocation, track, challenge, selected_car, create=not read_only)
     return store
@@ -200,6 +200,7 @@ class MetricsStore:
         self._track = None
         self._challenge = None
         self._car = None
+        self._car_name = None
         self._lap = lap
         self._environment_name = cfg.opts("system", "env.name")
         if meta_info is None:
@@ -238,6 +239,8 @@ class MetricsStore:
         assert self._track is not None, "Attempting to open metrics store without a track"
         assert self._challenge is not None, "Attempting to open metrics store without a challenge"
         assert self._car is not None, "Attempting to open metrics store without a car"
+
+        self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
                     (self._invocation, self._track, self._challenge, self._car))
@@ -453,7 +456,7 @@ class MetricsStore:
             "track": self._track,
             "lap": self._lap,
             "challenge": self._challenge,
-            "car": self._car,
+            "car": self._car_name,
             "name": name,
             "value": value,
             "unit": unit,
@@ -786,7 +789,7 @@ class EsMetricsStore(MetricsStore):
                     },
                     {
                         "term": {
-                            "car": self._car
+                            "car": self._car_name
                         }
                     },
                     {
@@ -962,7 +965,7 @@ def list_races(cfg):
 
 
 def create_race(cfg, track, challenge):
-    car = cfg.opts("mechanic", "car.name")
+    car = cfg.opts("mechanic", "car.names")
     environment_name = cfg.opts("system", "env.name")
     trial_timestamp = cfg.opts("system", "time.start")
     total_laps = cfg.opts("race", "laps")
@@ -1001,6 +1004,10 @@ class Race:
     @property
     def challenge_name(self):
         return str(self.challenge)
+
+    @property
+    def car_name(self):
+        return "+".join(self.car) if isinstance(self.car, list) else self.car
 
     @property
     def revision(self):
@@ -1047,7 +1054,7 @@ class Race:
             "user-tag": self.user_tag,
             "track": self.track_name,
             "challenge": self.challenge_name,
-            "car": self.car,
+            "car": self.car_name,
             "node-count": len(self.cluster.nodes),
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
             "active": True

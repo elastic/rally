@@ -11,13 +11,42 @@ logger = logging.getLogger("rally.team")
 
 
 def list_cars(cfg):
-    cars = CarLoader(team_repo(cfg)).car_names()
+    loader = CarLoader(team_repo(cfg))
+    cars = []
+    for name in loader.car_names():
+        cars.append(loader.load_car(name))
+    # first by type, then by name (we need to run the sort in reverse for that)
+    # idiomatic way according to https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
+    cars = sorted(sorted(cars, key=lambda c: c.name), key=lambda c: c.type)
     console.println("Available cars:\n")
-    console.println(tabulate.tabulate([[str(c)] for c in cars], headers=["Name"]))
+    console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
 def load_car(repo, name):
-    return CarLoader(repo).load_car(name)
+    # preserve order as we append to existing config files later during provisioning.
+    all_config_paths = []
+    all_variables = {}
+    all_env = {}
+
+    for n in name:
+        descriptor = CarLoader(repo).load_car(n)
+        for p in descriptor.config_paths:
+            if p not in all_config_paths:
+                all_config_paths.append(p)
+        all_variables.update(descriptor.variables)
+        # env needs to be merged individually, consider ES_JAVA_OPTS="-Xms1G" and ES_JAVA_OPTS="-ea".
+        # We want it to be ES_JAVA_OPTS="-Xms1G -ea" in the end.
+        for k, v in descriptor.env.items():
+            # merge
+            if k not in all_env:
+                all_env[k] = v
+            else:  # merge
+                # assume we need to separate with a space
+                all_env[k] = all_env[k] + " " + v
+
+    if len(all_config_paths) == 0:
+        raise exceptions.SystemSetupError("At least one config base is required for car %s" % name)
+    return Car("+".join(name), all_config_paths, all_variables, all_env)
 
 
 def list_plugins(cfg):
@@ -96,14 +125,21 @@ class CarLoader:
         config.optionxform = lambda option: option
         config.read(car_config_file)
         config_paths = []
+        description = ""
+        car_type = "car"
+        if "meta" in config:
+            description = config["meta"].get("description", description)
+            car_type = config["meta"].get("type", car_type)
+
         if "config" in config and "base" in config["config"]:
             config_bases = config["config"]["base"].split(",")
             for base in config_bases:
                 if base:
                     config_paths.append(os.path.join(self.cars_dir, base))
 
+        # it's possible that some cars don't have a config base, e.g. mixins which only override variables
         if len(config_paths) == 0:
-            raise exceptions.SystemSetupError("At least one config base is required for car [%s]" % name)
+            logger.info("Car [%s] does not define any config paths. Assuming that it is used as a mixin." % name)
 
         variables = {}
         if "variables" in config.sections():
@@ -113,7 +149,23 @@ class CarLoader:
         if "env" in config.sections():
             for k, v in config["env"].items():
                 env[k] = v
-        return Car(name, config_paths, variables, env)
+        return CarDescriptor(name, description, car_type, config_paths, variables, env)
+
+
+class CarDescriptor:
+    def __init__(self, name, description, type, config_paths, variables, env):
+        self.name = name
+        self.description = description
+        self.type = type
+        self.config_paths = config_paths
+        self.variables = variables
+        self.env = env
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.name == other.name
 
 
 class Car:
@@ -132,12 +184,8 @@ class Car:
             variables = {}
         self.name = name
         self.config_paths = config_paths
-        # for convenience as long as we do not allow more complex setups, e.g. with plugins
-        self.config_path = self.config_paths[0]
         self.variables = variables
         self.env = env
-        # for backwards-compatibility - but we allow only one node at the moment
-        self.nodes = 1
 
     def __str__(self):
         return self.name

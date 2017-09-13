@@ -4,7 +4,7 @@ Metrics
 Metrics Records
 ---------------
 
-At the end of a race, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster. Rally store the metrics in the indices ``rally-metrics-*`` and it will create a new index for each month.
+At the end of a race, Rally stores all metrics records in its metrics store, which is a dedicated Elasticsearch cluster. Rally stores the metrics in the indices ``rally-metrics-*``. It will create a new index for each month.
 
 Here is a typical metrics record::
 
@@ -50,7 +50,7 @@ The environment describes the origin of a metric record. You define this value i
 track, challenge, car
 ~~~~~~~~~~~~~~~~~~~~~
 
-This is the track, challenge and car for which the metrics record has been produced.
+This is the track, challenge and car for which the metrics record has been produced. Note that if you specify a car with mixins, it will be stored as one string separated with "+", e.g. ``--car="4gheap,ea"`` will be stored as ``4gheap+ea`` in the metrics store in order to simplify querying in Kibana. For more details, please see the :doc:`cars </car>` documentation.
 
 sample-type
 ~~~~~~~~~~~

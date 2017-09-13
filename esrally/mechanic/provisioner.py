@@ -167,7 +167,9 @@ class BareProvisioner:
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
 
-        self.apply_config(self.es_installer.config_source_path, target_root_path, provisioner_vars)
+        for p in self.es_installer.config_source_paths:
+            self.apply_config(p, target_root_path, provisioner_vars)
+
         for installer in self.plugin_installers:
             for plugin_config_path in installer.config_source_paths:
                 self.apply_config(plugin_config_path, target_root_path, provisioner_vars)
@@ -267,8 +269,8 @@ class ElasticsearchInstaller:
         return variables
 
     @property
-    def config_source_path(self):
-        return self.car.config_path
+    def config_source_paths(self):
+        return self.car.config_paths
 
     def _data_paths(self):
         roots = self.data_root_paths if self.data_root_paths else [self.es_home_path]
@@ -427,25 +429,25 @@ class DockerProvisioner:
 
         mounts = {}
 
-        car_config_path = self.car.config_path
-        for root, dirs, files in os.walk(car_config_path):
-            env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
+        for car_config_path in self.car.config_paths:
+            for root, dirs, files in os.walk(car_config_path):
+                env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
 
-            relative_root = root[len(car_config_path) + 1:]
-            absolute_target_root = os.path.join(self.install_dir, relative_root)
-            io.ensure_dir(absolute_target_root)
+                relative_root = root[len(car_config_path) + 1:]
+                absolute_target_root = os.path.join(self.install_dir, relative_root)
+                io.ensure_dir(absolute_target_root)
 
-            for name in files:
-                source_file = os.path.join(root, name)
-                target_file = os.path.join(absolute_target_root, name)
-                mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
-                if plain_text(source_file):
-                    logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
-                    with open(target_file, "w") as f:
-                        f.write(_render_template(env, self.config_vars, source_file))
-                else:
-                    logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
-                    shutil.copy(source_file, target_file)
+                for name in files:
+                    source_file = os.path.join(root, name)
+                    target_file = os.path.join(absolute_target_root, name)
+                    mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
+                    if plain_text(source_file):
+                        logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
+                        with open(target_file, "a") as f:
+                            f.write(_render_template(env, self.config_vars, source_file))
+                    else:
+                        logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
+                        shutil.copy(source_file, target_file)
 
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)

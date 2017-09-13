@@ -83,7 +83,16 @@ Selects the team repository that Rally should use to resolve cars. By default th
 ``car``
 ~~~~~~~
 
-A car defines the Elasticsearch configuration that will be used for the benchmark. To see a list of possible cars, issue ``esrally list cars``.
+A :doc:`car </car>` defines the Elasticsearch configuration that will be used for the benchmark. To see a list of possible cars, issue ``esrally list cars``. You can specify one or multiple comma-separated values, for details please refer to the documentation about :doc:`cars </car>`.
+
+**Example**
+
+ ::
+
+   esrally --car="4gheap,ea"
+
+
+Rally will configure Elasticsearch with 4GB of heap (``4gheap``) and enable Java assertions (``ea``).
 
 ``elasticsearch-plugins``
 ~~~~~~~~~~~~~~~~~~~~~~~~~

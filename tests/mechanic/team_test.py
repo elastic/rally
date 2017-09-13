@@ -15,38 +15,55 @@ class UnitTestRepo:
 class CarLoaderTests(TestCase):
     def __init__(self, args):
         super().__init__(args)
+        self.repo = None
         self.loader = None
 
     def setUp(self):
-        repo = UnitTestRepo(os.path.join(current_dir, "data"))
-        self.loader = team.CarLoader(repo)
+        self.repo = UnitTestRepo(os.path.join(current_dir, "data"))
+        self.loader = team.CarLoader(self.repo)
 
     def test_lists_car_names(self):
         # contrary to the name this assertion compares contents but does not care about order.
-        self.assertCountEqual(["default", "32gheap", "missing_config_base", "empty_config_base"], self.loader.car_names())
+        self.assertCountEqual(["default", "32gheap", "missing_config_base", "empty_config_base", "ea", "verbose"], self.loader.car_names())
 
     def test_load_known_car(self):
-        car = self.loader.load_car("default")
+        car = team.load_car(self.repo, ["default"])
         self.assertEqual("default", car.name)
         self.assertEqual([os.path.join(current_dir, "data", "cars", "vanilla")], car.config_paths)
         self.assertEqual({"heap_size": "1g"}, car.variables)
         self.assertEqual({}, car.env)
-        self.assertEqual(1, car.nodes)
+
+    def test_load_car_with_mixin_single_config_base(self):
+        car = team.load_car(self.repo, ["32gheap", "ea"])
+        self.assertEqual("32gheap+ea", car.name)
+        self.assertEqual([os.path.join(current_dir, "data", "cars", "vanilla")], car.config_paths)
+        self.assertEqual({"heap_size": "32g", "assertions": "true"}, car.variables)
+        self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F"}, car.env)
+
+    def test_load_car_with_mixin_multiple_config_bases(self):
+        car = team.load_car(self.repo, ["32gheap", "ea", "verbose"])
+        self.assertEqual("32gheap+ea+verbose", car.name)
+        self.assertEqual([
+            os.path.join(current_dir, "data", "cars", "vanilla"),
+            os.path.join(current_dir, "data", "cars", "verbose_logging"),
+        ], car.config_paths)
+        self.assertEqual({"heap_size": "32g", "assertions": "true"}, car.variables)
+        self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F G H I"}, car.env)
 
     def test_raises_error_on_unknown_car(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            self.loader.load_car("don_t-know-you")
+            team.load_car(self.repo, ["don_t-know-you"])
         self.assertRegex(ctx.exception.args[0], r"Unknown car \[don_t-know-you\]. List the available cars with [^\s]+ list cars.")
 
     def test_raises_error_on_empty_config_base(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            self.loader.load_car("empty_config_base")
-        self.assertEqual("At least one config base is required for car [empty_config_base]", ctx.exception.args[0])
+            team.load_car(self.repo, ["empty_config_base"])
+        self.assertEqual("At least one config base is required for car ['empty_config_base']", ctx.exception.args[0])
 
     def test_raises_error_on_missing_config_base(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            self.loader.load_car("missing_config_base")
-        self.assertEqual("At least one config base is required for car [missing_config_base]", ctx.exception.args[0])
+            team.load_car(self.repo, ["missing_config_base"])
+        self.assertEqual("At least one config base is required for car ['missing_config_base']", ctx.exception.args[0])
 
 
 class PluginLoaderTests(TestCase):

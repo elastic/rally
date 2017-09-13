@@ -10,35 +10,35 @@ A rally "car" is a specific configuration of Elasticsearch. You can list the ava
     /_/ |_|\__,_/_/_/\__, /
                     /____/
 
-    Available cars:
+    Name        Type    Description
+    ----------  ------  ----------------------------------
+    16gheap     car     Sets the Java heap to 16GB
+    1gheap      car     Sets the Java heap to 1GB
+    2gheap      car     Sets the Java heap to 2GB
+    4gheap      car     Sets the Java heap to 4GB
+    8gheap      car     Sets the Java heap to 8GB
+    defaults    car     Sets the Java heap to 1GB
+    verbose_iw  car     Log more detailed merge time stats
+    ea          mixin   Enables Java assertions
 
-    Name
-    ----------
-    1gheap
-    2gheap
-    4gheap
-    defaults
-    verbose_iw
-
-You can specify the car that Rally should use with e.g. ``--car=4gheap``.
+You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default).
 
 Similar to :doc:`custom tracks </adding_tracks>`, you can also define your own cars.
-
-.. warning::
-
-    This is a rather new feature (introduced in Rally 0.6.2). We want expand it so it can also install and configure plugins as well as multiple nodes the specific format and directory layout may change. Please keep this in mind when doing customizations.
-
-
 
 The Anatomy of a car
 --------------------
 
 The default car definitions of Rally are stored in ``~/.rally/benchmarks/teams/default/cars``. There we find the following structure::
 
+    ├── 16gheap.ini
     ├── 1gheap.ini
     ├── 2gheap.ini
     ├── 4gheap.ini
     ├── defaults.ini
+    ├── ea
+    │   └── config
+    │       └── jvm.options
+    ├── ea.ini
     ├── vanilla
     │   └── config
     │       ├── elasticsearch.yml
@@ -51,9 +51,13 @@ The default car definitions of Rally are stored in ``~/.rally/benchmarks/teams/d
     │       └── log4j2.properties
     └── verbose_iw.ini
 
-Each ``.ini`` file in the top level directory defines a car. And each directory (``vanilla`` or ``verbose_iw``) contains templates for the config files.
+Each ``.ini`` file in the top level directory defines a car. And each directory (``ea``, ``vanilla`` or ``verbose_iw``) contains templates for the config files.
 
 Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
+
+    [meta]
+    description=Sets the Java heap to 1GB
+    type=car
 
     [config]
     base=vanilla
@@ -61,7 +65,7 @@ Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
     [variables]
     heap_size=1g
 
-The name of the car is derived from the ini file name. In the ``config`` section we define that this definition is based on the ``vanilla`` configuration. We also define a variable ``heap_size`` and set it to ``1g``.
+The name of the car is derived from the ini file name. In the ``meta`` section we can provide a ``description`` and the ``type``. Use ``car`` if a configuration can be used standalone and ``mixin`` if it needs to be combined with other configurations. In the ``config`` section we define that this definition is based on the ``vanilla`` configuration. We also define a variable ``heap_size`` and set it to ``1g``.
 
 Let's open ``vanilla/config/jvm.options`` to see how this variable is used (we'll only show the relevant part here)::
 
@@ -79,7 +83,9 @@ If you open ``vanilla/config/elasticsearch.yml`` you will see a few variables th
 * ``http_port``
 * ``node_count_per_host``
 
-These values are derived by Rally internally based on command line flage and you cannot override them in your car definition. You also cannot use these names as names for variables because Rally would simply override them.
+These values are derived by Rally internally based on command line flags and you cannot override them in your car definition. You also cannot use these names as names for variables because Rally would simply override them.
+
+If you specify multiple configurations, e.g. ``--car="4gheap,ea"``, Rally will apply them in order. It will first read all variables in ``4gheap.ini``, then in ``ea.ini``. Afterwards, it will copy all configuration files from the corresponding config base of ``4gheap`` and *append* all configuration files from ``ea``. This also shows when to define a separate "car" and when to define a "mixin": If you need to amend configuration files, use a mixin, if you need to have a specific configuration, define a car.
 
 Custom Team Repositories
 ^^^^^^^^^^^^^^^^^^^^^^^^
