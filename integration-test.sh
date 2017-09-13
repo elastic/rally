@@ -4,7 +4,12 @@ set -e
 
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
-readonly DISTRIBUTIONS=(1.7.6 2.4.5 5.5.2)
+# we will not test anymore because it does not work with (out of the box) with Java 9 anymore (Java 8 is still fine). On startup it
+# fails with:
+#
+#       java.lang.UnsupportedOperationException: Boot class path mechanism is not supported
+#
+readonly DISTRIBUTIONS=(2.4.5 5.5.2)
 readonly TRACKS=(geonames nyc_taxis logging nested)
 
 readonly ES_METRICS_STORE_VERSION="5.0.0"

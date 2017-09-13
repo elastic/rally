@@ -11,7 +11,8 @@ def mock_debian(args, fallback=None):
         return [
             "/usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java",
             "/usr/lib/jvm/java-7-oracle/jre/bin/java",
-            "/usr/lib/jvm/java-8-oracle/jre/bin/java"
+            "/usr/lib/jvm/java-8-oracle/jre/bin/java",
+            "/usr/lib/jvm/java-9-openjdk-amd64/bin/java"
         ]
     else:
         return fallback
@@ -36,6 +37,7 @@ class IoTests(TestCase):
         self.assertEqual("/Library/Java/JavaVirtualMachines/jdk-9.jdk/Contents/Home", java_home)
 
     def test_guess_java_home_on_debian(self):
+        self.assertEqual("/usr/lib/jvm/java-9-openjdk-amd64", io.guess_java_home(major_version=9, runner=mock_debian))
         self.assertEqual("/usr/lib/jvm/java-8-oracle", io.guess_java_home(major_version=8, runner=mock_debian))
         self.assertEqual("/usr/lib/jvm/java-7-openjdk-amd64", io.guess_java_home(major_version=7, runner=mock_debian))
 

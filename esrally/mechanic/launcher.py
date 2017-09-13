@@ -188,7 +188,7 @@ class InProcessLauncher:
         self.metrics_store = metrics_store
         self._clock = clock
         self.races_root_dir = races_root_dir
-        self.java_home = self.cfg.opts("runtime", "java8.home")
+        self.java_home = self.cfg.opts("runtime", "java.home")
 
     def start(self, node_configurations):
         # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine

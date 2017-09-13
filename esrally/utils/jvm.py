@@ -62,3 +62,15 @@ def major_version(java_home, sysprop_reader=system_property):
         return int(v[2])
     else:
         return int(v)
+
+
+def is_early_access_release(java_home, sysprop_reader=system_property):
+    """
+    Determines whether the JVM available at the provided JAVA_HOME directory is an early access release. It mimicks the corresponding
+    bootstrap check in Elasticsearch itself.
+
+    :param java_home: The JAVA_HOME directory to check.
+    :param sysprop_reader: (Optional) only relevant for testing.
+    :return: True iff the JVM available at ``java_home`` is classified as an early access release.
+    """
+    return vendor(java_home, sysprop_reader) == "Oracle Corporation" and version(java_home, sysprop_reader).endswith("-ea")

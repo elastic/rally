@@ -511,7 +511,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         remote_url = cfg.opts("source", "remote.repo.url")
         revision = cfg.opts("mechanic", "source.revision")
         gradle = cfg.opts("build", "gradle.bin")
-        java_home = cfg.opts("runtime", "java8.home")
+        java_home = cfg.opts("runtime", "java.home")
 
         if len(plugins) > 0:
             raise exceptions.RallyError("Source builds of plugins are not supported yet. For more details, please "

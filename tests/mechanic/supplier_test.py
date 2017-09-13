@@ -70,7 +70,9 @@ class SourceRepositoryTests(TestCase):
 class BuilderTests(TestCase):
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    def test_build(self, mock_run_subprocess):
+    @mock.patch("esrally.utils.jvm.major_version")
+    def test_build_on_jdk_8(self, jvm_major_version, mock_run_subprocess):
+        jvm_major_version.return_value = 8
         mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk8", log_dir="logs")
@@ -81,6 +83,26 @@ class BuilderTests(TestCase):
             mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1"),
             # Return value check
             mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle :distribution:tar:assemble >> logs/build.log 2>&1"),
+        ]
+
+        mock_run_subprocess.assert_has_calls(calls)
+
+    @mock.patch("esrally.utils.process.run_subprocess")
+    @mock.patch("esrally.utils.jvm.major_version")
+    def test_build_on_jdk_9(self, jvm_major_version, mock_run_subprocess):
+        jvm_major_version.return_value = 9
+        mock_run_subprocess.return_value = False
+
+        b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk9", log_dir="logs")
+        b.build()
+
+        calls = [
+            # Actual call
+            mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1" %
+                      supplier.Builder.JAVA_9_GRADLE_OPTS),
+            # Return value check
+            mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle :distribution:tar:assemble "
+                      ">> logs/build.log 2>&1" % supplier.Builder.JAVA_9_GRADLE_OPTS),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)

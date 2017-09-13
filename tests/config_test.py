@@ -214,6 +214,9 @@ class AutoLoadConfigTests(TestCase):
                 },
                 "benchmarks": {
                     "local.dataset.cache": "/tmp/rally/data"
+                },
+                "runtime": {
+                    "java8.home": "/opt/jdk8"
                 }
             })
         self.assertTrue(cfg.config_file.present)
@@ -227,11 +230,13 @@ class AutoLoadConfigTests(TestCase):
 
 
 class ConfigFactoryTests(TestCase):
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_simple_config(self, guess_install_location, guess_java_home):
+    def test_create_simple_config(self, guess_install_location, guess_java_home, is_ea_release):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
-        guess_java_home.return_value = "/tests/java8/home"
+        guess_java_home.return_value = "/tests/java9/home"
+        is_ea_release.return_value = False
         mock_input = MockInput(["/Projects/elasticsearch/src"])
 
         f = config.ConfigFactory(i=mock_input, sec_i=mock_input, o=null_output)
@@ -245,7 +250,7 @@ class ConfigFactoryTests(TestCase):
                 print("%s::%s: %s" % (section, k, v))
 
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("10", config_store.config["meta"]["config.version"])
+        self.assertEqual("11", config_store.config["meta"]["config.version"])
 
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
@@ -261,7 +266,7 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
 
         self.assertTrue("runtime" in config_store.config)
-        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+        self.assertEqual("/tests/java9/home", config_store.config["runtime"]["java.home"])
 
         self.assertTrue("benchmarks" in config_store.config)
         self.assertEqual("${node:root.dir}/data", config_store.config["benchmarks"]["local.dataset.cache"])
@@ -297,8 +302,7 @@ class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.io.guess_install_location")
     @mock.patch("esrally.utils.io.normalize_path")
     @mock.patch("os.path.exists")
-    def test_create_simple_config_no_java8_detected(self, path_exists, normalize_path, guess_install_location,
-                                                    guess_java_home):
+    def test_create_simple_config_no_java_detected(self, path_exists, normalize_path, guess_install_location, guess_java_home):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
         guess_java_home.return_value = None
         normalize_path.return_value = "/tests/java8/home"
@@ -311,13 +315,15 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("runtime" in config_store.config)
-        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
 
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_advanced_config(self, guess_install_location, guess_java_home):
+    def test_create_advanced_config(self, guess_install_location, guess_java_home, is_ea_release):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
-        guess_java_home.return_value = "/tests/java8/home"
+        guess_java_home.side_effect = ["/tests/java9/home", "/tests/java8/home"]
+        is_ea_release.return_value = True
 
         f = config.ConfigFactory(i=MockInput([
             # benchmark root directory
@@ -343,7 +349,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("10", config_store.config["meta"]["config.version"])
+        self.assertEqual("11", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
@@ -352,7 +358,7 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
         self.assertTrue("runtime" in config_store.config)
-        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java8.home"])
+        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
         self.assertTrue("benchmarks" in config_store.config)
 
         self.assertTrue("reporting" in config_store.config)
@@ -383,7 +389,6 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
 
-
 class ConfigMigrationTests(TestCase):
     # catch all test, migrations are checked in more detail in the other tests
     @mock.patch("esrally.utils.io.get_size")
@@ -408,6 +413,9 @@ class ConfigMigrationTests(TestCase):
                 "report.base.dir": "/tests/rally/reporting",
                 "output.html.report.filename": "index.html"
             },
+            "runtime": {
+                "java8.home": "/opt/jdk/8",
+            }
         }
 
         config_file.store(sample_config)
@@ -608,6 +616,25 @@ class ConfigMigrationTests(TestCase):
                          config_file.config["distributions"]["release.url"])
         self.assertEqual("true",
                          config_file.config["distributions"]["release.cache"])
+
+    def test_migrate_from_10_to_11(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 10
+            },
+            "runtime": {
+                "java8.home": "/opt/jdk/8",
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 10, 11, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("11", config_file.config["meta"]["config.version"])
+        self.assertTrue("runtime" in config_file.config)
+        self.assertFalse("java8.home" in config_file.config["runtime"])
+        self.assertEqual("/opt/jdk/8", config_file.config["runtime"]["java.home"])
 
 
 

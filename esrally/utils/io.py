@@ -403,16 +403,19 @@ def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_r
         # /usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java
         # /usr/lib/jvm/java-7-oracle/jre/bin/java
         # /usr/lib/jvm/java-8-oracle/jre/bin/java
+        # /usr/lib/jvm/java-9-openjdk-amd64/bin/java
         java_home = runner(["update-alternatives", "--list", "java"])
         if java_home:
-            debian_jdk_pattern = re.compile(r"/.*/(java-%d).*/jre/bin/java" % major_version)
+            debian_jdk_pattern = re.compile(r"(/.*/(java-%d)[^/]*)/(jre/)?bin/java" % major_version)
             for j in java_home:
-                if debian_jdk_pattern.match(j):
-                    return j[:-len("/jre/bin/java")]
+                m = debian_jdk_pattern.match(j)
+                if m:
+                    return m.group(1)
         # Red Hat based distributions
         #
         # ls -l /etc/alternatives/jre_1.[789].0
-        # lrwxrwxrwx. 1 root root 62 May 20 07:51 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.91-5.b14.fc23.x86_64/jre
+        # lrwxrwxrwx. 1 root root 63 Sep 10 13:57 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.144-5.b01.fc25.x86_64/jre
+        # lrwxrwxrwx. 1 root root 51 Sep 13 15:04 /etc/alternatives/jre_1.9.0 -> /usr/lib/jvm/java-9-openjdk-9.0.0.163-1.fc25.x86_64        #
         #
         # We could also use the output of "alternatives --display java" on Red Hat but the output is so
         # verbose that it's easier to use the links.

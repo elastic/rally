@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 10
+    CURRENT_CONFIG_VERSION = 11
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -305,14 +305,19 @@ class ConfigFactory:
         self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
         gradle_bin = io.guess_install_location("gradle")
-        default_jdk_8 = io.guess_java_home(major_version=8)
+        java_9_home = io.guess_java_home(major_version=9)
+        from esrally.utils import jvm
+        # Don't auto-detect an EA release and bring trouble to the user later on. They can still configure it manually if they want to.
+        if java_9_home and not jvm.is_early_access_release(java_9_home):
+            auto_detected_java_home = java_9_home
+        else:
+            auto_detected_java_home = io.guess_java_home(major_version=8)
 
         self.print_detection_result("git    ", git_path)
         self.print_detection_result("gradle ", gradle_bin)
-        self.print_detection_result("JDK 8  ", default_jdk_8,
+        self.print_detection_result("JDK    ", auto_detected_java_home,
                                     warn_if_missing=True,
-                                    additional_message="You cannot benchmark Elasticsearch 5.x without a JDK 8 installation")
-        # self.print_detection_result("JDK 9 ", default_jdk_9, warn_if_missing=True)
+                                    additional_message="You cannot benchmark Elasticsearch without a JDK installation")
         self.o("")
 
         # users that don't have Gradle available cannot benchmark from sources
@@ -349,11 +354,11 @@ class ConfigFactory:
             # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
             repo_url = "https://github.com/elastic/elasticsearch.git"
 
-        if default_jdk_8:
-            jdk8_home = default_jdk_8
+        if auto_detected_java_home:
+            java_home = auto_detected_java_home
         else:
             self.o("")
-            jdk8_home = io.normalize_path(self._ask_property("Enter the JDK 8 root directory:", check_path_exists=True))
+            java_home = io.normalize_path(self._ask_property("Enter the JDK root directory:", check_path_exists=True))
 
         if advanced_config:
             env_name = self._ask_env_name()
@@ -389,7 +394,7 @@ class ConfigFactory:
             config["build"]["gradle.bin"] = gradle_bin
 
         config["runtime"] = {}
-        config["runtime"]["java8.home"] = jdk8_home
+        config["runtime"]["java.home"] = java_home
 
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
@@ -637,6 +642,10 @@ def migrate(config_file, current_version, target_version, out=print):
         config["distributions"]["release.url"] = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
         config["distributions"]["release.cache"] = "true"
         current_version = 10
+        config["meta"]["config.version"] = str(current_version)
+    if current_version == 10 and target_version > current_version:
+        config["runtime"]["java.home"] = config["runtime"].pop("java8.home")
+        current_version = 11
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

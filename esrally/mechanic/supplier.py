@@ -101,6 +101,13 @@ class SourceRepository:
 
 
 class Builder:
+    # Tested with Gradle 4.1 on Java 9-ea+161
+    JAVA_9_GRADLE_OPTS = "--add-opens=java.base/java.io=ALL-UNNAMED " \
+                         "--add-opens=java.base/java.lang=ALL-UNNAMED " \
+                         "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED " \
+                         "--add-opens=java.base/java.util=ALL-UNNAMED " \
+                         "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED " \
+                         "--add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED"
     """
     A builder is responsible for creating an installable binary from the source files.
 
@@ -125,15 +132,23 @@ class Builder:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
 
     def run(self, task):
+        from esrally.utils import jvm
+
         logger.info("Building Elasticsearch from sources in [%s]." % self.src_dir)
         logger.info("Executing %s %s..." % (self.gradle, task))
         io.ensure_dir(self.log_dir)
         log_file = "%s/build.log" % self.log_dir
 
         # we capture all output to a dedicated build log file
+        jvm_major_version = jvm.major_version(self.java_home)
+        if jvm_major_version > 8:
+            logger.info("Detected JVM with major version [%d]. Adjusting JDK module access options for the build." % jvm_major_version)
+            gradle_opts = "export GRADLE_OPTS=\"%s\"; " % Builder.JAVA_9_GRADLE_OPTS
+        else:
+            gradle_opts = ""
 
-        if process.run_subprocess("export JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
-                                          (self.java_home, self.src_dir, self.gradle, task, log_file)):
+        if process.run_subprocess("%sexport JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
+                                  (gradle_opts, self.java_home, self.src_dir, self.gradle, task, log_file)):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:
@@ -141,6 +156,9 @@ class Builder:
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
             msg += "The full build log is available at [%s]." % log_file
+            if jvm_major_version > 8:
+                msg += "Please check"
+
             raise BuildError(msg)
 
 
