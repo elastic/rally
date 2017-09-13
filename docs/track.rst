@@ -83,7 +83,7 @@ Each type consists of the following properties:
 * ``name`` (mandatory): Name of the type.
 * ``mapping`` (mandatory): File name of the corresponding mapping file.
 * ``documents`` (optional): File name of the corresponding documents that should be indexed. If you are using parent-child, specify the number of parent documents. This file has to be compressed either as ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2`` and must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
-* ``includes_action_and_meta_data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
+* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
 * ``document-count`` (mandatory if ``documents`` is set): Number of documents in the documents file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus).
 * ``compressed-bytes`` (optional but recommended if ``documents`` is set): The size in bytes of the compressed document file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended if ``documents`` is set): The size in bytes of the documents file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
