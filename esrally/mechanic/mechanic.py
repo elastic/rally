@@ -421,17 +421,14 @@ class NodeMechanicActor(actor.RallyActor):
                     logger.info("Starting node(s) %s on [%s]." % (msg.node_ids, msg.ip))
 
                 # Load node-specific configuration
-                self.config = config.Config(config_name=msg.cfg.name)
-                self.config.load_config()
+                self.config = config.auto_load_local_config(msg.cfg, additional_sections=[
+                    # only copy the relevant bits
+                    "track", "mechanic", "client",
+                    # allow metrics store to extract race meta-data
+                    "race"
+                ])
+                # set root path (normally done by the main entry point)
                 self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
-                # copy only the necessary configuration sections
-                self.config.add_all(msg.cfg, "system")
-                self.config.add_all(msg.cfg, "distributions")
-                self.config.add_all(msg.cfg, "client")
-                self.config.add_all(msg.cfg, "track")
-                self.config.add_all(msg.cfg, "mechanic")
-                # allow metrics store to extract race meta-data
-                self.config.add_all(msg.cfg, "race")
                 if not msg.external:
                     self.config.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
                     # we need to override the port with the value that the user has specified instead of using the default value (39200)

@@ -257,16 +257,14 @@ class DriverActor(actor.RallyActor):
 
 
 def load_local_config(coordinator_config):
-    cfg = config.Config(config_name=coordinator_config.name)
-    cfg.load_config()
+    cfg = config.auto_load_local_config(coordinator_config, additional_sections=[
+        # only copy the relevant bits
+        "track", "driver", "client",
+        # due to distribution version...
+        "mechanic"
+    ])
+    # set root path (normally done by the main entry point)
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
-    # only copy the relevant bits
-    cfg.add_all(coordinator_config, "system")
-    cfg.add_all(coordinator_config, "track")
-    cfg.add_all(coordinator_config, "driver")
-    cfg.add_all(coordinator_config, "client")
-    # due to distribution version...
-    cfg.add_all(coordinator_config, "mechanic")
     return cfg
 
 

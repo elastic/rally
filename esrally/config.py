@@ -30,7 +30,7 @@ class Scope(Enum):
 
 
 class ConfigFile:
-    def __init__(self, config_name=None):
+    def __init__(self, config_name=None, **kwargs):
         self.config_name = config_name
 
     @property
@@ -68,6 +68,43 @@ class ConfigFile:
         return "%s/rally%s.ini" % (self.config_dir, config_name_suffix)
 
 
+def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs):
+    """
+    Loads a node-local configuration based on a ``base_config``. If an appropriate node-local configuration file is present, it will be
+    used (and potentially upgraded to the newest config version). Otherwise, a new one will be created and as many settings as possible
+    will be reused from the ``base_config``.
+
+    :param base_config: The base config to use.
+    :param config_file_class class of the config file to use. Only relevant for testing.
+    :param additional_sections: A list of any additional config sections to copy from the base config (will not end up in the config file).
+    :return: A fully-configured node local config.
+    """
+    cfg = Config(config_name=base_config.name, config_file_class=config_file_class, **kwargs)
+    if cfg.config_present():
+        cfg.load_config(auto_upgrade=True)
+    else:
+        # force unattended configuration - we don't need to raise errors if some bits are missing. Depending on the node role and the
+        # configuration it may be fine that e.g. Java is missing (no need for that on a load driver node).
+        ConfigFactory(o=logger.info).create_config(cfg.config_file, advanced_config=False, assume_defaults=True)
+        # reload and continue
+        if cfg.config_present():
+            cfg.load_config()
+    # we override our some configuration with the one from the coordinator because it may contain more entries and we should be
+    # consistent across all nodes here.
+    cfg.add_all(base_config, "reporting")
+    cfg.add_all(base_config, "tracks")
+    cfg.add_all(base_config, "teams")
+    cfg.add_all(base_config, "distributions")
+    cfg.add_all(base_config, "defaults")
+    # needed e.g. for "time.start"
+    cfg.add_all(base_config, "system")
+
+    if additional_sections:
+        for section in additional_sections:
+            cfg.add_all(base_config, section)
+    return cfg
+
+
 class Config:
     CURRENT_CONFIG_VERSION = 10
 
@@ -77,9 +114,9 @@ class Config:
     transparently resolved when a property is retrieved and the value on the most specific level is returned.
     """
 
-    def __init__(self, config_name=None, config_file_class=ConfigFile):
+    def __init__(self, config_name=None, config_file_class=ConfigFile, **kwargs):
         self.name = config_name
-        self.config_file = config_file_class(config_name)
+        self.config_file = config_file_class(config_name, **kwargs)
         self._opts = {}
         self._clear_config()
 
@@ -158,10 +195,17 @@ class Config:
         """
         return self.config_file.present
 
-    def load_config(self):
+    def load_config(self, auto_upgrade=False):
         """
         Loads an existing config file.
         """
+        self._do_load_config()
+        if auto_upgrade and not self.config_compatible():
+            self.migrate_config()
+            # Reload config after upgrading
+            self._do_load_config()
+
+    def _do_load_config(self):
         config = self.config_file.load()
         # It's possible that we just reload the configuration
         self._clear_config()

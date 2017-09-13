@@ -23,11 +23,16 @@ def null_output(*args, **kwargs):
 
 
 class InMemoryConfigStore:
-    def __init__(self, config_name):
+    def __init__(self, config_name, config=None, backup_created=False, present=False):
         self.config_name = config_name
-        self.config = None
-        self.backup_created = False
-        self.present = False
+        # support initialization from a dict
+        if config:
+            self.config = configparser.ConfigParser()
+            self.config.read_dict(config)
+        else:
+            self.config = config
+        self.backup_created = backup_created
+        self.present = present
         self.location = "in-memory"
         self.config_dir = "in-memory"
 
@@ -134,6 +139,91 @@ class ConfigTests(TestCase):
 
         # nonexisting key will not throw an error
         target_cfg.add_all(source=source_cfg, section="this section does not exist")
+
+
+class AutoLoadConfigTests(TestCase):
+    def test_can_create_non_existing_config(self):
+        base_cfg = config.Config(config_name="unittest", config_file_class=InMemoryConfigStore)
+        base_cfg.add(config.Scope.application, "meta", "config.version", config.Config.CURRENT_CONFIG_VERSION)
+        base_cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/base-config/data-set-cache")
+        base_cfg.add(config.Scope.application, "reporting", "datastore.type", "elasticsearch")
+        base_cfg.add(config.Scope.application, "tracks", "metrics.url", "http://github.com/org/metrics")
+        base_cfg.add(config.Scope.application, "teams", "private.url", "http://github.com/org/teams")
+        base_cfg.add(config.Scope.application, "distributions", "release.cache", False)
+        base_cfg.add(config.Scope.application, "defaults", "preserve_benchmark_candidate", True)
+
+        cfg = config.auto_load_local_config(base_cfg, config_file_class=InMemoryConfigStore)
+        self.assertTrue(cfg.config_file.present)
+        # did not just copy base config
+        self.assertNotEqual(base_cfg.opts("benchmarks", "local.dataset.cache"), cfg.opts("benchmarks", "local.dataset.cache"))
+        # copied sections from base config
+        self.assert_equals_base_config(base_cfg, cfg, "reporting", "datastore.type")
+        self.assert_equals_base_config(base_cfg, cfg, "tracks", "metrics.url")
+        self.assert_equals_base_config(base_cfg, cfg, "teams", "private.url")
+        self.assert_equals_base_config(base_cfg, cfg, "distributions", "release.cache")
+        self.assert_equals_base_config(base_cfg, cfg, "defaults", "preserve_benchmark_candidate")
+
+    def test_can_load_and_amend_existing_config(self):
+        base_cfg = config.Config(config_name="unittest", config_file_class=InMemoryConfigStore)
+        base_cfg.add(config.Scope.application, "meta", "config.version", config.Config.CURRENT_CONFIG_VERSION)
+        base_cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/base-config/data-set-cache")
+        base_cfg.add(config.Scope.application, "unit-test", "sample.property", "let me copy you")
+
+        cfg = config.auto_load_local_config(base_cfg, additional_sections=["unit-test"],
+                                            config_file_class=InMemoryConfigStore, present=True, config={
+            "distributions": {
+                "release.url": "https://acme.com/releases",
+                "release.cache": "true",
+            },
+            "system": {
+                "env.name": "existing-unit-test-config"
+            },
+            "meta": {
+                "config.version": config.Config.CURRENT_CONFIG_VERSION
+            },
+            "benchmarks": {
+                "local.dataset.cache": "/tmp/rally/data"
+            }
+        })
+        self.assertTrue(cfg.config_file.present)
+        # did not just copy base config
+        self.assertNotEqual(base_cfg.opts("benchmarks", "local.dataset.cache"), cfg.opts("benchmarks", "local.dataset.cache"))
+        # keeps config properties
+        self.assertEqual("existing-unit-test-config", cfg.opts("system", "env.name"))
+        # copies additional properties
+        self.assert_equals_base_config(base_cfg, cfg, "unit-test", "sample.property")
+
+    def test_can_migrate_outdated_config(self):
+        base_cfg = config.Config(config_name="unittest", config_file_class=InMemoryConfigStore)
+        base_cfg.add(config.Scope.application, "meta", "config.version", config.Config.CURRENT_CONFIG_VERSION)
+        base_cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/base-config/data-set-cache")
+        base_cfg.add(config.Scope.application, "unit-test", "sample.property", "let me copy you")
+
+        cfg = config.auto_load_local_config(base_cfg, additional_sections=["unit-test"],
+                                            config_file_class=InMemoryConfigStore, present=True, config={
+                "distributions": {
+                    "release.url": "https://acme.com/releases",
+                    "release.cache": "true",
+                },
+                "system": {
+                    "env.name": "existing-unit-test-config"
+                },
+                # outdated
+                "meta": {
+                    "config.version": config.Config.CURRENT_CONFIG_VERSION - 1
+                },
+                "benchmarks": {
+                    "local.dataset.cache": "/tmp/rally/data"
+                }
+            })
+        self.assertTrue(cfg.config_file.present)
+        # did not just copy base config
+        self.assertNotEqual(base_cfg.opts("benchmarks", "local.dataset.cache"), cfg.opts("benchmarks", "local.dataset.cache"))
+        # migrated existing config
+        self.assertEqual(config.Config.CURRENT_CONFIG_VERSION, int(cfg.opts("meta", "config.version")))
+
+    def assert_equals_base_config(self, base_config, local_config, section, key):
+        self.assertEqual(base_config.opts(section, key), local_config.opts(section, key))
 
 
 class ConfigFactoryTests(TestCase):

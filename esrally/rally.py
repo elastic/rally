@@ -343,11 +343,7 @@ def ensure_configuration_present(cfg, args, sub_command):
         exit(0)
     else:
         if cfg.config_present():
-            cfg.load_config()
-            if not cfg.config_compatible():
-                cfg.migrate_config()
-                # Reload config after upgrading
-                cfg.load_config()
+            cfg.load_config(auto_upgrade=True)
         else:
             console.error("No config present. Please run '%s configure' first." % PROGRAM_NAME)
             exit(64)
