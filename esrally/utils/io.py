@@ -294,6 +294,20 @@ def prepare_file_offset_table(data_file_path):
         return None
 
 
+def remove_file_offset_table(data_file_path):
+    """
+
+    Attempts to remove the file offset table for the provided data path.
+
+    :param data_file_path: The path to a text file that is readable by this process.
+    """
+    offset_file_path = "%s.offset" % data_file_path
+    try:
+        os.remove(offset_file_path)
+    except OSError as e:
+        logger.debug("Error while attempting to delete [%s]: [%s]" % (offset_file_path, e))
+
+
 def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
     """
     Skips the first `number_of_lines_to_skip` lines in `data_file` as a side effect.

@@ -242,6 +242,7 @@ def prepare_track(track, cfg):
                 # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
                 lines_read = io.prepare_file_offset_table(decompressed_file_path)
                 if lines_read and lines_read != type.number_of_lines:
+                    io.remove_file_offset_table(decompressed_file_path)
                     raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
                                                % (decompressed_file_path, track, type.number_of_lines, lines_read))
             else:
