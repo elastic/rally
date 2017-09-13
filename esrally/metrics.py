@@ -954,7 +954,7 @@ def race_store(cfg):
 def list_races(cfg):
     races = []
     for race in race_store(cfg).list():
-        races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car, race.user_tag])
+        races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car_name, race.user_tag])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
