@@ -120,6 +120,7 @@ class BenchmarkActor(actor.RallyActor):
                 # We also need to ask in order to avoid races between this notification and the following ActorExitRequest.
                 self.send(self.start_sender, msg)
             elif isinstance(msg, actor.BenchmarkFailure):
+                logger.info("Received a benchmark failure from [%s] and will forward it now." % sender)
                 self.error = True
                 self.send(self.start_sender, msg)
             elif isinstance(msg, driver.BenchmarkComplete):

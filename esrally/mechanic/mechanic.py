@@ -285,10 +285,10 @@ class MechanicActor(actor.RallyActor):
                     logger.error("[%s] sent to a child actor has resulted in PoisonMessage" % str(msg.poisonMessage))
                     raise exceptions.RallyError("Could not communicate with benchmark candidate (unknown reason)")
         except BaseException:
-            logger.exception("Cannot process message [%s]" % msg)
             # usually, we'll notify the sender but in case a child sent something that caused an exception we'd rather
             # have it bubble up to race control. Otherwise, we could play ping-pong with our child actor.
             recipient = self.race_control if sender in self.children else sender
+            logger.exception("Cannot process message [%s]. Notifying [%s]." % (msg, recipient))
             ex_type, ex_value, ex_traceback = sys.exc_info()
             # avoid "can't pickle traceback objects"
             import traceback
