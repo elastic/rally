@@ -307,6 +307,9 @@ class DockerProvisionerTests(TestCase):
             "node_count_per_host": 1,
             "cluster_settings": {
                 "xpack.security.enabled": "false",
+                "xpack.ml.enabled": "false",
+                "xpack.monitoring.enabled": "false",
+                "xpack.watcher.enabled": "false",
                 "indices.query.bool.max_clause_count": 5000
             },
             "xpack.security.enabled": False

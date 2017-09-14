@@ -394,7 +394,7 @@ class DockerProvisioner:
 
         # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
         merged_cluster_settings = cluster_settings.copy()
-        #disable x-pack features as we don't use them and want to compare with plain vanilla ES
+        # disable x-pack features as we don't use them and want to compare with plain vanilla ES
         merged_cluster_settings["xpack.security.enabled"] = "false"
         merged_cluster_settings["xpack.ml.enabled"] = "false"
         merged_cluster_settings["xpack.monitoring.enabled"] = "false"
