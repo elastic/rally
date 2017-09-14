@@ -86,7 +86,7 @@ class DockerLauncher:
             binary_path = node_configuration.binary_path
             self.binary_paths[node_name] = binary_path
 
-            p = self._start_process(cmd="docker-compose -f %s up" % binary_path, node_name=node_name)
+            p = self._start_process(cmd="docker-compose -f %s up" % binary_path, node_name=node_name, log_dir=node_configuration.log_path)
             # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
             node_telemetry = [
                 telemetry.DiskIo(self.metrics_store, len(node_configurations)),
@@ -97,7 +97,7 @@ class DockerLauncher:
             nodes.append(cluster.Node(p, host_name, node_name, t))
         return nodes
 
-    def _start_process(self, cmd, node_name):
+    def _start_process(self, cmd, node_name, log_dir):
         startup_event = threading.Event()
         p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
         t = threading.Thread(target=self._read_output, args=(node_name, p, startup_event))
@@ -107,7 +107,6 @@ class DockerLauncher:
             logger.info("Started node=%s with pid=%s" % (node_name, p.pid))
             return p
         else:
-            log_dir = self.cfg.opts("system", "log.dir")
             msg = "Could not start node '%s' within timeout period of %s seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
             logger.error(msg)
