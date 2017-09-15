@@ -794,6 +794,7 @@ class ExecutorTests(TestCase):
         self.assertEqual({
             # Look ma: No http-status!
             "error-description": "no route to host",
+            "error-type": "transport",
             "success": False
         }, request_meta_data)
 
@@ -809,6 +810,7 @@ class ExecutorTests(TestCase):
         self.assertEqual("ops", total_ops_unit)
         self.assertEqual({
             "http-status": 404,
+            "error-type": "transport",
             "error-description": "not found",
             "success": False
         }, request_meta_data)

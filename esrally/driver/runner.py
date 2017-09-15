@@ -267,6 +267,8 @@ class BulkIndex(Runner):
             "bulk-size": bulk_size
         }
         meta_data.update(stats)
+        if not stats["success"]:
+            meta_data["error-type"] = "bulk"
         return meta_data
 
     def detailed_stats(self, params, bulk_size, response):

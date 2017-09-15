@@ -1066,6 +1066,7 @@ def execute_single(runner, es, params):
         total_ops_unit = "ops"
         request_meta_data = {
             "success": False,
+            "error-type": "transport",
             "error-description": e.error
         }
         # The ES client will return N/A for connection errors

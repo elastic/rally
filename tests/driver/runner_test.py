@@ -76,6 +76,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
+        self.assertFalse("error-type" in result)
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -106,6 +107,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
+        self.assertFalse("error-type" in result)
 
         es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="test-type", params={})
 
@@ -170,6 +172,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(2, result["error-count"])
+        self.assertEqual("bulk", result["error-type"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -274,6 +277,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(2, result["error-count"])
+        self.assertEqual("bulk", result["error-type"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -416,6 +420,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(3, result["error-count"])
+        self.assertEqual("bulk", result["error-type"])
         self.assertEqual(
             {
                 "index": {
@@ -503,6 +508,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, result["hits"])
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
+        self.assertFalse("error-type" in result)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_only_one_page(self, es):
@@ -553,6 +559,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(4, results["took"])
         self.assertEqual("ops", results["unit"])
         self.assertFalse(results["timed_out"])
+        self.assertFalse("error-type" in results)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_with_explicit_number_of_pages(self, es):
@@ -616,6 +623,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(79, results["took"])
         self.assertEqual("ops", results["unit"])
         self.assertTrue(results["timed_out"])
+        self.assertFalse("error-type" in results)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_early_termination(self, es):
@@ -671,6 +679,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["hits"])
         self.assertEqual("ops", results["unit"])
         self.assertEqual(55, results["took"])
+        self.assertFalse("error-type" in results)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_request_all_pages(self, es):
@@ -736,3 +745,4 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(900, results["took"])
         self.assertEqual("ops", results["unit"])
         self.assertFalse(results["timed_out"])
+        self.assertFalse("error-type" in results)
