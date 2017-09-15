@@ -76,6 +76,7 @@ class DockerLauncher:
         self.metrics_store = metrics_store
         self.binary_paths = {}
         self.node_name = None
+        self.keep_running = self.cfg.opts("mechanic", "keep.running")
 
     def start(self, node_configurations):
         nodes = []
@@ -132,11 +133,14 @@ class DockerLauncher:
                 logger.info("[%s] has successfully started." % node_name)
 
     def stop(self, nodes):
-        logger.info("Stopping Docker container")
-        for node in nodes:
-            node.telemetry.detach_from_node(node, running=True)
-            process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_paths[node.node_name])
-            node.telemetry.detach_from_node(node, running=False)
+        if self.keep_running:
+            logger.info("Keeping Docker container running.")
+        else:
+            logger.info("Stopping Docker container")
+            for node in nodes:
+                node.telemetry.detach_from_node(node, running=True)
+                process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_paths[node.node_name])
+                node.telemetry.detach_from_node(node, running=False)
 
 
 class ExternalLauncher:
@@ -189,6 +193,7 @@ class InProcessLauncher:
         self._clock = clock
         self.races_root_dir = races_root_dir
         self.java_home = self.cfg.opts("runtime", "java.home")
+        self.keep_running = self.cfg.opts("mechanic", "keep.running")
 
     def start(self, node_configurations):
         # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
@@ -319,36 +324,38 @@ class InProcessLauncher:
                 logger.info("[%s] has successfully started." % node_name)
 
     def stop(self, nodes):
-        logger.info("Shutting down [%d] nodes on this host." % len(nodes))
-        stop_watch = self._clock.stop_watch()
-        stop_watch.start()
+        if self.keep_running:
+            logger.info("Keeping [%d] nodes on this host running." % len(nodes))
+        else:
+            logger.info("Shutting down [%d] nodes on this host." % len(nodes))
         for node in nodes:
             process = node.process
             node_name = node.node_name
             node.telemetry.detach_from_node(node, running=True)
-
-            os.kill(process.pid, signal.SIGINT)
-
-            try:
-                process.wait(10.0)
-                logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
-            except subprocess.TimeoutExpired:
-                # kill -9
-                logger.warning("Node [%s] did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node_name)
+            if not self.keep_running:
+                stop_watch = self._clock.stop_watch()
+                stop_watch.start()
+                os.kill(process.pid, signal.SIGINT)
                 try:
-                    os.kill(process.pid, signal.SIGQUIT)
-                except OSError:
-                    logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
-                    break
-                try:
-                    process.wait(120.0)
+                    process.wait(10.0)
                     logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
-                    break
                 except subprocess.TimeoutExpired:
-                    pass
-                logger.info("kill -KILL node [%s]" % node_name)
-                try:
-                    process.kill()
-                except ProcessLookupError:
-                    logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
-            node.telemetry.detach_from_node(node, running=False)
+                    # kill -9
+                    logger.warning("Node [%s] did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node_name)
+                    try:
+                        os.kill(process.pid, signal.SIGQUIT)
+                    except OSError:
+                        logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
+                        break
+                    try:
+                        process.wait(120.0)
+                        logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+                    logger.info("kill -KILL node [%s]" % node_name)
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
+                node.telemetry.detach_from_node(node, running=False)

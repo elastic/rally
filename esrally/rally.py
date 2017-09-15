@@ -308,6 +308,12 @@ def parse_args():
             choices=["true", "false"],
             help=argparse.SUPPRESS,
             default=None)
+        # keeps the cluster running after the benchmark, only relevant if Rally provisions the cluster
+        p.add_argument(
+            "--keep-cluster-running",
+            help=argparse.SUPPRESS,
+            action="store_true",
+            default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -558,7 +564,13 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+    if args.keep_cluster_running:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
+        # force-preserve the cluster nodes.
+        cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", True)
+    else:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
     if args.override_src_dir is not None:
         cfg.add(config.Scope.applicationOverride, "source", "local.src.dir", args.override_src_dir)
