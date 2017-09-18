@@ -1146,14 +1146,14 @@ class FileRaceStore(RaceStore):
 
     def _output_file_name(self, doc):
         if self.user_provided_start_timestamp:
-            suffix = "_%s_%s_%s" % (doc["track"], doc["challenge"], doc["car"])
+            suffix = "_%s_%s_%s" % (doc["track"], doc["challenge"], "+".join(doc["car"]))
         else:
             suffix = ""
         return "%s/race%s.json" % (self.race_path, suffix)
 
     def list(self):
         import glob
-        results = glob.glob("%s/*/race.json" % self.races_path)
+        results = glob.glob("%s/*/race*.json" % self.races_path)
         all_races = self._to_races(results)
         return all_races[:self._max_results()]
 
