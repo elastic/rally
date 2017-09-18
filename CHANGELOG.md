@@ -1,3 +1,18 @@
+### 0.7.2
+
+#### Enhancements
+
+* [#322](https://github.com/elastic/rally/issues/322): Add error-type to request meta-data
+* [#321](https://github.com/elastic/rally/issues/321): Don't log body when creating a new index
+* [#319](https://github.com/elastic/rally/issues/319): Upgrade to thespian 3.8.0
+* [#315](https://github.com/elastic/rally/issues/315): Simplify multi-node configuration
+* [#313](https://github.com/elastic/rally/issues/313): Allow car mixins
+* [#265](https://github.com/elastic/rally/issues/265): Have Rally detect and use more Java versions
+
+#### Bug Fixes
+
+* [#318](https://github.com/elastic/rally/issues/318): Run tasks indefinitely
+
 ### 0.7.1
 
 #### Highlights
