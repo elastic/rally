@@ -780,7 +780,7 @@ def setup_index(es, index, index_settings):
         if es.indices.exists(index=index.name):
             logger.warning("Index [%s] already exists. Deleting it." % index.name)
             es.indices.delete(index=index.name)
-        logger.info("Creating index [%s]" % index.name)
+        logger.info("Preparing to create index [%s]" % index.name)
         # first we merge the index settings and the mappings for all types
         body = {
             "settings": index_settings,
@@ -789,8 +789,8 @@ def setup_index(es, index, index_settings):
         for type in index.types:
             body["mappings"].update(type.mapping)
         # create the index with mappings and settings
-        logger.info("create index [%s] with body [%s]" % (index.name, body))
         es.indices.create(index=index.name, body=body)
+        logger.info("Created index [%s]." % index.name)
     else:
         logger.info("Skipping index [%s] as it is managed by the user." % index.name)
 
