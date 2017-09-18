@@ -148,7 +148,7 @@ class DriverActor(actor.RallyActor):
 
     def receiveMessage(self, msg, sender):
         try:
-            logger.debug("Driver#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+            logger.info("Driver#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartBenchmark):
                 self.start_benchmark(msg, sender)
             elif isinstance(msg, TrackPrepared):
@@ -566,7 +566,7 @@ class LoadGenerator(actor.RallyActor):
 
     def receiveMessage(self, msg, sender):
         try:
-            logger.debug("LoadGenerator[%s]#receiveMessage(msg = [%s], sender = [%s])" % (str(self.client_id), str(type(msg)), str(sender)))
+            logger.info("LoadGenerator[%s]#receiveMessage(msg = [%s], sender = [%s])" % (str(self.client_id), str(type(msg)), str(sender)))
             if isinstance(msg, StartLoadGenerator):
                 logger.info("LoadGenerator[%d] is about to start." % msg.client_id)
                 self.master = sender

@@ -228,7 +228,7 @@ class MechanicActor(actor.RallyActor):
 
     def receiveMessage(self, msg, sender):
         try:
-            logger.debug("MechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+            logger.info("MechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartEngine):
                 self.on_start_engine(msg, sender)
             elif isinstance(msg, NodesStarted):

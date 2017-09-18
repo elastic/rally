@@ -94,7 +94,7 @@ class BenchmarkActor(actor.RallyActor):
 
     def receiveMessage(self, msg, sender):
         try:
-            logger.debug("BenchmarkActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+            logger.info("BenchmarkActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, Setup):
                 self.start_sender = sender
                 self.setup(msg)
