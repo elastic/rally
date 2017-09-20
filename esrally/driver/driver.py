@@ -131,10 +131,7 @@ class TaskFinished:
 
 
 class DriverActor(actor.RallyActor):
-    RESET_RELATIVE_TIME_MARKER = "reset_relative_time"
-
     WAKEUP_INTERVAL_SECONDS = 1
-
     """
     Coordinates all worker drivers. This is actually only a thin actor wrapper layer around ``Driver`` which does the actual work.
     """
@@ -159,7 +156,9 @@ class DriverActor(actor.RallyActor):
             elif isinstance(msg, UpdateSamples):
                 self.update_samples(msg)
             elif isinstance(msg, thespian.actors.WakeupMessage):
-                if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
+                # workaround to detect multiple timers firing at different intervals. We should actually determine them via some other means
+                # e.g. a payload.
+                if msg.delayPeriod != datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS):
                     self.coordinator.reset_relative_time()
                 elif not self.coordinator.finished():
                     self.coordinator.update_progress_message()
@@ -222,7 +221,9 @@ class DriverActor(actor.RallyActor):
 
     def on_task_finished(self, metrics, next_task_scheduled_in):
         if next_task_scheduled_in > 0:
-            self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in), payload=DriverActor.RESET_RELATIVE_TIME_MARKER)
+            assert next_task_scheduled_in != DriverActor.WAKEUP_INTERVAL_SECONDS, \
+                "Due to a (temporary) workaround the task schedule interval must be different than the wakeup interval."
+            self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in))
         else:
             self.coordinator.reset_relative_time()
         self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
