@@ -425,7 +425,8 @@ class NodeMechanicActor(actor.RallyActor):
                     # only copy the relevant bits
                     "track", "mechanic", "client",
                     # allow metrics store to extract race meta-data
-                    "race"
+                    "race",
+                    "source"
                 ])
                 # set root path (normally done by the main entry point)
                 self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
@@ -502,7 +503,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
 
     if sources:
         try:
-            src_dir = cfg.opts("source", "local.src.dir")
+            src_dir = cfg.opts("node", "src.root.dir")
         except config.ConfigError:
             logger.exception("Cannot determine source directory")
             raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
@@ -512,12 +513,8 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         revision = cfg.opts("mechanic", "source.revision")
         gradle = cfg.opts("build", "gradle.bin")
         java_home = cfg.opts("runtime", "java.home")
-
-        if len(plugins) > 0:
-            raise exceptions.RallyError("Source builds of plugins are not supported yet. For more details, please "
-                                        "check https://github.com/elastic/rally/issues/309 and upgrade Rally in case support has been "
-                                        "added in the meantime.")
-        s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, challenge_root_path, build)
+        src_config = cfg.all_opts("source")
+        s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, challenge_root_path, plugins, src_config, build)
         p = []
         for node_id in node_ids:
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))

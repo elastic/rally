@@ -5,6 +5,23 @@ from esrally import exceptions
 from esrally.mechanic import supplier
 
 
+class RevisionExtractorTests(TestCase):
+    def test_single_revision(self):
+        self.assertDictEqual({"elasticsearch": "67c2f42", "all": "67c2f42"}, supplier.extract_revisions("67c2f42"))
+        self.assertDictEqual({"elasticsearch": "current", "all": "current"}, supplier.extract_revisions("current"))
+        self.assertDictEqual({"elasticsearch": "@2015-01-01-01:00:00", "all": "@2015-01-01-01:00:00"},
+                             supplier.extract_revisions("@2015-01-01-01:00:00"))
+
+    def test_multiple_revisions(self):
+        self.assertDictEqual({"elasticsearch": "67c2f42", "x-pack": "@2015-01-01-01:00:00", "some-plugin": "current"},
+                             supplier.extract_revisions("elasticsearch:67c2f42,x-pack:@2015-01-01-01:00:00,some-plugin:current"))
+
+    def test_invalid_revisions(self):
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            supplier.extract_revisions("elasticsearch 67c2f42,x-pack:current")
+        self.assertEqual("Revision [elasticsearch 67c2f42] does not match expected format [name:revision].", ctx.exception.args[0])
+
+
 class SourceRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
     @mock.patch("esrally.utils.git.pull", autospec=True)
@@ -14,7 +31,7 @@ class SourceRepositoryTests(TestCase):
         mock_is_working_copy.return_value = False
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
         s.fetch("latest")
 
         mock_is_working_copy.assert_called_with("/src")
@@ -30,7 +47,7 @@ class SourceRepositoryTests(TestCase):
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
         s.fetch("current")
 
         mock_is_working_copy.assert_called_with("/src")
@@ -45,7 +62,7 @@ class SourceRepositoryTests(TestCase):
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
         s.fetch("@2015-01-01-01:00:00")
 
         mock_is_working_copy.assert_called_with("/src")
@@ -59,16 +76,23 @@ class SourceRepositoryTests(TestCase):
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
         mock_pull_revision.assert_called_with("/src", "67c2f42")
         mock_head_revision.assert_called_with("/src")
 
+    def test_is_commit_hash(self):
+        self.assertTrue(supplier.SourceRepository.is_commit_hash("67c2f42"))
+
+    def test_is_not_commit_hash(self):
+        self.assertFalse(supplier.SourceRepository.is_commit_hash("latest"))
+        self.assertFalse(supplier.SourceRepository.is_commit_hash("current"))
+        self.assertFalse(supplier.SourceRepository.is_commit_hash("@2015-01-01-01:00:00"))
+
 
 class BuilderTests(TestCase):
-
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.jvm.major_version")
     def test_build_on_jdk_8(self, jvm_major_version, mock_run_subprocess):
@@ -76,7 +100,7 @@ class BuilderTests(TestCase):
         mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk8", log_dir="logs")
-        b.build()
+        b.build([supplier.CLEAN_TASK, supplier.ASSEMBLE_TASK])
 
         calls = [
             # Actual call
@@ -94,7 +118,7 @@ class BuilderTests(TestCase):
         mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk9", log_dir="logs")
-        b.build()
+        b.build([supplier.CLEAN_TASK, supplier.ASSEMBLE_TASK])
 
         calls = [
             # Actual call
@@ -107,10 +131,18 @@ class BuilderTests(TestCase):
 
         mock_run_subprocess.assert_has_calls(calls)
 
-    @mock.patch("glob.glob", lambda p: ["elasticsearch.zip"])
-    def test_binary(self):
-        b = supplier.Builder(src_dir="/src")
-        self.assertEqual(b.binary, "elasticsearch.zip")
+
+class ArtifactResolverTests(TestCase):
+    @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
+    def test_resolve_elasticsearch_binary(self):
+        self.assertEqual(supplier.resolve_es_binary("/src"), "elasticsearch.tar.gz")
+
+    @mock.patch("glob.glob", lambda p: ["/src/elasticsearch-extra/some-plugin/plugin/build/distributions/some-plugin.zip"])
+    def test_resolve_elasticsearch_binary(self):
+        self.assertEqual(supplier.resolve_plugin_binary("some-plugin", "/src", {
+            "plugin.some-plugin.src.subdir": "elasticsearch-extra/some-plugin",
+            "plugin.some-plugin.build.artifact.subdir": "plugin/build/distributions"
+        }), "file:///src/elasticsearch-extra/some-plugin/plugin/build/distributions/some-plugin.zip")
 
 
 class DistributionRepositoryTests(TestCase):

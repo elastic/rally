@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import logging
 import urllib.error
@@ -9,19 +10,89 @@ from esrally.exceptions import BuildError, SystemSetupError
 
 logger = logging.getLogger("rally.supplier")
 
+CLEAN_TASK = "clean"
+ASSEMBLE_TASK = ":distribution:tar:assemble"
 
-def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, build=True):
+# e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
+REVISION_PATTERN = r"(\w.*?):(.*)"
+
+
+def config_value(src_config, key):
+    try:
+        return src_config[key]
+    except KeyError:
+        raise exceptions.SystemSetupError("Mandatory config key [%s] is undefined. Please add it in the [source] section of the "
+                                          "config file." % key)
+
+
+def extract_revisions(revision):
+    revisions = revision.split(",")
+    if len(revisions) == 1:
+        es_revision = revisions[0]
+        if es_revision.startswith("elasticsearch:"):
+            es_revision = es_revision[len("elasticsearch:"):]
+        return {
+            "elasticsearch": es_revision,
+            # use a catch-all value
+            "all": es_revision
+        }
+    else:
+        results = {}
+        for r in revisions:
+            m = re.match(REVISION_PATTERN, r)
+            if m:
+                results[m.group(1)] = m.group(2)
+            else:
+                raise exceptions.SystemSetupError("Revision [%s] does not match expected format [name:revision]." % r)
+        return results
+
+
+def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, plugins, src_config, build=True):
     if build:
         console.info("Preparing for race ...", end="", flush=True)
     try:
-        SourceRepository(remote_url, src_dir).fetch(revision)
+        revisions = extract_revisions(revision)
+        es_src_dir = os.path.join(src_dir, config_value(src_config, "elasticsearch.src.subdir"))
+        try:
+            es_revision = revisions["elasticsearch"]
+        except KeyError:
+            raise exceptions.SystemSetupError("No revision specified for Elasticsearch in [%s]." % revision)
+        SourceRepository("Elasticsearch", remote_url, es_src_dir).fetch(es_revision)
 
-        builder = Builder(src_dir, gradle, java_home, log_dir)
+        # this may as well be a core plugin and we need to treat them specially. :plugins:analysis-icu:assemble
+        for plugin in plugins:
+            if not plugin.core_plugin:
+                plugin_remote_url = config_value(src_config, "plugin.%s.remote.repo.url" % plugin.name)
+                plugin_src_dir = os.path.join(src_dir, config_value(src_config, "plugin.%s.src.subdir" % plugin.name))
+                try:
+                    plugin_revision = revisions[plugin.name]
+                except KeyError:
+                    # maybe we can use the catch-all revision (only if it's not a git revision)
+                    plugin_revision = revisions.get("all")
+                    if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
+                        raise exceptions.SystemSetupError("No revision specified for plugin [%s] in [%s]." % (plugin.name, revision))
+                    else:
+                        logger.info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
+                                    % (plugin.name, plugin_revision))
+                SourceRepository(plugin.name, plugin_remote_url, plugin_src_dir).fetch(plugin_revision)
 
         if build:
-            builder.build()
+            builder = Builder(es_src_dir, gradle, java_home, log_dir)
+            builder.build([CLEAN_TASK, ASSEMBLE_TASK])
+            for plugin in plugins:
+                if plugin.core_plugin:
+                    task = ":plugins:%s:assemble" % plugin.name
+                else:
+                    task = config_value(src_config, "plugin.%s.build.task" % plugin.name)
+                builder.build([task])
             console.println(" [OK]")
-        return {"elasticsearch": builder.binary}
+        binaries = {"elasticsearch": resolve_es_binary(es_src_dir)}
+        for plugin in plugins:
+            if plugin.core_plugin:
+                binaries[plugin.name] = resolve_core_plugin_binary(plugin.name, es_src_dir)
+            else:
+                binaries[plugin.name] = resolve_plugin_binary(plugin.name, src_dir, src_config)
+        return binaries
     except BaseException:
         if build:
             console.println(" [FAILED]")
@@ -70,8 +141,8 @@ class SourceRepository:
     """
     Supplier fetches the benchmark candidate source tree from the remote repository.
     """
-
-    def __init__(self, remote_url, src_dir):
+    def __init__(self, name, remote_url, src_dir):
+        self.name = name
         self.remote_url = remote_url
         self.src_dir = src_dir
 
@@ -82,22 +153,53 @@ class SourceRepository:
 
     def _try_init(self):
         if not git.is_working_copy(self.src_dir):
-            console.println("Downloading sources from %s to %s." % (self.remote_url, self.src_dir))
+            console.println("Downloading sources for %s from %s to %s." % (self.name, self.remote_url, self.src_dir))
             git.clone(self.src_dir, self.remote_url)
 
     def _update(self, revision):
         if revision == "latest":
-            logger.info("Fetching latest sources from origin.")
+            logger.info("Fetching latest sources for %s from origin." % self.name)
             git.pull(self.src_dir)
         elif revision == "current":
-            logger.info("Skip fetching sources")
+            logger.info("Skip fetching sources for %s." % self.name)
         elif revision.startswith("@"):
             # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             git.pull_ts(self.src_dir, revision[1:])
         else:  # assume a git commit hash
             git.pull_revision(self.src_dir, revision)
         git_revision = git.head_revision(self.src_dir)
-        logger.info("Specified revision [%s] on command line results in git revision [%s]" % (revision, git_revision))
+        logger.info("Specified revision [%s] for [%s] on command line results in git revision [%s]" % (revision, self.name, git_revision))
+
+    @classmethod
+    def is_commit_hash(cls, revision):
+        return revision != "latest" and revision != "current" and not revision.startswith("@")
+
+
+def resolve_es_binary(src_dir):
+    try:
+        return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % src_dir)[0]
+    except IndexError:
+        raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
+
+
+def resolve_plugin_binary(plugin_name, src_dir, src_config):
+    plugin_src_dir = config_value(src_config, "plugin.%s.src.subdir" % plugin_name)
+    artifact_path = config_value(src_config, "plugin.%s.build.artifact.subdir" % plugin_name)
+    try:
+        name = glob.glob("%s/%s/%s/*.zip" % (src_dir, plugin_src_dir, artifact_path))[0]
+        return "file://%s" % name
+    except IndexError:
+        raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
+                               plugin_name)
+
+
+def resolve_core_plugin_binary(plugin_name, src_dir):
+    try:
+        name = glob.glob("%s/plugins/%s/build/distributions/*.zip" % (src_dir, plugin_name))[0]
+        return "file://%s" % name
+    except IndexError:
+        raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
+                               plugin_name)
 
 
 class Builder:
@@ -120,21 +222,14 @@ class Builder:
         self.java_home = java_home
         self.log_dir = log_dir
 
-    def build(self):
-        self.run("clean")
-        self.run(":distribution:tar:assemble")
-
-    @property
-    def binary(self):
-        try:
-            return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
-        except IndexError:
-            raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
+    def build(self, tasks):
+        for task in tasks:
+            self.run(task)
 
     def run(self, task):
         from esrally.utils import jvm
 
-        logger.info("Building Elasticsearch from sources in [%s]." % self.src_dir)
+        logger.info("Building from sources in [%s]." % self.src_dir)
         logger.info("Executing %s %s..." % (self.gradle, task))
         io.ensure_dir(self.log_dir)
         log_file = "%s/build.log" % self.log_dir
@@ -156,8 +251,6 @@ class Builder:
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
             msg += "The full build log is available at [%s]." % log_file
-            if jvm_major_version > 8:
-                msg += "Please check"
 
             raise BuildError(msg)
 

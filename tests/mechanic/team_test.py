@@ -78,14 +78,15 @@ class PluginLoaderTests(TestCase):
     def test_lists_plugins(self):
         self.assertCountEqual(
             [
-                team.PluginDescriptor("complex-plugin", "config-a"),
-                team.PluginDescriptor("complex-plugin", "config-b"),
-                team.PluginDescriptor("my-analysis-plugin"),
-                team.PluginDescriptor("my-ingest-plugin")
+                team.PluginDescriptor(name="complex-plugin", config="config-a"),
+                team.PluginDescriptor(name="complex-plugin", config="config-b"),
+                team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True),
+                team.PluginDescriptor(name="my-ingest-plugin", core_plugin=True)
             ], self.loader.plugins())
 
-    def test_loads_official_plugin(self):
-        self.assertEqual(team.PluginDescriptor("my-analysis-plugin"), self.loader.load_plugin("my-analysis-plugin", None))
+    def test_loads_core_plugin(self):
+        self.assertEqual(team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True),
+                         self.loader.load_plugin("my-analysis-plugin", None))
 
     def test_cannot_load_plugin_with_missing_config(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:

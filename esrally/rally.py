@@ -300,10 +300,6 @@ def parse_args():
             help=argparse.SUPPRESS,
             default=None)
         p.add_argument(
-            "--override-src-dir",
-            help=argparse.SUPPRESS,
-            default=None)
-        p.add_argument(
             "--auto-manage-indices",
             choices=["true", "false"],
             help=argparse.SUPPRESS,
@@ -572,8 +568,6 @@ def main():
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
-    if args.override_src_dir is not None:
-        cfg.add(config.Scope.applicationOverride, "source", "local.src.dir", args.override_src_dir)
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)

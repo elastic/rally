@@ -186,6 +186,15 @@ You can specify the revision in different formats:
 
 Supported date format: If you specify a date, it has to be ISO-8601 conformant and must start with an ``@`` sign to make it easier for Rally to determine that you actually mean a date.
 
+If you want to create source builds of Elasticsearch plugins, you need to specify the revision for Elasticsearch and all relevant plugins separately. Revisions for Elasticsearch and each plugin need to be comma-separated (``,``). Each revision is prefixed either by ``elasticsearch`` or by the plugin name and separated by a colon (``:``). As core plugins are contained in the Elasticsearch repo, there is no need to specify a revision for them (the revision would even be ignored in fact).
+
+Examples:
+
+* Build latest Elasticsearch and plugin "my-plugin": ``--revision="elasticsearch:latest,my-plugin:latest"
+* Build Elasticsearch tag ``v5.6.1`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v5.6.1,my-plugin:abc123"
+
+Note that it is still required to provide the parameter ``--elasticsearch-plugins``. Specifying a plugin with ``--revision`` just tells Rally which revision to use for building the artifact. See the documentation on :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
+
 ``distribution-version``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 

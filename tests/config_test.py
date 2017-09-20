@@ -4,6 +4,7 @@ from unittest import TestCase
 import unittest.mock as mock
 
 from esrally import config
+from esrally.utils import io
 
 
 class MockInput:
@@ -237,7 +238,7 @@ class ConfigFactoryTests(TestCase):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
         guess_java_home.return_value = "/tests/java9/home"
         is_ea_release.return_value = False
-        mock_input = MockInput(["/Projects/elasticsearch/src"])
+        mock_input = MockInput(["/Projects/elasticsearch/master"])
 
         f = config.ConfigFactory(i=mock_input, sec_i=mock_input, o=null_output)
 
@@ -250,17 +251,18 @@ class ConfigFactoryTests(TestCase):
                 print("%s::%s: %s" % (section, k, v))
 
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("11", config_store.config["meta"]["config.version"])
+        self.assertEqual("12", config_store.config["meta"]["config.version"])
 
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
 
         self.assertTrue("node" in config_store.config)
         self.assertEqual("in-memory/benchmarks", config_store.config["node"]["root.dir"])
+        self.assertEqual("/Projects/elasticsearch", config_store.config["node"]["src.root.dir"])
 
         self.assertTrue("source" in config_store.config)
-        self.assertEqual("/Projects/elasticsearch/src", config_store.config["source"]["local.src.dir"])
         self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
+        self.assertEqual("master", config_store.config["source"]["elasticsearch.src.subdir"])
 
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
@@ -349,7 +351,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("11", config_store.config["meta"]["config.version"])
+        self.assertEqual("12", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
@@ -636,5 +638,129 @@ class ConfigMigrationTests(TestCase):
         self.assertFalse("java8.home" in config_file.config["runtime"])
         self.assertEqual("/opt/jdk/8", config_file.config["runtime"]["java.home"])
 
+    @mock.patch("esrally.utils.io.exists")
+    @mock.patch("os.rename")
+    def test_migrate_from_11_to_12_with_default_src_config_repo_checked_out(self, path_rename, path_exists):
+        path_exists.return_value = True
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 11
+            },
+            "node": {
+                "root.dir": io.normalize_path("~/.rally/benchmarks")
+            },
+            "source": {
+                "local.src.dir": io.normalize_path("~/.rally/benchmarks/src")
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 11, 12, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("12", config_file.config["meta"]["config.version"])
+        self.assertEqual(io.normalize_path("~/.rally/benchmarks/src"), config_file.config["node"]["src.root.dir"])
+        self.assertEqual("elasticsearch", config_file.config["source"]["elasticsearch.src.subdir"])
+
+        path_rename.assert_has_calls(
+            [
+                mock.call(io.normalize_path("~/.rally/benchmarks/src"), io.normalize_path("~/.rally/benchmarks/tmp_src_mig")),
+                mock.call(io.normalize_path("~/.rally/benchmarks/tmp_src_mig"),
+                          io.normalize_path("~/.rally/benchmarks/src/elasticsearch")),
+             ]
+        )
+
+    @mock.patch("esrally.utils.io.exists")
+    @mock.patch("os.rename")
+    def test_migrate_from_11_to_12_with_default_src_config_repo_not_checked_out(self, path_rename, path_exists):
+        path_exists.return_value = False
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 11
+            },
+            "node": {
+                "root.dir": io.normalize_path("~/.rally/benchmarks")
+            },
+            "source": {
+                "local.src.dir": io.normalize_path("~/.rally/benchmarks/src")
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 11, 12, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("12", config_file.config["meta"]["config.version"])
+        self.assertEqual(io.normalize_path("~/.rally/benchmarks/src"), config_file.config["node"]["src.root.dir"])
+        self.assertEqual("elasticsearch", config_file.config["source"]["elasticsearch.src.subdir"])
+        # did all the migrations but nothing moved
+        path_rename.assert_not_called()
+
+    def test_migrate_from_11_to_12_without_src_config(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 11
+            },
+            "node": {
+                "root.dir": "~/.rally/benchmarks"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 11, 12, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("12", config_file.config["meta"]["config.version"])
+        self.assertFalse("src.root.dir" in config_file.config["node"])
+
+    def test_migrate_from_11_to_12_with_partial_src_config(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 11
+            },
+            "node": {
+                "root.dir": "~/.rally/benchmarks"
+            },
+            "source": {
+                # a source config section without any keys should be treated like a missing source config section
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 11, 12, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("12", config_file.config["meta"]["config.version"])
+        self.assertFalse("src.root.dir" in config_file.config["node"])
+        self.assertFalse("elasticsearch.src.subdir" in config_file.config["source"])
+
+    @mock.patch("esrally.utils.io.exists")
+    @mock.patch("os.rename")
+    def test_migrate_from_11_to_12_with_custom_src_config(self, path_rename, path_exists):
+        path_exists.return_value = False
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 11
+            },
+            "node": {
+                "root.dir": io.normalize_path("~/.rally/benchmarks")
+            },
+            "source": {
+                "local.src.dir": io.normalize_path("~/Projects/elasticsearch/master/es")
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 11, 12, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("12", config_file.config["meta"]["config.version"])
+        self.assertEqual(io.normalize_path("~/Projects/elasticsearch/master"), config_file.config["node"]["src.root.dir"])
+        self.assertEqual("es", config_file.config["source"]["elasticsearch.src.subdir"])
+        # did all the migrations but nothing moved
+        path_rename.assert_not_called()
 
 

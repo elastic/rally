@@ -6,7 +6,7 @@ A benchmark aborts with ``Couldn't find a tar.gz distribution``. What's the prob
 
 This error occurs when Rally cannot build an Elasticsearch distribution from source code. The most likely cause is that there is some problem in the build setup.
 
-To see what's the problem, try building Elasticsearch yourself. First, find out where the source code is located (run ``grep local.src.dir  ~/.rally/rally.ini``). Then change to this directory and run the following commands::
+To see what's the problem, try building Elasticsearch yourself. First, find out where the source code is located (run ``grep src ~/.rally/rally.ini``). Then change to the directory (``src.root.dir`` + ``elasticsearch.src.subdir`` which is usually ``~/.rally/benchmarks/src/elasticsearch``) and run the following commands::
 
     gradle clean
     gradle :distribution:tar:assemble

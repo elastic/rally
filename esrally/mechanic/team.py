@@ -197,19 +197,21 @@ class PluginLoader:
         self.plugins_root_path = os.path.join(self.repo.repo_dir, "plugins")
 
     def plugins(self):
-        known_plugins = self._official_plugins() + self._configured_plugins()
+        known_plugins = self._core_plugins() + self._configured_plugins()
         sorted(known_plugins, key=lambda p: p.name)
         return known_plugins
 
-    def _official_plugins(self):
-        official_plugins = []
-        official_plugins_path = os.path.join(self.plugins_root_path, "official-plugins.txt")
-        if os.path.exists(official_plugins_path):
-            with open(official_plugins_path, "rt") as f:
+    def _core_plugins(self):
+        core_plugins = []
+        core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
+        if os.path.exists(core_plugins_path):
+            with open(core_plugins_path, "rt") as f:
                 for line in f:
                     if not line.startswith("#"):
-                        official_plugins.append(PluginDescriptor(line.strip()))
-        return official_plugins
+                        # be forward compatible and allow additional values (comma-separated). At the moment, we only use the plugin name.
+                        values = line.strip().split(",")
+                        core_plugins.append(PluginDescriptor(name=values[0], core_plugin=True))
+        return core_plugins
 
     def _configured_plugins(self):
         configured_plugins = []
@@ -222,7 +224,7 @@ class PluginLoader:
                         f, _ = io.splitext(child_entry)
                         plugin_name = self._file_to_plugin_name(entry)
                         config = io.basename(f)
-                        configured_plugins.append(PluginDescriptor(plugin_name, config))
+                        configured_plugins.append(PluginDescriptor(name=plugin_name, config=config))
         return configured_plugins
 
     def _plugin_file(self, name, config):
@@ -242,19 +244,19 @@ class PluginLoader:
     def _plugin_name_to_file(self, plugin_name):
         return plugin_name.replace("-", "_")
 
-    def _official_plugin(self, name):
-        return next((p for p in self._official_plugins() if p.name == name and p.config is None), None)
+    def _core_plugin(self, name):
+        return next((p for p in self._core_plugins() if p.name == name and p.config is None), None)
 
     def load_plugin(self, name, config_names):
         root_path = self._plugin_root_path(name)
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
             if io.exists(root_path):
-                return PluginDescriptor(name, config_names, root_path)
+                return PluginDescriptor(name=name, config=config_names, root_path=root_path)
             else:
-                official_plugin = self._official_plugin(name)
-                if official_plugin:
-                    return official_plugin
+                core_plugin = self._core_plugin(name)
+                if core_plugin:
+                    return core_plugin
                 # If we just have a plugin name then we assume that this is a community plugin and the user has specified a download URL
                 else:
                     logger.info("The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
@@ -265,13 +267,14 @@ class PluginLoader:
             config_paths = []
             # used for deduplication
             known_config_bases = set()
+            # used to determine whether this is a core plugin
+            core_plugin = self._core_plugin(name)
 
             for config_name in config_names:
                 config_file = self._plugin_file(name, config_name)
                 # Do we have an explicit configuration for this plugin?
                 if not io.exists(config_file):
-                    official_plugin = self._official_plugin(name)
-                    if official_plugin:
+                    if core_plugin:
                         raise exceptions.SystemSetupError("Plugin [%s] does not provide configuration [%s]. List the available plugins "
                                                           "and configurations with %s list elasticsearch-plugins "
                                                           "--distribution-version=VERSION." % (name, config_name, PROGRAM_NAME))
@@ -297,16 +300,18 @@ class PluginLoader:
             # maybe one of the configs is really just for providing variables. However, we still require one config base overall.
             if len(config_paths) == 0:
                 raise exceptions.SystemSetupError("At least one config base is required for plugin [%s]" % name)
-            return PluginDescriptor(name, config_names, root_path, config_paths, variables)
+            return PluginDescriptor(name=name, core_plugin=core_plugin is not None, config=config_names, root_path=root_path,
+                                    config_paths=config_paths, variables=variables)
 
 
 class PluginDescriptor:
-    def __init__(self, name, config=None, root_path=None, config_paths=None, variables=None):
+    def __init__(self, name, core_plugin=False, config=None, root_path=None, config_paths=None, variables=None):
         if config_paths is None:
             config_paths = []
         if variables is None:
             variables = {}
         self.name = name
+        self.core_plugin = core_plugin
         self.config = config
         self.root_path = root_path
         self.config_paths = config_paths
@@ -322,9 +327,9 @@ class PluginDescriptor:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.config)
+        return hash(self.name) ^ hash(self.config) ^ hash(self.core_plugin)
 
     def __eq__(self, other):
-        return isinstance(other, type(self)) and (self.name, self.config) == (other.name, other.config)
+        return isinstance(other, type(self)) and (self.name, self.config, self.core_plugin) == (other.name, other.config, other.core_plugin)
 
 

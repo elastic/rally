@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 11
+    CURRENT_CONFIG_VERSION = 12
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -350,7 +350,7 @@ class ConfigFactory:
                 self.o("Autodetected Elasticsearch project directory at [%s]." % source_dir)
                 logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
             else:
-                default_src_dir = "%s/src" % root_dir
+                default_src_dir = "%s/src/elasticsearch" % root_dir
                 logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
                 source_dir = io.normalize_path(self._ask_property("Enter your Elasticsearch project directory:",
                                                                   default_value=default_src_dir))
@@ -389,9 +389,14 @@ class ConfigFactory:
         config["node"]["root.dir"] = root_dir
 
         if benchmark_from_sources:
+            # user has provided the Elasticsearch directory but the root for Elasticsearch and related plugins will be one level above
+            final_source_dir = io.normalize_path(os.path.abspath(os.path.join(source_dir, os.pardir)))
+            config["node"]["src.root.dir"] = final_source_dir
+
             config["source"] = {}
-            config["source"]["local.src.dir"] = source_dir
             config["source"]["remote.repo.url"] = repo_url
+            # the Elasticsearch directory is just the last path component (relative to the source root directory)
+            config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
 
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
@@ -649,6 +654,53 @@ def migrate(config_file, current_version, target_version, out=print):
     if current_version == 10 and target_version > current_version:
         config["runtime"]["java.home"] = config["runtime"].pop("java8.home")
         current_version = 11
+        config["meta"]["config.version"] = str(current_version)
+    if current_version == 11 and target_version > current_version:
+        # As this is a rather complex migration, we log more than usual to understand potential migration problems better.
+        if "source" in config:
+            if "local.src.dir" in config["source"]:
+                previous_root = config["source"].pop("local.src.dir")
+                logger.info("Set [source][local.src.dir] to [%s]." % previous_root)
+                # if this directory was Rally's default location, then move it on the file system because to allow for checkouts of plugins
+                # in the sibling directory.
+                if previous_root == os.path.join(config["node"]["root.dir"], "src"):
+                    new_root_dir_all_sources = previous_root
+                    new_es_sub_dir = "elasticsearch"
+                    new_root = os.path.join(new_root_dir_all_sources, new_es_sub_dir)
+                    # only attempt to move if the directory exists. It may be possible that users never ran a source benchmark although they
+                    # have configured it. In that case the source directory will not yet exist.
+                    if io.exists(previous_root):
+                        logger.info("Previous source directory was at Rally's default location [%s]. Moving to [%s]."
+                                    % (previous_root, new_root))
+                        try:
+                            # we need to do this in two steps as we need to move the sources to a subdirectory
+                            tmp_path = io.normalize_path(os.path.join(new_root_dir_all_sources, os.pardir, "tmp_src_mig"))
+                            os.rename(previous_root, tmp_path)
+                            io.ensure_dir(new_root)
+                            os.rename(tmp_path, new_root)
+                        except OSError:
+                            logger.exception("Could not move source directory from [%s] to [%s]." % (previous_root, new_root))
+                            # A warning is sufficient as Rally should just do a fresh checkout if moving did not work.
+                            console.warn("Elasticsearch source directory could not be moved from [%s] to [%s]. Please check the logs."
+                                         % (previous_root, new_root))
+                    else:
+                        logger.info("Source directory is configured at Rally's default location [%s] but does not exist yet."
+                                    % previous_root)
+                else:
+                    logger.info("Previous source directory was the custom directory [%s]." % previous_root)
+                    new_root_dir_all_sources = io.normalize_path(os.path.join(previous_root, os.path.pardir))
+                    # name of the elasticsearch project directory.
+                    new_es_sub_dir = io.basename(previous_root)
+
+                logger.info("Setting [node][src.root.dir] to [%s]." % new_root_dir_all_sources)
+                config["node"]["src.root.dir"] = new_root_dir_all_sources
+                logger.info("Setting [source][elasticsearch.src.subdir] to [%s]" % new_es_sub_dir)
+                config["source"]["elasticsearch.src.subdir"] = new_es_sub_dir
+            else:
+                logger.info("Key [local.src.dir] not found. Advancing without changes.")
+        else:
+            logger.info("No section named [source] found in config. Advancing without changes.")
+        current_version = 12
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done
