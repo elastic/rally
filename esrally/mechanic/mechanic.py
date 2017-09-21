@@ -311,7 +311,7 @@ class MechanicActor(actor.RallyActor):
             logger.info("Cluster will not be provisioned by Rally.")
             # just create one actor for this special case and run it on the coordinator node (i.e. here)
             m = self.createActor(NodeMechanicActor,
-                                 globalName="/rally/mechanic/worker/external",
+                                 #globalName="/rally/mechanic/worker/external",
                                  targetActorRequirements={"coordinator": True})
             self.children.append(m)
             mechanics_and_start_message.append((m, msg.for_nodes(ip=hosts)))
@@ -323,7 +323,7 @@ class MechanicActor(actor.RallyActor):
                 ip, port = ip_port
                 if ip == "127.0.0.1":
                     m = self.createActor(NodeMechanicActor,
-                                         globalName="/rally/mechanic/worker/localhost",
+                                         #globalName="/rally/mechanic/worker/localhost",
                                          targetActorRequirements={"coordinator": True})
                     self.children.append(m)
                     mechanics_and_start_message.append((m, msg.for_nodes(all_node_ips, ip, port, nodes)))
@@ -344,7 +344,7 @@ class MechanicActor(actor.RallyActor):
                     if not already_running:
                         console.println(" [OK]")
                     m = self.createActor(NodeMechanicActor,
-                                         globalName="/rally/mechanic/worker/%s" % ip,
+                                         #globalName="/rally/mechanic/worker/%s" % ip,
                                          targetActorRequirements={"ip": ip})
                     mechanics_and_start_message.append((m, msg.for_nodes(all_node_ips, ip, port, nodes)))
                     self.children.append(m)

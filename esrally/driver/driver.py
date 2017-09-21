@@ -207,7 +207,7 @@ class DriverActor(actor.RallyActor):
 
     def create_client(self, client_id, host):
         return self.createActor(LoadGenerator,
-                                globalName="/rally/driver/worker/%s" % str(client_id),
+                                #globalName="/rally/driver/worker/%s" % str(client_id),
                                 targetActorRequirements=self._requirements(host))
 
     def start_load_generator(self, driver, client_id, cfg, track, allocations):
