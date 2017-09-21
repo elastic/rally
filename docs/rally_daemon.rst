@@ -16,6 +16,10 @@ Preparation
 
 First, :doc:`install </install>` and :doc:`configure </configuration>` Rally on all machines that are involved in the benchmark. If you want to automate this, there is no need to use the interactive configuration routine of Rally. You can copy `~/.rally/rally.ini` to the target machines adapting the paths in the file as necessary. We also recommend that you copy ``~/.rally/benchmarks/data`` to all load driver machines before-hand. Otherwise, each load driver machine will need to download a complete copy of the benchmark data.
 
+.. note::
+
+   Rally Daemon will listen on port 1900 so please ensure to open that port on your firewall.
+
 Starting
 --------
 
