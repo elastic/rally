@@ -460,7 +460,7 @@ class Driver:
         expected_cluster_health = self.config.opts("driver", "cluster.health")
         es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
         for template in self.track.templates:
-            setup_template(es, template)
+            setup_template(es, template, self.challenge.index_settings)
         for index in self.track.indices:
             setup_index(es, index, self.challenge.index_settings)
         wait_for_status(es, expected_cluster_health)
@@ -767,13 +767,17 @@ def select_challenge(config, t):
     return selected_challenge
 
 
-def setup_template(es, template):
+def setup_template(es, template, settings):
     if es.indices.exists_template(template.name):
         es.indices.delete_template(template.name)
     if template.delete_matching_indices:
         es.indices.delete(index=template.pattern)
     logger.info("create index template [%s] matching indices [%s] with content:\n%s" % (template.name, template.pattern, template.content))
-    es.indices.put_template(name=template.name, body=template.content)
+    body = template.content
+    if "settings" not in body:
+        body["settings"] = {}
+    body["settings"].update(settings)
+    es.indices.put_template(name=template.name, body=body)
 
 
 def setup_index(es, index, index_settings):
