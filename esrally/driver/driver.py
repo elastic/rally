@@ -807,13 +807,16 @@ def wait_for_status(es, expected_cluster_status):
     :param es Elasticsearch client
     :param expected_cluster_status the cluster status that should be reached.
     """
-    logger.info("Wait for cluster status [%s]" % expected_cluster_status)
-    start = time.perf_counter()
-    reached_cluster_status, relocating_shards = _do_wait(es, expected_cluster_status)
-    stop = time.perf_counter()
-    logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
-    logger.info("Cluster health: [%s]" % str(es.cluster.health()))
-    logger.info("Shards:\n%s" % es.cat.shards(v=True))
+    if expected_cluster_status == "skip":
+        console.warn("Skipping cluster health status check. Results may be skewed (e.g. ongoing shard relocation).", logger=logger)
+    else:
+        logger.info("Wait for cluster status [%s]" % expected_cluster_status)
+        start = time.perf_counter()
+        reached_cluster_status, relocating_shards = _do_wait(es, expected_cluster_status)
+        stop = time.perf_counter()
+        logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
+        logger.info("Cluster health: [%s]" % str(es.cluster.health()))
+        logger.info("Shards:\n%s" % es.cat.shards(v=True))
 
 
 def _do_wait(es, expected_cluster_status, sleep=time.sleep):

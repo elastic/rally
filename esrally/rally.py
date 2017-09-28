@@ -219,7 +219,7 @@ def parse_args():
             default=DEFAULT_CLIENT_OPTIONS)
         p.add_argument(
             "--cluster-health",
-            choices=["red", "yellow", "green"],
+            choices=["red", "yellow", "green", "skip"],
             help="Expected cluster health at the beginning of the benchmark (default: green)",
             default="green")
         p.add_argument(
