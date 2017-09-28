@@ -190,8 +190,8 @@ If you want to create source builds of Elasticsearch plugins, you need to specif
 
 Examples:
 
-* Build latest Elasticsearch and plugin "my-plugin": ``--revision="elasticsearch:latest,my-plugin:latest"
-* Build Elasticsearch tag ``v5.6.1`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v5.6.1,my-plugin:abc123"
+* Build latest Elasticsearch and plugin "my-plugin": ``--revision="elasticsearch:latest,my-plugin:latest"``
+* Build Elasticsearch tag ``v5.6.1`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v5.6.1,my-plugin:abc123"``
 
 Note that it is still required to provide the parameter ``--elasticsearch-plugins``. Specifying a plugin with ``--revision`` just tells Rally which revision to use for building the artifact. See the documentation on :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
 
