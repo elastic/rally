@@ -4,23 +4,33 @@
 set -e
 
 # Attempt to update Rally itself by default but allow user to skip it.
-if [ "${1}" == "--skip-update" ]
-then
-    echo "Skipping self-update as requested by user"
-    SELF_UPDATE=NO
-    shift # past argument with no value
-else
-    SELF_UPDATE=YES
-fi
+SELF_UPDATE=YES
+# Assume that the "main remote" is called "origin"
+REMOTE="origin"
 
-# inspect Rally's command line options and skip update also if the user has specified --offline. Note that we do NOT consume any of these
-# options as they need to be passed to Rally.
+# Check for parameters that are intended for this script. Note that they only work if they're specified at the beginning (due to how
+# the shell builtin `shift` works. We could make it work for arbitrary positions but that's not worth the complexity for such an
+# edge case).
 for i in "$@"
 do
 case ${i} in
+    --update-from-remote=*)
+    REMOTE="${i#*=}"
+    shift # past argument=value
+    ;;
+    --skip-update)
+    SELF_UPDATE=NO
+    shift # past argument with no value
+    ;;
+    # inspect Rally's command line options and skip update also if the user has specified --offline.
+    #
+    # Note that we do NOT consume this option as it needs to be passed to Rally.
     --offline)
     SELF_UPDATE=NO
+    # DO NOT CONSUME!!
     ;;
+    # Do not consume unknown parameters; they should still be passed to the actual Rally script
+    #*)
 esac
 done
 
@@ -47,13 +57,13 @@ then
       # Working directory clean -> we assume this is a user that is not actively developing Rally and just upgrade it every time it is invoked
       set +e
       # this will fail if the user is offline
-      git fetch origin --quiet >/dev/null 2>&1
+      git fetch ${REMOTE} --quiet >/dev/null 2>&1
       exit_code=$?
       set -e
       if [ ${exit_code} == 0 ]
       then
-        echo "Auto-updating Rally"
-        git rebase origin/master --quiet
+        echo "Auto-updating Rally from ${REMOTE}"
+        git rebase ${REMOTE}/master --quiet
         python3 setup.py -q develop --user
       #else
       # offline - skipping update
