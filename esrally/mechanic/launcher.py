@@ -219,7 +219,7 @@ class InProcessLauncher:
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         node_telemetry = [
-            telemetry.FlightRecorder(node_telemetry_dir),
+            telemetry.FlightRecorder(node_telemetry_dir, java_major_version),
             telemetry.JitCompiler(node_telemetry_dir),
             telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.PerfStat(node_telemetry_dir),

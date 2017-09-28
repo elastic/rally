@@ -114,9 +114,10 @@ class FlightRecorder(TelemetryDevice):
     human_name = "Flight Recorder"
     help = "Enables Java Flight Recorder (requires an Oracle JDK)"
 
-    def __init__(self, log_root):
+    def __init__(self, log_root, java_major_version):
         super().__init__()
         self.log_root = log_root
+        self.java_major_version = java_major_version
 
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
@@ -137,9 +138,15 @@ class FlightRecorder(TelemetryDevice):
         # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
         #
         # in that case change to: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
-        return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints -XX:+FlightRecorder "
-                                "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=%s "
-                                "-XX:StartFlightRecording=defaultrecording=true" % log_file}
+        if self.java_major_version < 9:
+            return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
+                                    "-XX:+FlightRecorder "
+                                    "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=%s "
+                                    "-XX:StartFlightRecording=defaultrecording=true" % log_file}
+        else:
+            return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
+                                    "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=%s" % log_file}
+
 
 
 class JitCompiler(TelemetryDevice):
