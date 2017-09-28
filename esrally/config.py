@@ -305,13 +305,16 @@ class ConfigFactory:
         self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
         gradle_bin = io.guess_install_location("gradle")
+        java_8_home = io.guess_java_home(major_version=8)
         java_9_home = io.guess_java_home(major_version=9)
         from esrally.utils import jvm
+        if java_8_home:
+            auto_detected_java_home = java_8_home
         # Don't auto-detect an EA release and bring trouble to the user later on. They can still configure it manually if they want to.
-        if java_9_home and not jvm.is_early_access_release(java_9_home):
+        elif java_9_home and not jvm.is_early_access_release(java_9_home):
             auto_detected_java_home = java_9_home
         else:
-            auto_detected_java_home = io.guess_java_home(major_version=8)
+            auto_detected_java_home = None
 
         self.print_detection_result("git    ", git_path)
         self.print_detection_result("gradle ", gradle_bin)

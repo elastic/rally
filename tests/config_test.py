@@ -322,7 +322,7 @@ class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.io.guess_install_location")
     def test_create_advanced_config(self, guess_install_location, guess_java_home, is_ea_release):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
-        guess_java_home.side_effect = ["/tests/java9/home", "/tests/java8/home"]
+        guess_java_home.side_effect = ["/tests/java8/home", "/tests/java9/home"]
         is_ea_release.return_value = True
 
         f = config.ConfigFactory(i=MockInput([
