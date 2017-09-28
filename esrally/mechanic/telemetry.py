@@ -7,7 +7,7 @@ import threading
 
 import tabulate
 from esrally import metrics, time
-from esrally.utils import io, sysstats, process, console, versions, jvm
+from esrally.utils import io, sysstats, process, console, versions
 
 logger = logging.getLogger("rally.telemetry")
 
@@ -146,7 +146,6 @@ class FlightRecorder(TelemetryDevice):
         else:
             return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
                                     "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=%s" % log_file}
-
 
 
 class JitCompiler(TelemetryDevice):
