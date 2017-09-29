@@ -273,8 +273,8 @@ class MechanicActor(actor.RallyActor):
                 if sender != self.myAddress:
                     self.send_to_children_and_transition(self.myAddress, msg, expected_status=None, new_status="cluster_stopping")
             elif isinstance(msg, thespian.actors.ChildActorExited):
-                if self.is_current_status_expected("cluster_stopping"):
-                    logger.info("Child actor exited while engine is stopping: [%s]" % msg)
+                if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
+                    logger.info("Child actor exited while engine is stopping or stopped: [%s]" % msg)
                 else:
                     raise exceptions.RallyError("Child actor exited with [%s] while in status [%s]." % (msg, self.status))
             elif isinstance(msg, thespian.actors.PoisonMessage):
