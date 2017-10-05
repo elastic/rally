@@ -641,7 +641,7 @@ class LoadGenerator(actor.RallyActor):
                     self.pool.shutdown()
             else:
                 logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
-        except Exception as e:
+        except BaseException as e:
             logger.exception("Fatal error in LoadGenerator[%d]" % self.client_id)
             self.send(self.master, actor.BenchmarkFailure("Fatal error in load generator [%d]" % self.client_id, e))
 
