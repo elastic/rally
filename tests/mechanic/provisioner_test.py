@@ -275,10 +275,13 @@ class InstallHookHandlerTests(TestCase):
 
 class DockerProvisionerTests(TestCase):
     @mock.patch("esrally.utils.sysstats.total_memory")
-    def test_provisioning(self, total_memory):
+    @mock.patch("uuid.uuid4")
+    def test_provisioning(self, uuid4, total_memory):
         total_memory.return_value = convert.gb_to_bytes(64)
+        uuid4.return_value = "9dbc682e-d32a-4669-8fbe-56fb77120dd4"
         node_root_dir = tempfile.gettempdir()
         log_dir = os.path.join(node_root_dir, "logs", "server")
+        data_dir = "%s/data/9dbc682e-d32a-4669-8fbe-56fb77120dd4" % node_root_dir
 
         rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../esrally"))
 
@@ -316,7 +319,7 @@ class DockerProvisionerTests(TestCase):
         }, docker.config_vars)
 
         self.assertEqual({
-            "es_data_dir": "%s/install/data" % node_root_dir,
+            "es_data_dir": data_dir,
             "es_log_dir": log_dir,
             "es_version": "5.0.0",
             "http_port": 39200,
@@ -340,5 +343,5 @@ services:
         soft: -1
         hard: -1
     volumes:
-      - %s/install/data:/usr/share/elasticsearch/data
-      - %s:/var/log/elasticsearch""" % (node_root_dir, log_dir), docker_cfg)
+      - %s:/usr/share/elasticsearch/data
+      - %s:/var/log/elasticsearch""" % (data_dir, log_dir), docker_cfg)

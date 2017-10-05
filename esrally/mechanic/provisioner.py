@@ -388,7 +388,9 @@ class DockerProvisioner:
         self.distribution_version = distribution_version
         self.rally_root = rally_root
         self.install_dir = "%s/install" % node_root_dir
-        self.data_paths = ["%s/data" % self.install_dir]
+        # use a random subdirectory to isolate multiple runs because an external (non-root) user cannot clean it up.
+        import uuid
+        self.data_paths = ["%s/data/%s" % (node_root_dir, uuid.uuid4())]
         self.preserve = preserve
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
 
@@ -463,7 +465,13 @@ class DockerProvisioner:
                                  self.node_log_dir, self.data_paths)
 
     def cleanup(self):
-        cleanup(self.preserve, self.install_dir, self.data_paths)
+        # do not attempt to cleanup data paths. It does not work due to different permissions. As:
+        #
+        # (a) Docker is unsupported and not meant to be used by everybody, and
+        # (b) the volume is recreated before each trial run
+        #
+        # this is not a major problem.
+        cleanup(self.preserve, self.install_dir, [])
 
     def docker_vars(self, mounts):
         return {
