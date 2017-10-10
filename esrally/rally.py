@@ -3,7 +3,6 @@ import datetime
 import logging
 import logging.handlers
 import os
-import shutil
 import sys
 import time
 import faulthandler
@@ -91,19 +90,6 @@ def parse_args():
         preserve_install = cfg.opts("defaults", "preserve_benchmark_candidate", default_value=False, mandatory=False)
     else:
         preserve_install = False
-
-    # workaround for http://bugs.python.org/issue13041
-    #
-    # Set a proper width (see argparse.HelpFormatter)
-    try:
-        int(os.environ["COLUMNS"])
-    except (KeyError, ValueError):
-        # noinspection PyBroadException
-        try:
-            os.environ['COLUMNS'] = str(shutil.get_terminal_size().columns)
-        except BaseException:
-            # don't fail if anything goes wrong here
-            pass
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You know for benchmarking Elasticsearch.",

@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 
 QUIET = False
 PLAIN = False
@@ -78,6 +79,18 @@ def init(quiet=False):
     else:
         PLAIN = False
         format = RichFormat
+    # workaround for http://bugs.python.org/issue13041
+    #
+    # Set a proper width (see argparse.HelpFormatter)
+    try:
+        int(os.environ["COLUMNS"])
+    except (KeyError, ValueError):
+        # noinspection PyBroadException
+        try:
+            os.environ['COLUMNS'] = str(shutil.get_terminal_size().columns)
+        except BaseException:
+            # don't fail if anything goes wrong here
+            pass
 
 
 def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
