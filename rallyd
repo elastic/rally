@@ -2,6 +2,12 @@
 
 # fail this script immediately if any command fails with a non-zero exit code
 set -e
+# Treat unset env variables as an error
+set -u
+# fail on pipeline errors, e.g. when grepping
+set -o pipefail
+
+# We assume here that this script will stay in the Rally git root directory (it does not make sense in any other place anyway)
 
 # see http://stackoverflow.com/a/246128
 SOURCE="${BASH_SOURCE[0]}"
@@ -15,38 +21,9 @@ RALLY_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 pushd . >/dev/null 2>&1
 cd "${RALLY_SRC_HOME}" >/dev/null 2>&1
 
-export PYTHONPATH=$RALLY_SRC_HOME:$PYTHONPATH
+export PYTHONPATH="${RALLY_SRC_HOME}:${PYTHONPATH}"
 
-# see http://unix.stackexchange.com/a/155077
-if output=$(git status --porcelain) && [ -z "$output" ] && on_master=$(git rev-parse --abbrev-ref HEAD) && [ "$on_master" == "master" ]
-then
-  # Working directory clean -> we assume this is a user that is not actively developing Rally and just upgrade it every time it is invoked
-  set +e
-  # this will fail if the user is offline
-  git fetch origin --quiet >/dev/null 2>&1
-  exit_code=$?
-  set -e
-  if [ ${exit_code} == 0 ]
-  then
-    echo "Auto-updating Rally"
-    git rebase origin/master --quiet
-    python3 setup.py -q develop --user
-  #else
-  # offline - skipping update
-  fi
-# else
-  # Uncommitted changes - don't upgrade, just run
-fi
+__RALLY_INTERNAL_BINARY_NAME="esrallyd"
+__RALLY_INTERNAL_HUMAN_NAME="Rally daemon"
 
-popd >/dev/null 2>&1
-
-# Provide a consistent binary name to the user and hide the fact that we call another binary under the hood.
-export RALLY_ALTERNATIVE_BINARY_NAME=$(basename "$0")
-RALLY_ROOT=$(python3 -c "import site; print(site.USER_BASE)")
-RALLY_BIN=${RALLY_ROOT}/bin/esrallyd
-if [ -x "$RALLY_BIN" ]
-then
-    ${RALLY_BIN} "$@"
-else
-    echo "Cannot execute Rally daemon in ${RALLY_BIN}."
-fi
+source run.sh
