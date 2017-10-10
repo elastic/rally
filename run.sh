@@ -8,8 +8,8 @@
 #
 ##########################################################################################
 
-BINARY_NAME="${__RALLY_INTERNAL_BINARY_NAME}"
-HUMAN_NAME="${__RALLY_INTERNAL_HUMAN_NAME}"
+readonly BINARY_NAME="${__RALLY_INTERNAL_BINARY_NAME}"
+readonly HUMAN_NAME="${__RALLY_INTERNAL_HUMAN_NAME}"
 
 # Attempt to update Rally itself by default but allow user to skip it.
 SELF_UPDATE=YES
@@ -68,6 +68,11 @@ then
 fi
 
 popd >/dev/null 2>&1
+
+# write the actor system's log file to a well-known location (but let the user override it with the same env variable)
+export THESPLOG_FILE="${THESPLOG_FILE:-${HOME}/.rally/logs/actor-system-internal.log}"
+# this value is in bytes, the default is 50kB. We increase it to 200kiB.
+export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
 
 # Provide a consistent binary name to the user and hide the fact that we call another binary under the hood.
 export RALLY_ALTERNATIVE_BINARY_NAME=$(basename "$0")
