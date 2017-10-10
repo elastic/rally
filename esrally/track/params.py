@@ -181,10 +181,6 @@ class BulkIndexParamSource(ParamSource):
         else:
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
 
-        # TODO cleanup: Remove this after some grace period.
-        if "action-and-meta-data" in params:
-            raise exceptions.InvalidSyntax("The parameter \"action-and-meta-data\" is not supported anymore. Please specify instead the "
-                                           "boolean flag \"includes-action-and-meta-data\" on each type definition.")
         for index in indices:
             for t in index.types:
                 if t.includes_action_and_meta_data and self.id_conflicts != IndexIdConflict.NoConflicts:

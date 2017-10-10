@@ -538,7 +538,6 @@ def main():
     cfg.add(config.Scope.application, "node", "rally.cwd", os.getcwd())
 
     cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
-    #TODO dm: Consider renaming this one. It's used by different modules
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
@@ -572,9 +571,6 @@ def main():
         cfg.add(config.Scope.applicationOverride, "reporting", "baseline.timestamp", args.baseline)
         cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
 
-    ################################
-    # new section name: driver
-    ################################
     cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))

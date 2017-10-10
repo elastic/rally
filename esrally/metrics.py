@@ -640,10 +640,6 @@ class EsMetricsStore(MetricsStore):
         self._index = self.index_name(invocation)
         # reduce a bit of noise in the metrics cluster log
         if create:
-            # Remove the old index template, named "rally"
-            #TODO dm: Remove this fallback after some grace period
-            if self._client.template_exists("rally"):
-                self._client.delete_template("rally")
             # always update the mapping to the latest version
             self._client.put_template("rally-metrics", self._get_template())
             if not self._client.exists(index=self._index):

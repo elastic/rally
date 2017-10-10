@@ -437,15 +437,6 @@ class BulkIndexParamSourceTests(TestCase):
 
         self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
 
-    def test_create_with_unsupported_action_meta_data(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={
-                "action-and-meta-data": "generate",
-            })
-
-        self.assertEqual("The parameter \"action-and-meta-data\" is not supported anymore. Please specify instead the boolean "
-                         "flag \"includes-action-and-meta-data\" on each type definition.", ctx.exception.args[0])
-
     def test_create_valid_param_source(self):
         self.assertIsNotNone(params.BulkIndexParamSource(indices=[], params={
             "conflicts": "random",
