@@ -23,6 +23,7 @@ def start(args):
 
 def stop(raise_errors=True):
     if actor.actor_system_already_running():
+        # noinspection PyBroadException
         try:
             # TheSpian writes the following warning upon start (at least) on Mac OS X:
             #
@@ -70,9 +71,11 @@ def main():
     for p in [start_command, restart_command]:
         p.add_argument(
             "--node-ip",
+            required=True,
             help="The IP of this node.")
         p.add_argument(
             "--coordinator-ip",
+            required=True,
             help="The IP of the coordinator node."
         )
     subparsers.add_parser("stop", help="Stops the Rally daemon")

@@ -120,12 +120,12 @@ def parse_args():
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
         "--baseline",
-        help="Race timestamp of the baseline (see %s list races)" % PROGRAM_NAME,
-        default="")
+        required=True,
+        help="Race timestamp of the baseline (see %s list races)" % PROGRAM_NAME)
     compare_parser.add_argument(
         "--contender",
-        help="Race timestamp of the contender (see %s list races)" % PROGRAM_NAME,
-        default="")
+        required=True,
+        help="Race timestamp of the contender (see %s list races)" % PROGRAM_NAME)
     compare_parser.add_argument(
         "--report-format",
         help="define the output format for the command line report (default: markdown).",
@@ -149,20 +149,31 @@ def parse_args():
             default=False,
             action="store_true")
 
+    for p in [parser, list_parser, race_parser]:
+        p.add_argument(
+            "--distribution-version",
+            help="define the version of the Elasticsearch distribution to download. "
+                 "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+            default="")
+        p.add_argument(
+            "--track-repository",
+            help="define the repository from where Rally will load tracks (default: default).",
+            default="default")
+        p.add_argument(
+            "--team-repository",
+            help="define the repository from where Rally will load teams and cars (default: default).",
+            default="default")
+        p.add_argument(
+            "--offline",
+            help="assume that Rally has no connection to the Internet (default: false)",
+            default=False,
+            action="store_true")
+
     for p in [parser, race_parser]:
         p.add_argument(
             "--pipeline",
             help="select the pipeline to run.",
             # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
-            default="")
-        p.add_argument(
-            "--preserve-install",
-            help="keep the benchmark candidate and its index. (default: %s)" % str(preserve_install).lower(),
-            default=preserve_install)
-        p.add_argument(
-            "--telemetry",
-            help="enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
-                 "with `%s list telemetry`" % PROGRAM_NAME,
             default="")
         p.add_argument(
             "--revision",
@@ -178,9 +189,6 @@ def parse_args():
         p.add_argument(
             "--challenge",
             help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
-        p.add_argument(
-            "--include-tasks",
-            help="defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
         p.add_argument(
             "--car",
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
@@ -199,6 +207,11 @@ def parse_args():
             help="define a comma-separated list of hosts which should generate load (default: localhost).",
             default="localhost")
         p.add_argument(
+            "--laps",
+            type=positive_number,
+            help="number of laps that the benchmark should run (default: 1).",
+            default=1)
+        p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
                  "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
@@ -208,6 +221,18 @@ def parse_args():
             choices=["red", "yellow", "green", "skip"],
             help="Expected cluster health at the beginning of the benchmark (default: green)",
             default="green")
+        p.add_argument(
+            "--telemetry",
+            help="enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
+                 "with `%s list telemetry`" % PROGRAM_NAME,
+            default="")
+        p.add_argument(
+            "--distribution-repository",
+            help="define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+            default="release")
+        p.add_argument(
+            "--include-tasks",
+            help="defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
         p.add_argument(
             "--user-tag",
             help="define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
@@ -228,37 +253,12 @@ def parse_args():
             default=False,
             action="store_true")
         p.add_argument(
-            "--laps",
-            type=positive_number,
-            help="number of laps that the benchmark should run (default: 1).",
-            default=1)
+            "--preserve-install",
+            help="keep the benchmark candidate and its index. (default: %s)" % str(preserve_install).lower(),
+            default=preserve_install)
         p.add_argument(
             "--test-mode",
             help="runs the given track in 'test mode'. Meant to check a track for errors but not for real benchmarks (default: false).",
-            default=False,
-            action="store_true")
-
-    for p in [parser, list_parser, race_parser]:
-        p.add_argument(
-            "--distribution-version",
-            help="define the version of the Elasticsearch distribution to download. "
-                 "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
-            default="")
-        p.add_argument(
-            "--distribution-repository",
-            help="define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-            default="release")
-        p.add_argument(
-            "--track-repository",
-            help="define the repository from where Rally will load tracks (default: default).",
-            default="default")
-        p.add_argument(
-            "--team-repository",
-            help="define the repository from where Rally will load teams and cars (default: default).",
-            default="default")
-        p.add_argument(
-            "--offline",
-            help="assume that Rally has no connection to the Internet (default: false)",
             default=False,
             action="store_true")
         p.add_argument(
