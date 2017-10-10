@@ -96,6 +96,7 @@ def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
+    # TODO: Checking for sys.stdout.isatty() prevents shell redirections and pipes (useful for list commands). Can we remove this check?
     if not QUIET and sys.stdout.isatty():
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
