@@ -33,15 +33,25 @@ Track elements
 
 The track elements that are described here are defined in `Rally's JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_. Rally uses this track schema to validate your tracks when it is loading them.
 
-Each track defines a three info attributes:
+Each track defines the following info attributes:
 
+* ``version`` (optional): An integer describing the track specification version in use. Rally uses it to detect incompatible future track specification versions and raise an error. See the table below for a reference of valid versions.
 * ``description`` (mandatory): A human-readable description of the track.
 * ``short-description`` (mandatory): A shorter description of the track.
 * ``data-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding data for this track. This element is not needed if data are only generated on the fly by a custom runner.
 
+=========================== =============
+Track Specification Version Rally version
+=========================== =============
+                          1       >=0.7.3
+=========================== =============
+
+The ``version`` property has been introduced with Rally 0.7.3. Rally versions before 0.7.3 do not recognize this property and thus cannot detect incompatible track specification versions.
+
 Example::
 
     {
+        "version": 1,
         "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
         "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
         "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"

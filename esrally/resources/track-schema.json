@@ -12,6 +12,11 @@
       "type": "string",
       "description": "A longer description of this track."
     },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The version of the track specification format that is being used (optional)."
+    },
     "data-url": {
       "type": "string",
       "format": "uri",

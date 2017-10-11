@@ -135,6 +135,10 @@ def track_file(repo, track_name):
     return os.path.join(track_dir(repo, track_name), "track.json")
 
 
+def track_meta_file(repo, track_name):
+    return os.path.join(track_dir(repo, track_name), "track.ini")
+
+
 def operation_parameters(t, op):
     if op.param_source:
         logger.debug("Creating parameter source with name [%s]" % op.param_source)
@@ -375,6 +379,7 @@ def post_process_for_test_mode(t):
 
 
 class TrackFileReader:
+    MAXIMUM_SUPPORTED_TRACK_VERSION = 1
     """
     Creates a track from a track file.
     """
@@ -403,6 +408,16 @@ class TrackFileReader:
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
             logger.exception("Could not load [%s]." % track_spec_file)
             raise TrackSyntaxError("Could not load '%s'" % track_spec_file, e)
+        # check the track version before even attempting to validate the JSON format to avoid bogus errors.
+        raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
+        try:
+            track_version = int(raw_version)
+        except ValueError:
+            raise exceptions.InvalidSyntax("version identifier for track %s must be numeric but was [%s]" % (track_name, str(raw_version)))
+        if TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION < track_version:
+            raise exceptions.RallyError("Track %s requires a newer version of Rally. Please upgrade Rally (supported track version: %d, "
+                                        "required track version: %d)" %
+                                        (track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION, track_version))
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
