@@ -32,11 +32,11 @@ Let's go through an example step by step: First run ``esrally``::
     * Autodetecting available third-party software
       git    : [OK]
       gradle : [OK]
-      JDK 8  : [OK]
+      JDK    : [OK]
 
-    * Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
+    * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
 
-As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. If you don't have Gradle, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you don't have Gradle installed::
+As you can see above, Rally autodetects if git, Gradle and a JDK are installed. If you don't have Gradle, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you don't have Gradle installed::
 
     dm@io:~ $ esrally
 
@@ -56,40 +56,38 @@ As you can see above, Rally autodetects if git, Gradle and JDK 8 are installed. 
       gradle : [MISSING]
       JDK 8  : [OK]
 
-    **********************************************************************************
-    You don't have the necessary software to benchmark source builds of Elasticsearch.
+    ********************************************************************************
+    You don't have the required software to benchmark Elasticsearch source builds.
 
     You can still benchmark binary distributions with e.g.:
 
       esrally --distribution-version=5.0.0
-    **********************************************************************************
+    ********************************************************************************
 
 As you can see, Rally tells you that you cannot build Elasticsearch from sources but you can still benchmark official binary distributions.
 
-It's also possible that Rally cannot automatically find your JDK 8 home directory. In that case, it will ask you later in the configuration process.
+It's also possible that Rally cannot automatically find your JDK 8 or JDK 9 home directory. In that case, it will ask you later in the configuration process. If you do not provide a JDK home directory, Rally cannot start Elasticsearch on this machine but you can still :doc:`benchmark remote clusters </recipes>`.
 
-After the initial detection, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``). If all goes well, then you will see this::
+After running the initial detection, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``) or will choose a default directory::
 
-    Autodetected Elasticsearch project directory at [/Users/dm/elasticsearch].
-
-Otherwise, Rally will choose a default directory and ask you for confirmation::
-
-    * Setting up benchmark data directory in [/Users/dm/.rally/benchmarks] (needs several GB).
-    Enter your Elasticsearch project directory: [default: '/Users/dm/.rally/benchmarks/src/elasticsearch']:
-
-If you are ok with this default, just press "Enter" and Rally will take care of the rest. Otherwise, provide your Elasticsearch project directory here. Please keep in mind that Rally will run builds with Gradle in this directory if you start a benchmark.
+    * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
+    * Setting up benchmark source directory in /Users/dm/.rally/benchmarks/src/elasticsearch
 
 If Rally has not found Gradle in the first step, it will not ask you for a source directory and just go on.
 
 Now Rally is done::
 
-    Configuration successfully written to [/Users/dm/.rally/rally.ini]. Happy benchmarking!
+    Configuration successfully written to /Users/dm/.rally/rally.ini. Happy benchmarking!
 
-    To benchmark the latest version of Elasticsearch with the default benchmark run:
+    To benchmark Elasticsearch with the default benchmark, run:
 
-      esrally --revision=latest
+      esrally
 
-    For more help see the user documentation at https://esrally.readthedocs.io
+    More info about Rally:
+
+    * Type esrally --help
+    * Read the documentation at https://esrally.readthedocs.io/en/latest/
+    * Ask a question on the forum at https://discuss.elastic.co/c/elasticsearch/rally
 
 Congratulations! Time to run your first benchmark.
 
@@ -101,7 +99,7 @@ If you need more control over a few variables or want to store your metrics in a
 Prerequisites
 ~~~~~~~~~~~~~
 
-When using the advanced configuration, Rally stores its metrics not in-memory but in a dedicated Elasticsearch instance. Therefore, you will also need the following software installed:
+When using the advanced configuration, you can choose that Rally stores its metrics not in-memory but in a dedicated Elasticsearch instance. Therefore, you will also need the following software installed:
 
 * Elasticsearch: a dedicated Elasticsearch instance which acts as the metrics store for Rally. If you don't want to set it up yourself you can also use `Elastic Cloud <https://www.elastic.co/cloud>`_.
 * Optional: Kibana (also included in `Elastic Cloud <https://www.elastic.co/cloud>`_).
@@ -125,8 +123,9 @@ Rally will ask you a few more things in the advanced setup:
 * Benchmark data directory: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different data directory here.
 * Elasticsearch project directory: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with Gradle in this directory (it runs ``gradle clean`` and ``gradle :distribution:tar:assemble``).
 * JDK root directory: Rally will only ask this if it could not autodetect the JDK home by itself. Just enter the root directory of the JDK you want to use. By default, Rally will choose Java 9 if available and fallback to Java 8.
-* Name for this benchmark environment: You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different environments by choosing a different name.
-* metrics store settings: Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. There is currently no support for choosing the in-memory metrics store when you run the advanced configuration. If you really need it, please raise an issue on Github.
+* metrics store type: You can choose between ``in-memory`` which requires no additional setup or ``elasticsearch`` which requires that you start a dedicated Elasticsearch instance to store metrics but gives you much more flexibility to analyse results.
+* metrics store settings (only for metrics store type ``elasticsearch``): Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it.
+* Name for this benchmark environment (only for metrics store type ``elasticsearch``): You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different environments by choosing a different name.
 * whether or not Rally should keep the Elasticsearch benchmark candidate installation including all data by default. This will use lots of disk space so you should wipe ``~/.rally/benchmarks/races`` regularly.
 
 Proxy Configuration

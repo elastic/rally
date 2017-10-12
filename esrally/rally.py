@@ -361,7 +361,7 @@ def print_help_on_errors():
     console.println(console.format.underline_for(heading))
     console.println("* Check the log files in %s for errors." % application_log_dir_path())
     console.println("* Read the documentation at %s" % console.format.link(DOC_LINK))
-    console.println("* Ask a question in the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
+    console.println("* Ask a question on the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
     console.println("* Raise an issue at %s and include the log files in %s." %
                     (console.format.link("https://github.com/elastic/rally/issues"), application_log_dir_path()))
 

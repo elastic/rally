@@ -1,3 +1,4 @@
+import os
 import configparser
 
 from unittest import TestCase
@@ -231,14 +232,18 @@ class AutoLoadConfigTests(TestCase):
 
 
 class ConfigFactoryTests(TestCase):
+    @mock.patch("esrally.utils.git.is_working_copy")
     @mock.patch("esrally.utils.jvm.is_early_access_release")
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_simple_config(self, guess_install_location, guess_java_home, is_ea_release):
+    def test_create_simple_config(self, guess_install_location, guess_java_home, is_ea_release, working_copy):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
         guess_java_home.return_value = "/tests/java9/home"
         is_ea_release.return_value = False
-        mock_input = MockInput(["/Projects/elasticsearch/master"])
+        # Rally checks in the parent and sibling directories whether there is an ES working copy. We don't want this detection logic
+        # to succeed spuriously (e.g. on developer machines).
+        working_copy.return_value = False
+        mock_input = MockInput([""])
 
         f = config.ConfigFactory(i=mock_input, sec_i=mock_input, o=null_output)
 
@@ -257,12 +262,12 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("local", config_store.config["system"]["env.name"])
 
         self.assertTrue("node" in config_store.config)
-        self.assertEqual("in-memory/benchmarks", config_store.config["node"]["root.dir"])
-        self.assertEqual("/Projects/elasticsearch", config_store.config["node"]["src.root.dir"])
+        self.assertEqual(io.normalize_path(os.path.abspath("./in-memory/benchmarks")), config_store.config["node"]["root.dir"])
+        self.assertEqual(io.normalize_path(os.path.abspath("./in-memory/benchmarks/src")), config_store.config["node"]["src.root.dir"])
 
         self.assertTrue("source" in config_store.config)
         self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
-        self.assertEqual("master", config_store.config["source"]["elasticsearch.src.subdir"])
+        self.assertEqual("elasticsearch", config_store.config["source"]["elasticsearch.src.subdir"])
 
         self.assertTrue("build" in config_store.config)
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
@@ -319,6 +324,21 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
 
+    @mock.patch("esrally.utils.io.guess_java_home")
+    @mock.patch("esrally.utils.io.guess_install_location")
+    def test_create_simple_config_no_java_installed(self, guess_install_location, guess_java_home):
+        guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
+        guess_java_home.return_value = None
+
+        # the input is the question for the JDK home directory - the user does not define one
+        f = config.ConfigFactory(i=MockInput([""]), o=null_output)
+
+        config_store = InMemoryConfigStore("test")
+        f.create_config(config_store)
+
+        self.assertIsNotNone(config_store.config)
+        self.assertFalse("runtime" in config_store.config)
+
     @mock.patch("esrally.utils.jvm.is_early_access_release")
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
@@ -332,8 +352,8 @@ class ConfigFactoryTests(TestCase):
             "/var/data/rally",
             # src dir
             "/Projects/elasticsearch/src",
-            # env
-            "unittest-env",
+            # metrics store type (Elasticsearch)
+            "2",
             # data_store_host
             "localhost",
             # data_store_port
@@ -342,6 +362,8 @@ class ConfigFactoryTests(TestCase):
             "Yes",
             # data_store_user
             "user",
+            # env
+            "unittest-env",
             # preserve benchmark candidate
             "y"
         ]), sec_i=MockInput(["pw"]), o=null_output)

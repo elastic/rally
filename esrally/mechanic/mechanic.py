@@ -501,6 +501,13 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         car = team.load_car(repo, cfg.opts("mechanic", "car.names"))
         plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"))
 
+    if sources or distribution:
+        try:
+            java_home = cfg.opts("runtime", "java.home")
+        except config.ConfigError:
+            logger.exception("Cannot determine Java home.")
+            raise exceptions.SystemSetupError("No JDK is configured. You cannot benchmark Elasticsearch on this machine. Please install"
+                                              " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
     if sources:
         try:
             src_dir = cfg.opts("node", "src.root.dir")
@@ -512,7 +519,6 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         remote_url = cfg.opts("source", "remote.repo.url")
         revision = cfg.opts("mechanic", "source.revision")
         gradle = cfg.opts("build", "gradle.bin")
-        java_home = cfg.opts("runtime", "java.home")
         src_config = cfg.all_opts("source")
         s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, challenge_root_path, plugins, src_config, build)
         p = []

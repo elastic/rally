@@ -4,7 +4,7 @@ Quickstart
 Install
 -------
 
-Install Python 3.4+ including ``pip3``, JDK 8 and git 1.9+. Then run the following command, optionally prefixed by ``sudo`` if necessary::
+Install Python 3.4+ including ``pip3``, JDK 8 or 9 and git 1.9+. Then run the following command, optionally prefixed by ``sudo`` if necessary::
 
     pip3 install esrally
 

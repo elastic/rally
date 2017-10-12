@@ -285,15 +285,11 @@ class ConfigFactory:
             self.o("")
             self.o("  %s" % console.format.link("%sconfiguration.html" % DOC_LINK))
             self.o("")
-
-            logger.info("Running advanced configuration routine.")
-            self.o("")
         else:
             self.o("Running simple configuration. Run the advanced configuration with:")
             self.o("")
             self.o("  %s configure --advanced-config" % PROGRAM_NAME)
             self.o("")
-            logger.info("Running simple configuration routine.")
 
         if config_file.present:
             self.o("\nWARNING: Will overwrite existing config file at [%s]\n" % config_file.location)
@@ -320,59 +316,93 @@ class ConfigFactory:
         self.print_detection_result("gradle ", gradle_bin)
         self.print_detection_result("JDK    ", auto_detected_java_home,
                                     warn_if_missing=True,
-                                    additional_message="You cannot benchmark Elasticsearch without a JDK installation")
+                                    additional_message="You cannot benchmark Elasticsearch on this machine without a JDK.")
         self.o("")
 
         # users that don't have Gradle available cannot benchmark from sources
         benchmark_from_sources = gradle_bin
 
         if not benchmark_from_sources:
-            self.o("**********************************************************************************")
-            self.o("You don't have the necessary software to benchmark source builds of Elasticsearch.")
+            self.o("********************************************************************************")
+            self.o("You don't have the required software to benchmark Elasticsearch source builds.")
             self.o("")
             self.o("You can still benchmark binary distributions with e.g.:")
             self.o("")
             self.o("  %s --distribution-version=5.0.0" % PROGRAM_NAME)
-            self.o("**********************************************************************************")
+            self.o("********************************************************************************")
             self.o("")
 
-        root_dir = "%s/benchmarks" % config_file.config_dir
+        root_dir = io.normalize_path(os.path.abspath(os.path.join(config_file.config_dir, "benchmarks")))
         if advanced_config:
-            root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory:", default_value=root_dir))
+            root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory", default_value=root_dir))
         else:
-            self.o("* Setting up benchmark data directory in [%s] (needs several GB)." % root_dir)
+            self.o("* Setting up benchmark data directory in %s" % root_dir)
 
         if benchmark_from_sources:
             # We try to autodetect an existing ES source directory
             guess = self._guess_es_src_dir()
             if guess:
                 source_dir = guess
-                self.o("Autodetected Elasticsearch project directory at [%s]." % source_dir)
                 logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
             else:
-                default_src_dir = "%s/src/elasticsearch" % root_dir
+                default_src_dir = os.path.join(root_dir, "src", "elasticsearch")
                 logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
+                source_dir = default_src_dir
+
+            if advanced_config:
                 source_dir = io.normalize_path(self._ask_property("Enter your Elasticsearch project directory:",
-                                                                  default_value=default_src_dir))
+                                                                  default_value=source_dir))
+            if not advanced_config:
+                self.o("* Setting up benchmark source directory in %s" % source_dir)
+                self.o("")
+
             # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
             repo_url = "https://github.com/elastic/elasticsearch.git"
 
         if auto_detected_java_home:
             java_home = auto_detected_java_home
+            local_benchmarks = True
         else:
-            self.o("")
-            java_home = io.normalize_path(self._ask_property("Enter the JDK root directory:", check_path_exists=True))
+            raw_java_home = self._ask_property("Enter the JDK root directory", check_path_exists=True, mandatory=False)
+            java_home = io.normalize_path(raw_java_home) if raw_java_home else None
+            if not java_home:
+                local_benchmarks = False
+                self.o("")
+                self.o("********************************************************************************")
+                self.o("You don't have a JDK installed but Elasticsearch requires one to run. This means")
+                self.o("that you cannot benchmark Elasticsearch on this machine.")
+                self.o("")
+                self.o("You can still benchmark against remote machines e.g.:")
+                self.o("")
+                self.o("  %s --pipeline=benchmark-only --target-host=\"NODE_IP:9200\"" % PROGRAM_NAME)
+                self.o("")
+                self.o("See %s for further info." % console.format.link("%srecipes.html" % DOC_LINK))
+                self.o("********************************************************************************")
+                self.o("")
+            else:
+                local_benchmarks = True
 
         if advanced_config:
-            env_name = self._ask_env_name()
-            data_store_type = "elasticsearch"
-            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
+            data_store_choice = self._ask_property("Where should metrics be kept?"
+                                                   "\n\n"
+                                                   "(1) In memory (simpler but less options for analysis)\n"
+                                                   "(2) Elasticsearch (requires a separate ES instance, keeps all raw samples for analysis)"
+                                                   "\n\n", default_value="1", choices=["1", "2"])
+            if data_store_choice == "1":
+                env_name = "local"
+                data_store_type = "in-memory"
+                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
+            else:
+                data_store_type = "elasticsearch"
+                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
+
+                env_name = self._ask_env_name()
 
             preserve_install = convert.to_bool(self._ask_property("Do you want Rally to keep the Elasticsearch benchmark candidate "
-                                                                  "installation including the index (will use lots of disk space)?",
+                                                                  "installation including the index (will use several GB per trial run)?",
                                                                   default_value=False))
         else:
-            # Does not matter too much for an in-memory store
+            # Does not matter for an in-memory store
             env_name = "local"
             data_store_type = "in-memory"
             data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
@@ -401,8 +431,9 @@ class ConfigFactory:
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
 
-        config["runtime"] = {}
-        config["runtime"]["java.home"] = java_home
+        if java_home:
+            config["runtime"] = {}
+            config["runtime"]["java.home"] = java_home
 
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
@@ -434,20 +465,27 @@ class ConfigFactory:
 
         config_file.store(config)
 
-        self.o("Configuration successfully written to [%s]. Happy benchmarking!" % config_file.location)
+        self.o("Configuration successfully written to %s. Happy benchmarking!" % config_file.location)
         self.o("")
-        if benchmark_from_sources:
-            self.o("To benchmark Elasticsearch with the default benchmark run:")
+        if local_benchmarks and benchmark_from_sources:
+            self.o("To benchmark Elasticsearch with the default benchmark, run:")
             self.o("")
             self.o("  %s" % PROGRAM_NAME)
-        else:
-            self.o("To benchmark Elasticsearch 5.0.0 with the default benchmark run:")
+            self.o("")
+        elif local_benchmarks:
+            self.o("To benchmark Elasticsearch 5.0.0 with the default benchmark, run:")
             self.o("")
             self.o("  %s --distribution-version=5.0.0" % PROGRAM_NAME)
+            self.o("")
+        else:
+            # we've already printed an info for the user. No need to repeat that.
+            pass
 
+        self.o("More info about Rally:")
         self.o("")
-        self.o("For help, type %s --help or see the user documentation at %s"
-               % (PROGRAM_NAME, console.format.link(DOC_LINK)))
+        self.o("* Type %s --help" % PROGRAM_NAME)
+        self.o("* Read the documentation at %s" % console.format.link(DOC_LINK))
+        self.o("* Ask a question on the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
         logger.debug("Autodetected %s at [%s]" % (what, result))
@@ -491,15 +529,18 @@ class ConfigFactory:
 
     def _ask_env_name(self):
         return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
-                                  check_pattern=ConfigFactory.ENV_NAME_PATTERN)
+                                  check_pattern=ConfigFactory.ENV_NAME_PATTERN, default_value="local")
 
-    def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, sensitive=False, default_value=None):
+    def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, choices=None, sensitive=False,
+                      default_value=None):
         if default_value is not None:
-            final_prompt = "%s [default: '%s']: " % (prompt, default_value)
+            final_prompt = "%s (default: %s): " % (prompt, default_value)
+        elif not mandatory:
+            final_prompt = "%s (Press Enter to skip): " % prompt
         else:
             final_prompt = "%s: " % prompt
         while True:
-            if self.assume_defaults and default_value is not None:
+            if self.assume_defaults and (default_value is not None or not mandatory):
                 self.o(final_prompt)
                 value = None
             elif sensitive:
@@ -512,17 +553,23 @@ class ConfigFactory:
                     self.o("  Value is required. Please retry.")
                     continue
                 else:
-                    self.o("  Using default value '%s'" % default_value)
+                    # suppress output when the default is empty
+                    if default_value:
+                        self.o("  Using default value '%s'" % default_value)
                     # this way, we can still check the path...
                     value = default_value
 
-            if check_path_exists and not os.path.exists(value):
-                self.o("'%s' does not exist. Please check and retry." % value)
-                continue
-            if check_pattern is not None and not check_pattern.match(str(value)):
-                self.o("Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
-                continue
-            self.o("")
+            if mandatory or value is not None:
+                if check_path_exists and not os.path.exists(value):
+                    self.o("'%s' does not exist. Please check and retry." % value)
+                    continue
+                if check_pattern is not None and not check_pattern.match(str(value)):
+                    self.o("Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
+                    continue
+                if choices is not None and str(value) not in choices:
+                    self.o("Input is not one of the valid choices %s. Please check and retry." % choices)
+                    continue
+                self.o("")
             # user entered a valid value
             return value
 

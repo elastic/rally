@@ -11,8 +11,8 @@ Before installing Rally, please ensure that the following packages are installed
 * Python 3.4 or better available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` or higher)
 * Python3 dev (for header files) (``python3-dev`` package)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
-* JDK 8 or 9
 * git 1.9 or better
+* JDK 8 or 9 on all machines where you want to launch Elasticsearch (if you use Rally just as a load generator, no JDK is required)
 
 Rally does not support Windows and is only actively tested on Mac OS X and Linux.
 
