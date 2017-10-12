@@ -21,8 +21,8 @@ RALLY_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 pushd . >/dev/null 2>&1
 cd "${RALLY_SRC_HOME}" >/dev/null 2>&1
 
-# ensure the Actor system can find Rally sources
-export PYTHONPATH="${RALLY_SRC_HOME}:${PYTHONPATH}"
+# ensure the Actor system can find Rally sources (it is ok if PYTHONPATH is undefined yet. Hence we define an empty default).
+export PYTHONPATH="${RALLY_SRC_HOME}:${PYTHONPATH:-}"
 
 # set variables that are needed for run.sh
 __RALLY_INTERNAL_BINARY_NAME="esrallyd"
