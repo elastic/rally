@@ -50,6 +50,13 @@ def stop(raise_errors=True):
         sys.exit(1)
 
 
+def status():
+    if actor.actor_system_already_running():
+        console.println("Running")
+    else:
+        console.println("Stopped")
+
+
 def main():
     check_python_version()
     console.init()
@@ -79,6 +86,7 @@ def main():
             help="The IP of the coordinator node."
         )
     subparsers.add_parser("stop", help="Stops the Rally daemon")
+    subparsers.add_parser("status", help="Shows the current status of the local Rally daemon")
 
     args = parser.parse_args()
 
@@ -86,6 +94,8 @@ def main():
         start(args)
     elif args.subcommand == "stop":
         stop()
+    elif args.subcommand == "status":
+        status()
     elif args.subcommand == "restart":
         stop(raise_errors=False)
         start(args)

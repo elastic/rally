@@ -44,3 +44,10 @@ You can leave the Rally daemon processes running in case you want to run multipl
     esrallyd stop
 
 Contrary to startup, order does not matter here.
+
+Status
+------
+
+You can query the status of the local Rally daemon with::
+
+    esrallyd status
