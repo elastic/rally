@@ -1,9 +1,10 @@
 import re
+import unittest.mock as mock
 from unittest import TestCase
 
 import jinja2
 
-from esrally import exceptions
+from esrally import exceptions, config
 from esrally.utils import io
 from esrally.track import loader
 
@@ -22,6 +23,100 @@ class StaticClock:
     @staticmethod
     def stop_watch():
         return None
+
+
+class SimpleTrackRepositoryTests(TestCase):
+    @mock.patch("os.path.exists")
+    @mock.patch("os.path.isdir")
+    def test_track_from_directory(self, is_dir, path_exists):
+        is_dir.return_value = True
+        path_exists.return_value = True
+
+        repo = loader.SimpleTrackRepository("/path/to/track/unit-test")
+        self.assertEqual("unit-test", repo.track_name)
+        self.assertEqual(["unit-test"], repo.track_names)
+        self.assertEqual("/path/to/track/unit-test", repo.track_dir("unit-test"))
+        self.assertEqual("/path/to/track/unit-test/track.json", repo.track_file("unit-test"))
+
+    @mock.patch("os.path.exists")
+    @mock.patch("os.path.isdir")
+    @mock.patch("os.path.isfile")
+    def test_track_from_file(self, is_file, is_dir, path_exists):
+        is_file.return_value = True
+        is_dir.return_value = False
+        path_exists.return_value = True
+
+        repo = loader.SimpleTrackRepository("/path/to/track/unit-test/my-track.json")
+        self.assertEqual("my-track", repo.track_name)
+        self.assertEqual(["my-track"], repo.track_names)
+        self.assertEqual("/path/to/track/unit-test", repo.track_dir("my-track"))
+        self.assertEqual("/path/to/track/unit-test/my-track.json", repo.track_file("my-track"))
+
+    @mock.patch("os.path.exists")
+    @mock.patch("os.path.isdir")
+    @mock.patch("os.path.isfile")
+    def test_track_from_named_pipe(self, is_file, is_dir, path_exists):
+        is_file.return_value = False
+        is_dir.return_value = False
+        path_exists.return_value = True
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            loader.SimpleTrackRepository("a named pipe cannot point to a track")
+        self.assertEqual("a named pipe cannot point to a track is neither a file nor a directory", ctx.exception.args[0])
+
+    @mock.patch("os.path.exists")
+    def test_track_from_non_existing_path(self, path_exists):
+        path_exists.return_value = False
+        with self.assertRaises(FileNotFoundError) as ctx:
+            loader.SimpleTrackRepository("/path/does/not/exist")
+        self.assertEqual("Track path /path/does/not/exist does not exist", ctx.exception.args[0])
+
+    @mock.patch("os.path.isdir")
+    @mock.patch("os.path.exists")
+    def test_track_from_directory_without_track(self, path_exists, is_dir):
+        # directory exists, but not the file
+        path_exists.side_effect = [True, False]
+        is_dir.return_value = True
+        with self.assertRaises(FileNotFoundError) as ctx:
+            loader.SimpleTrackRepository("/path/to/not/a/track")
+        self.assertEqual("Could not find track.json in /path/to/not/a/track", ctx.exception.args[0])
+
+    @mock.patch("os.path.exists")
+    @mock.patch("os.path.isdir")
+    @mock.patch("os.path.isfile")
+    def test_track_from_file_but_not_json(self, is_file, is_dir, path_exists):
+        is_file.return_value = True
+        is_dir.return_value = False
+        path_exists.return_value = True
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            loader.SimpleTrackRepository("/path/to/track/unit-test/my-track.xml")
+        self.assertEqual("/path/to/track/unit-test/my-track.xml has to be a JSON file", ctx.exception.args[0])
+
+
+class GitRepositoryTests(TestCase):
+    class MockGitRepo:
+        def __init__(self, remote_url, root_dir, repo_name, resource_name, offline, fetch=True):
+            self.repo_dir = "%s/%s" % (root_dir, repo_name)
+
+    @mock.patch("os.path.exists")
+    @mock.patch("os.walk")
+    def test_track_from_existing_repo(self, walk, exists):
+        walk.return_value = iter([(".", ["unittest", "unittest2", "unittest3"], [])])
+        exists.return_value = True
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "track.name", "unittest")
+        cfg.add(config.Scope.application, "track", "repository.name", "default")
+        cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "node", "root.dir", "/tmp")
+        cfg.add(config.Scope.application, "benchmarks", "track.repository.dir", "tracks")
+
+        repo = loader.GitTrackRepository(cfg, fetch=False, update=False, repo_class=GitRepositoryTests.MockGitRepo)
+
+        self.assertEqual("unittest", repo.track_name)
+        self.assertEqual(["unittest", "unittest2", "unittest3"], list(repo.track_names))
+        self.assertEqual("/tmp/tracks/default/unittest", repo.track_dir("unittest"))
+        self.assertEqual("/tmp/tracks/default/unittest/track.json", repo.track_file("unittest"))
 
 
 class TemplateRenderTests(TestCase):

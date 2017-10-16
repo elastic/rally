@@ -172,7 +172,7 @@ class Track:
     """
 
     def __init__(self, name, short_description, description=None, source_root_url=None, meta_data=None, challenges=None, indices=None,
-                 templates=None):
+                 templates=None, has_plugins=False):
         """
 
         Creates a new track.
@@ -187,6 +187,7 @@ class Track:
         with its ``default`` property set to ``True``.
         :param indices: A list of indices for this track. May be None. One of `indices` or `templates` must be set though.
         :param templates: A list of index templates for this track. May be None. One of `indices` or `templates` must be set though.
+        :param has_plugins: True iff the track also defines plugins (e.g. custom runners or parameter sources).
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
@@ -196,6 +197,7 @@ class Track:
         self.challenges = challenges if challenges else []
         self.indices = indices if indices else []
         self.templates = templates if templates else []
+        self.has_plugins = has_plugins
 
     @property
     def default_challenge(self):

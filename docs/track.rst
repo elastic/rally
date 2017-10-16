@@ -11,7 +11,97 @@ A track is the description of one ore more benchmarking scenarios with a specifi
 * Source URL of the benchmark data
 * A list of steps to run, which we'll call "challenge", for example indexing data with a specific number of documents per bulk request or running searches for a defined number of iterations.
 
-Tracks are written as JSON files and are kept in a separate track repository, which is located at https://github.com/elastic/rally-tracks. This repository has separate branches for different Elasticsearch versions and Rally will check out the appropriate branch based on the command line parameter ``--distribution-version``. If the parameter is missing, Rally will assume by default that you are benchmarking the latest version of Elasticsearch and will checkout the ``master`` branch of the track repository.
+Track File Format and Storage
+=============================
+
+A track is specified in a JSON file.
+
+Ad-hoc use
+..........
+
+For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g::
+
+   # provide a directory - Rally searches for a track.json file in this directory
+   # Track name is "app-logs"
+   esrally --track-path=~/Projects/tracks/app-logs
+   # provide a file name - Rally uses this file directly
+   # Track name is "syslog"
+   esrally --track-path=~/Projects/tracks/syslog.json
+
+Rally will also search for additional files like mappings or data files in the provided directory. If you use advanced features like :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>` we recommend that you create a separate directory per track.
+
+Custom Track Repositories
+.........................
+
+Alternatively, you can store Rally tracks also in a dedicated git repository which we call a "track repository". Rally provides a default track repository that is hosted on `Github <https://github.com/elastic/rally-tracks>`_. You can also add your own track repositories although this requires a bit of additional work. First of all, track repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match for each track (based on the command line parameter ``--distribution-version``). The versioning scheme is as follows:
+
+* The `master` branch needs to work with the latest `master` branch of Elasticsearch.
+* All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
+
+Rally implements a fallback logic so you don't need to define a branch for each patch release of Elasticsearch. For example:
+
+* The branch `6.0.0-alpha1` will be chosen for the version ``6.0.0-alpha1`` of Elasticsearch.
+* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3`` (provided there is no specific branch).
+
+Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
+
+Rally will also search for related files like mappings or custom runners or parameter sources in the track repository. However, Rally will use a separate directory to look for data files (``~/.rally/benchmarks/data/$TRACK_NAME/``). The reason is simply that we do not want to check multi-GB data files into git.
+
+Creating a new track repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+All track repositories are located in ``~/.rally/benchmarks/tracks``. If you want to add a dedicated track repository, called ``private`` follow these steps::
+
+    cd ~/.rally/benchmarks/tracks
+    mkdir private
+    cd private
+    git init
+    # add your track now
+    git add .
+    git commit -m "Initial commit"
+
+
+If you want to share your tracks with others you need to add a remote and push it::
+
+    git remote add origin git@git-repos.acme.com:acme/rally-tracks.git
+    git push -u origin master
+
+If you have added a remote you should also add it in ``~/.rally/rally.ini``, otherwise you can skip this step. Open the file in your editor of choice and add the following line in the section ``tracks``::
+
+    private.url = <<URL_TO_YOUR_ORIGIN>>
+
+Rally will then automatically update the local tracking branches before the benchmark starts.
+
+You can now verify that everything works by listing all tracks in this track repository::
+
+    esrally list tracks --track-repository=private
+
+This shows all tracks that are available on the ``master`` branch of this repository. Suppose you only created tracks on the branch ``2`` because you're interested in the performance of Elasticsearch 2.x, then you can specify also the distribution version::
+
+    esrally list tracks --track-repository=private --distribution-version=2.0.0
+
+
+Rally will follow the same branch fallback logic as described above.
+
+Adding an already existing track repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you want to add a track repository that already exists, just open ``~/.rally/rally.ini`` in your editor of choice and add the following line in the section ``tracks``::
+
+    your_repo_name.url = <<URL_TO_YOUR_ORIGIN>>
+
+After you have added this line, have Rally list the tracks in this repository::
+
+    esrally list tracks --track-repository=your_repo_name
+
+When to use what?
+.................
+
+We recommend the following path:
+
+* Start with a simple json file. The file name can be arbitrary.
+* If you need :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`, create one directory per track. Then you can keep everything separated. Remember that the JSON file needs to be named ``track.json``.
+* If you want to version your tracks so they can work with multiple versions of Elasticsearch (e.g. you are running benchmarks before an upgrade), use a track repository.
 
 Anatomy of a track
 ==================

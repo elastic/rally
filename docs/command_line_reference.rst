@@ -44,15 +44,30 @@ This subcommand is needed to :doc:`configure </configuration>` Rally. It is impl
 Command Line Flags
 ------------------
 
+``track-path``
+~~~~~~~~~~~~~~
+
+Can be either directory that contains a ``track.json`` file or a ``.json`` file with an arbitrary name that contains a track specification. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive. See the :doc:`track reference </track>` to decide whether you should use ``--track-path`` or ``--track-repository``.
+
+Examples::
+
+   # provide a directory - Rally searches for a track.json file in this directory
+   # Track name is "app-logs"
+   esrally --track-path=~/Projects/tracks/app-logs
+   # provide a file name - Rally uses this file directly
+   # Track name is "syslog"
+   esrally --track-path=~/Projects/tracks/syslog.json
+
+
 ``track-repository``
 ~~~~~~~~~~~~~~~~~~~~
 
-Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See :doc:`adding tracks </adding_tracks>` on how to add your own track repositories.
+Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See :doc:`track reference </track>` on how to add your own track repositories. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
 ``track``
 ~~~~~~~~~
 
-Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>`.
+Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>` or the :doc:`track reference </track>`. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
 ``challenge``
 ~~~~~~~~~~~~~

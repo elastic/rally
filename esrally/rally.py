@@ -76,7 +76,7 @@ def configure_logging(cfg):
         profile_logger.addHandler(handler)
 
 
-def parse_args():
+def create_arg_parser():
     def positive_number(v):
         value = int(v)
         if value <= 0:
@@ -155,10 +155,17 @@ def parse_args():
             help="define the version of the Elasticsearch distribution to download. "
                  "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
             default="")
-        p.add_argument(
+
+        track_source_group = p.add_mutually_exclusive_group()
+        track_source_group.add_argument(
             "--track-repository",
             help="define the repository from where Rally will load tracks (default: default).",
-            default="default")
+            # argparse is smart enough to use this default only if the user did not use --track-path and also did not specify anything
+            default="default"
+        )
+        track_source_group.add_argument(
+            "--track-path",
+            help="define the path to a track")
         p.add_argument(
             "--team-repository",
             help="define the repository from where Rally will load teams and cars (default: default).",
@@ -184,8 +191,10 @@ def parse_args():
             default="current")  # optimized for local usage, don't fetch sources
         p.add_argument(
             "--track",
-            help="define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME,
-            default="geonames")
+            help="define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
+            # we set the default value later on because we need to determine whether the user has provided this value.
+            # default="geonames"
+        )
         p.add_argument(
             "--challenge",
             help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
@@ -310,7 +319,7 @@ def parse_args():
             default="file"
         )
 
-    return parser.parse_args()
+    return parser
 
 
 def derive_sub_command(args, cfg):
@@ -511,7 +520,8 @@ def main():
     faulthandler.register(signal.SIGQUIT, file=sys.stderr)
 
     pre_configure_logging()
-    args = parse_args()
+    arg_parser = create_arg_parser()
+    args = arg_parser.parse_args()
 
     console.init(quiet=args.quiet)
     console.println(BANNER)
@@ -558,8 +568,22 @@ def main():
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
     cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
 
-    cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
-    cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+    # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
+    # its default value)
+    if args.track_path:
+        cfg.add(config.Scope.applicationOverride, "track", "track.path", os.path.abspath(io.normalize_path(args.track_path)))
+        cfg.add(config.Scope.applicationOverride, "track", "repository.name", None)
+        if args.track:
+            # stay as close as possible to argparse errors although we have a custom validation.
+            arg_parser.error("argument --track not allowed with argument --track-path")
+        # cfg.add(config.Scope.applicationOverride, "track", "track.name", None)
+    else:
+        # cfg.add(config.Scope.applicationOverride, "track", "track.path", None)
+        cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
+        # set the default programmatically because we need to determine whether the user has provided a value
+        chosen_track = args.track if args.track else "geonames"
+        cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
+
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)

@@ -31,16 +31,12 @@ def tracks(cfg):
     :param cfg: The config object.
     :return: A list of tracks that are available for the provided distribution version or else for the master version.
     """
-
-    def track_names(repo):
-        return filter(lambda p: os.path.exists(track_file(repo, p)), next(os.walk(repo.repo_dir))[1])
-
     repo = track_repo(cfg)
     reader = TrackFileReader(cfg)
     return [reader.read(track_name,
-                        track_file(repo, track_name),
-                        track_dir(repo, track_name))
-            for track_name in track_names(repo)]
+                        repo.track_file(track_name),
+                        repo.track_dir(track_name))
+            for track_name in repo.track_names]
 
 
 def list_tracks(cfg):
@@ -62,14 +58,18 @@ def load_track(cfg):
     :param cfg: The config object. It contains the name of the track to load.
     :return: The loaded track.
     """
-    track_name = cfg.opts("track", "track.name")
+    track_name = None
     try:
         repo = track_repo(cfg)
+        track_name = repo.track_name
+        track_dir = repo.track_dir(track_name)
         reader = TrackFileReader(cfg)
         included_tasks = cfg.opts("track", "include.tasks")
 
-        current_track = reader.read(track_name, track_file(repo, track_name), track_dir(repo, track_name))
+        current_track = reader.read(track_name, repo.track_file(track_name), track_dir)
         current_track = filter_included_tasks(current_track, filters_from_included_tasks(included_tasks))
+        plugin_reader = TrackPluginReader(track_dir)
+        current_track.has_plugins = plugin_reader.can_load()
 
         if cfg.opts("track", "test.mode.enabled"):
             return post_process_for_test_mode(current_track)
@@ -82,9 +82,9 @@ def load_track(cfg):
 
 
 def load_track_plugins(cfg, register_runner, register_scheduler):
-    track_name = cfg.opts("track", "track.name")
     repo = track_repo(cfg, fetch=False, update=False)
-    track_plugin_path = track_dir(repo, track_name)
+    track_name = repo.track_name
+    track_plugin_path = repo.track_dir(track_name)
 
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler)
 
@@ -103,7 +103,7 @@ def set_absolute_data_path(cfg, t):
     :param cfg: The config object.
     :param t: The track to modify.
     """
-    data_root = cfg.opts("benchmarks", "local.dataset.cache")
+    data_root = data_dir(cfg)
     for index in t.indices:
         for t in index.types:
             if t.document_archive:
@@ -112,31 +112,88 @@ def set_absolute_data_path(cfg, t):
                 t.document_file = os.path.join(data_root, t.document_file)
 
 
+def is_simple_track_mode(cfg):
+    return cfg.exists("track", "track.path")
+
+
 def track_repo(cfg, fetch=True, update=True):
-    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    repo_name = cfg.opts("track", "repository.name")
-    offline = cfg.opts("system", "offline.mode")
-    remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)
-    root = cfg.opts("node", "root.dir")
-    track_repositories = cfg.opts("benchmarks", "track.repository.dir")
-    tracks_dir = os.path.join(root, track_repositories)
-
-    current_track_repo = repo.RallyRepository(remote_url, tracks_dir, repo_name, "tracks", offline, fetch)
-    if update:
-        current_track_repo.update(distribution_version)
-    return current_track_repo
+    if is_simple_track_mode(cfg):
+        track_path = cfg.opts("track", "track.path")
+        return SimpleTrackRepository(track_path)
+    else:
+        return GitTrackRepository(cfg, fetch, update)
 
 
-def track_dir(repo, track_name):
-    return os.path.join(repo.repo_dir, track_name)
+def data_dir(cfg):
+    if is_simple_track_mode(cfg):
+        track_path = cfg.opts("track", "track.path")
+        r = SimpleTrackRepository(track_path)
+        # data should always be stored in the track's directory. If the user uses the same directory on all machines this will even work
+        # in the distributed case. However, the user is responsible for ensure
+        return r.track_dir(r.track_name)
+    else:
+        return cfg.opts("benchmarks", "local.dataset.cache")
 
 
-def track_file(repo, track_name):
-    return os.path.join(track_dir(repo, track_name), "track.json")
+class GitTrackRepository:
+    def __init__(self, cfg, fetch, update, repo_class=repo.RallyRepository):
+        # current track name (if any)
+        self.track_name = cfg.opts("track", "track.name", mandatory=False)
+        distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+        repo_name = cfg.opts("track", "repository.name")
+        offline = cfg.opts("system", "offline.mode")
+        remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)
+        root = cfg.opts("node", "root.dir")
+        track_repositories = cfg.opts("benchmarks", "track.repository.dir")
+        tracks_dir = os.path.join(root, track_repositories)
+
+        self.repo = repo_class(remote_url, tracks_dir, repo_name, "tracks", offline, fetch)
+        if update:
+            self.repo.update(distribution_version)
+
+    @property
+    def track_names(self):
+        return filter(lambda p: os.path.exists(self.track_file(p)), next(os.walk(self.repo.repo_dir))[1])
+
+    def track_dir(self, track_name):
+        return os.path.join(self.repo.repo_dir, track_name)
+
+    def track_file(self, track_name):
+        return os.path.join(self.track_dir(track_name), "track.json")
 
 
-def track_meta_file(repo, track_name):
-    return os.path.join(track_dir(repo, track_name), "track.ini")
+class SimpleTrackRepository:
+    def __init__(self, track_path):
+        if not os.path.exists(track_path):
+            raise FileNotFoundError("Track path %s does not exist" % track_path)
+
+        if os.path.isdir(track_path):
+            self.track_name = io.basename(track_path)
+            self._track_dir = track_path
+            self._track_file = os.path.join(track_path, "track.json")
+            if not os.path.exists(self._track_file):
+                raise FileNotFoundError("Could not find track.json in %s" % track_path)
+        elif os.path.isfile(track_path):
+            if io.has_extension(track_path, ".json"):
+                self._track_dir = io.dirname(track_path)
+                self._track_file = track_path
+                self.track_name = io.splitext(io.basename(track_path))[0]
+            else:
+                raise exceptions.SystemSetupError("%s has to be a JSON file" % track_path)
+        else:
+            raise exceptions.SystemSetupError("%s is neither a file nor a directory" % track_path)
+
+    @property
+    def track_names(self):
+        return [self.track_name]
+
+    def track_dir(self, track_name):
+        assert track_name == self.track_name
+        return self._track_dir
+
+    def track_file(self, track_name):
+        assert track_name == self.track_name
+        return self._track_file
 
 
 def operation_parameters(t, op):
@@ -225,7 +282,8 @@ def prepare_track(track, cfg):
     if not track.source_root_url:
         logger.info("Track [%s] does not specify a source root URL. Assuming data are available locally." % track.name)
 
-    data_root = cfg.opts("benchmarks", "local.dataset.cache")
+    data_root = data_dir(cfg)
+    logger.info("Resolved data root directory for track [%s] to [%s]." % (track.name, data_root))
     for index in track.indices:
         for type in index.types:
             if type.document_archive:
@@ -432,7 +490,7 @@ class TrackPluginReader:
     """
     Loads track plugins
     """
-    def __init__(self, track_plugin_path, runner_registry, scheduler_registry):
+    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")

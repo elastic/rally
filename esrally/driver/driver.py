@@ -280,10 +280,13 @@ class TrackPreparationActor(actor.RallyActor):
                 # load node-specific config to have correct paths available
                 cfg = load_local_config(msg.config)
                 logger.info("Preparing track [%s]" % msg.track.name)
-                # TODO #292: Can we get rid of this in the simple case?
-                # we also need to attempt to checkout the track without actually reading it completely. Otherwise reading
-                # track plugins later on will fail on the load generator. We should revisit this in #292.
-                track.track_repo(cfg, fetch=True, update=True)
+                # for "proper" track repositories this will ensure that all state is identical to the coordinator node. For simple tracks
+                # the track is usually self-contained but in some cases (plugins are defined) we still need to ensure that the track
+                # is present on all machines.
+                if msg.track.has_plugins:
+                    track.track_repo(cfg, fetch=True, update=True)
+                # Beware: This is a potentially long-running operation and we're completely blocking our actor here. We should do this
+                # maybe in a background thread.
                 track.prepare_track(msg.track, cfg)
                 self.send(sender, TrackPrepared())
         except BaseException as e:
@@ -582,7 +585,8 @@ class LoadGenerator(actor.RallyActor):
                 # we need to wake up more often in test mode
                 if self.config.opts("track", "test.mode.enabled"):
                     self.wakeup_interval = 0.5
-                track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
+                if self.track.has_plugins:
+                    track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
                 self.drive()
             elif isinstance(msg, Drive):
                 sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
