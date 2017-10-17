@@ -1,3 +1,19 @@
+### 0.7.3
+
+#### Enhancements
+
+* [#332](https://github.com/elastic/rally/issues/332): Provide more information about errors
+* [#330](https://github.com/elastic/rally/issues/330): Provide better error message when Rally reads an incompatible track
+* [#329](https://github.com/elastic/rally/issues/329): Allow to skip cluster health check
+* [#323](https://github.com/elastic/rally/issues/323): Rally should not demand a local Java install
+* [#309](https://github.com/elastic/rally/issues/309): Allow to benchmark plugins from sources
+* [#292](https://github.com/elastic/rally/issues/292): Add a "simple track" mode
+* [#259](https://github.com/elastic/rally/issues/259): Prepare Rally for Java 9
+
+#### Bug Fixes
+
+* [#328](https://github.com/elastic/rally/issues/328): Challenge-specific index settings are not applied to index template definitions
+
 ### 0.7.2
 
 #### Enhancements
