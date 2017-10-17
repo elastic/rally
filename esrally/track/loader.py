@@ -261,7 +261,7 @@ def prepare_track(track, cfg):
         # we assume that track data are always compressed and try to decompress them before running the benchmark
         basename, extension = io.splitext(data_set_path)
         decompressed = False
-        if not os.path.isfile(basename) or os.path.getsize(basename) != expected_size_in_bytes:
+        if not os.path.isfile(basename) or (expected_size_in_bytes is not None and os.path.getsize(basename) != expected_size_in_bytes):
             decompressed = True
             if type.uncompressed_size_in_bytes:
                 console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
