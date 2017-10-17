@@ -556,6 +556,7 @@ class LoadGenerator(actor.RallyActor):
         self.tasks = None
         self.current_task_index = 0
         self.current_task = None
+        self.abort_on_error = False
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
@@ -575,6 +576,7 @@ class LoadGenerator(actor.RallyActor):
                 self.master = sender
                 self.client_id = msg.client_id
                 self.config = load_local_config(msg.config)
+                self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
                 self.es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
                 self.track = msg.track
                 track.set_absolute_data_path(self.config, self.track)
@@ -678,7 +680,7 @@ class LoadGenerator(actor.RallyActor):
                 self.sampler = Sampler(self.client_id, task, start_timestamp=time.perf_counter())
                 schedule = schedule_for(self.track, task, self.client_id)
 
-                executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete)
+                executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
                 final_executor = Profiler(executor, self.client_id, task.operation) if profiling_enabled else executor
 
                 self.executor_future = self.pool.submit(final_executor)
@@ -992,7 +994,7 @@ class Profiler:
 
 
 class Executor:
-    def __init__(self, task, schedule, es, sampler, cancel, complete):
+    def __init__(self, task, schedule, es, sampler, cancel, complete, abort_on_error=False):
         """
         Executes tasks according to the schedule for a given operation.
 
@@ -1010,6 +1012,7 @@ class Executor:
         self.sampler = sampler
         self.cancel = cancel
         self.complete = complete
+        self.abort_on_error = abort_on_error
 
     def __call__(self, *args, **kwargs):
         total_start = time.perf_counter()
@@ -1026,7 +1029,7 @@ class Executor:
                     if rest > 0:
                         time.sleep(rest)
                 start = time.perf_counter()
-                total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params)
+                total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params, self.abort_on_error)
                 stop = time.perf_counter()
 
                 service_time = stop - start
@@ -1049,7 +1052,7 @@ class Executor:
                 self.complete.set()
 
 
-def execute_single(runner, es, params):
+def execute_single(runner, es, params, abort_on_error=False):
     """
     Invokes the given runner once and provides the runner's return value in a uniform structure.
 
@@ -1087,6 +1090,14 @@ def execute_single(runner, es, params):
         logger.exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
         raise exceptions.SystemSetupError(msg)
+
+    if abort_on_error and not request_meta_data["success"]:
+        msg = "Request returned an error:\n\n"
+        msg += "Error type: %s\n" % request_meta_data.get("error-type", "Unknown")
+        description = request_meta_data.get("error-description")
+        if description:
+            msg += "Description: %s\n" % description
+        raise exceptions.RallyAssertionError(msg)
 
     return total_ops, total_ops_unit, request_meta_data
 

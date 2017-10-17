@@ -225,6 +225,10 @@ def create_arg_parser():
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
                  "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
             default=DEFAULT_CLIENT_OPTIONS)
+        p.add_argument("--on-error",
+                       choices=["continue", "abort"],
+                       help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
+                       default="continue")
         p.add_argument(
             "--cluster-health",
             choices=["red", "yellow", "green", "skip"],
@@ -597,6 +601,7 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
+    cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?

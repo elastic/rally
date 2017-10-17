@@ -275,6 +275,7 @@ class BulkIndex(Runner):
         ops = {}
         shards_histogram = OrderedDict()
         bulk_error_count = 0
+        error_details = set()
         bulk_request_size_bytes = 0
         total_document_size_bytes = 0
 
@@ -309,7 +310,8 @@ class BulkIndex(Runner):
                 shards_histogram[sk]["item-count"] += 1
             if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                 bulk_error_count += 1
-        return {
+                self.extract_error_details(error_details, data)
+        stats = {
             "success": bulk_error_count == 0,
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count,
@@ -318,19 +320,44 @@ class BulkIndex(Runner):
             "bulk-request-size-bytes": bulk_request_size_bytes,
             "total-document-size-bytes": total_document_size_bytes
         }
+        if bulk_error_count > 0:
+            stats["error-type"] = "bulk"
+            stats["error-description"] = self.error_description(error_details)
+        return stats
 
     def simple_stats(self, bulk_size, response):
         bulk_error_count = 0
+        error_details = set()
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
                 data = next(iter(item.values()))
                 if data["status"] > 299 or data["_shards"]["failed"] > 0:
                     bulk_error_count += 1
-        return {
+                    self.extract_error_details(error_details, data)
+        stats = {
             "success": bulk_error_count == 0,
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
         }
+        if bulk_error_count > 0:
+            stats["error-type"] = "bulk"
+            stats["error-description"] = self.error_description(error_details)
+        return stats
+
+    def extract_error_details(self, error_details, data):
+        if data.get("error") and data["error"].get("reason"):
+            error_details.add((data["status"], data["error"]["reason"]))
+        else:
+            error_details.add((data["status"], None))
+
+    def error_description(self, error_details):
+        error_description = ""
+        for status, reason in error_details:
+            if reason:
+                error_description += "HTTP status: %s, message: %s" % (str(status), reason)
+            else:
+                error_description += "HTTP status: %s" % str(status)
+        return error_description
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"

@@ -300,6 +300,11 @@ Here are a few common examples:
 * Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the [Elasticsearch Python client docs](http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication))
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Please avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
 
+``on-error``
+~~~~~~~~~~~~
+
+THis option controls whether Rally will ``continue`` or ``abort`` when a request error occurs. By default, Rally will record the error and report the error rate at the end of a race. With ``--on-error=abort``, Rally will immediately abort the race on the first error and print a detailed error message.
+
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~
 
