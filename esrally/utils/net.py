@@ -3,6 +3,7 @@ import os
 
 import certifi
 import urllib3
+import urllib.error
 from esrally import exceptions
 
 __HTTP = None
@@ -57,6 +58,8 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
     try:
         with __http().request("GET", url, preload_content=False, retries=10,
                               timeout=urllib3.Timeout(connect=45, read=240)) as r, open(tmp_data_set_path, "wb") as out_file:
+            if r.status > 299:
+                raise urllib.error.HTTPError(url, r.status, "", None, None)
             # noinspection PyBroadException
             try:
                 size_from_content_header = int(r.getheader("Content-Length"))
