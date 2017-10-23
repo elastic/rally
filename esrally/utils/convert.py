@@ -11,6 +11,8 @@ def bytes_to_gb(b):
 
 
 def bytes_to_human_string(b):
+    if b is None:
+        return "N/A"
     gb = bytes_to_gb(b)
     if gb > 1.0:
         return "%.1f GB" % gb
@@ -20,7 +22,7 @@ def bytes_to_human_string(b):
     kb = bytes_to_kb(b)
     if kb > 1.0:
         return "%.1f kB" % kb
-    return "%d bytes"
+    return "%d bytes" % b
 
 
 def mb_to_bytes(mb):

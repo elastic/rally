@@ -58,15 +58,13 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
 
 Store the script as ``toJSON.py`` in our tutorial directory (``~/rally-tracks/tutorial``) and invoke the script with ``python3 toJSON.py > documents.json``.
 
-Next we need to compress the JSON file with ``bzip2 -9 -c documents.json > documents.json.bz2``.
-
 We also need a mapping file for our documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at an `example mapping file <https://github.com/elastic/rally-tracks/blob/master/geonames/mappings.json>`_. Place the mapping file in the tutorial directory.
 
 Finally, add a file called ``track.json`` right next to the mapping file::
 
     {
       "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
       "indices": [
         {
           "name": "geonames",
@@ -74,9 +72,8 @@ Finally, add a file called ``track.json`` right next to the mapping file::
             {
               "name": "type",
               "mapping": "mappings.json",
-              "documents": "documents.json.bz2",
+              "documents": "documents.json",
               "document-count": 8647880,
-              "compressed-bytes": 197857614,
               "uncompressed-bytes": 2790927196
             }
           ]
@@ -161,9 +158,9 @@ When you invoke ``esrally list tracks --track-path=~/rally-tracks/tutorial``, th
     
     Name        Description                   Documents    Compressed Size  Uncompressed Size  Default Challenge  All Challenges
     ----------  ----------------------------- -----------  ---------------  -----------------  -----------------  ---------------
-    tutorial    Tutorial benchmark for Rally      8647880  188.7 MB         2.6 GB             index-and-query    index-and-query
+    tutorial    Tutorial benchmark for Rally      8647880  N/A              2.6 GB             index-and-query    index-and-query
 
-Congratulations, you have created your first track! You can test it with ``esrally --track-path=~/rally-tracks/tutorial --offline`` and run specific challenges with ``esrally --track-path=~/rally-tracks/tutorial --challenge=index-and-query --offline``.
+Congratulations, you have created your first track! You can test it with ``esrally --track-path=~/rally-tracks/tutorial`` and run specific challenges with ``esrally --track-path=~/rally-tracks/tutorial --challenge=index-and-query``.
 
 .. _add_track_test_mode:
 
@@ -177,12 +174,7 @@ When you invoke Rally with ``--test-mode``, it switches to a mode that allows yo
 
 Rally will postprocess all data file names of a track. So instead of ``documents.json.bz2``, Rally will attempt to find ``documents-1k.json.bz2`` and will assume it contains 1.000 documents. However, you need to prepare these data files otherwise this test mode is not supported.
 
-The preparation is very easy and requires these two steps:
-
-1. Pick 1.000 documents from your data set. We choose the first 1.000 here but it does not matter usually which part you choose: ``head -n 1000 documents.json > documents-1k.json``.
-2. Compress it: ``bzip2 -9 -c documents-1k.json > documents-1k.json.bz2``
-
-You have to repeat these steps for all data files of your track.
+The preparation is very easy. Just pick 1.000 documents for every data file in your track. We choose the first 1.000 here but it does not matter usually which part you choose: ``head -n 1000 documents.json > documents-1k.json``.
 
 Structuring your track
 ----------------------
@@ -221,7 +213,7 @@ Now modify ``track.json`` so it knows about your new file::
 
     {
       "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
       "indices": [
         {
           "name": "geonames",
@@ -229,9 +221,8 @@ Now modify ``track.json`` so it knows about your new file::
             {
               "name": "type",
               "mapping": "mappings.json",
-              "documents": "documents.json.bz2",
+              "documents": "documents.json",
               "document-count": 8647880,
-              "compressed-bytes": 197857614,
               "uncompressed-bytes": 2790927196
             }
           ]
@@ -268,8 +259,8 @@ However, if your track consists of multiple challenges it can be cumbersome to i
 
     {% import "rally.helpers" as rally %}
     {
-      "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
-      "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+      "short-description": "Tutorial benchmark for Rally",
+      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
       "indices": [
         {
           "name": "geonames",
@@ -277,9 +268,8 @@ However, if your track consists of multiple challenges it can be cumbersome to i
             {
               "name": "type",
               "mapping": "mappings.json",
-              "documents": "documents.json.bz2",
+              "documents": "documents.json",
               "document-count": 8647880,
-              "compressed-bytes": 197857614,
               "uncompressed-bytes": 2790927196
             }
           ]
@@ -326,7 +316,43 @@ If you use this idiom you can then refer to variables inside your snippets with 
 Sharing your track with others
 ------------------------------
 
-At the moment your track is only available on your local machine but maybe you want to share it with other people in your team. You can share the track itself in any way you want, e.g. you can check it into version control. However, you will most likely not want to commit the potentially huge data file. Therefore, you can expose the data via http (e.g. via S3) and Rally can download it from there. To make this work, you need to add an additional property ``data-url`` at the top-level of your ``track.json`` file which contains the URL from where to download your documents. Rally expects that the URL points to the parent path and will append the file name of the compressed documents automatically.
+At the moment your track is only available on your local machine but maybe you want to share it with other people in your team. You can share the track itself in any way you want, e.g. you can check it into version control. However, you will most likely not want to commit the potentially huge data file. Therefore, you can expose the data via http (e.g. via S3) and Rally can download it from there. To make this work, you need to add an additional property ``data-url`` at the top-level of your ``track.json`` file which contains the URL from where to download your documents. Rally expects that the URL points to the parent path and will append the document file name automatically.
+
+It is also recommended that you compress your document corpus to save network bandwidth. We recommend to use bzip2 compression. You can create a compressed archive with the following command::
+
+    bzip2 -9 -c documents.json > documents.json.bz2
+
+If you want to support the test mode, don't forget to also compress your test mode corpus with::
+
+    bzip2 -9 -c documents-1k.json > documents-1k.json.bz2
+
+Then upload ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote location.
+
+Finally, specify the compressed file name in your ``track.json`` file::
+
+    {
+      "short-description": "Tutorial benchmark for Rally",
+      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+      "indices": [
+        {
+          "name": "geonames",
+          "types": [
+            {
+              "name": "type",
+              "mapping": "mappings.json",
+              "documents": "documents.json.bz2",
+              "document-count": 8647880,
+              "compressed-bytes": 197857614,
+              "uncompressed-bytes": 2790927196
+            }
+          ]
+        }
+      ],
+      ...
+    }
+
+Specifying ``compressed-bytes`` (file size of ``documents.json.bz2``) and ``uncompressed-bytes`` (file size of ``documents.json``) is optional but helps Rally to provide progress indicators and also verify integrity.
 
 How to contribute a track
 -------------------------

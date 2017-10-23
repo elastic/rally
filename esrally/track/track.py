@@ -43,14 +43,20 @@ class Index:
     def compressed_size_in_bytes(self):
         size = 0
         for t in self.types:
-            size += t.compressed_size_in_bytes
+            if t.compressed_size_in_bytes is not None:
+                size += t.compressed_size_in_bytes
+            else:
+                return None
         return size
 
     @property
     def uncompressed_size_in_bytes(self):
         size = 0
         for t in self.types:
-            size += t.uncompressed_size_in_bytes
+            if t.uncompressed_size_in_bytes is not None:
+                size += t.uncompressed_size_in_bytes
+            else:
+                return None
         return size
 
     def __str__(self):
@@ -141,7 +147,13 @@ class Type:
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
 
     def has_valid_document_data(self):
-        return self.document_archive is not None and self.number_of_documents > 0
+        return (self.has_compressed_corpus() or self.has_uncompressed_corpus()) and self.number_of_documents > 0
+
+    def has_compressed_corpus(self):
+        return self.document_archive is not None
+
+    def has_uncompressed_corpus(self):
+        return self.document_file is not None
 
     @property
     def number_of_lines(self):
@@ -232,7 +244,10 @@ class Track:
         size = 0
         if self.indices:
             for index in self.indices:
-                size += index.compressed_size_in_bytes
+                if index.compressed_size_in_bytes is not None:
+                    size += index.compressed_size_in_bytes
+                else:
+                    return None
         return size
 
     @property
@@ -240,7 +255,10 @@ class Track:
         size = 0
         if self.indices:
             for index in self.indices:
-                size += index.uncompressed_size_in_bytes
+                if index.uncompressed_size_in_bytes is not None:
+                    size += index.uncompressed_size_in_bytes
+                else:
+                    return None
         return size
 
     def __str__(self):

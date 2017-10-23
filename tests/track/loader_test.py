@@ -6,7 +6,7 @@ import jinja2
 
 from esrally import exceptions, config
 from esrally.utils import io
-from esrally.track import loader
+from esrally.track import loader, track
 
 
 def strip_ws(s):
@@ -117,6 +117,259 @@ class GitRepositoryTests(TestCase):
         self.assertEqual(["unittest", "unittest2", "unittest3"], list(repo.track_names))
         self.assertEqual("/tmp/tracks/default/unittest", repo.track_dir("unittest"))
         self.assertEqual("/tmp/tracks/default/unittest/track.json", repo.track_file("unittest"))
+
+
+class TrackPreparationTests(TestCase):
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_does_nothing_if_document_file_available(self, is_file, get_size, prepare_file_offset_table):
+        is_file.return_value = True
+        get_size.return_value = 2000
+        prepare_file_offset_table.return_value = 5
+
+        loader.prepare_corpus(track_name="unit-test",
+                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                              data_root="/tmp",
+                              type=track.Type(name="test-type", mapping=None, document_file="docs.json", document_archive="docs.json.bz2",
+                                              number_of_documents=5, compressed_size_in_bytes=200, uncompressed_size_in_bytes=2000),
+                              offline=False,
+                              test_mode=False)
+
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_decompresses_if_archive_available(self, is_file, get_size, prepare_file_offset_table):
+        is_file.return_value = True
+        get_size.return_value = 2000
+        prepare_file_offset_table.return_value = 5
+
+        loader.prepare_corpus(track_name="unit-test",
+                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                              data_root="/tmp",
+                              type=track.Type(name="test-type", mapping=None, document_file="docs.json", document_archive="docs.json.bz2",
+                                              number_of_documents=5, compressed_size_in_bytes=200, uncompressed_size_in_bytes=2000),
+                              offline=False,
+                              test_mode=False)
+
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_raise_error_on_wrong_uncompressed_file_size(self, is_file, get_size, decompress):
+        # uncompressed file does not exist
+        # compressed file exists
+        # after decompression, uncompressed file exists
+        is_file.side_effect = [False, True, True]
+        # compressed file size is 200
+        # uncompressed is corrupt, only 1 byte available
+        get_size.side_effect = [200, 1]
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                                  document_archive="docs.json.bz2", number_of_documents=5, compressed_size_in_bytes=200,
+                                                  uncompressed_size_in_bytes=2000),
+                                  offline=False,
+                                  test_mode=False)
+        self.assertEqual("[/tmp/docs.json] is corrupt. Extracted [1] bytes but [2000] bytes are expected.", ctx.exception.args[0])
+
+        decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
+
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_raise_error_if_compressed_does_not_contain_expected_document_file(self, is_file, get_size, decompress):
+        # uncompressed file does not exist
+        # compressed file exists
+        # after decompression, uncompressed file does not exist (e.g. because the output file name is called differently)
+        is_file.side_effect = [False, True, False]
+        # compressed file size is 200
+        get_size.return_value = 200
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                                  document_archive="docs.json.bz2", number_of_documents=5, compressed_size_in_bytes=200,
+                                                  uncompressed_size_in_bytes=2000),
+                                  offline=False,
+                                  test_mode=False)
+        self.assertEqual("Decompressing [/tmp/docs.json.bz2] did not create [/tmp/docs.json]. Please check with the track author if the "
+                         "compressed archive has been created correctly.", ctx.exception.args[0])
+
+        decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_download_document_archive_if_no_file_available(self, is_file, get_size, ensure_dir, download, decompress, prepare_file_offset_table):
+        # uncompressed file does not exist
+        # compressed file does not exist
+        # after download compressed file exists
+        # after download uncompressed file still does not exist (in main loop)
+        # after download compressed file exists (in main loop)
+        # after decompression, uncompressed file exists
+        is_file.side_effect = [False, False, True, False, True, True, True]
+        # compressed file size is 200 after download
+        # compressed file size is 200 after download (in main loop)
+        # uncompressed file size is 2000 after decompression
+        # uncompressed file size is 2000 after decompression (in main loop)
+        get_size.side_effect = [200, 200, 2000, 2000]
+
+        prepare_file_offset_table.return_value = 5
+
+        loader.prepare_corpus(track_name="unit-test",
+                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                              data_root="/tmp",
+                              type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                              document_archive="docs.json.bz2", number_of_documents=5, compressed_size_in_bytes=200,
+                                              uncompressed_size_in_bytes=2000),
+                              offline=False,
+                              test_mode=False)
+
+        ensure_dir.assert_called_with("/tmp")
+        decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
+        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json.bz2",
+                                    "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY)
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_download_document_file_if_no_file_available(self, is_file, get_size, ensure_dir, download, prepare_file_offset_table):
+        # uncompressed file does not exist
+        # after download uncompressed file exists
+        # after download uncompressed file exists (main loop)
+        is_file.side_effect = [False, True, True]
+        # uncompressed file size is 2000
+        get_size.return_value = 2000
+
+        prepare_file_offset_table.return_value = 5
+
+        loader.prepare_corpus(track_name="unit-test",
+                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                              data_root="/tmp",
+                              type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                              # --> We don't provide a document archive here <--
+                                              document_archive=None, number_of_documents=5, uncompressed_size_in_bytes=2000),
+                              offline=False,
+                              test_mode=False)
+
+        ensure_dir.assert_called_with("/tmp")
+        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json",
+                                    "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.isfile")
+    def test_raise_download_error_if_offline(self, is_file, ensure_dir, download):
+        # uncompressed file does not exist
+        is_file.return_value = False
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
+                                  offline=True,
+                                  test_mode=False)
+
+        self.assertEqual("Cannot find /tmp/docs.json. Please disable offline mode and retry again.", ctx.exception.args[0])
+
+        ensure_dir.assert_not_called()
+        download.assert_not_called()
+
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.isfile")
+    def test_raise_download_error_if_no_url_provided(self, is_file, ensure_dir, download):
+        # uncompressed file does not exist
+        is_file.return_value = False
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url=None,
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
+                                  offline=False,
+                                  test_mode=False)
+
+        self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no source URL is provided in the track.",
+                         ctx.exception.args[0])
+
+        ensure_dir.assert_not_called()
+        download.assert_not_called()
+
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.isfile")
+    def test_raise_download_error_no_test_mode_file(self, is_file, ensure_dir, download):
+        import urllib.error
+
+        # uncompressed file does not exist
+        is_file.return_value = False
+
+        download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+                                                      404, "", None, None)
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs-1k.json",
+                                                  number_of_documents=5, uncompressed_size_in_bytes=None),
+                                  offline=False,
+                                  test_mode=True)
+
+        self.assertEqual("Track [unit-test] does not support test mode. Please ask the track author to add it or disable test mode "
+                         "and retry.", ctx.exception.args[0])
+
+        ensure_dir.assert_called_with("/tmp")
+        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+                                    "/tmp/docs-1k.json", None, progress_indicator=mock.ANY)
+
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.isfile")
+    def test_raise_download_error_on_connection_problems(self, is_file, ensure_dir, download):
+        import urllib.error
+
+        # uncompressed file does not exist
+        is_file.return_value = False
+
+        download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+                                                      500, "Internal Server Error", None, None)
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
+                                  offline=False,
+                                  test_mode=False)
+
+        self.assertEqual("Could not download [http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json] "
+                         "to [/tmp/docs.json] (HTTP status: 500, reason: Internal Server Error)", ctx.exception.args[0])
+
+        ensure_dir.assert_called_with("/tmp")
+        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json",
+                                    "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
 
 
 class TemplateRenderTests(TestCase):

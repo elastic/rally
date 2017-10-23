@@ -212,73 +212,6 @@ def prepare_track(track, cfg):
     :param track: A track that is about to be run.
     :param cfg: The config object.
     """
-
-    def download(cfg, url, local_path, size_in_bytes):
-        offline = cfg.opts("system", "offline.mode")
-        file_exists = os.path.isfile(local_path)
-
-        # ensure we only skip the download if the file size also matches our expectation
-        if file_exists and (size_in_bytes is None or os.path.getsize(local_path) == size_in_bytes):
-            logger.info("[%s] already exists locally. Skipping download." % local_path)
-            return False
-
-        if not offline:
-            try:
-                io.ensure_dir(os.path.dirname(local_path))
-                if size_in_bytes:
-                    size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
-                    # ensure output appears immediately
-                    logger.info("Downloading data from [%s] (%s MB) to [%s]." % (url, size_in_mb, local_path))
-                else:
-                    logger.info("Downloading data from [%s] to [%s]." % (url, local_path))
-
-                # we want to have a bit more accurate download progress as these files are typically very large
-                progress = net.Progress("[INFO] Downloading data for track %s" % track.name, accuracy=1)
-                net.download(url, local_path, size_in_bytes, progress_indicator=progress)
-                progress.finish()
-                logger.info("Downloaded data from [%s] to [%s]." % (url, local_path))
-            except urllib.error.URLError:
-                logger.exception("Could not download [%s] to [%s]." % (url, local_path))
-
-        # file must exist at this point -> verify
-        if not os.path.isfile(local_path):
-            if offline:
-                raise exceptions.SystemSetupError(
-                    "Cannot find %s. Please disable offline mode and retry again." % local_path)
-            else:
-                raise exceptions.SystemSetupError(
-                    "Cannot download from %s to %s. Please verify that data are available at %s and "
-                    "check your internet connection." % (url, local_path, url))
-
-        actual_size = os.path.getsize(local_path)
-        if size_in_bytes is not None and actual_size != size_in_bytes:
-            raise exceptions.DataError("[%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected." %
-                                       (local_path, actual_size, size_in_bytes))
-
-        return True
-
-    def decompress(data_set_path, expected_size_in_bytes):
-        # we assume that track data are always compressed and try to decompress them before running the benchmark
-        basename, extension = io.splitext(data_set_path)
-        decompressed = False
-        if not os.path.isfile(basename) or (expected_size_in_bytes is not None and os.path.getsize(basename) != expected_size_in_bytes):
-            decompressed = True
-            if type.uncompressed_size_in_bytes:
-                console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
-                             (data_set_path, basename, convert.bytes_to_gb(type.uncompressed_size_in_bytes)),
-                             end='', flush=True, logger=logger)
-            else:
-                console.info("Decompressing track data from [%s] to [%s] ... " % (data_set_path, basename), end='',
-                             flush=True, logger=logger)
-
-            io.decompress(data_set_path, io.dirname(data_set_path))
-            console.println("[OK]")
-            extracted_bytes = os.path.getsize(basename)
-            if expected_size_in_bytes is not None and extracted_bytes != expected_size_in_bytes:
-                raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
-                                           (basename, extracted_bytes, expected_size_in_bytes))
-        return basename, decompressed
-
     if not track.source_root_url:
         logger.info("Track [%s] does not specify a source root URL. Assuming data are available locally." % track.name)
 
@@ -286,30 +219,117 @@ def prepare_track(track, cfg):
     logger.info("Resolved data root directory for track [%s] to [%s]." % (track.name, data_root))
     for index in track.indices:
         for type in index.types:
-            if type.document_archive:
-                absolute_archive_path = os.path.join(data_root, type.document_archive)
-                if track.source_root_url:
-                    data_url = "%s/%s" % (track.source_root_url, os.path.basename(absolute_archive_path))
-                    download(cfg, data_url, absolute_archive_path, type.compressed_size_in_bytes)
-                if not os.path.exists(absolute_archive_path):
-                    if cfg.opts("track", "test.mode.enabled"):
-                        logger.error("[%s] does not exist so assuming that track [%s] does not support test mode." %
-                                     (absolute_archive_path, track))
-                        raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
-                                                   "disable test mode and retry." % track)
-                    else:
-                        logger.error("[%s] does not exist." % absolute_archive_path)
-                        raise exceptions.DataError("Track data file [%s] is missing." % absolute_archive_path)
-                decompressed_file_path, was_decompressed = decompress(absolute_archive_path, type.uncompressed_size_in_bytes)
-                # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-                lines_read = io.prepare_file_offset_table(decompressed_file_path)
-                if lines_read and lines_read != type.number_of_lines:
-                    io.remove_file_offset_table(decompressed_file_path)
-                    raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
-                                               % (decompressed_file_path, track, type.number_of_lines, lines_read))
+            if type.has_valid_document_data():
+                offline = cfg.opts("system", "offline.mode")
+                test_mode = cfg.opts("track", "test.mode.enabled")
+                prepare_corpus(track.name, track.source_root_url, data_root, type, offline, test_mode)
             else:
-                logger.info("Type [%s] in index [%s] does not define a document archive. No data are indexed from a file for this type." %
+                logger.info("Type [%s] in index [%s] does not define documents. No data are indexed from a file for this type." %
                             (type.name, index.name))
+
+
+def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_mode):
+    def is_locally_available(file_name, expected_size):
+        return os.path.isfile(file_name) and (expected_size is None or os.path.getsize(file_name) == expected_size)
+
+    def decompress_corpus(archive_path, documents_path, uncompressed_size):
+        if uncompressed_size:
+            console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
+                         (archive_path, documents_path, convert.bytes_to_gb(uncompressed_size)),
+                         end='', flush=True, logger=logger)
+        else:
+            console.info("Decompressing track data from [%s] to [%s] ... " % (archive_path, documents_path), end='',
+                         flush=True, logger=logger)
+
+        io.decompress(archive_path, io.dirname(archive_path))
+        console.println("[OK]")
+        if not os.path.isfile(documents_path):
+            raise exceptions.DataError("Decompressing [%s] did not create [%s]. Please check with the track author if the compressed "
+                                       "archive has been created correctly." % (archive_path, documents_path))
+
+        extracted_bytes = os.path.getsize(documents_path)
+        if uncompressed_size is not None and extracted_bytes != uncompressed_size:
+            raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
+                                       (documents_path, extracted_bytes, uncompressed_size))
+
+    def download_corpus(root_url, target_path, size_in_bytes, track_name, offline, test_mode):
+        file_name = os.path.basename(target_path)
+
+        if not root_url:
+            raise exceptions.DataError("%s is missing and it cannot be downloaded because no source URL is provided in the track."
+                                       % target_path)
+        if offline:
+            raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
+
+        data_url = "%s/%s" % (source_root_url, file_name)
+        try:
+            io.ensure_dir(os.path.dirname(target_path))
+            if size_in_bytes:
+                size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
+                logger.info("Downloading data from [%s] (%s MB) to [%s]." % (data_url, size_in_mb, target_path))
+            else:
+                logger.info("Downloading data from [%s] to [%s]." % (data_url, target_path))
+
+            # we want to have a bit more accurate download progress as these files are typically very large
+            progress = net.Progress("[INFO] Downloading data for track %s" % track_name, accuracy=1)
+            net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
+            progress.finish()
+            logger.info("Downloaded data from [%s] to [%s]." % (data_url, target_path))
+        except urllib.error.HTTPError as e:
+            if e.code == 404 and test_mode:
+                raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
+                                           "disable test mode and retry." % track_name)
+            else:
+                msg = "Could not download [%s] to [%s]" % (data_url, target_path)
+                if e.reason:
+                    msg += " (HTTP status: %s, reason: %s)" % (str(e.code), e.reason)
+                else:
+                    msg += " (HTTP status: %s)" % str(e.code)
+                raise exceptions.DataError(msg)
+        except urllib.error.URLError:
+            logger.exception("Could not download [%s] to [%s]." % (data_url, target_path))
+            raise exceptions.DataError("Could not download [%s] to [%s]." % (data_url, target_path))
+
+        if not os.path.isfile(target_path):
+            raise exceptions.SystemSetupError(
+                "Cannot download from %s to %s. Please verify that data are available at %s and "
+                "check your internet connection." % (data_url, target_path, data_url))
+
+        actual_size = os.path.getsize(target_path)
+        if size_in_bytes is not None and actual_size != size_in_bytes:
+            raise exceptions.DataError("[%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected." %
+                                       (target_path, actual_size, size_in_bytes))
+
+    def create_file_offset_table(document_file_path, expected_number_of_lines):
+        # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
+        lines_read = io.prepare_file_offset_table(document_file_path)
+        if lines_read and lines_read != expected_number_of_lines:
+            io.remove_file_offset_table(document_file_path)
+            raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
+                                       % (document_file_path, track, expected_number_of_lines, lines_read))
+
+    full_document_path = os.path.join(data_root, type.document_file)
+    full_archive_path = os.path.join(data_root, type.document_archive) if type.has_compressed_corpus() else None
+
+    while True:
+        if is_locally_available(full_document_path, type.uncompressed_size_in_bytes):
+            break
+        elif type.has_compressed_corpus() and is_locally_available(full_archive_path, type.compressed_size_in_bytes):
+            decompress_corpus(full_archive_path, full_document_path, type.uncompressed_size_in_bytes)
+        else:
+            if type.has_compressed_corpus():
+                target_path = full_archive_path
+                expected_size = type.compressed_size_in_bytes
+            elif type.has_uncompressed_corpus():
+                target_path = full_document_path
+                expected_size = type.uncompressed_size_in_bytes
+            else:
+                # this should not happen in practice as the JSON schema should take care of this
+                raise exceptions.RallyAssertionError("Track %s specifies documents but neither a compressed nor an uncompressed corpus" %
+                                                     track_name)
+            download_corpus(source_root_url, target_path, expected_size, track_name, offline, test_mode)
+
+    create_file_offset_table(full_document_path, type.number_of_lines)
 
 
 def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.Clock):
@@ -601,11 +621,15 @@ class TrackSpecificationReader:
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _create_type(self, type_spec, mapping_dir):
-        compressed_docs = self._r(type_spec, "documents", mandatory=False)
-        if compressed_docs:
+        docs = self._r(type_spec, "documents", mandatory=False)
+        if docs:
             relative_data_dir = self.name.lower()
-            document_archive = os.path.join(relative_data_dir, compressed_docs)
-            document_file = os.path.join(relative_data_dir, io.splitext(compressed_docs)[0])
+            if io.is_archive(docs):
+                document_archive = os.path.join(relative_data_dir, docs)
+                document_file = os.path.join(relative_data_dir, io.splitext(docs)[0])
+            else:
+                document_archive = None
+                document_file = os.path.join(relative_data_dir, docs)
             number_of_documents = self._r(type_spec, "document-count")
             compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
             uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
