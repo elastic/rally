@@ -126,8 +126,8 @@ class DockerLauncher:
             if l.find("Initialization Failed") != -1:
                 logger.warning("[%s] has started with initialization errors." % node_name)
                 startup_event.set()
-
-            logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
+            # logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
             if l.endswith("] started") and not startup_event.isSet():
                 startup_event.set()
                 logger.info("[%s] has successfully started." % node_name)
@@ -314,7 +314,8 @@ class InProcessLauncher:
                 startup_event.set()
                 break
             l = l.rstrip()
-            logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
+            # logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
 
             if l.find("Initialization Failed") != -1 or l.find("A fatal exception has occurred") != -1:
                 logger.error("[%s] encountered initialization errors." % node_name)
