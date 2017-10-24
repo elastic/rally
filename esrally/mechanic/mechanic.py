@@ -284,15 +284,12 @@ class MechanicActor(actor.RallyActor):
                 else:
                     logger.error("[%s] sent to a child actor has resulted in PoisonMessage" % str(msg.poisonMessage))
                     raise exceptions.RallyError("Could not communicate with benchmark candidate (unknown reason)")
-        except BaseException:
+        except BaseException as e:
             # usually, we'll notify the sender but in case a child sent something that caused an exception we'd rather
             # have it bubble up to race control. Otherwise, we could play ping-pong with our child actor.
             recipient = self.race_control if sender in self.children else sender
             logger.exception("Cannot process message [%s]. Notifying [%s]." % (msg, recipient))
-            ex_type, ex_value, ex_traceback = sys.exc_info()
-            # avoid "can't pickle traceback objects"
-            import traceback
-            self.send(recipient, actor.BenchmarkFailure("Could not execute command (%s)" % ex_value, traceback.format_exc()))
+            self.send(sender, actor.BenchmarkFailure("Error in Elasticsearch cluster coordinator", e))
 
     def on_start_engine(self, msg, sender):
         logger.info("Received signal from race control to start engine.")
@@ -474,13 +471,10 @@ class NodeMechanicActor(actor.RallyActor):
                     logger.info("Stopping nodes %s (due to ActorExitRequest)" % self.mechanic.nodes)
                     self.mechanic.stop_engine()
                     self.running = False
-        except BaseException:
+        except BaseException as e:
             self.running = False
             logger.exception("Cannot process message [%s]" % msg)
-            # avoid "can't pickle traceback objects"
-            import traceback
-            ex_type, ex_value, ex_traceback = sys.exc_info()
-            self.send(sender, actor.BenchmarkFailure(ex_value, traceback.format_exc()))
+            self.send(sender, actor.BenchmarkFailure("Error on host %s" % str(self.host), e))
 
 
 #####################################################

@@ -32,7 +32,7 @@ def clone(src, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
     if process.run_subprocess("git clone %s %s" % (remote, src)):
-        raise exceptions.SupplyError("Could not clone from '%s' to '%s'" % (remote, src))
+        raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
 
 
 @probed
@@ -40,21 +40,21 @@ def fetch(src, remote="origin"):
     # Don't swallow output but silence git at least a bit... (--quiet)
     if process.run_subprocess(
             "git -C {0} fetch --prune --quiet {1}".format(src, remote)):
-        raise exceptions.SupplyError("Could not fetch source tree from '%s'" % remote)
+        raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
 
 @probed
 def checkout(src_dir, branch="master"):
     if process.run_subprocess(
             "git -C {0} checkout --quiet {1}".format(src_dir, branch)):
-        raise exceptions.SupplyError("Could not checkout '%s'" % branch)
+        raise exceptions.SupplyError("Could not checkout branch [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
 def rebase(src_dir, remote="origin", branch="master"):
     checkout(src_dir, branch)
     if process.run_subprocess("git -C {0} rebase --quiet {1}/{2}".format(src_dir, remote, branch)):
-        raise exceptions.SupplyError("Could not rebase on '%s'" % branch)
+        raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
 @probed
@@ -68,14 +68,14 @@ def pull_ts(src_dir, ts):
     if process.run_subprocess(
             "git -C {0} fetch --quiet origin && git -C {0} checkout --quiet `git -C {0} rev-list -n 1 --before=\"{1}\" "
             "--date=iso8601 origin/master`".format(src_dir, ts)):
-        raise exceptions.SupplyError("Could not fetch source tree for timestamped revision %s" % ts)
+        raise exceptions.SupplyError("Could not fetch source tree for timestamped revision [%s]" % ts)
 
 
 @probed
 def pull_revision(src_dir, revision):
     if process.run_subprocess(
                     "git -C {0} fetch --quiet origin && git -C {0} checkout --quiet {1}".format(src_dir, revision)):
-        raise exceptions.SupplyError("Could not fetch source tree for revision %s" % revision)
+        raise exceptions.SupplyError("Could not fetch source tree for revision [%s]" % revision)
 
 
 @probed

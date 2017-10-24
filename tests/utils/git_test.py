@@ -49,7 +49,7 @@ class GitTests(TestCase):
 
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.clone(src, remote)
-        self.assertEqual("Could not clone from 'http://github.com/some/project' to '/src'", ctx.exception.args[0])
+        self.assertEqual("Could not clone from [http://github.com/some/project] to [/src]", ctx.exception.args[0])
 
         ensure_dir.assert_called_with(src)
         run_subprocess.assert_called_with("git clone http://github.com/some/project /src")
@@ -69,7 +69,7 @@ class GitTests(TestCase):
         run_subprocess.return_value = True
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.fetch("/src", remote="my-origin")
-        self.assertEqual("Could not fetch source tree from 'my-origin'", ctx.exception.args[0])
+        self.assertEqual("Could not fetch source tree from [my-origin]", ctx.exception.args[0])
         run_subprocess.assert_called_with("git -C /src fetch --prune --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
@@ -87,7 +87,7 @@ class GitTests(TestCase):
         run_subprocess.return_value = True
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.checkout("/src", "feature-branch")
-        self.assertEqual("Could not checkout 'feature-branch'", ctx.exception.args[0])
+        self.assertEqual("Could not checkout branch [feature-branch]. Do you have uncommitted changes?", ctx.exception.args[0])
         run_subprocess.assert_called_with("git -C /src checkout --quiet feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess")

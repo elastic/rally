@@ -62,6 +62,6 @@ class RallyRepository:
                 git.checkout(self.repo_dir, branch=branch)
             else:
                 raise exceptions.SystemSetupError("Cannot find %s for distribution version %s" % (self.resource_name, distribution_version))
-        except exceptions.SupplyError:
+        except exceptions.SupplyError as e:
             tb = sys.exc_info()[2]
-            raise exceptions.DataError("Cannot update [%s] in [%s]." % (self.resource_name, self.repo_dir)).with_traceback(tb)
+            raise exceptions.DataError("Cannot update %s in [%s] (%s)." % (self.resource_name, self.repo_dir, e.message)).with_traceback(tb)
