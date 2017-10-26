@@ -162,18 +162,22 @@ def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=No
     :param read_only: Whether to open the metrics store only for reading (Default: True).
     :return: A metrics store implementation.
     """
-    if cfg.opts("reporting", "datastore.type") == "elasticsearch":
-        logger.info("Creating ES metrics store")
-        store = EsMetricsStore(cfg)
-    else:
-        logger.info("Creating in-memory metrics store")
-        store = InMemoryMetricsStore(cfg)
+    cls = metrics_store_class(cfg)
+    store = cls(cfg)
+    logger.info("Creating %s" % str(store))
 
     selected_invocation = cfg.opts("system", "time.start") if invocation is None else invocation
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
     store.open(selected_invocation, track, challenge, selected_car, create=not read_only)
     return store
+
+
+def metrics_store_class(cfg):
+    if cfg.opts("reporting", "datastore.type") == "elasticsearch":
+        return EsMetricsStore
+    else:
+        return InMemoryMetricsStore
 
 
 class SampleType(IntEnum):
@@ -271,7 +275,7 @@ class MetricsStore:
     def lap(self, lap):
         self._lap = lap
 
-    def flush(self):
+    def flush(self, refresh=True):
         """
         Explicitly flushes buffered metrics to the metric store. It is not required to flush before closing the metrics store.
         """
@@ -477,9 +481,13 @@ class MetricsStore:
 
         :param memento: The external representation as returned by #to_externalizable().
         """
-        logger.info("Restoring in-memory representation of metrics store.")
-        for doc in pickle.loads(zlib.decompress(memento)):
-            self._add(doc)
+        if memento:
+            logger.info("Restoring in-memory representation of metrics store.")
+            for doc in pickle.loads(zlib.decompress(memento)):
+                self._add(doc)
+
+    def to_externalizable(self, clear=False):
+        raise NotImplementedError("abstract method")
 
     def _add(self, doc):
         """
@@ -637,7 +645,7 @@ class EsMetricsStore(MetricsStore):
     def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
         MetricsStore.open(self, invocation, track_name, challenge_name, car_name, ctx, create)
-        self._index = self.index_name(invocation)
+        self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
             # always update the mapping to the latest version
@@ -647,19 +655,21 @@ class EsMetricsStore(MetricsStore):
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
 
-    def index_name(self, ts):
+    def index_name(self):
+        ts = time.from_is8601(self._invocation)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _get_template(self):
         return self._index_template_provider.metrics_template()
 
-    def flush(self):
+    def flush(self, refresh=True):
         self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
         logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
                     (len(self._docs), self._invocation, self._track, self._challenge, self._car))
         self._docs = []
         # ensure we can search immediately after flushing
-        self._client.refresh(index=self._index)
+        if refresh:
+            self._client.refresh(index=self._index)
 
     def _add(self, doc):
         self._docs.append(doc)
@@ -822,6 +832,13 @@ class EsMetricsStore(MetricsStore):
             })
         return q
 
+    def to_externalizable(self, clear=False):
+        # no need for an externalizable representation - stores everything directly
+        return None
+
+    def __str__(self):
+        return "Elasticsearch metrics store"
+
 
 class InMemoryMetricsStore(MetricsStore):
     def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
@@ -846,7 +863,7 @@ class InMemoryMetricsStore(MetricsStore):
     def _add(self, doc):
         self.docs.append(doc)
 
-    def flush(self):
+    def flush(self, refresh=True):
         pass
 
     def to_externalizable(self, clear=False):
@@ -931,6 +948,10 @@ class InMemoryMetricsStore(MetricsStore):
                 (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
                 (lap is None or doc["lap"] == lap)
                 ]
+
+    def __str__(self):
+        return "in-memory metrics store"
+
 
 
 def race_store(cfg):

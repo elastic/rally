@@ -1,4 +1,3 @@
-import sys
 import logging
 
 import thespian.actors
@@ -295,7 +294,8 @@ class MechanicActor(actor.RallyActor):
         logger.info("Received signal from race control to start engine.")
         self.race_control = sender
         self.cfg = msg.cfg
-        self.metrics_store = metrics.InMemoryMetricsStore(self.cfg)
+        cls = metrics.metrics_store_class(self.cfg)
+        self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
@@ -378,9 +378,11 @@ class MechanicActor(actor.RallyActor):
 
     def on_benchmark_stopped(self):
         self.cluster.on_benchmark_stop()
+        self.metrics_store.flush(refresh=False)
         self.send(self.race_control, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
 
     def on_all_nodes_stopped(self):
+        self.metrics_store.flush(refresh=False)
         self.send(self.race_control, EngineStopped(self.metrics_store.to_externalizable()))
         # clear all state as the mechanic might get reused later
         for m in self.children:
@@ -391,6 +393,8 @@ class MechanicActor(actor.RallyActor):
 
 
 class NodeMechanicActor(actor.RallyActor):
+    METRIC_FLUSH_INTERVAL_SECONDS = 30
+
     """
     One instance of this actor is run on each target host and coordinates the actual work of starting / stopping all nodes that should run
     on this host.
@@ -433,7 +437,8 @@ class NodeMechanicActor(actor.RallyActor):
                     self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
                     self.config.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
 
-                self.metrics_store = metrics.InMemoryMetricsStore(self.config)
+                cls = metrics.metrics_store_class(self.config)
+                self.metrics_store = cls(self.config)
                 self.metrics_store.open(ctx=msg.open_metrics_context)
                 # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
                 self.metrics_store.lap = 0
@@ -452,9 +457,16 @@ class NodeMechanicActor(actor.RallyActor):
             elif isinstance(msg, OnBenchmarkStart):
                 self.metrics_store.lap = msg.lap
                 self.mechanic.on_benchmark_start()
+                self.wakeupAfter(NodeMechanicActor.METRIC_FLUSH_INTERVAL_SECONDS)
                 self.send(sender, BenchmarkStarted())
+            elif isinstance(msg, thespian.actors.WakeupMessage):
+                if self.running:
+                    logger.info("Flushing system metrics store on host [%s]." % self.host)
+                    self.metrics_store.flush(refresh=False)
+                    self.wakeupAfter(NodeMechanicActor.METRIC_FLUSH_INTERVAL_SECONDS)
             elif isinstance(msg, OnBenchmarkStop):
                 self.mechanic.on_benchmark_stop()
+                self.metrics_store.flush(refresh=False)
                 # clear metrics store data to not send duplicate system metrics data
                 self.send(sender, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
             elif isinstance(msg, StopNodes):
@@ -462,6 +474,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.mechanic.stop_engine()
                 self.send(sender, NodesStopped(self.metrics_store.to_externalizable()))
                 # clear all state as the mechanic might get reused later
+                self.metrics_store.close()
                 self.running = False
                 self.config = None
                 self.mechanic = None

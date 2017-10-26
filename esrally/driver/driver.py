@@ -135,6 +135,9 @@ class DriverActor(actor.RallyActor):
 
     WAKEUP_INTERVAL_SECONDS = 1
 
+    # post-process request metrics every N seconds and send it to the metrics store
+    POST_PROCESS_INTERVAL_SECONDS = 30
+
     """
     Coordinates all worker drivers. This is actually only a thin actor wrapper layer around ``Driver`` which does the actual work.
     """
@@ -145,6 +148,7 @@ class DriverActor(actor.RallyActor):
         self.start_sender = None
         self.coordinator = None
         self.status = "init"
+        self.post_process_timer = 0
 
     def receiveMessage(self, msg, sender):
         try:
@@ -162,6 +166,10 @@ class DriverActor(actor.RallyActor):
                 if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
                     self.coordinator.reset_relative_time()
                 elif not self.coordinator.finished():
+                    self.post_process_timer += DriverActor.WAKEUP_INTERVAL_SECONDS
+                    if self.post_process_timer >= DriverActor.POST_PROCESS_INTERVAL_SECONDS:
+                        self.post_process_timer = 0
+                        self.coordinator.post_process_samples()
                     self.coordinator.update_progress_message()
                     self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
             elif isinstance(msg, actor.BenchmarkFailure):
@@ -317,6 +325,7 @@ class Driver:
         self.quiet = False
         self.allocations = None
         self.raw_samples = []
+        self.throughput_calculator = None
         self.most_recent_sample_per_client = {}
 
         self.number_of_steps = 0
@@ -330,8 +339,10 @@ class Driver:
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
+        self.throughput_calculator = ThroughputCalculator()
         # create - but do not yet open - the metrics store as an internal timer starts when we open it.
-        self.metrics_store = metrics.InMemoryMetricsStore(cfg=self.config, meta_info=metrics_meta_info, lap=lap)
+        cls = metrics.metrics_store_class(self.config)
+        self.metrics_store = cls(cfg=self.config, meta_info=metrics_meta_info, lap=lap)
         for host in self.config.opts("driver", "load_driver_hosts"):
             if host != "localhost":
                 self.load_driver_hosts.append(net.resolve(host))
@@ -390,12 +401,9 @@ class Driver:
             self.most_recent_sample_per_client = {}
             self.current_step += 1
 
-            # TODO #217: We should still postprocess samples only at the end of a task but maybe we can send latency and service_time
-            # samples in microbatches.
             logger.info("Postprocessing samples...")
             self.post_process_samples()
             m = self.metrics_store.to_externalizable(clear=True)
-            self.raw_samples = []
 
             if self.finished():
                 logger.info("All steps completed.")
@@ -493,8 +501,15 @@ class Driver:
                 self.progress_reporter.finish()
 
     def post_process_samples(self):
-        logger.info("Storing latency and service time... ")
-        for sample in self.raw_samples:
+        if len(self.raw_samples) == 0:
+            return
+        total_start = time.perf_counter()
+        start = total_start
+        # we do *not* do this here to avoid concurrent updates (actors are single-threaded) but rather to make it clear that we use
+        # only a snapshot and that new data will go to a new sample set.
+        raw_samples = self.raw_samples
+        self.raw_samples = []
+        for sample in raw_samples:
             meta_data = self.merge(
                 self.track.meta_data,
                 self.challenge.meta_data,
@@ -512,9 +527,13 @@ class Driver:
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                        relative_time=sample.relative_time, meta_data=meta_data)
 
-        logger.info("Calculating throughput... ")
-        aggregates = calculate_global_throughput(self.raw_samples)
-        logger.info("Storing throughput... ")
+        end = time.perf_counter()
+        logger.info("Storing latency and service time took [%f] seconds." % (end - start))
+        start = end
+        aggregates = self.throughput_calculator.calculate(raw_samples)
+        end = time.perf_counter()
+        logger.info("Calculating throughput took [%f] seconds." % (end - start))
+        start = end
         for task, samples in aggregates.items():
             meta_data = self.merge(
                 self.track.meta_data,
@@ -527,6 +546,19 @@ class Driver:
                 self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
                                                            operation=op.name, operation_type=op.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time, meta_data=meta_data)
+        end = time.perf_counter()
+        logger.info("Storing throughput took [%f] seconds." % (end - start))
+        start = end
+        # this will be a noop for the in-memory metrics store. If we use an ES metrics store however, this will ensure that we already send
+        # the data and also clear the in-memory buffer. This allows users to see data already while running the benchmark. In cases where
+        # it does not matter (i.e. in-memory) we will still defer this step until the end.
+        #
+        # Don't force refresh here in the interest of short processing times. We don't need to query immediately afterwards so there is
+        # no need for frequent refreshes.
+        self.metrics_store.flush(refresh=False)
+        end = time.perf_counter()
+        logger.info("Flushing the metrics store took [%f] seconds." % (end - start))
+        logger.info("Postprocessing [%d] raw samples took [%f] seconds in total." % (len(raw_samples), (end - total_start)))
 
     def merge(self, *args):
         result = {}
@@ -897,67 +929,120 @@ def _do_wait(es, expected_cluster_status, sleep=time.sleep):
     raise exceptions.RallyAssertionError(msg)
 
 
-def calculate_global_throughput(samples, bucket_interval_secs=1):
-    """
-    Calculates global throughput based on samples gathered from multiple load generators.
+class ThroughputCalculator:
+    class TaskStats:
+        """
+        Stores per task numbers needed for throughput calculation in between multiple calculations.
+        """
+        def __init__(self, bucket_interval, sample_type, start_time):
+            self.unprocessed = []
+            self.total_count = 0
+            self.interval = 0
+            self.bucket_interval = bucket_interval
+            # the first bucket is complete after one bucket interval is over
+            self.bucket = bucket_interval
+            self.sample_type = sample_type
+            self.has_samples_in_sample_type = False
+            # start relative to the beginning of our (calculation) time slice.
+            self.start_time = start_time
 
-    :param samples: A list containing all samples from all load generators.
-    :param bucket_interval_secs: The bucket interval for aggregations.
-    :return: A global view of throughput samples.
-    """
-    samples_per_task = {}
-    # first we group all warmup / measurement samples by operation.
-    for sample in samples:
-        k = sample.task
-        if k not in samples_per_task:
-            samples_per_task[k] = []
-        samples_per_task[k].append(sample)
+        @property
+        def throughput(self):
+            return self.total_count / self.interval
 
-    global_throughput = {}
-    # with open("raw_samples.csv", "w") as sample_log:
-    #    print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
-    for k, v in samples_per_task.items():
-        task = k
-        if task not in global_throughput:
-            global_throughput[task] = []
-        # sort all samples by time
-        current_samples = sorted(v, key=lambda s: s.absolute_time)
+        def maybe_update_sample_type(self, current_sample_type):
+            if self.sample_type < current_sample_type:
+                self.sample_type = current_sample_type
+                self.has_samples_in_sample_type = False
 
-        total_count = 0
-        interval = 0
-        current_bucket = 0
-        current_sample_type = current_samples[0].sample_type
-        sample_count_for_current_sample_type = 0
-        start_time = current_samples[0].absolute_time - current_samples[0].time_period
-        for sample in current_samples:
-            # print("%d,%f,%f,%s,%s,%d,%f" %
-            # (sample.client_id, sample.absolute_time, sample.relative_time, sample.operation, sample.sample_type,
-            #  sample.total_ops, sample.time_period), file=sample_log)
+        def update_interval(self, absolute_sample_time):
+            self.interval = max(absolute_sample_time - self.start_time, self.interval)
 
-            # once we have seen a new sample type, we stick to it.
-            if current_sample_type < sample.sample_type:
-                current_sample_type = sample.sample_type
-                sample_count_for_current_sample_type = 0
+        def can_calculate_throughput(self):
+            return self.interval > 0 and self.interval >= self.bucket
 
-            total_count += sample.total_ops
-            interval = max(sample.absolute_time - start_time, interval)
+        def can_add_final_throughput_sample(self):
+            return self.interval > 0 and not self.has_samples_in_sample_type
 
-            # avoid division by zero
-            if interval > 0 and interval >= current_bucket:
-                sample_count_for_current_sample_type += 1
-                current_bucket = int(interval) + bucket_interval_secs
-                throughput = (total_count / interval)
-                # we calculate throughput per second
+        def finish_bucket(self, new_total):
+            self.unprocessed = []
+            self.total_count = new_total
+            self.has_samples_in_sample_type = True
+            self.bucket = int(self.interval) + self.bucket_interval
+
+    def __init__(self):
+        self.task_stats = {}
+
+    def calculate(self, samples, bucket_interval_secs=1):
+        """
+        Calculates global throughput based on samples gathered from multiple load generators.
+
+        :param samples: A list containing all samples from all load generators.
+        :param bucket_interval_secs: The bucket interval for aggregations.
+        :return: A global view of throughput samples.
+        """
+
+        import itertools
+        samples_per_task = {}
+        # first we group all samples by task (operation).
+        for sample in samples:
+            k = sample.task
+            if k not in samples_per_task:
+                samples_per_task[k] = []
+            samples_per_task[k].append(sample)
+
+        global_throughput = {}
+        # with open("raw_samples_new.csv", "a") as sample_log:
+        # print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
+        for k, v in samples_per_task.items():
+            task = k
+            if task not in global_throughput:
+                global_throughput[task] = []
+            # sort all samples by time
+            if task in self.task_stats:
+                samples = itertools.chain(v, self.task_stats[task].unprocessed)
+            else:
+                samples = v
+            current_samples = sorted(samples, key=lambda s: s.absolute_time)
+
+            if task not in self.task_stats:
+                first_sample = current_samples[0]
+                self.task_stats[task] = ThroughputCalculator.TaskStats(bucket_interval=bucket_interval_secs,
+                                                                       sample_type=first_sample.sample_type,
+                                                                       start_time=first_sample.absolute_time - first_sample.time_period)
+            current = self.task_stats[task]
+            count = current.total_count
+            for sample in current_samples:
+                # print("%d,%f,%f,%s,%s,%d,%f" %
+                #       (sample.client_id, sample.absolute_time, sample.relative_time, sample.operation, sample.sample_type,
+                #        sample.total_ops, sample.time_period), file=sample_log)
+
+                # once we have seen a new sample type, we stick to it.
+                current.maybe_update_sample_type(sample.sample_type)
+
+                # we need to store the total count separately and cannot update `current.total_count` immediately here because we would
+                # count all raw samples in `unprocessed` twice. Hence, we'll only update `current.total_count` when we have calculated a new
+                # throughput sample.
+                count += sample.total_ops
+                current.update_interval(sample.absolute_time)
+
+                if current.can_calculate_throughput():
+                    current.finish_bucket(count)
+                    global_throughput[task].append(
+                        (sample.absolute_time, sample.relative_time, current.sample_type, current.throughput,
+                         # we calculate throughput per second
+                         "%s/s" % sample.total_ops_unit))
+                else:
+                    current.unprocessed.append(sample)
+
+            # also include the last sample if we don't have one for the current sample type, even if it is below the bucket interval
+            # (mainly needed to ensure we show throughput data in test mode)
+            if current.can_add_final_throughput_sample():
+                current.finish_bucket(count)
                 global_throughput[task].append(
-                    (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
-        # also include the last sample if we don't have one for the current sample type, even if it is below the bucket interval
-        # (mainly needed to ensure we show throughput data in test mode)
-        if interval > 0 and sample_count_for_current_sample_type == 0:
-            throughput = (total_count / interval)
-            global_throughput[task].append(
-                (sample.absolute_time, sample.relative_time, current_sample_type, throughput, "%s/s" % sample.total_ops_unit))
+                    (sample.absolute_time, sample.relative_time, current.sample_type, current.throughput, "%s/s" % sample.total_ops_unit))
 
-    return global_throughput
+        return global_throughput
 
 
 class Profiler:

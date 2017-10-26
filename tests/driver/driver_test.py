@@ -43,6 +43,7 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "client", "options", {})
         self.cfg.add(config.Scope.application, "driver", "cluster.health", "green")
         self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
+        self.cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
 
         default_challenge = track.Challenge("default", description="default challenge", default=True, schedule=[
             track.Task(operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
@@ -421,7 +422,7 @@ class MetricsAggregationTests(TestCase):
             driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, 2500, "docs", 1, 1),
         ]
 
-        aggregated = driver.calculate_global_throughput(samples)
+        aggregated = self.calculate_global_throughput(samples)
 
         self.assertIn(op, aggregated)
         self.assertEqual(1, len(aggregated))
@@ -446,7 +447,7 @@ class MetricsAggregationTests(TestCase):
             driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6.5, 9 / 9)
         ]
 
-        aggregated = driver.calculate_global_throughput(samples)
+        aggregated = self.calculate_global_throughput(samples)
 
         self.assertIn(op, aggregated)
         self.assertEqual(1, len(aggregated))
@@ -460,6 +461,9 @@ class MetricsAggregationTests(TestCase):
         self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
         self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
         # self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
+
+    def calculate_global_throughput(self, samples):
+        return driver.ThroughputCalculator().calculate(samples)
 
 
 class SchedulerTests(ScheduleTestCase):
