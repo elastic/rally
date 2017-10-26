@@ -21,7 +21,7 @@ long_description = str_from_file("README.rst")
 
 install_requires = [
     "elasticsearch==5.3.0",
-    "psutil==4.1.0",
+    "psutil==5.4.0",
     "py-cpuinfo==3.2.0",
     "tabulate==0.7.5",
     "jsonschema==2.5.1",
