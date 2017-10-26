@@ -385,11 +385,15 @@ class SampleCpuUsage(threading.Thread):
         self.join()
 
     def run(self):
+        import psutil
         # noinspection PyBroadException
         try:
             while not self.stop:
                 self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",
                                                         value=sysstats.cpu_utilization(self.process), unit="%")
+        # this can happen when the Elasticsearch process has been terminated already and we were not quick enough to stop.
+        except psutil.NoSuchProcess:
+            pass
         except BaseException:
             logger.exception("Could not determine CPU utilization")
 
