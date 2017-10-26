@@ -1083,8 +1083,8 @@ def execute_single(runner, es, params, abort_on_error=False):
             "error-type": "transport",
             "error-description": e.error
         }
-        # The ES client will return N/A for connection errors
-        if e.status_code != "N/A":
+        # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
+        if isinstance(e.status_code, int):
             request_meta_data["http-status"] = e.status_code
     except KeyError as e:
         logger.exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
