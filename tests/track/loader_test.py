@@ -643,8 +643,8 @@ class TrackPathTests(TestCase):
 
         loader.set_absolute_data_path(cfg, t)
 
-        self.assertEqual("/data/docs/documents.json", t.indices[0].types[0].document_file)
-        self.assertEqual("/data/docs/documents.json.bz2", t.indices[0].types[0].document_archive)
+        self.assertEqual("/data/unittest/docs/documents.json", t.indices[0].types[0].document_file)
+        self.assertEqual("/data/unittest/docs/documents.json.bz2", t.indices[0].types[0].document_archive)
 
 
 class TrackFilterTests(TestCase):
@@ -991,8 +991,8 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0].name)
         self.assertFalse(resulting_track.indices[0].types[0].includes_action_and_meta_data)
-        self.assertEqual("unittest/documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
-        self.assertEqual("unittest/documents-main.json", resulting_track.indices[0].types[0].document_file)
+        self.assertEqual("documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
+        self.assertEqual("documents-main.json", resulting_track.indices[0].types[0].document_file)
         self.assertDictEqual({"main": "empty-for-test"}, resulting_track.indices[0].types[0].mapping)
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
         self.assertDictEqual({"secondary": "empty-for-test"}, resulting_track.indices[0].types[1].mapping)

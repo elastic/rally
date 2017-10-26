@@ -103,7 +103,7 @@ def set_absolute_data_path(cfg, t):
     :param cfg: The config object.
     :param t: The track to modify.
     """
-    data_root = data_dir(cfg)
+    data_root = data_dir(cfg, t.name)
     for index in t.indices:
         for t in index.types:
             if t.document_archive:
@@ -124,15 +124,15 @@ def track_repo(cfg, fetch=True, update=True):
         return GitTrackRepository(cfg, fetch, update)
 
 
-def data_dir(cfg):
+def data_dir(cfg, track_name):
     if is_simple_track_mode(cfg):
         track_path = cfg.opts("track", "track.path")
         r = SimpleTrackRepository(track_path)
         # data should always be stored in the track's directory. If the user uses the same directory on all machines this will even work
-        # in the distributed case. However, the user is responsible for ensure
-        return r.track_dir(r.track_name)
+        # in the distributed case. However, the user is responsible to ensure that this is actually the case.
+        return r.track_dir(track_name)
     else:
-        return cfg.opts("benchmarks", "local.dataset.cache")
+        return os.path.join(cfg.opts("benchmarks", "local.dataset.cache"), track_name)
 
 
 class GitTrackRepository:
@@ -215,7 +215,7 @@ def prepare_track(track, cfg):
     if not track.source_root_url:
         logger.info("Track [%s] does not specify a source root URL. Assuming data are available locally." % track.name)
 
-    data_root = data_dir(cfg)
+    data_root = data_dir(cfg, track.name)
     logger.info("Resolved data root directory for track [%s] to [%s]." % (track.name, data_root))
     for index in track.indices:
         for type in index.types:
@@ -310,7 +310,6 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
 
     full_document_path = os.path.join(data_root, type.document_file)
     full_archive_path = os.path.join(data_root, type.document_archive) if type.has_compressed_corpus() else None
-
     while True:
         if is_locally_available(full_document_path, type.uncompressed_size_in_bytes):
             break
@@ -623,13 +622,12 @@ class TrackSpecificationReader:
     def _create_type(self, type_spec, mapping_dir):
         docs = self._r(type_spec, "documents", mandatory=False)
         if docs:
-            relative_data_dir = self.name.lower()
             if io.is_archive(docs):
-                document_archive = os.path.join(relative_data_dir, docs)
-                document_file = os.path.join(relative_data_dir, io.splitext(docs)[0])
+                document_archive = docs
+                document_file = io.splitext(docs)[0]
             else:
                 document_archive = None
-                document_file = os.path.join(relative_data_dir, docs)
+                document_file = docs
             number_of_documents = self._r(type_spec, "document-count")
             compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
             uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
