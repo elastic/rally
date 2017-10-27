@@ -324,11 +324,11 @@ def create_readers(num_clients, client_index, indices, batch_size, bulk_size, id
         for type in index.types:
             offset, num_docs, num_lines = bounds(type.number_of_documents, client_index, num_clients, type.includes_action_and_meta_data)
             if num_docs > 0:
-                logger.info("Client [%d] will index [%d] docs starting from line offset [%d] for [%s/%s]" %
+                logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s]" %
                             (client_index, num_docs, offset, index, type))
                 readers.append(create_reader(index, type, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts))
             else:
-                logger.info("Client [%d] skips [%s/%s] (no documents to read)." % (client_index, index, type))
+                logger.info("Task-relative client at index [%d] skips [%s/%s] (no documents to read)." % (client_index, index, type))
     return readers
 
 

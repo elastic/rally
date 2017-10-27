@@ -684,14 +684,14 @@ class LoadGenerator(actor.RallyActor):
 
     def drive(self):
         profiling_enabled = self.config.opts("driver", "profiling")
-        task = self.current_task_and_advance()
+        task_allocation = self.current_task_and_advance()
         # skip non-tasks in the task list
-        while task is None:
-            task = self.current_task_and_advance()
-        self.current_task = task
+        while task_allocation is None:
+            task_allocation = self.current_task_and_advance()
+        self.current_task = task_allocation
 
-        if isinstance(task, JoinPoint):
-            logger.info("LoadGenerator[%d] reached join point [%s]." % (self.client_id, task))
+        if isinstance(task_allocation, JoinPoint):
+            logger.info("LoadGenerator[%d] reached join point [%s]." % (self.client_id, task_allocation))
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
                 self.executor_future.result()
@@ -700,8 +700,9 @@ class LoadGenerator(actor.RallyActor):
             self.complete.clear()
             self.executor_future = None
             self.sampler = None
-            self.send(self.master, JoinPointReached(self.client_id, task))
-        elif isinstance(task, track.Task):
+            self.send(self.master, JoinPointReached(self.client_id, task_allocation))
+        elif isinstance(task_allocation, TaskAllocation):
+            task = task_allocation.task
             # There may be a situation where there are more (parallel) tasks than clients. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
             if self.complete.is_set():
@@ -710,7 +711,16 @@ class LoadGenerator(actor.RallyActor):
             else:
                 logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
                 self.sampler = Sampler(self.client_id, task, start_timestamp=time.perf_counter())
-                schedule = schedule_for(self.track, task, self.client_id)
+                # We cannot use the global client index here because we need to support parallel execution of tasks with multiple clients.
+                #
+                # Consider the following scenario:
+                #
+                # * Clients 0-3 bulk index into indexA
+                # * Clients 4-7 bulk index into indexB
+                #
+                # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we need to start
+                # from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
+                schedule = schedule_for(self.track, task_allocation.task, task_allocation.client_index_in_task)
 
                 executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
                 final_executor = Profiler(executor, self.client_id, task.operation) if profiling_enabled else executor
@@ -718,7 +728,7 @@ class LoadGenerator(actor.RallyActor):
                 self.executor_future = self.pool.submit(final_executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
         else:
-            raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task))
+            raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task_allocation))
 
     def at_joinpoint(self):
         return isinstance(self.current_task, JoinPoint)
@@ -1202,11 +1212,29 @@ class JoinPoint:
         self.num_clients_executing_completing_task = len(clients_executing_completing_task)
         self.preceding_task_completes_parent = self.num_clients_executing_completing_task > 0
 
+    def __hash__(self):
+        return hash(self.id)
+
     def __eq__(self, other):
-        return self.id == other.id
+        return isinstance(other, type(self)) and self.id == other.id
 
     def __repr__(self, *args, **kwargs):
         return "JoinPoint(%s)" % self.id
+
+
+class TaskAllocation:
+    def __init__(self, task, client_index_in_task):
+        self.task = task
+        self.client_index_in_task = client_index_in_task
+
+    def __hash__(self):
+        return hash(self.task) ^ hash(self.client_index_in_task)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.task == other.task and self.client_index_in_task == other.client_index_in_task
+
+    def __repr__(self, *args, **kwargs):
+        return "TaskAllocation [%d/%d] for %s" % (self.client_index_in_task, self.task.clients, self.task)
 
 
 class Allocator:
@@ -1247,10 +1275,12 @@ class Allocator:
             clients_executing_completing_task = []
             for sub_task in task:
                 for client_index in range(start_client_index, start_client_index + sub_task.clients):
-                    final_client_index = client_index % max_clients
+                    # this is the actual client that will execute the task. It may differ from the logical one in case we over-commit (i.e.
+                    # more tasks than actually available clients)
+                    physical_client_index = client_index % max_clients
                     if sub_task.completes_parent:
-                        clients_executing_completing_task.append(final_client_index)
-                    allocations[final_client_index].append(sub_task)
+                        clients_executing_completing_task.append(physical_client_index)
+                    allocations[physical_client_index].append(TaskAllocation(sub_task, client_index - start_client_index))
                 start_client_index += sub_task.clients
 
             # uneven distribution between tasks and clients, e.g. there are 5 (parallel) tasks but only 2 clients. Then, one of them
@@ -1299,10 +1329,10 @@ class Allocator:
         # assumption: the shape of allocs is rectangular (i.e. each client contains the same number of elements)
         for idx in range(0, len(allocs[0])):
             for client in range(0, self.clients):
-                task = allocs[client][idx]
-                if isinstance(task, track.Task):
-                    current_ops.add(task.operation)
-                elif isinstance(task, JoinPoint) and len(current_ops) > 0:
+                allocation = allocs[client][idx]
+                if isinstance(allocation, TaskAllocation):
+                    current_ops.add(allocation.task.operation)
+                elif isinstance(allocation, JoinPoint) and len(current_ops) > 0:
                     ops.append(current_ops)
                     current_ops = set()
 

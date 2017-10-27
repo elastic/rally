@@ -197,6 +197,9 @@ class AllocatorTests(TestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
 
+    def ta(self, task, client_index_in_task):
+        return driver.TaskAllocation(task, client_index_in_task)
+
     def test_allocates_one_task(self):
         op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
         task = track.Task(op)
@@ -304,10 +307,11 @@ class AllocatorTests(TestCase):
         # join_point, index_a, index_c, index_e, join_point
         self.assertEqual(5, len(allocations[0]))
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual([allocations[0][0], index_a, index_c, index_e, allocations[0][4]], allocations[0])
+        self.assertEqual([allocations[0][0], self.ta(index_a, 0), self.ta(index_c, 0), self.ta(index_e, 0), allocations[0][4]],
+                         allocations[0])
         # join_point, index_a, index_c, None, join_point
         self.assertEqual(5, len(allocator.allocations[1]))
-        self.assertEqual([allocations[1][0], index_b, index_d, None, allocations[1][4]], allocations[1])
+        self.assertEqual([allocations[1][0], self.ta(index_b, 0), self.ta(index_d, 0), None, allocations[1][4]], allocations[1])
 
         self.assertEqual([{op1, op2, op3, op4, op5}], allocator.operations_per_joinpoint)
         self.assertEqual(2, len(allocator.join_points))
@@ -333,16 +337,21 @@ class AllocatorTests(TestCase):
 
         # 3 clients
         self.assertEqual(3, len(allocations))
+
+        # tasks that client 0 will execute:
         # join_point, index_a, index_c, join_point
         self.assertEqual(4, len(allocations[0]))
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual([allocations[0][0], index_a, index_c, allocations[0][3]], allocations[0])
+        self.assertEqual([allocations[0][0], self.ta(index_a, 0), self.ta(index_c, 1), allocations[0][3]], allocations[0])
+
+        # task that client 1 will execute:
         # join_point, index_b, None, join_point
         self.assertEqual(4, len(allocator.allocations[1]))
-        self.assertEqual([allocations[1][0], index_b, None, allocations[1][3]], allocations[1])
+        self.assertEqual([allocations[1][0], self.ta(index_b, 0), None, allocations[1][3]], allocations[1])
 
+        # tasks that client 2 will execute:
         self.assertEqual(4, len(allocator.allocations[2]))
-        self.assertEqual([allocations[2][0], index_c, None, allocations[2][3]], allocations[2])
+        self.assertEqual([allocations[2][0], self.ta(index_c, 0), None, allocations[2][3]], allocations[2])
 
         self.assertEqual([{op1, op2, op3}], allocator.operations_per_joinpoint)
 
