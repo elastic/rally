@@ -45,11 +45,14 @@ However, this feature is mainly intended for continuous integration environments
 
    This pipeline is just mentioned for completeness but Rally will autoselect it for you. All you need to do is to define the ``--distribution-version`` flag.
 
+.. _pipelines_from-sources-complete:
 
 from-sources-complete
 ~~~~~~~~~~~~~~~~~~~~~
 
-You should use this pipeline when you want to build and benchmark Elasticsearch from sources. Remember that you also need to install git and Gradle before and Rally needs to be configured for building for sources. If that's not the case you'll get an error and have to run ``esrally configure`` first. An example invocation::
+You should use this pipeline when you want to build and benchmark Elasticsearch from sources. This pipeline will only work from Elasticsearch 5.0 onwards because Elasticsearch switched from Maven to Gradle and Rally only supports one build tool in the interest of maintainability.
+
+Remember that you also need to install git and Gradle before and Rally needs to be configured for building for sources. If that's not the case you'll get an error and have to run ``esrally configure`` first. An example invocation::
 
     esrally --pipeline=from-sources-complete --revision=latest
 
@@ -57,7 +60,7 @@ You have to specify a :ref:`revision <clr_revision>`.
 
 .. note::
 
-   This pipeline is just mentioned for completeness but Rally will autoselect it for you. All you need to do is to define the ``--revision`` flag.
+   This pipeline is just mentioned for completeness but Rally will automatically select it for you. All you need to do is to define the ``--revision`` flag.
 
 
 from-sources-skip-build
