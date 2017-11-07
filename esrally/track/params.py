@@ -341,21 +341,21 @@ def bounds(total_docs, client_index, num_clients, includes_action_and_meta_data)
     :param client_index: The current client index.  Must be in the range [0, `num_clients').
     :param num_clients: The total number of clients that will run bulk index operations.
     :param includes_action_and_meta_data: Whether the source file already includes the action and meta-data line.
-    :return: A tuple containing: the start offset for the document corpus, the number documents that the client should index,
+    :return: A tuple containing: the start offset (in lines) for the document corpus, the number documents that the client should index,
     and the number of lines that the client should read.
     """
-    # last client gets one less if the number is uneven
-    if client_index + 1 == num_clients and total_docs % num_clients > 0:
-        correction = 1
-    else:
-        correction = 0
-    # if the source file contains also action and meta data with to skip two times the lines. Otherwise lines to skip == number of docs
     source_lines_per_doc = 2 if includes_action_and_meta_data else 1
-    docs_per_client = round(total_docs / num_clients) - correction
-    lines_per_client = docs_per_client * source_lines_per_doc
-    # don't consider the correction for the other clients because it just applies to the last one
-    offset = client_index * (docs_per_client + correction) * source_lines_per_doc
-    return offset, docs_per_client, lines_per_client
+
+    docs_per_client = total_docs / num_clients
+
+    start_offset_docs = round(docs_per_client * client_index)
+    end_offset_docs = round(docs_per_client * (client_index + 1))
+
+    offset_lines = start_offset_docs * source_lines_per_doc
+    docs = end_offset_docs - start_offset_docs
+    lines = docs * source_lines_per_doc
+
+    return offset_lines, docs, lines
 
 
 def bulk_generator(readers, client_index, pipeline, original_params):
