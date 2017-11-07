@@ -6,13 +6,15 @@ Prerequisites
 
 Please ensure that the following packages are installed before installing Rally in development mode:
 
-* Python 3.4 or better available as `python3` on the path (verify with: ``python3 --version`` which should print ``Python 3.4.0`` (or higher))
+* Python 3.4 or better available as ``python3`` on the path (verify with: ``python3 --version``)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
-* JDK
+* JDK 8 or 9
 * git 1.9 or better
 * Gradle 3.3 or better
 
-Rally does not support Windows and is only actively tested on Mac OS X and Linux.
+Please check the :doc:`installation guide </install>` for detailed installation instructions for these packages.
+
+Rally does not support Windows and is only actively tested on MacOS and Linux.
 
 Installation Instructions for Development
 -----------------------------------------
