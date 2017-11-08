@@ -23,7 +23,7 @@ install_requires = [
     "elasticsearch==5.3.0",
     "psutil==5.4.0",
     "py-cpuinfo==3.2.0",
-    "tabulate==0.7.5",
+    "tabulate==0.8.1",
     "jsonschema==2.5.1",
     "Jinja2==2.9.5",
     # remote messaging
