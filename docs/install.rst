@@ -28,7 +28,7 @@ Python
 
 .. note::
 
-    Depending on the concrete flavor and version of your distribution you may need to enable `EPEL <https://fedoraproject.org/wiki/EPEL>`_ before.
+    You will need to enable `EPEL <https://fedoraproject.org/wiki/EPEL>`_ before.
 
 ::
 
@@ -38,6 +38,10 @@ Python
 
 
 **RHEL 7 / CentOS 7**
+
+.. note::
+
+    You will need to enable `EPEL <https://fedoraproject.org/wiki/EPEL>`_ before.
 
 *Tested on CentOS Linux release 7.4.1708 (Core).*
 
@@ -127,4 +131,4 @@ Whenever you want to use Rally, run the activation script (step 2 above) first. 
 Next Steps
 ----------
 
-After you have installed, you need to configure it. Just run ``esrally configure`` or follow the :doc:`configuration help page </configuration>` for more guidance.
+After you have installed Rally, you need to configure it. Just run ``esrally configure`` or follow the :doc:`configuration help page </configuration>` for more guidance.
