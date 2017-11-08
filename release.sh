@@ -76,13 +76,17 @@ python3 setup.py develop
 git commit -a -m "Continue in $NEXT_RELEASE"
 git push origin master
 
+# Prepare offline installation package
+source scripts/offline-install.sh "${RELEASE_VERSION}"
+
 echo ""
 echo "===================="
-echo "Released Rally $RELEASE_VERSION"
+echo "Released Rally ${RELEASE_VERSION}"
 echo "===================="
 echo ""
 echo "Manual tasks:"
 echo ""
 echo "* Activate version $RELEASE_VERSION: https://readthedocs.org/dashboard/esrally/version/$RELEASE_VERSION/"
 echo "* Close milestone on Github: https://github.com/elastic/rally/milestones/$RELEASE_VERSION"
+echo "* Upload offline install package to Github: https://github.com/elastic/rally/releases/edit/$RELEASE_VERSION"
 echo "* Announce on Discuss: https://discuss.elastic.co/c/annoucements"

@@ -127,6 +127,24 @@ You can also use Virtualenv to install Rally into an isolated Python environment
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
 
+.. _install_offline-install:
+
+Offline Install
+---------------
+
+.. ifconfig:: release.endswith('.dev0')
+
+    .. warning::
+
+        This documentation is for the version of Rally currently under development. We do not provide offline installation packages for development versions.
+        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
+
+If you are in a corporate environment where your servers do not have any access to the Internet, you can use Rally's offline installation package. Follow these steps to install Rally:
+
+1. Install all prerequisites as documented above.
+2. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
+3. Decompress the installation package with ``tar -xzf esrally-dist-*.tar.gz``.
+4. Run the install script with ``sudo ./esrally-dist-*/install.sh``.
 
 Next Steps
 ----------

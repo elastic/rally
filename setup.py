@@ -19,6 +19,13 @@ __versionstr__ = raw_version
 
 long_description = str_from_file("README.rst")
 
+################################################################################################
+#
+# Adapt `scripts/offline-install.sh` whenever changing dependencies here.
+#
+# That script grabs all license files so we include them in the offline package.
+#
+################################################################################################
 install_requires = [
     "elasticsearch==5.3.0",
     "psutil==5.4.0",
