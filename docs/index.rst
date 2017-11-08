@@ -54,6 +54,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :maxdepth: 2
 
    command_line_reference
+   offline
    track
    car
    elasticsearch_plugins
