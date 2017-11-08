@@ -25,7 +25,7 @@ A Rally track describes a benchmarking scenario. You can either write your own t
 Use the `download script <https://raw.githubusercontent.com/elastic/rally-tracks/master/download.sh>`_ to download all data for a track on a machine that has access to the Internet. Example::
 
     # downloads the script from Github
-    curl -o https://raw.githubusercontent.com/elastic/rally-tracks/master/download.sh
+    curl -O https://raw.githubusercontent.com/elastic/rally-tracks/master/download.sh
     chmod u+x download.sh
     # download all data for the geonames track
     ./download.sh geonames
