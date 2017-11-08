@@ -1,3 +1,24 @@
+### 0.7.4
+
+#### Enhancements
+
+* [#333](https://github.com/elastic/rally/issues/333): Provide a clear error message for non-existing releases
+* [#331](https://github.com/elastic/rally/issues/331): Don't demand a compressed representation of the document corpus
+* [#226](https://github.com/elastic/rally/issues/226): Provide a Rally package with all dependencies for offline install
+* [#217](https://github.com/elastic/rally/issues/217): Add ability to continuously stream metrics
+
+#### Bug Fixes
+
+* [#344](https://github.com/elastic/rally/issues/344): Client assignment can miss a (small) number of docs
+* [#338](https://github.com/elastic/rally/issues/338): Documents are not found if track is referenced via a file
+* [#337](https://github.com/elastic/rally/issues/337): Only map numeric HTTP status codes to request meta-data
+* [#334](https://github.com/elastic/rally/issues/334): Data partition algorithm failling with parallel indexing tasks
+
+#### Doc Changes
+
+* [#343](https://github.com/elastic/rally/issues/343): If python is required then python-dev should be as well
+* [#231](https://github.com/elastic/rally/issues/231): Simplify usage of Rally for offline-only use
+
 ### 0.7.3
 
 #### Enhancements
