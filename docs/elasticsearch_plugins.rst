@@ -94,7 +94,7 @@ Let's discuss these properties one by one:
 In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --revision="elasticsearch:some-elasticsearch-revision,my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``some-elasticsearch-revision`` and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
 
 * All prerequisites for source builds are installed.
-* The Elasticsearch source revision is compatible with the chosen plugin revision. Note that you do not need to know the revision hash to build against an already released version and can use git tags instead. E.g. if you want to benchmark against Elasticsearch 5.6.1, you c0an specify ``--revision="elasticsearch:v5.6.1,my-plugin:some-plugin-revision"`` (see e.g. the `Elasticsearch tags on Github <https://github.com/elastic/elasticsearch/tags>`_ or use ``git tag`` in the Elasticsearch source directory on the console).
+* The Elasticsearch source revision is compatible with the chosen plugin revision. Note that you do not need to know the revision hash to build against an already released version and can use git tags instead. E.g. if you want to benchmark against Elasticsearch 5.6.1, you can specify ``--revision="elasticsearch:v5.6.1,my-plugin:some-plugin-revision"`` (see e.g. the `Elasticsearch tags on Github <https://github.com/elastic/elasticsearch/tags>`_ or use ``git tag`` in the Elasticsearch source directory on the console).
 * If your plugin needs to be configured, please ensure to create a proper plugin specification (see below).
 
 .. note::
