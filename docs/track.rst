@@ -116,7 +116,7 @@ In the ``indices`` section you describe the relevant indices. Rally can auto-man
 
 In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
 
-In the ``challenges`` section you describe one or more execution schedules. Each schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline. Think of a challenge as a scenario that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
+In the ``challenge`` or ``challenges`` section you describe one or more execution schedules respectively. Each schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline. Think of a challenge as a scenario that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
 
 Track elements
 ==============
@@ -317,10 +317,12 @@ For scroll queries, throughput will be reported as number of retrieved scroll pa
 
 For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
 
-challenges
-..........
+challenge
+.........
 
-The ``challenges`` section contains a list of challenges which describe the benchmark scenarios for this data set. It can reference all operations that are defined in the ``operations`` section.
+If you track has only one challenge, you can use the ``challenge`` element. If you have multiple challenges, you can define an array of ``challenges``.
+
+This section contains one or more challenges which describe the benchmark scenarios for this data set. A challenge can reference all operations that are defined in the ``operations`` section.
 
 Each challenge consists of the following properties:
 
@@ -369,92 +371,86 @@ In the following snippet we define two operations ``force-merge`` and a ``match-
          }
        }
      ],
-     "challenges": [
-       {
-         "name": "just-query",
-         "description": "",
-         "schedule": [
-           {
-             "operation": "force-merge",
-             "clients": 1
-           },
-           {
-             "operation": "match-all-query",
-             "clients": 4,
-             "warmup-iterations": 1000,
-             "iterations": 1000,
-             "target-throughput": 100
-           }
-         ]
-       }
-     ]
+     "challenge": {
+       "name": "just-query",
+       "description": "",
+       "schedule": [
+         {
+           "operation": "force-merge",
+           "clients": 1
+         },
+         {
+           "operation": "match-all-query",
+           "clients": 4,
+           "warmup-iterations": 1000,
+           "iterations": 1000,
+           "target-throughput": 100
+         }
+       ]
+     }
    }
 
 If we do not want to reuse these operations, we can also define them inline. Note that the ``operations`` section is gone::
 
    {
-     "challenges": [
-       {
-         "name": "just-query",
-         "description": "",
-         "schedule": [
-           {
-             "operation": {
-               "name": "force-merge",
-               "operation-type": "force-merge"
-             },
-             "clients": 1
+     "challenge": {
+       "name": "just-query",
+       "description": "",
+       "schedule": [
+         {
+           "operation": {
+             "name": "force-merge",
+             "operation-type": "force-merge"
            },
-           {
-             "operation": {
-               "name": "match-all-query",
-               "operation-type": "search",
-               "body": {
-                 "query": {
-                   "match_all": {}
-                 }
+           "clients": 1
+         },
+         {
+           "operation": {
+             "name": "match-all-query",
+             "operation-type": "search",
+             "body": {
+               "query": {
+                 "match_all": {}
                }
-             },
-             "clients": 4,
-             "warmup-iterations": 1000,
-             "iterations": 1000,
-             "target-throughput": 100
-           }
-         ]
-       }
-     ]
+             }
+           },
+           "clients": 4,
+           "warmup-iterations": 1000,
+           "iterations": 1000,
+           "target-throughput": 100
+         }
+       ]
+     }
    }
 
 Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
 
    {
-     "challenges": [
-       {
-         "name": "just-query",
-         "description": "",
-         "schedule": [
-           {
-             "operation": "force-merge",
-             "clients": 1
-           },
-           {
-             "operation": {
-               "name": "match-all-query",
-               "operation-type": "search",
-               "body": {
-                 "query": {
-                   "match_all": {}
-                 }
+     "challenge": {
+       "name": "just-query",
+       "description": "",
+       "schedule": [
+         {
+           "operation": "force-merge",
+           "clients": 1
+         },
+         {
+           "operation": {
+             "name": "match-all-query",
+             "operation-type": "search",
+             "body": {
+               "query": {
+                 "match_all": {}
                }
-             },
-             "clients": 4,
-             "warmup-iterations": 1000,
-             "iterations": 1000,
-             "target-throughput": 100
-           }
-         ]
-       }
-     ]
+             }
+           },
+           "clients": 4,
+           "warmup-iterations": 1000,
+           "iterations": 1000,
+           "target-throughput": 100
+         }
+       ]
+     }
    }
 
 Choosing a schedule

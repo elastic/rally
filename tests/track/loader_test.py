@@ -851,6 +851,68 @@ class TrackSpecificationReaderTests(TestCase):
                          "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
                          ctx.exception.args[0])
 
+    def test_parse_missing_challenge_or_challenges(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": [
+                        {
+                            "name": "main",
+                            "documents": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "mapping": "main-type-mappings.json"
+                        }
+                    ]
+                }
+            ]
+            # no challenge or challenges element
+        }
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+        }))
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. You must define either 'challenge' or 'challenges' but none is specified.",
+                         ctx.exception.args[0])
+
+    def test_parse_challenge_and_challenges_are_defined(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "data-url": "https://localhost/data",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": [
+                        {
+                            "name": "main",
+                            "documents": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "mapping": "main-type-mappings.json"
+                        }
+                    ]
+                }
+            ],
+            # We define both. Note that challenges without any properties would not pass JSON schema validation but we don't test this here.
+            "challenge": {},
+            "challenges": []
+        }
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+        }))
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. 'challenge' and 'challenges' are defined but only one of them is allowed.",
+                         ctx.exception.args[0])
+
     def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
             "short-description": "short description for unit test",
@@ -1222,17 +1284,15 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation-type": "index"
                 }
             ],
-            "challenges": [
-                {
-                    "name": "challenge",
-                    "description": "Some challenge",
-                    "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
-                }
-            ]
+            "challenge": {
+                "name": "challenge",
+                "description": "Some challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append"
+                    }
+                ]
+            }
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -1245,25 +1305,23 @@ class TrackSpecificationReaderTests(TestCase):
             "short-description": "short description for unit test",
             "description": "longer description of this track for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
-            "challenges": [
-                {
-                    "name": "challenge",
-                    "description": "Some challenge",
-                    "schedule": [
-                        # an operation with parameters still needs to define a type
-                        {
-                            "operation": {
-                                "operation-type": "index",
-                                "bulk-size": 5000
-                            }
-                        },
-                        # a parameterless operation can just use the operation type as implicit reference to the operation
-                        {
-                            "operation": "force-merge"
+            "challenge": {
+                "name": "challenge",
+                "description": "Some challenge",
+                "schedule": [
+                    # an operation with parameters still needs to define a type
+                    {
+                        "operation": {
+                            "operation-type": "index",
+                            "bulk-size": 5000
                         }
-                    ]
-                }
-            ]
+                    },
+                    # a parameterless operation can just use the operation type as implicit reference to the operation
+                    {
+                        "operation": "force-merge"
+                    }
+                ]
+            }
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -1283,18 +1341,16 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation-type": "index"
                 }
             ],
-            "challenges": [
-                {
-                    "name": "default-challenge",
-                    "description": "Default challenge",
-                    "schedule": [
-                        {
-                            "operation": "index-append",
-                            "target-throughput": 10,
-                        }
-                    ]
-                }
-            ]
+            "challenge": {
+                "name": "default-challenge",
+                "description": "Default challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append",
+                        "target-throughput": 10,
+                    }
+                ]
+            }
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")

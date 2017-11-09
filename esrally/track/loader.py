@@ -657,16 +657,17 @@ class TrackSpecificationReader:
         challenges = []
         known_challenge_names = set()
         default_challenge = None
-        number_of_challenges = len(self._r(track_spec, "challenges"))
-        for challenge in self._r(track_spec, "challenges"):
-            name = self._r(challenge, "name", error_ctx="challenges")
-            description = self._r(challenge, "description", error_ctx=name)
-            user_info = self._r(challenge, "user-info", error_ctx=name, mandatory=False)
-            meta_data = self._r(challenge, "meta", error_ctx=name, mandatory=False)
+        challenge_specs = self._get_challenge_specs(track_spec)
+        number_of_challenges = len(challenge_specs)
+        for challenge_spec in challenge_specs:
+            name = self._r(challenge_spec, "name", error_ctx="challenges")
+            description = self._r(challenge_spec, "description", error_ctx=name)
+            user_info = self._r(challenge_spec, "user-info", error_ctx=name, mandatory=False)
+            meta_data = self._r(challenge_spec, "meta", error_ctx=name, mandatory=False)
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified
-            default = number_of_challenges == 1 or self._r(challenge, "default", error_ctx=name, mandatory=False)
-            index_settings = self._r(challenge, "index-settings", error_ctx=name, mandatory=False)
-            cluster_settings = self._r(challenge, "cluster-settings", error_ctx=name, mandatory=False)
+            default = number_of_challenges == 1 or self._r(challenge_spec, "default", error_ctx=name, mandatory=False)
+            index_settings = self._r(challenge_spec, "index-settings", error_ctx=name, mandatory=False)
+            cluster_settings = self._r(challenge_spec, "cluster-settings", error_ctx=name, mandatory=False)
 
             if default and default_challenge is not None:
                 self._error("Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
@@ -677,30 +678,43 @@ class TrackSpecificationReader:
 
             schedule = []
 
-            for op in self._r(challenge, "schedule", error_ctx=name):
+            for op in self._r(challenge_spec, "schedule", error_ctx=name):
                 if "parallel" in op:
                     task = self.parse_parallel(op["parallel"], ops, name)
                 else:
                     task = self.parse_task(op, ops, name)
                 schedule.append(task)
 
-            new_challenge = track.Challenge(name=name,
-                                            meta_data=meta_data,
-                                            description=description,
-                                            user_info=user_info,
-                                            index_settings=index_settings,
-                                            cluster_settings=cluster_settings,
-                                            default=default,
-                                            schedule=schedule)
+            challenge = track.Challenge(name=name,
+                                        meta_data=meta_data,
+                                        description=description,
+                                        user_info=user_info,
+                                        index_settings=index_settings,
+                                        cluster_settings=cluster_settings,
+                                        default=default,
+                                        schedule=schedule)
             if default:
-                default_challenge = new_challenge
+                default_challenge = challenge
 
-            challenges.append(new_challenge)
+            challenges.append(challenge)
 
         if challenges and default_challenge is None:
             self._error("No default challenge specified. Please edit the track and add \"default\": true to one of the challenges %s."
                         % ", ".join([c.name for c in challenges]))
         return challenges
+
+    def _get_challenge_specs(self, track_spec):
+        challenge = self._r(track_spec, "challenge", mandatory=False)
+        challenges = self._r(track_spec, "challenges", mandatory=False)
+
+        if challenge is not None and challenges is not None:
+            self._error("'challenge' and 'challenges' are defined but only one of them is allowed.")
+        elif challenge is not None:
+            return [challenge]
+        elif challenges is not None:
+            return challenges
+        else:
+            self._error("You must define either 'challenge' or 'challenges' but none is specified.")
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
         # use same default values as #parseTask() in case the 'parallel' element did not specify anything
