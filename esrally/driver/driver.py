@@ -1377,13 +1377,20 @@ def schedule_for(current_track, task, client_index):
     if task.warmup_time_period is not None or task.time_period is not None:
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
         logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] seconds and a "
-                    "time period of [%s] seconds." % (task.schedule, op, str(warmup_time_period), str(task.time_period)))
+                    "time period of [%s] seconds." % (task.schedule, task, str(warmup_time_period), str(task.time_period)))
         return time_period_based(sched, warmup_time_period, task.time_period, runner_for_op, params_for_op)
     else:
         logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%d] warmup iterations and "
                     "[%d] iterations." % (task.schedule, op, task.warmup_iterations, task.iterations))
-        return iteration_count_based(sched, task.warmup_iterations // num_clients, task.iterations // num_clients,
-                                     runner_for_op, params_for_op)
+        # TODO: Remove this message after some grace period
+        # just print this info message once
+        if client_index == 0 and num_clients > 1:
+            console.warn("!!! Behavior change for task %s !!!" % task)
+            console.warn("Before Rally 0.8.0: All %d clients together executed %d warmup iterations and %d iterations "
+                         "(each got 1/%d th)." % (num_clients, task.warmup_iterations, task.iterations, num_clients))
+            console.warn("Now: Each client executes %d warmup iterations and %d iterations." % (task.warmup_iterations, task.iterations))
+
+        return iteration_count_based(sched, task.warmup_iterations, task.iterations, runner_for_op, params_for_op)
 
 
 def time_period_based(sched, warmup_time_period, time_period, runner, params):

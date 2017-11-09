@@ -502,7 +502,7 @@ class SchedulerTests(ScheduleTestCase):
 
     def test_search_task_two_clients(self):
         task = track.Task(track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
-                          warmup_iterations=2, iterations=10, clients=2, params={"target-throughput": 10, "clients": 2})
+                          warmup_iterations=1, iterations=5, clients=2, params={"target-throughput": 10, "clients": 2})
         schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
