@@ -45,11 +45,11 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
         self.cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
 
-        default_challenge = track.Challenge("default", description="default challenge", default=True, schedule=[
+        default_challenge = track.Challenge("default", default=True, schedule=[
             track.Task(operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
         ])
-        another_challenge = track.Challenge("other", description="non-default challenge", default=False)
-        self.track = track.Track(name="unittest", short_description="unittest track", challenges=[another_challenge, default_challenge])
+        another_challenge = track.Challenge("other", default=False)
+        self.track = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge])
 
     def create_test_driver_target(self):
         track_preparator = "track_preparator_marker"
@@ -478,7 +478,7 @@ class MetricsAggregationTests(TestCase):
 class SchedulerTests(ScheduleTestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        self.test_track = track.Track(name="unittest", short_description="unittest track",
+        self.test_track = track.Track(name="unittest", description="unittest track",
                                       source_root_url="http://example.org",
                                       indices=None,
                                       challenges=None)
@@ -603,7 +603,7 @@ class ExecutorTests(TestCase):
         }
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        test_track = track.Track(name="unittest", short_description="unittest track",
+        test_track = track.Track(name="unittest", description="unittest track",
                                  source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
@@ -654,7 +654,7 @@ class ExecutorTests(TestCase):
         }
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        test_track = track.Track(name="unittest", short_description="unittest track",
+        test_track = track.Track(name="unittest", description="unittest track",
                                  source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
@@ -695,7 +695,7 @@ class ExecutorTests(TestCase):
         }
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        test_track = track.Track(name="unittest", short_description="unittest track",
+        test_track = track.Track(name="unittest", description="unittest track",
                                  source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)

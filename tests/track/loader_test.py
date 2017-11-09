@@ -627,11 +627,11 @@ class TrackPathTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
 
-        default_challenge = track.Challenge("default", description="default challenge", default=True, schedule=[
+        default_challenge = track.Challenge("default", default=True, schedule=[
             track.Task(operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
         ])
-        another_challenge = track.Challenge("other", description="non-default challenge", default=False)
-        t = track.Track(name="unittest", short_description="unittest track", challenges=[another_challenge, default_challenge],
+        another_challenge = track.Challenge("other", default=False)
+        t = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge],
                         indices=[
                             track.Index(name="test",
                                         auto_managed=True,
@@ -670,8 +670,7 @@ class TrackFilterTests(TestCase):
     def test_filters_tasks(self):
         from esrally.track import track
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -707,7 +706,6 @@ class TrackFilterTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "parallel": {
@@ -760,17 +758,16 @@ class TrackFilterTests(TestCase):
 class TrackSpecificationReaderTests(TestCase):
     def test_missing_description_raises_syntax_error(self):
         track_specification = {
-            "description": "unittest track"
+            # no description here
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'short-description' is missing.", ctx.exception.args[0])
+        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'description' is missing.", ctx.exception.args[0])
 
     def test_can_read_track_info(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [],
@@ -779,14 +776,12 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
-        self.assertEqual("short description for unit test", resulting_track.short_description)
-        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual("https://localhost/data", resulting_track.source_root_url)
 
     def test_document_count_mandatory_if_file_present(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [{"name": "test-index", "types": [{"name": "docs", "documents": "documents.json.bz2"}]}],
             "operations": [],
@@ -799,8 +794,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_with_mixed_warmup_iterations_and_measurement(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [
                 {
@@ -827,7 +821,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "index-settings": {},
                     "schedule": [
                         {
@@ -853,8 +846,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_missing_challenge_or_challenges(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [
                 {
@@ -883,8 +875,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_challenge_and_challenges_are_defined(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [
                 {
@@ -915,8 +906,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [
                 {
@@ -943,7 +933,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "index-settings": {},
                     "schedule": [
                         {
@@ -969,8 +958,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_valid_track_specification(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "data-url": "https://localhost/data",
             "indices": [
                 {
@@ -1046,8 +1034,7 @@ class TrackSpecificationReaderTests(TestCase):
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
-        self.assertEqual("short description for unit test", resulting_track.short_description)
-        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual("index-historical", resulting_track.indices[0].name)
         self.assertEqual(2, len(resulting_track.indices[0].types))
@@ -1061,6 +1048,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertTrue(resulting_track.indices[0].types[1].includes_action_and_meta_data)
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
+        self.assertEqual("Default challenge", resulting_track.challenges[0].description)
         self.assertEqual(1, len(resulting_track.challenges[0].index_settings))
         self.assertEqual(2, resulting_track.challenges[0].index_settings["index.number_of_replicas"])
         self.assertEqual({"mixed": True, "max-clients": 8}, resulting_track.challenges[0].meta_data)
@@ -1069,8 +1057,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parse_valid_track_specification_with_index_template(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "templates": [
                 {
                     "name": "my-index-template",
@@ -1086,8 +1073,7 @@ class TrackSpecificationReaderTests(TestCase):
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
-        self.assertEqual("short description for unit test", resulting_track.short_description)
-        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(0, len(resulting_track.indices))
         self.assertEqual(1, len(resulting_track.templates))
         self.assertEqual("my-index-template", resulting_track.templates[0].name)
@@ -1097,8 +1083,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_types_are_optional_for_user_managed_indices(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [],
             "challenges": []
@@ -1106,8 +1091,7 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
-        self.assertEqual("short description for unit test", resulting_track.short_description)
-        self.assertEqual("longer description of this track for unit test", resulting_track.description)
+        self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual(0, len(resulting_track.templates))
         self.assertEqual("test-index", resulting_track.indices[0].name)
@@ -1115,8 +1099,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_unique_challenge_names(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1154,8 +1137,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_not_more_than_one_default_challenge_possible(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1195,8 +1177,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_at_least_one_default_challenge(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1207,7 +1188,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "challenge",
-                    "description": "Some challenge",
                     "schedule": [
                         {
                             "operation": "index-append"
@@ -1216,7 +1196,6 @@ class TrackSpecificationReaderTests(TestCase):
                 },
                 {
                     "name": "another-challenge",
-                    "description": "Another challenge",
                     "schedule": [
                         {
                             "operation": "index-append"
@@ -1234,8 +1213,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_exactly_one_default_challenge(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1246,7 +1224,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "challenge",
-                    "description": "Some challenge",
                     "default": True,
                     "schedule": [
                         {
@@ -1256,7 +1233,6 @@ class TrackSpecificationReaderTests(TestCase):
                 },
                 {
                     "name": "another-challenge",
-                    "description": "Another challenge",
                     "schedule": [
                         {
                             "operation": "index-append"
@@ -1275,8 +1251,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_selects_sole_challenge_implicitly_as_default(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1286,7 +1261,6 @@ class TrackSpecificationReaderTests(TestCase):
             ],
             "challenge": {
                 "name": "challenge",
-                "description": "Some challenge",
                 "schedule": [
                     {
                         "operation": "index-append"
@@ -1302,12 +1276,10 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_inline_operations(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "challenge": {
                 "name": "challenge",
-                "description": "Some challenge",
                 "schedule": [
                     # an operation with parameters still needs to define a type
                     {
@@ -1332,8 +1304,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_supports_target_throughput(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1343,7 +1314,6 @@ class TrackSpecificationReaderTests(TestCase):
             ],
             "challenge": {
                 "name": "default-challenge",
-                "description": "Default challenge",
                 "schedule": [
                     {
                         "operation": "index-append",
@@ -1358,8 +1328,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_supports_target_interval(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1370,7 +1339,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "operation": "index-append",
@@ -1386,8 +1354,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parallel_tasks_with_default_values(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1406,7 +1373,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "parallel": {
@@ -1463,8 +1429,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parallel_tasks_with_default_clients_does_not_propagate(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1475,7 +1440,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "parallel": {
@@ -1515,8 +1479,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parallel_tasks_with_completed_by_set(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1531,7 +1494,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "parallel": {
@@ -1569,8 +1531,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parallel_tasks_with_completed_by_set_no_task_matches(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1585,7 +1546,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "parallel": {
@@ -1613,8 +1573,7 @@ class TrackSpecificationReaderTests(TestCase):
 
     def test_parallel_tasks_with_completed_by_set_multiple_tasks_match(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
+            "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
@@ -1625,7 +1584,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "description": "Default challenge",
                     "schedule": [
                         {
                             "parallel": {

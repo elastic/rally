@@ -183,15 +183,14 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, short_description, description=None, source_root_url=None, meta_data=None, challenges=None, indices=None,
+    def __init__(self, name, description, source_root_url=None, meta_data=None, challenges=None, indices=None,
                  templates=None, has_plugins=False):
         """
 
         Creates a new track.
 
         :param name: A short, descriptive name for this track. As per convention, this name should be in lower-case without spaces.
-        :param short_description: A short description for this track (should be less than 80 characters).
-        :param description: A longer description for this track.
+        :param description: A description for this track (should be less than 80 characters).
         :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
         below this URL the benchmark document files have to be located.
         :param meta_data: An optional dict of meta-data elements to attach to each metrics record. Default: {}.
@@ -203,8 +202,7 @@ class Track:
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
-        self.short_description = short_description
-        self.description = description if description else short_description
+        self.description = description
         self.source_root_url = source_root_url
         self.challenges = challenges if challenges else []
         self.indices = indices if indices else []
@@ -271,14 +269,13 @@ class Track:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.meta_data) ^ hash(self.short_description) ^ hash(self.description) ^ \
-               hash(self.source_root_url) ^ hash(self.challenges) ^ hash(self.indices) ^ hash(self.templates)
+        return hash(self.name) ^ hash(self.meta_data) ^ hash(self.description) ^ hash(self.source_root_url) ^ hash(self.challenges) ^ \
+               hash(self.indices) ^ hash(self.templates)
 
-    def __eq__(self, other):
-        return (isinstance(other, type(self)) and (self.name, self.meta_data, self.short_description, self.description,
-                                                   self.source_root_url, self.challenges, self.indices, self.templates) ==
-                (other.name, other.meta_data, other.short_description, other.description, other.source_root_url,
-                 other.challenges, other.indices, other.templates))
+    def __eq__(self, othr):
+        return (isinstance(othr, type(self)) and
+                (self.name, self.meta_data, self.description, self.source_root_url, self.challenges, self.indices, self.templates) ==
+                (othr.name, othr.meta_data, othr.description, othr.source_root_url, othr.challenges, othr.indices, othr.templates))
 
 
 class Challenge:
@@ -288,7 +285,7 @@ class Challenge:
 
     def __init__(self,
                  name,
-                 description,
+                 description=None,
                  user_info=None,
                  index_settings=None,
                  cluster_settings=None,
@@ -320,10 +317,10 @@ class Challenge:
         return hash(self.name) ^ hash(self.description) ^ hash(self.index_settings) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
                hash(self.meta_data) ^ hash(self.schedule)
 
-    def __eq__(self, other):
-        return (isinstance(other, type(self)) and 
-                (self.name, self.default, self.index_settings, self.cluster_settings, self.default, self.meta_data, self.schedule) ==
-                (other.name, other.default, other.index_settings, other.cluster_settings, other.default, other.meta_data, other.schedule))
+    def __eq__(self, othr):
+        return (isinstance(othr, type(self)) and
+                (self.name, self.description, self.index_settings, self.cluster_settings, self.default, self.meta_data, self.schedule) ==
+                (othr.name, othr.description, othr.index_settings, othr.cluster_settings, othr.default, othr.meta_data, othr.schedule))
 
 
 class OperationType(Enum):

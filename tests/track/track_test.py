@@ -10,13 +10,13 @@ class TrackTests(TestCase):
 
         self.assertEqual(default_challenge,
                          track.Track(name="unittest",
-                                     short_description="unittest track",
+                                     description="unittest track",
                                      challenges=[another_challenge, default_challenge])
                          .default_challenge)
 
     def test_default_challenge_none_if_no_challenges(self):
         self.assertIsNone(track.Track(name="unittest",
-                                      short_description="unittest track",
+                                      description="unittest track",
                                       challenges=[])
                           .default_challenge)
 
@@ -26,7 +26,7 @@ class TrackTests(TestCase):
 
         self.assertEqual(another_challenge,
                          track.Track(name="unittest",
-                                     short_description="unittest track",
+                                     description="unittest track",
                                      challenges=[another_challenge, default_challenge])
                          .find_challenge_or_default("other"))
 
@@ -36,7 +36,7 @@ class TrackTests(TestCase):
 
         self.assertEqual(default_challenge,
                          track.Track(name="unittest",
-                                     short_description="unittest track",
+                                     description="unittest track",
                                      challenges=[another_challenge, default_challenge])
                          .find_challenge_or_default(""))
 
@@ -45,7 +45,7 @@ class TrackTests(TestCase):
         another_challenge = track.Challenge("other", description="non-default challenge", default=False)
 
         self.assertIsNone(track.Track(name="unittest",
-                                      short_description="unittest track",
+                                      description="unittest track",
                                       challenges=[another_challenge, default_challenge])
                           .find_challenge_or_default("unknown-name"))
 

@@ -127,7 +127,6 @@ Each track defines the following info attributes:
 
 * ``version`` (optional): An integer describing the track specification version in use. Rally uses it to detect incompatible future track specification versions and raise an error. See the table below for a reference of valid versions.
 * ``description`` (mandatory): A human-readable description of the track.
-* ``short-description`` (mandatory): A shorter description of the track.
 * ``data-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding data for this track. This element is not needed if data are only generated on the fly by a custom runner.
 
 =========================== =============
@@ -327,7 +326,7 @@ This section contains one or more challenges which describe the benchmark scenar
 Each challenge consists of the following properties:
 
 * ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
-* ``description`` (mandatory): A human readable description of the challenge.
+* ``description`` (optional): A human readable description of the challenge.
 * ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need define ``"default": true`` on exactly one challenge.
 * ``index-settings`` (optional): Defines the index settings of the benchmark candidate when an index is created. Note that these settings are only applied if the index is auto-managed.
 * ``schedule`` (mandatory): Defines the concrete execution order of operations. It is described in more detail below.

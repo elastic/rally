@@ -43,7 +43,7 @@ def list_tracks(cfg):
     console.println("Available tracks:\n")
     console.println(tabulate.tabulate(
         tabular_data=[
-            [t.name, t.short_description, t.number_of_documents, convert.bytes_to_human_string(t.compressed_size_in_bytes),
+            [t.name, t.description, t.number_of_documents, convert.bytes_to_human_string(t.compressed_size_in_bytes),
              convert.bytes_to_human_string(t.uncompressed_size_in_bytes), t.default_challenge,
              ",".join(map(str, t.challenges))] for t in tracks(cfg)
         ],
@@ -549,7 +549,6 @@ class TrackSpecificationReader:
 
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
-        short_description = self._r(track_specification, "short-description")
         description = self._r(track_specification, "description")
         source_root_url = self._r(track_specification, "data-url", mandatory=False)
         meta_data = self._r(track_specification, "meta", mandatory=False)
@@ -563,8 +562,7 @@ class TrackSpecificationReader:
         # if len(indices) == 0 and len(templates) == 0:
         #    self._error("Specify at least one index or one template.")
 
-        return track.Track(name=self.name, meta_data=meta_data, short_description=short_description, description=description,
-                           source_root_url=source_root_url,
+        return track.Track(name=self.name, meta_data=meta_data, description=description, source_root_url=source_root_url,
                            challenges=challenges, indices=indices, templates=templates)
 
     def _error(self, msg):
@@ -661,7 +659,7 @@ class TrackSpecificationReader:
         number_of_challenges = len(challenge_specs)
         for challenge_spec in challenge_specs:
             name = self._r(challenge_spec, "name", error_ctx="challenges")
-            description = self._r(challenge_spec, "description", error_ctx=name)
+            description = self._r(challenge_spec, "description", error_ctx=name, mandatory=False)
             user_info = self._r(challenge_spec, "user-info", error_ctx=name, mandatory=False)
             meta_data = self._r(challenge_spec, "meta", error_ctx=name, mandatory=False)
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified

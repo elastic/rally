@@ -17,7 +17,7 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
 
         index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
-        challenge = track.Challenge(name="unittest", description="", index_settings=None, schedule=[index], default=True)
+        challenge = track.Challenge(name="unittest", schedule=[index], default=True)
         t = track.Track("unittest", "unittest-track", challenges=[challenge])
 
         store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)

@@ -182,19 +182,14 @@
       },
       "required": [
         "name",
-        "description",
         "schedule"
       ]
     }
   },
   "properties": {
-    "short-description": {
-      "type": "string",
-      "description": "A short description of this track suitable for command line usage. It should be less than 80 characters."
-    },
     "description": {
       "type": "string",
-      "description": "A longer description of this track."
+      "description": "A description of this track suitable for command line usage. It should be less than 80 characters."
     },
     "version": {
       "type": "integer",
@@ -411,5 +406,8 @@
     "challenge": {
       "$ref": "#/definitions/challenge"
     }
-  }
+  },
+  "required": [
+    "description"
+  ]
 }
