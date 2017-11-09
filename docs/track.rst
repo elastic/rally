@@ -100,7 +100,7 @@ When to use what?
 We recommend the following path:
 
 * Start with a simple json file. The file name can be arbitrary.
-* If you need :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`, create one directory per track. Then you can keep everything separated. Remember that the JSON file needs to be named ``track.json``.
+* If you need :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`, create one directory per track. Then you can keep everything that is related to one track in one place. Remember that the track JSON file needs to be named ``track.json``.
 * If you want to version your tracks so they can work with multiple versions of Elasticsearch (e.g. you are running benchmarks before an upgrade), use a track repository.
 
 Anatomy of a track
@@ -114,9 +114,9 @@ A track JSON file consists of the following sections:
 
 In the ``indices`` section you describe the relevant indices. Rally can auto-manage them for you: it can download the associated data files, create and destroy the index and apply the relevant mappings. Sometimes, you may want to have full control over the index. Then you can specify ``"auto-managed": false`` on an index. Rally will then assume the index is already present. However, there are some disadvantages with this approach. First of all, this can only work if you set up the cluster by yourself and use the pipeline ``benchmark-only``. Second, the index is out of control of Rally, which means that you need to keep track for yourself of the index configuration. Third, it does not play nice with the ``laps`` feature (which you can use to run multiple iterations). Usually, Rally will destroy and recreate all specified indices for each lap but if you use ``"auto-managed": false``, it cannot do that. As a consequence it will produce bogus metrics if your track specifies that Rally should run bulk-index operations (as you'll just overwrite existing documents from lap 2 on). So please use extra care if you don't let Rally manage the track's indices.
 
-In the ``operations`` section you describe which operations are available for this track and how they are parametrized.
+In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
 
-In the ``challenges`` section you describe one or more execution schedules for the operations defined in the ``operations`` block. Think of it as different scenarios that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
+In the ``challenges`` section you describe one or more execution schedules. Each schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline. Think of a challenge as a scenario that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
 
 Track elements
 ==============
@@ -338,6 +338,7 @@ schedule
 
 The ``schedule`` element contains a list of tasks that are executed by Rally. Each task consists of the following properties:
 
+* ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
 * ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
 * ``warmup-iterations`` (optional, defaults to 0): Number of iterations that Rally should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.
 * ``iterations`` (optional, defaults to 1): Number of measurement iterations that Rally executes. The command line report will automatically adjust the percentile numbers based on this number (i.e. if you just run 5 iterations you will not get a 99.9th percentile because we need at least 1000 iterations to determine this value precisely).
@@ -346,6 +347,115 @@ The ``schedule`` element contains a list of tasks that are executed by Rally. Ea
 * ``schedule`` (optional, defaults to ``deterministic``): Defines the schedule for this task, i.e. it defines at which point in time during the benchmark an operation should be executed. For example, if you specify a ``deterministic`` schedule and a target-interval of 5 (seconds), Rally will attempt to execute the corresponding operation at second 0, 5, 10, 15 ... . Out of the box, Rally supports ``deterministic`` and ``poisson`` but you can define your own :doc:`custom schedules </adding_tracks>`.
 * ``target-throughput`` (optional): Defines the benchmark mode. If it is not defined, Rally assumes this is a throughput benchmark and will run the task as fast as it can. This is mostly needed for batch-style operations where it is more important to achieve the best throughput instead of an acceptable latency. If it is defined, it specifies the number of requests per second over all clients. E.g. if you specify ``target-throughput: 1000`` with 8 clients, it means that each client will issue 125 (= 1000 / 8) requests per second. In total, all clients will issue 1000 requests each second. If Rally reports less than the specified throughput then Elasticsearch simply cannot reach it.
 * ``target-interval`` (optional): This is just ``1 / target-throughput`` (in seconds) and may be more convenient for cases where the throughput is less than one operation per second. Define either ``target-throughput`` or ``target-interval`` but not both (otherwise Rally will raise an error).
+
+Defining operations
+...................
+
+In the following snippet we define two operations ``force-merge`` and a ``match-all`` query separately in an operations block::
+
+   {
+     "operations": [
+       {
+         "name": "force-merge",
+         "operation-type": "force-merge"
+       },
+       {
+         "name": "match-all-query",
+         "operation-type": "search",
+         "body": {
+           "query": {
+             "match_all": {}
+           }
+         }
+       }
+     ],
+     "challenges": [
+       {
+         "name": "just-query",
+         "description": "",
+         "schedule": [
+           {
+             "operation": "force-merge",
+             "clients": 1
+           },
+           {
+             "operation": "match-all-query",
+             "clients": 4,
+             "warmup-iterations": 1000,
+             "iterations": 1000,
+             "target-throughput": 100
+           }
+         ]
+       }
+     ]
+   }
+
+If we do not want to reuse these operations, we can also define them inline. Note that the ``operations`` section is gone::
+
+   {
+     "challenges": [
+       {
+         "name": "just-query",
+         "description": "",
+         "schedule": [
+           {
+             "operation": {
+               "name": "force-merge",
+               "operation-type": "force-merge"
+             },
+             "clients": 1
+           },
+           {
+             "operation": {
+               "name": "match-all-query",
+               "operation-type": "search",
+               "body": {
+                 "query": {
+                   "match_all": {}
+                 }
+               }
+             },
+             "clients": 4,
+             "warmup-iterations": 1000,
+             "iterations": 1000,
+             "target-throughput": 100
+           }
+         ]
+       }
+     ]
+   }
+
+Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
+
+   {
+     "challenges": [
+       {
+         "name": "just-query",
+         "description": "",
+         "schedule": [
+           {
+             "operation": "force-merge",
+             "clients": 1
+           },
+           {
+             "operation": {
+               "name": "match-all-query",
+               "operation-type": "search",
+               "body": {
+                 "query": {
+                   "match_all": {}
+                 }
+               }
+             },
+             "clients": 4,
+             "warmup-iterations": 1000,
+             "iterations": 1000,
+             "target-throughput": 100
+           }
+         ]
+       }
+     ]
+   }
 
 Choosing a schedule
 ...................

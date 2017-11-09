@@ -653,7 +653,7 @@ class TrackSpecificationReader:
                           uncompressed_size_in_bytes=uncompressed_bytes)
 
     def _create_challenges(self, track_spec):
-        ops = self.parse_operations(self._r(track_spec, "operations"))
+        ops = self.parse_operations(self._r(track_spec, "operations", mandatory=False, default_value=[]))
         challenges = []
         known_challenge_names = set()
         default_challenge = None
@@ -731,32 +731,35 @@ class TrackSpecificationReader:
 
     def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1,
                    default_warmup_time_period=None, default_time_period=None, completed_by_name=None):
-        op_name = task_spec["operation"]
-        if op_name not in ops:
-            self._error("'schedule' for challenge '%s' contains a non-existing operation '%s'. "
-                        "Please add an operation '%s' to the 'operations' block." % (challenge_name, op_name, op_name))
 
-        schedule = self._r(task_spec, "schedule", error_ctx=op_name, mandatory=False, default_value="deterministic")
-        task = track.Task(operation=ops[op_name],
-                          meta_data=self._r(task_spec, "meta", error_ctx=op_name, mandatory=False),
-                          warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op_name, mandatory=False,
+        op_spec = task_spec["operation"]
+        if isinstance(op_spec, str) and op_spec in ops:
+            op = ops[op_spec]
+        else:
+            # may as well an inline operation
+            op = self.parse_operation(op_spec, error_ctx="inline operation in challenge %s" % challenge_name)
+
+        schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False, default_value="deterministic")
+        task = track.Task(operation=op,
+                          meta_data=self._r(task_spec, "meta", error_ctx=op.name, mandatory=False),
+                          warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
                                                     default_value=default_warmup_iterations),
-                          iterations=self._r(task_spec, "iterations", error_ctx=op_name, mandatory=False, default_value=default_iterations),
-                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op_name, mandatory=False,
+                          iterations=self._r(task_spec, "iterations", error_ctx=op.name, mandatory=False, default_value=default_iterations),
+                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op.name, mandatory=False,
                                                      default_value=default_warmup_time_period),
-                          time_period=self._r(task_spec, "time-period", error_ctx=op_name, mandatory=False,
+                          time_period=self._r(task_spec, "time-period", error_ctx=op.name, mandatory=False,
                                               default_value=default_time_period),
-                          clients=self._r(task_spec, "clients", error_ctx=op_name, mandatory=False, default_value=1),
+                          clients=self._r(task_spec, "clients", error_ctx=op.name, mandatory=False, default_value=1),
                           # this will work because op_name must always be set, i.e. it is never `None`.
-                          completes_parent=(op_name == completed_by_name),
+                          completes_parent=(op.name == completed_by_name),
                           schedule=schedule,
                           params=task_spec)
         if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
-                        "mix time periods and iterations." % (op_name, challenge_name, task.warmup_iterations, task.time_period))
+                        "mix time periods and iterations." % (op.name, challenge_name, task.warmup_iterations, task.time_period))
         elif task.warmup_time_period is not None and task.iterations != default_iterations:
             self._error("Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
-                        "mix time periods and iterations." % (op_name, challenge_name, task.warmup_time_period, task.iterations))
+                        "mix time periods and iterations." % (op.name, challenge_name, task.warmup_time_period, task.iterations))
 
         return task
 
@@ -764,22 +767,37 @@ class TrackSpecificationReader:
         # key = name, value = operation
         ops = {}
         for op_spec in ops_specs:
-            op_name = self._r(op_spec, "name", error_ctx="operations")
-            meta_data = self._r(op_spec, "meta", error_ctx="operations", mandatory=False)
-            # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
-            op_type_name = self._r(op_spec, "operation-type", error_ctx="operations")
-            try:
-                op_type = track.OperationType.from_hyphenated_string(op_type_name).name
-                logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
-            except KeyError:
-                logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
-                op_type = op_type_name
-            param_source = self._r(op_spec, "param-source", error_ctx="operations", mandatory=False)
-            if op_name in ops:
-                self._error("Duplicate operation with name '%s'." % op_name)
-            try:
-                ops[op_name] = track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=op_spec,
-                                               param_source=param_source)
-            except exceptions.InvalidSyntax as e:
-                raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
+            op = self.parse_operation(op_spec)
+            if op.name in ops:
+                self._error("Duplicate operation with name '%s'." % op.name)
+            else:
+                ops[op.name] = op
         return ops
+
+    def parse_operation(self, op_spec, error_ctx="operations"):
+        # just a name, let's assume it is a simple operation like force-merge and create a full operation
+        if isinstance(op_spec, str):
+            op_name = op_spec
+            meta_data = None
+            op_type_name = op_spec
+            param_source = None
+        else:
+            meta_data = self._r(op_spec, "meta", error_ctx=error_ctx, mandatory=False)
+            # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
+            op_type_name = self._r(op_spec, "operation-type", error_ctx=error_ctx)
+            # fallback to use the operation type as the operation name
+            op_name = self._r(op_spec, "name", error_ctx=error_ctx, mandatory=False, default_value=op_type_name)
+            param_source = self._r(op_spec, "param-source", error_ctx=error_ctx, mandatory=False)
+
+        try:
+            op_type = track.OperationType.from_hyphenated_string(op_type_name).name
+            logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
+        except KeyError:
+            logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
+            op_type = op_type_name
+
+        try:
+            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=op_spec, param_source=param_source)
+        except exceptions.InvalidSyntax as e:
+            raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
+

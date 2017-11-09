@@ -79,26 +79,6 @@ Finally, add a file called ``track.json`` right next to the mapping file::
           ]
         }
       ],
-      "operations": [
-        {
-          "name": "index",
-          "operation-type": "index",
-          "bulk-size": 5000
-        },
-        {
-          "name": "force-merge",
-          "operation-type": "force-merge"
-        },
-        {
-          "name": "query-match-all",
-          "operation-type": "search",
-          "body": {
-            "query": {
-              "match_all": {}
-            }
-          }
-        }
-      ],
       "challenges": [
         {
           "name": "index-and-query",
@@ -109,7 +89,10 @@ Finally, add a file called ``track.json`` right next to the mapping file::
           },
           "schedule": [
             {
-              "operation": "index",
+              "operation": {
+                "operation-type": "index",
+                "bulk-size": 5000
+              }
               "warmup-time-period": 120,
               "clients": 8
             },
@@ -118,7 +101,15 @@ Finally, add a file called ``track.json`` right next to the mapping file::
               "clients": 1
             },
             {
-              "operation": "query-match-all",
+              "operation": {
+                "name": "query-match-all",
+                "operation-type": "search",
+                "body": {
+                  "query": {
+                    "match_all": {}
+                  }
+                }
+              },
               "clients": 8,
               "warmup-iterations": 1000,
               "iterations": 1000,
@@ -190,7 +181,10 @@ Structuring your track
           },
           "schedule": [
             {
-              "operation": "index",
+              "operation": {
+                "operation-type": "index",
+                "bulk-size": 5000
+              }
               "warmup-time-period": 120,
               "clients": 8
             },
@@ -199,7 +193,15 @@ Structuring your track
               "clients": 1
             },
             {
-              "operation": "query-match-all",
+              "operation": {
+                "name": "query-match-all",
+                "operation-type": "search",
+                "body": {
+                  "query": {
+                    "match_all": {}
+                  }
+                }
+              },
               "clients": 8,
               "warmup-iterations": 1000,
               "iterations": 1000,
@@ -210,6 +212,31 @@ Structuring your track
 
 Now modify ``track.json`` so it knows about your new file::
 
+    {
+      "short-description": "Tutorial benchmark for Rally",
+      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "indices": [
+        {
+          "name": "geonames",
+          "types": [
+            {
+              "name": "type",
+              "mapping": "mappings.json",
+              "documents": "documents.json",
+              "document-count": 8647880,
+              "uncompressed-bytes": 2790927196
+            }
+          ]
+        }
+      ],
+      "challenges": [
+        {% include "challenges/index-and-query.json" %}
+      ]
+    }
+
+We replaced the challenge content with  ``{% include "challenges/index-and-query.json" %}`` which tells Rally to include the challenge from the provided file. You can use ``include`` on arbitrary parts of your track.
+
+If you want to reuse operation definitions across challenges, you can also define them in a separate ``operations`` block and just refer to them by name in the corresponding challenge::
 
     {
       "short-description": "Tutorial benchmark for Rally",
@@ -253,9 +280,38 @@ Now modify ``track.json`` so it knows about your new file::
       ]
     }
 
-We replaced the challenge content with  ``{% include "challenges/index-and-query.json" %}`` which tells Rally to include the challenge from the provided file. You can use ``include`` on arbitrary parts of your track.
+``challenges/index-and-query.json`` then becomes::
 
-However, if your track consists of multiple challenges it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
+    {
+          "name": "index-and-query",
+          "description": "",
+          "default": true,
+          "index-settings": {
+            "index.number_of_replicas": 0
+          },
+          "schedule": [
+            {
+              "operation": "index",
+              "warmup-time-period": 120,
+              "clients": 8
+            },
+            {
+              "operation": "force-merge",
+              "clients": 1
+            },
+            {
+              "operation": "query-match-all",
+              "clients": 8,
+              "warmup-iterations": 1000,
+              "iterations": 1000,
+              "target-throughput": 100
+            }
+          ]
+        }
+
+Note how we reference to the operations by their name (i.e. ``index``, ``force-merge`` and ``query-match-all``).
+
+If your track consists of multiple challenges, it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
 
     {% import "rally.helpers" as rally %}
     {
@@ -304,7 +360,7 @@ We changed two things here. First, we imported helper functions from Rally by ad
 
 .. note::
 
-    If you want to check the final result, please check Rally's log file. Rally will print the full rendered track there after it has loaded it successfully.
+    If you want to check the final result, please check Rally's log file. Rally will print the fully rendered track there after it has loaded it successfully.
 
 You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but you need to import the Rally helpers a bit differently then. You also need to declare all variables before the ``import`` statement::
 

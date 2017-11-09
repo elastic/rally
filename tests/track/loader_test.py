@@ -1240,6 +1240,38 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
 
+    def test_inline_operations(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "challenges": [
+                {
+                    "name": "challenge",
+                    "description": "Some challenge",
+                    "schedule": [
+                        # an operation with parameters still needs to define a type
+                        {
+                            "operation": {
+                                "operation-type": "index",
+                                "bulk-size": 5000
+                            }
+                        },
+                        # a parameterless operation can just use the operation type as implicit reference to the operation
+                        {
+                            "operation": "force-merge"
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings")
+
+        self.assertEqual(2, len(resulting_track.challenges[0].schedule))
+        self.assertEqual(track.OperationType.Index.name, resulting_track.challenges[0].schedule[0].operation.type)
+        self.assertEqual(track.OperationType.ForceMerge.name, resulting_track.challenges[0].schedule[1].operation.type)
+
     def test_supports_target_throughput(self):
         track_specification = {
             "short-description": "short description for unit test",
