@@ -72,6 +72,14 @@ class DelegatingRunner(Runner):
         return "user-defined runner for [%s]" % self.name
 
 
+def mandatory(params, key, op):
+    try:
+        return params[key]
+    except KeyError:
+        raise exceptions.DataError("Parameter source for operation '%s' did not provide the mandatory parameter '%s'. Please add it to your"
+                                   " parameter source." % (op, key))
+
+
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
@@ -245,12 +253,8 @@ class BulkIndex(Runner):
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
 
-        with_action_metadata = params["action_metadata_present"]
-        try:
-            bulk_size = params["bulk-size"]
-        except KeyError:
-            raise exceptions.DataError(
-                "Bulk parameter source did not provide a 'bulk-size' parameter. Please add it to your parameter source.")
+        with_action_metadata = mandatory(params, "action_metadata_present", "bulk-index")
+        bulk_size = mandatory(params, "bulk-size", "bulk-index")
 
         if with_action_metadata:
             # only half of the lines are documents
@@ -372,15 +376,14 @@ class ForceMerge(Runner):
         logger.info("Force merging all indices.")
         import elasticsearch
         try:
-            if ("max_num_segments" in params):
+            if "max_num_segments" in params:
                 es.indices.forcemerge(index="_all", max_num_segments=params["max_num_segments"])
             else:
                 es.indices.forcemerge(index="_all")
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                # es.indices.optimize(index="_all")
-                if ("max_num_segments" in params):
+                if "max_num_segments" in params:
                     es.transport.perform_request("POST", "/_optimize?max_num_segments=%s" % (params["max_num_segments"]))
                 else:
                     es.transport.perform_request("POST", "/_optimize")
@@ -460,11 +463,12 @@ class Query(Runner):
 
     def request_body_query(self, es, params):
         request_params = params.get("request_params", {})
+        if "use_request_cache" in params:
+            request_params["request_cache"] = params["use_request_cache"]
         r = es.search(
-            index=params["index"],
-            doc_type=params["type"],
-            request_cache=params["use_request_cache"],
-            body=params["body"],
+            index=params.get("index", "_all"),
+            doc_type=params.get("type"),
+            body=mandatory(params, "body", "query"),
             **request_params)
         hits = r["hits"]["total"]
         return {
@@ -488,13 +492,13 @@ class Query(Runner):
         for page in range(total_pages):
             if page == 0:
                 r = es.search(
-                    index=params["index"],
-                    doc_type=params["type"],
-                    body=params["body"],
+                    index=params.get("index", "_all"),
+                    doc_type=params.get("type"),
+                    body=mandatory(params, "body", "query"),
                     sort="_doc",
                     scroll="10s",
                     size=params["items_per_page"],
-                    request_cache=params["use_request_cache"],
+                    request_cache=params.get("use_request_cache"),
                     **request_params
                 )
                 # This should only happen if we concurrently create an index and start searching

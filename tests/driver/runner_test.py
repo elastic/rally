@@ -2,6 +2,7 @@ import unittest.mock as mock
 from unittest import TestCase
 
 from esrally.driver import runner
+from esrally import exceptions
 
 
 class RegisterRunnerTests(TestCase):
@@ -48,6 +49,53 @@ class RegisterRunnerTests(TestCase):
 
 
 class BulkIndexRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_bulk_index_missing_params(self, es):
+        es.bulk.return_value = {
+            "errors": False
+        }
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": [
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line"
+            ]
+        }
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            bulk(es, bulk_params)
+        self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action_metadata_present'. "
+                         "Please add it to your parameter source.", ctx.exception.args[0])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_bulk_index_missing_params(self, es):
+        es.bulk.return_value = {
+            "errors": False
+        }
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": [
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line"
+            ],
+            "action_metadata_present": True,
+        }
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            bulk(es, bulk_params)
+        self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'bulk-size'. "
+                         "Please add it to your parameter source.", ctx.exception.args[0])
+
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_success_with_metadata(self, es):
         es.bulk.return_value = {
@@ -470,6 +518,44 @@ class BulkIndexRunnerTests(TestCase):
 
 class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
+    def test_query_match_only_request_body_defined(self, es):
+        es.search.return_value = {
+            "timed_out": False,
+            "took": 5,
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+                ]
+            }
+        }
+
+        query_runner = runner.Query()
+
+        params = {
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            result = query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertEqual(2, result["hits"])
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(5, result["took"])
+        self.assertFalse("error-type" in result)
+
+    @mock.patch("elasticsearch.Elasticsearch")
     def test_query_match_all(self, es):
         es.search.return_value = {
             "timed_out": False,
@@ -543,6 +629,54 @@ class QueryRunnerTests(TestCase):
             "index": "unittest",
             "type": "type",
             "use_request_cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            results = query_runner(es, params)
+
+        self.assertEqual(1, results["weight"])
+        self.assertEqual(1, results["pages"])
+        self.assertEqual(2, results["hits"])
+        self.assertEqual(4, results["took"])
+        self.assertEqual("ops", results["unit"])
+        self.assertFalse(results["timed_out"])
+        self.assertFalse("error-type" in results)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_only_one_page_only_request_body_defined(self, es):
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "took": 4,
+            "timed_out": False,
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # delete scroll id response
+            {
+                "acknowledged": True
+            }
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": 1,
+            "items_per_page": 100,
             "body": {
                 "query": {
                     "match_all": {}
