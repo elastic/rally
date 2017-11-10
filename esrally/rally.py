@@ -196,6 +196,11 @@ def create_arg_parser():
             # default="geonames"
         )
         p.add_argument(
+            "--track-params",
+            help="define a comma-separate list of key:value pairs that are injected verbatim to the track as variables",
+            default=""
+        )
+        p.add_argument(
             "--challenge",
             help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
         p.add_argument(
@@ -588,6 +593,7 @@ def main():
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
+    cfg.add(config.Scope.applicationOverride, "track", "params", kv_to_map(csv_to_list(args.track_params)))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)

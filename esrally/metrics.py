@@ -202,6 +202,7 @@ class MetricsStore:
         self._config = cfg
         self._invocation = None
         self._track = None
+        self._track_params = cfg.opts("track", "params")
         self._challenge = None
         self._car = None
         self._car_name = None
@@ -471,6 +472,8 @@ class MetricsStore:
             doc["operation"] = operation
         if operation_type:
             doc["operation-type"] = operation_type
+        if self._track_params:
+            doc["track-params"] = self._track_params
 
         assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
         self._add(doc)
@@ -953,7 +956,6 @@ class InMemoryMetricsStore(MetricsStore):
         return "in-memory metrics store"
 
 
-
 def race_store(cfg):
     """
     Creates a proper race store based on the current configuration.
@@ -969,13 +971,20 @@ def race_store(cfg):
 
 
 def list_races(cfg):
+    def format_dict(d):
+        if d:
+            return ",".join(["%s=%s" % (k, v) for k, v in d.items()])
+        else:
+            return None
+
     races = []
     for race in race_store(cfg).list():
-        races.append([time.to_iso8601(race.trial_timestamp), race.track, race.challenge, race.car_name, race.user_tag])
+        races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge, race.car_name,
+                      race.user_tag])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Challenge", "Car", "User Tag"]))
+        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tag"]))
     else:
         console.println("")
         console.println("No recent races found.")
@@ -988,14 +997,15 @@ def create_race(cfg, track, challenge):
     total_laps = cfg.opts("race", "laps")
     user_tag = cfg.opts("race", "user.tag")
     pipeline = cfg.opts("race", "pipeline")
+    track_params = cfg.opts("track", "params")
     rally_version = version.version()
 
-    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, challenge, car, total_laps)
+    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, track_params, challenge, car, total_laps)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, challenge, car, total_laps,
-                 cluster=None, lap_results=None, results=None):
+    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, track_params, challenge, car,
+                 total_laps, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
         if lap_results is None:
@@ -1006,6 +1016,7 @@ class Race:
         self.pipeline = pipeline
         self.user_tag = user_tag
         self.track = track
+        self.track_params = track_params
         self.challenge = challenge
         self.car = car
         self.total_laps = total_laps
@@ -1045,7 +1056,7 @@ class Race:
         """
         :return: A dict representation suitable for persisting this race instance as JSON.
         """
-        return {
+        d = {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
@@ -1058,6 +1069,9 @@ class Race:
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
+        if self.track_params:
+            d["track-params"] = self.track_params
+        return d
 
     def to_result_dicts(self):
         """
@@ -1083,6 +1097,9 @@ class Race:
         if plugins:
             result_template["plugins"] = list(plugins)
 
+        if self.track_params:
+            result_template["track-params"] = self.track_params
+
         all_results = []
 
         for item in self.results.as_flat_list():
@@ -1097,7 +1114,7 @@ class Race:
         # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
         return Race(d["rally-version"], d["environment"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], d["user-tag"],
-                    d["track"], d["challenge"], d["car"], d["total-laps"], results=d["results"])
+                    d["track"], d.get("track-params"), d["challenge"], d["car"], d["total-laps"], results=d["results"])
 
 
 class RaceStore:

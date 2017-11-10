@@ -13,11 +13,11 @@ Suppose, we want to analyze the impact of a performance improvement. First, we n
                     /____/
     Recent races:
 
-    Race Timestamp    Track    Challenge            Car       User Tag
-    ----------------  -------  -------------------  --------  ------------------------------
-    20160518T122341Z  pmc      append-no-conflicts  defaults  intention:reduce_alloc_1234
-    20160518T112057Z  pmc      append-no-conflicts  defaults  intention:baseline_github_1234
-    20160518T101957Z  pmc      append-no-conflicts  defaults
+    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
+    ----------------  -------  ------------------ -------------------  --------  ------------------------------
+    20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:reduce_alloc_1234
+    20160518T112057Z  pmc                         append-no-conflicts  defaults  intention:baseline_github_1234
+    20160518T101957Z  pmc                         append-no-conflicts  defaults
 
 
 We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race timestamps in the next step::

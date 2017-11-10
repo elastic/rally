@@ -69,6 +69,52 @@ Selects the track repository that Rally should use to resolve tracks. By default
 
 Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>` or the :doc:`track reference </track>`. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
+``track-params``
+~~~~~~~~~~~~~~~~
+
+With this parameter you can inject variables into tracks. The supported variables depend on the track and you should check the track JSON file to see which variables can be provided.
+
+It accepts a list of comma-separated key-value pairs. The key-value pairs have to be delimited by a colon.
+
+**Examples**:
+
+Consider the following track snippet showing a single challenge::
+
+    {
+      "name": "index-only",
+      "index-settings": {
+        "index.number_of_replicas": {{ replica_count|default(0) }},
+        "index.number_of_shards": {{ shard_count|default(5) }},
+      },
+      "schedule": [
+        {
+          "operation": "bulk-index",
+          "warmup-time-period": 120,
+          "clients": 8
+        }
+      ]
+    }
+
+Rally tracks can use the Jinja templating language and the construct ``{{ some_variable|default(0) }}`` that you can see above is a `feature of Jinja <http://jinja.pocoo.org/docs/2.10/templates/#default>`_ to define default values for variables.
+
+We can see that it defines two variables:
+
+* ``replica_count`` with a default value of 0
+* ``shard_count`` with a default value of 5
+
+When we run this track, we can override these defaults:
+
+* ``--track-params="replica_count:1,shard_count:3"`` will set the number of replicas to 1 and the number of shards to 3.
+* ``--track-params="replica_count:1"`` will just set the number of replicas to 1 and just keep the default value of 5 shards.
+
+All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
+
+    Race Timestamp    Track    Track Parameters               Challenge            Car       User Tag
+    ----------------  -------  ------------------------------ -------------------  --------  ---------
+    20160518T122341Z  pmc      replica_count=1                append-no-conflicts  defaults
+    20160518T112341Z  pmc      replica_count=1,shard_count=3  append-no-conflicts  defaults
+
+
 ``challenge``
 ~~~~~~~~~~~~~
 
@@ -411,19 +457,9 @@ You can also specify multiple tags. They need to be separated by a comma.
 
 When you run ``esrally list races``, this will show up again::
 
-    dm@io:~ $ esrally list races
-
-        ____        ____
-       / __ \____ _/ / /_  __
-      / /_/ / __ `/ / / / / /
-     / _, _/ /_/ / / / /_/ /
-    /_/ |_|\__,_/_/_/\__, /
-                    /____/
-    Recent races:
-
-    Race Timestamp    Track    Challenge            Car       User Tag
-    ----------------  -------  -------------------  --------  ------------------------------------
-    20160518T122341Z  pmc      append-no-conflicts  defaults  intention:github-issue-1234-baseline
-    20160518T112341Z  pmc      append-no-conflicts  defaults  disk:SSD,data_node_count:4
+    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
+    ----------------  -------  ------------------ -------------------  --------  ------------------------------------
+    20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:github-issue-1234-baseline
+    20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4
 
 This will help you recognize a specific race when running ``esrally compare``.

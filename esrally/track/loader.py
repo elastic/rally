@@ -331,7 +331,7 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
     create_file_offset_table(full_document_path, type.number_of_lines)
 
 
-def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.Clock):
+def render_template(loader, template_name, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
     macros = """
         {% macro collect(parts) -%}
             {% set comma = joiner() %}
@@ -346,6 +346,10 @@ def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.
     env = jinja2.Environment(
         loader=jinja2.ChoiceLoader([jinja2.DictLoader({"rally.helpers": macros}), loader])
     )
+    if template_vars:
+        for k, v in template_vars.items():
+            env.globals[k] = v
+    # ensure that user variables never override our internal variables
     env.globals["now"] = clock.now()
     env.globals["glob"] = glob_helper
     env.filters["days_ago"] = time.days_ago
@@ -354,7 +358,7 @@ def render_template(loader, template_name, glob_helper=lambda f: [], clock=time.
     return template.render()
 
 
-def render_template_from_file(template_file_name):
+def render_template_from_file(template_file_name, template_vars):
     def relative_glob(start, f):
         result = glob.glob(os.path.join(start, f))
         if result:
@@ -365,6 +369,7 @@ def render_template_from_file(template_file_name):
     base_path = io.dirname(template_file_name)
     return render_template(loader=jinja2.FileSystemLoader(base_path),
                            template_name=io.basename(template_file_name),
+                           template_vars=template_vars,
                            glob_helper=lambda f: relative_glob(base_path, f))
 
 
@@ -465,6 +470,7 @@ class TrackFileReader:
         track_schema_file = "%s/resources/track-schema.json" % (cfg.opts("node", "rally.root"))
         self.track_schema = json.loads(open(track_schema_file).read())
         override_auto_manage_indices = cfg.opts("track", "auto_manage_indices")
+        self.track_params = cfg.opts("track", "params")
         self.read_track = TrackSpecificationReader(override_auto_manage_indices)
 
     def read(self, track_name, track_spec_file, mapping_dir):
@@ -479,7 +485,7 @@ class TrackFileReader:
 
         logger.info("Reading track specification file [%s]." % track_spec_file)
         try:
-            rendered = render_template_from_file(track_spec_file)
+            rendered = render_template_from_file(track_spec_file, self.track_params)
             logger.info("Final rendered track for '%s': %s" % (track_spec_file, rendered))
             track_spec = json.loads(rendered)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:

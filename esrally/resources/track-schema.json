@@ -135,7 +135,6 @@
                 ]
               },
               "operation": {
-                "type": "string",
                 "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
               },
               "meta": {

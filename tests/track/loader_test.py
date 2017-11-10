@@ -392,6 +392,25 @@ class TemplateRenderTests(TestCase):
         """
         self.assertEqual(expected, rendered)
 
+    def test_render_template_with_external_variables(self):
+        template = """
+        {
+            "greeting": "{{greeting | default("Aloha")}}",
+            "name": "{{name | default("stranger")}}"
+        }
+        """
+
+        rendered = loader.render_template(
+            loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", template_vars={"greeting": "Hi"}, clock=StaticClock)
+
+        expected = """
+        {
+            "greeting": "Hi",
+            "name": "stranger"
+        }
+        """
+        self.assertEqual(expected, rendered)
+
     def test_render_template_with_globbing(self):
         def key_globber(e):
             if e == "dynamic-key-*":
@@ -436,12 +455,13 @@ class TemplateRenderTests(TestCase):
     def test_render_template_with_variables(self):
         def key_globber(e):
             if e == "dynamic-key-*":
-                return ["dynamic-key-1"]
+                return ["dynamic-key-1", "dynamic-key-2"]
             else:
                 return []
 
         template = """
-        {% set clients = 16 %}
+        {% set _clients = clients if clients is defined else 16 %}
+        {% set _bulk_size = bulk_size if bulk_size is defined else 100 %}
         {% import "rally.helpers" as rally with context %}
         {
             "key1": "static value",
@@ -453,14 +473,16 @@ class TemplateRenderTests(TestCase):
             loader=jinja2.DictLoader(
                 {
                     "unittest": template,
-                    "dynamic-key-1": '"dkey1": {{ clients }}',
+                    "dynamic-key-1": '"dkey1": {{ _clients }}',
+                    "dynamic-key-2": '"dkey2": {{ _bulk_size }}',
                  }),
-            template_name="unittest", glob_helper=key_globber, clock=StaticClock)
+            template_name="unittest", template_vars={"clients": 8}, glob_helper=key_globber, clock=StaticClock)
 
         expected = """
         {
             "key1": "static value",
-            "dkey1": 16
+            "dkey1": 8,
+            "dkey2": 100
         }
         """
         self.assertEqualIgnoreWhitespace(expected, rendered)

@@ -12,6 +12,9 @@ Here is a typical metrics record::
     {
           "environment": "nightly",
           "track": "geonames",
+          "track-params": {
+            "shard-count": 3
+          },
           "challenge": "append-no-conflicts",
           "car": "defaults",
           "sample-type": "normal",
@@ -47,10 +50,12 @@ environment
 
 The environment describes the origin of a metric record. You define this value in the initial configuration of Rally. The intention is to clearly separate different benchmarking environments but still allow to store them in the same index.
 
-track, challenge, car
-~~~~~~~~~~~~~~~~~~~~~
+track, track-params, challenge, car
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This is the track, challenge and car for which the metrics record has been produced. Note that if you specify a car with mixins, it will be stored as one string separated with "+", e.g. ``--car="4gheap,ea"`` will be stored as ``4gheap+ea`` in the metrics store in order to simplify querying in Kibana. For more details, please see the :doc:`cars </car>` documentation.
+This is the track, challenge and car for which the metrics record has been produced. If the user has provided track parameters with the command line parameter, ``--track-params``, each of them is listed here too.
+
+If you specify a car with mixins, it will be stored as one string separated with "+", e.g. ``--car="4gheap,ea"`` will be stored as ``4gheap+ea`` in the metrics store in order to simplify querying in Kibana. For more details, please see the :doc:`cars </car>` documentation.
 
 sample-type
 ~~~~~~~~~~~

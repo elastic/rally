@@ -10,6 +10,7 @@ from esrally.mechanic import telemetry, team, cluster
 def create_config():
     cfg = config.Config()
     cfg.add(config.Scope.application, "system", "env.name", "unittest")
+    cfg.add(config.Scope.application, "track", "params", {})
     # concrete path does not matter
     cfg.add(config.Scope.application, "node", "rally.root", "/some/root/path")
 

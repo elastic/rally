@@ -119,6 +119,7 @@ class EsMetricsTests(TestCase):
     def setUp(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "track", "params", {"shard-count": 3})
         self.metrics_store = metrics.EsMetricsStore(self.cfg,
                                                     client_factory_class=MockClientFactory,
                                                     index_template_provider_class=DummyIndexTemplateProvider,
@@ -140,6 +141,9 @@ class EsMetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
+            "track-params": {
+                "shard-count": 3
+            },
             "lap": 1,
             "challenge": "append-no-conflicts",
             "car": "defaults",
@@ -167,6 +171,9 @@ class EsMetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
+            "track-params": {
+                "shard-count": 3
+            },
             "lap": 1,
             "challenge": "append-no-conflicts",
             "car": "defaults",
@@ -203,6 +210,9 @@ class EsMetricsTests(TestCase):
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
+            "track-params": {
+                "shard-count": 3
+            },
             "lap": 1,
             "challenge": "append-no-conflicts",
             "car": "defaults",
@@ -557,7 +567,8 @@ class EsRaceStoreTests(TestCase):
                         challenges=[track.Challenge(name="index", default=True, index_settings=None, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
-                            pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
+                            pipeline="from-sources", user_tag="let-me-test", track=t, track_params={"shard-count": 3},
+                            challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
                             cluster=EsRaceStoreTests.DictHolder(
                                 {
@@ -594,6 +605,9 @@ class EsRaceStoreTests(TestCase):
             "pipeline": "from-sources",
             "user-tag": "let-me-test",
             "track": "unittest",
+            "track-params": {
+                "shard-count": 3
+            },
             "challenge": "index",
             "car": "4gheap",
             "total-laps": 12,
@@ -660,7 +674,8 @@ class EsResultsStoreTests(TestCase):
         node.plugins.append("x-pack")
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
-                            pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
+                            pipeline="from-sources", user_tag="let-me-test", track=t, track_params=None,
+                            challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
                             cluster=c,
                             lap_results=[],
@@ -748,6 +763,7 @@ class InMemoryMetricsStoreTests(TestCase):
     def setUp(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "track", "params", {})
         self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
 
     def tearDown(self):
@@ -924,7 +940,8 @@ class FileRaceStoreTests(TestCase):
                         challenges=[track.Challenge(name="index", default=True, index_settings=None, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
-                            pipeline="from-sources", user_tag="let-me-test", track=t, challenge=t.default_challenge, car="4gheap",
+                            pipeline="from-sources", user_tag="let-me-test", track=t, track_params={"clients": 12},
+                            challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
                             cluster=FileRaceStoreTests.DictHolder(
                                 {
