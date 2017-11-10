@@ -73,5 +73,5 @@ Do I need an Internet connection?
 
 You do NOT need Internet access on any node of your Elasticsearch cluster but the machine where you start Rally needs an Internet connection to download track data sets and Elasticsearch distributions. After it has downloaded all data, an Internet connection is not required anymore and you can specify ``--offline``. If Rally detects no active Internet connection, it will automatically enable offline mode and warn you.
 
-As a workaround you can also download all data on a different machine and transfer it the the target machine but this is not actively supported.
+We have a dedicated documentation page for :doc:`running Rally offline </offline>` which should cover all necessary details.
 
