@@ -332,7 +332,7 @@ We support the following data types:
 
 In addition to the options, supported by the Elasticsearch client, it is also possible to enable HTTP compression by specifying ``compressed:true``
 
-Default value: ``timeout:60000,request_timeout:60000``
+Default value: ``timeout:60``
 
 .. warning::
    If you provide your own client options, the default value will not be magically merged. You have to specify all client options explicitly. The only exceptions to this rule is ``ca_cert`` (see below).

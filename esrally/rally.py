@@ -17,7 +17,7 @@ from elasticsearch.client import _normalize_hosts
 
 logger = logging.getLogger("rally.main")
 
-DEFAULT_CLIENT_OPTIONS = "timeout:60000,request_timeout:60000"
+DEFAULT_CLIENT_OPTIONS = "timeout:60"
 
 
 # we want to use some basic logging even before the output to log file is configured
