@@ -67,7 +67,7 @@ class SimpleTrackRepositoryTests(TestCase):
     @mock.patch("os.path.exists")
     def test_track_from_non_existing_path(self, path_exists):
         path_exists.return_value = False
-        with self.assertRaises(FileNotFoundError) as ctx:
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
             loader.SimpleTrackRepository("/path/does/not/exist")
         self.assertEqual("Track path /path/does/not/exist does not exist", ctx.exception.args[0])
 
@@ -77,7 +77,7 @@ class SimpleTrackRepositoryTests(TestCase):
         # directory exists, but not the file
         path_exists.side_effect = [True, False]
         is_dir.return_value = True
-        with self.assertRaises(FileNotFoundError) as ctx:
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
             loader.SimpleTrackRepository("/path/to/not/a/track")
         self.assertEqual("Could not find track.json in /path/to/not/a/track", ctx.exception.args[0])
 

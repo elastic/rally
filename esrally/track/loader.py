@@ -165,14 +165,14 @@ class GitTrackRepository:
 class SimpleTrackRepository:
     def __init__(self, track_path):
         if not os.path.exists(track_path):
-            raise FileNotFoundError("Track path %s does not exist" % track_path)
+            raise exceptions.SystemSetupError("Track path %s does not exist" % track_path)
 
         if os.path.isdir(track_path):
             self.track_name = io.basename(track_path)
             self._track_dir = track_path
             self._track_file = os.path.join(track_path, "track.json")
             if not os.path.exists(self._track_file):
-                raise FileNotFoundError("Could not find track.json in %s" % track_path)
+                raise exceptions.SystemSetupError("Could not find track.json in %s" % track_path)
         elif os.path.isfile(track_path):
             if io.has_extension(track_path, ".json"):
                 self._track_dir = io.dirname(track_path)
