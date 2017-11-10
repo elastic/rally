@@ -496,7 +496,33 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 Examples
 ~~~~~~~~
 
-Note that we do not show the operation definition in the examples below but you should be able to infer from the operation name what it is doing.
+To get started with custom tracks, you can benchmark a single operation, e.g. a match_all query::
+
+   {
+     "description": "Simple search-only track",
+     "challenge": {
+       "name": "just-search",
+       "schedule": [
+         {
+           "operation": {
+             "operation-type": "query",
+             "body": {
+               "query": {
+                 "match_all": {}
+               }
+             }
+           },
+           "warmup-iterations": 100,
+           "iterations": 100,
+           "target-throughput": 10
+         }
+       ]
+     }
+   }
+
+This track assumes that you have an existing cluster with pre-populated data. It will run the provided match_all query at 10 operations per second with one client and use 100 iterations as warmup and the next 100 iterations to measure. You can store this file
+
+For the examples below, note that we do not show the operation definition but you should be able to infer from the operation name what it is doing.
 
 In this example Rally will run a bulk index operation unthrottled for one hour::
 
