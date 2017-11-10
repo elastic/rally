@@ -16,20 +16,15 @@ def run_subprocess(command_line):
 def run_subprocess_with_output(command_line):
     logger.debug("Running subprocess [%s] with output." % command_line)
     command_line_args = shlex.split(command_line)
-    command_line_process = subprocess.Popen(
-        command_line_args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    has_output = True
-    lines = []
-    while has_output:
-        line = command_line_process.stdout.readline()
-        if line:
-            lines.append(line.decode("UTF-8").strip())
-        else:
-            has_output = False
-    command_line_process.wait(timeout=5)
+    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
+        has_output = True
+        lines = []
+        while has_output:
+            line = command_line_process.stdout.readline()
+            if line:
+                lines.append(line.decode("UTF-8").strip())
+            else:
+                has_output = False
     return lines
 
 
@@ -62,20 +57,14 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     if header is not None:
         logger.info(header)
     logger.debug("Invoking subprocess '%s'" % command_line)
-    command_line_process = subprocess.Popen(
-        command_line_args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        env=env
-    )
-    has_output = True
-    while has_output:
-        line = command_line_process.stdout.readline()
-        if line:
-            logger.log(level=level, msg=line)
-        else:
-            has_output = False
-    command_line_process.wait(timeout=5)
+    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
+        has_output = True
+        while has_output:
+            line = command_line_process.stdout.readline()
+            if line:
+                logger.log(level=level, msg=line)
+            else:
+                has_output = False
     logger.debug("Subprocess [%s] finished with return code [%s]." % (command_line, str(command_line_process.returncode)))
     return command_line_process.returncode
 
