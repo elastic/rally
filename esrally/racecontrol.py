@@ -103,8 +103,8 @@ class BenchmarkActor(actor.RallyActor):
                 self.metrics_store.meta_info = msg.system_meta_info
                 cluster = msg.cluster_meta_info
                 self.race.cluster = cluster
-                console.info("Racing on track [%s], challenge [%s] and car %s\n"
-                             % (self.race.track_name, self.race.challenge_name, self.race.car))
+                console.info("Racing on track [%s], challenge [%s] and car %s with version [%s].\n"
+                             % (self.race.track_name, self.race.challenge_name, self.race.car, self.race.cluster.distribution_version))
                 # start running we assume that each race has at least one lap
                 self.run()
             elif isinstance(msg, driver.TaskFinished):
