@@ -339,7 +339,6 @@ schedule
 
 The ``schedule`` element contains a list of tasks that are executed by Rally. Each task consists of the following properties:
 
-* ``name`` (optional): This property defines an explicit name for the given task. By default the operation's name is implicitly used as the task name but if the same operation is run multiple times, a unique task name must be specified using this property.
 * ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
 * ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
 * ``warmup-iterations`` (optional, defaults to 0): Number of iterations that each client should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.

@@ -78,10 +78,6 @@
                       "type": "object",
                       "description": "Defines an individual operation that is executed",
                       "properties": {
-                        "name": {
-                          "type": "string",
-                          "description": "Explicit name of the task. By default the operation's name is implicitly used as the task's name but if the same operation is run multiple times, a unique task name must be specified."
-                        },
                         "operation": {
                           "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
                         },
@@ -137,10 +133,6 @@
                 "required": [
                   "tasks"
                 ]
-              },
-              "name": {
-                "type": "string",
-                "description": "Explicit name of the task. By default the operation's name is implicitly used as the task's name but if the same operation is run multiple times, a unique task name must be specified."
               },
               "operation": {
                 "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."

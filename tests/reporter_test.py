@@ -17,30 +17,30 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
         cfg.add(config.Scope.application, "track", "params", {})
 
-        index = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
+        index = track.Task(operation=track.Operation(name="index", operation_type=track.OperationType.Index, params=None))
         challenge = track.Challenge(name="unittest", schedule=[index], default=True)
         t = track.Track("unittest", "unittest-track", challenges=[challenge])
 
         store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
         store.lap = 1
 
-        store.put_value_cluster_level("throughput", 500, unit="docs/s", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("throughput", 1000, unit="docs/s", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("throughput", 2000, unit="docs/s", operation="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("throughput", 500, unit="docs/s", operation="index", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("throughput", 1000, unit="docs/s", operation="index", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("throughput", 2000, unit="docs/s", operation="index", operation_type=track.OperationType.Index)
 
-        store.put_value_cluster_level("latency", 2800, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("latency", 2800, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       sample_type=metrics.SampleType.Warmup)
-        store.put_value_cluster_level("latency", 200, unit="ms", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("latency", 220, unit="ms", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("latency", 225, unit="ms", operation="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("latency", 200, unit="ms", operation="index", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("latency", 220, unit="ms", operation="index", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("latency", 225, unit="ms", operation="index", operation_type=track.OperationType.Index)
 
-        store.put_value_cluster_level("service_time", 250, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 250, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
-        store.put_value_cluster_level("service_time", 190, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 190, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       meta_data={"success": True})
-        store.put_value_cluster_level("service_time", 200, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 200, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       meta_data={"success": False})
-        store.put_value_cluster_level("service_time", 215, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 215, unit="ms", operation="index", operation_type=track.OperationType.Index,
                                       meta_data={"success": True})
         store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
         store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
@@ -49,7 +49,7 @@ class StatsCalculatorTests(TestCase):
 
         del store
 
-        opm = stats.metrics("index #1")
+        opm = stats.metrics("index")
         self.assertEqual(collections.OrderedDict([("min", 500), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
         self.assertEqual(collections.OrderedDict([("50", 220), ("100", 225)]), opm["latency"])
         self.assertEqual(collections.OrderedDict([("50", 200), ("100", 215)]), opm["service_time"])

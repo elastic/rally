@@ -346,12 +346,12 @@ class OperationType(Enum):
             raise KeyError("No enum value for [%s]" % v)
 
 
-class TaskNameFilter:
+class TaskOpNameFilter:
     def __init__(self, name):
         self.name = name
 
-    def matches(self, task):
-        return self.name == task.name
+    def matches(self, operation):
+        return self.name == operation.name
 
     def __hash__(self):
         return hash(self.name)
@@ -360,7 +360,7 @@ class TaskNameFilter:
         return isinstance(other, type(self)) and self.name == other.name
 
     def __str__(self, *args, **kwargs):
-        return "filter for task name [%s]" % self.name
+        return "filter for operation name [%s]" % self.name
 
 
 class TaskOpTypeFilter:
@@ -371,8 +371,8 @@ class TaskOpTypeFilter:
         except KeyError:
             self.op_type = op_type_name
 
-    def matches(self, task):
-        return self.op_type == task.operation.type
+    def matches(self, operation):
+        return self.op_type == operation.type
 
     def __hash__(self):
         return hash(self.op_type)
@@ -430,9 +430,9 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1,
+    def __init__(self, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1,
                  completes_parent=False, schedule="deterministic", params=None):
-        self.name = name
+        self.name = operation.name
         self.operation = operation
         self.meta_data = meta_data if meta_data else {}
         self.warmup_iterations = warmup_iterations
@@ -445,7 +445,7 @@ class Task:
         self.params = params if params else {}
 
     def matches(self, task_filter):
-        return task_filter.matches(self)
+        return task_filter.matches(self.operation)
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)

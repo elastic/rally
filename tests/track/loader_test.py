@@ -538,21 +538,18 @@ class TrackPostProcessingTests(TestCase):
                             "parallel": {
                                 "tasks": [
                                     {
-                                        "name": "search #1",
                                         "clients": 4,
                                         "operation": "search",
                                         "warmup-iterations": 1000,
                                         "iterations": 2000
                                     },
                                     {
-                                        "name": "search #2",
                                         "clients": 1,
                                         "operation": "search",
                                         "warmup-iterations": 1000,
                                         "iterations": 2000
                                     },
                                     {
-                                        "name": "search #3",
                                         "clients": 1,
                                         "operation": "search",
                                         "iterations": 1
@@ -610,21 +607,18 @@ class TrackPostProcessingTests(TestCase):
                             "parallel": {
                                 "tasks": [
                                     {
-                                        "name": "search #1",
                                         "clients": 4,
                                         "operation": "search",
                                         "warmup-iterations": 4,
                                         "iterations": 4
                                     },
                                     {
-                                        "name": "search #2",
                                         "clients": 1,
                                         "operation": "search",
                                         "warmup-iterations": 1,
                                         "iterations": 1
                                     },
                                     {
-                                        "name": "search #3",
                                         "clients": 1,
                                         "operation": "search",
                                         "iterations": 1
@@ -656,7 +650,7 @@ class TrackPathTests(TestCase):
         cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
 
         default_challenge = track.Challenge("default", default=True, schedule=[
-            track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
+            track.Task(operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
         ])
         another_challenge = track.Challenge("other", default=False)
         t = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge],
@@ -683,7 +677,7 @@ class TrackFilterTests(TestCase):
     def test_create_filters_from_mixed_included_tasks(self):
         from esrally.track import track
         filters = loader.filters_from_included_tasks(["force-merge", "type:search"])
-        self.assertListEqual([track.TaskNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
+        self.assertListEqual([track.TaskOpNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
 
     def test_rejects_invalid_syntax(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
@@ -702,7 +696,15 @@ class TrackFilterTests(TestCase):
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
-                    "name": "bulk-index",
+                    "name": "index-1",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "index"
+                },
+                {
+                    "name": "index-3",
                     "operation-type": "index"
                 },
                 {
@@ -731,19 +733,15 @@ class TrackFilterTests(TestCase):
                             "parallel": {
                                 "tasks": [
                                     {
-                                        "name": "index-1",
-                                        "operation": "bulk-index",
+                                        "operation": "index-1",
                                     },
                                     {
-                                        "name": "index-2",
-                                        "operation": "bulk-index",
+                                        "operation": "index-2",
                                     },
                                     {
-                                        "name": "index-3",
-                                        "operation": "bulk-index",
+                                        "operation": "index-3",
                                     },
                                     {
-                                        "name": "match-all-parallel",
                                         "operation": "match-all",
                                     },
                                 ]
@@ -753,7 +751,6 @@ class TrackFilterTests(TestCase):
                             "operation": "node-stats"
                         },
                         {
-                            "name": "match-all-serial",
                             "operation": "match-all"
                         },
                         {
@@ -767,7 +764,7 @@ class TrackFilterTests(TestCase):
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(4, len(full_track.challenges[0].schedule))
 
-        filtered = loader.filter_included_tasks(full_track, [track.TaskNameFilter("index-3"),
+        filtered = loader.filter_included_tasks(full_track, [track.TaskOpNameFilter("index-3"),
                                                              track.TaskOpTypeFilter("search"),
                                                              # Filtering should also work for non-core operation types.
                                                              track.TaskOpTypeFilter("custom-operation-type")
@@ -775,9 +772,9 @@ class TrackFilterTests(TestCase):
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(3, len(schedule))
-        self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[0].tasks])
-        self.assertEqual("match-all-serial", schedule[1].name)
-        self.assertEqual("cluster-stats", schedule[2].name)
+        self.assertEqual(["index-3", "match-all"], [t.operation.name for t in schedule[0].tasks])
+        self.assertEqual("match-all", schedule[1].operation.name)
+        self.assertEqual("cluster-stats", schedule[2].operation.name)
 
 
 class TrackSpecificationReaderTests(TestCase):
@@ -981,106 +978,6 @@ class TrackSpecificationReaderTests(TestCase):
                          "period of '20' seconds and '1000' iterations. Please do not mix time periods and iterations.",
                          ctx.exception.args[0])
 
-    def test_parse_duplicate_implicit_task_names(self):
-        track_specification = {
-            "description": "description for unit test",
-            "operations": [
-                {
-                    "name": "search",
-                    "operation-type": "search",
-                    "index": "_all"
-                }
-            ],
-            "challenge": {
-                "name": "default-challenge",
-                "schedule": [
-                    {
-                        "operation": "search",
-                        "clients": 1
-                    },
-                    {
-                        "operation": "search",
-                        "clients": 2
-                    }
-                ]
-            }
-        }
-        reader = loader.TrackSpecificationReader()
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Challenge 'default-challenge' contains multiple tasks with the name 'search'. Please"
-                         " use the task's name property to assign a unique name for each task.",
-                         ctx.exception.args[0])
-
-    def test_parse_duplicate_explicit_task_names(self):
-        track_specification = {
-            "description": "description for unit test",
-            "operations": [
-                {
-                    "name": "search",
-                    "operation-type": "search",
-                    "index": "_all"
-                }
-            ],
-            "challenge": {
-                "name": "default-challenge",
-                "schedule": [
-                    {
-                        "name": "duplicate-task-name",
-                        "operation": "search",
-                        "clients": 1
-                    },
-                    {
-                        "name": "duplicate-task-name",
-                        "operation": "search",
-                        "clients": 2
-                    }
-                ]
-            }
-        }
-        reader = loader.TrackSpecificationReader()
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Challenge 'default-challenge' contains multiple tasks with the name "
-                         "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
-                         ctx.exception.args[0])
-
-    def test_parse_unique_task_names(self):
-        track_specification = {
-            "description": "description for unit test",
-            "operations": [
-                {
-                    "name": "search",
-                    "operation-type": "search",
-                    "index": "_all"
-                }
-            ],
-            "challenge": {
-                "name": "default-challenge",
-                "schedule": [
-                    {
-                        "name": "search-one-client",
-                        "operation": "search",
-                        "clients": 1
-                    },
-                    {
-                        "name": "search-two-clients",
-                        "operation": "search",
-                        "clients": 2
-                    }
-                ]
-            }
-        }
-        reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual("unittest", resulting_track.name)
-        schedule = resulting_track.challenges[0].schedule
-        self.assertEqual(2, len(schedule))
-        self.assertEqual("search-one-client", schedule[0].name)
-        self.assertEqual("search", schedule[0].operation.name)
-        self.assertEqual("search-two-clients", schedule[1].name)
-        self.assertEqual("search", schedule[1].operation.name)
-
     def test_parse_valid_track_specification(self):
         track_specification = {
             "description": "description for unit test",
@@ -1150,6 +1047,7 @@ class TrackSpecificationReaderTests(TestCase):
                         }
                     ]
                 }
+
             ]
         }
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
@@ -1572,19 +1470,15 @@ class TrackSpecificationReaderTests(TestCase):
                                 "clients": 2,
                                 "tasks": [
                                     {
-                                        "name": "index-1-1",
                                         "operation": "index-1"
                                     },
                                     {
-                                        "name": "index-1-2",
                                         "operation": "index-1"
                                     },
                                     {
-                                        "name": "index-1-3",
                                         "operation": "index-1"
                                     },
                                     {
-                                        "name": "index-1-4",
                                         "operation": "index-1"
                                     }
                                 ]

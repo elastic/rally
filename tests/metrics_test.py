@@ -558,7 +558,7 @@ class EsRaceStoreTests(TestCase):
 
     def test_store_race(self):
         schedule = [
-            track.Task("index #1", track.Operation("index", track.OperationType.Index))
+            track.Task(track.Operation("index", track.OperationType.Index))
         ]
 
         t = track.Track(name="unittest", description="unittest track",
@@ -584,7 +584,7 @@ class EsRaceStoreTests(TestCase):
                                     "old_gc_time": 5,
                                     "op_metrics": [
                                         {
-                                            "operation": "index #1",
+                                            "operation": "index",
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,
@@ -626,7 +626,7 @@ class EsRaceStoreTests(TestCase):
                 "old_gc_time": 5,
                 "op_metrics": [
                     {
-                        "operation": "index #1",
+                        "operation": "index",
                         "throughput": {
                             "min": 1000,
                             "median": 1250,
@@ -660,7 +660,7 @@ class EsResultsStoreTests(TestCase):
         from esrally.mechanic import cluster
 
         schedule = [
-            track.Task("index #1", track.Operation("index", track.OperationType.Index))
+            track.Task(track.Operation("index", track.OperationType.Index))
         ]
 
         t = track.Track(name="unittest-track", description="unittest track",
@@ -685,7 +685,7 @@ class EsResultsStoreTests(TestCase):
                                     "old_gc_time": 5,
                                     "op_metrics": [
                                         {
-                                            "operation": "index #1",
+                                            "operation": "index",
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,
@@ -730,7 +730,7 @@ class EsResultsStoreTests(TestCase):
                 "plugins": ["x-pack"],
                 "active": True,
                 "name": "throughput",
-                "operation": "index #1",
+                "operation": "index",
                 "value": {
                     "min": 1000,
                     "median": 1250,
@@ -931,7 +931,7 @@ class FileRaceStoreTests(TestCase):
     def test_store_race(self):
         from esrally import time
         schedule = [
-            track.Task("index #1", track.Operation("index", track.OperationType.Index))
+            track.Task(track.Operation("index", track.OperationType.Index))
         ]
 
         t = track.Track(name="unittest", description="unittest track",
@@ -957,7 +957,7 @@ class FileRaceStoreTests(TestCase):
                                     "old_gc_time": 5,
                                     "op_metrics": [
                                         {
-                                            "operation": "index #1",
+                                            "operation": "index",
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,

@@ -184,10 +184,10 @@ Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corr
 ``enable-driver-profiling``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This option enables a profiler on all tasks that the load test driver performs. It is intended to help track authors spot accidental bottlenecks, especially if they implement their own runners or parameter sources. When this mode is enabled, Rally will enable a profiler in the load driver module. After each task and for each client, Rally will add the profile information to a dedicated profile log file. For example::
+This option enables a profiler on all operations that the load test driver performs. It is intended to help track authors spot accidental bottlenecks, especially if they implement their own runners or parameter sources. When this mode is enabled, Rally will enable a profiler in the load driver module. After each task and for each client, Rally will add the profile information to a dedicated profile log file. For example::
 
    2017-02-09 08:23:24,35 rally.profile INFO
-   === Profile START for client [0] and task [index-append-1000] ===
+   === Profile START for client [0] and operation [index-append-1000] ===
       16052402 function calls (15794402 primitive calls) in 180.221 seconds
 
       Ordered by: cumulative time
@@ -204,7 +204,7 @@ This option enables a profiler on all tasks that the load test driver performs. 
       129000    0.181    0.000   41.742    0.000 /Users/dm/.rally/benchmarks/tracks/develop/bottleneck/parameter_sources/randomevent.py:79(add_fields)
       ....
 
-   === Profile END for client [0] and task [index-append-1000] ===
+   === Profile END for client [0] and operation [index-append-1000] ===
 
 In this example we can spot quickly that ``Random.seed`` is called excessively, causing an accidental bottleneck in the load test driver.
 
