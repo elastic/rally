@@ -332,7 +332,7 @@ class Driver:
         self.currently_completed = 0
         self.clients_completed_current_step = {}
         self.current_step = -1
-        self.ops_per_join_point = None
+        self.tasks_per_join_point = None
         self.complete_current_task_sent = False
 
     def start_benchmark(self, t, lap, metrics_meta_info):
@@ -366,7 +366,7 @@ class Driver:
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
-        self.ops_per_join_point = allocator.operations_per_joinpoint
+        self.tasks_per_join_point = allocator.tasks_per_joinpoint
 
         logger.info("Benchmark consists of [%d] steps executed by (at most) [%d] clients as specified by the allocation matrix:\n%s" %
                     (self.number_of_steps, len(self.allocations), self.allocations))
@@ -483,7 +483,7 @@ class Driver:
 
     def update_progress_message(self, task_finished=False):
         if not self.quiet and self.current_step >= 0:
-            ops = ",".join([op.name for op in self.ops_per_join_point[self.current_step]])
+            tasks = ",".join([t.name for t in self.tasks_per_join_point[self.current_step]])
 
             if task_finished:
                 total_progress = 1.0
@@ -496,7 +496,7 @@ class Driver:
 
                 num_clients = max(len(progress_per_client), 1)
                 total_progress = sum(progress_per_client) / num_clients
-            self.progress_reporter.print("Running %s" % ops, "[%3d%% done]" % (round(total_progress * 100)))
+            self.progress_reporter.print("Running %s" % tasks, "[%3d%% done]" % (round(total_progress * 100)))
             if task_finished:
                 self.progress_reporter.finish()
 
@@ -517,13 +517,13 @@ class Driver:
                 sample.task.meta_data,
                 sample.request_meta_data)
 
-            self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.operation.name,
+            self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.task.name,
                                                        operation_type=sample.operation.type, sample_type=sample.sample_type,
                                                        absolute_time=sample.absolute_time, relative_time=sample.relative_time,
                                                        meta_data=meta_data)
 
             self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms",
-                                                       operation=sample.operation.name, operation_type=sample.operation.type,
+                                                       operation=sample.task.name, operation_type=sample.operation.type,
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                        relative_time=sample.relative_time, meta_data=meta_data)
 
@@ -541,10 +541,9 @@ class Driver:
                 task.operation.meta_data,
                 task.meta_data
             )
-            op = task.operation
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
-                                                           operation=op.name, operation_type=op.type, sample_type=sample_type,
+                                                           operation=task.name, operation_type=task.operation.type, sample_type=sample_type,
                                                            absolute_time=absolute_time, relative_time=relative_time, meta_data=meta_data)
         end = time.perf_counter()
         logger.info("Storing throughput took [%f] seconds." % (end - start))
@@ -723,7 +722,7 @@ class LoadGenerator(actor.RallyActor):
                 schedule = schedule_for(self.track, task_allocation.task, task_allocation.client_index_in_task)
 
                 executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
-                final_executor = Profiler(executor, self.client_id, task.operation) if profiling_enabled else executor
+                final_executor = Profiler(executor, self.client_id, task) if profiling_enabled else executor
 
                 self.executor_future = self.pool.submit(final_executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
@@ -1056,18 +1055,18 @@ class ThroughputCalculator:
 
 
 class Profiler:
-    def __init__(self, target, client_id, operation):
+    def __init__(self, target, client_id, task):
         """
         :param target: The actual executor which should be profiled.
         :param client_id: The id of the client that executes the operation.
-        :param operation: The operation that is executed.
+        :param task: The task that is executed.
         """
         self.target = target
         self.client_id = client_id
-        self.operation = operation
+        self.task = task
 
     def __call__(self, *args, **kwargs):
-        logger.debug("Enabling Python profiler for [%s]" % str(self.operation))
+        logger.debug("Enabling Python profiler for [%s]" % str(self.task))
         import cProfile
         import pstats
         import io as python_io
@@ -1082,9 +1081,9 @@ class Profiler:
             ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
             ps.print_stats()
 
-            profile = "\n=== Profile START for client [%s] and operation [%s] ===\n" % (str(self.client_id), str(self.operation))
+            profile = "\n=== Profile START for client [%s] and task [%s] ===\n" % (str(self.client_id), str(self.task))
             profile += s.getvalue()
-            profile += "=== Profile END for client [%s] and operation [%s] ===" % (str(self.client_id), str(self.operation))
+            profile += "=== Profile END for client [%s] and task [%s] ===" % (str(self.client_id), str(self.task))
             profile_logger.info(profile)
 
 
@@ -1306,24 +1305,24 @@ class Allocator:
         return [allocation for allocation in self.allocations[0] if isinstance(allocation, JoinPoint)]
 
     @property
-    def operations_per_joinpoint(self):
+    def tasks_per_joinpoint(self):
         """
 
-        Calculates a flat list of all unique operations that are run in between join points.
+        Calculates a flat list of all tasks that are run in between join points.
 
         Consider the following schedule (2 clients):
 
-        1. op1 and op2 run by both clients in parallel
+        1. task1 and task2 run by both clients in parallel
         2. join point
-        3. op3 run by client 1
+        3. task3 run by client 1
         4. join point
 
-        The results in: [{op1, op2}, {op3}]
+        The results in: [{task1, task2}, {task3}]
 
-        :return: A list of sets containing all operations.
+        :return: A list of sets containing all tasks.
         """
-        ops = []
-        current_ops = set()
+        tasks = []
+        current_tasks = set()
 
         allocs = self.allocations
         # assumption: the shape of allocs is rectangular (i.e. each client contains the same number of elements)
@@ -1331,12 +1330,12 @@ class Allocator:
             for client in range(0, self.clients):
                 allocation = allocs[client][idx]
                 if isinstance(allocation, TaskAllocation):
-                    current_ops.add(allocation.task.operation)
-                elif isinstance(allocation, JoinPoint) and len(current_ops) > 0:
-                    ops.append(current_ops)
-                    current_ops = set()
+                    current_tasks.add(allocation.task)
+                elif isinstance(allocation, JoinPoint) and len(current_tasks) > 0:
+                    tasks.append(current_tasks)
+                    current_tasks = set()
 
-        return ops
+        return tasks
 
     @property
     def clients(self):

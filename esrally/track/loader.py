@@ -410,7 +410,7 @@ def filters_from_included_tasks(included_tasks):
         for t in included_tasks:
             spec = t.split(":")
             if len(spec) == 1:
-                filters.append(track.TaskOpNameFilter(spec[0]))
+                filters.append(track.TaskNameFilter(spec[0]))
             elif len(spec) == 2:
                 if spec[0] == "type":
                     filters.append(track.TaskOpTypeFilter(spec[1]))
@@ -689,6 +689,16 @@ class TrackSpecificationReader:
                     task = self.parse_task(op, ops, name)
                 schedule.append(task)
 
+            # verify we don't have any duplicate task names (which can be confusing / misleading in reporting).
+            known_task_names = set()
+            for task in schedule:
+                for sub_task in task:
+                    if sub_task.name in known_task_names:
+                        self._error("Challenge '%s' contains multiple tasks with the name '%s'. Please use the task's name property to "
+                                    "assign a unique name for each task." % (name, sub_task.name))
+                    else:
+                        known_task_names.add(sub_task.name)
+
             challenge = track.Challenge(name=name,
                                         meta_data=meta_data,
                                         description=description,
@@ -758,7 +768,8 @@ class TrackSpecificationReader:
             op = self.parse_operation(op_spec, error_ctx="inline operation in challenge %s" % challenge_name)
 
         schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False, default_value="deterministic")
-        task = track.Task(operation=op,
+        task = track.Task(name=self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name),
+                          operation=op,
                           meta_data=self._r(task_spec, "meta", error_ctx=op.name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
                                                     default_value=default_warmup_iterations),
