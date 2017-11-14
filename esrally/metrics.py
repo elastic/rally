@@ -352,7 +352,7 @@ class MetricsStore:
             "car": self._car
         }
 
-    def put_count_cluster_level(self, name, count, unit=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
+    def put_count_cluster_level(self, name, count, unit=None, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
                                 absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new cluster level counter metric.
@@ -360,20 +360,21 @@ class MetricsStore:
         :param name: The name of the metric.
         :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
         :param unit: A count may or may not have unit.
-        :param operation The operation name to which this value applies. Optional. Defaults to None.
-        :param operation_type The operation type to which this value applies. Optional. Defaults to None.
-        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
-        :param absolute_time The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
+        :param task: The task name to which this value applies. Optional. Defaults to None.
+        :param operation: The operation name to which this value applies. Optional. Defaults to None.
+        :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
+        :param sample_type: Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
+        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
                store will derive the timestamp automatically.
-        :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
+        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.cluster, None, name, count, unit, operation, operation_type, sample_type, absolute_time, relative_time,
-                  meta_data)
+        self._put(MetaInfoScope.cluster, None, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
+                  relative_time, meta_data)
 
-    def put_count_node_level(self, node_name, name, count, unit=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                             absolute_time=None, relative_time=None, meta_data=None):
+    def put_count_node_level(self, node_name, name, count, unit=None, task=None, operation=None, operation_type=None,
+                             sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new node level counter metric.
 
@@ -381,20 +382,21 @@ class MetricsStore:
         :param node_name: The name of the cluster node for which this metric has been determined.
         :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
         :param unit: A count may or may not have unit.
-        :param operation The operation name to which this value applies. Optional. Defaults to None.
-        :param operation_type The operation type to which this value applies. Optional. Defaults to None.
+        :param task: The task name to which this value applies. Optional. Defaults to None.
+        :param operation: The operation name to which this value applies. Optional. Defaults to None.
+        :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
         :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
-        :param absolute_time The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
+        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
                store will derive the timestamp automatically.
-        :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
+        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.node, node_name, name, count, unit, operation, operation_type, sample_type, absolute_time, relative_time,
-                  meta_data)
+        self._put(MetaInfoScope.node, node_name, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
+                  relative_time, meta_data)
 
     # should be a float
-    def put_value_cluster_level(self, name, value, unit, operation=None, operation_type=None, sample_type=SampleType.Normal,
+    def put_value_cluster_level(self, name, value, unit, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
                                 absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new cluster level value metric.
@@ -402,20 +404,21 @@ class MetricsStore:
         :param name: The name of the metric.
         :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
         :param unit: The unit of this metric value (e.g. ms, docs/s).
-        :param operation The operation name to which this value applies. Optional. Defaults to None.
-        :param operation_type The operation type to which this value applies. Optional. Defaults to None.
-        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
-        :param absolute_time The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
+        :param task: The task name to which this value applies. Optional. Defaults to None.
+        :param operation: The operation name to which this value applies. Optional. Defaults to None.
+        :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
+        :param sample_type: Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
+        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
                store will derive the timestamp automatically.
-        :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
+        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.cluster, None, name, value, unit, operation, operation_type, sample_type, absolute_time, relative_time,
-                  meta_data)
+        self._put(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
+                  relative_time, meta_data)
 
-    def put_value_node_level(self, node_name, name, value, unit, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                             absolute_time=None, relative_time=None, meta_data=None):
+    def put_value_node_level(self, node_name, name, value, unit, task=None, operation=None, operation_type=None,
+                             sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new node level value metric.
 
@@ -423,20 +426,21 @@ class MetricsStore:
         :param node_name: The name of the cluster node for which this metric has been determined.
         :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
         :param unit: The unit of this metric value (e.g. ms, docs/s)
-        :param operation The operation name to which this value applies. Optional. Defaults to None.
-        :param operation_type The operation type to which this value applies. Optional. Defaults to None.
-        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
-        :param absolute_time The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
+        :param task: The task name to which this value applies. Optional. Defaults to None.
+        :param operation: The operation name to which this value applies. Optional. Defaults to None.
+        :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
+        :param sample_type: Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
+        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
                store will derive the timestamp automatically.
-        :param relative_time The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
+        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.node, node_name, name, value, unit, operation, operation_type, sample_type, absolute_time, relative_time,
-                  meta_data)
+        self._put(MetaInfoScope.node, node_name, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
+                  relative_time, meta_data)
 
-    def _put(self, level, level_key, name, value, unit, operation, operation_type, sample_type, absolute_time=None, relative_time=None,
-             meta_data=None):
+    def _put(self, level, level_key, name, value, unit, task, operation, operation_type, sample_type, absolute_time=None,
+             relative_time=None, meta_data=None):
         if level == MetaInfoScope.cluster:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
         elif level == MetaInfoScope.node:
@@ -468,6 +472,8 @@ class MetricsStore:
             "sample-type": sample_type.name.lower(),
             "meta": meta
         }
+        if task:
+            doc["task"] = task
         if operation:
             doc["operation"] = operation
         if operation_type:
@@ -500,71 +506,68 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+    def get_one(self, name, sample_type=None, lap=None):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
-        :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name, operation, operation_type, sample_type, lap))
+        return self._first_or_none(self.get(name=name, sample_type=sample_type, lap=lap))
 
     def _first_or_none(self, values):
         return values[0] if values else None
 
-    def get(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+    def get(self, name, task=None, operation_type=None, sample_type=None, lap=None):
         """
         Gets all raw values for the given metric name.
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
+        :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A list of all values for the given metric.
         """
-        return self._get(name, operation, operation_type, sample_type, lap, lambda doc: doc["value"])
+        return self._get(name, task, operation_type, sample_type, lap, lambda doc: doc["value"])
 
-    def get_unit(self, name, operation=None, operation_type=None):
+    def get_unit(self, name, task=None):
         """
         Gets the unit for the given metric name.
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
-        :param operation_type The operation type to query. Optional.
+        :param task The task name to query. Optional.
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, operation, operation_type, None, None, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, None, None, None, lambda doc: doc["unit"]))
 
-    def _get(self, name, operation, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, lap, mapper):
         raise NotImplementedError("abstract method")
 
-    def get_count(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+    def get_count(self, name, task=None, operation_type=None, sample_type=None, lap=None):
         """
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
+        :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The number of samples for this metric.
         """
-        stats = self.get_stats(name, operation, operation_type, sample_type, lap)
+        stats = self.get_stats(name, task, operation_type, sample_type, lap)
         if stats:
             return stats["count"]
         else:
             return 0
 
-    def get_error_rate(self, operation, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
         """
-        Gets the error rate for a specific operation.
+        Gets the error rate for a specific task.
 
-        :param operation The operation name to query.
+        :param task The task name to query.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
@@ -572,12 +575,12 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_stats(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None, lap=None):
         """
         Gets standard statistics for the given metric.
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
+        :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
@@ -585,12 +588,12 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_percentiles(self, name, operation=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
         """
         Retrieves percentile metrics for the given metric.
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
+        :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
@@ -602,19 +605,19 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_median(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+    def get_median(self, name, task=None, operation_type=None, sample_type=None, lap=None):
         """
         Retrieves median value of the given metric.
 
         :param name: The metric name to query.
-        :param operation The operation name to query. Optional.
+        :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The median value.
         """
         median = "50.0"
-        percentiles = self.get_percentiles(name, operation, operation_type, sample_type, lap, percentiles=[median])
+        percentiles = self.get_percentiles(name, task, operation_type, sample_type, lap, percentiles=[median])
         return percentiles[median] if percentiles else None
 
 
@@ -632,7 +635,7 @@ class EsMetricsStore(MetricsStore):
         """
         Creates a new metrics store.
 
-        :param config: The config object. Mandatory.
+        :param cfg: The config object. Mandatory.
         :param client_factory_class: This parameter is optional and needed for testing.
         :param index_template_provider_class: This parameter is optional and needed for testing.
         :param clock: This parameter is optional and needed for testing.
@@ -677,18 +680,18 @@ class EsMetricsStore(MetricsStore):
     def _add(self, doc):
         self._docs.append(doc)
 
-    def _get(self, name, operation, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, lap, mapper):
         query = {
-            "query": self._query_by_name(name, operation, operation_type, sample_type, lap)
+            "query": self._query_by_name(name, task, operation_type, sample_type, lap)
         }
         logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s]" % (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         logger.debug("Metrics query produced [%s] results." % result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
-    def get_error_rate(self, operation, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
         query = {
-            "query": self._query_by_name("service_time", operation, operation_type, sample_type, lap),
+            "query": self._query_by_name("service_time", task, operation_type, sample_type, lap),
             "size": 0,
             "aggs": {
                 "error_rate": {
@@ -723,7 +726,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return count_errors / (count_errors + count_success)
 
-    def get_stats(self, name, operation=None, operation_type=None, sample_type=None, lap=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None, lap=None):
         """
         Gets standard statistics for the given metric name.
 
@@ -731,7 +734,7 @@ class EsMetricsStore(MetricsStore):
         https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
         """
         query = {
-            "query": self._query_by_name(name, operation, operation_type, sample_type, lap),
+            "query": self._query_by_name(name, task, operation_type, sample_type, lap),
             "size": 0,
             "aggs": {
                 "metric_stats": {
@@ -746,11 +749,11 @@ class EsMetricsStore(MetricsStore):
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         return result["aggregations"]["metric_stats"]
 
-    def get_percentiles(self, name, operation=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {
-            "query": self._query_by_name(name, operation, operation_type, sample_type, lap),
+            "query": self._query_by_name(name, task, operation_type, sample_type, lap),
             "size": 0,
             "aggs": {
                 "percentile_stats": {
@@ -772,7 +775,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def _query_by_name(self, name, operation, operation_type, sample_type, lap):
+    def _query_by_name(self, name, task, operation_type, sample_type, lap):
         q = {
             "bool": {
                 "filter": [
@@ -809,10 +812,10 @@ class EsMetricsStore(MetricsStore):
                 ]
             }
         }
-        if operation:
+        if task:
             q["bool"]["filter"].append({
                 "term": {
-                    "operation": operation
+                    "task": task
                 }
             })
         if operation_type:
@@ -878,11 +881,11 @@ class InMemoryMetricsStore(MetricsStore):
                     (sys.getsizeof(docs), sys.getsizeof(compressed)))
         return compressed
 
-    def get_percentiles(self, name, operation=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         result = collections.OrderedDict()
-        values = self.get(name, operation, operation_type, sample_type, lap)
+        values = self.get(name, task, operation_type, sample_type, lap)
         if len(values) > 0:
             sorted_values = sorted(values)
             for percentile in percentiles:
@@ -911,12 +914,12 @@ class InMemoryMetricsStore(MetricsStore):
             higher_score = sorted_values[lr_next]
             return lower_score + (higher_score - lower_score) * fr
 
-    def get_error_rate(self, operation, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
         error = 0
         total_count = 0
         for doc in self.docs:
             # we can use any request metrics record (i.e. service time or latency)
-            if doc["name"] == "service_time" and doc["operation"] == operation and \
+            if doc["name"] == "service_time" and doc["task"] == task and \
                     (operation_type is None or doc["operation-type"] == operation_type.name) and \
                     (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and \
                     (lap is None or doc["lap"] == lap):
@@ -928,8 +931,8 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return 0.0
 
-    def get_stats(self, name, operation=None, operation_type=None, sample_type=SampleType.Normal, lap=None):
-        values = self.get(name, operation, operation_type, sample_type, lap)
+    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal, lap=None):
+        values = self.get(name, task, operation_type, sample_type, lap)
         sorted_values = sorted(values)
         if len(sorted_values) > 0:
             return {
@@ -942,11 +945,11 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return None
 
-    def _get(self, name, operation, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, lap, mapper):
         return [mapper(doc)
                 for doc in self.docs
                 if doc["name"] == name and
-                (operation is None or doc["operation"] == operation) and
+                (task is None or doc["task"] == task) and
                 (operation_type is None or doc["operation-type"] == operation_type.name) and
                 (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
                 (lap is None or doc["lap"] == lap)

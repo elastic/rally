@@ -59,7 +59,7 @@ Please be patient as it will take a while to run the benchmark.
 
 When the race has finished, Rally will show a summary on the command line::
 
-    |                          Metric |    Operation |     Value |   Unit |
+    |                          Metric |         Task |     Value |   Unit |
     |--------------------------------:|-------------:|----------:|-------:|
     |                   Indexing time |              |   124.712 |    min |
     |                      Merge time |              |   21.8604 |    min |

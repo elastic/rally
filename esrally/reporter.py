@@ -95,6 +95,7 @@ class StatsCalculator:
                 logger.debug("Gathering request metrics for [%s]." % t)
                 result.add_op_metrics(
                     t,
+                    task.operation.name,
                     self.summary_stats("throughput", t),
                     self.single_latency(t),
                     self.single_latency(t, metric_name="service_time"),
@@ -151,10 +152,10 @@ class StatsCalculator:
     def one(self, metric_name):
         return self.store.get_one(metric_name, lap=self.lap)
 
-    def summary_stats(self, metric_name, operation_name):
-        median = self.store.get_median(metric_name, operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
-        unit = self.store.get_unit(metric_name, operation=operation_name)
-        stats = self.store.get_stats(metric_name, operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+    def summary_stats(self, metric_name, task_name):
+        median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        unit = self.store.get_unit(metric_name, task=task_name)
+        stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         if median and stats:
             return {
                 "min": stats["min"],
@@ -170,19 +171,19 @@ class StatsCalculator:
                 "unit": unit
             }
 
-    def error_rate(self, operation_name):
-        return self.store.get_error_rate(operation=operation_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+    def error_rate(self, task_name):
+        return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
 
-    def median(self, metric_name, operation_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, operation=operation_name, operation_type=operation_type, sample_type=sample_type,
+    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
+        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type,
                                      lap=self.lap)
 
-    def single_latency(self, operation, metric_name="latency"):
+    def single_latency(self, task, metric_name="latency"):
         sample_type = metrics.SampleType.Normal
-        sample_size = self.store.get_count(metric_name, operation=operation, sample_type=sample_type, lap=self.lap)
+        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type, lap=self.lap)
         if sample_size > 0:
             percentiles = self.store.get_percentiles(metric_name,
-                                                     operation=operation,
+                                                     task=task,
                                                      sample_type=sample_type,
                                                      percentiles=self.percentiles_for_sample_size(sample_size),
                                                      lap=self.lap)
@@ -257,13 +258,18 @@ class Stats:
             if metric == "op_metrics":
                 for item in value:
                     if "throughput" in item:
-                        all_results.append({"operation": item["operation"], "name": "throughput", "value": item["throughput"]})
+                        all_results.append(
+                            {"task": item["task"], "operation": item["operation"], "name": "throughput", "value": item["throughput"]})
                     if "latency" in item:
-                        all_results.append({"operation": item["operation"], "name": "latency", "value": item["latency"]})
+                        all_results.append(
+                            {"task": item["task"], "operation": item["operation"], "name": "latency", "value": item["latency"]})
                     if "service_time" in item:
-                        all_results.append({"operation": item["operation"], "name": "service_time", "value": item["service_time"]})
+                        all_results.append(
+                            {"task": item["task"], "operation": item["operation"], "name": "service_time", "value": item["service_time"]})
                     if "error_rate" in item:
-                        all_results.append({"operation": item["operation"], "name": "error_rate", "value": {"single": item["error_rate"]}})
+                        all_results.append(
+                            {"task": item["task"], "operation": item["operation"], "name": "error_rate",
+                             "value": {"single": item["error_rate"]}})
             elif value is not None:
                 result = {
                     "name": metric,
@@ -278,8 +284,9 @@ class Stats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, operation, throughput, latency, service_time, error_rate):
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate):
         self.op_metrics.append({
+            "task": task,
             "operation": operation,
             "throughput": throughput,
             "latency": latency,
@@ -287,12 +294,14 @@ class Stats:
             "error_rate": error_rate
         })
 
-    def operations(self):
-        return [v["operation"] for v in self.op_metrics]
+    def tasks(self):
+        # ensure we can read race.json files before Rally 0.8.0
+        return [v.get("task", v["operation"]) for v in self.op_metrics]
 
-    def metrics(self, operation):
+    def metrics(self, task):
+        # ensure we can read race.json files before Rally 0.8.0
         for r in self.op_metrics:
-            if r["operation"] == operation:
+            if r.get("task", r["operation"]) == task:
                 return r
         return None
 
@@ -373,12 +382,12 @@ class SummaryReporter:
         metrics_table += self.report_segment_counts(stats)
 
         for record in stats.op_metrics:
-            operation = record["operation"]
-            metrics_table += self.report_throughput(record, operation)
-            metrics_table += self.report_latency(record, operation)
-            metrics_table += self.report_service_time(record, operation)
-            metrics_table += self.report_error_rate(record, operation)
-            self.add_warnings(warnings, record, operation)
+            task = record["task"]
+            metrics_table += self.report_throughput(record, task)
+            metrics_table += self.report_latency(record, task)
+            metrics_table += self.report_service_time(record, task)
+            metrics_table += self.report_error_rate(record, task)
+            self.add_warnings(warnings, record, task)
 
         meta_info_table += self.report_meta_info()
 
@@ -401,49 +410,49 @@ class SummaryReporter:
         report_file = self._config.opts("reporting", "output.path")
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Operation", "Value", "Unit"],
+        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Task", "Value", "Unit"],
                             data_plain=metrics_table,
                             data_rich=metrics_table, write_header=self.needs_header())
         if self.is_final_report() and len(report_file) > 0:
             write_single_report("%s.meta" % report_file, report_format, cwd, headers=["Name", "Value"], data_plain=meta_info_table,
                                 data_rich=meta_info_table, show_also_in_console=False)
 
-    def report_throughput(self, values, operation):
+    def report_throughput(self, values, task):
         min = values["throughput"]["min"]
         median = values["throughput"]["median"]
         max = values["throughput"]["max"]
         unit = values["throughput"]["unit"]
 
         throughput = []
-        self.append_if_present(throughput, "Min Throughput", operation, min, unit, lambda v: "%.2f" % v)
-        self.append_if_present(throughput, "Median Throughput", operation, median, unit, lambda v: "%.2f" % v)
-        self.append_if_present(throughput, "Max Throughput", operation, max, unit, lambda v: "%.2f" % v)
+        self.append_if_present(throughput, "Min Throughput", task, min, unit, lambda v: "%.2f" % v)
+        self.append_if_present(throughput, "Median Throughput", task, median, unit, lambda v: "%.2f" % v)
+        self.append_if_present(throughput, "Max Throughput", task, max, unit, lambda v: "%.2f" % v)
         return throughput
 
-    def report_latency(self, values, operation):
+    def report_latency(self, values, task):
         lines = []
         latency = values["latency"]
         if latency:
             for percentile, value in latency.items():
-                lines.append([self.lap, "%sth percentile latency" % self.decode_percentile_key(percentile), operation, value, "ms"])
+                lines.append([self.lap, "%sth percentile latency" % self.decode_percentile_key(percentile), task, value, "ms"])
         return lines
 
-    def report_service_time(self, values, operation):
+    def report_service_time(self, values, task):
         lines = []
         service_time = values["service_time"]
         if service_time:
             for percentile, value in service_time.items():
-                lines.append([self.lap, "%sth percentile service time" % self.decode_percentile_key(percentile), operation, value, "ms"])
+                lines.append([self.lap, "%sth percentile service time" % self.decode_percentile_key(percentile), task, value, "ms"])
         return lines
 
     def decode_percentile_key(self, k):
         return k.replace("_", ".")
 
-    def report_error_rate(self, values, operation):
+    def report_error_rate(self, values, task):
         lines = []
         error_rate = values["error_rate"]
         if error_rate is not None:
-            lines.append([self.lap, "error rate", operation, "%.2f" % (error_rate * 100.0), "%"])
+            lines.append([self.lap, "error rate", task, "%.2f" % (error_rate * 100.0), "%"])
         return lines
 
     def report_total_times(self, stats):
@@ -457,9 +466,9 @@ class SummaryReporter:
 
         return total_times
 
-    def append_if_present(self, l, k, operation, v, unit, converter=lambda x: x):
+    def append_if_present(self, l, k, task, v, unit, converter=lambda x: x):
         if v:
-            l.append([self.lap, k, operation, converter(v), unit])
+            l.append([self.lap, k, task, converter(v), unit])
 
     def report_merge_part_times(self, stats):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
@@ -568,77 +577,77 @@ class ComparisonReporter:
         metrics_table += self.report_segment_memory(baseline_stats, contender_stats)
         metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
 
-        for op in baseline_stats.operations():
-            if op in contender_stats.operations():
-                metrics_table += self.report_throughput(baseline_stats, contender_stats, op)
-                metrics_table += self.report_latency(baseline_stats, contender_stats, op)
-                metrics_table += self.report_service_time(baseline_stats, contender_stats, op)
-                metrics_table += self.report_error_rate(baseline_stats, contender_stats, op)
+        for t in baseline_stats.tasks():
+            if t in contender_stats.tasks():
+                metrics_table += self.report_throughput(baseline_stats, contender_stats, t)
+                metrics_table += self.report_latency(baseline_stats, contender_stats, t)
+                metrics_table += self.report_service_time(baseline_stats, contender_stats, t)
+                metrics_table += self.report_error_rate(baseline_stats, contender_stats, t)
         return metrics_table
 
     def format_as_table(self, table):
         return tabulate.tabulate(table,
-                                 headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
+                                 headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
                                  tablefmt="pipe", numalign="right", stralign="right")
 
     def write_report(self, metrics_table, metrics_table_console):
         report_file = self._config.opts("reporting", "output.path")
         report_format = self._config.opts("reporting", "format")
         cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"],
+        write_single_report(report_file, report_format, cwd, headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
                             data_plain=metrics_table, data_rich=metrics_table_console, write_header=True)
 
-    def report_throughput(self, baseline_stats, contender_stats, operation):
-        b_min = baseline_stats.metrics(operation)["throughput"]["min"]
-        b_median = baseline_stats.metrics(operation)["throughput"]["median"]
-        b_max = baseline_stats.metrics(operation)["throughput"]["max"]
-        b_unit = baseline_stats.metrics(operation)["throughput"]["unit"]
+    def report_throughput(self, baseline_stats, contender_stats, task):
+        b_min = baseline_stats.metrics(task)["throughput"]["min"]
+        b_median = baseline_stats.metrics(task)["throughput"]["median"]
+        b_max = baseline_stats.metrics(task)["throughput"]["max"]
+        b_unit = baseline_stats.metrics(task)["throughput"]["unit"]
 
-        c_min = contender_stats.metrics(operation)["throughput"]["min"]
-        c_median = contender_stats.metrics(operation)["throughput"]["median"]
-        c_max = contender_stats.metrics(operation)["throughput"]["max"]
+        c_min = contender_stats.metrics(task)["throughput"]["min"]
+        c_median = contender_stats.metrics(task)["throughput"]["median"]
+        c_max = contender_stats.metrics(task)["throughput"]["max"]
 
         return self.join(
-            self.line("Min Throughput", b_min, c_min, operation, b_unit, treat_increase_as_improvement=True),
-            self.line("Median Throughput", b_median, c_median, operation, b_unit, treat_increase_as_improvement=True),
-            self.line("Max Throughput", b_max, c_max, operation, b_unit, treat_increase_as_improvement=True)
+            self.line("Min Throughput", b_min, c_min, task, b_unit, treat_increase_as_improvement=True),
+            self.line("Median Throughput", b_median, c_median, task, b_unit, treat_increase_as_improvement=True),
+            self.line("Max Throughput", b_max, c_max, task, b_unit, treat_increase_as_improvement=True)
         )
 
-    def report_latency(self, baseline_stats, contender_stats, operation):
+    def report_latency(self, baseline_stats, contender_stats, task):
         lines = []
 
-        baseline_latency = baseline_stats.metrics(operation)["latency"]
-        contender_latency = contender_stats.metrics(operation)["latency"]
+        baseline_latency = baseline_stats.metrics(task)["latency"]
+        contender_latency = contender_stats.metrics(task)["latency"]
 
         for percentile, baseline_value in baseline_latency.items():
             if percentile in contender_latency:
                 contender_value = contender_latency[percentile]
                 lines.append(self.line("%sth percentile latency" % self.decode_percentile_key(percentile), baseline_value, contender_value,
-                                       operation, "ms", treat_increase_as_improvement=False))
+                                       task, "ms", treat_increase_as_improvement=False))
         return lines
 
-    def report_service_time(self, baseline_stats, contender_stats, operation):
+    def report_service_time(self, baseline_stats, contender_stats, task):
         lines = []
 
-        baseline_service_time = baseline_stats.metrics(operation)["service_time"]
-        contender_service_time = contender_stats.metrics(operation)["service_time"]
+        baseline_service_time = baseline_stats.metrics(task)["service_time"]
+        contender_service_time = contender_stats.metrics(task)["service_time"]
 
         for percentile, baseline_value in baseline_service_time.items():
             if percentile in contender_service_time:
                 contender_value = contender_service_time[percentile]
                 self.append_if_present(lines, self.line("%sth percentile service time" %
                                                         self.decode_percentile_key(percentile), baseline_value, contender_value,
-                                                        operation, "ms", treat_increase_as_improvement=False))
+                                                        task, "ms", treat_increase_as_improvement=False))
         return lines
 
     def decode_percentile_key(self, k):
         return k.replace("_", ".")
 
-    def report_error_rate(self, baseline_stats, contender_stats, operation):
-        baseline_error_rate = baseline_stats.metrics(operation)["error_rate"]
-        contender_error_rate = contender_stats.metrics(operation)["error_rate"]
+    def report_error_rate(self, baseline_stats, contender_stats, task):
+        baseline_error_rate = baseline_stats.metrics(task)["error_rate"]
+        contender_error_rate = contender_stats.metrics(task)["error_rate"]
         return self.join(
-            self.line("error rate", baseline_error_rate, contender_error_rate, operation, "%",
+            self.line("error rate", baseline_error_rate, contender_error_rate, task, "%",
                       treat_increase_as_improvement=False, formatter=convert.factor(100.0))
         )
 
@@ -738,9 +747,9 @@ class ComparisonReporter:
         else:
             return []
 
-    def line(self, metric, baseline, contender, operation, unit, treat_increase_as_improvement, formatter=lambda x: x):
+    def line(self, metric, baseline, contender, task, unit, treat_increase_as_improvement, formatter=lambda x: x):
         if baseline is not None and contender is not None:
-            return [metric, str(operation), formatter(baseline), formatter(contender),
+            return [metric, str(task), formatter(baseline), formatter(contender),
                     self.diff(baseline, contender, treat_increase_as_improvement, formatter), unit]
         else:
             return []

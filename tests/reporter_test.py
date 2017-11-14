@@ -24,23 +24,23 @@ class StatsCalculatorTests(TestCase):
         store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
         store.lap = 1
 
-        store.put_value_cluster_level("throughput", 500, unit="docs/s", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("throughput", 1000, unit="docs/s", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("throughput", 2000, unit="docs/s", operation="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("throughput", 500, unit="docs/s", task="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("throughput", 1000, unit="docs/s", task="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("throughput", 2000, unit="docs/s", task="index #1", operation_type=track.OperationType.Index)
 
-        store.put_value_cluster_level("latency", 2800, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("latency", 2800, unit="ms", task="index #1", operation_type=track.OperationType.Index,
                                       sample_type=metrics.SampleType.Warmup)
-        store.put_value_cluster_level("latency", 200, unit="ms", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("latency", 220, unit="ms", operation="index #1", operation_type=track.OperationType.Index)
-        store.put_value_cluster_level("latency", 225, unit="ms", operation="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("latency", 200, unit="ms", task="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("latency", 220, unit="ms", task="index #1", operation_type=track.OperationType.Index)
+        store.put_value_cluster_level("latency", 225, unit="ms", task="index #1", operation_type=track.OperationType.Index)
 
-        store.put_value_cluster_level("service_time", 250, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 250, unit="ms", task="index #1", operation_type=track.OperationType.Index,
                                       sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
-        store.put_value_cluster_level("service_time", 190, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 190, unit="ms", task="index #1", operation_type=track.OperationType.Index,
                                       meta_data={"success": True})
-        store.put_value_cluster_level("service_time", 200, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 200, unit="ms", task="index #1", operation_type=track.OperationType.Index,
                                       meta_data={"success": False})
-        store.put_value_cluster_level("service_time", 215, unit="ms", operation="index #1", operation_type=track.OperationType.Index,
+        store.put_value_cluster_level("service_time", 215, unit="ms", task="index #1", operation_type=track.OperationType.Index,
                                       meta_data={"success": True})
         store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
         store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
@@ -70,6 +70,7 @@ class StatsTests(TestCase):
         d = {
             "op_metrics": [
                 {
+                    "task": "index #1",
                     "operation": "index",
                     "throughput": {
                         "min": 450,
@@ -96,6 +97,7 @@ class StatsTests(TestCase):
         metric_list = s.as_flat_list()
         self.assertEqual({
             "name": "throughput",
+            "task": "index #1",
             "operation": "index",
             "value": {
                 "min": 450,
@@ -107,6 +109,7 @@ class StatsTests(TestCase):
 
         self.assertEqual({
             "name": "service_time",
+            "task": "index #1",
             "operation": "index",
             "value": {
                 "50": 341,
@@ -116,6 +119,7 @@ class StatsTests(TestCase):
 
         self.assertEqual({
             "name": "latency",
+            "task": "index #1",
             "operation": "index",
             "value": {
                 "50": 340,
@@ -125,6 +129,7 @@ class StatsTests(TestCase):
 
         self.assertEqual({
             "name": "error_rate",
+            "task": "index #1",
             "operation": "index",
             "value": {
                 "single": 0.0
@@ -155,7 +160,7 @@ class ComparisonReporterTests(TestCase):
         # 1 header line, 1 separation line + 0 data lines
         self.assertEqual(1 + 1 + 0, len(formatted.splitlines()))
 
-        # ["Metric", "Operation", "Baseline", "Contender", "Diff", "Unit"]
+        # ["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"]
         metrics_table = [
             ["Min Throughput", "index", "17300", "18000", "700", "ops/s"],
             ["Median Throughput", "index", "17500", "18500", "1000", "ops/s"],

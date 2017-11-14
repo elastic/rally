@@ -24,6 +24,7 @@ Here is a typical metrics record::
           "name": "throughput",
           "value": 27385,
           "unit": "docs/s",
+          "task": "index-append-no-conflicts",
           "operation": "index-append-no-conflicts",
           "operation-type": "Index",
           "lap": 1,
@@ -82,8 +83,10 @@ name, value, unit
 
 This is the actual metric name and value with an optional unit (counter metrics don't have a unit). Depending on the nature of a metric, it is either sampled periodically by Rally, e.g. the CPU utilization or query latency or just measured once like the final size of the index.
 
-operation, operation-type
-~~~~~~~~~~~~~~~~~~~~~~~~~
+task, operation, operation-type
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``task`` is the name of the task (as specified in the track file) that ran when this metric has been gathered. Most of the time, this value will be identical to the operation's name but if the same operation is ran multiple times, the task name will be unique whereas the operation may occur multiple times. It will only be set for metrics with name ``latency`` and ``throughput``.
 
 ``operation`` is the name of the operation (as specified in the track file) that ran when this metric has been gathered. It will only be set for metrics with name ``latency`` and ``throughput``.
 

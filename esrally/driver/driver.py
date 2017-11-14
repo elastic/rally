@@ -517,12 +517,12 @@ class Driver:
                 sample.task.meta_data,
                 sample.request_meta_data)
 
-            self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", operation=sample.task.name,
-                                                       operation_type=sample.operation.type, sample_type=sample.sample_type,
-                                                       absolute_time=sample.absolute_time, relative_time=sample.relative_time,
-                                                       meta_data=meta_data)
+            self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", task=sample.task.name,
+                                                       operation=sample.operation.name, operation_type=sample.operation.type,
+                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                       relative_time=sample.relative_time, meta_data=meta_data)
 
-            self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms",
+            self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms", task=sample.task.name,
                                                        operation=sample.task.name, operation_type=sample.operation.type,
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                        relative_time=sample.relative_time, meta_data=meta_data)
@@ -542,9 +542,10 @@ class Driver:
                 task.meta_data
             )
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
-                self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit,
-                                                           operation=task.name, operation_type=task.operation.type, sample_type=sample_type,
-                                                           absolute_time=absolute_time, relative_time=relative_time, meta_data=meta_data)
+                self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit, task=task.name,
+                                                           operation=task.operation.name, operation_type=task.operation.type,
+                                                           sample_type=sample_type, absolute_time=absolute_time,
+                                                           relative_time=relative_time, meta_data=meta_data)
         end = time.perf_counter()
         logger.info("Storing throughput took [%f] seconds." % (end - start))
         start = end

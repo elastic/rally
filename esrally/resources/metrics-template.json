@@ -68,6 +68,9 @@
         "sample-type": {
           "type": "keyword"
         },
+        "task": {
+          "type": "keyword"
+        },
         "operation": {
           "type": "keyword"
         },

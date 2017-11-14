@@ -64,6 +64,9 @@
         "distribution-major-version": {
           "type": "short"
         },
+        "task": {
+          "type": "keyword"
+        },
         "operation": {
           "type": "keyword"
         },

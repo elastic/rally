@@ -35,7 +35,7 @@ This will download Elasticsearch 5.0.0 and run Rally's default track against it.
     /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
     ------------------------------------------------------
 
-    |                         Metric |            Operation |     Value |   Unit |
+    |                         Metric |                 Task |     Value |   Unit |
     |-------------------------------:|---------------------:|----------:|-------:|
     |                  Indexing time |                      |   28.0997 |    min |
     |                     Merge time |                      |   6.84378 |    min |

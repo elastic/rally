@@ -111,7 +111,7 @@ Segment count
 Throughput
 ----------
 
-Rally reports the minimum, median and maximum throughput for each operation.
+Rally reports the minimum, median and maximum throughput for each task.
 
 * **Definition**: Number of operations that Elasticsearch can perform within a certain time period, usually per second.
 * **Corresponding metrics key**: ``throughput``
@@ -119,7 +119,7 @@ Rally reports the minimum, median and maximum throughput for each operation.
 Latency
 -------
 
-Rally reports several percentile numbers for each operation. Which percentiles are shown depends on how many requests Rally could capture (i.e. Rally will not show a 99.99th percentile if it could only capture five samples because that would be a vanity metric).
+Rally reports several percentile numbers for each task. Which percentiles are shown depends on how many requests Rally could capture (i.e. Rally will not show a 99.99th percentile if it could only capture five samples because that would be a vanity metric).
 
 * **Definition**: Time period between submission of a request and receiving the complete response. It also includes wait time, i.e. the time the request spends waiting until it is ready to be serviced by Elasticsearch.
 * **Corresponding metrics key**: ``latency``
@@ -127,7 +127,7 @@ Rally reports several percentile numbers for each operation. Which percentiles a
 Service time
 ------------
 
-Rally reports several percentile numbers for each operation. Which percentiles are shown depends on how many requests Rally could capture (i.e. Rally will not show a 99.99th percentile if it could only capture five samples because that would be a vanity metric).
+Rally reports several percentile numbers for each task. Which percentiles are shown depends on how many requests Rally could capture (i.e. Rally will not show a 99.99th percentile if it could only capture five samples because that would be a vanity metric).
 
 * **Definition**: Time period between start of request processing and receiving the complete response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
 * **Corresponding metrics key**: ``service_time``
@@ -135,5 +135,5 @@ Rally reports several percentile numbers for each operation. Which percentiles a
 Error rate
 ----------
 
-* **Definition**: The ratio of erroneous responses relative to the total number of responses. Any exception thrown by the Python Elasticsearch client is considered erroneous (e.g. HTTP response codes 4xx, 5xx or network errors (network unreachable)). For specific details, please check the `reference documentation of the Elasticsearch client <https://elasticsearch-py.readthedocs.io>`_. Usually any error rate greater than zero is alerting. You should investigate the root cause by inspecting Rally and Elasticearch logs and rerun the benchmark.
+* **Definition**: The ratio of erroneous responses relative to the total number of responses. Any exception thrown by the Python Elasticsearch client is considered erroneous (e.g. HTTP response codes 4xx, 5xx or network errors (network unreachable)). For specific details, please check the `reference documentation of the Elasticsearch client <https://elasticsearch-py.readthedocs.io>`_. Usually any error rate greater than zero is alerting. You should investigate the root cause by inspecting Rally and Elasticsearch logs and rerun the benchmark.
 * **Corresponding metrics key**: ``service_time``. Each ``service_time`` record has a ``meta.success`` flag. Rally simply counts how often this flag is ``true`` and ``false`` respectively.

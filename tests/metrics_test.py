@@ -509,7 +509,7 @@ class EsMetricsTests(TestCase):
                         },
                         {
                             "term": {
-                                "operation": "scroll_query"
+                                "task": "scroll_query"
                             }
                         },
                         {
@@ -584,7 +584,8 @@ class EsRaceStoreTests(TestCase):
                                     "old_gc_time": 5,
                                     "op_metrics": [
                                         {
-                                            "operation": "index #1",
+                                            "task": "index #1",
+                                            "operation": "index",
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,
@@ -626,7 +627,8 @@ class EsRaceStoreTests(TestCase):
                 "old_gc_time": 5,
                 "op_metrics": [
                     {
-                        "operation": "index #1",
+                        "task": "index #1",
+                        "operation": "index",
                         "throughput": {
                             "min": 1000,
                             "median": 1250,
@@ -685,7 +687,8 @@ class EsResultsStoreTests(TestCase):
                                     "old_gc_time": 5,
                                     "op_metrics": [
                                         {
-                                            "operation": "index #1",
+                                            "task": "index #1",
+                                            "operation": "index",
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,
@@ -730,7 +733,8 @@ class EsResultsStoreTests(TestCase):
                 "plugins": ["x-pack"],
                 "active": True,
                 "name": "throughput",
-                "operation": "index #1",
+                "task": "index #1",
+                "operation": "index",
                 "value": {
                     "min": 1000,
                     "median": 1250,
@@ -874,9 +878,9 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_by_sample_type(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Warmup,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Warmup,
                                                    meta_data={"success": False})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
 
         self.metrics_store.close()
@@ -889,15 +893,15 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_mixed(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": False})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
-        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", operation="term-query", sample_type=metrics.SampleType.Normal,
+        self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
 
         self.metrics_store.close()
@@ -957,7 +961,8 @@ class FileRaceStoreTests(TestCase):
                                     "old_gc_time": 5,
                                     "op_metrics": [
                                         {
-                                            "operation": "index #1",
+                                            "task": "index #1",
+                                            "operation": "index",
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,
