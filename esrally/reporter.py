@@ -1,6 +1,7 @@
 import collections
 import csv
 import io
+import sys
 import logging
 
 import tabulate
@@ -41,7 +42,7 @@ def print_header(message):
     print_internal(console.format.bold(message))
 
 
-def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich, write_header=True, show_also_in_console=True):
+def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich, write_header=True):
     if report_format == "markdown":
         formatter = format_as_markdown
     elif report_format == "csv":
@@ -49,8 +50,7 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
     else:
         raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
 
-    if show_also_in_console:
-        print_internal(formatter(headers, data_rich))
+    print_internal(formatter(headers, data_rich))
     if len(report_file) > 0:
         normalized_report_file = rio.normalize_path(report_file, cwd)
         logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
@@ -78,6 +78,29 @@ def format_as_csv(headers, data, write_header=True):
         for metric_record in data:
             writer.writerow(metric_record)
         return out.getvalue()
+
+
+# helper function for encoding and decoding float keys so that the Elasticsearch metrics store can safe it.
+def encode_float_key(k):
+    return str(k).replace(".", "_")
+
+
+def percentiles_for_sample_size(sample_size):
+    # if needed we can come up with something smarter but it'll do for now
+    if sample_size < 1:
+        raise AssertionError("Percentiles require at least one sample")
+    elif sample_size == 1:
+        return [100]
+    elif 1 < sample_size < 10:
+        return [50, 100]
+    elif 10 <= sample_size < 100:
+        return [50, 90, 100]
+    elif 100 <= sample_size < 1000:
+        return [50, 90, 99, 100]
+    elif 1000 <= sample_size < 10000:
+        return [50, 90, 99, 99.9, 100]
+    else:
+        return [50, 90, 99, 99.9, 99.99, 100]
 
 
 class StatsCalculator:
@@ -185,35 +208,15 @@ class StatsCalculator:
             percentiles = self.store.get_percentiles(metric_name,
                                                      task=task,
                                                      sample_type=sample_type,
-                                                     percentiles=self.percentiles_for_sample_size(sample_size),
+                                                     percentiles=percentiles_for_sample_size(sample_size),
                                                      lap=self.lap)
             # safely encode so we don't have any dots in field names
             safe_percentiles = collections.OrderedDict()
             for k, v in percentiles.items():
-                safe_percentiles[self.safe_float_key(k)] = v
+                safe_percentiles[encode_float_key(k)] = v
             return safe_percentiles
         else:
             return {}
-
-    def safe_float_key(self, k):
-        return str(k).replace(".", "_")
-
-    def percentiles_for_sample_size(self, sample_size):
-        # if needed we can come up with something smarter but it'll do for now
-        if sample_size < 1:
-            raise AssertionError("Percentiles require at least one sample")
-        elif sample_size == 1:
-            return [100]
-        elif 1 < sample_size < 10:
-            return [50, 100]
-        elif 10 <= sample_size < 100:
-            return [50, 90, 100]
-        elif 100 <= sample_size < 1000:
-            return [50, 90, 99, 100]
-        elif 1000 <= sample_size < 10000:
-            return [50, 90, 99, 99.9, 100]
-        else:
-            return [50, 90, 99, 99.9, 99.99, 100]
 
 
 class Stats:
@@ -305,30 +308,14 @@ class Stats:
                 return r
         return None
 
-    def has_merge_part_stats(self):
-        return self.merge_part_time_postings or \
-               self.merge_part_time_stored_fields or \
-               self.memory_doc_values or \
-               self.merge_part_time_norms or \
-               self.merge_part_time_vectors or \
-               self.merge_part_time_points
-
-    def has_memory_stats(self):
-        return self.memory_segments is not None and \
-               self.memory_doc_values is not None and \
-               self.memory_terms is not None and \
-               self.memory_norms is not None and \
-               self.memory_points is not None and \
-               self.memory_stored_fields is not None
-
-    def has_disk_usage_stats(self):
-        return self.index_size and self.bytes_written
-
 
 class SummaryReporter:
     def __init__(self, results, config, revision, current_lap, total_laps):
         self.results = results
-        self._config = config
+        self.report_file = config.opts("reporting", "output.path")
+        self.report_format = config.opts("reporting", "format")
+        self.cwd = config.opts("node", "rally.cwd")
+
         self.revision = revision
         self.current_lap = current_lap
         self.total_laps = total_laps
@@ -370,7 +357,6 @@ class SummaryReporter:
 
         warnings = []
         metrics_table = []
-        meta_info_table = []
         metrics_table += self.report_total_times(stats)
         metrics_table += self.report_merge_part_times(stats)
 
@@ -389,9 +375,7 @@ class SummaryReporter:
             metrics_table += self.report_error_rate(record, task)
             self.add_warnings(warnings, record, task)
 
-        meta_info_table += self.report_meta_info()
-
-        self.write_report(metrics_table, meta_info_table)
+        self.write_report(metrics_table)
 
         if warnings:
             for warning in warnings:
@@ -406,130 +390,118 @@ class SummaryReporter:
             else:
                 warnings.append("No throughput metrics available for [%s]. Likely cause: The benchmark ended already during warmup." % op)
 
-    def write_report(self, metrics_table, meta_info_table):
-        report_file = self._config.opts("reporting", "output.path")
-        report_format = self._config.opts("reporting", "format")
-        cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Lap", "Metric", "Task", "Value", "Unit"],
+    def write_report(self, metrics_table):
+        write_single_report(self.report_file, self.report_format, self.cwd,
+                            headers=["Lap", "Metric", "Task", "Value", "Unit"],
                             data_plain=metrics_table,
                             data_rich=metrics_table, write_header=self.needs_header())
-        if self.is_final_report() and len(report_file) > 0:
-            write_single_report("%s.meta" % report_file, report_format, cwd, headers=["Name", "Value"], data_plain=meta_info_table,
-                                data_rich=meta_info_table, show_also_in_console=False)
 
     def report_throughput(self, values, task):
-        min = values["throughput"]["min"]
-        median = values["throughput"]["median"]
-        max = values["throughput"]["max"]
-        unit = values["throughput"]["unit"]
+        throughput = values["throughput"]
+        unit = throughput["unit"]
 
-        throughput = []
-        self.append_if_present(throughput, "Min Throughput", task, min, unit, lambda v: "%.2f" % v)
-        self.append_if_present(throughput, "Median Throughput", task, median, unit, lambda v: "%.2f" % v)
-        self.append_if_present(throughput, "Max Throughput", task, max, unit, lambda v: "%.2f" % v)
-        return throughput
+        return self.join(
+            self.line("Min Throughput", task, throughput["min"], unit, lambda v: "%.2f" % v),
+            self.line("Median Throughput", task, throughput["median"], unit, lambda v: "%.2f" % v),
+            self.line("Max Throughput", task, throughput["max"], unit, lambda v: "%.2f" % v)
+        )
 
     def report_latency(self, values, task):
-        lines = []
-        latency = values["latency"]
-        if latency:
-            for percentile, value in latency.items():
-                lines.append([self.lap, "%sth percentile latency" % self.decode_percentile_key(percentile), task, value, "ms"])
-        return lines
+        return self.report_percentiles("latency", task, values["latency"])
 
     def report_service_time(self, values, task):
-        lines = []
-        service_time = values["service_time"]
-        if service_time:
-            for percentile, value in service_time.items():
-                lines.append([self.lap, "%sth percentile service time" % self.decode_percentile_key(percentile), task, value, "ms"])
-        return lines
+        return self.report_percentiles("service time", task, values["service_time"])
 
-    def decode_percentile_key(self, k):
-        return k.replace("_", ".")
+    def report_percentiles(self, name, task, value):
+        lines = []
+        if value:
+            for percentile in percentiles_for_sample_size(sys.maxsize):
+                a_line = self.line("%sth percentile %s" % (percentile, name), task, value.get(encode_float_key(percentile)), "ms")
+                self.append_non_empty(lines, a_line)
+        return lines
 
     def report_error_rate(self, values, task):
-        lines = []
-        error_rate = values["error_rate"]
-        if error_rate is not None:
-            lines.append([self.lap, "error rate", task, "%.2f" % (error_rate * 100.0), "%"])
-        return lines
+        return self.join(
+            self.line("error rate", task, values["error_rate"], "%", lambda v: "%.2f" % (v * 100.0))
+        )
 
     def report_total_times(self, stats):
-        total_times = []
         unit = "min"
-        self.append_if_present(total_times, "Indexing time", "", stats.total_time, unit, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Merge time", "", stats.merge_time, unit, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Refresh time", "", stats.refresh_time, unit, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Flush time", "", stats.flush_time, unit, convert.ms_to_minutes)
-        self.append_if_present(total_times, "Merge throttle time", "", stats.merge_throttle_time, unit, convert.ms_to_minutes)
-
-        return total_times
-
-    def append_if_present(self, l, k, task, v, unit, converter=lambda x: x):
-        if v:
-            l.append([self.lap, k, task, converter(v), unit])
+        return self.join(
+            self.line("Indexing time", "", stats.total_time, unit, convert.ms_to_minutes),
+            self.line("Merge time", "", stats.merge_time, unit, convert.ms_to_minutes),
+            self.line("Refresh time", "", stats.refresh_time, unit, convert.ms_to_minutes),
+            self.line("Flush time", "", stats.flush_time, unit, convert.ms_to_minutes),
+            self.line("Merge throttle time", "", stats.merge_throttle_time, unit, convert.ms_to_minutes)
+        )
 
     def report_merge_part_times(self, stats):
         # note that these times are not(!) wall clock time results but total times summed up over multiple threads
-        merge_part_times = []
         unit = "min"
-        self.append_if_present(merge_part_times, "Merge time (postings)", "", stats.merge_part_time_postings, unit, convert.ms_to_minutes)
-        self.append_if_present(merge_part_times, "Merge time (stored fields)", "", stats.merge_part_time_stored_fields, unit,
-                               convert.ms_to_minutes)
-        self.append_if_present(merge_part_times, "Merge time (doc values)", "", stats.merge_part_time_doc_values, unit,
-                               convert.ms_to_minutes)
-        self.append_if_present(merge_part_times, "Merge time (norms)", "", stats.merge_part_time_norms, unit, convert.ms_to_minutes)
-        self.append_if_present(merge_part_times, "Merge time (vectors)", "", stats.merge_part_time_vectors, unit, convert.ms_to_minutes)
-        self.append_if_present(merge_part_times, "Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
-        return merge_part_times
+        return self.join(
+            self.line("Merge time (postings)", "", stats.merge_part_time_postings, unit, convert.ms_to_minutes),
+            self.line("Merge time (stored fields)", "", stats.merge_part_time_stored_fields, unit, convert.ms_to_minutes),
+            self.line("Merge time (doc values)", "", stats.merge_part_time_doc_values, unit, convert.ms_to_minutes),
+            self.line("Merge time (norms)", "", stats.merge_part_time_norms, unit, convert.ms_to_minutes),
+            self.line("Merge time (vectors)", "", stats.merge_part_time_vectors, unit, convert.ms_to_minutes),
+            self.line("Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
+        )
 
     def report_cpu_usage(self, stats):
-        cpu_usage = []
-        self.append_if_present(cpu_usage, "Median CPU usage", "", stats.median_cpu_usage, "%")
-        return cpu_usage
+        return self.join(
+            self.line("Median CPU usage", "", stats.median_cpu_usage, "%")
+        )
 
     def report_gc_times(self, stats):
-        return [
-            [self.lap, "Total Young Gen GC", "", convert.ms_to_seconds(stats.young_gc_time), "s"],
-            [self.lap, "Total Old Gen GC", "", convert.ms_to_seconds(stats.old_gc_time), "s"]
-        ]
+        return self.join(
+            self.line("Total Young Gen GC", "", stats.young_gc_time, "s", convert.ms_to_seconds),
+            self.line("Total Old Gen GC", "", stats.old_gc_time, "s", convert.ms_to_seconds)
+        )
 
     def report_disk_usage(self, stats):
-        if stats.has_disk_usage_stats():
-            return [
-                [self.lap, "Index size", "", convert.bytes_to_gb(stats.index_size), "GB"],
-                [self.lap, "Totally written", "", convert.bytes_to_gb(stats.bytes_written), "GB"]
-            ]
-        else:
-            return []
+        return self.join(
+            self.line("Index size", "", stats.index_size, "GB", convert.bytes_to_gb),
+            self.line("Totally written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
+        )
 
     def report_segment_memory(self, stats):
-        memory_stats = []
         unit = "MB"
-        self.append_if_present(memory_stats, "Heap used for segments", "", stats.memory_segments, unit, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for doc values", "", stats.memory_doc_values, unit, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for terms", "", stats.memory_terms, unit, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for norms", "", stats.memory_norms, unit, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for points", "", stats.memory_points, unit, convert.bytes_to_mb)
-        self.append_if_present(memory_stats, "Heap used for stored fields", "", stats.memory_stored_fields, unit, convert.bytes_to_mb)
-        return memory_stats
+        return self.join(
+            self.line("Heap used for segments", "", stats.memory_segments, unit, convert.bytes_to_mb),
+            self.line("Heap used for doc values", "", stats.memory_doc_values, unit, convert.bytes_to_mb),
+            self.line("Heap used for terms", "", stats.memory_terms, unit, convert.bytes_to_mb),
+            self.line("Heap used for norms", "", stats.memory_norms, unit, convert.bytes_to_mb),
+            self.line("Heap used for points", "", stats.memory_points, unit, convert.bytes_to_mb),
+            self.line("Heap used for stored fields", "", stats.memory_stored_fields, unit, convert.bytes_to_mb)
+        )
 
     def report_segment_counts(self, stats):
-        if stats.segment_count:
-            return [[self.lap, "Segment count", "", stats.segment_count, ""]]
+        return self.join(
+            self.line("Segment count", "", stats.segment_count, "")
+        )
+
+    def join(self, *args):
+        lines = []
+        for arg in args:
+            self.append_non_empty(lines, arg)
+        return lines
+
+    def append_non_empty(self, lines, line):
+        if line and len(line) > 0:
+            lines.append(line)
+
+    def line(self, k, task, v, unit, converter=lambda x: x):
+        if v is not None:
+            return [self.lap, k, task, converter(v), unit]
         else:
             return []
-
-    def report_meta_info(self):
-        return [
-            ["Elasticsearch source revision", self.revision]
-        ]
 
 
 class ComparisonReporter:
     def __init__(self, config):
-        self._config = config
+        self.report_file = config.opts("reporting", "output.path")
+        self.report_format = config.opts("reporting", "format")
+        self.cwd = config.opts("node", "rally.cwd")
         self.plain = False
 
     def report(self, r1, r2):
@@ -585,16 +557,9 @@ class ComparisonReporter:
                 metrics_table += self.report_error_rate(baseline_stats, contender_stats, t)
         return metrics_table
 
-    def format_as_table(self, table):
-        return tabulate.tabulate(table,
-                                 headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
-                                 tablefmt="pipe", numalign="right", stralign="right")
-
     def write_report(self, metrics_table, metrics_table_console):
-        report_file = self._config.opts("reporting", "output.path")
-        report_format = self._config.opts("reporting", "format")
-        cwd = self._config.opts("node", "rally.cwd")
-        write_single_report(report_file, report_format, cwd, headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
+        write_single_report(self.report_file, self.report_format, self.cwd,
+                            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
                             data_plain=metrics_table, data_rich=metrics_table_console, write_header=True)
 
     def report_throughput(self, baseline_stats, contender_stats, task):
@@ -614,34 +579,23 @@ class ComparisonReporter:
         )
 
     def report_latency(self, baseline_stats, contender_stats, task):
-        lines = []
-
         baseline_latency = baseline_stats.metrics(task)["latency"]
         contender_latency = contender_stats.metrics(task)["latency"]
-
-        for percentile, baseline_value in baseline_latency.items():
-            if percentile in contender_latency:
-                contender_value = contender_latency[percentile]
-                lines.append(self.line("%sth percentile latency" % self.decode_percentile_key(percentile), baseline_value, contender_value,
-                                       task, "ms", treat_increase_as_improvement=False))
-        return lines
+        return self.report_percentiles("latency", task, baseline_latency, contender_latency)
 
     def report_service_time(self, baseline_stats, contender_stats, task):
-        lines = []
-
         baseline_service_time = baseline_stats.metrics(task)["service_time"]
         contender_service_time = contender_stats.metrics(task)["service_time"]
+        return self.report_percentiles("service time", task, baseline_service_time, contender_service_time)
 
-        for percentile, baseline_value in baseline_service_time.items():
-            if percentile in contender_service_time:
-                contender_value = contender_service_time[percentile]
-                self.append_if_present(lines, self.line("%sth percentile service time" %
-                                                        self.decode_percentile_key(percentile), baseline_value, contender_value,
-                                                        task, "ms", treat_increase_as_improvement=False))
+    def report_percentiles(self, name, task, baseline_values, contender_values):
+        lines = []
+        for percentile in percentiles_for_sample_size(sys.maxsize):
+            baseline_value = baseline_values.get(encode_float_key(percentile))
+            contender_value = contender_values.get(encode_float_key(percentile))
+            self.append_non_empty(lines, self.line("%sth percentile %s" % (percentile, name),
+                                                   baseline_value, contender_value, task, "ms", treat_increase_as_improvement=False))
         return lines
-
-    def decode_percentile_key(self, k):
-        return k.replace("_", ".")
 
     def report_error_rate(self, baseline_stats, contender_stats, task):
         baseline_error_rate = baseline_stats.metrics(task)["error_rate"]
@@ -652,38 +606,23 @@ class ComparisonReporter:
         )
 
     def report_merge_part_times(self, baseline_stats, contender_stats):
-        if baseline_stats.has_merge_part_stats() and contender_stats.has_merge_part_stats():
-            return self.join(
-                self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
-                          contender_stats.merge_part_time_postings,
-                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
-                          contender_stats.merge_part_time_stored_fields,
-                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
-                          contender_stats.merge_part_time_doc_values,
-                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
-                          contender_stats.merge_part_time_norms,
-                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-                self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
-                          contender_stats.merge_part_time_vectors,
-                          "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
-            )
-        else:
-            return []
-
-    def append_if_present(self, l, v):
-        if v and len(v) > 0:
-            l.append(v)
-
-    def join(self, *args):
-        lines = []
-        for arg in args:
-            if arg and len(arg) > 0:
-                lines.append(arg)
-
-        return lines
+        return self.join(
+            self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
+                      contender_stats.merge_part_time_postings,
+                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
+                      contender_stats.merge_part_time_stored_fields,
+                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
+                      contender_stats.merge_part_time_doc_values,
+                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
+                      contender_stats.merge_part_time_norms,
+                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
+                      contender_stats.merge_part_time_vectors,
+                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
+        )
 
     def report_total_times(self, baseline_stats, contender_stats):
         return self.join(
@@ -708,44 +647,45 @@ class ComparisonReporter:
         )
 
     def report_disk_usage(self, baseline_stats, contender_stats):
-        if baseline_stats.has_disk_usage_stats() and contender_stats.has_disk_usage_stats():
-            return self.join(
-                self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-                self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
-            )
-        else:
-            return []
+        return self.join(
+            self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
+            self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
+        )
 
     def report_segment_memory(self, baseline_stats, contender_stats):
-        if baseline_stats.has_memory_stats() and contender_stats.has_memory_stats():
-            return self.join(
-                self.line("Heap used for segments", baseline_stats.memory_segments, contender_stats.memory_segments, "", "MB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for doc values", baseline_stats.memory_doc_values, contender_stats.memory_doc_values, "", "MB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for terms", baseline_stats.memory_terms, contender_stats.memory_terms, "", "MB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for norms", baseline_stats.memory_norms, contender_stats.memory_norms, "", "MB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for points", baseline_stats.memory_points, contender_stats.memory_points, "", "MB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-                self.line("Heap used for stored fields", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "",
-                          "MB",
-                          treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
+        return self.join(
+            self.line("Heap used for segments", baseline_stats.memory_segments, contender_stats.memory_segments, "", "MB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
+            self.line("Heap used for doc values", baseline_stats.memory_doc_values, contender_stats.memory_doc_values, "", "MB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
+            self.line("Heap used for terms", baseline_stats.memory_terms, contender_stats.memory_terms, "", "MB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
+            self.line("Heap used for norms", baseline_stats.memory_norms, contender_stats.memory_norms, "", "MB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
+            self.line("Heap used for points", baseline_stats.memory_points, contender_stats.memory_points, "", "MB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
+            self.line("Heap used for stored fields", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "",
+                      "MB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
             )
-        else:
-            return []
 
     def report_segment_counts(self, baseline_stats, contender_stats):
-        if baseline_stats.segment_count and contender_stats.segment_count:
-            return self.join(
-                self.line("Segment count", baseline_stats.segment_count, contender_stats.segment_count,
-                          "", "", treat_increase_as_improvement=False)
-            )
-        else:
-            return []
+        return self.join(
+            self.line("Segment count", baseline_stats.segment_count, contender_stats.segment_count,
+                      "", "", treat_increase_as_improvement=False)
+        )
+
+    def join(self, *args):
+        lines = []
+        for arg in args:
+            self.append_non_empty(lines, arg)
+        return lines
+
+    def append_non_empty(self, lines, line):
+        if line and len(line) > 0:
+            lines.append(line)
 
     def line(self, metric, baseline, contender, task, unit, treat_increase_as_improvement, formatter=lambda x: x):
         if baseline is not None and contender is not None:

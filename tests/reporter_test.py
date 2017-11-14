@@ -151,22 +151,32 @@ class StatsTests(TestCase):
         }, select(metric_list, "old_gc_time"))
 
 
-class ComparisonReporterTests(TestCase):
-    def test_formats_table(self):
-        cfg = config.Config()
-        r = reporter.ComparisonReporter(cfg)
+class FormatterTests(TestCase):
+    def setUp(self):
+        self.empty_header = ["Header"]
+        self.empty_data = []
 
-        formatted = r.format_as_table([])
-        # 1 header line, 1 separation line + 0 data lines
-        self.assertEqual(1 + 1 + 0, len(formatted.splitlines()))
-
-        # ["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"]
-        metrics_table = [
+        self.metrics_header = ["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"]
+        self.metrics_data = [
             ["Min Throughput", "index", "17300", "18000", "700", "ops/s"],
             ["Median Throughput", "index", "17500", "18500", "1000", "ops/s"],
             ["Max Throughput", "index", "17700", "19000", "1300", "ops/s"]
         ]
 
-        formatted = r.format_as_table(metrics_table)
+    def test_formats_as_markdown(self):
+        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data)
+        # 1 header line, 1 separation line + 0 data lines
+        self.assertEqual(1 + 1 + 0, len(formatted.splitlines()))
+
+        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data)
         # 1 header line, 1 separation line + 3 data lines
         self.assertEqual(1 + 1 + 3, len(formatted.splitlines()))
+
+    def test_formats_as_csv(self):
+        formatted = reporter.format_as_csv(self.empty_header, self.empty_data)
+        # 1 header line, no separation line + 0 data lines
+        self.assertEqual(1 + 0, len(formatted.splitlines()))
+
+        formatted = reporter.format_as_csv(self.metrics_header, self.metrics_data)
+        # 1 header line, no separation line + 3 data lines
+        self.assertEqual(1 + 3, len(formatted.splitlines()))
