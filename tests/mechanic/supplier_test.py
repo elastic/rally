@@ -28,7 +28,8 @@ class SourceRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.clone", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_intial_checkout_latest(self, mock_is_working_copy, mock_clone, mock_pull, mock_head_revision):
-        mock_is_working_copy.return_value = False
+        # before cloning, it is not a working copy, afterwards it is
+        mock_is_working_copy.side_effect = [False, True]
         mock_head_revision.return_value = "HEAD"
 
         s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
@@ -53,6 +54,26 @@ class SourceRepositoryTests(TestCase):
         mock_is_working_copy.assert_called_with("/src")
         mock_clone.assert_not_called()
         mock_pull.assert_not_called()
+        mock_head_revision.assert_called_with("/src")\
+
+
+    @mock.patch("esrally.utils.git.head_revision", autospec=True)
+    @mock.patch("esrally.utils.git.checkout")
+    @mock.patch("esrally.utils.git.pull")
+    @mock.patch("esrally.utils.git.clone")
+    @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
+    def test_checkout_revision_for_local_only_repo(self, mock_is_working_copy, mock_clone, mock_pull, mock_checkout, mock_head_revision):
+        mock_is_working_copy.return_value = True
+        mock_head_revision.return_value = "HEAD"
+
+        # local only, we dont specify a remote
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url=None, src_dir="/src")
+        s.fetch("67c2f42")
+
+        mock_is_working_copy.assert_called_with("/src")
+        mock_clone.assert_not_called()
+        mock_pull.assert_not_called()
+        mock_checkout.assert_called_with("/src", "67c2f42")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)

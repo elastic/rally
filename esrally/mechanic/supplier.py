@@ -62,7 +62,8 @@ def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, plug
         # this may as well be a core plugin and we need to treat them specially. :plugins:analysis-icu:assemble
         for plugin in plugins:
             if not plugin.core_plugin:
-                plugin_remote_url = config_value(src_config, "plugin.%s.remote.repo.url" % plugin.name)
+                # optional (but then source code is assumed to be available locally)
+                plugin_remote_url = src_config.get("plugin.%s.remote.repo.url" % plugin.name)
                 plugin_src_dir = os.path.join(src_dir, config_value(src_config, "plugin.%s.src.subdir" % plugin.name))
                 try:
                     plugin_revision = revisions[plugin.name]
@@ -141,34 +142,52 @@ class SourceRepository:
     """
     Supplier fetches the benchmark candidate source tree from the remote repository.
     """
+
     def __init__(self, name, remote_url, src_dir):
         self.name = name
         self.remote_url = remote_url
         self.src_dir = src_dir
 
     def fetch(self, revision):
-        # assume fetching of latest version for now
-        self._try_init()
+        # if and only if we want to benchmark the current revision, Rally may skip repo initialization (if it is already present)
+        self._try_init(may_skip_init=revision == "current")
         self._update(revision)
 
-    def _try_init(self):
+    def has_remote(self):
+        return self.remote_url is not None
+
+    def _try_init(self, may_skip_init=False):
         if not git.is_working_copy(self.src_dir):
-            console.println("Downloading sources for %s from %s to %s." % (self.name, self.remote_url, self.src_dir))
-            git.clone(self.src_dir, self.remote_url)
+            if self.has_remote():
+                console.println("Downloading sources for %s from %s to %s." % (self.name, self.remote_url, self.src_dir))
+                git.clone(self.src_dir, self.remote_url)
+            elif os.path.isdir(self.src_dir) and may_skip_init:
+                logger.info("Skipping repository initialization for %s." % self.name)
+            else:
+                exceptions.SystemSetupError("A remote repository URL is mandatory for %s" % self.name)
 
     def _update(self, revision):
-        if revision == "latest":
+        if self.has_remote() and revision == "latest":
             logger.info("Fetching latest sources for %s from origin." % self.name)
             git.pull(self.src_dir)
         elif revision == "current":
             logger.info("Skip fetching sources for %s." % self.name)
-        elif revision.startswith("@"):
+        elif self.has_remote() and revision.startswith("@"):
             # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
-            git.pull_ts(self.src_dir, revision[1:])
-        else:  # assume a git commit hash
+            git_ts_revision = revision[1:]
+            logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s." % (git_ts_revision, self.name))
+            git.pull_ts(self.src_dir, git_ts_revision)
+        elif self.has_remote():  # assume a git commit hash
+            logger.info("Fetching from remote and checking out revision [%s] for %s." % (revision, self.name))
             git.pull_revision(self.src_dir, revision)
-        git_revision = git.head_revision(self.src_dir)
-        logger.info("Specified revision [%s] for [%s] on command line results in git revision [%s]" % (revision, self.name, git_revision))
+        else:
+            logger.info("Checking out local revision [%s] for %s." % (revision, self.name))
+            git.checkout(self.src_dir, revision)
+        if git.is_working_copy(self.src_dir):
+            git_revision = git.head_revision(self.src_dir)
+            logger.info("User-specified revision [%s] for [%s] results in git revision [%s]" % (revision, self.name, git_revision))
+        else:
+            logger.info("Skipping git revision resolution for %s (%s is not a git repository)." % (self.name, self.src_dir))
 
     @classmethod
     def is_commit_hash(cls, revision):
@@ -243,7 +262,7 @@ class Builder:
             gradle_opts = ""
 
         if process.run_subprocess("%sexport JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
-                                  (gradle_opts, self.java_home, self.src_dir, self.gradle, task, log_file)):
+                                          (gradle_opts, self.java_home, self.src_dir, self.gradle, task, log_file)):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:
