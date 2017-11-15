@@ -314,6 +314,9 @@ class SummaryReporter:
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
+        reporting_values = config.opts("reporting", "values")
+        self.report_all_values = reporting_values == "all"
+        self.report_all_percentile_values = reporting_values == "all-percentiles"
         self.cwd = config.opts("node", "rally.cwd")
 
         self.revision = revision
@@ -416,7 +419,8 @@ class SummaryReporter:
         lines = []
         if value:
             for percentile in percentiles_for_sample_size(sys.maxsize):
-                a_line = self.line("%sth percentile %s" % (percentile, name), task, value.get(encode_float_key(percentile)), "ms")
+                a_line = self.line("%sth percentile %s" % (percentile, name), task, value.get(encode_float_key(percentile)), "ms",
+                                   force=self.report_all_percentile_values)
                 self.append_non_empty(lines, a_line)
         return lines
 
@@ -490,9 +494,10 @@ class SummaryReporter:
         if line and len(line) > 0:
             lines.append(line)
 
-    def line(self, k, task, v, unit, converter=lambda x: x):
-        if v is not None:
-            return [self.lap, k, task, converter(v), unit]
+    def line(self, k, task, v, unit, converter=lambda x: x, force=False):
+        if v is not None or force or self.report_all_values:
+            u = unit if v is not None else None
+            return [self.lap, k, task, converter(v), u]
         else:
             return []
 

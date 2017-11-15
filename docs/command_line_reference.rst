@@ -306,6 +306,12 @@ This will benchmark the latest 6.0.0 snapshot build of Elasticsearch.
 
 The command line reporter in Rally displays a table with key metrics after a race. With this option you can specify whether this table should be in ``markdown`` format (default) or ``csv``.
 
+``show-in-report``
+~~~~~~~~~~~~~~~~~~
+
+By default, the command line reporter will only show values that are available (``available``). With ``all`` you can force it to show a line for every value,~ even undefined ones and with ``all-percentiles`` it will show only available values but force output of all possible percentile values. This command line parameter is not available for comparing races.
+
+
 ``report-file``
 ~~~~~~~~~~~~~~~
 

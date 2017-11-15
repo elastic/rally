@@ -262,6 +262,11 @@ def create_arg_parser():
             choices=["markdown", "csv"],
             default="markdown")
         p.add_argument(
+            "--show-in-report",
+            help="define which values are shown in the summary report (default: available).",
+            choices=["available", "all-percentiles", "all"],
+            default="available")
+        p.add_argument(
             "--report-file",
             help="write the command line report also to the provided file",
             default="")
@@ -600,6 +605,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "track", "auto_manage_indices", to_bool(args.auto_manage_indices))
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
+    cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
     if sub_command == "compare":
         cfg.add(config.Scope.applicationOverride, "reporting", "baseline.timestamp", args.baseline)
