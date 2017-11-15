@@ -21,11 +21,11 @@ For more detailed instructions and a detailed walkthrough see the :doc:`configur
 Run your first race
 -------------------
 
-Now we're ready to run our first race::
+Now we're ready to run our first :doc:`race </glossary>`::
 
     esrally --distribution-version=5.0.0
 
-This will download Elasticsearch 5.0.0 and run Rally's default track against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
+This will download Elasticsearch 5.0.0 and run Rally's default :doc:`track </glossary>` - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
 
     ------------------------------------------------------
         _______             __   _____
@@ -89,7 +89,7 @@ This will download Elasticsearch 5.0.0 and run Rally's default track against it.
 Next steps
 ----------
 
-Now you can check :doc:`how to run benchmarks </race>`, get a better understanding  how to interpret the numbers in the :doc:`summary report </summary_report>` or start to :doc:`create your own tracks </adding_tracks>`. Be sure to check also the available :doc:`recipes </recipes>` to help you understand how to solve specific problems in Rally.
+Now you can check :doc:`how to run benchmarks </race>`, get a better understanding how to interpret the numbers in the :doc:`summary report </summary_report>` or start to :doc:`create your own tracks </adding_tracks>`. Be sure to check also the available :doc:`recipes </recipes>` to help you understand how to solve specific problems in Rally.
 
 Also run ``esrally --help`` to see what options are available and keep the :doc:`command line reference </command_line_reference>` handy for more detailed explanations of each option.
 
