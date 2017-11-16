@@ -1,5 +1,6 @@
 import sys
 import types
+import time
 import logging
 from collections import Counter, OrderedDict
 
@@ -545,6 +546,71 @@ class Query(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "query"
+
+
+# TODO: Allow to use this from (selected) regular runners and add user documentation.
+# TODO: It would maybe be interesting to add meta-data on how many retries there were.
+class Retry(Runner):
+    """
+    This runner can be used as a wrapper around regular runners to retry operations.
+
+    It defines the following parameters:
+
+    * ``retries`` (optional, default 0): The number of times the operation is retried.
+    * ``retry-wait-period`` (optional, default 0.5): The time in seconds to wait after an error.
+    * ``retry-on-timeout`` (optional, default True): Whether to retry on connection timeout.
+    * ``retry-on-error`` (optional, default False): Whether to retry on failure (i.e. the delegate returns ``success == False``)
+    """
+
+    def __init__(self, delegate):
+        self.delegate = delegate
+
+    def __enter__(self):
+        self.delegate.__enter__()
+        return self
+
+    def __call__(self, es, params):
+        import elasticsearch
+        import socket
+
+        max_attempts = params.get("retries", 0) + 1
+        sleep_time = params.get("retry-wait-period", 0.5)
+        retry_on_timeout = params.get("retry-on-timeout", True)
+        retry_on_error = params.get("retry-on-error", False)
+
+        for attempt in range(max_attempts):
+            last_attempt = attempt + 1 == max_attempts
+            try:
+                return_value = self.delegate(es, params)
+                if last_attempt or not retry_on_error:
+                    return return_value
+                # we can determine success if and only if the runner returns a dict. Otherwise, we have to assume it was fine.
+                elif isinstance(return_value, dict):
+                    if return_value.get("success", True):
+                        return return_value
+                    else:
+                        time.sleep(sleep_time)
+                else:
+                    return return_value
+            except (socket.timeout, elasticsearch.exceptions.ConnectionError):
+                if last_attempt or not retry_on_timeout:
+                    raise
+                else:
+                    time.sleep(sleep_time)
+            except elasticsearch.exceptions.TransportError as e:
+                if last_attempt or not retry_on_timeout:
+                    raise e
+                elif e.status_code == 408:
+                    logger.debug("%s has timed out." % repr(self.delegate))
+                    time.sleep(sleep_time)
+                else:
+                    raise e
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self.delegate.__exit__(exc_type, exc_val, exc_tb)
+
+    def __repr__(self, *args, **kwargs):
+        return "retryable %s" % repr(self.delegate)
 
 
 register_runner(track.OperationType.Index.name, BulkIndex())

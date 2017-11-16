@@ -880,3 +880,228 @@ class QueryRunnerTests(TestCase):
         self.assertEqual("ops", results["unit"])
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
+
+
+class RetryTests(TestCase):
+    def test_is_transparent_on_success_when_no_retries(self):
+        delegate = mock.Mock()
+        es = None
+        params = {
+            # no retries
+        }
+        retrier = runner.Retry(delegate)
+
+        retrier(es, params)
+
+        delegate.assert_called_once_with(es, params)
+
+    def test_is_transparent_on_exception_when_no_retries(self):
+        import elasticsearch
+
+        delegate = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        es = None
+        params = {
+            # no retries
+        }
+        retrier = runner.Retry(delegate)
+
+        with self.assertRaises(elasticsearch.ConnectionError):
+            retrier(es, params)
+
+        delegate.assert_called_once_with(es, params)
+
+    def test_is_transparent_on_application_error_when_no_retries(self):
+        original_return_value = {"weight": 1, "unit": "ops", "success": False}
+
+        delegate = mock.Mock(return_value=original_return_value)
+        es = None
+        params = {
+            # no retries
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+
+        self.assertEqual(original_return_value, result)
+        delegate.assert_called_once_with(es, params)
+
+    def test_is_does_not_retry_on_success(self):
+        delegate = mock.Mock()
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.1,
+            "retry-on-timeout": True,
+            "retry-on-error": True
+        }
+        retrier = runner.Retry(delegate)
+
+        retrier(es, params)
+
+        delegate.assert_called_once_with(es, params)
+
+    def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
+        import elasticsearch
+
+        delegate = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": True,
+            "retry-on-error": True
+        }
+        retrier = runner.Retry(delegate)
+
+        with self.assertRaises(elasticsearch.ConnectionError):
+            retrier(es, params)
+
+        delegate.assert_has_calls([
+            mock.call(es, params),
+            mock.call(es, params),
+            mock.call(es, params)
+        ])
+
+    def test_retries_on_timeout_if_wanted_and_returns_first_call(self):
+        import elasticsearch
+        failed_return_value = {"weight": 1, "unit": "ops", "success": False}
+
+        delegate = mock.Mock(side_effect=[elasticsearch.ConnectionError("N/A", "no route to host"), failed_return_value])
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": True,
+            "retry-on-error": False
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+        self.assertEqual(failed_return_value, result)
+
+        delegate.assert_has_calls([
+            # has returned a connection error
+            mock.call(es, params),
+            # has returned normally
+            mock.call(es, params)
+        ])
+
+    def test_retries_mixed_timeout_and_application_errors(self):
+        import elasticsearch
+        connection_error = elasticsearch.ConnectionError("N/A", "no route to host")
+        failed_return_value = {"weight": 1, "unit": "ops", "success": False}
+        success_return_value = {"weight": 1, "unit": "ops", "success": False}
+
+        delegate = mock.Mock(side_effect=[
+            connection_error,
+            failed_return_value,
+            connection_error,
+            connection_error,
+            failed_return_value,
+            success_return_value]
+        )
+        es = None
+        params = {
+            # we try exactly as often as there are errors to also test the semantics of "retry".
+            "retries": 5,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": True,
+            "retry-on-error": True
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+        self.assertEqual(success_return_value, result)
+
+        delegate.assert_has_calls([
+            # connection error
+            mock.call(es, params),
+            # application error
+            mock.call(es, params),
+            # connection error
+            mock.call(es, params),
+            # connection error
+            mock.call(es, params),
+            # application error
+            mock.call(es, params),
+            # success
+            mock.call(es, params)
+        ])
+
+    def test_does_not_retry_on_timeout_if_not_wanted(self):
+        import elasticsearch
+
+        delegate = mock.Mock(side_effect=elasticsearch.ConnectionTimeout(408, "timed out"))
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": False,
+            "retry-on-error": True
+        }
+        retrier = runner.Retry(delegate)
+
+        with self.assertRaises(elasticsearch.ConnectionTimeout):
+            retrier(es, params)
+
+        delegate.assert_called_once_with(es, params)
+
+    def test_retries_on_application_error_if_wanted(self):
+        failed_return_value = {"weight": 1, "unit": "ops", "success": False}
+        success_return_value = {"weight": 1, "unit": "ops", "success": True}
+
+        delegate = mock.Mock(side_effect=[failed_return_value, success_return_value])
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": False,
+            "retry-on-error": True
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+
+        self.assertEqual(success_return_value, result)
+
+        delegate.assert_has_calls([
+            mock.call(es, params),
+            # one retry
+            mock.call(es, params)
+        ])
+
+    def test_does_not_retry_on_application_error_if_not_wanted(self):
+        failed_return_value = {"weight": 1, "unit": "ops", "success": False}
+
+        delegate = mock.Mock(return_value=failed_return_value)
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": True,
+            "retry-on-error": False
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+
+        self.assertEqual(failed_return_value, result)
+
+        delegate.assert_called_once_with(es, params)
+
+    def test_assumes_success_if_runner_returns_non_dict(self):
+        delegate = mock.Mock(return_value=(1, "ops"))
+        es = None
+        params = {
+            "retries": 3,
+            "retry-wait-period": 0.01,
+            "retry-on-timeout": True,
+            "retry-on-error": True
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+
+        self.assertEqual((1, "ops"), result)
+
+        delegate.assert_called_once_with(es, params)
