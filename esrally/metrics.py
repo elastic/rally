@@ -54,36 +54,55 @@ class EsClient:
 
     def guarded(self, target, *args, **kwargs):
         import elasticsearch
-        try:
-            return target(*args, **kwargs)
-        except elasticsearch.exceptions.AuthenticationException:
-            # we know that it is just one host (see EsClientFactory)
-            node = self._client.transport.hosts[0]
-            msg = "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at " \
-                  "port [%s] (wrong password?). Please fix the configuration in [%s]." % \
-                  (node["host"], node["port"], config.ConfigFile().location)
-            logger.exception(msg)
-            raise exceptions.SystemSetupError(msg)
-        except elasticsearch.exceptions.AuthorizationException:
-            node = self._client.transport.hosts[0]
-            msg = "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics " \
-                  "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough " \
-                  "privileges in the configuration in [%s]." % (target.__name__, node["host"], node["port"], config.ConfigFile().location)
-            logger.exception(msg)
-            raise exceptions.SystemSetupError(msg)
-        except elasticsearch.exceptions.ConnectionError:
-            node = self._client.transport.hosts[0]
-            msg = "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s] or " \
-                  "fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
-            logger.exception(msg)
-            raise exceptions.SystemSetupError(msg)
-        except elasticsearch.exceptions.ElasticsearchException:
-            node = self._client.transport.hosts[0]
-            msg = "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] at " \
-                  "port [%s]." % (target.__name__, node["host"], node["port"])
-            logger.exception(msg)
-            # this does not necessarily mean it's a system setup problem...
-            raise exceptions.RallyError(msg)
+        max_execution_count = 3
+        execution_count = 0
+
+        while execution_count < max_execution_count:
+            execution_count += 1
+            try:
+                return target(*args, **kwargs)
+            except elasticsearch.exceptions.AuthenticationException:
+                # we know that it is just one host (see EsClientFactory)
+                node = self._client.transport.hosts[0]
+                msg = "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at " \
+                      "port [%s] (wrong password?). Please fix the configuration in [%s]." % \
+                      (node["host"], node["port"], config.ConfigFile().location)
+                logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
+            except elasticsearch.exceptions.AuthorizationException:
+                node = self._client.transport.hosts[0]
+                msg = "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics " \
+                      "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough " \
+                      "privileges in the configuration in [%s]." % \
+                      (target.__name__, node["host"], node["port"], config.ConfigFile().location)
+                logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
+            except elasticsearch.exceptions.ConnectionError:
+                node = self._client.transport.hosts[0]
+                msg = "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]" \
+                      " or fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
+                logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
+            except elasticsearch.TransportError as e:
+                # gateway timeout - let's wait a bit and retry
+                if e.status_code == 504 and execution_count < max_execution_count:
+                    logger.info("Received a gateway timeout from the metrics store in attempt [%d/%d]." %
+                                (execution_count, max_execution_count))
+                    time.sleep(1)
+                else:
+                    node = self._client.transport.hosts[0]
+                    msg = "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on " \
+                          "host [%s] at port [%s]." % (target.__name__, node["host"], node["port"])
+                    logger.exception(msg)
+                    raise exceptions.RallyError(msg)
+
+            except elasticsearch.exceptions.ElasticsearchException:
+                node = self._client.transport.hosts[0]
+                msg = "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] " \
+                      "at port [%s]." % (target.__name__, node["host"], node["port"])
+                logger.exception(msg)
+                # this does not necessarily mean it's a system setup problem...
+                raise exceptions.RallyError(msg)
 
 
 class EsClientFactory:

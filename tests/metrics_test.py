@@ -112,6 +112,33 @@ class EsClientTests(TestCase):
         self.assertEqual("An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
                          "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
 
+    def test_retries_on_timeouts(self):
+        gateway_timeout = elasticsearch.exceptions.TransportError(504, "Gateway timeout")
+
+        # should return on first success
+        operation = mock.Mock(side_effect=[gateway_timeout, gateway_timeout, "success", gateway_timeout])
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        self.assertEqual("success", client.guarded(operation))
+
+        operation.assert_has_calls([
+            mock.call(),
+            mock.call(),
+            mock.call()
+        ])
+
+    def test_fails_after_too_many_timeouts(self):
+        def gateway_timeout():
+            raise elasticsearch.exceptions.TransportError(504, "Gateway timeout")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            client.guarded(gateway_timeout)
+        self.assertEqual("A transport error occurred while running the operation [gateway_timeout] against your Elasticsearch metrics "
+                         "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
+
 
 class EsMetricsTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
