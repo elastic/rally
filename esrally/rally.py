@@ -234,6 +234,7 @@ def create_arg_parser():
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
                        default="continue")
+        # This parameter is deprecated. We will replace this with an explicit call in our tracks.
         p.add_argument(
             "--cluster-health",
             choices=["red", "yellow", "green", "skip"],
@@ -612,6 +613,8 @@ def main():
         cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
 
     cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
+    if args.cluster_health != "green":
+        console.warn("--cluster-health is deprecated and will be removed in a future version of Rally.")
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))

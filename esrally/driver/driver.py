@@ -847,6 +847,7 @@ def setup_index(es, index, index_settings):
         logger.info("Skipping index [%s] as it is managed by the user." % index.name)
 
 
+# TODO: This method is deprecated. Replace with an explicit operation in the standard tracks.
 def wait_for_status(es, expected_cluster_status):
     """
     Synchronously waits until the cluster reaches the provided status. Upon timeout a LaunchError is thrown.
@@ -866,6 +867,7 @@ def wait_for_status(es, expected_cluster_status):
         logger.info("Shards:\n%s" % es.cat.shards(v=True))
 
 
+# TODO: This method is deprecated. Replace with an explicit operation in the standard tracks.
 def _do_wait(es, expected_cluster_status, sleep=time.sleep):
     import elasticsearch
     from enum import Enum

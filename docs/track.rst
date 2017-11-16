@@ -316,6 +316,16 @@ For scroll queries, throughput will be reported as number of retrieved scroll pa
 
 For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
 
+cluster-health
+~~~~~~~~~~~~~~
+
+With the operation ``cluster-health`` you can execute the `cluster health API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html>`_. It supports the following properties:
+
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the cluster health API.
+* ``index`` (optional): The name of the index that should be used to check.
+
+The ``cluster-health`` operation will check whether the expected cluster health and will report a failure if this is not the case. Use ``--on-error`` on the command line to control Rally's behavior in case of such failures.
+
 challenge
 .........
 
@@ -495,7 +505,7 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 
 
 Examples
-~~~~~~~~
+========
 
 To get started with custom tracks, you can benchmark a single operation, e.g. a match_all query::
 

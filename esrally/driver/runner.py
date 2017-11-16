@@ -548,6 +548,64 @@ class Query(Runner):
         return "query"
 
 
+class ClusterHealth(Runner):
+    """
+    Get cluster health
+    """
+
+    def __call__(self, es, params):
+        from enum import Enum
+        from functools import total_ordering
+        from elasticsearch.client import _make_path
+
+        @total_ordering
+        class ClusterHealthStatus(Enum):
+            UNKNOWN = 0
+            RED = 1
+            YELLOW = 2
+            GREEN = 3
+
+            def __lt__(self, other):
+                if self.__class__ is other.__class__:
+                    return self.value < other.value
+                return NotImplemented
+
+        def status(v):
+            try:
+                return ClusterHealthStatus[v.upper()]
+            except (KeyError, AttributeError):
+                return ClusterHealthStatus.UNKNOWN
+
+        index = params.get("index")
+        request_params = params.get("request-params", {})
+        # by default, Elasticsearch will not wait and thus we treat this as success
+        expected_cluster_status = request_params.get("wait_for_status", str(ClusterHealthStatus.UNKNOWN))
+        # newer ES versions >= 5.0
+        if "wait_for_no_relocating_shards" in request_params:
+            expected_relocating_shards = 0
+        else:
+            # older ES versions
+            # either the user has defined something or we're good with any count of relocating shards.
+            expected_relocating_shards = int(request_params.get("wait_for_relocating_shards", sys.maxsize))
+
+        # This would not work if the request parameter is not a proper method parameter for the ES client...
+        # result = es.cluster.health(**request_params)
+        result = es.transport.perform_request("GET", _make_path("_cluster", "health", index), params=request_params)
+        cluster_status = result["status"]
+        relocating_shards = result["relocating_shards"]
+
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "success": status(cluster_status) >= status(expected_cluster_status) and relocating_shards <= expected_relocating_shards,
+            "cluster-status": cluster_status,
+            "relocating-shards": relocating_shards
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "cluster-health"
+
+
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
 class Retry(Runner):
@@ -618,3 +676,6 @@ register_runner(track.OperationType.ForceMerge.name, ForceMerge())
 register_runner(track.OperationType.IndicesStats.name, IndicesStats())
 register_runner(track.OperationType.NodesStats.name, NodeStats())
 register_runner(track.OperationType.Search.name, Query())
+
+# We treat ClusterHealth as administrative command and thus already start to wrap it in a retry.
+register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
