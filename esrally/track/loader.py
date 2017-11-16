@@ -555,7 +555,7 @@ class TrackSpecificationReader:
 
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
-        description = self._r(track_specification, "description")
+        description = self._r(track_specification, "description", mandatory=False, default_value="")
         source_root_url = self._r(track_specification, "data-url", mandatory=False)
         meta_data = self._r(track_specification, "meta", mandatory=False)
         indices = [self._create_index(idx, mapping_dir)

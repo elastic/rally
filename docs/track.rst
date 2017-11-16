@@ -126,7 +126,7 @@ The track elements that are described here are defined in `Rally's JSON schema f
 Each track defines the following info attributes:
 
 * ``version`` (optional): An integer describing the track specification version in use. Rally uses it to detect incompatible future track specification versions and raise an error. See the table below for a reference of valid versions.
-* ``description`` (mandatory): A human-readable description of the track.
+* ``description`` (optional): A human-readable description of the track. Although it is optional, we recommend providing it.
 * ``data-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding data for this track. This element is not needed if data are only generated on the fly by a custom runner.
 
 =========================== =============
@@ -141,8 +141,7 @@ Example::
 
     {
         "version": 1,
-        "short-description": "Standard benchmark in Rally (8.6M POIs from Geonames)",
-        "description": "This test indexes 8.6M documents (POIs from Geonames, total 2.8 GB json) using 8 client threads and 5000 docs per bulk request against Elasticsearch",
+        "description": "POIs from Geonames",
         "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
     }
 

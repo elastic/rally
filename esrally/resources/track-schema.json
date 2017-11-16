@@ -413,8 +413,5 @@
     "challenge": {
       "$ref": "#/definitions/challenge"
     }
-  },
-  "required": [
-    "description"
-  ]
+  }
 }

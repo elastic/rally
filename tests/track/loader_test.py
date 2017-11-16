@@ -781,14 +781,16 @@ class TrackFilterTests(TestCase):
 
 
 class TrackSpecificationReaderTests(TestCase):
-    def test_missing_description_raises_syntax_error(self):
+    def test_description_is_optional(self):
         track_specification = {
             # no description here
+            "challenges": []
         }
         reader = loader.TrackSpecificationReader()
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'description' is missing.", ctx.exception.args[0])
+
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("", resulting_track.description)
 
     def test_can_read_track_info(self):
         track_specification = {
