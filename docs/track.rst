@@ -4,7 +4,7 @@ Track Reference
 Definition
 ==========
 
-A track is the description of one ore more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and which operations are invoked. Its most important attributes are:
+A track is a specification of one ore more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and the operations that are invoked. Its most important attributes are:
 
 * One or more indices, each with one or more types
 * The queries to issue
@@ -530,7 +530,7 @@ To get started with custom tracks, you can benchmark a single operation, e.g. a 
      }
    }
 
-This track assumes that you have an existing cluster with pre-populated data. It will run the provided match_all query at 10 operations per second with one client and use 100 iterations as warmup and the next 100 iterations to measure. You can store this file
+This track assumes that you have an existing cluster with pre-populated data. It will run the provided match_all query at 10 operations per second with one client and use 100 iterations as warmup and the next 100 iterations to measure.
 
 For the examples below, note that we do not show the operation definition but you should be able to infer from the operation name what it is doing.
 
