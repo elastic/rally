@@ -111,6 +111,7 @@ class DelegatingParamSource(ParamSource):
         return self.delegate(self.indices, self._params)
 
 
+# TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
 class SearchParamSource(ParamSource):
     def __init__(self, indices, params):
         super().__init__(indices, params)
@@ -128,6 +129,7 @@ class SearchParamSource(ParamSource):
         type_name = params.get("type", default_type)
         request_cache = params.get("cache", False)
         query_body = params.get("body", None)
+        query_body_params = params.get("body-params", None)
         pages = params.get("pages", None)
         items_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
@@ -148,7 +150,44 @@ class SearchParamSource(ParamSource):
         if items_per_page:
             self.query_params["items_per_page"] = items_per_page
 
-    def params(self):
+        self.query_body_params = []
+        if query_body_params:
+            for param, data in query_body_params.items():
+                # TODO #365: Stricly check for allowed syntax. Be lenient in the pre-release and only interpret what's safely possible.
+                # build path based on param
+                # if not isinstance(data, list):
+                #    raise exceptions.RallyError("%s in body-params defines %s but only lists are allowed. This may be a new syntax "
+                #                                "that is not recognized by this version. Please upgrade Rally." % (param, data))
+                if isinstance(data, list):
+                    query_body_path = param.split(".")
+                    b = self.query_params["body"]
+                    # check early to ensure this path is actually contained in the body
+                    try:
+                        self.get_from_dict(b, query_body_path)
+                    except KeyError:
+                        raise exceptions.RallyError("The path %s could not be found within the query body %s." % (param, b))
+
+                    self.query_body_params.append((query_body_path, data))
+
+    def get_from_dict(self, d, path):
+        v = d
+        for k in path:
+            v = v[k]
+        return v
+
+    def set_in_dict(self, d, path, val):
+        v = d
+        # navigate to the next to last path
+        for k in path[:-1]:
+            v = v[k]
+        # the value is now the inner-most dictionary and the last path element is its key
+        v[path[-1]] = val
+
+    def params(self, choice=random.choice):
+        if self.query_body_params:
+            # needs to replace params first
+            for path, data in self.query_body_params:
+                self.set_in_dict(self.query_params["body"], path, choice(data))
         return self.query_params
 
 
