@@ -43,6 +43,8 @@ class RallyActor(thespian.actors.Actor):
 
     @staticmethod
     def configure_logging(actor_logger):
+        # see rally#configure_logging() for more details.
+        logging.captureWarnings(True)
         # configure each actor's root logger
         actor_logger.parent.setLevel(root_log_level)
         # Also ensure that the elasticsearch logger is properly configured

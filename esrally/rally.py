@@ -63,6 +63,29 @@ def configure_logging(cfg):
     logging.root.addHandler(ch)
     logging.getLogger("elasticsearch").setLevel(logging.WARNING)
 
+    # Avoid failures such as the following (shortened a bit):
+    #
+    # ---------------------------------------------------------------------------------------------
+    # "esrally/driver/driver.py", line 220, in create_client
+    # "thespian-3.8.0-py3.5.egg/thespian/actors.py", line 187, in createActor
+    # [...]
+    # "thespian-3.8.0-py3.5.egg/thespian/system/multiprocCommon.py", line 348, in _startChildActor
+    # "python3.5/multiprocessing/process.py", line 105, in start
+    # "python3.5/multiprocessing/context.py", line 267, in _Popen
+    # "python3.5/multiprocessing/popen_fork.py", line 18, in __init__
+    # sys.stderr.flush()
+    #
+    # OSError: [Errno 5] Input/output error
+    # ---------------------------------------------------------------------------------------------
+    #
+    # This is caused by urllib3 wanting to send warnings about insecure SSL connections to stderr when we disable them (in client.py) with:
+    #
+    #   urllib3.disable_warnings()
+    #
+    # The filtering functionality of the warnings module causes the error above on some systems. If we instead redirect the warning output
+    # to our logs instead of stderr (which is the warnings module's default), we can disable warnings safely.
+    logging.captureWarnings(True)
+
     if profiling_enabled:
         profile_file = "%s/profile.log" % application_log_dir_path()
         log_dir = os.path.dirname(profile_file)
