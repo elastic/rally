@@ -24,7 +24,7 @@ The ``list`` subcommand is used to list different configuration options:
 * telemetry: Will show all :doc:`telemetry devices </telemetry>` that are supported by Rally.
 * tracks: Will show all tracks that are supported by Rally. As this *may* depend on the Elasticsearch version that you want to benchmark, you can specify ``--distribution-version`` and also ``--distribution-repository`` as additional options.
 * pipelines: Will show all :doc:`pipelines </pipelines>` that are supported by Rally.
-* races: Will show all races that are currently stored. This is needed for the :doc:`tournament mode </tournament>`.
+* races: Will show a list of the most recent races. This is needed for the :doc:`tournament mode </tournament>`.
 * cars: Will show all cars that are supported by Rally (i.e. Elasticsearch configurations).
 * elasticsearch-plugins: Will show all Elasticsearch plugins and their configurations that are supported by Rally.
 
@@ -47,7 +47,7 @@ Command Line Flags
 ``track-path``
 ~~~~~~~~~~~~~~
 
-Can be either directory that contains a ``track.json`` file or a ``.json`` file with an arbitrary name that contains a track specification. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive. See the :doc:`track reference </track>` to decide whether you should use ``--track-path`` or ``--track-repository``.
+Can be either a directory that contains a ``track.json`` file or a ``.json`` file with an arbitrary name that contains a track specification. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive. See the :doc:`track reference </track>` to decide whether you should use ``--track-path`` or ``--track-repository`` / ``--track``.
 
 Examples::
 
@@ -62,7 +62,7 @@ Examples::
 ``track-repository``
 ~~~~~~~~~~~~~~~~~~~~
 
-Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See :doc:`track reference </track>` on how to add your own track repositories. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
+Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See the :doc:`track reference </track>` on how to add your own track repositories. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
 ``track``
 ~~~~~~~~~
@@ -114,6 +114,7 @@ All track parameters are recorded for each metrics record in the metrics store. 
     20160518T122341Z  pmc      replica_count=1                append-no-conflicts  defaults
     20160518T112341Z  pmc      replica_count=1,shard_count=3  append-no-conflicts  defaults
 
+Note that the default values are not recorded or shown (Rally does not know about them).
 
 ``challenge``
 ~~~~~~~~~~~~~
@@ -127,13 +128,13 @@ A track consists of one or more challenges. With this flag you can specify which
 
 Each challenge consists of one or more tasks but sometimes you are only interested to run a subset of all tasks. For example, you might have prepared an index already and want only to repeatedly run search benchmarks. Or you want to run only the indexing task but nothing else.
 
-You can use ``--include-tasks`` to specify a comma-separated list of tasks that you want to run. Each item in the list defines either the name of a task or the operation type of a task. Only the tasks that match will be executed. Currently there is also no command that shows a list of tasks per challenge so you need to look at the track source.
+You can use ``--include-tasks`` to specify a comma-separated list of tasks that you want to run. Each item in the list defines either the name of a task or the operation type of a task. Only the tasks that match will be executed. Currently there is also no command that lists the tasks of a challenge so you need to look at the track source.
 
 **Examples**:
 
 * Execute only the tasks with the name ``index`` and ``term``: ``--include-tasks="index,term"``
 * Execute only tasks of type ``search``: ``--include-tasks="type:search"``
-* You can also mix and match these: ``--include-tasks="index,type:search"``
+* You can also mix and match: ``--include-tasks="index,type:search"``
 
 ``team-repository``
 ~~~~~~~~~~~~~~~~~~~
@@ -177,7 +178,7 @@ Rally can autodetect the pipeline in most cases. If you specify ``--distribution
 ``laps``
 ~~~~~~~~
 
-Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted between laps.
+Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted in between.
 
 .. _clr_enable_driver_profiling:
 
@@ -282,7 +283,7 @@ Additionally, Rally will always work with the current development version of Ela
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Rally does not only support benchmarking official distributions but can also benchmark snapshot builds. This is option is really just intended for `our benchmarks that are run in continuous integration <https://elasticsearch-benchmarks.elastic.co/>`_ but if you want to, you can use it too. The only supported value out of the box is ``release`` (default) but you can define an arbitrary repositories in ``~/.rally/rally.ini``.
+Rally does not only support benchmarking official distributions but can also benchmark snapshot builds. This is option is really just intended for `our benchmarks that are run in continuous integration <https://elasticsearch-benchmarks.elastic.co/>`_ but if you want to, you can use it too. The only supported value out of the box is ``release`` (default) but you can define arbitrary repositories in ``~/.rally/rally.ini``.
 
 **Example**
 
@@ -297,9 +298,9 @@ The ``url`` property defines the URL pattern for this repository. The ``cache`` 
 
 You can use this distribution repository with the name "in_house_snapshot" as follows::
 
-   esrally --distribution-repository=in_house_snapshot --distribution-version=6.0.0-SNAPSHOT
+   esrally --distribution-repository=in_house_snapshot --distribution-version=7.0.0-SNAPSHOT
 
-This will benchmark the latest 6.0.0 snapshot build of Elasticsearch.
+This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
 
 ``report-format``
 ~~~~~~~~~~~~~~~~~
@@ -309,7 +310,9 @@ The command line reporter in Rally displays a table with key metrics after a rac
 ``show-in-report``
 ~~~~~~~~~~~~~~~~~~
 
-By default, the command line reporter will only show values that are available (``available``). With ``all`` you can force it to show a line for every value,~ even undefined ones and with ``all-percentiles`` it will show only available values but force output of all possible percentile values. This command line parameter is not available for comparing races.
+By default, the command line reporter will only show values that are available (``available``). With ``all`` you can force it to show a line for every value, even undefined ones, and with ``all-percentiles`` it will show only available values but force output of all possible percentile values.
+
+This command line parameter is not available for comparing races.
 
 
 ``report-file``
@@ -349,18 +352,18 @@ Here are a few common examples:
 
 * Enable HTTP compression: ``--client-options="compressed:true"``
 * Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
-* Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the [Elasticsearch Python client docs](http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication))
+* Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the `Elasticsearch Python client docs <http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication>`_)
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Please avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
 
 ``on-error``
 ~~~~~~~~~~~~
 
-THis option controls whether Rally will ``continue`` or ``abort`` when a request error occurs. By default, Rally will record the error and report the error rate at the end of a race. With ``--on-error=abort``, Rally will immediately abort the race on the first error and print a detailed error message.
+This option controls whether Rally will ``continue`` or ``abort`` when a request error occurs. By default, Rally will just record errors and report the error rate at the end of a race. With ``--on-error=abort``, Rally will immediately abort the race on the first error and print a detailed error message.
 
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~
 
-By default, Rally will run its load driver on the same machine where you start the benchmark. However, if you benchmark larger clusters one machine may not be enough to generate sufficient load. Hence, you can specify a comma-separated list of hosts which should be used to generate load with ``--load-driver-hosts``.
+By default, Rally will run its load driver on the same machine where you start the benchmark. However, if you benchmark larger clusters, one machine may not be enough to generate sufficient load. Hence, you can specify a comma-separated list of hosts which should be used to generate load with ``--load-driver-hosts``.
 
 **Example**
 
@@ -446,13 +449,13 @@ This flag determines whether Rally should automatically accept all values for co
 
 This is only relevant when you want to run :doc:`tournaments </tournament>`. You can use this flag to attach an arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
-The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely. Note that only one user tag is supported.
+The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely.
 
 **Example**
 
  ::
 
-   esrally --user-tag="intention:github-issue-1234-baseline"
+   esrally --user-tag="intention:github-issue-1234-baseline,gc:cms"
 
 You can also specify multiple tags. They need to be separated by a comma.
 

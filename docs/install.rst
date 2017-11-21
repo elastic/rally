@@ -93,7 +93,7 @@ JDK
 
 A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator, no JDK is required.
 
-We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK, please see your Linux distribution's documentation pages.
+We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK, please see your operating system's documentation pages.
 
 Installing Rally
 ----------------
@@ -104,7 +104,7 @@ Simply install Rally with pip: ``pip3 install esrally``
 
    Depending on your system setup you may need to prepend this command with ``sudo``.
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please ensure that you have installed the Python development package as documented in the prerequisites section above.
 
 Non-sudo Install
 ----------------

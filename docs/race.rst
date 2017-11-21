@@ -23,7 +23,7 @@ This will show the following list::
     percolator  Percolator benchmark based on AOL queries              2000000  102.7 kB           104.9 MB             append-no-conflicts      append-no-conflicts,appe...
     pmc         Full text benchmark with academic papers from PMC       574199  5.5 GB             21.7 GB              append-no-conflicts      append-no-conflicts,appe...
 
-The first two columns show the name and a description of each track. A track also specifies one or more challenges which basically defines the operations that will be run.
+The first two columns show the name and a description of each track. A track also specifies one or more challenges which describe the workload to run.
 
 Starting a Race
 ---------------
@@ -33,11 +33,11 @@ Starting a Race
 
 To start a race you have to define the track and challenge to run. For example::
 
-    esrally --distribution-version=5.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    esrally --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
 
 Rally will then start racing on this track. If you have never started Rally before, it should look similar to the following output::
 
-    dm@io:~ $ esrally --distribution-version=5.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    dm@io:~ $ esrally --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -46,8 +46,8 @@ Rally will then start racing on this track. If you have never started Rally befo
     /_/ |_|\__,_/_/_/\__, /
                     /____/
 
-    [INFO] Racing on track [geopoint], challenge [append-fast-with-conflicts] and car [defaults]
-    [INFO] Downloading Elasticsearch 5.0.0 ... [OK]
+    [INFO] Racing on track [geopoint], challenge [append-fast-with-conflicts] and car ['defaults'] with version [6.0.0].
+    [INFO] Downloading Elasticsearch 6.0.0 ... [OK]
     [INFO] Rally will delete the benchmark candidate after the benchmark
     [INFO] Downloading data from [http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geopoint/documents.json.bz2] (482 MB) to [/Users/dm/.rally/benchmarks/data/geopoint/documents.json.bz2] ... [OK]
     [INFO] Decompressing track data from [/Users/dm/.rally/benchmarks/data/geopoint/documents.json.bz2] to [/Users/dm/.rally/benchmarks/data/geopoint/documents.json] (resulting size: 2.28 GB) ... [OK]
@@ -108,7 +108,7 @@ When the race has finished, Rally will show a summary on the command line::
 
 What did Rally just do?
 
-* It downloaded and started Elasticsearch 5.0.0
+* It downloaded and started Elasticsearch 6.0.0
 * It downloaded the relevant data for the geopoint track
 * It ran the actual benchmark
 * And finally it reported the results
