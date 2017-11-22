@@ -2,7 +2,7 @@ import logging
 
 import thespian.actors
 
-from esrally import actor, client, paths, config, metrics, exceptions, time, PROGRAM_NAME
+from esrally import actor, client, paths, config, metrics, exceptions, time
 from esrally.utils import console, net
 from esrally.mechanic import supplier, provisioner, launcher, team
 
@@ -509,37 +509,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"))
 
     if sources or distribution:
-        try:
-            java_home = cfg.opts("runtime", "java.home")
-        except config.ConfigError:
-            logger.exception("Cannot determine Java home.")
-            raise exceptions.SystemSetupError("No JDK is configured. You cannot benchmark Elasticsearch on this machine. Please install"
-                                              " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
-    if sources:
-        try:
-            src_dir = cfg.opts("node", "src.root.dir")
-        except config.ConfigError:
-            logger.exception("Cannot determine source directory")
-            raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
-                                              " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
-
-        remote_url = cfg.opts("source", "remote.repo.url")
-        revision = cfg.opts("mechanic", "source.revision")
-        gradle = cfg.opts("build", "gradle.bin")
-        src_config = cfg.all_opts("source")
-        s = lambda: supplier.from_sources(remote_url, src_dir, revision, gradle, java_home, challenge_root_path, plugins, src_config, build)
-        p = []
-        for node_id in node_ids:
-            p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
-        l = launcher.InProcessLauncher(cfg, metrics_store, races_root)
-    elif distribution:
-        version = cfg.opts("mechanic", "distribution.version")
-        repo_name = cfg.opts("mechanic", "distribution.repository")
-        distributions_root = "%s/%s" % (cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
-        distribution_cfg = cfg.all_opts("distributions")
-
-        s = lambda: supplier.from_distribution(version=version, repo_name=repo_name, distribution_config=distribution_cfg,
-                                               distributions_root=distributions_root, plugins=plugins)
+        s = supplier.create(cfg, sources, distribution, build, challenge_root_path, plugins)
         p = []
         for node_id in node_ids:
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))

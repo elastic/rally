@@ -4,7 +4,7 @@ import glob
 import logging
 import urllib.error
 
-from esrally import exceptions
+from esrally import exceptions, PROGRAM_NAME
 from esrally.utils import git, console, io, process, net, versions, convert
 from esrally.exceptions import BuildError, SystemSetupError
 
@@ -17,7 +17,324 @@ ASSEMBLE_TASK = ":distribution:tar:assemble"
 REVISION_PATTERN = r"(\w.*?):(.*)"
 
 
-def config_value(src_config, key):
+def create(cfg, sources, distribution, build, challenge_root_path, plugins):
+    revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
+    java_home = _java_home(cfg)
+    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
+    build_needed = any([build for _, _, build in supply_requirements.values()])
+    src_config = cfg.all_opts("source")
+    suppliers = []
+
+    if build_needed:
+        gradle = cfg.opts("build", "gradle.bin")
+        es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
+        builder = Builder(es_src_dir, gradle, java_home, challenge_root_path)
+    else:
+        builder = None
+
+    es_supplier_type, es_version, es_build = supply_requirements["elasticsearch"]
+    if es_supplier_type == "source":
+        es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
+        suppliers.append(ElasticsearchSourceSupplier(es_version, es_src_dir, remote_url=cfg.opts("source", "remote.repo.url"), builder=builder))
+        repo = None
+    else:
+        es_src_dir = None
+        distributions_root = os.path.join(cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
+        repo = DistributionRepository(name=cfg.opts("mechanic", "distribution.repository"),
+                                      distribution_config=cfg.all_opts("distributions"),
+                                      version=es_version)
+        suppliers.append(ElasticsearchDistributionSupplier(repo, distributions_root))
+
+    for plugin in plugins:
+        supplier_type, plugin_version, build_plugin = supply_requirements[plugin.name]
+
+        if supplier_type == "source":
+            if CorePluginSourceSupplier.can_handle(plugin):
+                logger.info("Adding core plugin source supplier for [%s]." % plugin.name)
+                assert es_src_dir is not None, "Cannot build core plugin %s when Elasticsearch is not built from source." % plugin.name
+                suppliers.append(CorePluginSourceSupplier(plugin, es_src_dir, builder))
+            elif ExternalPluginSourceSupplier.can_handle(plugin):
+                logger.info("Adding external plugin source supplier for [%s]." % plugin.name)
+                suppliers.append(ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder))
+            else:
+                raise exceptions.RallyError("Plugin %s can neither be treated as core nor as external plugin. Requirements: %s" %
+                                            (plugin.name, supply_requirements[plugin.name]))
+        else:
+            logger.info("Adding plugin distribution supplier for [%s]." % plugin.name)
+            assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
+            suppliers.append(PluginDistributionSupplier(repo, plugin))
+
+    return CompositeSupplier(suppliers)
+
+
+def _java_home(cfg):
+    from esrally import config
+    try:
+        return cfg.opts("runtime", "java.home")
+    except config.ConfigError:
+        logger.exception("Cannot determine Java home.")
+        raise exceptions.SystemSetupError("No JDK is configured. You cannot benchmark Elasticsearch on this machine. Please install"
+                                          " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
+
+
+def _required_version(version):
+    if not version or version.strip() == "":
+        raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
+                                          "to download with the command line parameter --distribution-version. "
+                                          "E.g. --distribution-version=5.0.0")
+    else:
+        return version
+
+
+def _required_revision(revisions, key, name=None):
+    try:
+        return revisions[key]
+    except KeyError:
+        n = name if name is not None else key
+        raise exceptions.SystemSetupError("No revision specified for %s" % n)
+
+
+def _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version):
+    # per artifact (elasticsearch or a specific plugin):
+    #   * key: artifact
+    #   * value: ("source" | "distribution", distribution_version | revision, build = True | False)
+    supply_requirements = {}
+
+    # can only build Elasticsearch with source-related pipelines -> ignore revision in that case
+    if "elasticsearch" in revisions and sources:
+        supply_requirements["elasticsearch"] = ("source", _required_revision(revisions, "elasticsearch", "Elasticsearch"), build)
+    else:
+        # no revision given or explicitly specified that it's from a distribution -> must use a distribution
+        supply_requirements["elasticsearch"] = ("distribution", _required_version(distribution_version), False)
+
+    for plugin in plugins:
+        if plugin.core_plugin:
+            # core plugins are entirely dependent upon Elasticsearch.
+            supply_requirements[plugin.name] = supply_requirements["elasticsearch"]
+        else:
+            if plugin.name in revisions:
+                # this plugin always needs to built unless we explicitly disable it; we cannot solely rely on the Rally pipeline.
+                # We either have:
+                #
+                # * --pipeline=from-sources-skip-build --distribution-version=X.Y.Z where the plugin should not be built but ES should be
+                #   a distributed version.
+                # * --distribution-version=X.Y.Z --revision="my-plugin:abcdef" where the plugin should be built from sources.
+                plugin_needs_build = (sources and build) or distribution
+
+                # This would be a bit more lenient version that would allow us to skip the explicit plugin revision spec but for the moment
+                # we should enforce more strict behavior and may introduce leniency later on.
+
+                # try:
+                #     plugin_revision = revisions[plugin.name]
+                # except KeyError:
+                #     # maybe we can use the catch-all revision (only if it's not a git revision)
+                #     plugin_revision = revisions.get("all")
+                #     if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
+                #         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
+                #     else:
+                #         logger.info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
+                #                     % (plugin.name, plugin_revision))
+                supply_requirements[plugin.name] = ("source", _required_revision(revisions, plugin.name), plugin_needs_build)
+            else:
+                supply_requirements[plugin.name] = (distribution, _required_version(distribution_version), False)
+    return supply_requirements
+
+
+def _src_dir(cfg, mandatory=True):
+    # Don't let this spread across the whole module
+    from esrally import config
+    try:
+        return cfg.opts("node", "src.root.dir", mandatory=mandatory)
+    except config.ConfigError:
+        logger.exception("Cannot determine source directory")
+        raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
+                                          " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
+
+
+class CompositeSupplier:
+    def __init__(self, suppliers):
+        self.suppliers = suppliers
+
+    def __call__(self, *args, **kwargs):
+        binaries = {}
+        console.info("Preparing for race ...", flush=True)
+        try:
+            for supplier in self.suppliers:
+                supplier.fetch()
+
+            for supplier in self.suppliers:
+                supplier.prepare()
+
+            for supplier in self.suppliers:
+                supplier.add(binaries)
+            return binaries
+        except BaseException:
+            raise
+
+
+class ElasticsearchSourceSupplier:
+    def __init__(self, revision, es_src_dir, remote_url, builder):
+        self.revision = revision
+        self.src_dir = es_src_dir
+        self.remote_url = remote_url
+        self.builder = builder
+
+    def fetch(self):
+        SourceRepository("Elasticsearch", self.remote_url, self.src_dir).fetch(self.revision)
+
+    def prepare(self):
+        if self.builder:
+            self.builder.build([CLEAN_TASK, ASSEMBLE_TASK])
+
+    def add(self, binaries):
+        binaries["elasticsearch"] = self.resolve_binary()
+
+    def resolve_binary(self):
+        try:
+            return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
+        except IndexError:
+            raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
+
+
+class ExternalPluginSourceSupplier:
+    def __init__(self, plugin, revision, src_dir, src_config, builder):
+        assert not plugin.core_plugin, "Plugin %s is a core plugin" % plugin.name
+        self.plugin = plugin
+        self.revision = revision
+        # may be None if and only if the user has set an absolute plugin directory
+        self.src_dir = src_dir
+        self.src_config = src_config
+        self.builder = builder
+        subdir_cfg_key = "plugin.%s.src.subdir" % self.plugin.name
+        dir_cfg_key = "plugin.%s.src.dir" % self.plugin.name
+        if dir_cfg_key in self.src_config and subdir_cfg_key in self.src_config:
+            raise exceptions.SystemSetupError("Can only specify one of %s and %s but both are set." % (dir_cfg_key, subdir_cfg_key))
+        elif dir_cfg_key in self.src_config:
+            self.plugin_src_dir = _config_value(self.src_config, dir_cfg_key)
+            # we must build directly in the plugin dir, not relative to Elasticsearch
+            self.override_build_dir = self.plugin_src_dir
+        elif subdir_cfg_key in self.src_config:
+            self.plugin_src_dir = os.path.join(self.src_dir, _config_value(self.src_config, subdir_cfg_key))
+            self.override_build_dir = None
+        else:
+            raise exceptions.SystemSetupError("Neither %s nor %s are set for plugin %s." % (dir_cfg_key, subdir_cfg_key, self.plugin.name))
+
+    @staticmethod
+    def can_handle(plugin):
+        return not plugin.core_plugin
+
+    def fetch(self):
+        # optional (but then source code is assumed to be available locally)
+        plugin_remote_url = self.src_config.get("plugin.%s.remote.repo.url" % self.plugin.name)
+        SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir).fetch(self.revision)
+
+    def prepare(self):
+        if self.builder:
+            task = _config_value(self.src_config, "plugin.%s.build.task" % self.plugin.name)
+            self.builder.build([task], override_src_dir=self.override_build_dir)
+
+    def add(self, binaries):
+        binaries[self.plugin.name] = self.resolve_binary()
+
+    def resolve_binary(self):
+        artifact_path = _config_value(self.src_config, "plugin.%s.build.artifact.subdir" % self.plugin.name)
+        try:
+            name = glob.glob("%s/%s/*.zip" % (self.plugin_src_dir, artifact_path))[0]
+            return "file://%s" % name
+        except IndexError:
+            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
+                                   self.plugin.name)
+
+
+class CorePluginSourceSupplier:
+    def __init__(self, plugin, es_src_dir, builder):
+        assert plugin.core_plugin, "Plugin %s is not a core plugin" % plugin.name
+        self.plugin = plugin
+        self.es_src_dir = es_src_dir
+        self.builder = builder
+
+    @staticmethod
+    def can_handle(plugin):
+        return plugin.core_plugin
+
+    def fetch(self):
+        pass
+
+    def prepare(self):
+        if self.builder:
+            task = ":plugins:%s:assemble" % self.plugin.name
+            self.builder.build([task])
+
+    def add(self, binaries):
+        binaries[self.plugin.name] = self.resolve_binary()
+
+    def resolve_binary(self):
+        try:
+            name = glob.glob("%s/plugins/%s/build/distributions/*.zip" % (self.es_src_dir, self.plugin.name))[0]
+            return "file://%s" % name
+        except IndexError:
+            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
+                                   self.plugin.name)
+
+
+class ElasticsearchDistributionSupplier:
+    def __init__(self, repo, distributions_root):
+        self.repo = repo
+        self.version = repo.version
+        self.distributions_root = distributions_root
+        # will be defined in the prepare phase
+        self.distribution_path = None
+
+    def fetch(self):
+        io.ensure_dir(self.distributions_root)
+        distribution_path = "%s/elasticsearch-%s.tar.gz" % (self.distributions_root, self.version)
+        download_url = self.repo.download_url
+        logger.info("Resolved download URL [%s] for version [%s]" % (download_url, self.version))
+        if not os.path.isfile(distribution_path) or not self.repo.cache:
+            try:
+                logger.info("Starting download of Elasticsearch [%s]" % self.version)
+                progress = net.Progress("[INFO] Downloading Elasticsearch %s" % self.version)
+                net.download(download_url, distribution_path, progress_indicator=progress)
+                progress.finish()
+                logger.info("Successfully downloaded Elasticsearch [%s]." % self.version)
+            except urllib.error.HTTPError:
+                console.println("[FAILED]")
+                logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (self.version, download_url))
+                raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
+                                                  "version [%s] is correct." % (download_url, self.version))
+        else:
+            logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (self.version, distribution_path))
+
+        self.distribution_path = distribution_path
+
+    def prepare(self):
+        pass
+
+    def add(self, binaries):
+        binaries["elasticsearch"] = self.distribution_path
+
+
+class PluginDistributionSupplier:
+    def __init__(self, repo, plugin):
+        self.repo = repo
+        self.plugin = plugin
+
+    def fetch(self):
+        pass
+
+    def prepare(self):
+        pass
+
+    def add(self, binaries):
+        # if we have multiple plugin configurations for a plugin we will override entries here but as this is always the same
+        # key-value pair this is ok.
+        plugin_url = self.repo.plugin_download_url(self.plugin.name)
+        if plugin_url:
+            binaries[self.plugin.name] = plugin_url
+
+
+def _config_value(src_config, key):
     try:
         return src_config[key]
     except KeyError:
@@ -25,17 +342,24 @@ def config_value(src_config, key):
                                           "config file." % key)
 
 
-def extract_revisions(revision):
+def _extract_revisions(revision):
     revisions = revision.split(",")
     if len(revisions) == 1:
-        es_revision = revisions[0]
-        if es_revision.startswith("elasticsearch:"):
-            es_revision = es_revision[len("elasticsearch:"):]
-        return {
-            "elasticsearch": es_revision,
-            # use a catch-all value
-            "all": es_revision
-        }
+        r = revisions[0]
+        if r.startswith("elasticsearch:"):
+            r = r[len("elasticsearch:"):]
+        # may as well be just a single plugin
+        m = re.match(REVISION_PATTERN, r)
+        if m:
+            return {
+                m.group(1): m.group(2)
+            }
+        else:
+            return {
+                "elasticsearch": r,
+                # use a catch-all value
+                "all": r
+            }
     else:
         results = {}
         for r in revisions:
@@ -45,97 +369,6 @@ def extract_revisions(revision):
             else:
                 raise exceptions.SystemSetupError("Revision [%s] does not match expected format [name:revision]." % r)
         return results
-
-
-def from_sources(remote_url, src_dir, revision, gradle, java_home, log_dir, plugins, src_config, build=True):
-    if build:
-        console.info("Preparing for race ...", end="", flush=True)
-    try:
-        revisions = extract_revisions(revision)
-        es_src_dir = os.path.join(src_dir, config_value(src_config, "elasticsearch.src.subdir"))
-        try:
-            es_revision = revisions["elasticsearch"]
-        except KeyError:
-            raise exceptions.SystemSetupError("No revision specified for Elasticsearch in [%s]." % revision)
-        SourceRepository("Elasticsearch", remote_url, es_src_dir).fetch(es_revision)
-
-        # this may as well be a core plugin and we need to treat them specially. :plugins:analysis-icu:assemble
-        for plugin in plugins:
-            if not plugin.core_plugin:
-                # optional (but then source code is assumed to be available locally)
-                plugin_remote_url = src_config.get("plugin.%s.remote.repo.url" % plugin.name)
-                plugin_src_dir = os.path.join(src_dir, config_value(src_config, "plugin.%s.src.subdir" % plugin.name))
-                try:
-                    plugin_revision = revisions[plugin.name]
-                except KeyError:
-                    # maybe we can use the catch-all revision (only if it's not a git revision)
-                    plugin_revision = revisions.get("all")
-                    if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
-                        raise exceptions.SystemSetupError("No revision specified for plugin [%s] in [%s]." % (plugin.name, revision))
-                    else:
-                        logger.info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
-                                    % (plugin.name, plugin_revision))
-                SourceRepository(plugin.name, plugin_remote_url, plugin_src_dir).fetch(plugin_revision)
-
-        if build:
-            builder = Builder(es_src_dir, gradle, java_home, log_dir)
-            builder.build([CLEAN_TASK, ASSEMBLE_TASK])
-            for plugin in plugins:
-                if plugin.core_plugin:
-                    task = ":plugins:%s:assemble" % plugin.name
-                else:
-                    task = config_value(src_config, "plugin.%s.build.task" % plugin.name)
-                builder.build([task])
-            console.println(" [OK]")
-        binaries = {"elasticsearch": resolve_es_binary(es_src_dir)}
-        for plugin in plugins:
-            if plugin.core_plugin:
-                binaries[plugin.name] = resolve_core_plugin_binary(plugin.name, es_src_dir)
-            else:
-                binaries[plugin.name] = resolve_plugin_binary(plugin.name, src_dir, src_config)
-        return binaries
-    except BaseException:
-        if build:
-            console.println(" [FAILED]")
-        raise
-
-
-def from_distribution(version, repo_name, distribution_config, distributions_root, plugins):
-    if version.strip() == "":
-        raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
-                                          "to download with the command line parameter --distribution-version. "
-                                          "E.g. --distribution-version=5.0.0")
-    io.ensure_dir(distributions_root)
-    distribution_path = "%s/elasticsearch-%s.tar.gz" % (distributions_root, version)
-
-    repo = DistributionRepository(repo_name, distribution_config, version)
-
-    download_url = repo.download_url
-    logger.info("Resolved download URL [%s] for version [%s]" % (download_url, version))
-    if not os.path.isfile(distribution_path) or not repo.cache:
-        try:
-            logger.info("Starting download of Elasticsearch [%s]" % version)
-            progress = net.Progress("[INFO] Downloading Elasticsearch %s" % version)
-            net.download(download_url, distribution_path, progress_indicator=progress)
-            progress.finish()
-            logger.info("Successfully downloaded Elasticsearch [%s]." % version)
-        except urllib.error.HTTPError:
-            console.println("[FAILED]")
-            logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (version, download_url))
-            raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
-                                              "version [%s] is correct." % (download_url, version))
-    else:
-        logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (version, distribution_path))
-
-    binaries = {"elasticsearch": distribution_path}
-    for plugin in plugins:
-        # if we have multiple plugin configurations for a plugin we will override entries here but as this is always the same
-        # key-value pair this is ok.
-        plugin_url = repo.plugin_download_url(plugin.name)
-        if plugin_url:
-            binaries[plugin.name] = plugin_url
-
-    return binaries
 
 
 class SourceRepository:
@@ -194,33 +427,6 @@ class SourceRepository:
         return revision != "latest" and revision != "current" and not revision.startswith("@")
 
 
-def resolve_es_binary(src_dir):
-    try:
-        return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % src_dir)[0]
-    except IndexError:
-        raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
-
-
-def resolve_plugin_binary(plugin_name, src_dir, src_config):
-    plugin_src_dir = config_value(src_config, "plugin.%s.src.subdir" % plugin_name)
-    artifact_path = config_value(src_config, "plugin.%s.build.artifact.subdir" % plugin_name)
-    try:
-        name = glob.glob("%s/%s/%s/*.zip" % (src_dir, plugin_src_dir, artifact_path))[0]
-        return "file://%s" % name
-    except IndexError:
-        raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
-                               plugin_name)
-
-
-def resolve_core_plugin_binary(plugin_name, src_dir):
-    try:
-        name = glob.glob("%s/plugins/%s/build/distributions/*.zip" % (src_dir, plugin_name))[0]
-        return "file://%s" % name
-    except IndexError:
-        raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
-                               plugin_name)
-
-
 class Builder:
     # Tested with Gradle 4.1 on Java 9-ea+161
     JAVA_9_GRADLE_OPTS = "--add-opens=java.base/java.io=ALL-UNNAMED " \
@@ -241,14 +447,15 @@ class Builder:
         self.java_home = java_home
         self.log_dir = log_dir
 
-    def build(self, tasks):
+    def build(self, tasks, override_src_dir=None):
         for task in tasks:
-            self.run(task)
+            self.run(task, override_src_dir)
 
-    def run(self, task):
+    def run(self, task, override_src_dir=None):
         from esrally.utils import jvm
+        src_dir = self.src_dir if override_src_dir is None else override_src_dir
 
-        logger.info("Building from sources in [%s]." % self.src_dir)
+        logger.info("Building from sources in [%s]." % src_dir)
         logger.info("Executing %s %s..." % (self.gradle, task))
         io.ensure_dir(self.log_dir)
         log_file = "%s/build.log" % self.log_dir
@@ -262,7 +469,7 @@ class Builder:
             gradle_opts = ""
 
         if process.run_subprocess("%sexport JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
-                                          (gradle_opts, self.java_home, self.src_dir, self.gradle, task, log_file)):
+                                          (gradle_opts, self.java_home, src_dir, self.gradle, task, log_file)):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r") as f:

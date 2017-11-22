@@ -77,7 +77,15 @@ If you are behind a proxy, please set the environment variable ``ES_JAVA_OPTS`` 
 Building plugins from sources
 -----------------------------
 
-Plugin authors may want to benchmark source builds of their plugins. To make this work, you need to manually edit Rally's configuration file in ``~/.rally/rally.ini``. Suppose, we want to benchmark the plugin "my-plugin". Then you need to add the following entries in the ``source`` section::
+Plugin authors may want to benchmark source builds of their plugins. Your plugin is either:
+
+* built alongside Elasticsearch
+* built against a released version of Elasticsearch
+
+Plugins built alongside Elasticsearch
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To make this work, you need to manually edit Rally's configuration file in ``~/.rally/rally.ini``. Suppose, we want to benchmark the plugin "my-plugin". Then you need to add the following entries in the ``source`` section::
 
     plugin.my-plugin.remote.repo.url = git@github.com:example-org/my-plugin.git
     plugin.my-plugin.src.subdir = elasticsearch-extra/my-plugin
@@ -88,7 +96,7 @@ Let's discuss these properties one by one:
 
 * ``plugin.my-plugin.remote.repo.url`` (optional): This is needed to let Rally checkout the source code of the plugin. If this is a private repo, credentials need to be setup properly. If the source code is already locally available you may not need to define this property. The remote's name is assumed to be "origin" and this is not configurable. Also, only git is supported as revision control system.
 * ``plugin.my-plugin.src.subdir`` (mandatory): This is the directory to which the plugin will be checked out relative to ``src.root.dir``. In order to allow to build the plugin alongside Elasticsearch, the plugin needs to reside in a subdirectory of ``elasticsearch-extra`` (see also the `Elasticsearch testing documentation <https://github.com/elastic/elasticsearch/blob/master/TESTING.asciidoc#building-with-extra-plugins>`_.
-* ``plugin.my-plugin.build.task`` (mandatory): The Gradle task to run in order to build the plugin artifact. Note that his command is run from the Elasticsearch source directory as Rally assumes that you want to build your plugin alongside Elasticsearch. Mixing released Elasticsearch distributions with plugin source builds is not supported (nor is there an intention to do so).
+* ``plugin.my-plugin.build.task`` (mandatory): The Gradle task to run in order to build the plugin artifact. Note that this command is run from the Elasticsearch source directory as Rally assumes that you want to build your plugin alongside Elasticsearch (otherwise, see the next section).
 * ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.subdir`` in which the final plugin artifact is located.
 
 In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --revision="elasticsearch:some-elasticsearch-revision,my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``some-elasticsearch-revision`` and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
@@ -100,6 +108,28 @@ In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: `
 .. note::
     Rally can build all `Elasticsearch core plugins <https://github.com/elastic/elasticsearch/tree/master/plugins>`_ out of the box without any further configuration.
 
+Plugins based on a released Elasticsearch version
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To make this work, you need to manually edit Rally's configuration file in ``~/.rally/rally.ini``. Suppose, we want to benchmark the plugin "my-plugin". Then you need to add the following entries in the ``source`` section::
+
+    plugin.my-plugin.remote.repo.url = git@github.com:example-org/my-plugin.git
+    plugin.my-plugin.src.dir = /path/to/your/plugin/sources
+    plugin.my-plugin.build.task = :my-plugin:plugin:assemble
+    plugin.my-plugin.build.artifact.subdir = build/distributions
+
+Let's discuss these properties one by one:
+
+* ``plugin.my-plugin.remote.repo.url`` (optional): This is needed to let Rally checkout the source code of the plugin. If this is a private repo, credentials need to be setup properly. If the source code is already locally available you may not need to define this property. The remote's name is assumed to be "origin" and this is not configurable. Also, only git is supported as revision control system.
+* ``plugin.my-plugin.src.dir`` (mandatory): This is the absolute directory to which the source code will be checked out.
+* ``plugin.my-plugin.build.task`` (mandatory): The Gradle task to run in order to build the plugin artifact. This command is run from the plugin project's root directory.
+* ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.dir`` in which the final plugin artifact is located.
+
+In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --distribution-version="elasticsearch-version" --revision="my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``elasticsearch-version`` with the correct release (e.g. 6.0.0) and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
+
+* All prerequisites for source builds are installed.
+* The Elasticsearch release is compatible with the chosen plugin revision.
+* If your plugin needs to be configured, please ensure to create a proper plugin specification (see below).
 
 Anatomy of a plugin specification
 ---------------------------------
