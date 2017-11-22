@@ -146,6 +146,16 @@ If you are in a corporate environment where your servers do not have any access 
 3. Decompress the installation package with ``tar -xzf esrally-dist-*.tar.gz``.
 4. Run the install script with ``sudo ./esrally-dist-*/install.sh``.
 
+Kubernetes Job
+------------------
+
+You can run Rally as a Kubernetes `Job <https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/>`_ via `this <https://github.com/gdmello/elasticsearch-rally>`_ `Helm Chart <https://helm.sh/>`_.
+
+Docker
+------
+
+You can run Rally as a docker container too. Follow the instructions `here <https://github.com/gdmello/elasticsearch-rally/tree/master/docker>`_.
+
 Next Steps
 ----------
 
