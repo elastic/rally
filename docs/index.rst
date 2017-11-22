@@ -46,8 +46,8 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :caption: Extending Rally
    :maxdepth: 2
 
-   developing
    adding_tracks
+   developing
 
 .. toctree::
    :caption: Reference Documentation

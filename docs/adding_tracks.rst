@@ -1,5 +1,10 @@
-Creating custom tracks
-======================
+Define Custom Workloads: Tracks
+===============================
+
+Definition
+----------
+
+A track is a specification of one ore more benchmarking scenarios with a specific document corpus.
 
 .. note::
     Please see the :doc:`track reference </track>` for more information on the structure of a track.
@@ -63,8 +68,7 @@ We also need a mapping file for our documents. For details on how to write a map
 Finally, add a file called ``track.json`` right next to the mapping file::
 
     {
-      "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
@@ -82,7 +86,6 @@ Finally, add a file called ``track.json`` right next to the mapping file::
       "challenges": [
         {
           "name": "index-and-query",
-          "description": "",
           "default": true,
           "index-settings": {
             "index.number_of_replicas": 0
@@ -174,7 +177,6 @@ Structuring your track
 
     {
           "name": "index-and-query",
-          "description": "",
           "default": true,
           "index-settings": {
             "index.number_of_replicas": 0
@@ -213,8 +215,7 @@ Structuring your track
 Now modify ``track.json`` so it knows about your new file::
 
     {
-      "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
@@ -239,8 +240,7 @@ We replaced the challenge content with  ``{% include "challenges/index-and-query
 If you want to reuse operation definitions across challenges, you can also define them in a separate ``operations`` block and just refer to them by name in the corresponding challenge::
 
     {
-      "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
@@ -284,7 +284,6 @@ If you want to reuse operation definitions across challenges, you can also defin
 
     {
           "name": "index-and-query",
-          "description": "",
           "default": true,
           "index-settings": {
             "index.number_of_replicas": 0
@@ -315,8 +314,7 @@ If your track consists of multiple challenges, it can be cumbersome to include t
 
     {% import "rally.helpers" as rally %}
     {
-      "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
@@ -387,8 +385,7 @@ Then upload ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote l
 Finally, specify the compressed file name in your ``track.json`` file::
 
     {
-      "short-description": "Tutorial benchmark for Rally",
-      "description": "This test indexes 8.6 million documents (POIs from Geonames) using 8 clients and 5000 docs per bulk request against Elasticsearch",
+      "description": "Tutorial benchmark for Rally",
       "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
       "indices": [
         {
@@ -409,17 +406,6 @@ Finally, specify the compressed file name in your ``track.json`` file::
     }
 
 Specifying ``compressed-bytes`` (file size of ``documents.json.bz2``) and ``uncompressed-bytes`` (file size of ``documents.json``) is optional but helps Rally to provide progress indicators and also verify integrity.
-
-How to contribute a track
--------------------------
-
-First of all, please read Rally's `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_.
-
-If you want to contribute your track, follow these steps:
-
-1. Create a track JSON file and mapping files as described above and place them in a separate folder in the ``rally-tracks`` repository. Please also add a README file in this folder which contains licensing information (respecting the licensing terms of the source data). Note that pull requests for tracks without a license cannot be accepted.
-2. Upload the associated data so they can be publicly downloaded via HTTP. The data should be compressed either as .bz2 (recommended) or as .zip. Also, don't forget to upload the "-1k" data files to support test mode properly.
-3. Create a pull request in the `rally-tracks Github repo <https://github.com/elastic/rally-tracks>`_.
 
 You've now mastered the basics of track development for Rally. It's time to pat yourself on the back before you dive into the advanced topics!
 
@@ -739,104 +725,3 @@ This implementation will now achieve the same rate independent of the number of 
         "lower-bound-millis": 50,
         "upper-bound-millis": 250
     }
-
-Running tasks in parallel
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Rally supports running tasks in parallel with the ``parallel`` element. Below you find a few examples that show how it should be used:
-
-In the simplest case, you let Rally decide the number of clients needed to run the parallel tasks::
-
-
-        {
-          "parallel": {
-            "warmup-iterations": 1000,
-            "iterations": 1000,
-            "tasks": [
-              {
-                "operation": "default",
-                "target-throughput": 50
-              },
-              {
-                "operation": "term",
-                "target-throughput": 200
-              },
-              {
-                "operation": "phrase",
-                "target-throughput": 200
-              },
-              {
-                "operation": "country_agg_uncached",
-                "target-throughput": 50
-              }
-            ]
-          }
-        }
-      ]
-    }
-
-Rally will determine that four clients are needed to run each task in a dedicated client.
-
-However, you can also explicitly limit the number of clients::
-
-        {
-          "parallel": {
-            "clients": 2,
-            "warmup-iterations": 1000,
-            "iterations": 1000,
-            "tasks": [
-              {
-                "operation": "default",
-                "target-throughput": 50
-              },
-              {
-                "operation": "term",
-                "target-throughput": 200
-              },
-              {
-                "operation": "phrase",
-                "target-throughput": 200
-              },
-              {
-                "operation": "country_agg_uncached",
-                "target-throughput": 50
-              }
-            ]
-          }
-        }
-
-This will run the four tasks with just two clients. You could also specify more clients than there are tasks but these will then just idle.
-
-You can also specify a number of clients on sub tasks explicitly (by default, one client is assumed per subtask). This allows to define a weight for each client operation. Note that you need to define the number of clients also on the ``parallel`` parent element, otherwise Rally would determine the number of totally needed clients again on its own::
-
-        {
-          "parallel": {
-            "clients": 3,
-            "warmup-iterations": 1000,
-            "iterations": 1000,
-            "tasks": [
-              {
-                "operation": "default",
-                "target-throughput": 50
-              },
-              {
-                "operation": "term",
-                "target-throughput": 200
-              },
-              {
-                "operation": "phrase",
-                "target-throughput": 200,
-                "clients": 2
-              },
-              {
-                "operation": "country_agg_uncached",
-                "target-throughput": 50
-              }
-            ]
-          }
-        }
-
-This will ensure that the phrase query will be executed by two clients. All other ones are executed by one client.
-
-.. warning::
-    You cannot nest parallel tasks.

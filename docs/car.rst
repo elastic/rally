@@ -1,7 +1,14 @@
-Cars
-====
+Configure Elasticsearch: Cars
+=============================
 
-A rally "car" is a specific configuration of Elasticsearch. You can list the available cars with ``esrally list cars``::
+.. note::
+
+    You can skip this section if you use Rally only as a load generator.
+
+Definition
+----------
+
+A Rally "car" is a specific configuration of Elasticsearch. You can list the available cars with ``esrally list cars``::
 
         ____        ____
        / __ \____ _/ / /_  __

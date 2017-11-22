@@ -1,7 +1,10 @@
-Running Races
-=============
+Run a Benchmark: Races
+======================
 
-A "race" in Rally is the execution of a benchmarking experiment. You can use different data sets (which we call :doc:`tracks </track>`) for your benchmarks.
+Definition
+----------
+
+A "race" in Rally is the execution of a benchmarking experiment. You can choose different benchmarking scenarios (called :doc:`tracks </track>`) for your benchmarks.
 
 List Tracks
 -----------

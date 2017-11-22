@@ -1,5 +1,7 @@
-Recipes
-=======
+Tips and Tricks
+===============
+
+This section covers various tips and tricks when using Rally in a recipe-style fashion.
 
 Benchmarking an existing cluster
 --------------------------------
@@ -120,8 +122,6 @@ By default, Rally will generate load on the same machine where you start a bench
 .. note::
 
    As indicated in the diagram, track data will be downloaded by each load driver machine separately. If you want to avoid that, you can run a benchmark once without distributing the load test driver (i.e. do not specify ``--load-driver-hosts``) and then copy the contents of ``~/.rally/benchmarks/data`` to all load driver machines.
-
-
 
 
 Changing the default track repository

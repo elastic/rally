@@ -34,7 +34,7 @@ On all other nodes, issue::
 
     esrallyd start --node-ip=IP_OF_THIS_NODE --coordinator-ip=IP_OF_COORDINATOR_NODE
 
-After that, all Rally nodes, know about each other and you can use Rally as usual. Please see the :doc:`recipes </recipes>` for more examples.
+After that, all Rally nodes, know about each other and you can use Rally as usual. Please see the :doc:`tips and tricks </recipes>` for more examples.
 
 Stopping
 --------
