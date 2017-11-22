@@ -93,7 +93,7 @@ Finally, add a file called ``track.json`` right next to the mapping file::
           "schedule": [
             {
               "operation": {
-                "operation-type": "index",
+                "operation-type": "bulk",
                 "bulk-size": 5000
               }
               "warmup-time-period": 120,
@@ -184,7 +184,7 @@ Structuring your track
           "schedule": [
             {
               "operation": {
-                "operation-type": "index",
+                "operation-type": "bulk",
                 "bulk-size": 5000
               }
               "warmup-time-period": 120,
@@ -257,8 +257,8 @@ If you want to reuse operation definitions across challenges, you can also defin
       ],
       "operations": [
         {
-          "name": "index",
-          "operation-type": "index",
+          "name": "bulk-index",
+          "operation-type": "bulk",
           "bulk-size": 5000
         },
         {
@@ -290,7 +290,7 @@ If you want to reuse operation definitions across challenges, you can also defin
           },
           "schedule": [
             {
-              "operation": "index",
+              "operation": "bulk-index",
               "warmup-time-period": 120,
               "clients": 8
             },
@@ -308,7 +308,7 @@ If you want to reuse operation definitions across challenges, you can also defin
           ]
         }
 
-Note how we reference to the operations by their name (i.e. ``index``, ``force-merge`` and ``query-match-all``).
+Note how we reference to the operations by their name (i.e. ``bulk-index``, ``force-merge`` and ``query-match-all``).
 
 If your track consists of multiple challenges, it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
 
@@ -331,8 +331,8 @@ If your track consists of multiple challenges, it can be cumbersome to include t
       ],
       "operations": [
         {
-          "name": "index",
-          "operation-type": "index",
+          "name": "bulk-index",
+          "operation-type": "bulk",
           "bulk-size": 5000
         },
         {

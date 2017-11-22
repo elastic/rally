@@ -671,7 +671,11 @@ class Retry(Runner):
         return "retryable %s" % repr(self.delegate)
 
 
+# TODO #370: Remove this registration and replace with a new Index runner.
+# Old (deprecated) name
 register_runner(track.OperationType.Index.name, BulkIndex())
+# New name
+register_runner(track.OperationType.Bulk.name, BulkIndex())
 register_runner(track.OperationType.ForceMerge.name, ForceMerge())
 register_runner(track.OperationType.IndicesStats.name, IndicesStats())
 register_runner(track.OperationType.NodesStats.name, NodeStats())

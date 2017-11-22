@@ -580,7 +580,11 @@ class IndexDataReader:
         return False
 
 
+# TODO #370: Remove this registration.
+# Old name - deprecated
 register_param_source_for_operation(track.OperationType.Index, BulkIndexParamSource)
+# New name
+register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSource)
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
 
 # Also register by name, so users can use it too

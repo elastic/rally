@@ -819,6 +819,13 @@ class TrackSpecificationReader:
             param_source = self._r(op_spec, "param-source", error_ctx=error_ctx, mandatory=False)
 
         try:
+            # TODO #370: Remove this warning.
+            # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
+            if op_type_name == "index" and \
+                            self.name not in ["geonames", "geopoint", "noaa", "logging", "nyc_taxis", "pmc", "percolator", "nested"]:
+                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
+                             "operation type to [bulk]." % self.name)
+
             op_type = track.OperationType.from_hyphenated_string(op_type_name).name
             logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
         except KeyError:

@@ -330,6 +330,7 @@ class OperationType(Enum):
     NodesStats = 3,
     Search = 4,
     ClusterHealth = 5,
+    Bulk = 6
 
     @classmethod
     def from_hyphenated_string(cls, v):
@@ -345,6 +346,8 @@ class OperationType(Enum):
             return OperationType.Search
         elif v == "cluster-health":
             return OperationType.ClusterHealth
+        elif v == "bulk":
+            return OperationType.Bulk
         else:
             raise KeyError("No enum value for [%s]" % v)
 

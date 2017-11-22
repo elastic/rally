@@ -585,7 +585,7 @@ class EsRaceStoreTests(TestCase):
 
     def test_store_race(self):
         schedule = [
-            track.Task("index #1", track.Operation("index", track.OperationType.Index))
+            track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
 
         t = track.Track(name="unittest", description="unittest track",
@@ -689,7 +689,7 @@ class EsResultsStoreTests(TestCase):
         from esrally.mechanic import cluster
 
         schedule = [
-            track.Task("index #1", track.Operation("index", track.OperationType.Index))
+            track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
 
         t = track.Track(name="unittest-track", description="unittest track",
@@ -962,7 +962,7 @@ class FileRaceStoreTests(TestCase):
     def test_store_race(self):
         from esrally import time
         schedule = [
-            track.Task("index #1", track.Operation("index", track.OperationType.Index))
+            track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
 
         t = track.Track(name="unittest", description="unittest track",

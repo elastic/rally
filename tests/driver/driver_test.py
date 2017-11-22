@@ -47,7 +47,7 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
 
         default_challenge = track.Challenge("default", default=True, schedule=[
-            track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
+            track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Bulk), clients=4)
         ])
         another_challenge = track.Challenge("other", default=False)
         self.track = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge])
@@ -206,7 +206,7 @@ class AllocatorTests(TestCase):
         return driver.TaskAllocation(task, client_index_in_task)
 
     def test_allocates_one_task(self):
-        task = track.Task("index", op("index", track.OperationType.Index))
+        task = track.Task("index", op("index", track.OperationType.Bulk))
 
         allocator = driver.Allocator([task])
 
@@ -216,7 +216,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([{task}], allocator.tasks_per_joinpoint)
 
     def test_allocates_two_serial_tasks(self):
-        task = track.Task("index", op("index", track.OperationType.Index))
+        task = track.Task("index", op("index", track.OperationType.Bulk))
 
         allocator = driver.Allocator([task, task])
 
@@ -227,7 +227,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([{task}, {task}], allocator.tasks_per_joinpoint)
 
     def test_allocates_two_parallel_tasks(self):
-        task = track.Task("index", op("index", track.OperationType.Index))
+        task = track.Task("index", op("index", track.OperationType.Bulk))
 
         allocator = driver.Allocator([track.Parallel([task, task])])
 
@@ -241,8 +241,8 @@ class AllocatorTests(TestCase):
             self.assertEqual(0, join_point.num_clients_executing_completing_task)
 
     def test_a_task_completes_the_parallel_structure(self):
-        taskA = track.Task("index-completing", op("index", track.OperationType.Index), completes_parent=True)
-        taskB = track.Task("index-non-completing", op("index", track.OperationType.Index))
+        taskA = track.Task("index-completing", op("index", track.OperationType.Bulk), completes_parent=True)
+        taskB = track.Task("index-non-completing", op("index", track.OperationType.Bulk))
 
         allocator = driver.Allocator([track.Parallel([taskA, taskB])])
 
@@ -257,7 +257,7 @@ class AllocatorTests(TestCase):
         self.assertEqual([0], final_join_point.clients_executing_completing_task)
 
     def test_allocates_mixed_tasks(self):
-        index = track.Task("index", op("index", track.OperationType.Index))
+        index = track.Task("index", op("index", track.OperationType.Bulk))
         stats = track.Task("stats", op("stats", track.OperationType.IndicesStats))
         search = track.Task("search", op("search", track.OperationType.Search))
 
@@ -280,11 +280,11 @@ class AllocatorTests(TestCase):
             self.assertEqual(0, join_point.num_clients_executing_completing_task)
 
     def test_allocates_more_tasks_than_clients(self):
-        index_a = track.Task("index-a", op("index-a", track.OperationType.Index))
-        index_b = track.Task("index-b", op("index-b", track.OperationType.Index), completes_parent=True)
-        index_c = track.Task("index-c", op("index-c", track.OperationType.Index))
-        index_d = track.Task("index-d", op("index-d", track.OperationType.Index))
-        index_e = track.Task("index-e", op("index-e", track.OperationType.Index))
+        index_a = track.Task("index-a", op("index-a", track.OperationType.Bulk))
+        index_b = track.Task("index-b", op("index-b", track.OperationType.Bulk), completes_parent=True)
+        index_c = track.Task("index-c", op("index-c", track.OperationType.Bulk))
+        index_d = track.Task("index-d", op("index-d", track.OperationType.Bulk))
+        index_e = track.Task("index-e", op("index-e", track.OperationType.Bulk))
 
         allocator = driver.Allocator([track.Parallel(tasks=[index_a, index_b, index_c, index_d, index_e], clients=2)])
 
@@ -311,9 +311,9 @@ class AllocatorTests(TestCase):
         self.assertEqual([1], final_join_point.clients_executing_completing_task)
 
     def test_considers_number_of_clients_per_subtask(self):
-        index_a = track.Task("index-a", op("index-a", track.OperationType.Index))
-        index_b = track.Task("index-b", op("index-b", track.OperationType.Index))
-        index_c = track.Task("index-c", op("index-c", track.OperationType.Index), clients=2, completes_parent=True)
+        index_a = track.Task("index-a", op("index-a", track.OperationType.Bulk))
+        index_b = track.Task("index-b", op("index-b", track.OperationType.Bulk))
+        index_c = track.Task("index-c", op("index-c", track.OperationType.Bulk), clients=2, completes_parent=True)
 
         allocator = driver.Allocator([track.Parallel(tasks=[index_a, index_b, index_c], clients=3)])
 
@@ -410,7 +410,7 @@ class MetricsAggregationTests(TestCase):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
 
     def test_different_sample_types(self):
-        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
+        op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
             driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, 3000, "docs", 1, 1),
@@ -428,7 +428,7 @@ class MetricsAggregationTests(TestCase):
         self.assertEqual((1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s"), throughput[1])
 
     def test_single_metrics_aggregation(self):
-        op = track.Operation("index", track.OperationType.Index, param_source="driver-test-param-source")
+        op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
             driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 1, 1 / 9),
@@ -502,7 +502,7 @@ class SchedulerTests(ScheduleTestCase):
         self.assert_schedule(expected_schedule, schedule)
 
     def test_schedule_for_warmup_time_based(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"], "size": 11},
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
@@ -523,7 +523,7 @@ class SchedulerTests(ScheduleTestCase):
         ], list(invocations))
 
     def test_eternal_schedule(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"]},
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
@@ -538,7 +538,7 @@ class SchedulerTests(ScheduleTestCase):
         ], invocations, eternal_schedule=True)
 
     def test_schedule_for_time_based(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Index.name, params={"body": ["a"], "size": 11},
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"), warmup_time_period=0.1, time_period=0.1,
                           clients=1)
 
@@ -595,7 +595,7 @@ class ExecutorTests(TestCase):
                                  indices=None,
                                  challenges=None)
 
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Index.name, params={
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
             "body": ["action_metadata_line", "index_line"],
             "action_metadata_present": True,
             "bulk-size": 1,
@@ -648,7 +648,7 @@ class ExecutorTests(TestCase):
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
-            task = track.Task("time-based", track.Operation("time-based", track.OperationType.Index.name, params={
+            task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
                 "body": ["action_metadata_line", "index_line"],
                 "action_metadata_present": True,
                 "bulk-size": 1
@@ -689,7 +689,7 @@ class ExecutorTests(TestCase):
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
-            task = track.Task("time-based", track.Operation("time-based", track.OperationType.Index.name, params={
+            task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
                 "body": ["action_metadata_line", "index_line"],
                 "action_metadata_present": True,
                 "bulk-size": 1
@@ -720,7 +720,7 @@ class ExecutorTests(TestCase):
         def run(*args, **kwargs):
             raise ExpectedUnitTestException()
 
-        task = track.Task("no-op", track.Operation("no-op", track.OperationType.Index.name, params={},
+        task = track.Task("no-op", track.Operation("no-op", track.OperationType.Bulk.name, params={},
                                                    param_source="driver-test-param-source"),
                           warmup_time_period=0.5, time_period=0.5, clients=4,
                           params={"clients": 4})

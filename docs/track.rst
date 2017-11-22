@@ -233,14 +233,14 @@ The ``operations`` section contains a list of all operations that are available 
 Each operation consists of the following properties:
 
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
-* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``index``, ``force-merge``, ``index-stats``, ``node-stats`` and ``search``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
+* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``bulk``, ``force-merge``, ``index-stats``, ``node-stats``, ``search`` and ``cluster-health``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
 
 Depending on the operation type a couple of further parameters can be specified.
 
-index
-~~~~~
+bulk
+~~~~
 
-With the operation type ``index`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. It supports the following properties:
+With the operation type ``bulk`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. It supports the following properties:
 
 * ``index`` (optional): An index name that defines which indices should be targeted by this indexing operation. Only needed if the ``index`` section contains more than one index and you don't want to index all of them with this operation.
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
@@ -252,7 +252,7 @@ Example::
 
     {
       "name": "index-append",
-      "operation-type": "index",
+      "operation-type": "bulk",
       "bulk-size": 5000
     }
 

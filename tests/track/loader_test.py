@@ -656,7 +656,7 @@ class TrackPathTests(TestCase):
         cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
 
         default_challenge = track.Challenge("default", default=True, schedule=[
-            track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Index), clients=4)
+            track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Bulk), clients=4)
         ])
         another_challenge = track.Challenge("other", default=False)
         t = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge],
@@ -1410,7 +1410,7 @@ class TrackSpecificationReaderTests(TestCase):
                     # an operation with parameters still needs to define a type
                     {
                         "operation": {
-                            "operation-type": "index",
+                            "operation-type": "bulk",
                             "bulk-size": 5000
                         }
                     },
@@ -1425,7 +1425,7 @@ class TrackSpecificationReaderTests(TestCase):
         resulting_track = reader("unittest", track_specification, "/mappings")
 
         self.assertEqual(2, len(resulting_track.challenges[0].schedule))
-        self.assertEqual(track.OperationType.Index.name, resulting_track.challenges[0].schedule[0].operation.type)
+        self.assertEqual(track.OperationType.Bulk.name, resulting_track.challenges[0].schedule[0].operation.type)
         self.assertEqual(track.OperationType.ForceMerge.name, resulting_track.challenges[0].schedule[1].operation.type)
 
     def test_supports_target_throughput(self):
