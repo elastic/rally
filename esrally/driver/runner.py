@@ -606,6 +606,22 @@ class ClusterHealth(Runner):
         return "cluster-health"
 
 
+class PutPipeline(Runner):
+    """
+    Execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this
+    API is only available from Elasticsearch 5.0 onwards.
+    """
+    def __call__(self, es, params):
+        es.ingest.put_pipeline(id=mandatory(params, "id", "put-pipeline"),
+                               body=mandatory(params, "body", "put-pipeline"),
+                               master_timeout=params.get("master_timeout"),
+                               timeout=params.get("timeout"),
+                               )
+
+    def __repr__(self, *args, **kwargs):
+        return "put-pipeline"
+
+
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
 class Retry(Runner):
@@ -681,5 +697,6 @@ register_runner(track.OperationType.IndicesStats.name, IndicesStats())
 register_runner(track.OperationType.NodesStats.name, NodeStats())
 register_runner(track.OperationType.Search.name, Query())
 
-# We treat ClusterHealth as administrative command and thus already start to wrap it in a retry.
+# We treat the following as administrative commands and thus already start to wrap them in a retry.
 register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
+register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()))

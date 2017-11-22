@@ -233,7 +233,7 @@ The ``operations`` section contains a list of all operations that are available 
 Each operation consists of the following properties:
 
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
-* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``bulk``, ``force-merge``, ``index-stats``, ``node-stats``, ``search`` and ``cluster-health``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
+* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``bulk``, ``force-merge``, ``index-stats``, ``node-stats``, ``search``, ``put-pipeline``, and ``cluster-health``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
 
 Depending on the operation type a couple of further parameters can be specified.
 
@@ -314,6 +314,40 @@ Example::
 For scroll queries, throughput will be reported as number of retrieved scroll pages per second. The unit is ops/s, where one op(eration) is one page that has been retrieved. The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
 
 For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
+
+put-pipeline
+~~~~~~~~~~~~
+
+With the operation-type ``put-pipeline`` you can execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this API is only available from Elasticsearch 5.0 onwards. It supports the following properties:
+
+* `id` (mandatory): Pipeline id
+* `body` (mandatory): Pipeline definition
+
+Example::
+
+    {
+      "name": "define-ip-geocoder",
+      "operation-type": "put-pipeline",
+      "id": "ip-geocoder",
+      "body": {
+        "description": "Extracts location information from the client IP.",
+        "processors": [
+          {
+            "geoip": {
+              "field": "clientip",
+              "properties": [
+                "city_name",
+                "country_iso_code",
+                "country_name",
+                "location"
+              ]
+            }
+          }
+        ]
+      }
+    }
+
+This example requires that the ``ingest-geoip`` Elasticsearch plugin is installed.
 
 cluster-health
 ~~~~~~~~~~~~~~

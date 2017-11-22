@@ -882,6 +882,59 @@ class QueryRunnerTests(TestCase):
         self.assertFalse("error-type" in results)
 
 
+class PutPipelineRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_pipeline(self, es):
+        r = runner.PutPipeline()
+
+        params = {
+            "id": "rename",
+            "body": {
+                "description": "describe pipeline",
+                "processors": [
+                    {
+                        "set": {
+                            "field": "foo",
+                            "value": "bar"
+                        }
+                    }
+                ]
+            }
+        }
+
+        r(es, params)
+
+        es.ingest.put_pipeline.assert_called_once_with(id="rename", body=params["body"], master_timeout=None, timeout=None)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_param_body_mandatory(self, es):
+        r = runner.PutPipeline()
+
+        params = {
+            "id": "rename"
+        }
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
+                                    "Please add it to your parameter source."):
+            r(es, params)
+
+        es.ingest.put_pipeline.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_param_body_mandatory(self, es):
+        r = runner.PutPipeline()
+
+        params = {
+            "body": {}
+        }
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
+                                    "Please add it to your parameter source."):
+            r(es, params)
+
+        es.ingest.put_pipeline.assert_not_called()
+
+
 class RetryTests(TestCase):
     def test_is_transparent_on_success_when_no_retries(self):
         delegate = mock.Mock()
