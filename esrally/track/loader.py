@@ -552,6 +552,7 @@ class TrackSpecificationReader:
         self.name = None
         self.override_auto_manage_indices = override_auto_manage_indices
         self.source = source
+        self.index_op_type_warning_issued = False
 
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
@@ -822,9 +823,12 @@ class TrackSpecificationReader:
             # TODO #370: Remove this warning.
             # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
             if op_type_name == "index" and \
-                            self.name not in ["geonames", "geopoint", "noaa", "logging", "nyc_taxis", "pmc", "percolator", "nested"]:
+                            self.name not in ["geonames", "geopoint", "noaa", "logging", "nyc_taxis", "pmc", "percolator", "nested"] and \
+                            not self.index_op_type_warning_issued:
                 console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
                              "operation type to [bulk]." % self.name)
+                # Don't spam the console...
+                self.index_op_type_warning_issued = True
 
             op_type = track.OperationType.from_hyphenated_string(op_type_name).name
             logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
