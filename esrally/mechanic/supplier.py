@@ -113,7 +113,7 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
             # core plugins are entirely dependent upon Elasticsearch.
             supply_requirements[plugin.name] = supply_requirements["elasticsearch"]
         else:
-            if plugin.name in revisions:
+            if plugin.name in revisions or "all" in revisions:
                 # this plugin always needs to built unless we explicitly disable it; we cannot solely rely on the Rally pipeline.
                 # We either have:
                 #
@@ -121,21 +121,19 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
                 #   a distributed version.
                 # * --distribution-version=X.Y.Z --revision="my-plugin:abcdef" where the plugin should be built from sources.
                 plugin_needs_build = (sources and build) or distribution
-
-                # This would be a bit more lenient version that would allow us to skip the explicit plugin revision spec but for the moment
-                # we should enforce more strict behavior and may introduce leniency later on.
-
-                # try:
-                #     plugin_revision = revisions[plugin.name]
-                # except KeyError:
-                #     # maybe we can use the catch-all revision (only if it's not a git revision)
-                #     plugin_revision = revisions.get("all")
-                #     if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
-                #         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
-                #     else:
-                #         logger.info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
-                #                     % (plugin.name, plugin_revision))
-                supply_requirements[plugin.name] = ("source", _required_revision(revisions, plugin.name), plugin_needs_build)
+                # be a bit more lenient when checking for plugin revisions. This allows users to specify `--revision="current"` and
+                # rely on Rally to do the right thing.
+                try:
+                    plugin_revision = revisions[plugin.name]
+                except KeyError:
+                    # maybe we can use the catch-all revision (only if it's not a git revision)
+                    plugin_revision = revisions.get("all")
+                    if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
+                        raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
+                    else:
+                        logger.info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
+                                    % (plugin.name, plugin_revision))
+                supply_requirements[plugin.name] = ("source", plugin_revision, plugin_needs_build)
             else:
                 supply_requirements[plugin.name] = (distribution, _required_version(distribution_version), False)
     return supply_requirements
