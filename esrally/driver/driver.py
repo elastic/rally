@@ -1177,23 +1177,25 @@ def execute_single(runner, es, params, abort_on_error=False):
         total_ops_unit = "ops"
         request_meta_data = {
             "success": False,
-            "error-type": "transport",
-            "error-description": e.error
+            "error-type": "transport"
         }
         # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
         if isinstance(e.status_code, int):
             request_meta_data["http-status"] = e.status_code
+        if e.info:
+            request_meta_data["error-description"] = "%s (%s)" % (e.error, e.info)
+        else:
+            request_meta_data["error-description"] = e.error
     except KeyError as e:
         logger.exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
         raise exceptions.SystemSetupError(msg)
 
     if abort_on_error and not request_meta_data["success"]:
-        msg = "Request returned an error:\n\n"
-        msg += "Error type: %s\n" % request_meta_data.get("error-type", "Unknown")
+        msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
         description = request_meta_data.get("error-description")
         if description:
-            msg += "Description: %s\n" % description
+            msg += ", Description: %s" % description
         raise exceptions.RallyAssertionError(msg)
 
     return total_ops, total_ops_unit, request_meta_data

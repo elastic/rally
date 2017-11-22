@@ -785,7 +785,7 @@ class ExecutorTests(TestCase):
         es = None
         params = None
         # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        runner = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
 
         total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
 
@@ -802,7 +802,7 @@ class ExecutorTests(TestCase):
         import elasticsearch
         es = None
         params = None
-        runner = mock.Mock(side_effect=elasticsearch.NotFoundError(404, "not found"))
+        runner = mock.Mock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
 
         total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
 
@@ -811,7 +811,7 @@ class ExecutorTests(TestCase):
         self.assertEqual({
             "http-status": 404,
             "error-type": "transport",
-            "error-description": "not found",
+            "error-description": "not found (the requested document could not be found)",
             "success": False
         }, request_meta_data)
 
