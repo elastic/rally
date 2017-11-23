@@ -545,27 +545,28 @@ A track with a single task
 
 To get started with custom tracks, you can benchmark a single task, e.g. a match_all query::
 
-   {
-     "description": "Simple search-only track",
-     "challenge": {
-       "name": "just-search",
-       "schedule": [
-         {
-           "operation": {
-             "operation-type": "query",
-             "body": {
-               "query": {
-                 "match_all": {}
-               }
-             }
-           },
-           "warmup-iterations": 100,
-           "iterations": 100,
-           "target-throughput": 10
-         }
-       ]
-     }
-   }
+    {
+      "challenge": {
+        "name": "just-search",
+        "schedule": [
+          {
+            "operation": {
+              "operation-type": "search",
+              "index": "_all",
+              "body": {
+                "query": {
+                  "match_all": {}
+                }
+              }
+            },
+            "warmup-iterations": 100,
+            "iterations": 100,
+            "target-throughput": 10
+          }
+        ]
+      }
+    }
+
 
 This track assumes that you have an existing cluster with pre-populated data. It will run the provided match_all query at 10 operations per second with one client and use 100 iterations as warmup and the next 100 iterations to measure.
 
