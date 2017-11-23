@@ -1,3 +1,33 @@
+### 0.8.0
+
+#### Highlights
+
+* [#310](https://github.com/elastic/rally/issues/310): Introduce track parameters and allow to override them on the command line
+
+#### Enhancements
+
+* [#371](https://github.com/elastic/rally/issues/371): Introduce put pipeline API
+* [#369](https://github.com/elastic/rally/issues/369): Prepare rename from operation-type "index" to "bulk"
+* [#363](https://github.com/elastic/rally/issues/363): Allow to retry operations (internally)
+* [#362](https://github.com/elastic/rally/issues/362): Make plugin remote URL optional
+* [#360](https://github.com/elastic/rally/issues/360): Show ES distribution version upon race start
+* [#358](https://github.com/elastic/rally/issues/358): Rally tables should always output the same rows
+* [#354](https://github.com/elastic/rally/issues/354): Be more lenient when custom parameter source does not provide a parameter
+* [#353](https://github.com/elastic/rally/issues/353): Make a few track properties optional
+* [#352](https://github.com/elastic/rally/issues/352): Allow to use a challenge element if there is only one challenge in a track
+* [#351](https://github.com/elastic/rally/issues/351) (Breaking): Ensure task names are unique
+* [#345](https://github.com/elastic/rally/issues/345): Allow to use an ES distribution for plugins that are built separately
+* [#326](https://github.com/elastic/rally/issues/326): Allow to define operations inline
+
+#### Bug Fixes
+
+* [#356](https://github.com/elastic/rally/issues/356) (Breaking): Set a sane default socket timeout
+* [#350](https://github.com/elastic/rally/issues/350) (Breaking): Number of iterations should be treated per client, not "global"
+
+#### Doc Changes
+
+* [#364](https://github.com/elastic/rally/issues/364): Deprecate --cluster-health
+
 ### 0.7.4
 
 #### Enhancements
