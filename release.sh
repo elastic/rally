@@ -22,8 +22,11 @@ echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
 
+make clean
+echo "Building docs"
+make docs
+
 echo "Running tests"
-cd docs && make html && cd -
 # run integration tests, note that this requires that tox is properly set up
 tox
 
