@@ -33,6 +33,7 @@ install_requires = [
     "tabulate==0.8.1",
     "jsonschema==2.5.1",
     "Jinja2==2.9.5",
+    "MarkupSafe==1.0",
     # remote messaging
     "thespian==3.8.0",
     # recommended library for thespian to identify actors more easily with `ps`
