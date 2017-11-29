@@ -113,7 +113,8 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
             # core plugins are entirely dependent upon Elasticsearch.
             supply_requirements[plugin.name] = supply_requirements["elasticsearch"]
         else:
-            if plugin.name in revisions or "all" in revisions:
+            # allow catch-all only if we're generally building from sources. If it is mixed, the user should tell explicitly.
+            if plugin.name in revisions or ("all" in revisions and sources):
                 # this plugin always needs to built unless we explicitly disable it; we cannot solely rely on the Rally pipeline.
                 # We either have:
                 #
