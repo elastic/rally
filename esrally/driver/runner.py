@@ -611,6 +611,7 @@ class PutPipeline(Runner):
     Execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this
     API is only available from Elasticsearch 5.0 onwards.
     """
+
     def __call__(self, es, params):
         es.ingest.put_pipeline(id=mandatory(params, "id", "put-pipeline"),
                                body=mandatory(params, "body", "put-pipeline"),
@@ -620,6 +621,18 @@ class PutPipeline(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "put-pipeline"
+
+
+class Refresh(Runner):
+    """
+    Execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_.
+    """
+
+    def __call__(self, es, params):
+        es.indices.refresh(index=params.get("index", "_all"))
+
+    def __repr__(self, *args, **kwargs):
+        return "refresh"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
@@ -700,3 +713,4 @@ register_runner(track.OperationType.Search.name, Query())
 # We treat the following as administrative commands and thus already start to wrap them in a retry.
 register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
 register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()))
+register_runner(track.OperationType.Refresh.name, Retry(Refresh()))

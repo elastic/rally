@@ -811,6 +811,8 @@ class TrackSpecificationReader:
             meta_data = None
             op_type_name = op_spec
             param_source = None
+            # Cannot have parameters here
+            params = None
         else:
             meta_data = self._r(op_spec, "meta", error_ctx=error_ctx, mandatory=False)
             # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
@@ -818,6 +820,8 @@ class TrackSpecificationReader:
             # fallback to use the operation type as the operation name
             op_name = self._r(op_spec, "name", error_ctx=error_ctx, mandatory=False, default_value=op_type_name)
             param_source = self._r(op_spec, "param-source", error_ctx=error_ctx, mandatory=False)
+            # just pass-through all parameters by default
+            params = op_spec
 
         try:
             # TODO #370: Remove this warning.
@@ -837,7 +841,7 @@ class TrackSpecificationReader:
             op_type = op_type_name
 
         try:
-            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=op_spec, param_source=param_source)
+            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=params, param_source=param_source)
         except exceptions.InvalidSyntax as e:
             raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
 

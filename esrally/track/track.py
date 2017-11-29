@@ -331,7 +331,8 @@ class OperationType(Enum):
     Search = 4,
     ClusterHealth = 5,
     Bulk = 6,
-    PutPipeline = 7
+    PutPipeline = 7,
+    Refresh = 8
 
     @classmethod
     def from_hyphenated_string(cls, v):
@@ -351,6 +352,8 @@ class OperationType(Enum):
             return OperationType.Bulk
         elif v == "put-pipeline":
             return OperationType.PutPipeline
+        elif v == "refresh":
+            return OperationType.Refresh
         else:
             raise KeyError("No enum value for [%s]" % v)
 

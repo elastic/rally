@@ -233,7 +233,7 @@ The ``operations`` section contains a list of all operations that are available 
 Each operation consists of the following properties:
 
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
-* ``operation-type`` (mandatory): Type of this operation. Out of the box, Rally supports the following operation types: ``bulk``, ``force-merge``, ``index-stats``, ``node-stats``, ``search``, ``put-pipeline``, and ``cluster-health``. You can run arbitrary operations however by defining :doc:`custom runners </adding_tracks>`.
+* ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 
 Depending on the operation type a couple of further parameters can be specified.
 
@@ -358,6 +358,13 @@ With the operation ``cluster-health`` you can execute the `cluster health API <h
 * ``index`` (optional): The name of the index that should be used to check.
 
 The ``cluster-health`` operation will check whether the expected cluster health and will report a failure if this is not the case. Use ``--on-error`` on the command line to control Rally's behavior in case of such failures.
+
+refresh
+~~~~~~~
+
+With the operation ``refresh`` you can execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_. It supports the following properties:
+
+* ``index`` (optional, defaults to ``_all``): The name of the index that should be refreshed.
 
 challenge
 .........
