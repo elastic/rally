@@ -237,7 +237,6 @@ class MechanicActor(actor.RallyActor):
                 self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
             elif isinstance(msg, OnBenchmarkStart):
                 self.metrics_store.lap = msg.lap
-                self.cluster.on_benchmark_start()
                 # in the first lap, we are in state "cluster_started", after that in "benchmark_stopped"
                 self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
             elif isinstance(msg, BenchmarkStarted):
