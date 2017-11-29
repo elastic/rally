@@ -664,10 +664,19 @@ class IndexStats(InternalTelemetryDevice):
         super().__init__()
         self.client = client
         self.metrics_store = metrics_store
-        self.index_times_at_start = {}
+        self.first_time = True
 
     def on_benchmark_start(self):
-        self.index_times_at_start = self.index_times(self.primaries_index_stats())
+        # we only determine this value at the start of the benchmark (in the first lap). This is actually only useful for
+        # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
+        # the cluster so we can at least tell them.
+        if self.first_time:
+            index_times = self.index_times(self.primaries_index_stats())
+            for k, v in index_times.items():
+                if v > 0:
+                    console.warn("%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
+                                 "metrics may be misleading." % (k, v), logger=logger)
+            self.first_time = False
 
     def on_benchmark_stop(self):
         p = self.primaries_index_stats()
@@ -675,12 +684,8 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
-        index_time_at_end = self.index_times(p)
-
-        for metric_key, value_at_end in index_time_at_end.items():
-            value_at_start = self.index_times_at_start[metric_key]
-            self.add_metrics(max(value_at_end - value_at_start, 0), metric_key, "ms")
-        self.index_times_at_start = {}
+        for metric_key, value in self.index_times(p).items():
+            self.add_metrics(value, metric_key, "ms")
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte")
