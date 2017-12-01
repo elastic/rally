@@ -426,7 +426,7 @@ Rally also provides a few extension points to Jinja2:
 * ``now``: This is a global variable that represents the current date and time when the template is evaluated by Rally.
 * ``days_ago()``: This is a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
-You can find an example in the logging track::
+You can find an example in the http_logs track::
 
     {
       "name": "range",
@@ -445,7 +445,7 @@ You can find an example in the logging track::
       }
     }
 
-The data set that is used in the logging track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
+The data set that is used in the http_logs track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
 
 .. _adding_tracks_custom_param_sources:
 

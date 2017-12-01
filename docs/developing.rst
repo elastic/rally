@@ -61,7 +61,7 @@ To get a rough understanding of Rally, it makes sense to get to know its key com
 
 * `Race Control`: is responsible for proper execution of the race. It sets up all components and acts as a high-level controller.
 * `Mechanic`: can build and prepare a benchmark candidate for the race. It checks out the source, builds Elasticsearch, provisions and starts the cluster.
-* `Track`: is a concrete benchmarking scenario, e.g. the logging benchmark. It defines the data set to use.
+* `Track`: is a concrete benchmarking scenario, e.g. the http_logs benchmark. It defines the data set to use.
 * `Challenge`: is the specification on what benchmarks should be run and its configuration (e.g. index, then run a search benchmark with 1000 iterations)
 * `Car`: is a concrete system configuration for a benchmark, e.g. an Elasticsearch single-node cluster with default settings.
 * `Driver`: drives the race, i.e. it is executing the benchmark according to the track specification.
