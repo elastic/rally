@@ -841,11 +841,11 @@ class IndexStatsTests(TestCase):
 
             # 2nd lap
             mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("merges_total_time", 600, "ms"),
-            mock.call("merges_total_throttled_time", 0, "ms"),
-            mock.call("indexing_total_time", 6000, "ms"),
-            mock.call("refresh_total_time", 300, "ms"),
-            mock.call("flush_total_time", 200, "ms"),
+            mock.call("merges_total_time", 900, "ms"),
+            mock.call("merges_total_throttled_time", 120, "ms"),
+            mock.call("indexing_total_time", 8000, "ms"),
+            mock.call("refresh_total_time", 500, "ms"),
+            mock.call("flush_total_time", 300, "ms"),
             mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
