@@ -308,6 +308,17 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
             raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
                                        % (document_file_path, track, expected_number_of_lines, lines_read))
 
+    # TODO: Remove me after some grace period.
+    # Hack to migrate data from the existing logging track.
+    if track_name == "http_logs" and source_root_url == "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/http_logs":
+        logger.info("Attempting to migrate data from logging track to http_logs.")
+        logging_root = io.normalize_path(os.path.join(data_root, os.path.pardir, "logging"))
+        if os.path.exists(logging_root) and not os.path.exists(data_root):
+            logger.info("Directory [%s] exists. Migrating data to [%s]." % (logging_root, data_root))
+            os.rename(logging_root, data_root)
+        else:
+            logger.info("[%s] does not exist or [%s] is already present. Skipping migration." % (logging_root, data_root))
+
     full_document_path = os.path.join(data_root, type.document_file)
     full_archive_path = os.path.join(data_root, type.document_archive) if type.has_compressed_corpus() else None
     while True:
@@ -827,7 +838,8 @@ class TrackSpecificationReader:
             # TODO #370: Remove this warning.
             # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
             if op_type_name == "index" and \
-                            self.name not in ["geonames", "geopoint", "noaa", "logging", "nyc_taxis", "pmc", "percolator", "nested"] and \
+                            self.name not in ["geonames", "geopoint", "noaa", "logging", "http_logs", "nyc_taxis", "pmc", "percolator",
+                                              "nested"] and \
                             not self.index_op_type_warning_issued:
                 console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
                              "operation type to [bulk]." % self.name)
