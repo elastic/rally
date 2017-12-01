@@ -82,7 +82,8 @@ def format_as_csv(headers, data, write_header=True):
 
 # helper function for encoding and decoding float keys so that the Elasticsearch metrics store can safe it.
 def encode_float_key(k):
-    return str(k).replace(".", "_")
+    # ensure that the key is indeed a float to unify the representation (e.g. 50 should be represented as "50_0")
+    return str(float(k)).replace(".", "_")
 
 
 def percentiles_for_sample_size(sample_size):

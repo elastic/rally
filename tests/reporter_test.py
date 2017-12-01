@@ -51,8 +51,8 @@ class StatsCalculatorTests(TestCase):
 
         opm = stats.metrics("index #1")
         self.assertEqual(collections.OrderedDict([("min", 500), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
-        self.assertEqual(collections.OrderedDict([("50", 220), ("100", 225)]), opm["latency"])
-        self.assertEqual(collections.OrderedDict([("50", 200), ("100", 215)]), opm["service_time"])
+        self.assertEqual(collections.OrderedDict([("50_0", 220), ("100_0", 225)]), opm["latency"])
+        self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 215)]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
         self.assertEqual(6144, stats.index_size)
