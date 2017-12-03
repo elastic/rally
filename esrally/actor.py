@@ -127,18 +127,6 @@ class RallyActor(thespian.actors.Actor):
 
 
 # Defined on top-level to allow pickling
-class ActorLogFilter(logging.Filter):
-    def filter(self, log_record):
-        return "actorAddress" in log_record.__dict__
-
-
-# Defined on top-level to allow pickling
-class NotActorLogFilter(logging.Filter):
-    def filter(self, log_record):
-        return "actorAddress" not in log_record.__dict__
-
-
-# Defined on top-level to allow pickling
 def configure_utc_formatter(*args, **kwargs):
     formatter = logging.Formatter(fmt=kwargs["fmt"], datefmt=kwargs["datefmt"])
     formatter.converter = time.gmtime
@@ -160,19 +148,11 @@ def configure_actor_logging():
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 "()": configure_utc_formatter
             },
-            "actor": {
-                "fmt": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(actorAddress)s => %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-                "()": configure_utc_formatter
-            }
         },
         "filters": {
             "isActorLog": {
-                "()": ActorLogFilter
+                "()": 'thespian.director.ActorAddressLogFilter'
             },
-            "notActorLog": {
-                "()": NotActorLogFilter
-            }
         },
         "handlers": {
             "rally_log_handler": {
@@ -182,22 +162,12 @@ def configure_actor_logging():
                 "backupCount": 14,
                 "encoding": "UTF-8",
                 "formatter": "normal",
-                "filters": ["notActorLog"],
-                "level": root_log_level
-            },
-            "actor_log_handler": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
-                "filename": "%s/rally-actor-messages.log" % log_dir,
-                "when": "midnight",
-                "backupCount": 14,
-                "encoding": "UTF-8",
-                "formatter": "actor",
                 "filters": ["isActorLog"],
                 "level": root_log_level
-            }
+            },
         },
         "root": {
-            "handlers": ["rally_log_handler", "actor_log_handler"],
+            "handlers": ["rally_log_handler"],
             "level": root_log_level
         },
         "loggers": {
