@@ -33,8 +33,8 @@ class BenchmarkCancelled:
 
 
 class RallyActor(thespian.actors.Actor):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
         # allow to see a thread-dump on SIGQUIT
         faulthandler.register(signal.SIGQUIT, file=sys.stderr)
         self.children = []
