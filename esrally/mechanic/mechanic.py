@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 import thespian.actors
 
@@ -232,6 +233,15 @@ class MechanicActor(actor.RallyActor):
                 self.on_start_engine(msg, sender)
             elif isinstance(msg, NodesStarted):
                 self.metrics_store.merge_meta_info(msg.system_meta_info)
+
+                # Initially the addresses of the children are not
+                # known and there is just a None placeholder in the
+                # array.  As addresses become known, fill them in.
+                if sender not in self.children:
+                    # Length-limited FIFO characteristics:
+                    self.children.insert(0, sender)
+                    self.children.pop()
+
                 self.transition_when_all_children_responded(sender, msg, "starting", "nodes_started", self.on_all_nodes_started)
             elif isinstance(msg, MetricsMetaInfoApplied):
                 self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
@@ -298,7 +308,6 @@ class MechanicActor(actor.RallyActor):
         self.metrics_store.open(ctx=msg.open_metrics_context)
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
-        mechanics_and_start_message = []
         hosts = self.cfg.opts("client", "hosts")
         if len(hosts) == 0:
             raise exceptions.LaunchError("No target hosts are configured.")
@@ -307,47 +316,19 @@ class MechanicActor(actor.RallyActor):
             logger.info("Cluster will not be provisioned by Rally.")
             # just create one actor for this special case and run it on the coordinator node (i.e. here)
             m = self.createActor(NodeMechanicActor,
-                                 #globalName="/rally/mechanic/worker/external",
+                                 globalName="/rally/mechanic/worker/external",
                                  targetActorRequirements={"coordinator": True})
             self.children.append(m)
-            mechanics_and_start_message.append((m, msg.for_nodes(ip=hosts)))
+            self.send(m, msg.for_nodes(ip=hosts))
         else:
             logger.info("Cluster consisting of %s will be provisioned by Rally." % hosts)
-            all_ips_and_ports = to_ip_port(hosts)
-            all_node_ips = extract_all_node_ips(all_ips_and_ports)
-            for ip_port, nodes in nodes_by_host(all_ips_and_ports).items():
-                ip, port = ip_port
-                if ip == "127.0.0.1":
-                    m = self.createActor(NodeMechanicActor,
-                                         #globalName="/rally/mechanic/worker/localhost",
-                                         targetActorRequirements={"coordinator": True})
-                    self.children.append(m)
-                    mechanics_and_start_message.append((m, msg.for_nodes(all_node_ips, ip, port, nodes)))
-                else:
-                    if self.cfg.opts("system", "remote.benchmarking.supported"):
-                        logger.info("Benchmarking against %s with external Rally daemon." % hosts)
-                    else:
-                        logger.error("User tried to benchmark against %s but no external Rally daemon has been started." % hosts)
-                        raise exceptions.SystemSetupError("To benchmark remote hosts (e.g. %s) you need to start the Rally daemon "
-                                                          "on each machine including this one." % ip)
-                    already_running = actor.actor_system_already_running(ip=ip)
-                    logger.info("Actor system on [%s] already running? [%s]" % (ip, str(already_running)))
-                    if not already_running:
-                        console.println("Waiting for Rally daemon on [%s] " % ip, end="", flush=True)
-                    while not actor.actor_system_already_running(ip=ip):
-                        console.println(".", end="", flush=True)
-                        time.sleep(3)
-                    if not already_running:
-                        console.println(" [OK]")
-                    m = self.createActor(NodeMechanicActor,
-                                         #globalName="/rally/mechanic/worker/%s" % ip,
-                                         targetActorRequirements={"ip": ip})
-                    mechanics_and_start_message.append((m, msg.for_nodes(all_node_ips, ip, port, nodes)))
-                    self.children.append(m)
+            msg.hosts = hosts
+            self.send(self.createActor(Dispatcher), msg)
         self.status = "starting"
         self.received_responses = []
-        for mechanic_actor, start_message in mechanics_and_start_message:
-            self.send(mechanic_actor, start_message)
+        # Initialize the children array to have the right size to
+        # ensure waiting for all responses
+        self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
 
     def on_all_nodes_started(self):
         self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
@@ -389,6 +370,75 @@ class MechanicActor(actor.RallyActor):
         self.children = []
         # self terminate + slave nodes
         self.send(self.myAddress, thespian.actors.ActorExitRequest())
+
+
+@thespian.actors.requireCapability('coordinator')
+class Dispatcher(thespian.actors.ActorTypeDispatcher):
+    """This Actor receives a copy of the startmsg (with the computed hosts
+       attached) and creates a NodeMechanicActor on each targeted
+       remote host.  It uses Thespian SystemRegistration to get
+       notification of when remote nodes are available.  As a special
+       case, if an IP address is localhost, the NodeMechanicActor is
+       immediately created locally.  Once All NodeMechanicActors are
+       started, it will send them all their startup message, with a
+       reply-to back to the actor that made the request of the
+       Dispatcher.
+    """
+    def receiveMsg_StartEngine(self, startmsg, sender):
+        all_ips_and_ports = to_ip_port(startmsg.hosts)
+        all_node_ips = extract_all_node_ips(all_ips_and_ports)
+        self.pending = []
+        self.remotes = defaultdict(list)
+
+        for (ip, port), node in nodes_by_host(all_ips_and_ports).items():
+            submsg = startmsg.for_nodes(all_node_ips, ip, port, node)
+            submsg.reply_to = sender
+            if '127.0.0.1' == ip:
+                m = self.createActor(NodeMechanicActor,
+                                     targetActorRequirements={"coordinator": True})
+                self.pending.append((m, submsg))
+            else:
+                self.remotes[ip].append(submsg)
+
+        if self.remotes:
+            # Now register with the ActorSystem to be told about all
+            # remote nodes (via the ActorSystemConventionUpdate below).
+            self.notifyOnSystemRegistrationChanges(True)
+        else:
+            self.send_all_pending()
+
+        # Could also initiate a wakeup message to fail this if not all
+        # remotes come online within the expected amount of time... TBD
+
+    def receiveMsg_ActorSystemConventionUpdate(self, convmsg, sender):
+        if not convmsg.remoteAdded:
+            logging.getLogger("rally.mechanic")\
+                   .warning("Remote %s exited during NodeMechanicActor startup process.",
+                            convmsg.remoteAdminAddress)
+            # remote system went away... TBD handling
+            return
+        remote_ip = convmsg.remoteCapabilities.get('ip', None)
+        for eachmsg in self.remotes[remote_ip]:
+            self.pending.append((self.createActor(NodeMechanicActor,
+                                                  targetActorRequirements={"ip": remote_ip}),
+                                 eachmsg))
+        if remote_ip in self.remotes:
+            del self.remotes[remote_ip]
+        if not self.remotes:
+            self.send_all_pending()
+
+    def send_all_pending(self):
+        # Invoked when all remotes have checked in and self.pending is
+        # the list of remote NodeMechanic actors and messages to send.
+        for each in self.pending:
+            self.send(*each)
+        self.pending = []
+
+        # Notifications are no longer needed
+        self.notifyOnSystemRegistrationChanges(False)
+
+    # def receiveMsg_ChildActorExited ...
+    # def receiveMsg_PoisonMessage ...
 
 
 class NodeMechanicActor(actor.RallyActor):
@@ -446,7 +496,7 @@ class NodeMechanicActor(actor.RallyActor):
                                        msg.distribution, msg.external, msg.docker)
                 nodes = self.mechanic.start_engine()
                 self.running = True
-                self.send(sender, NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
+                self.send(msg.reply_to, NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
             elif isinstance(msg, ApplyMetricsMetaInfo):
                 self.metrics_store.merge_meta_info(msg.meta_info)
                 self.send(sender, MetricsMetaInfoApplied())
