@@ -144,9 +144,9 @@ def configure_actor_logging():
         "version": 1,
         "formatters": {
             "normal": {
-                "fmt": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
+                "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
-                "()": configure_utc_formatter
+                #"()": 'esrally.actor.configure_utc_formatter'
             },
         },
         "filters": {
