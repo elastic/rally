@@ -109,7 +109,7 @@ class RallyActor(thespian.actors.Actor):
         if self.is_current_status_expected(expected_status):
             logger.info("Transitioning from [%s] to [%s]." % (self.status, new_status))
             self.status = new_status
-            for m in self.children:
+            for m in filter(None, self.children):
                 self.send(m, msg)
         else:
             raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
