@@ -8,7 +8,7 @@ import time
 import faulthandler
 import signal
 
-from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, exceptions, time as rtime
+from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
 from esrally.utils import io, convert, process, console, net
@@ -140,6 +140,49 @@ def create_arg_parser():
         default=10,
     )
 
+    generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
+    generate_parser.add_argument(
+        "artifact",
+        metavar="artifact",
+        help="The artifact to create. Possible values are: charts",
+        choices=["charts"])
+
+    generate_parser.add_argument(
+        "--track",
+        help="define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
+        # we set the default value later on because we need to determine whether the user has provided this value.
+        # default="geonames"
+    )
+    # Not sure whether we should allow that / need that
+    # generate_parser.add_argument(
+    #    "--track-params",
+    #    help="define a comma-separate list of key:value pairs that are injected verbatim to the track as variables",
+    #    default="")
+    generate_parser.add_argument(
+        "--challenge",
+        required=True,
+        help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
+    generate_parser.add_argument(
+        "--car",
+        required=True,
+        help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+        default="defaults")  # optimized for local usage
+    generate_parser.add_argument(
+        "--chart-type",
+        help="Chart type to generate. Default: time-series",
+        choices=["time-series", "bar"],
+        default="time-series")
+    generate_parser.add_argument(
+        "--node-count",
+        type=positive_number,
+        help="The number of Elasticsearch nodes to use in charts.",
+        required=True)
+    generate_parser.add_argument(
+        "--quiet",
+        help="suppress as much as output as possible (default: false).",
+        default=False,
+        action="store_true")
+
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
         "--baseline",
@@ -172,7 +215,7 @@ def create_arg_parser():
             default=False,
             action="store_true")
 
-    for p in [parser, list_parser, race_parser]:
+    for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
             "--distribution-version",
             help="define the version of the Elasticsearch distribution to download. "
@@ -473,6 +516,10 @@ def with_actor_system(runnable, cfg):
                 console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes.")
 
 
+def generate(cfg):
+    chart_generator.generate(cfg)
+
+
 def dispatch_sub_command(cfg, sub_command):
     try:
         if sub_command == "compare":
@@ -481,6 +528,8 @@ def dispatch_sub_command(cfg, sub_command):
             list(cfg)
         elif sub_command == "race":
             race(cfg)
+        elif sub_command == "generate":
+            generate(cfg)
         else:
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
         return True
@@ -634,6 +683,9 @@ def main():
     if sub_command == "compare":
         cfg.add(config.Scope.applicationOverride, "reporting", "baseline.timestamp", args.baseline)
         cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
+    if sub_command == "generate":
+        cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
+        cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
     cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
     if args.cluster_health != "green":
