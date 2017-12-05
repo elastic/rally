@@ -708,6 +708,7 @@ class IndexStats(InternalTelemetryDevice):
             "merges_total_time": self.extract_value(p, ["merges", "total_time_in_millis"], default_value=0),
             "merges_total_throttled_time": self.extract_value(p, ["merges", "total_throttled_time_in_millis"], default_value=0),
             "indexing_total_time": self.extract_value(p, ["indexing", "index_time_in_millis"], default_value=0),
+            "indexing_throttle_time": self.extract_value(p, ["indexing", "throttle_time_in_millis"], default_value=0),
             "refresh_total_time": self.extract_value(p, ["refresh", "total_time_in_millis"], default_value=0),
             "flush_total_time": self.extract_value(p, ["flush", "total_time_in_millis"], default_value=0)
         }

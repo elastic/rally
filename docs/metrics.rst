@@ -139,6 +139,7 @@ Rally stores the following metrics:
 * ``merges_total_time``: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes).
 * ``merges_total_throttled_time``: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
 * ``indexing_total_time``: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time.
+* ``indexing_throttle_time``: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time.
 * ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
 * ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
 * ``final_index_size_bytes``: Final resulting index size after the benchmark.

@@ -9,6 +9,12 @@ Indexing time
 * **Definition**: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_total_time``
 
+Indexing throttle time
+----------------------
+
+* **Definition**: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
+* **Corresponding metrics key**: ``indexing_throttle_time``
+
 Merge time
 ----------
 

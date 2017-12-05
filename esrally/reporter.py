@@ -128,6 +128,7 @@ class StatsCalculator:
 
         logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
+        result.indexing_throttle_time = self.sum("indexing_throttle_time")
         result.merge_time = self.sum("merges_total_time")
         result.refresh_time = self.sum("refresh_total_time")
         result.flush_time = self.sum("flush_total_time")
@@ -224,6 +225,7 @@ class Stats:
     def __init__(self, d=None):
         self.op_metrics = self.v(d, "op_metrics", default=[])
         self.total_time = self.v(d, "total_time")
+        self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
         self.merge_time = self.v(d, "merge_time")
         self.refresh_time = self.v(d, "refresh_time")
         self.flush_time = self.v(d, "flush_time")
@@ -434,6 +436,7 @@ class SummaryReporter:
         unit = "min"
         return self.join(
             self.line("Indexing time", "", stats.total_time, unit, convert.ms_to_minutes),
+            self.line("Indexing throttle time", "", stats.indexing_throttle_time, unit, convert.ms_to_minutes),
             self.line("Merge time", "", stats.merge_time, unit, convert.ms_to_minutes),
             self.line("Refresh time", "", stats.refresh_time, unit, convert.ms_to_minutes),
             self.line("Flush time", "", stats.flush_time, unit, convert.ms_to_minutes),
@@ -633,6 +636,8 @@ class ComparisonReporter:
     def report_total_times(self, baseline_stats, contender_stats):
         return self.join(
             self.line("Indexing time", baseline_stats.total_time, contender_stats.total_time, "", "min",
+                      treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self.line("Indexing throttle time", baseline_stats.indexing_throttle_time, contender_stats.indexing_throttle_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
             self.line("Merge time", baseline_stats.merge_time, contender_stats.merge_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
