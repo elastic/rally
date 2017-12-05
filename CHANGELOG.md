@@ -1,3 +1,9 @@
+### 0.8.1
+
+#### Enhancements
+
+* [#375](https://github.com/elastic/rally/issues/375): Add refresh API
+
 ### 0.8.0
 
 #### Highlights
