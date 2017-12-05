@@ -4,79 +4,369 @@ import json
 from esrally import track, config, exceptions
 
 
-# TODO: Create JSON representation for bar-charts (similar to time series charts)
 class BarCharts:
     @staticmethod
     def gc(title, environment, track, challenge, car, node_count):
+        vis_state = {
+            "title": title,
+            "type": "histogram",
+            "params": {
+                "addLegend": True,
+                "addTimeMarker": False,
+                "addTooltip": True,
+                "categoryAxes": [
+                    {
+                        "id": "CategoryAxis-1",
+                        "labels": {
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "position": "bottom",
+                        "scale": {
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "filters"
+                        },
+                        "type": "category"
+                    }
+                ],
+                "defaultYExtents": False,
+                "drawLinesBetweenPoints": True,
+                "grid": {
+                    "categoryLines": False,
+                    "style": {
+                        "color": "#eee"
+                    }
+                },
+                "interpolate": "linear",
+                "legendPosition": "right",
+                "radiusRatio": 9,
+                "scale": "linear",
+                "seriesParams": [
+                    {
+                        "data": {
+                            "id": "1",
+                            "label": "Total GC Duration [ms]"
+                        },
+                        "drawLinesBetweenPoints": True,
+                        "mode": "normal",
+                        "show": "True",
+                        "showCircles": True,
+                        "type": "histogram",
+                        "valueAxis": "ValueAxis-1"
+                    }
+                ],
+                "setYExtents": False,
+                "showCircles": True,
+                "times": [],
+                "valueAxes": [
+                    {
+                        "id": "ValueAxis-1",
+                        "labels": {
+                            "filter": False,
+                            "rotate": 0,
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "name": "LeftAxis-1",
+                        "position": "left",
+                        "scale": {
+                            "mode": "normal",
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "Total GC Duration [ms]"
+                        },
+                        "type": "value"
+                    }
+                ]
+            },
+            "aggs": [
+                {
+                    "id": "1",
+                    "enabled": True,
+                    "type": "median",
+                    "schema": "metric",
+                    "params": {
+                        "field": "value.single",
+                        "percents": [
+                            50
+                        ],
+                        "customLabel": "Total GC Duration [ms]"
+                    }
+                },
+                {
+                    "id": "2",
+                    "enabled": True,
+                    "type": "filters",
+                    "schema": "segment",
+                    "params": {
+                        "filters": [
+                            {
+                                "input": {
+                                    "query": {
+                                        "query_string": {
+                                            "query": "name:young_gc_time",
+                                            "analyze_wildcard": True
+                                        }
+                                    }
+                                },
+                                "label": "Young GC"
+                            },
+                            {
+                                "input": {
+                                    "query": {
+                                        "query_string": {
+                                            "query": "name:old_gc_time",
+                                            "analyze_wildcard": True
+                                        }
+                                    }
+                                },
+                                "label": "Old GC"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "3",
+                    "enabled": True,
+                    "type": "terms",
+                    "schema": "split",
+                    "params": {
+                        "field": "distribution-version",
+                        "size": 10,
+                        "order": "asc",
+                        "orderBy": "_term",
+                        "row": False
+                    }
+                },
+                {
+                    "id": "4",
+                    "enabled": True,
+                    "type": "terms",
+                    "schema": "group",
+                    "params": {
+                        "field": "user-tag",
+                        "size": 5,
+                        "order": "desc",
+                        "orderBy": "_term"
+                    }
+                }
+            ],
+            "listeners": {}
+        }
+
+        search_source = {
+            "index": "rally-results-*",
+            "query": {
+                "query_string": {
+                    "query": "environment:%s AND active:true AND track:%s AND challenge:%s AND car:%s AND node-count:%d" % (
+                        environment, track, challenge, car, node_count),
+                    "analyze_wildcard": True
+                }
+            },
+            "filter": []
+        }
+
         return {
             "_id": str(uuid.uuid4()),
             "_type": "visualization",
             "_source": {
                 "title": title,
-                "visState": "{\"title\":\"%s\",\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,"
-                            "\"addTooltip\":true,\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"labels\":{\"show\":true,\"truncate\":100},"
-                            "\"position\":\"bottom\",\"scale\":{\"type\":\"linear\"},\"show\":true,\"style\":{},\"title\":{\"text\":"
-                            "\"filters\"},\"type\":\"category\"}],\"defaultYExtents\":false,\"drawLinesBetweenPoints\":true,\"grid\":"
-                            "{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"interpolate\":\"linear\",\"legendPosition\":"
-                            "\"right\",\"radiusRatio\":9,\"scale\":\"linear\",\"seriesParams\":[{\"data\":{\"id\":\"1\",\"label\":"
-                            "\"Total GC Duration [ms]\"},\"drawLinesBetweenPoints\":true,\"mode\":\"normal\",\"show\":\"true\","
-                            "\"showCircles\":true,\"type\":\"histogram\",\"valueAxis\":\"ValueAxis-1\"}],\"setYExtents\":false,"
-                            "\"showCircles\":true,\"times\":[],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"labels\":{\"filter\":false,"
-                            "\"rotate\":0,\"show\":true,\"truncate\":100},\"name\":\"LeftAxis-1\",\"position\":\"left\",\"scale\":"
-                            "{\"mode\":\"normal\",\"type\":\"linear\"},\"show\":true,\"style\":{},\"title\":"
-                            "{\"text\":\"Total GC Duration [ms]\"},\"type\":\"value\"}]},\"aggs\":[{\"id\":\"1\",\"enabled\":true,"
-                            "\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value.single\",\"percents\":[50],"
-                            "\"customLabel\":\"Total GC Duration [ms]\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"filters\","
-                            "\"schema\":\"segment\",\"params\":{\"filters\":[{\"input\":{\"query\":{\"query_string\":{\"query\":"
-                            "\"name:young_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Young GC\"},{\"input\":{\"query\":"
-                            "{\"query_string\":{\"query\":\"name:old_gc_time\",\"analyze_wildcard\":true}}},\"label\":\"Old GC\"}]}},"
-                            "{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"split\",\"params\":{\"field\":"
-                            "\"distribution-version\",\"size\":10,\"order\":\"asc\",\"orderBy\":\"_term\",\"row\":false}},{\"id\":\"4\","
-                            "\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"user-tag\",\"size\":5,"
-                            "\"order\":\"desc\",\"orderBy\":\"_term\"}}],\"listeners\":{}}" % title,
+                "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"index\":\"rally-results-*\",\"query\":{\"query_string\":{\"query\":\"environment:%s AND active:true AND track:%s AND challenge:%s AND car:%s AND node-count:%d\",\"analyze_wildcard\":true}},\"filter\":[]}" % (
-                        environment, track, challenge, car, node_count)
+                    "searchSourceJSON": json.dumps(search_source)
                 }
             }
         }
 
     @staticmethod
     def io(title, environment, track, challenge, car, node_count):
+        vis_state = {
+            "title": title,
+            "type": "histogram",
+            "params": {
+                "addLegend": True,
+                "addTimeMarker": False,
+                "addTooltip": True,
+                "categoryAxes": [
+                    {
+                        "id": "CategoryAxis-1",
+                        "labels": {
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "position": "bottom",
+                        "scale": {
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "filters"
+                        },
+                        "type": "category"
+                    }
+                ],
+                "defaultYExtents": False,
+                "drawLinesBetweenPoints": True,
+                "grid": {
+                    "categoryLines": False,
+                    "style": {
+                        "color": "#eee"
+                    }
+                },
+                "interpolate": "linear",
+                "legendPosition": "right",
+                "radiusRatio": 9,
+                "scale": "linear",
+                "seriesParams": [
+                    {
+                        "data": {
+                            "id": "1",
+                            "label": "[Bytes]"
+                        },
+                        "drawLinesBetweenPoints": True,
+                        "mode": "normal",
+                        "show": "True",
+                        "showCircles": True,
+                        "type": "histogram",
+                        "valueAxis": "ValueAxis-1"
+                    }
+                ],
+                "setYExtents": False,
+                "showCircles": True,
+                "times": [],
+                "valueAxes": [
+                    {
+                        "id": "ValueAxis-1",
+                        "labels": {
+                            "filter": False,
+                            "rotate": 0,
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "name": "LeftAxis-1",
+                        "position": "left",
+                        "scale": {
+                            "mode": "normal",
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "[Bytes]"
+                        },
+                        "type": "value"
+                    }
+                ]
+            },
+            "aggs": [
+                {
+                    "id": "1",
+                    "enabled": True,
+                    "type": "median",
+                    "schema": "metric",
+                    "params": {
+                        "field": "value.single",
+                        "percents": [
+                            50
+                        ],
+                        "customLabel": "[Bytes]"
+                    }
+                },
+                {
+                    "id": "2",
+                    "enabled": True,
+                    "type": "filters",
+                    "schema": "segment",
+                    "params": {
+                        "filters": [
+                            {
+                                "input": {
+                                    "query": {
+                                        "query_string": {
+                                            "analyze_wildcard": True,
+                                            "query": "name:index_size"
+                                        }
+                                    }
+                                },
+                                "label": "Index size"
+                            },
+                            {
+                                "input": {
+                                    "query": {
+                                        "query_string": {
+                                            "analyze_wildcard": True,
+                                            "query": "name:bytes_written"
+                                        }
+                                    }
+                                },
+                                "label": "Bytes written"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "3",
+                    "enabled": True,
+                    "type": "terms",
+                    "schema": "split",
+                    "params": {
+                        "field": "distribution-version",
+                        "size": 10,
+                        "order": "asc",
+                        "orderBy": "_term",
+                        "row": False
+                    }
+                },
+                {
+                    "id": "4",
+                    "enabled": True,
+                    "type": "terms",
+                    "schema": "group",
+                    "params": {
+                        "field": "user-tag",
+                        "size": 5,
+                        "order": "desc",
+                        "orderBy": "_term"
+                    }
+                }
+            ],
+            "listeners": {}
+        }
+
+        search_source = {
+            "index": "rally-results-*",
+            "query": {
+                "query_string": {
+                    "query": "environment:%s AND active:true AND track:%s AND challenge:%s AND car:%s AND node-count:%d" % (
+                        environment, track, challenge, car, node_count),
+                    "analyze_wildcard": True
+                }
+            },
+            "filter": []
+        }
+
         return {
             "_id": str(uuid.uuid4()),
             "_type": "visualization",
             "_source": {
                 "title": title,
-                "visState": "{\"title\":\"%s\",\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,"
-                            "\"addTooltip\":true,\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"labels\":{\"show\":true,\"truncate\":100},"
-                            "\"position\":\"bottom\",\"scale\":{\"type\":\"linear\"},\"show\":true,\"style\":{},\"title\":"
-                            "{\"text\":\"filters\"},\"type\":\"category\"}],\"defaultYExtents\":false,\"drawLinesBetweenPoints\":true,"
-                            "\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"interpolate\":\"linear\","
-                            "\"legendPosition\":\"right\",\"radiusRatio\":9,\"scale\":\"linear\",\"seriesParams\":[{\"data\":{\"id\":\"1\","
-                            "\"label\":\"[Bytes]\"},\"drawLinesBetweenPoints\":true,\"mode\":\"normal\",\"show\":\"true\","
-                            "\"showCircles\":true,\"type\":\"histogram\",\"valueAxis\":\"ValueAxis-1\"}],\"setYExtents\":false,"
-                            "\"showCircles\":true,\"times\":[],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"labels\":{\"filter\":false,"
-                            "\"rotate\":0,\"show\":true,\"truncate\":100},\"name\":\"LeftAxis-1\",\"position\":\"left\","
-                            "\"scale\":{\"mode\":\"normal\",\"type\":\"linear\"},\"show\":true,\"style\":{},\"title\":{\"text\":\"[Bytes]\"},"
-                            "\"type\":\"value\"}]},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"median\",\"schema\":\"metric\","
-                            "\"params\":{\"field\":\"value.single\",\"percents\":[50],\"customLabel\":\"[Bytes]\"}},{\"id\":\"2\","
-                            "\"enabled\":true,\"type\":\"filters\",\"schema\":\"segment\",\"params\":{\"filters\":[{\"input\":{\"query\":"
-                            "{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"name:index_size\"}}},\"label\":\"Index size\"},"
-                            "{\"input\":{\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"name:bytes_written\"}}},"
-                            "\"label\":\"Bytes written\"}]}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"split\","
-                            "\"params\":{\"field\":\"distribution-version\",\"size\":10,\"order\":\"asc\",\"orderBy\":\"_term\","
-                            "\"row\":false}},{\"id\":\"4\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":"
-                            "{\"field\":\"user-tag\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"_term\"}}],\"listeners\":{}}" % title,
+                "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"index\":\"rally-results-*\",\"query\":{\"query_string\":{\"query\":\"environment:%s AND active:true AND track:%s AND challenge:%s AND car:%s AND node-count:%d\",\"analyze_wildcard\":true}},\"filter\":[]}" % (
-                        environment, track, challenge, car, node_count)
+                    "searchSourceJSON": json.dumps(search_source)
                 }
             }
         }
@@ -87,78 +377,325 @@ class BarCharts:
         label = "Query Latency [ms]"
         metric = "service_time"
 
+        vis_state = {
+            "title": title,
+            "type": "histogram",
+            "params": {
+                "addLegend": True,
+                "addTimeMarker": False,
+                "addTooltip": True,
+                "categoryAxes": [
+                    {
+                        "id": "CategoryAxis-1",
+                        "labels": {
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "position": "bottom",
+                        "scale": {
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "distribution-version: Ascending"
+                        },
+                        "type": "category"
+                    }
+                ],
+                "defaultYExtents": False,
+                "drawLinesBetweenPoints": True,
+                "grid": {
+                    "categoryLines": False,
+                    "style": {
+                        "color": "#eee"
+                    }
+                },
+                "interpolate": "linear",
+                "legendPosition": "right",
+                "radiusRatio": 9,
+                "scale": "linear",
+                "seriesParams": [
+                    {
+                        "data": {
+                            "id": "1",
+                            "label": label
+                        },
+                        "drawLinesBetweenPoints": True,
+                        "mode": "normal",
+                        "show": "True",
+                        "showCircles": True,
+                        "type": "histogram",
+                        "valueAxis": "ValueAxis-1"
+                    }
+                ],
+                "setYExtents": False,
+                "showCircles": True,
+                "times": [],
+                "valueAxes": [
+                    {
+                        "id": "ValueAxis-1",
+                        "labels": {
+                            "filter": False,
+                            "rotate": 0,
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "name": "LeftAxis-1",
+                        "position": "left",
+                        "scale": {
+                            "mode": "normal",
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": label
+                        },
+                        "type": "value"
+                    }
+                ]
+            },
+            "aggs": [
+                {
+                    "id": "1",
+                    "enabled": True,
+                    "type": "median",
+                    "schema": "metric",
+                    "params": {
+                        "field": "value.99_0",
+                        "percents": [
+                            50
+                        ],
+                        "customLabel": label
+                    }
+                },
+                {
+                    "id": "2",
+                    "enabled": True,
+                    "type": "terms",
+                    "schema": "segment",
+                    "params": {
+                        "field": "distribution-version",
+                        "size": 10,
+                        "order": "asc",
+                        "orderBy": "_term"
+                    }
+                },
+                {
+                    "id": "3",
+                    "enabled": True,
+                    "type": "terms",
+                    "schema": "group",
+                    "params": {
+                        "field": "user-tag",
+                        "size": 10,
+                        "order": "desc",
+                        "orderBy": "_term"
+                    }
+                }
+            ],
+            "listeners": {}
+        }
+
+        search_source = {
+            "index": "rally-results-*",
+            "query": {
+                "query_string": {
+                    "query": "environment:%s AND active:true AND track:%s AND name:%s AND operation:%s AND challenge:%s AND car:%s AND "
+                             "node-count:%d" % (environment, track, metric, q, challenge, car, node_count),
+                    "analyze_wildcard": True
+                }
+            },
+            "filter": []
+        }
+
         return {
             "_id": str(uuid.uuid4()),
             "_type": "visualization",
             "_source": {
                 "title": title,
-                "visState": "{\"title\":\"%s\",\"type\":\"histogram\",\"params\":{\"addLegend\":true,\"addTimeMarker\":false,\"addTooltip\":true,\""
-                            "categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"labels\":{\"show\":true,\"truncate\":100},\"position\":\"bottom\",\""
-                            "scale\":{\"type\":\"linear\"},\"show\":true,\"style\":{},\"title\":{\"text\":\"distribution-version: Ascending\"},\"type\":\"category\"}],"
-                            "\"defaultYExtents\":false,\"drawLinesBetweenPoints\":true,\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},"
-                            "\"interpolate\":\"linear\",\"legendPosition\":\"right\",\"radiusRatio\":9,\"scale\":\"linear\",\""
-                            "seriesParams\":[{\"data\":{\"id\":\"1\",\"label\":\"%s\"},\"drawLinesBetweenPoints\":true,"
-                            "\"mode\":\"normal\",\"show\":\"true\",\"showCircles\":true,\"type\":\"histogram\",\"valueAxis\":\"ValueAxis-1\"}],"
-                            "\"setYExtents\":false,\"showCircles\":true,\"times\":[],\"valueAxes\":[{\"id\":\"ValueAxis-1\","
-                            "\"labels\":{\"filter\":false,\"rotate\":0,\"show\":true,\"truncate\":100},\"name\":\"LeftAxis-1\","
-                            "\"position\":\"left\",\"scale\":{\"mode\":\"normal\",\"type\":\"linear\"},\"show\":true,\"style\":{},"
-                            "\"title\":{\"text\":\"%s\"},\"type\":\"value\"}]},\"aggs\":[{\"id\":\"1\","
-                            "\"enabled\":true,\"type\":\"median\",\"schema\":\"metric\",\"params\":{\"field\":\"value.99_0\","
-                            "\"percents\":[50],\"customLabel\":\"%s\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":"
-                            "\"segment\",\"params\":{\"field\":\"distribution-version\",\"size\":10,\"order\":\"asc\","
-                            "\"orderBy\":\"_term\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\","
-                            "\"params\":{\"field\":\"user-tag\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"_term\"}}],"
-                            "\"listeners\":{}}" % (title, label, label, label),
+                "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"index\":\"rally-results-*\",\"query\":{\"query_string\":"
-                                        "{\"query\":\"environment:%s AND active:true AND track:%s AND name:%s AND operation:%s AND challenge:%s AND car:%s AND node-count:%d\",\"analyze_wildcard\":true}},\"filter\":[]}" % (
-                                            environment, track, metric, q, challenge, car, node_count)
+                    "searchSourceJSON": json.dumps(search_source)
                 }
             }
         }
 
     @staticmethod
     def index(environment, track, cci, title):
-        filters = ""
+        filters = []
         for idx, item in enumerate(cci):
             challenge, car, node_count, index_op = item
-            if idx > 0:
-                filters = filters + ","
             label = "%s-%s" % (challenge, car) if node_count == 1 else "%s-%s (%d nodes)" % (challenge, car, node_count)
-            filters = filters + "{\"input\":{\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"operation:%s AND challenge:%s AND car:%s AND node-count:%d\"}}},\"label\":\"%s\"}" % (
-                index_op, challenge, car, node_count, label)
+            filters.append({
+                "input": {
+                    "query": {
+                        "query_string": {
+                            "analyze_wildcard": True,
+                            "query": "task:%s AND challenge:%s AND car:%s AND node-count:%d" % (index_op, challenge, car, node_count)
+                        }
+                    }
+                },
+                "label": label
+            })
+
+        vis_state = {
+            "aggs": [
+                {
+                    "enabled": True,
+                    "id": "1",
+                    "params": {
+                        "customLabel": "Median Indexing Throughput [docs/s]",
+                        "field": "value.median",
+                        "percents": [
+                            50
+                        ]
+                    },
+                    "schema": "metric",
+                    "type": "median"
+                },
+                {
+                    "enabled": True,
+                    "id": "2",
+                    "params": {
+                        "field": "distribution-version",
+                        "order": "asc",
+                        "orderBy": "_term",
+                        "size": 10
+                    },
+                    "schema": "segment",
+                    "type": "terms"
+                },
+                {
+                    "enabled": True,
+                    "id": "3",
+                    "params": {
+                        "field": "user-tag",
+                        "order": "desc",
+                        "orderBy": "_term",
+                        "size": 10
+                    },
+                    "schema": "group",
+                    "type": "terms"
+                },
+                {
+                    "enabled": True,
+                    "id": "4",
+                    "params": {
+                        "filters": filters,
+                        "row": True
+                    },
+                    "schema": "split",
+                    "type": "filters"
+                }
+            ],
+            "listeners": {},
+            "params": {
+                "addLegend": True,
+                "addTimeMarker": False,
+                "addTooltip": True,
+                "categoryAxes": [
+                    {
+                        "id": "CategoryAxis-1",
+                        "labels": {
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "position": "bottom",
+                        "scale": {
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "distribution-version: Ascending"
+                        },
+                        "type": "category"
+                    }
+                ],
+                "defaultYExtents": False,
+                "drawLinesBetweenPoints": True,
+                "grid": {
+                    "categoryLines": False,
+                    "style": {
+                        "color": "#eee"
+                    }
+                },
+                "interpolate": "linear",
+                "legendPosition": "right",
+                "radiusRatio": 9,
+                "scale": "linear",
+                "seriesParams": [
+                    {
+                        "data": {
+                            "id": "1",
+                            "label": "Median Indexing Throughput [docs/s]"
+                        },
+                        "drawLinesBetweenPoints": True,
+                        "mode": "normal",
+                        "show": "True",
+                        "showCircles": True,
+                        "type": "histogram",
+                        "valueAxis": "ValueAxis-1"
+                    }
+                ],
+                "setYExtents": False,
+                "showCircles": True,
+                "times": [],
+                "valueAxes": [
+                    {
+                        "id": "ValueAxis-1",
+                        "labels": {
+                            "filter": False,
+                            "rotate": 0,
+                            "show": True,
+                            "truncate": 100
+                        },
+                        "name": "LeftAxis-1",
+                        "position": "left",
+                        "scale": {
+                            "mode": "normal",
+                            "type": "linear"
+                        },
+                        "show": True,
+                        "style": {},
+                        "title": {
+                            "text": "Median Indexing Throughput [docs/s]"
+                        },
+                        "type": "value"
+                    }
+                ]
+            },
+            "title": title,
+            "type": "histogram"
+        }
+
+        search_source = {
+            "index": "rally-results-*",
+            "query": {
+                "query_string": {
+                    "analyze_wildcard": True,
+                    "query": "environment:%s AND active:true AND track:%s AND name:throughput" % (environment, track)
+                }
+            },
+            "filter": []
+        }
 
         return {
             "_id": str(uuid.uuid4()),
             "_type": "visualization",
             "_source": {
                 "title": title,
-                "visState": "{\"aggs\":[{\"enabled\":true,\"id\":\"1\",\"params\":{\"customLabel\":\"Median Indexing Throughput [docs/s]\",\"field\":\"value.median\",\"percents\":[50]},\"schema\":\"metric\",\"type\":\"median\"},"
-                            "{\"enabled\":true,\"id\":\"2\",\"params\":{\"field\":\"distribution-version\",\"order\":\"asc\",\"orderBy\":\"_term\",\"size\":10},\"schema\":\"segment\",\"type\":\"terms\"},{\"enabled\":true,\"id\":\"3\",\"params\":"
-                            "{\"field\":\"user-tag\",\"order\":\"desc\",\"orderBy\":\"_term\",\"size\":10},\"schema\":\"group\",\"type\":\"terms\"},{\"enabled\":true,\"id\":\"4\",\"params\":"
-                            "{\"filters\":[%s]"
-                            ",\"row\":true},\"schema\":\"split\",\"type\":\"filters\"}],\"listeners\":{},\"params\":{\"addLegend\":true,"
-                            "\"addTimeMarker\":false,\"addTooltip\":true,\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"labels\":{\"show\":true,"
-                            "\"truncate\":100},\"position\":\"bottom\",\"scale\":{\"type\":\"linear\"},\"show\":true,\"style\":{},"
-                            "\"title\":{\"text\":\"distribution-version: Ascending\"},\"type\":\"category\"}],\"defaultYExtents\":false,"
-                            "\"drawLinesBetweenPoints\":true,\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},"
-                            "\"interpolate\":\"linear\",\"legendPosition\":\"right\",\"radiusRatio\":9,\"scale\":\"linear\","
-                            "\"seriesParams\":[{\"data\":{\"id\":\"1\",\"label\":\"Median Indexing Throughput [docs/s]\"},"
-                            "\"drawLinesBetweenPoints\":true,\"mode\":\"normal\",\"show\":\"true\",\"showCircles\":true,\"type\":"
-                            "\"histogram\",\"valueAxis\":\"ValueAxis-1\"}],\"setYExtents\":false,\"showCircles\":true,\"times\":[],"
-                            "\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"labels\":{\"filter\":false,\"rotate\":0,\"show\":true,\"truncate\":100},"
-                            "\"name\":\"LeftAxis-1\",\"position\":\"left\",\"scale\":{\"mode\":\"normal\",\"type\":\"linear\"},\"show\":true,"
-                            "\"style\":{},\"title\":{\"text\":\"Median Indexing Throughput [docs/s]\"},\"type\":\"value\"}]},\"title\":\"%s\",\"type\":\"histogram\"}" % (
-                                filters, title),
-                "uiStateJSON": "{\"vis\":{\"legendOpen\":true}}",
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"index\":\"rally-results-*\",\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"environment:%s AND active:true AND track:%s AND name:throughput\"}},\"filter\":[]}" % (
-                        environment, track)
+                    "searchSourceJSON": json.dumps(search_source)
                 }
             }
         }
