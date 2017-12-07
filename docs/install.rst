@@ -129,7 +129,6 @@ Whenever you want to use Rally, run the activation script (step 2 above) first. 
 
 .. _install_offline-install:
 
-
 Kubernetes Job
 --------------
 
@@ -139,7 +138,6 @@ Docker
 ------
 
 You can run Rally as a docker container too. Follow the instructions `here <https://github.com/gdmello/elasticsearch-rally/tree/master/docker>`_.
-
 
 Offline Install
 ---------------
