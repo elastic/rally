@@ -144,9 +144,6 @@ You can run Rally as a docker container too. Follow the instructions `here <http
 Offline Install
 ---------------
 
-After you have installed Rally, you need to configure it. Just run ``esrally configure`` or follow the :doc:`configuration help page </configuration>` for more guidance.
-
-
 .. ifconfig:: release.endswith('.dev0')
 
     .. warning::
