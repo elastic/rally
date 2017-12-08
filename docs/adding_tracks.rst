@@ -95,7 +95,7 @@ Finally, add a file called ``track.json`` right next to the mapping file::
               "operation": {
                 "operation-type": "bulk",
                 "bulk-size": 5000
-              }
+              },
               "warmup-time-period": 120,
               "clients": 8
             },
