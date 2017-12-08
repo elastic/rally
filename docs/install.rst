@@ -129,6 +129,16 @@ Whenever you want to use Rally, run the activation script (step 2 above) first. 
 
 .. _install_offline-install:
 
+Kubernetes Job
+--------------
+
+You can run Rally as a Kubernetes `Job <https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/>`_ via `this <https://github.com/gdmello/elasticsearch-rally>`_ `Helm Chart <https://helm.sh/>`_.
+
+Docker
+------
+
+You can run Rally as a docker container too. Follow the instructions `here <https://github.com/gdmello/elasticsearch-rally/tree/master/docker>`_.
+
 Offline Install
 ---------------
 
