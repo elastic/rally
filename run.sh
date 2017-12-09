@@ -57,7 +57,15 @@ then
       then
         echo "Auto-updating Rally from ${REMOTE}"
         git rebase ${REMOTE}/master --quiet
-        python3 setup.py -q develop --user
+        # if we're running in a virtualenv then the --user prefix is not defined (and makes no sense)
+        # While we could also check via the presence of `VIRTUAL_ENV` this is a bit more reliable.
+        python3 -c 'import sys; print(sys.real_prefix)' 2>/dev/null && IN_VIRTUALENV=1 || IN_VIRTUALENV=0
+        if [ ${IN_VIRTUALENV} == 0 ]
+        then
+            python3 setup.py -q develop --user
+        else
+            python3 setup.py -q develop
+        fi
       #else
       # offline - skipping update
       fi
