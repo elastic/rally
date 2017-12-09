@@ -897,7 +897,7 @@ class InMemoryMetricsStore(MetricsStore):
             self.docs = []
         compressed = zlib.compress(pickle.dumps(docs))
         logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
-                    (sys.getsizeof(docs), sys.getsizeof(compressed)))
+                    (sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1)))
         return compressed
 
     def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
