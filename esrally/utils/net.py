@@ -66,17 +66,15 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
             except BaseException:
                 size_from_content_header = None
 
-            chunk_size = 16 * 1014
+            chunk_size = 2 ** 16
             bytes_read = 0
-            while True:
-                chunk = r.read(chunk_size)
-                if not chunk:
-                    break
+
+            for chunk in r.stream(chunk_size):
                 out_file.write(chunk)
                 bytes_read += len(chunk)
                 if progress_indicator and size_from_content_header:
                     progress_indicator(bytes_read, size_from_content_header)
-    except:
+    except BaseException:
         if os.path.isfile(tmp_data_set_path):
             os.remove(tmp_data_set_path)
         raise
