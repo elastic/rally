@@ -640,9 +640,105 @@ class TrackPostProcessingTests(TestCase):
         self.assertEqual(self.as_track(expected_post_processed),
                          loader.post_process_for_test_mode(self.as_track(track_specification)))
 
+    def test_creates_index_auto_management_operations(self):
+        track_specification = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "body": "test-index-body.json",
+                    "types": [
+                        {
+                            "name": "test-type",
+                            "documents": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000
+                        }
+                    ]
+                }
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": {
+                            "operation-type": "index",
+                            "bulk-size": 5000
+                        },
+                        "warmup-time-period": 120
+                    }
+                ]
+            }
+        }
+
+        expected_post_processed = {
+            "short-description": "short description for unit test",
+            "description": "longer description of this track for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "body": "test-index-body.json",
+                    "types": [
+                        {
+                            "name": "test-type",
+                            "documents": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000
+                        }
+                    ]
+                }
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "name": "auto-delete-indices",
+                        "operation": {
+                            "name": "auto-delete-indices",
+                            "operation-type": "delete-index",
+                            "include-in-reporting": False,
+                            "only-if-exists": True
+                        }
+                    },
+                    {
+                        "name": "auto-create-indices",
+                        "operation": {
+                            "name": "auto-create-indices",
+                            "operation-type": "create-index",
+                            "include-in-reporting": False
+                        }
+                    },
+                    {
+                        "name": "auto-check-cluster-health",
+                        "operation": {
+                            "name": "auto-check-cluster-health",
+                            "operation-type": "cluster-health",
+                            "include-in-reporting": False,
+                            "request-params": {
+                                "wait_for_status": "green"
+                            }
+                        }
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "index",
+                            "bulk-size": 5000
+                        },
+                        "warmup-time-period": 120
+                    }
+                ]
+            }
+        }
+
+        self.assertEqual(self.as_track(expected_post_processed),
+                         loader.post_process_for_index_auto_management(self.as_track(track_specification), "green"))
+
     def as_track(self, track_specification):
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/type-mappings.json": ['{"test-type": "empty-for-test"}']
+            "/mappings/test-index-body.json": ['{"settings": {}}']
         }))
         return reader("unittest", track_specification, "/mappings")
 

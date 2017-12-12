@@ -129,11 +129,12 @@ Each track defines the following info attributes:
 * ``description`` (optional): A human-readable description of the track. Although it is optional, we recommend providing it.
 * ``data-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding data for this track. This element is not needed if data are only generated on the fly by a custom runner.
 
-=========================== =============
+=========================== =================
 Track Specification Version Rally version
-=========================== =============
-                          1       >=0.7.3
-=========================== =============
+=========================== =================
+                          1  >=0.7.3, <0.10.0
+                          2           >=0.9.0
+=========================== =================
 
 The ``version`` property has been introduced with Rally 0.7.3. Rally versions before 0.7.3 do not recognize this property and thus cannot detect incompatible track specification versions.
 
@@ -173,13 +174,13 @@ The ``indices`` section contains a list of all indices that are used by this tra
 Each index in this list consists of the following properties:
 
 * ``name`` (mandatory): The name of the index.
+* ``body`` (optional): File name of the corresponding index definition that will be used as body in the create index API call.
 * ``auto-managed`` (optional, defaults to ``true``): Controls whether Rally or the user takes care of creating / destroying the index. If this setting is ``false``, Rally will neither create nor delete this index but just assume its presence.
 * types (optional): A list of types in this index.
 
 Each type consists of the following properties:
 
 * ``name`` (mandatory): Name of the type.
-* ``mapping`` (mandatory): File name of the corresponding mapping file.
 * ``documents`` (optional): File name of the corresponding documents that should be indexed. For local use, this file can be a ``.json`` file. If you provide a ``data-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
 * ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
 * ``document-count`` (mandatory if ``documents`` is set): Number of documents in the documents file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
@@ -191,10 +192,10 @@ Example::
     "indices": [
         {
           "name": "geonames",
+          "body": "geonames-index.json",
           "types": [
             {
               "name": "type",
-              "mapping": "mappings.json",
               "documents": "documents.json.bz2",
               "document-count": 8647880,
               "compressed-bytes": 197857614,
@@ -234,6 +235,7 @@ Each operation consists of the following properties:
 
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
+* ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
 
 Depending on the operation type a couple of further parameters can be specified.
 
@@ -266,7 +268,7 @@ With the operation type ``force-merge`` you can call the `force merge API <http:
 
 * ``max_num_segments`` (optional)  The number of segments the index should be merged into. Defaults to simply checking if a merge needs to execute, and if so, executes it.
 
-Throughput metrics are not necessarily very useful but will be reported in the number of completed force-merge operations per second.
+This is an administrative operation. Metrics are not reported by default. If reporting is forced by setting ``include-in-reporting`` to ``true``, then throughput is reported as the number of completed force-merge operations per second.
 
 index-stats
 ~~~~~~~~~~~
@@ -349,6 +351,8 @@ Example::
 
 This example requires that the ``ingest-geoip`` Elasticsearch plugin is installed.
 
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 cluster-health
 ~~~~~~~~~~~~~~
 
@@ -359,12 +363,219 @@ With the operation ``cluster-health`` you can execute the `cluster health API <h
 
 The ``cluster-health`` operation will check whether the expected cluster health and will report a failure if this is not the case. Use ``--on-error`` on the command line to control Rally's behavior in case of such failures.
 
+Example::
+
+    {
+      "name": "check-cluster-green",
+      "operation-type": "cluster-health",
+      "index": "logs-*",
+      "request-params": {
+        "wait_for_status": "green",
+        "wait_for_no_relocating_shards": true
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 refresh
 ~~~~~~~
 
 With the operation ``refresh`` you can execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_. It supports the following properties:
 
 * ``index`` (optional, defaults to ``_all``): The name of the index that should be refreshed.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-index
+~~~~~~~~~~~~
+
+With the operation ``create-index`` you can execute the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_. It supports two modes: it creates either all indices that are specified in the track's ``indices`` section or it creates one specific index defined by this operation.
+
+If you want it to create all indices that have been declared in the ``indices`` section you can specify the following properties:
+
+* ``settings`` (optional): Allows to specify additional index settings that will be merged with the index settings specified in the body of the index in the ``indices`` section.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`_ that are allowed by the create index API.
+
+If you want it to create one specific index instead, you can specify the following properties:
+
+* ``index`` (mandatory): The name of the index that should be created.
+* ``body`` (optional): The body for the create index API call.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`_ that are allowed by the create index API.
+
+**Examples**
+
+The following snippet will create all indices that have been defined in the ``indices`` section. It will reuse all settings defined but override the number of shards::
+
+    {
+      "name": "create-all-indices",
+      "operation-type": "create-index",
+      "settings": {
+        "index.number_of_shards": 1
+      },
+      "request-params": {
+        "wait_for_active_shards": true
+      }
+    }
+
+With the following snippet we will create a new index that is not defined in the ``indices`` section. Note that we specify the index settings directly in the body::
+
+    {
+      "name": "create-an-index",
+      "operation-type": "create-index",
+      "index": "people",
+      "body": {
+        "settings": {
+          "index.number_of_shards": 0
+        },
+        "mappings": {
+          "docs": {
+            "properties": {
+              "name": {
+                "type": "text"
+              }
+            }
+          }
+        }
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+delete-index
+~~~~~~~~~~~~
+
+With the operation ``delete-index`` you can execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_. It supports two modes: it deletes either all indices that are specified in the track's ``indices`` section or it deletes one specific index (pattern) defined by this operation.
+
+If you want it to delete all indices that have been declared in the ``indices`` section, you can specify the following properties:
+
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`_ that are allowed by the delete index API.
+
+If you want it to delete one specific index (pattern) instead, you can specify the following properties:
+
+* ``index`` (mandatory): The name of the index that should be deleted.
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`_ that are allowed by the delete index API.
+
+**Examples**
+
+With the following snippet we will delete all indices that are declared in the ``indices`` section but only if they existed previously (implicit default)::
+
+    {
+      "name": "delete-all-indices",
+      "operation-type": "delete-index"
+    }
+
+With the following snippet we will delete all ``logs-*`` indices::
+
+    {
+      "name": "delete-logs",
+      "operation-type": "delete-index",
+      "index": "logs-*",
+      "only-if-exists": false,
+      "request-params": {
+        "expand_wildcards": "all",
+        "allow_no_indices": true,
+        "ignore_unavailable": true
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-index-template
+~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-index-template`` you can execute the `create index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_. It supports two modes: it creates either all index templates that are specified in the track's ``templates`` section or it creates one specific index template defined by this operation.
+
+If you want it to create index templates that have been declared in the ``templates`` section you can specify the following properties:
+
+* ``template`` (optional): If you specify a template name, only the template with this name will be created.
+* ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the index template in the ``templates`` section.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`_ that are allowed by the create index template API.
+
+If you want it to create one specific index instead, you can specify the following properties:
+
+* ``template`` (mandatory): The name of the index template that should be created.
+* ``body`` (mandatory): The body for the create index template API call.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`_ that are allowed by the create index template API.
+
+**Examples**
+
+The following snippet will create all index templates that have been defined in the ``templates`` section::
+
+    {
+      "name": "create-all-templates",
+      "operation-type": "create-index-template",
+      "request-params": {
+        "create": true
+      }
+    }
+
+With the following snippet we will create a new index template that is not defined in the ``templates`` section. Note that we specify the index template settings directly in the body::
+
+    {
+      "name": "create-a-template",
+      "operation-type": "create-index-template",
+      "template": "defaults",
+      "body": {
+        "index_patterns": ["*"],
+        "settings": {
+          "number_of_shards": 3
+        },
+        "mappings": {
+          "docs": {
+            "_source": {
+              "enabled": false
+            }
+          }
+        }
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+delete-index-template
+~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-index-template`` you can execute the `delete index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_. It supports two modes: it deletes either all index templates that are specified in the track's ``templates`` section or it deletes one specific index template defined by this operation.
+
+If you want it to delete all index templates that have been declared in the ``templates`` section, you can specify the following properties:
+
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index template should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`_ that are allowed by the delete index template API.
+
+If you want it to delete one specific index template instead, you can specify the following properties:
+
+* ``template`` (mandatory): The name of the index that should be deleted.
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
+* ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
+* ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`_ that are allowed by the delete index template API.
+
+**Examples**
+
+With the following snippet we will delete all index templates that are declared in the ``templates`` section but only if they existed previously (implicit default)::
+
+    {
+      "name": "delete-all-index-templates",
+      "operation-type": "delete-index-template"
+    }
+
+With the following snippet we will delete the `default`` index template::
+
+    {
+      "name": "delete-default-template",
+      "operation-type": "delete-index-template",
+      "template": "default",
+      "only-if-exists": false,
+      "delete-matching-indices": true,
+      "index-pattern": "*"
+    }
+
+.. note::
+    If ``delete-matching-indices`` is set to ``true``, indices with the provided ``index-pattern`` are deleted regardless whether the index template has previously existed.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 challenge
 .........

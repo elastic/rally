@@ -301,8 +301,7 @@
                 }
               },
               "required": [
-                "name",
-                "mapping"
+                "name"
               ]
             }
           }

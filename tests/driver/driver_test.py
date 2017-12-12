@@ -10,10 +10,10 @@ from esrally.track import params
 
 
 class DriverTestParamSource:
-    def __init__(self, indices=None, params=None):
+    def __init__(self, track=None, params=None, **kwargs):
         if params is None:
             params = {}
-        self._indices = indices
+        self._indices = track.indices
         self._params = params
 
     def partition(self, partition_index, total_partitions):
@@ -42,7 +42,6 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
         self.cfg.add(config.Scope.application, "client", "hosts", ["localhost:9200"])
         self.cfg.add(config.Scope.application, "client", "options", {})
-        self.cfg.add(config.Scope.application, "driver", "cluster.health", "green")
         self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
         self.cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
 
@@ -61,11 +60,8 @@ class DriverTests(TestCase):
         }
         return mock.Mock(**attrs)
 
-    @mock.patch("esrally.driver.driver.setup_template")
-    @mock.patch("esrally.driver.driver.setup_index")
-    @mock.patch("esrally.driver.driver.wait_for_status")
     @mock.patch("esrally.utils.net.resolve")
-    def test_start_benchmark_and_prepare_track(self, resolve, wait_for_status, setup_index, setup_template):
+    def test_start_benchmark_and_prepare_track(self, resolve):
         # override load driver host
         self.cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", ["10.5.5.1", "10.5.5.2"])
         resolve.side_effect = ["10.5.5.1", "10.5.5.2"]
@@ -94,10 +90,7 @@ class DriverTests(TestCase):
         # Did we start all load generators? There is no specific mock assert for this...
         self.assertEqual(4, target.start_load_generator.call_count)
 
-    @mock.patch("esrally.driver.driver.setup_template")
-    @mock.patch("esrally.driver.driver.setup_index")
-    @mock.patch("esrally.driver.driver.wait_for_status")
-    def test_assign_drivers_round_robin(self, wait_for_status, setup_index, setup_template):
+    def test_assign_drivers_round_robin(self):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
@@ -118,10 +111,7 @@ class DriverTests(TestCase):
         # Did we start all load generators? There is no specific mock assert for this...
         self.assertEqual(4, target.start_load_generator.call_count)
 
-    @mock.patch("esrally.driver.driver.setup_template")
-    @mock.patch("esrally.driver.driver.setup_index")
-    @mock.patch("esrally.driver.driver.wait_for_status")
-    def test_client_reaches_join_point_others_still_executing(self, wait_for_status, setup_index, setup_template):
+    def test_client_reaches_join_point_others_still_executing(self):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
@@ -137,10 +127,7 @@ class DriverTests(TestCase):
         target.on_task_finished.assert_not_called()
         target.drive_at.assert_not_called()
 
-    @mock.patch("esrally.driver.driver.setup_template")
-    @mock.patch("esrally.driver.driver.setup_index")
-    @mock.patch("esrally.driver.driver.wait_for_status")
-    def test_client_reaches_join_point_which_completes_parent(self, wait_for_status, setup_index, setup_template):
+    def test_client_reaches_join_point_which_completes_parent(self):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
@@ -347,62 +334,6 @@ class AllocatorTests(TestCase):
         # task index_c has two clients, hence we have to wait for two clients to finish
         self.assertEqual(2, final_join_point.num_clients_executing_completing_task)
         self.assertEqual([2, 0], final_join_point.clients_executing_completing_task)
-
-
-class IndexManagementTests(TestCase):
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_setup_auto_managed_index(self, es):
-        es.indices.exists.return_value = False
-
-        index = track.Index(name="test-index",
-                            auto_managed=True,
-                            types=[track.Type(name="test-type", mapping={"test-type": "empty-for-test"})])
-        index_settings = {
-            "index.number_of_replicas": 0
-        }
-        expected_body = {
-            "settings": {
-                "index.number_of_replicas": 0
-            },
-            "mappings": {
-                "test-type": "empty-for-test"
-            }
-        }
-        driver.setup_index(es, index, index_settings)
-
-        es.indices.exists.assert_called_with(index="test-index")
-        es.indices.delete.assert_not_called()
-        es.indices.create.assert_called_with(index="test-index", body=expected_body)
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_recreate_existing_managed_index(self, es):
-        es.indices.exists.return_value = True
-
-        index = track.Index(name="test-index",
-                            auto_managed=True,
-                            types=[track.Type(name="test-type", mapping={"test-type": "empty-for-test"})])
-        index_settings = {
-            "index.number_of_replicas": 0
-        }
-        expected_body = {
-            "settings": {
-                "index.number_of_replicas": 0
-            },
-            "mappings": {
-                "test-type": "empty-for-test"
-            }
-        }
-        driver.setup_index(es, index, index_settings)
-
-        es.indices.exists.assert_called_with(index="test-index")
-        es.indices.delete.assert_called_with(index="test-index")
-        es.indices.create.assert_called_with(index="test-index", body=expected_body)
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_do_not_change_manually_managed_index(self, es):
-        index = track.Index(name="test-index", auto_managed=False, types=[])
-        driver.setup_index(es, index, index_settings=None)
-        es.assert_not_called()
 
 
 class MetricsAggregationTests(TestCase):
@@ -853,73 +784,3 @@ class ProfilerTests(TestCase):
         self.assertEqual(2, return_value)
         duration = end - start
         self.assertTrue(0.9 <= duration <= 1.2, "Should sleep for roughly 1 second but took [%.2f] seconds." % duration)
-
-
-class ClusterHealthCheckTests(TestCase):
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_waits_for_expected_cluster_status(self, es):
-        es.info.return_value = {
-            "version": {
-                "number": "6.0.0"
-            }
-        }
-        es.cluster.health.return_value = {
-            "status": "green",
-            "relocating_shards": 0
-        }
-
-        reached_cluster_status, relocating_shards = driver._do_wait(es, "green")
-
-        self.assertEqual("green", reached_cluster_status)
-        self.assertEqual(0, relocating_shards)
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_accepts_better_cluster_status(self, es):
-        es.info.return_value = {
-            "version": {
-                "number": "6.0.0"
-            }
-        }
-        es.cluster.health.return_value = {
-            "status": "green",
-            "relocating_shards": 0
-        }
-
-        reached_cluster_status, relocating_shards = driver._do_wait(es, "yellow")
-
-        self.assertEqual("green", reached_cluster_status)
-        self.assertEqual(0, relocating_shards)
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_rejects_relocating_shards(self, es):
-        es.info.return_value = {
-            "version": {
-                "number": "6.0.0"
-            }
-        }
-        es.cluster.health.return_value = {
-            "status": "yellow",
-            "relocating_shards": 3
-        }
-
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
-            driver._do_wait(es, "red", sleep=lambda t: t)
-        self.assertEqual("Cluster reached status [yellow] which is equal or better than the expected status [red] but there were [3] "
-                         "relocating shards and we require zero relocating shards (Use the /_cat/shards API to check which shards are "
-                         "relocating.)", ctx.exception.args[0])
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_rejects_unknown_cluster_status(self, es):
-        es.info.return_value = {
-            "version": {
-                "number": "6.0.0"
-            }
-        }
-        es.cluster.health.return_value = {
-            "status": None,
-            "relocating_shards": 0
-        }
-
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
-            driver._do_wait(es, "red", sleep=lambda t: t)
-        self.assertEqual("Cluster did not reach status [red]. Last reached status: [None]", ctx.exception.args[0])

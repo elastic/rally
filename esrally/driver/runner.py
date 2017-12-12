@@ -78,7 +78,7 @@ def mandatory(params, key, op):
         return params[key]
     except KeyError:
         raise exceptions.DataError("Parameter source for operation '%s' did not provide the mandatory parameter '%s'. Please add it to your"
-                                   " parameter source." % (op, key))
+                                   " parameter source." % (str(op), key))
 
 
 class BulkIndex(Runner):
@@ -254,8 +254,8 @@ class BulkIndex(Runner):
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
 
-        with_action_metadata = mandatory(params, "action_metadata_present", "bulk-index")
-        bulk_size = mandatory(params, "bulk-size", "bulk-index")
+        with_action_metadata = mandatory(params, "action_metadata_present", self)
+        bulk_size = mandatory(params, "bulk-size", self)
 
         if with_action_metadata:
             # only half of the lines are documents
@@ -469,7 +469,7 @@ class Query(Runner):
         r = es.search(
             index=params.get("index", "_all"),
             doc_type=params.get("type"),
-            body=mandatory(params, "body", "query"),
+            body=mandatory(params, "body", self),
             **request_params)
         hits = r["hits"]["total"]
         return {
@@ -495,7 +495,7 @@ class Query(Runner):
                 r = es.search(
                     index=params.get("index", "_all"),
                     doc_type=params.get("type"),
-                    body=mandatory(params, "body", "query"),
+                    body=mandatory(params, "body", self),
                     sort="_doc",
                     scroll="10s",
                     size=params["items_per_page"],
@@ -613,8 +613,8 @@ class PutPipeline(Runner):
     """
 
     def __call__(self, es, params):
-        es.ingest.put_pipeline(id=mandatory(params, "id", "put-pipeline"),
-                               body=mandatory(params, "body", "put-pipeline"),
+        es.ingest.put_pipeline(id=mandatory(params, "id", self),
+                               body=mandatory(params, "body", self),
                                master_timeout=params.get("master_timeout"),
                                timeout=params.get("timeout"),
                                )
@@ -633,6 +633,97 @@ class Refresh(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "refresh"
+
+
+class CreateIndex(Runner):
+    """
+    Execute the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_.
+    """
+
+    def __call__(self, es, params):
+        indices = mandatory(params, "indices", self)
+        request_params = params.get("request-params", {})
+        for index, body in indices:
+            es.indices.create(index=index, body=body, **request_params)
+        return len(indices), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-index"
+
+
+class DeleteIndex(Runner):
+    """
+    Execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_.
+    """
+
+    def __call__(self, es, params):
+        ops = 0
+
+        indices = mandatory(params, "indices", self)
+        only_if_exists = params.get("only-if-exists", False)
+        request_params = params.get("request-params", {})
+
+        for index_name in indices:
+            if not only_if_exists:
+                es.indices.delete(index=index_name, **request_params)
+                ops += 1
+            elif only_if_exists and es.indices.exists(index=index_name):
+                logger.info("Index [%s] already exists. Deleting it." % index_name)
+                es.indices.delete(index=index_name, **request_params)
+                ops += 1
+
+        return ops, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-index"
+
+
+class CreateIndexTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_.
+    """
+
+    def __call__(self, es, params):
+        templates = mandatory(params, "templates", self)
+        request_params = params.get("request-params", {})
+        for template, body in templates:
+            es.indices.put_template(name=template,
+                                    body=body,
+                                    **request_params)
+        return len(templates), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-index-template"
+
+
+class DeleteIndexTemplate(Runner):
+    """
+    Execute the `delete index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html#delete>`_.
+    """
+
+    def __call__(self, es, params):
+        template_names = mandatory(params, "templates", self)
+        only_if_exists = params.get("only-if-exists", False)
+        request_params = params.get("request-params", {})
+        ops_count = 0
+
+        for template_name, delete_matching_indices, index_pattern in template_names:
+            if not only_if_exists:
+                es.indices.delete_template(name=template_name, **request_params)
+                ops_count += 1
+            elif only_if_exists and es.indices.exists_template(template_name):
+                logger.info("Index template [%s] already exists. Deleting it." % template_name)
+                es.indices.delete_template(name=template_name, **request_params)
+                ops_count += 1
+            # ensure that we do not provide an empty index pattern by accident
+            if delete_matching_indices and index_pattern:
+                es.indices.delete(index=index_pattern)
+                ops_count += 1
+
+        return ops_count, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-index-template"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
@@ -714,3 +805,7 @@ register_runner(track.OperationType.Search.name, Query())
 register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
 register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()))
 register_runner(track.OperationType.Refresh.name, Retry(Refresh()))
+register_runner(track.OperationType.CreateIndex.name, Retry(CreateIndex()))
+register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()))
+register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()))
+register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()))

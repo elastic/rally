@@ -1,7 +1,7 @@
 import os
 import pytest
 
-from esrally.track import params
+from esrally.track import params, track
 
 
 cwd = os.path.dirname(__file__)
@@ -16,7 +16,7 @@ with open(os.path.join(cwd, "terms.txt"), "r") as ins:
     disable_gc=True
 )
 def test_search_params_with_one_body_param_small(benchmark):
-    search = params.SearchParamSource(indices=[], params={
+    search = params.SearchParamSource(track=track.Track(name="benchmark-track"), params={
         "index": "_all",
         "body": {
             "suggest": {
@@ -45,7 +45,7 @@ def test_search_params_with_one_body_param_small(benchmark):
     disable_gc=True
 )
 def test_search_params_with_one_body_param_long(benchmark):
-    search = params.SearchParamSource(indices=[], params={
+    search = params.SearchParamSource(track=track.Track(name="benchmark-track"), params={
         "index": "_all",
         "body": {
             "suggest": {
@@ -75,7 +75,7 @@ def test_search_params_with_one_body_param_long(benchmark):
     disable_gc=True
 )
 def test_search_params_with_multiple_body_params_long(benchmark):
-    search = params.SearchParamSource(indices=[], params={
+    search = params.SearchParamSource(track=track.Track(name="benchmark-track"), params={
         "index": "_all",
         "body": {
             "suggest": {
@@ -108,7 +108,7 @@ def test_search_params_with_multiple_body_params_long(benchmark):
     disable_gc=True
 )
 def test_search_params_no_body_params(benchmark):
-    search = params.SearchParamSource(indices=[], params={
+    search = params.SearchParamSource(track=track.Track(name="benchmark-track"), params={
         "index": "_all",
         "body": {
             "suggest": {

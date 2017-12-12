@@ -404,13 +404,13 @@ class InvocationGeneratorTests(TestCase):
 class BulkIndexParamSourceTests(TestCase):
     def test_create_without_params(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={})
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
 
         self.assertEqual("Mandatory parameter 'bulk-size' is missing", ctx.exception.args[0])
 
     def test_create_with_non_numeric_bulk_size(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": "Three"
             })
 
@@ -418,7 +418,7 @@ class BulkIndexParamSourceTests(TestCase):
 
     def test_create_with_negative_bulk_size(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": -5
             })
 
@@ -426,7 +426,7 @@ class BulkIndexParamSourceTests(TestCase):
 
     def test_create_with_fraction_smaller_batch_size(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": 5,
                 "batch-size": 3
             })
@@ -435,7 +435,7 @@ class BulkIndexParamSourceTests(TestCase):
 
     def test_create_with_fraction_larger_batch_size(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": 5,
                 "batch-size": 8
             })
@@ -447,7 +447,7 @@ class BulkIndexParamSourceTests(TestCase):
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[index1], params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
                 "conflicts": "random"
             })
 
@@ -456,14 +456,14 @@ class BulkIndexParamSourceTests(TestCase):
 
     def test_create_with_unknown_id_conflicts(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(indices=[], params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "conflicts": "crazy"
             })
 
         self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
 
     def test_create_valid_param_source(self):
-        self.assertIsNotNone(params.BulkIndexParamSource(indices=[], params={
+        self.assertIsNotNone(params.BulkIndexParamSource(track.Track(name="unit-test"), params={
             "conflicts": "random",
             "bulk-size": 5000,
             "batch-size": 20000,
@@ -475,7 +475,7 @@ class BulkIndexParamSourceTests(TestCase):
         index2 = track.Index(name="index2", auto_managed=True, types=[])
 
         source = params.BulkIndexParamSource(
-            indices=[index1, index2],
+            track=track.Track(name="unit-test", indices=[index1, index2]),
             params={
                 "conflicts": "random",
                 "bulk-size": 5000,
@@ -491,7 +491,7 @@ class BulkIndexParamSourceTests(TestCase):
         index2 = track.Index(name="index2", auto_managed=True, types=[])
 
         source = params.BulkIndexParamSource(
-            indices=[index1, index2],
+            track=track.Track(name="unit-test", indices=[index1, index2]),
             params={
                 "index": "index2",
                 "conflicts": "random",
@@ -507,7 +507,7 @@ class BulkIndexParamSourceTests(TestCase):
         index1 = track.Index(name="index1", auto_managed=True, types=[])
 
         source = params.BulkIndexParamSource(
-            indices=[index1],
+            track=track.Track(name="unit-test", indices=[index1]),
             params={
                 "index": "does_not_exist",
                 "conflicts": "random",
@@ -613,12 +613,18 @@ class BulkDataGeneratorTests(TestCase):
 
 class ParamsRegistrationTests(TestCase):
     @staticmethod
-    def param_source_function(indices, params):
+    def param_source_legacy_function(indices, params):
         return {
             "key": params["parameter"]
         }
 
-    class ParamSourceClass:
+    @staticmethod
+    def param_source_function(track, params, **kwargs):
+        return {
+            "key": params["parameter"]
+        }
+
+    class ParamSourceLegacyClass:
         def __init__(self, indices=None, params=None):
             self._indices = indices
             self._params = params
@@ -634,12 +640,46 @@ class ParamsRegistrationTests(TestCase):
                 "class-key": self._params["parameter"]
             }
 
+    class ParamSourceClass:
+        def __init__(self, track=None, params=None, **kwargs):
+            self._track = track
+            self._params = params
+
+        def partition(self, partition_index, total_partitions):
+            return self
+
+        def size(self):
+            return 1
+
+        def params(self):
+            return {
+                "class-key": self._params["parameter"]
+            }
+
+    def test_can_register_legacy_function_as_param_source(self):
+        source_name = "legacy-params-test-function-param-source"
+
+        params.register_param_source_for_name(source_name, ParamsRegistrationTests.param_source_legacy_function)
+        source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
+        self.assertEqual({"key": 42}, source.params())
+
+        params._unregister_param_source_for_name(source_name)
+
     def test_can_register_function_as_param_source(self):
         source_name = "params-test-function-param-source"
 
         params.register_param_source_for_name(source_name, ParamsRegistrationTests.param_source_function)
-        source = params.param_source_for_name(source_name, None, {"parameter": 42})
+        source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
         self.assertEqual({"key": 42}, source.params())
+
+        params._unregister_param_source_for_name(source_name)
+
+    def test_can_register_legacy_class_as_param_source(self):
+        source_name = "legacy-params-test-class-param-source"
+
+        params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceLegacyClass)
+        source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
+        self.assertEqual({"class-key": 42}, source.params())
 
         params._unregister_param_source_for_name(source_name)
 
@@ -647,10 +687,412 @@ class ParamsRegistrationTests(TestCase):
         source_name = "params-test-class-param-source"
 
         params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass)
-        source = params.param_source_for_name(source_name, None, {"parameter": 42})
+        source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
         self.assertEqual({"class-key": 42}, source.params())
 
         params._unregister_param_source_for_name(source_name)
+
+
+class CreateIndexParamSourceTests(TestCase):
+    def test_create_index_inline_with_body(self):
+        source = params.CreateIndexParamSource(track.Track(name="unit-test"), params={
+            "index": "test",
+            "body": {
+                "settings": {
+                    "index.number_of_replicas": 0
+                },
+                "mappings": {
+                    "doc": {
+                        "properties": {
+                            "name": {
+                                "type": "keyword",
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        p = source.params()
+        self.assertEqual(1, len(p["indices"]))
+        index, body = p["indices"][0]
+        self.assertEqual("test", index)
+        self.assertTrue(len(body) > 0)
+        self.assertEqual({}, p["request-params"])
+
+    def test_create_index_inline_without_body(self):
+        source = params.CreateIndexParamSource(track.Track(name="unit-test"), params={
+            "index": "test",
+            "request-params": {
+                "wait_for_active_shards": True
+            }
+        })
+
+        p = source.params()
+        self.assertEqual(1, len(p["indices"]))
+        index, body = p["indices"][0]
+        self.assertEqual("test", index)
+        self.assertIsNone(body)
+        self.assertDictEqual({
+            "wait_for_active_shards": True
+        }, p["request-params"])
+
+    def test_create_index_from_track_with_settings(self):
+        type1 = track.Type("type1", number_of_documents=3)
+        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+        index2 = track.Index(name="index2", auto_managed=True, types=[type1], body={
+            "settings": {
+                "index.number_of_replicas": 0,
+                "index.number_of_shards": 3
+            },
+            "mappings": {
+                "type1": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            }
+        })
+
+        index3 = track.Index(name="index3", auto_managed=True, types=[
+            track.Type("typeA", number_of_documents=3, mapping={
+                "typeA": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            }),
+            track.Type("typeB", number_of_documents=5, mapping={
+                "typeB": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            })
+        ])
+
+        source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2, index3]), params={
+            "settings": {
+                "index.number_of_replicas": 1
+            }
+        })
+
+        p = source.params()
+        self.assertEqual(3, len(p["indices"]))
+
+        index, body = p["indices"][0]
+        self.assertEqual("index1", index)
+        # index did not specify any body, we merge the type's body
+        self.assertDictEqual({
+            "settings": {
+                "index.number_of_replicas": 1
+            },
+            "mappings": {}
+        }, body)
+
+        index, body = p["indices"][1]
+        self.assertEqual("index2", index)
+        # index specified a body + we need to merge settings
+        self.assertDictEqual({
+            "settings": {
+                # we have properly merged (overridden) an existing setting
+                "index.number_of_replicas": 1,
+                # and we have preserved one that was specified in the original index body
+                "index.number_of_shards": 3
+            },
+            "mappings": {
+                "type1": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            }
+        }, body)
+
+        index, body = p["indices"][2]
+        self.assertEqual("index3", index)
+        # index specified a body
+        self.assertDictEqual({
+            "settings": {
+                "index.number_of_replicas": 1
+            },
+            "mappings": {
+                "typeA": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                },
+                "typeB": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            }
+        }, body)
+
+    def test_create_index_from_track_without_settings(self):
+        type1 = track.Type("type1", number_of_documents=3)
+        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+        index2 = track.Index(name="index2", auto_managed=True, types=[type1], body={
+            "settings": {
+                "index.number_of_replicas": 0,
+                "index.number_of_shards": 3
+            },
+            "mappings": {
+                "type1": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            }
+        })
+
+        source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2]), params={})
+
+        p = source.params()
+        self.assertEqual(2, len(p["indices"]))
+
+        index, body = p["indices"][0]
+        self.assertEqual("index1", index)
+        # index did not specify any body, we merge the type's body
+        self.assertDictEqual({
+            "mappings": {}
+        }, body)
+
+        index, body = p["indices"][1]
+        self.assertEqual("index2", index)
+        # index specified a body
+        self.assertDictEqual({
+            "settings": {
+                "index.number_of_replicas": 0,
+                "index.number_of_shards": 3
+            },
+            "mappings": {
+                "type1": {
+                    "properties": {
+                        "name": {
+                            "type": "keyword",
+                        }
+                    }
+                }
+            }
+        }, body)
+
+    def test_filter_index(self):
+        type1 = track.Type("type1", number_of_documents=3)
+        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+        index2 = track.Index(name="index2", auto_managed=True, types=[type1])
+        index3 = track.Index(name="index3", auto_managed=True, types=[type1])
+
+        source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2, index3]), params={
+            "index": "index2"
+        })
+
+        p = source.params()
+        self.assertEqual(1, len(p["indices"]))
+
+        index, body = p["indices"][0]
+        self.assertEqual("index2", index)
+
+
+class DeleteIndexParamSourceTests(TestCase):
+    def test_delete_index_from_track(self):
+        source = params.DeleteIndexParamSource(track.Track(name="unit-test", indices=[
+            track.Index(name="index1"),
+            track.Index(name="index2"),
+            track.Index(name="index3")
+        ]), params={})
+
+        p = source.params()
+
+        self.assertEqual(["index1", "index2", "index3"], p["indices"])
+        self.assertDictEqual({}, p["request-params"])
+        self.assertTrue(p["only-if-exists"])
+
+    def test_filter_index_from_track(self):
+        source = params.DeleteIndexParamSource(track.Track(name="unit-test", indices=[
+            track.Index(name="index1"),
+            track.Index(name="index2"),
+            track.Index(name="index3")
+        ]), params={"index": "index2", "only-if-exists": False, "request-params": {"allow_no_indices": True}})
+
+        p = source.params()
+
+        self.assertEqual(["index2"], p["indices"])
+        self.assertDictEqual({"allow_no_indices": True}, p["request-params"])
+        self.assertFalse(p["only-if-exists"])
+
+    def test_delete_index_by_name(self):
+        source = params.DeleteIndexParamSource(track.Track(name="unit-test"), params={"index": "index2"})
+
+        p = source.params()
+
+        self.assertEqual(["index2"], p["indices"])
+
+    def test_delete_no_index(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.DeleteIndexParamSource(track.Track(name="unit-test"), params={})
+        self.assertEqual("delete-index operation targets no index", ctx.exception.args[0])
+
+
+class CreateIndexTemplateParamSourceTests(TestCase):
+    def test_create_index_template_inline(self):
+        source = params.CreateIndexTemplateParamSource(track=track.Track(name="unit-test"), params={
+            "template": "test",
+            "body": {
+                "index_patterns": ["*"],
+                "settings": {
+                    "index.number_of_shards": 3
+                },
+                "mappings": {
+                    "docs": {
+                        "_source": {
+                            "enabled": False
+                        }
+                    }
+                }
+            }
+        })
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertDictEqual({}, p["request-params"])
+        template, body = p["templates"][0]
+        self.assertEqual("test", template)
+        self.assertDictEqual({
+            "index_patterns": ["*"],
+            "settings": {
+                "index.number_of_shards": 3
+            },
+            "mappings": {
+                "docs": {
+                    "_source": {
+                        "enabled": False
+                    }
+                }
+            }
+        }, body)
+
+    def test_create_index_template_from_track(self):
+        tpl = track.IndexTemplate(name="default", pattern="*", content={
+            "index_patterns": ["*"],
+            "settings": {
+                "index.number_of_shards": 3
+            },
+            "mappings": {
+                "docs": {
+                    "_source": {
+                        "enabled": False
+                    }
+                }
+            }
+        })
+
+        source = params.CreateIndexTemplateParamSource(track=track.Track(name="unit-test", templates=[tpl]), params={
+            "settings": {
+                "index.number_of_replicas": 1
+            }
+        })
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertDictEqual({}, p["request-params"])
+        template, body = p["templates"][0]
+        self.assertEqual("default", template)
+        self.assertDictEqual({
+            "index_patterns": ["*"],
+            "settings": {
+                "index.number_of_shards": 3,
+                "index.number_of_replicas": 1
+            },
+            "mappings": {
+                "docs": {
+                    "_source": {
+                        "enabled": False
+                    }
+                }
+            }
+        }, body)
+
+
+class DeleteIndexTemplateParamSourceTests(TestCase):
+    def test_delete_index_template_by_name(self):
+        source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertEqual(("default", False, None), p["templates"][0])
+        self.assertTrue(p["only-if-exists"])
+        self.assertDictEqual({}, p["request-params"])
+
+    def test_delete_index_template_by_name_and_matching_indices(self):
+        source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"),
+                                                       params={
+                                                           "template": "default",
+                                                           "delete-matching-indices": True,
+                                                           "index-pattern": "logs-*"
+                                                       })
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertEqual(("default", True, "logs-*"), p["templates"][0])
+        self.assertTrue(p["only-if-exists"])
+        self.assertDictEqual({}, p["request-params"])
+
+    def test_delete_index_template_by_name_and_matching_indices_missing_index_pattern(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"),
+                                                  params={
+                                                      "template": "default",
+                                                      "delete-matching-indices": True
+                                                  })
+        self.assertEqual("The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true.",
+                         ctx.exception.args[0])
+
+    def test_delete_index_template_from_track(self):
+        tpl1 = track.IndexTemplate(name="metrics", pattern="metrics-*", delete_matching_indices=True, content={
+            "index_patterns": ["metrics-*"],
+            "settings": {},
+            "mappings": {}
+        })
+        tpl2 = track.IndexTemplate(name="logs", pattern="logs-*", delete_matching_indices=False, content={
+            "index_patterns": ["logs-*"],
+            "settings": {},
+            "mappings": {}
+        })
+
+        source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test", templates=[tpl1, tpl2]), params={
+            "request-params": {
+                "master_timeout": 20
+            },
+            "only-if-exists": False
+        })
+
+        p = source.params()
+
+        self.assertEqual(2, len(p["templates"]))
+        self.assertEqual(("metrics", True, "metrics-*"), p["templates"][0])
+        self.assertEqual(("logs", False, "logs-*"), p["templates"][1])
+        self.assertFalse(p["only-if-exists"])
+        self.assertDictEqual({"master_timeout": 20}, p["request-params"])
 
 
 class SearchParamSourceTests(TestCase):
@@ -658,7 +1100,7 @@ class SearchParamSourceTests(TestCase):
         type1 = track.Type("type1", mapping={}, number_of_documents=3)
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
-        source = params.SearchParamSource(indices=[index1], params={
+        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
             "request-params": {
                 "_source_include": "some_field"
             },
@@ -686,7 +1128,7 @@ class SearchParamSourceTests(TestCase):
     def test_replaces_body_params(self):
         import copy
 
-        search = params.SearchParamSource(indices=[], params={
+        search = params.SearchParamSource(track=track.Track(name="unit-test"), params={
             "index": "_all",
             "body": {
                 "suggest": {

@@ -300,6 +300,7 @@ def create_arg_parser():
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
                        default="continue")
+        # TODO #380: Remove this. We will turn off index auto management and our standard tracks will provide a track parameter for this.
         # This parameter is deprecated. We will replace this with an explicit call in our tracks.
         p.add_argument(
             "--cluster-health",

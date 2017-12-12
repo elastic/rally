@@ -14,6 +14,8 @@ from esrally.utils import io, convert, net, console, modules, repo
 
 logger = logging.getLogger("rally.track")
 
+DEFAULT_TRACKS = ["geonames", "geopoint", "noaa", "logging", "http_logs", "nyc_taxis", "pmc", "percolator", "nested"]
+
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
     """
@@ -65,9 +67,11 @@ def load_track(cfg):
         track_dir = repo.track_dir(track_name)
         reader = TrackFileReader(cfg)
         included_tasks = cfg.opts("track", "include.tasks")
+        expected_cluster_health = cfg.opts("driver", "cluster.health")
 
         current_track = reader.read(track_name, repo.track_file(track_name), track_dir)
         current_track = filter_included_tasks(current_track, filters_from_included_tasks(included_tasks))
+        current_track = post_process_for_index_auto_management(current_track, expected_cluster_health)
         plugin_reader = TrackPluginReader(track_dir)
         current_track.has_plugins = plugin_reader.can_load()
 
@@ -199,10 +203,10 @@ class SimpleTrackRepository:
 def operation_parameters(t, op):
     if op.param_source:
         logger.debug("Creating parameter source with name [%s]" % op.param_source)
-        return params.param_source_for_name(op.param_source, t.indices, op.params)
+        return params.param_source_for_name(op.param_source, t, op.params)
     else:
         logger.debug("Creating parameter source for operation type [%s]" % op.type)
-        return params.param_source_for_operation(op.type, t.indices, op.params)
+        return params.param_source_for_operation(op.type, t, op.params)
 
 
 def prepare_track(track, cfg):
@@ -426,10 +430,76 @@ def filters_from_included_tasks(included_tasks):
                 if spec[0] == "type":
                     filters.append(track.TaskOpTypeFilter(spec[1]))
                 else:
-                    raise exceptions.SystemSetupError("Invalid format for included tasks: [%s]. Expected [type] but got [%s]." % (t, spec[0]))
+                    raise exceptions.SystemSetupError(
+                        "Invalid format for included tasks: [%s]. Expected [type] but got [%s]." % (t, spec[0]))
             else:
                 raise exceptions.SystemSetupError("Invalid format for included tasks: [%s]" % t)
     return filters
+
+
+def post_process_for_index_auto_management(t, expected_cluster_health):
+    auto_managed_indices = any([index.auto_managed for index in t.indices])
+    # spare users this warning for our default tracks
+    if auto_managed_indices and t.name not in DEFAULT_TRACKS:
+        console.warn("Track [%s] uses index auto-management which will be removed soon. Please add [delete-index] and [create-index] "
+                     "tasks at the beginning of each relevant challenge and turn off index auto-management for each index. For details "
+                     "please see the migration guide in the docs." % t.name)
+    if auto_managed_indices or len(t.templates) > 0:
+        for challenge in t.challenges:
+            tasks = []
+            # TODO: Remove the index settings element. We can do this much better now with the create-index operation.
+            create_index_params = {"include-in-reporting": False}
+            if challenge.index_settings:
+                create_index_params["settings"] = challenge.index_settings
+            if len(t.templates) > 0:
+                # check if the user has defined a create index template operation
+                f = track.TaskOpTypeFilter(track.OperationType.CreateIndexTemplate.name)
+                user_creates_templates = any(task.matches(f) for task in challenge.schedule)
+                # We attempt to still do this automatically but issue a warning so that the user will create it themselves.
+                if not user_creates_templates:
+                    console.warn("Track [%s] defines %d index template(s) but soon Rally will not create them implicitly anymore. Please "
+                                 "add [delete-index-template] and [create-index-template] tasks at the beginning of the challenge %s."
+                                 % (t.name, len(t.templates), challenge.name), logger=logger)
+                    tasks.append(track.Task(name="auto-delete-index-templates",
+                                            operation=track.Operation(name="auto-delete-index-templates",
+                                                                      operation_type=track.OperationType.DeleteIndexTemplate.name,
+                                                                      params={
+                                                                          "include-in-reporting": False,
+                                                                          "only-if-exists": True
+                                                                      })))
+                    tasks.append(track.Task(name="auto-create-index-templates",
+                                            operation=track.Operation(name="auto-create-index-templates",
+                                                                      operation_type=track.OperationType.CreateIndexTemplate.name,
+                                                                      params=create_index_params.copy())))
+
+            if auto_managed_indices:
+                tasks.append(track.Task(name="auto-delete-indices",
+                                        operation=track.Operation(name="auto-delete-indices",
+                                                                  operation_type=track.OperationType.DeleteIndex.name,
+                                                                  params={
+                                                                      "include-in-reporting": False,
+                                                                      "only-if-exists": True
+                                                                  })))
+                tasks.append(track.Task(name="auto-create-indices",
+                                        operation=track.Operation(name="auto-create-indices",
+                                                                  operation_type=track.OperationType.CreateIndex.name,
+                                                                  params=create_index_params.copy())))
+
+            if not expected_cluster_health == "skip":
+                tasks.append(track.Task(name="auto-check-cluster-health",
+                                        operation=track.Operation(name="auto-check-cluster-health",
+                                                                  operation_type=track.OperationType.ClusterHealth.name,
+                                                                  params={
+                                                                      "include-in-reporting": False,
+                                                                      "request-params": {
+                                                                          "wait_for_status": expected_cluster_health
+                                                                      }
+                                                                  })))
+
+            challenge.prepend_tasks(tasks)
+        return t
+    else:
+        return t
 
 
 def post_process_for_test_mode(t):
@@ -472,7 +542,8 @@ def post_process_for_test_mode(t):
 
 
 class TrackFileReader:
-    MAXIMUM_SUPPORTED_TRACK_VERSION = 1
+    # TODO #380: We will increase the version with 0.10.0 in our standard tracks but Rally 0.9.0 will already be prepared for this change.
+    MAXIMUM_SUPPORTED_TRACK_VERSION = 2
     """
     Creates a track from a track file.
     """
@@ -526,6 +597,7 @@ class TrackPluginReader:
     """
     Loads track plugins
     """
+
     def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
@@ -553,6 +625,14 @@ class TrackPluginReader:
     def register_scheduler(self, name, scheduler):
         self.scheduler_registry(name, scheduler)
 
+    @property
+    def meta_data(self):
+        from esrally import version
+
+        return {
+            "rally_version": version.release_version()
+        }
+
 
 class TrackSpecificationReader:
     """
@@ -575,10 +655,6 @@ class TrackSpecificationReader:
         templates = [self._create_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         challenges = self._create_challenges(track_specification)
-
-        # This can be valid, e.g. for a search only benchmark
-        # if len(indices) == 0 and len(templates) == 0:
-        #    self._error("Specify at least one index or one template.")
 
         return track.Track(name=self.name, meta_data=meta_data, description=description, source_root_url=source_root_url,
                            challenges=challenges, indices=indices, templates=templates)
@@ -606,6 +682,13 @@ class TrackSpecificationReader:
 
     def _create_index(self, index_spec, mapping_dir):
         index_name = self._r(index_spec, "name")
+        body_file = self._r(index_spec, "body", mandatory=False)
+        if body_file:
+            with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
+                body = json.load(f)
+        else:
+            body = None
+
         if self.override_auto_manage_indices is not None:
             auto_managed = self.override_auto_manage_indices
             logger.info("User explicitly forced auto-managed indices to [%s] on the command line." % str(auto_managed))
@@ -624,7 +707,7 @@ class TrackSpecificationReader:
             console.warn("None of the types for index [%s] defines documents. Please check that you either don't want to index data or "
                          "parameter sources are defined for indexing." % index_name, logger=logger)
 
-        return track.Index(name=index_name, auto_managed=auto_managed, types=types)
+        return track.Index(name=index_name, body=body, auto_managed=auto_managed, types=types)
 
     def _create_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
@@ -654,9 +737,12 @@ class TrackSpecificationReader:
             compressed_bytes = 0
             uncompressed_bytes = 0
 
-        mapping_file = os.path.join(mapping_dir, self._r(type_spec, "mapping"))
-        with self.source(mapping_file, "rt") as f:
-            mapping = json.load(f)
+        mapping_file = self._r(type_spec, "mapping", mandatory=False)
+        if mapping_file:
+            with self.source(os.path.join(mapping_dir, mapping_file), "rt") as f:
+                mapping = json.load(f)
+        else:
+            mapping = None
 
         return track.Type(name=self._r(type_spec, "name"),
                           mapping=mapping,
@@ -682,8 +768,13 @@ class TrackSpecificationReader:
             meta_data = self._r(challenge_spec, "meta", error_ctx=name, mandatory=False)
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified
             default = number_of_challenges == 1 or self._r(challenge_spec, "default", error_ctx=name, mandatory=False)
+            # TODO #381: Remove this setting
             index_settings = self._r(challenge_spec, "index-settings", error_ctx=name, mandatory=False)
             cluster_settings = self._r(challenge_spec, "cluster-settings", error_ctx=name, mandatory=False)
+
+            if index_settings and self.name not in DEFAULT_TRACKS:
+                console.warn("Challenge [%s] in track [%s] defines the [index-settings] property which will be removed soon. For details "
+                             "please see the migration guide in the docs." % (name, self.name))
 
             if default and default_challenge is not None:
                 self._error("Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
@@ -794,6 +885,7 @@ class TrackSpecificationReader:
                           # this will work because op_name must always be set, i.e. it is never `None`.
                           completes_parent=(op.name == completed_by_name),
                           schedule=schedule,
+                          # this is to provide scheduler-specific parameters for custom schedulers.
                           params=task_spec)
         if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
@@ -823,7 +915,7 @@ class TrackSpecificationReader:
             op_type_name = op_spec
             param_source = None
             # Cannot have parameters here
-            params = None
+            params = {}
         else:
             meta_data = self._r(op_spec, "meta", error_ctx=error_ctx, mandatory=False)
             # Rally's core operations will still use enums then but we'll allow users to define arbitrary operations
@@ -838,15 +930,17 @@ class TrackSpecificationReader:
             # TODO #370: Remove this warning.
             # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
             if op_type_name == "index" and \
-                            self.name not in ["geonames", "geopoint", "noaa", "logging", "http_logs", "nyc_taxis", "pmc", "percolator",
-                                              "nested"] and \
-                            not self.index_op_type_warning_issued:
+                            self.name not in DEFAULT_TRACKS and \
+                    not self.index_op_type_warning_issued:
                 console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
                              "operation type to [bulk]." % self.name)
                 # Don't spam the console...
                 self.index_op_type_warning_issued = True
 
-            op_type = track.OperationType.from_hyphenated_string(op_type_name).name
+            op = track.OperationType.from_hyphenated_string(op_type_name)
+            if "include-in-reporting" not in params:
+                params["include-in-reporting"] = not op.admin_op
+            op_type = op.name
             logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
         except KeyError:
             logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
@@ -856,4 +950,3 @@ class TrackSpecificationReader:
             return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=params, param_source=param_source)
         except exceptions.InvalidSyntax as e:
             raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
-

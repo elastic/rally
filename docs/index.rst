@@ -68,6 +68,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :caption: Additional Information
    :maxdepth: 2
 
+   migrate
    faq
    glossary
    community

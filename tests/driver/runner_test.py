@@ -12,6 +12,7 @@ class RegisterRunnerTests(TestCase):
     def test_runner_function_should_be_wrapped(self):
         def runner_function(es, params):
             pass
+
         runner.register_runner(operation_type="unit_test", runner=runner_function)
         returned_runner = runner.runner_for("unit_test")
         self.assertIsInstance(returned_runner, runner.DelegatingRunner)
@@ -933,6 +934,296 @@ class PutPipelineRunnerTests(TestCase):
             r(es, params)
 
         es.ingest.put_pipeline.assert_not_called()
+
+
+class ClusterHealthRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_waits_for_expected_cluster_status(self, es):
+        es.transport.perform_request.return_value = {
+            "status": "green",
+            "relocating_shards": 0
+        }
+        r = runner.ClusterHealth()
+
+        params = {
+            "request-params": {
+                "wait_for_status": "green"
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "cluster-status": "green",
+            "relocating-shards": 0
+        }, result)
+
+        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health", params={"wait_for_status": "green"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_accepts_better_cluster_status(self, es):
+        es.transport.perform_request.return_value = {
+            "status": "green",
+            "relocating_shards": 0
+        }
+        r = runner.ClusterHealth()
+
+        params = {
+            "request-params": {
+                "wait_for_status": "yellow"
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "cluster-status": "green",
+            "relocating-shards": 0
+        }, result)
+
+        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health", params={"wait_for_status": "yellow"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_rejects_relocating_shards(self, es):
+        es.transport.perform_request.return_value = {
+            "status": "yellow",
+            "relocating_shards": 3
+        }
+        r = runner.ClusterHealth()
+
+        params = {
+            "index": "logs-*",
+            "request-params": {
+                "wait_for_status": "red",
+                "wait_for_no_relocating_shards": True
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": False,
+            "cluster-status": "yellow",
+            "relocating-shards": 3
+        }, result)
+
+        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health/logs-*",
+                                                             params={"wait_for_status": "red", "wait_for_no_relocating_shards": True})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_rejects_unknown_cluster_status(self, es):
+        es.transport.perform_request.return_value = {
+            "status": None,
+            "relocating_shards": 0
+        }
+        r = runner.ClusterHealth()
+
+        params = {
+            "request-params": {
+                "wait_for_status": "green"
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": False,
+            "cluster-status": None,
+            "relocating-shards": 0
+        }, result)
+
+        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health", params={"wait_for_status": "green"})
+
+
+class CreateIndexRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_creates_multiple_indices(self, es):
+        r = runner.CreateIndex()
+
+        params = {
+            "indices": [
+                ("indexA", {"settings": {}}),
+                ("indexB", {"settings": {}}),
+            ],
+            "request-params": {
+                "wait_for_active_shards": True
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertEqual((2, "ops"), result)
+
+        es.indices.create.assert_has_calls([
+            mock.call(index="indexA", body={"settings": {}}, wait_for_active_shards=True),
+            mock.call(index="indexB", body={"settings": {}}, wait_for_active_shards=True)
+        ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_param_indices_mandatory(self, es):
+        r = runner.CreateIndex()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
+                                    "Please add it to your parameter source."):
+            r(es, params)
+
+        es.indices.create.assert_not_called()
+
+
+class DeleteIndexRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_deletes_existing_indices(self, es):
+        es.indices.exists.side_effect = [False, True]
+
+        r = runner.DeleteIndex()
+
+        params = {
+            "indices": ["indexA", "indexB"],
+            "only-if-exists": True
+        }
+
+        result = r(es, params)
+
+        self.assertEqual((1, "ops"), result)
+
+        es.indices.delete.assert_called_once_with(index="indexB")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_deletes_all_indices(self, es):
+        r = runner.DeleteIndex()
+
+        params = {
+            "indices": ["indexA", "indexB"],
+            "only-if-exists": False,
+            "request-params": {
+                "ignore_unavailable": True,
+                "expand_wildcards": "none"
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertEqual((2, "ops"), result)
+
+        es.indices.delete.assert_has_calls([
+            mock.call(index="indexA", ignore_unavailable=True, expand_wildcards="none"),
+            mock.call(index="indexB", ignore_unavailable=True, expand_wildcards="none")
+        ])
+        es.indices.exists.assert_not_called()
+
+
+class CreateIndexTemplateRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_index_templates(self, es):
+        r = runner.CreateIndexTemplate()
+
+        params = {
+            "templates": [
+                ("templateA", {"settings": {}}),
+                ("templateB", {"settings": {}}),
+            ],
+            "request-params": {
+                "timeout": 50,
+                "create": True
+            }
+        }
+
+        result = r(es, params)
+
+        self.assertEqual((2, "ops"), result)
+
+        es.indices.put_template.assert_has_calls([
+            mock.call(name="templateA", body={"settings": {}}, timeout=50, create=True),
+            mock.call(name="templateB", body={"settings": {}}, timeout=50, create=True)
+        ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_param_templates_mandatory(self, es):
+        r = runner.CreateIndexTemplate()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
+                                    "'templates'. Please add it to your parameter source."):
+            r(es, params)
+
+        es.indices.put_template.assert_not_called()
+
+
+class DeleteIndexTemplateRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_deletes_all_index_templates(self, es):
+        r = runner.DeleteIndexTemplate()
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                ("templateB", True, "logs-*"),
+            ],
+            "request-params": {
+                "timeout": 60
+            }
+        }
+        result = r(es, params)
+
+        # 2 times delete index template, one time delete matching indices
+        self.assertEqual((3, "ops"), result)
+
+        es.indices.delete_template.assert_has_calls([
+            mock.call(name="templateA", timeout=60),
+            mock.call(name="templateB", timeout=60)
+        ])
+        es.indices.delete.assert_called_once_with(index="logs-*")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_deletes_only_existing_index_templates(self, es):
+        es.indices.exists_template.side_effect = [False, True]
+
+        r = runner.DeleteIndexTemplate()
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                # will not accidentally delete all indices
+                ("templateB", True, ""),
+            ],
+            "request-params": {
+                "timeout": 60
+            },
+            "only-if-exists": True
+        }
+        result = r(es, params)
+
+        # 2 times delete index template, one time delete matching indices
+        self.assertEqual((1, "ops"), result)
+
+        es.indices.delete_template.assert_called_once_with(name="templateB", timeout=60)
+        # not called because the matching index is empty.
+        es.indices.delete.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_param_templates_mandatory(self, es):
+        r = runner.DeleteIndexTemplate()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
+                                    "'templates'. Please add it to your parameter source."):
+            r(es, params)
+
+        es.indices.delete_template.assert_not_called()
 
 
 class RetryTests(TestCase):

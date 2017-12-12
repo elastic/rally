@@ -3,13 +3,12 @@ import threading
 import datetime
 import logging
 import queue
-import socket
 import time
 
 import thespian.actors
 from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME
 from esrally.driver import runner, scheduler
-from esrally.utils import convert, console, versions, net
+from esrally.utils import convert, console, net
 
 logger = logging.getLogger("rally.driver")
 profile_logger = logging.getLogger("rally.profile")
@@ -361,8 +360,6 @@ class Driver:
         invocation = self.config.opts("system", "time.start")
         self.metrics_store.open(invocation, track_name, challenge_name, car_name)
 
-        self.prepare_cluster()
-
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -465,15 +462,6 @@ class Driver:
         self.progress_reporter.finish()
         if self.metrics_store:
             self.metrics_store.close()
-
-    def prepare_cluster(self):
-        expected_cluster_health = self.config.opts("driver", "cluster.health")
-        es = client.EsClientFactory(self.config.opts("client", "hosts"), self.config.opts("client", "options")).create()
-        for template in self.track.templates:
-            setup_template(es, template, self.challenge.index_settings)
-        for index in self.track.indices:
-            setup_index(es, index, self.challenge.index_settings)
-        wait_for_status(es, expected_cluster_health)
 
     def update_samples(self, samples):
         self.raw_samples += samples
@@ -812,133 +800,6 @@ def select_challenge(config, t):
         raise exceptions.SystemSetupError("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
                                           "challenges with %s list tracks." % (challenge_name, t.name, PROGRAM_NAME))
     return selected_challenge
-
-
-def setup_template(es, template, settings):
-    if es.indices.exists_template(template.name):
-        es.indices.delete_template(template.name)
-    if template.delete_matching_indices:
-        es.indices.delete(index=template.pattern)
-    logger.info("create index template [%s] matching indices [%s] with content:\n%s" % (template.name, template.pattern, template.content))
-    body = template.content
-    if "settings" not in body:
-        body["settings"] = {}
-    body["settings"].update(settings)
-    es.indices.put_template(name=template.name, body=body)
-
-
-def setup_index(es, index, index_settings):
-    if index.auto_managed:
-        if es.indices.exists(index=index.name):
-            logger.warning("Index [%s] already exists. Deleting it." % index.name)
-            es.indices.delete(index=index.name)
-        logger.info("Preparing to create index [%s]" % index.name)
-        # first we merge the index settings and the mappings for all types
-        body = {
-            "settings": index_settings,
-            "mappings": {}
-        }
-        for type in index.types:
-            body["mappings"].update(type.mapping)
-        # create the index with mappings and settings
-        es.indices.create(index=index.name, body=body)
-        logger.info("Created index [%s]." % index.name)
-    else:
-        logger.info("Skipping index [%s] as it is managed by the user." % index.name)
-
-
-# TODO: This method is deprecated. Replace with an explicit operation in the standard tracks.
-def wait_for_status(es, expected_cluster_status):
-    """
-    Synchronously waits until the cluster reaches the provided status. Upon timeout a LaunchError is thrown.
-
-    :param es Elasticsearch client
-    :param expected_cluster_status the cluster status that should be reached.
-    """
-    if expected_cluster_status == "skip":
-        console.warn("Skipping cluster health status check. Results may be skewed (e.g. ongoing shard relocation).", logger=logger)
-    else:
-        logger.info("Wait for cluster status [%s]" % expected_cluster_status)
-        start = time.perf_counter()
-        reached_cluster_status, relocating_shards = _do_wait(es, expected_cluster_status)
-        stop = time.perf_counter()
-        logger.info("Cluster reached status [%s] within [%.1f] sec." % (reached_cluster_status, (stop - start)))
-        logger.info("Cluster health: [%s]" % str(es.cluster.health()))
-        logger.info("Shards:\n%s" % es.cat.shards(v=True))
-
-
-# TODO: This method is deprecated. Replace with an explicit operation in the standard tracks.
-def _do_wait(es, expected_cluster_status, sleep=time.sleep):
-    import elasticsearch
-    from enum import Enum
-    from functools import total_ordering
-
-    @total_ordering
-    class ClusterHealthStatus(Enum):
-        UNKNOWN = 0
-        RED = 1
-        YELLOW = 2
-        GREEN = 3
-
-        def __lt__(self, other):
-            if self.__class__ is other.__class__:
-                return self.value < other.value
-            return NotImplemented
-
-    def status(v):
-        try:
-            return ClusterHealthStatus[v.upper()]
-        except (KeyError, AttributeError):
-            return ClusterHealthStatus.UNKNOWN
-
-    reached_cluster_status = None
-    relocating_shards = -1
-    major, minor, patch, suffix = versions.components(es.info()["version"]["number"])
-    if major < 5:
-        use_wait_for_relocating_shards = True
-    elif major == 5 and minor == 0 and patch == 0 and suffix and suffix.startswith("alpha"):
-        use_wait_for_relocating_shards = True
-    else:
-        use_wait_for_relocating_shards = False
-
-    max_attempts = 10
-    for attempt in range(max_attempts):
-        try:
-            # Is this the last attempt? Then just retrieve the status
-            if attempt + 1 == max_attempts:
-                result = es.cluster.health()
-            elif use_wait_for_relocating_shards:
-                result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s",
-                                           params={"wait_for_relocating_shards": 0})
-            else:
-                result = es.cluster.health(wait_for_status=expected_cluster_status, timeout="3s", wait_for_no_relocating_shards=True)
-        except (socket.timeout, elasticsearch.exceptions.ConnectionError):
-            pass
-        except elasticsearch.exceptions.TransportError as e:
-            if e.status_code == 408:
-                logger.info("Timed out waiting for cluster health status. Retrying shortly...")
-                sleep(0.5)
-            else:
-                raise e
-        else:
-            reached_cluster_status = result["status"]
-            relocating_shards = result["relocating_shards"]
-            logger.info("GOT: %s" % str(result))
-            logger.info("ALLOC:\n%s" % es.cat.allocation(v=True))
-            logger.info("RECOVERY:\n%s" % es.cat.recovery(v=True))
-            logger.info("SHARDS:\n%s" % es.cat.shards(v=True))
-            if status(reached_cluster_status) >= status(expected_cluster_status) and relocating_shards == 0:
-                return reached_cluster_status, relocating_shards
-            else:
-                sleep(0.5)
-    if status(reached_cluster_status) < status(expected_cluster_status):
-        msg = "Cluster did not reach status [%s]. Last reached status: [%s]" % (expected_cluster_status, reached_cluster_status)
-    else:
-        msg = "Cluster reached status [%s] which is equal or better than the expected status [%s] but there were [%d] relocating shards " \
-              "and we require zero relocating shards (Use the /_cat/shards API to check which shards are relocating.)" % \
-              (reached_cluster_status, expected_cluster_status, relocating_shards)
-    logger.error(msg)
-    raise exceptions.RallyAssertionError(msg)
 
 
 class ThroughputCalculator:
@@ -1386,14 +1247,6 @@ def schedule_for(current_track, task, client_index):
     else:
         logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%d] warmup iterations and "
                     "[%d] iterations." % (task.schedule, op, task.warmup_iterations, task.iterations))
-        # TODO: Remove this message after some grace period
-        # just print this info message once
-        if client_index == 0 and num_clients > 1:
-            console.warn("!!! Behavior change for task %s !!!" % task)
-            console.warn("Before Rally 0.8.0: All %d clients together executed %d warmup iterations and %d iterations "
-                         "(each got 1/%d th)." % (num_clients, task.warmup_iterations, task.iterations, num_clients))
-            console.warn("Now: Each client executes %d warmup iterations and %d iterations." % (task.warmup_iterations, task.iterations))
-
         return iteration_count_based(sched, task.warmup_iterations, task.iterations, runner_for_op, params_for_op)
 
 

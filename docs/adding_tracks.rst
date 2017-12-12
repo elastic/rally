@@ -491,7 +491,7 @@ Rally will recognize the parameter source and looks then for a file ``track.py``
     import random
 
 
-    def random_profession(indices, params):
+    def random_profession(track, params, **kwargs):
         # you must provide all parameters that the runner expects
         return {
             "body": {
@@ -513,7 +513,7 @@ The example above shows a simple case that is sufficient if the operation to whi
 
 The function ``random_profession`` is the actual parameter source. Rally will bind the name "my-custom-term-param-source" to this function by calling ``register``. ``register`` is called by Rally before the track is executed.
 
-The parameter source function needs to declare the two parameters ``indices`` and ``params``. `indices` contains all indices of this track and ``params`` contains all parameters that have been defined in the operation definition in ``track.json``. We use it in the example to read the professions to choose.
+The parameter source function needs to declare the parameters ``track``, ``params`` and ``**kwargs``. `track` contains a structured representation of the current track and ``params`` contains all parameters that have been defined in the operation definition in ``track.json``. The third parameter is there to ensure a more stable API as Rally evolves. We use it in the example to read the professions to choose.
 
 If you need more control, you need to implement a class. The example above, implemented as a class looks as follows::
 
@@ -521,8 +521,8 @@ If you need more control, you need to implement a class. The example above, impl
 
 
     class TermParamSource:
-        def __init__(self, indices, params):
-            self._indices = indices
+        def __init__(self, track, params, **kwargs):
+            self._indices = track.indices
             self._params = params
 
         def partition(self, partition_index, total_partitions):
@@ -556,7 +556,7 @@ Let's walk through this code step by step:
 * Note the method ``register`` where you need to bind the name in the track specification to your parameter source implementation class similar to the simple example.
 * The class ``TermParamSource`` is the actual parameter source and needs to fulfill a few requirements:
 
-    * It needs to have a constructor with the signature ``__init__(self, indices, params)``. You don't need to store these parameters if you don't need them.
+    * It needs to have a constructor with the signature ``__init__(self, track, params, **kwargs)``. You don't need to store these parameters if you don't need them.
     * ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self`` but in certain cases you need to do something more sophisticated. If each clients needs to act differently then you can provide different parameter source instances here.
     * ``size(self)``: This method is needed to help Rally provide a proper progress indication to users if you use a warmup time period. For bulk indexing, this would return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
     * ``params(self)``: This method needs to return a dictionary with all parameters that the corresponding "runner" expects. For the standard case, Rally provides most of these parameters as a convenience, but here you need to define all of them yourself. This method will be invoked once for every iteration during the race. We can see that we randomly select a profession from a list which will be then be executed by the corresponding runner.

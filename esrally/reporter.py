@@ -115,16 +115,17 @@ class StatsCalculator:
 
         for tasks in self.challenge.schedule:
             for task in tasks:
-                t = task.name
-                logger.debug("Gathering request metrics for [%s]." % t)
-                result.add_op_metrics(
-                    t,
-                    task.operation.name,
-                    self.summary_stats("throughput", t),
-                    self.single_latency(t),
-                    self.single_latency(t, metric_name="service_time"),
-                    self.error_rate(t)
-                )
+                if task.operation.include_in_reporting:
+                    t = task.name
+                    logger.debug("Gathering request metrics for [%s]." % t)
+                    result.add_op_metrics(
+                        t,
+                        task.operation.name,
+                        self.summary_stats("throughput", t),
+                        self.single_latency(t),
+                        self.single_latency(t, metric_name="service_time"),
+                        self.error_rate(t)
+                    )
 
         logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")

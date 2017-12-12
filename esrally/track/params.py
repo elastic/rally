@@ -2,11 +2,12 @@ import logging
 import random
 import time
 import types
+import inspect
 from enum import Enum
 
 from esrally import exceptions
 from esrally.track import track
-from esrally.utils import io
+from esrally.utils import io, console
 
 logger = logging.getLogger("rally.track")
 
@@ -14,21 +15,45 @@ __PARAM_SOURCES_BY_OP = {}
 __PARAM_SOURCES_BY_NAME = {}
 
 
-def param_source_for_operation(op_type, indices, params):
+def param_source_for_operation(op_type, track, params):
     try:
-        return __PARAM_SOURCES_BY_OP[op_type](indices, params)
+        # we know that this can only be a Rally core parameter source
+        return __PARAM_SOURCES_BY_OP[op_type](track, params)
     except KeyError:
         logger.debug("No specific parameter source registered for operation type [%s]. Creating default parameter source." % op_type)
-        return ParamSource(indices, params)
+        return ParamSource(track, params)
 
 
-def param_source_for_name(name, indices, params):
+def param_source_for_name(name, track, params):
     param_source = __PARAM_SOURCES_BY_NAME[name]
+
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     if isinstance(param_source, types.FunctionType):
-        return DelegatingParamSource(indices, params, param_source)
+        # TODO: Remove me after some grace period
+        try:
+            s = inspect.signature(param_source, follow_wrapped=False)
+        except TypeError:
+            # follow_wrapped has been introduced in Python 3.5
+            s = inspect.signature(param_source)
+        if len(s.parameters) == 2 and s.parameters.get("indices"):
+            console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
+                         "to (track, params, **kwargs)." % name, logger=logger)
+            return LegacyDelegatingParamSource(track, params, param_source)
+        else:
+            return DelegatingParamSource(track, params, param_source)
     else:
-        return param_source(indices, params)
+        try:
+            s = inspect.signature(param_source.__init__, follow_wrapped=False)
+        except TypeError:
+            # follow_wrapped has been introduced in Python 3.5
+            s = inspect.signature(param_source)
+        # self, indices, params
+        if len(s.parameters) == 3 and s.parameters.get("indices"):
+            console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
+                         "to (track, params, **kwargs)." % name, logger=logger)
+            return param_source(track.indices, params)
+        else:
+            return param_source(track, params)
 
 
 def register_param_source_for_operation(op_type, param_source_class):
@@ -54,15 +79,16 @@ class ParamSource:
      before Rally invokes the corresponding runner (that will actually execute the operation against Elasticsearch).
     """
 
-    def __init__(self, indices, params):
+    def __init__(self, track, params, **kwargs):
         """
         Creates a new ParamSource instance.
 
-        :param indices: All indices that are defined for this track.
+        :param track:  The current track definition
         :param params: A hash of all parameters that have been extracted for this operation.
         """
-        self.indices = indices
+        self.track = track
         self._params = params
+        self.kwargs = kwargs
 
     def partition(self, partition_index, total_partitions):
         """
@@ -103,22 +129,184 @@ class ParamSource:
 
 
 class DelegatingParamSource(ParamSource):
-    def __init__(self, indices, params, delegate):
-        super().__init__(indices, params)
+    def __init__(self, track, params, delegate, **kwargs):
+        super().__init__(track, params, **kwargs)
         self.delegate = delegate
 
     def params(self):
-        return self.delegate(self.indices, self._params)
+        return self.delegate(self.track, self._params, **self.kwargs)
+
+
+class LegacyDelegatingParamSource(ParamSource):
+    def __init__(self, track, params, delegate, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.delegate = delegate
+
+    def params(self):
+        return self.delegate(self.track.indices, self._params)
+
+
+class CreateIndexParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.index_definitions = []
+        if track.indices:
+            filter_index = params.get("index")
+            settings = params.get("settings")
+            for idx in track.indices:
+                if not filter_index or idx.name == filter_index:
+                    body = idx.body
+                    if body and settings:
+                        if "settings" in body:
+                            # merge (and potentially override)
+                            body["settings"].update(settings)
+                        else:
+                            body["settings"] = settings
+                    elif not body:
+                        console.warn("Creating index %s based on deprecated type mappings. Please specify an index body instead." % idx.name)
+                        # TODO #366: Deprecate this syntax. We should only specify all mappings in the body property.
+                        # check all types and merge their mappings
+                        body = {
+                            "mappings": {}
+                        }
+                        if settings:
+                            body["settings"] = settings
+                        for t in idx.types:
+                            body["mappings"].update(t.mapping)
+
+                    self.index_definitions.append((idx.name, body))
+        else:
+            # TODO: Should we allow to create multiple indices at once?
+            try:
+                # only 'index' is mandatory, the body is optional (may be ok to create an index without a body)
+                self.index_definitions.append((params["index"], params.get("body")))
+            except KeyError:
+                raise exceptions.InvalidSyntax("Please set the property 'index' for the create-index operation")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "indices": self.index_definitions,
+            "request-params": self.request_params
+        })
+        return p
+
+
+class DeleteIndexParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.only_if_exists = params.get("only-if-exists", True)
+
+        self.index_definitions = []
+        target_index = params.get("index")
+        if target_index:
+            # TODO: Should we allow to delete multiple indices at once?
+            self.index_definitions.append(target_index)
+        elif track.indices:
+            for idx in track.indices:
+                self.index_definitions.append(idx.name)
+        else:
+            raise exceptions.InvalidSyntax("delete-index operation targets no index")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "indices": self.index_definitions,
+            "request-params": self.request_params,
+            "only-if-exists": self.only_if_exists
+        })
+        return p
+
+
+class CreateIndexTemplateParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.template_definitions = []
+        if track.templates:
+            filter_template = params.get("template")
+            settings = params.get("settings")
+            for template in track.templates:
+                if not filter_template or template.name == filter_template:
+                    body = template.content
+                    if body and settings:
+                        if "settings" in body:
+                            # merge (and potentially override)
+                            body["settings"].update(settings)
+                        else:
+                            body["settings"] = settings
+
+                    self.template_definitions.append((template.name, body))
+        else:
+            # TODO: Should we allow to create multiple index templates at once?
+            try:
+                self.template_definitions.append((params["template"], params["body"]))
+            except KeyError:
+                raise exceptions.InvalidSyntax("Please set the properties 'template' and 'body' for the create-index-template operation")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "templates": self.template_definitions,
+            "request-params": self.request_params
+        })
+        return p
+
+
+class DeleteIndexTemplateParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.only_if_exists = params.get("only-if-exists", True)
+        self.request_params = params.get("request-params", {})
+        self.template_definitions = []
+        if track.templates:
+            filter_template = params.get("template")
+            for template in track.templates:
+                if not filter_template or template.name == filter_template:
+                    self.template_definitions.append((template.name, template.delete_matching_indices, template.pattern))
+        else:
+            # TODO: Should we allow to delete multiple templates at once?
+            try:
+                template = params["template"]
+            except KeyError:
+                raise exceptions.InvalidSyntax("Please set the property 'template' for the delete-index-template operation")
+
+            delete_matching = params.get("delete-matching-indices", False)
+            try:
+                index_pattern = params["index-pattern"] if delete_matching else None
+            except KeyError:
+                raise exceptions.InvalidSyntax("The property 'index-pattern' is required for delete-index-template if "
+                                               "'delete-matching-indices' is true.")
+            self.template_definitions.append((template, delete_matching, index_pattern))
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "templates": self.template_definitions,
+            "only-if-exists": self.only_if_exists,
+            "request-params": self.request_params
+        })
+        return p
 
 
 # TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
 class SearchParamSource(ParamSource):
-    def __init__(self, indices, params):
-        super().__init__(indices, params)
-        if len(indices) == 1:
-            default_index = indices[0].name
-            if len(indices[0].types) == 1:
-                default_type = indices[0].types[0].name
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        if len(track.indices) == 1:
+            default_index = track.indices[0].name
+            if len(track.indices[0].types) == 1:
+                default_type = track.indices[0].types[0].name
             else:
                 default_type = None
         else:
@@ -207,9 +395,10 @@ class IndexIdConflict(Enum):
 
 
 class BulkIndexParamSource(ParamSource):
-    def __init__(self, indices, params):
-        super().__init__(indices, params)
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
 
+        self.indices = track.indices
         id_conflicts = params.get("conflicts", None)
         if not id_conflicts:
             self.id_conflicts = IndexIdConflict.NoConflicts
@@ -220,7 +409,7 @@ class BulkIndexParamSource(ParamSource):
         else:
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
 
-        for index in indices:
+        for index in self.indices:
             for t in index.types:
                 if t.includes_action_and_meta_data and self.id_conflicts != IndexIdConflict.NoConflicts:
                     raise exceptions.InvalidSyntax("Cannot generate id conflicts [%s] as type [%s] in index [%s] already contains an "
@@ -246,8 +435,8 @@ class BulkIndexParamSource(ParamSource):
                 raise exceptions.InvalidSyntax("'batch-size' must be a multiple of 'bulk-size'")
         except ValueError:
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
-        if len(indices) == 1 and len(indices[0].types) == 1:
-            default_index = indices[0].name
+        if len(self.indices) == 1 and len(self.indices[0].types) == 1:
+            default_index = self.indices[0].name
         else:
             default_index = None
         self.index_name = params.get("index", default_index)
@@ -270,7 +459,7 @@ class BulkIndexParamSource(ParamSource):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
 
-class PartitionBulkIndexParamSource(ParamSource):
+class PartitionBulkIndexParamSource:
     def __init__(self, indices, partition_index, total_partitions, batch_size, bulk_size, id_conflicts=None,
                  pipeline=None, original_params=None):
         """
@@ -283,7 +472,7 @@ class PartitionBulkIndexParamSource(ParamSource):
         :param id_conflicts: The type of id conflicts.
         :param pipeline: The name of the ingest pipeline to run.
         """
-        super().__init__(indices, {})
+        self.indices = indices
         self.partition_index = partition_index
         self.total_partitions = total_partitions
         self.batch_size = batch_size
@@ -586,6 +775,10 @@ register_param_source_for_operation(track.OperationType.Index, BulkIndexParamSou
 # New name
 register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSource)
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
+register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndexParamSource)
+register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
+register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
+register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)

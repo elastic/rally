@@ -1,5 +1,5 @@
 import logging
-from enum import Enum
+from enum import Enum, unique
 
 logger = logging.getLogger("rally.track")
 
@@ -9,16 +9,22 @@ class Index:
     Defines an index in Elasticsearch.
     """
 
-    def __init__(self, name, auto_managed, types):
+    def __init__(self, name, body=None, auto_managed=False, types=None):
         """
 
         Creates a new index.
 
         :param name: The index name. Mandatory.
+        :param body: A dict representation of the index body. Optional.
         :param auto_managed: True iff Rally should automatically manage this index (i.e. it can create and delete it at will).
         :param types: A list of types. Should contain at least one type.
         """
+        if types is None:
+            types = []
+        if body is None:
+            body = {}
         self.name = name
+        self.body = body
         self.auto_managed = auto_managed
         self.types = types
 
@@ -80,7 +86,7 @@ class IndexTemplate:
     Defines an index template in Elasticsearch.
     """
 
-    def __init__(self, name, pattern, content, delete_matching_indices):
+    def __init__(self, name, pattern, content, delete_matching_indices=False):
         """
 
         Creates a new index template.
@@ -116,14 +122,14 @@ class Type:
     Defines a type in Elasticsearch.
     """
 
-    def __init__(self, name, mapping, document_file=None, document_archive=None, includes_action_and_meta_data=False,
+    def __init__(self, name, mapping=None, document_file=None, document_archive=None, includes_action_and_meta_data=False,
                  number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0):
         """
 
         Creates a new type. Mappings are mandatory but the document_archive (and associated properties) are optional.
 
         :param name: The name of this type. Mandatory.
-        :param mapping: The type's mapping. Mandatory.
+        :param mapping: The type's mapping. Optional.
         :param document_file: The file name of benchmark documents after decompression. Optional (e.g. for percolation we
         just need a mapping but no documents)
         :param document_archive: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for
@@ -137,6 +143,8 @@ class Type:
         :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only useful if a
         document_archive is given (optional but recommended to be set).
         """
+        if mapping is None:
+            mapping = {}
         self.name = name
         self.mapping = mapping
         self.document_file = document_file
@@ -183,7 +191,7 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description, source_root_url=None, meta_data=None, challenges=None, indices=None,
+    def __init__(self, name, description=None, source_root_url=None, meta_data=None, challenges=None, indices=None,
                  templates=None, has_plugins=False):
         """
 
@@ -202,7 +210,7 @@ class Track:
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
-        self.description = description
+        self.description = description if description is not None else ""
         self.source_root_url = source_root_url
         self.challenges = challenges if challenges else []
         self.indices = indices if indices else []
@@ -301,6 +309,9 @@ class Challenge:
         self.default = default
         self.schedule = schedule if schedule else []
 
+    def prepend_tasks(self, tasks):
+        self.schedule = tasks + self.schedule
+
     def remove_task(self, task):
         self.schedule.remove(task)
 
@@ -323,16 +334,27 @@ class Challenge:
                 (othr.name, othr.description, othr.index_settings, othr.cluster_settings, othr.default, othr.meta_data, othr.schedule))
 
 
+@unique
 class OperationType(Enum):
-    Index = 0,
-    ForceMerge = 1,
-    IndicesStats = 2,
-    NodesStats = 3,
-    Search = 4,
-    ClusterHealth = 5,
-    Bulk = 6,
-    PutPipeline = 7,
-    Refresh = 8
+    Index = 0
+    # for the time being we are not considering this action as administrative
+    IndicesStats = 1
+    NodesStats = 2
+    Search = 3
+    Bulk = 4
+    # administrative actions
+    ForceMerge = 1001
+    ClusterHealth = 1002
+    PutPipeline = 1003
+    Refresh = 1004
+    CreateIndex = 1005
+    DeleteIndex = 1006
+    CreateIndexTemplate = 1007
+    DeleteIndexTemplate = 1008
+
+    @property
+    def admin_op(self):
+        return self.value > 1000
 
     @classmethod
     def from_hyphenated_string(cls, v):
@@ -354,6 +376,14 @@ class OperationType(Enum):
             return OperationType.PutPipeline
         elif v == "refresh":
             return OperationType.Refresh
+        elif v == "create-index":
+            return OperationType.CreateIndex
+        elif v == "delete-index":
+            return OperationType.DeleteIndex
+        elif v == "create-index-template":
+            return OperationType.CreateIndexTemplate
+        elif v == "delete-index-template":
+            return OperationType.DeleteIndexTemplate
         else:
             raise KeyError("No enum value for [%s]" % v)
 
@@ -495,6 +525,10 @@ class Operation:
         self.type = operation_type
         self.params = params
         self.param_source = param_source
+
+    @property
+    def include_in_reporting(self):
+        return self.params.get("include-in-reporting", True)
 
     def __hash__(self):
         return hash(self.name)
