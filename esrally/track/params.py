@@ -37,7 +37,7 @@ def param_source_for_name(name, track, params):
             s = inspect.signature(param_source)
         if len(s.parameters) == 2 and s.parameters.get("indices"):
             console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
-                         "to (track, params, **kwargs)." % name, logger=logger)
+                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name, logger=logger)
             return LegacyDelegatingParamSource(track, params, param_source)
         else:
             return DelegatingParamSource(track, params, param_source)
@@ -50,7 +50,7 @@ def param_source_for_name(name, track, params):
         # self, indices, params
         if len(s.parameters) == 3 and s.parameters.get("indices"):
             console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
-                         "to (track, params, **kwargs)." % name, logger=logger)
+                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name, logger=logger)
             return param_source(track.indices, params)
         else:
             return param_source(track, params)
@@ -164,7 +164,11 @@ class CreateIndexParamSource(ParamSource):
                         else:
                             body["settings"] = settings
                     elif not body:
-                        console.warn("Creating index %s based on deprecated type mappings. Please specify an index body instead." % idx.name)
+                        # this is just needed because we will output this in the middle of the benchmark and will thus write
+                        # this on the same line as the progress message.
+                        console.println("")
+                        console.warn("Creating index %s based on deprecated type mappings. Please specify an index body instead. "
+                                     "For details please see the migration guide in the docs." % idx.name, logger=logger)
                         # TODO #366: Deprecate this syntax. We should only specify all mappings in the body property.
                         # check all types and merge their mappings
                         body = {
