@@ -570,6 +570,9 @@ class TrackFileReader:
             rendered = render_template_from_file(track_spec_file, self.track_params)
             logger.info("Final rendered track for '%s': %s" % (track_spec_file, rendered))
             track_spec = json.loads(rendered)
+        except jinja2.exceptions.TemplateNotFound:
+            logger.exception("Could not load [%s]." % track_spec_file)
+            raise exceptions.SystemSetupError("Track %s does not exist" % track_name)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
             logger.exception("Could not load [%s]." % track_spec_file)
             raise TrackSyntaxError("Could not load '%s'" % track_spec_file, e)
