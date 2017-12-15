@@ -499,14 +499,14 @@ class TrackPostProcessingTests(TestCase):
             "indices": [
                 {
                     "name": "test-index",
+                    "body": "test-index-body.json",
                     "types": [
                         {
                             "name": "test-type",
                             "documents": "documents.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "mapping": "type-mappings.json"
+                            "uncompressed-bytes": 10000
                         }
                     ]
                 }
@@ -571,14 +571,14 @@ class TrackPostProcessingTests(TestCase):
             "indices": [
                 {
                     "name": "test-index",
+                    "body": "test-index-body.json",
                     "types": [
                         {
                             "name": "test-type",
                             "documents": "documents.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "mapping": "type-mappings.json"
+                            "uncompressed-bytes": 10000
                         }
                     ]
                 }
