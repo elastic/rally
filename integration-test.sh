@@ -30,6 +30,12 @@ function kill_rally_processes() {
     # kill all lingering Rally instances that might still be hanging
     set +e
     killall -9 esrally
+    set -e
+}
+
+function kill_related_es_processes() {
+    # kill all lingering Rally instances that might still be hanging
+    set +e
     # killall matching ES instances - we cannot use killall as we also want to ensure "rally" is "somewhere" in the command line.
     RUNNING_RALLY_ES_PROCESSES=$(jps -v | egrep ".*java.*rally" | awk '{print $1}')
     for p in "${RUNNING_RALLY_ES_PROCESSES}"
@@ -38,9 +44,12 @@ function kill_rally_processes() {
     done
     set -e
 }
+
+
 function set_up() {
     info "setting up"
     kill_rally_processes
+    kill_related_es_processes
 
     # configure for tests with an Elasticsearch metrics store
     esrally configure --assume-defaults --configuration-name="es-integration-test"
@@ -109,8 +118,10 @@ function test_sources() {
 
     # build Elasticsearch and a core plugin
     info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap] [--elasticsearch-plugins=analysis-icu]"
+    kill_rally_processes
     esrally --logging=console --configuration-name="${cfg}" --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
     info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=verbose_iw], [--laps=2]"
+    kill_rally_processes
     esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car=verbose_iw --laps=2
 }
 
@@ -123,6 +134,7 @@ function test_distributions() {
         do
             random_configuration cfg
             info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=4gheap]"
+            kill_rally_processes
             esrally --logging=console --configuration-name="${cfg}" --distribution-version="${dist}" --track="${track}" --test-mode --car=4gheap
         done
     done
@@ -135,6 +147,7 @@ function test_benchmark_only() {
     random_configuration cfg
 
     info "test benchmark-only [--configuration-name=${cfg}]"
+    kill_rally_processes
     esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
 }
 
@@ -156,8 +169,9 @@ function tear_down() {
     rm -f ~/.rally/rally*integration-test.ini
     rm -rf .rally_it/cache/elasticsearch-"${ES_METRICS_STORE_VERSION}"
     set -e
-    # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
     kill_rally_processes
+    # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
+    kill_related_es_processes
 }
 
 function main {
