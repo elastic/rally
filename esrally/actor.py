@@ -32,7 +32,7 @@ class BenchmarkCancelled:
     pass
 
 
-class RallyActor(thespian.actors.Actor):
+class RallyActor(thespian.actors.ActorTypeDispatcher):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         # allow to see a thread-dump on SIGQUIT
