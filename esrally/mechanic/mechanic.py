@@ -226,7 +226,7 @@ class MechanicActor(actor.RallyActor):
         self.cluster_launcher = None
         self.cluster = None
 
-    def receiveMessage(self, msg, sender):
+    def receiveUnrecognizedMessage(self, msg, sender):
         try:
             logger.info("MechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
             if isinstance(msg, StartEngine):
@@ -457,7 +457,7 @@ class NodeMechanicActor(actor.RallyActor):
         self.running = False
         self.host = None
 
-    def receiveMessage(self, msg, sender):
+    def receiveUnrecognizedMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
         # needs to block anyway. The only reason we implement mechanic as an actor is to distribute them.
         # noinspection PyBroadException
@@ -536,7 +536,7 @@ class NodeMechanicActor(actor.RallyActor):
         except BaseException as e:
             self.running = False
             logger.exception("Cannot process message [%s]" % msg)
-            self.send(sender, actor.BenchmarkFailure("Error on host %s" % str(self.host), e))
+            self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure("Error on host %s" % str(self.host), e))
 
 
 #####################################################
