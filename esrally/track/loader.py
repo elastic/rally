@@ -348,7 +348,7 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
                 raise exceptions.RallyAssertionError("Track %s specifies documents but neither a compressed nor an uncompressed corpus" %
                                                      track_name)
             # provide a specific error message in case there is no download URL
-            if is_locally_available(full_archive_path):
+            if is_locally_available(target_path):
                 # convert expected_size eagerly to a string as it might be None (but in that case we'll never see that error message)
                 msg = "%s is present but does not have the expected size of %s bytes" % (target_path, str(expected_size))
             else:
