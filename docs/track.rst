@@ -394,13 +394,13 @@ With the operation ``create-index`` you can execute the `create index API <https
 If you want it to create all indices that have been declared in the ``indices`` section you can specify the following properties:
 
 * ``settings`` (optional): Allows to specify additional index settings that will be merged with the index settings specified in the body of the index in the ``indices`` section.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`_ that are allowed by the create index API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
 
 If you want it to create one specific index instead, you can specify the following properties:
 
 * ``index`` (mandatory): The name of the index that should be created.
 * ``body`` (optional): The body for the create index API call.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`_ that are allowed by the create index API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
 
 **Examples**
 
@@ -449,13 +449,13 @@ With the operation ``delete-index`` you can execute the `delete index API <https
 If you want it to delete all indices that have been declared in the ``indices`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`_ that are allowed by the delete index API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
 
 If you want it to delete one specific index (pattern) instead, you can specify the following properties:
 
 * ``index`` (mandatory): The name of the index that should be deleted.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`_ that are allowed by the delete index API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
 
 **Examples**
 
@@ -491,13 +491,13 @@ If you want it to create index templates that have been declared in the ``templa
 
 * ``template`` (optional): If you specify a template name, only the template with this name will be created.
 * ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the index template in the ``templates`` section.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`_ that are allowed by the create index template API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`__ that are allowed by the create index template API.
 
 If you want it to create one specific index instead, you can specify the following properties:
 
 * ``template`` (mandatory): The name of the index template that should be created.
 * ``body`` (mandatory): The body for the create index template API call.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`_ that are allowed by the create index template API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`__ that are allowed by the create index template API.
 
 **Examples**
 
@@ -542,7 +542,7 @@ With the operation ``delete-index-template`` you can execute the `delete index t
 If you want it to delete all index templates that have been declared in the ``templates`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index template should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`_ that are allowed by the delete index template API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`__ that are allowed by the delete index template API.
 
 If you want it to delete one specific index template instead, you can specify the following properties:
 
@@ -550,7 +550,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
 * ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`_ that are allowed by the delete index template API.
+* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`__ that are allowed by the delete index template API.
 
 **Examples**
 
