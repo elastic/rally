@@ -282,8 +282,11 @@ class MechanicActor(actor.RallyActor):
                 else:
                     logger.error("[%s] sent to a child actor has resulted in PoisonMessage" % str(msg.poisonMessage))
                     raise exceptions.RallyError("Could not communicate with benchmark candidate (unknown reason)")
+            else:
+                logger.info("MechanicActor received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
-            logger.exception("Cannot process message [%s]. Notifying [%s]." % (msg, self.race_control))
+            logger.exception("Cannot process message")
+            logger.error("Failed message details: [%s]. Notifying [%s]." % (msg, self.race_control))
             self.send(self.race_control, actor.BenchmarkFailure("Error in Elasticsearch cluster coordinator", e))
 
     def on_start_engine(self, msg, sender):
