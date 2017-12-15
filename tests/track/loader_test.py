@@ -215,11 +215,12 @@ class TrackPreparationTests(TestCase):
     def test_download_document_archive_if_no_file_available(self, is_file, get_size, ensure_dir, download, decompress, prepare_file_offset_table):
         # uncompressed file does not exist
         # compressed file does not exist
+        # file check for compressed file before download attempt (for potential error message)
         # after download compressed file exists
         # after download uncompressed file still does not exist (in main loop)
         # after download compressed file exists (in main loop)
         # after decompression, uncompressed file exists
-        is_file.side_effect = [False, False, True, False, True, True, True]
+        is_file.side_effect = [False, False, False, True, False, True, True, True]
         # compressed file size is 200 after download
         # compressed file size is 200 after download (in main loop)
         # uncompressed file size is 2000 after decompression
@@ -250,9 +251,10 @@ class TrackPreparationTests(TestCase):
     @mock.patch("os.path.isfile")
     def test_download_document_file_if_no_file_available(self, is_file, get_size, ensure_dir, download, prepare_file_offset_table):
         # uncompressed file does not exist
+        # file check for uncompressed file before download attempt (for potential error message)
         # after download uncompressed file exists
         # after download uncompressed file exists (main loop)
-        is_file.side_effect = [False, True, True]
+        is_file.side_effect = [False, False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
 
@@ -296,7 +298,7 @@ class TrackPreparationTests(TestCase):
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.isfile")
-    def test_raise_download_error_if_no_url_provided(self, is_file, ensure_dir, download):
+    def test_raise_download_error_if_no_url_provided_and_file_missing(self, is_file, ensure_dir, download):
         # uncompressed file does not exist
         is_file.return_value = False
 
@@ -311,6 +313,31 @@ class TrackPreparationTests(TestCase):
 
         self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no source URL is provided in the track.",
                          ctx.exception.args[0])
+
+        ensure_dir.assert_not_called()
+        download.assert_not_called()
+
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_raise_download_error_if_no_url_provided_and_wrong_file_size(self, is_file, get_size, ensure_dir, download):
+        # uncompressed file exists...
+        is_file.return_value = True
+        # but it's size is wrong
+        get_size.return_value = 100
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            loader.prepare_corpus(track_name="unit-test",
+                                  source_root_url=None,
+                                  data_root="/tmp",
+                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
+                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
+                                  offline=False,
+                                  test_mode=False)
+
+        self.assertEqual("/tmp/docs.json is present but does not have the expected size of 2000 bytes and it cannot be downloaded because "
+                         "no source URL is provided in the track.", ctx.exception.args[0])
 
         ensure_dir.assert_not_called()
         download.assert_not_called()

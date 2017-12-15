@@ -233,8 +233,11 @@ def prepare_track(track, cfg):
 
 
 def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_mode):
-    def is_locally_available(file_name, expected_size):
-        return os.path.isfile(file_name) and (expected_size is None or os.path.getsize(file_name) == expected_size)
+    def is_locally_available(file_name):
+        return os.path.isfile(file_name)
+
+    def has_expected_size(file_name, expected_size):
+        return expected_size is None or os.path.getsize(file_name) == expected_size
 
     def decompress_corpus(archive_path, documents_path, uncompressed_size):
         if uncompressed_size:
@@ -256,12 +259,12 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
             raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
                                        (documents_path, extracted_bytes, uncompressed_size))
 
-    def download_corpus(root_url, target_path, size_in_bytes, track_name, offline, test_mode):
+    def download_corpus(root_url, target_path, size_in_bytes, detail_on_missing_root_url, track_name, offline, test_mode):
         file_name = os.path.basename(target_path)
 
         if not root_url:
-            raise exceptions.DataError("%s is missing and it cannot be downloaded because no source URL is provided in the track."
-                                       % target_path)
+            raise exceptions.DataError("%s and it cannot be downloaded because no source URL is provided in the track."
+                                       % detail_on_missing_root_url)
         if offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
@@ -326,9 +329,12 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
     full_document_path = os.path.join(data_root, type.document_file)
     full_archive_path = os.path.join(data_root, type.document_archive) if type.has_compressed_corpus() else None
     while True:
-        if is_locally_available(full_document_path, type.uncompressed_size_in_bytes):
+        if is_locally_available(full_document_path) and \
+                has_expected_size(full_document_path, type.uncompressed_size_in_bytes):
             break
-        elif type.has_compressed_corpus() and is_locally_available(full_archive_path, type.compressed_size_in_bytes):
+        elif type.has_compressed_corpus() and \
+                is_locally_available(full_archive_path) and \
+                has_expected_size(full_archive_path, type.compressed_size_in_bytes):
             decompress_corpus(full_archive_path, full_document_path, type.uncompressed_size_in_bytes)
         else:
             if type.has_compressed_corpus():
@@ -341,7 +347,14 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
                 # this should not happen in practice as the JSON schema should take care of this
                 raise exceptions.RallyAssertionError("Track %s specifies documents but neither a compressed nor an uncompressed corpus" %
                                                      track_name)
-            download_corpus(source_root_url, target_path, expected_size, track_name, offline, test_mode)
+            # provide a specific error message in case there is no download URL
+            if is_locally_available(full_archive_path):
+                # convert expected_size eagerly to a string as it might be None (but in that case we'll never see that error message)
+                msg = "%s is present but does not have the expected size of %s bytes" % (target_path, str(expected_size))
+            else:
+                msg = "%s is missing" % target_path
+
+            download_corpus(source_root_url, target_path, expected_size, msg, track_name, offline, test_mode)
 
     create_file_offset_table(full_document_path, type.number_of_lines)
 
