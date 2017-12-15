@@ -74,7 +74,7 @@ class ProcessTests(TestCase):
         self.assertFalse(rally_process_mac.killed)
 
     @mock.patch("psutil.process_iter")
-    def test_kills_only_rally_processes(self, process_iter):
+    def test_find_other_rally_processes(self, process_iter):
         rally_es_5_process = ProcessTests.Process(100, "java",
                                                   ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
                                                    "org.elasticsearch.bootstrap.Elasticsearch"])
@@ -108,16 +108,16 @@ class ProcessTests(TestCase):
             night_rally_process,
         ]
 
-        process.kill_running_rally_instances()
+        self.assertEqual([rally_process_p, rally_process_r, rally_process_e, rally_process_mac],
+                         process.find_all_other_rally_processes())
 
-        self.assertFalse(rally_es_5_process.killed)
-        self.assertFalse(rally_es_1_process.killed)
-        self.assertFalse(metrics_store_process.killed)
-        self.assertFalse(random_python.killed)
-        self.assertFalse(other_process.killed)
-        self.assertTrue(rally_process_p.killed)
-        self.assertTrue(rally_process_r.killed)
-        self.assertTrue(rally_process_e.killed)
-        self.assertTrue(rally_process_mac.killed)
-        self.assertFalse(own_rally_process.killed)
-        self.assertFalse(night_rally_process.killed)
+    @mock.patch("psutil.process_iter")
+    def test_find_no_other_rally_process_running(self, process_iter):
+        metrics_store_process = ProcessTests.Process(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
+                                                                   "-Des.path.home=~/rally/metrics/",
+                                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
+
+        process_iter.return_value = [ metrics_store_process, random_python]
+
+        self.assertEqual(0, len(process.find_all_other_rally_processes()))

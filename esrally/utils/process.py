@@ -75,6 +75,7 @@ def kill_running_es_instances(trait):
 
     :param trait some trait of the process in the command line.
     """
+
     def elasticsearch_process(p):
         return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any(trait in e for e in p.cmdline())
 
@@ -82,18 +83,37 @@ def kill_running_es_instances(trait):
     kill_all(elasticsearch_process)
 
 
-def kill_running_rally_instances():
-    def rally_process(p):
-        return p.name() == "esrally" or \
-               p.name() == "rally" or \
-               (p.name().lower().startswith("python")
-                and any("esrally" in e for e in p.cmdline())
-                and not any("esrallyd" in e for e in p.cmdline()))
+def is_rally_process(p):
+    return p.name() == "esrally" or \
+           p.name() == "rally" or \
+           (p.name().lower().startswith("python")
+            and any("esrally" in e for e in p.cmdline())
+            and not any("esrallyd" in e for e in p.cmdline()))
 
-    kill_all(rally_process)
+
+def find_all_other_rally_processes():
+    others = []
+    for_all_other_processes(is_rally_process, lambda p: others.append(p))
+    return others
 
 
 def kill_all(predicate):
+    def kill(p):
+        logger.info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
+        p.kill()
+        # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
+        # sockets that are still open.
+        for i in range(3):
+            try:
+                p.status()
+                time.sleep(1)
+            except psutil.NoSuchProcess:
+                break
+
+    for_all_other_processes(predicate, kill)
+
+
+def for_all_other_processes(predicate, action):
     # no harakiri please
     my_pid = os.getpid()
     for p in psutil.process_iter():
@@ -101,16 +121,7 @@ def kill_all(predicate):
             if p.pid == my_pid:
                 logger.info("Skipping myself (PID [%s])." % p.pid)
             elif predicate(p):
-                logger.info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
-                p.kill()
-                # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
-                # sockets that are still open.
-                for i in range(3):
-                    try:
-                        p.status()
-                        time.sleep(1)
-                    except psutil.NoSuchProcess:
-                        break
+                action(p)
             else:
                 logger.debug("Skipping [%s]" % p.cmdline())
         except (psutil.ZombieProcess, psutil.AccessDenied) as e:

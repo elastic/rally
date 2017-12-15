@@ -458,6 +458,13 @@ def print_help_on_errors():
 
 
 def race(cfg):
+    other_rally_processes = process.find_all_other_rally_processes()
+    if other_rally_processes:
+        pids = [p.pid for p in other_rally_processes]
+        msg = "There are other Rally processes running on this machine (PIDs: %s) but only one Rally benchmark is allowed to run at " \
+              "the same time. Please check and terminate these processes and retry again." % pids
+        raise exceptions.RallyError(msg)
+
     with_actor_system(lambda c: racecontrol.run(c), cfg)
 
 
@@ -721,13 +728,6 @@ def main():
             cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)
         else:
             logger.info("Detected a working Internet connection.")
-
-    # Kill any lingering Rally processes before attempting to continue - the actor system needs to be a singleton on this machine
-    # noinspection PyBroadException
-    try:
-        process.kill_running_rally_instances()
-    except BaseException:
-        logger.exception("Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
 
     success = dispatch_sub_command(cfg, sub_command)
 
