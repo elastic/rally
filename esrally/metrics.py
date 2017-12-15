@@ -77,6 +77,18 @@ class EsClient:
                       (target.__name__, node["host"], node["port"], config.ConfigFile().location)
                 logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
+            except elasticsearch.exceptions.ConnectionTimeout:
+                if execution_count < max_execution_count:
+                    logger.info("Received a connection timeout from the metrics store in attempt [%d/%d]." %
+                                (execution_count, max_execution_count))
+                    time.sleep(1)
+                else:
+                    operation = target.__name__
+                    logger.exception("Got a connection timeout while running [%s] (retried %d times)." % (operation, max_execution_count))
+                    node = self._client.transport.hosts[0]
+                    msg = "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on " \
+                          "host [%s] at port [%s]." % (operation, node["host"], node["port"])
+                    raise exceptions.RallyError(msg)
             except elasticsearch.exceptions.ConnectionError:
                 node = self._client.transport.hosts[0]
                 msg = "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]" \
@@ -127,7 +139,7 @@ class EsClientFactory:
         import elasticsearch
         self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
                                                    use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where(),
-                                                   timeout=60000, request_timeout=60000)
+                                                   timeout=120, request_timeout=120)
 
     def create(self):
         return EsClient(self._client)
