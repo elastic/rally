@@ -321,6 +321,12 @@ class InProcessLauncher:
 
             if l.find("Initialization Failed") != -1 or l.find("A fatal exception has occurred") != -1:
                 logger.error("[%s] encountered initialization errors." % node_name)
+                # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
+                wait = 5
+                while not server.returncode or wait == 0:
+                    time.sleep(0.1)
+                    server.poll()
+                    wait -= 1
                 startup_event.set()
             if l.endswith("started") and not startup_event.isSet():
                 startup_event.set()
