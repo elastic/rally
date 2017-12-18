@@ -1,4 +1,5 @@
 import logging
+import sys
 from collections import defaultdict
 
 import thespian.actors
@@ -457,47 +458,55 @@ class NodeMechanicActor(actor.RallyActor):
         self.running = False
         self.host = None
 
+    def receiveMsg_StartNodes(self, msg, sender):
+        try:
+            self.host = msg.ip
+            if msg.external:
+                logger.info("Connecting to externally provisioned nodes on [%s]." % msg.ip)
+            else:
+                logger.info("Starting node(s) %s on [%s]." % (msg.node_ids, msg.ip))
+
+            # Load node-specific configuration
+            self.config = config.auto_load_local_config(msg.cfg, additional_sections=[
+                # only copy the relevant bits
+                "track", "mechanic", "client",
+                # allow metrics store to extract race meta-data
+                "race",
+                "source"
+            ])
+            # set root path (normally done by the main entry point)
+            self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+            if not msg.external:
+                self.config.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
+                # we need to override the port with the value that the user has specified instead of using the default value (39200)
+                self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
+                self.config.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
+
+            cls = metrics.metrics_store_class(self.config)
+            self.metrics_store = cls(self.config)
+            self.metrics_store.open(ctx=msg.open_metrics_context)
+            # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
+            self.metrics_store.lap = 0
+
+            self.mechanic = create(self.config, self.metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
+                                   msg.distribution, msg.external, msg.docker)
+            nodes = self.mechanic.start_engine()
+            self.running = True
+            self.send(msg.reply_to, NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
+        except Exception:
+            logger.exception("Cannot process message [%s]" % msg)
+            # avoid "can't pickle traceback objects"
+            import traceback
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            self.send(sender, actor.BenchmarkFailure(ex_value, traceback.format_exc()))
+
     def receiveUnrecognizedMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
         # needs to block anyway. The only reason we implement mechanic as an actor is to distribute them.
         # noinspection PyBroadException
         try:
             logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
-            if isinstance(msg, StartNodes):
-                self.host = msg.ip
-                if msg.external:
-                    logger.info("Connecting to externally provisioned nodes on [%s]." % msg.ip)
-                else:
-                    logger.info("Starting node(s) %s on [%s]." % (msg.node_ids, msg.ip))
-
-                # Load node-specific configuration
-                self.config = config.auto_load_local_config(msg.cfg, additional_sections=[
-                    # only copy the relevant bits
-                    "track", "mechanic", "client",
-                    # allow metrics store to extract race meta-data
-                    "race",
-                    "source"
-                ])
-                # set root path (normally done by the main entry point)
-                self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
-                if not msg.external:
-                    self.config.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
-                    # we need to override the port with the value that the user has specified instead of using the default value (39200)
-                    self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
-                    self.config.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
-
-                cls = metrics.metrics_store_class(self.config)
-                self.metrics_store = cls(self.config)
-                self.metrics_store.open(ctx=msg.open_metrics_context)
-                # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
-                self.metrics_store.lap = 0
-
-                self.mechanic = create(self.config, self.metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
-                                       msg.distribution, msg.external, msg.docker)
-                nodes = self.mechanic.start_engine()
-                self.running = True
-                self.send(msg.reply_to, NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
-            elif isinstance(msg, ApplyMetricsMetaInfo):
+            if isinstance(msg, ApplyMetricsMetaInfo):
                 self.metrics_store.merge_meta_info(msg.meta_info)
                 self.send(sender, MetricsMetaInfoApplied())
             elif isinstance(msg, ResetRelativeTime):
