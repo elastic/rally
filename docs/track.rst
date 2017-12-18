@@ -371,7 +371,7 @@ Example::
       "index": "logs-*",
       "request-params": {
         "wait_for_status": "green",
-        "wait_for_no_relocating_shards": true
+        "wait_for_no_relocating_shards": "true"
       }
     }
 
