@@ -501,7 +501,11 @@ def post_process_for_index_auto_management(t, expected_cluster_health):
                                                                   operation_type=track.OperationType.CreateIndex.name,
                                                                   params=create_index_params.copy())))
 
-            if not expected_cluster_health == "skip":
+            # check if the user has already defined a cluster-health operation
+            user_checks_cluster_health = any(task.matches(track.TaskOpTypeFilter(track.OperationType.ClusterHealth.name))
+                                             for task in challenge.schedule)
+
+            if expected_cluster_health != "skip" and not user_checks_cluster_health:
                 tasks.append(track.Task(name="auto-check-cluster-health",
                                         operation=track.Operation(name="auto-check-cluster-health",
                                                                   operation_type=track.OperationType.ClusterHealth.name,
