@@ -500,16 +500,17 @@ class NodeMechanicActor(actor.RallyActor):
             ex_type, ex_value, ex_traceback = sys.exc_info()
             self.send(sender, actor.BenchmarkFailure(ex_value, traceback.format_exc()))
 
+    def receiveMsg_ApplyMetricsMetaInfo(self, msg, sender):
+        self.metrics_store.merge_meta_info(msg.meta_info)
+        self.send(sender, MetricsMetaInfoApplied())
+
     def receiveUnrecognizedMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
         # needs to block anyway. The only reason we implement mechanic as an actor is to distribute them.
         # noinspection PyBroadException
         try:
             logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
-            if isinstance(msg, ApplyMetricsMetaInfo):
-                self.metrics_store.merge_meta_info(msg.meta_info)
-                self.send(sender, MetricsMetaInfoApplied())
-            elif isinstance(msg, ResetRelativeTime):
+            if isinstance(msg, ResetRelativeTime):
                 logger.info("Resetting relative time of system metrics store on host [%s]." % self.host)
                 self.metrics_store.reset_relative_time()
             elif isinstance(msg, OnBenchmarkStart):
