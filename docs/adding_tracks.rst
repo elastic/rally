@@ -492,9 +492,8 @@ Rally will recognize the parameter source and looks then for a file ``track.py``
 
 
     def random_profession(track, params, **kwargs):
-        # choose a suitable index - if there is only one defined for this track
-        # choose that one, otherwise check whether the user has set index and type
-        # explicitly for this operation
+        # choose a suitable index: if there is only one defined for this track
+        # choose that one, but let the user always override index and type.
         if len(track.indices) == 1:
             default_index = track.indices[0].name
             if len(track.indices[0].types) == 1:
@@ -550,9 +549,8 @@ If you need more control, you need to implement a class. The example above, impl
 
     class TermParamSource:
         def __init__(self, track, params, **kwargs):
-            # choose a suitable index - if there is only one defined for this track
-            # choose that one, otherwise check whether the user has set index and type
-            # explicitly for this operation
+            # choose a suitable index: if there is only one defined for this track
+            # choose that one, but let the user always override index and type.
             if len(track.indices) == 1:
                 default_index = track.indices[0].name
                 if len(track.indices[0].types) == 1:
