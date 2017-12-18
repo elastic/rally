@@ -501,7 +501,7 @@ class NodeMechanicActor(actor.RallyActor):
             # avoid "can't pickle traceback objects"
             import traceback
             ex_type, ex_value, ex_traceback = sys.exc_info()
-            self.send(sender, actor.BenchmarkFailure(ex_value, traceback.format_exc()))
+            self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure(ex_value, traceback.format_exc()))
 
     def receiveMsg_ApplyMetricsMetaInfo(self, msg, sender):
         self.metrics_store.merge_meta_info(msg.meta_info)
