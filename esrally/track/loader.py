@@ -463,11 +463,14 @@ def post_process_for_index_auto_management(t, expected_cluster_health):
             # TODO: Remove the index settings element. We can do this much better now with the create-index operation.
             create_index_params = {"include-in-reporting": False}
             if challenge.index_settings:
+                if t.name not in DEFAULT_TRACKS:
+                    console.warn("Track [%s] defines the deprecated property 'index-settings'. Please create indices explicitly with "
+                                 "[create-index] and the respective index settings there instead." % t.name)
                 create_index_params["settings"] = challenge.index_settings
             if len(t.templates) > 0:
                 # check if the user has defined a create index template operation
-                f = track.TaskOpTypeFilter(track.OperationType.CreateIndexTemplate.name)
-                user_creates_templates = any(task.matches(f) for task in challenge.schedule)
+                user_creates_templates = any(task.matches(track.TaskOpTypeFilter(track.OperationType.CreateIndexTemplate.name))
+                                             for task in challenge.schedule)
                 # We attempt to still do this automatically but issue a warning so that the user will create it themselves.
                 if not user_creates_templates:
                     console.warn("Track [%s] defines %d index template(s) but soon Rally will not create them implicitly anymore. Please "
