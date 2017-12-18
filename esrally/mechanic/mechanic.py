@@ -228,79 +228,27 @@ class MechanicActor(actor.RallyActor):
         self.cluster = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        try:
-            logger.info("MechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
-            if isinstance(msg, StartEngine):
-                self.on_start_engine(msg, sender)
-            elif isinstance(msg, NodesStarted):
-                self.metrics_store.merge_meta_info(msg.system_meta_info)
+        logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
 
-                # Initially the addresses of the children are not
-                # known and there is just a None placeholder in the
-                # array.  As addresses become known, fill them in.
-                if sender not in self.children:
-                    # Length-limited FIFO characteristics:
-                    self.children.insert(0, sender)
-                    self.children.pop()
+    def receiveMsg_ChildActorExited(self, msg, sender):
+        if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
+            logger.info("Child actor exited while engine is stopping or stopped: [%s]" % msg)
+            return
+        failmsg = "Child actor exited with [%s] while in status [%s]." % (msg, self.status)
+        logger.error(failmsg)
+        self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
-                self.transition_when_all_children_responded(sender, msg, "starting", "nodes_started", self.on_all_nodes_started)
-            elif isinstance(msg, MetricsMetaInfoApplied):
-                self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
-            elif isinstance(msg, OnBenchmarkStart):
-                self.metrics_store.lap = msg.lap
-                # in the first lap, we are in state "cluster_started", after that in "benchmark_stopped"
-                self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
-            elif isinstance(msg, BenchmarkStarted):
-                self.transition_when_all_children_responded(
-                    sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
-            elif isinstance(msg, ResetRelativeTime):
-                if msg.reset_in_seconds > 0:
-                    self.wakeupAfter(msg.reset_in_seconds)
-                else:
-                    self.reset_relative_time()
-            elif isinstance(msg, thespian.actors.WakeupMessage):
-                self.reset_relative_time()
-            elif isinstance(msg, actor.BenchmarkFailure):
-                self.send(self.race_control, msg)
-            elif isinstance(msg, OnBenchmarkStop):
-                self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
-            elif isinstance(msg, BenchmarkStopped):
-                self.metrics_store.bulk_add(msg.system_metrics)
-                self.transition_when_all_children_responded(
-                    sender, msg, "benchmark_stopping", "benchmark_stopped", self.on_benchmark_stopped)
-            elif isinstance(msg, StopEngine):
-                # detach from cluster and gather all system metrics
-                self.cluster_launcher.stop(self.cluster)
-                # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
-                # cluster from various states and we don't check here for a specific one.
-                self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
-            elif isinstance(msg, NodesStopped):
-                self.metrics_store.bulk_add(msg.system_metrics)
-                self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
-            elif isinstance(msg, thespian.actors.ActorExitRequest):
-                # due to early termination by race control. If it's self-initiated we already took care of the rest.
-                if sender != self.myAddress:
-                    self.send_to_children_and_transition(self.myAddress, msg, expected_status=None, new_status="cluster_stopping")
-            elif isinstance(msg, thespian.actors.ChildActorExited):
-                if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
-                    logger.info("Child actor exited while engine is stopping or stopped: [%s]" % msg)
-                else:
-                    raise exceptions.RallyError("Child actor exited with [%s] while in status [%s]." % (msg, self.status))
-            elif isinstance(msg, thespian.actors.PoisonMessage):
-                # something went wrong with a child actor
-                if isinstance(msg.poisonMessage, StartEngine):
-                    raise exceptions.LaunchError("Could not start benchmark candidate. Are Rally daemons on all targeted machines running?")
-                else:
-                    logger.error("[%s] sent to a child actor has resulted in PoisonMessage" % str(msg.poisonMessage))
-                    raise exceptions.RallyError("Could not communicate with benchmark candidate (unknown reason)")
-            else:
-                logger.info("MechanicActor received unknown message [%s] (ignoring)." % (str(msg)))
-        except BaseException as e:
-            logger.exception("Cannot process message")
-            logger.error("Failed message details: [%s]. Notifying [%s]." % (msg, self.race_control))
-            self.send(self.race_control, actor.BenchmarkFailure("Error in Elasticsearch cluster coordinator", e))
+    def receiveMsg_PoisonMessage(self, msg, sender):
+        # something went wrong with a child actor
+        if isinstance(msg.poisonMessage, StartEngine):
+            failmsg = "Could not start benchmark candidate. Are Rally daemons on all targeted machines running?"
+        else:
+            failmsg = "[%s] sent to a child actor has resulted in PoisonMessage. " \
+                      "Could not communicate with benchmark candidate (unknown reason)" % str(msg.poisonMessage)
+        logger.error(failmsg)
+        self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
-    def on_start_engine(self, msg, sender):
+    def receiveMsg_StartEngine(self, msg, sender):
         logger.info("Received signal from race control to start engine.")
         self.race_control = sender
         self.cfg = msg.cfg
@@ -317,7 +265,6 @@ class MechanicActor(actor.RallyActor):
             logger.info("Cluster will not be provisioned by Rally.")
             # just create one actor for this special case and run it on the coordinator node (i.e. here)
             m = self.createActor(NodeMechanicActor,
-                                 globalName="/rally/mechanic/worker/external",
                                  targetActorRequirements={"coordinator": True})
             self.children.append(m)
             self.send(m, msg.for_nodes(ip=hosts))
@@ -330,6 +277,62 @@ class MechanicActor(actor.RallyActor):
         # Initialize the children array to have the right size to
         # ensure waiting for all responses
         self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
+
+    def receiveMsg_NodesStarted(self, msg, sender):
+        self.metrics_store.merge_meta_info(msg.system_meta_info)
+
+        # Initially the addresses of the children are not
+        # known and there is just a None placeholder in the
+        # array.  As addresses become known, fill them in.
+        if sender not in self.children:
+            # Length-limited FIFO characteristics:
+            self.children.insert(0, sender)
+            self.children.pop()
+
+        self.transition_when_all_children_responded(sender, msg, "starting", "nodes_started", self.on_all_nodes_started)
+
+    def receiveMsg_MetricsMetaInfoApplied(self, msg, sender):
+        self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
+
+    def receiveMsg_OnBenchmarkStart(self, msg, sender):
+        self.metrics_store.lap = msg.lap
+        # in the first lap, we are in state "cluster_started", after that in "benchmark_stopped"
+        self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
+
+    def receiveMsg_BenchmarkStarted(self, msg, sender):
+        self.transition_when_all_children_responded(
+            sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
+
+    def receiveMsg_ResetRelativeTime(self, msg, sender):
+        if msg.reset_in_seconds > 0:
+            self.wakeupAfter(msg.reset_in_seconds)
+        else:
+            self.reset_relative_time()
+
+    def receiveMsg_WakeupMessage(self, msg, sender):
+        self.reset_relative_time()
+
+    def receiveMsg_BenchmarkFailure(self, msg, sender):
+        self.send(self.race_control, msg)
+
+    def receiveMsg_OnBenchmarkStop(self, msg, sender):
+        self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
+
+    def receiveMsg_BenchmarkStopped(self, msg, sender):
+        self.metrics_store.bulk_add(msg.system_metrics)
+        self.transition_when_all_children_responded(
+            sender, msg, "benchmark_stopping", "benchmark_stopped", self.on_benchmark_stopped)
+
+    def receiveMsg_StopEngine(self, msg, sender):
+        # detach from cluster and gather all system metrics
+        self.cluster_launcher.stop(self.cluster)
+        # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
+        # cluster from various states and we don't check here for a specific one.
+        self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
+
+    def receiveMsg_NodesStopped(self, msg, sender):
+        self.metrics_store.bulk_add(msg.system_metrics)
+        self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
         self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
