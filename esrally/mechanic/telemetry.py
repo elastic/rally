@@ -121,7 +121,7 @@ class FlightRecorder(TelemetryDevice):
 
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
-        log_file = "%s/%s-%s.jfr" % (self.log_root, car.name, candidate_id)
+        log_file = "%s/%s-%s.jfr" % (self.log_root, car.safe_name, candidate_id)
 
         console.println("\n***************************************************************************\n")
         console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
@@ -160,7 +160,7 @@ class JitCompiler(TelemetryDevice):
 
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
-        log_file = "%s/%s-%s.jit.log" % (self.log_root, car.name, candidate_id)
+        log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger)
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
@@ -179,7 +179,7 @@ class Gc(TelemetryDevice):
 
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
-        log_file = "%s/%s-%s.gc.log" % (self.log_root, car.name, candidate_id)
+        log_file = "%s/%s-%s.gc.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger)
         return self.java_opts(log_file)
 

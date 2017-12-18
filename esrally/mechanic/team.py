@@ -187,6 +187,10 @@ class Car:
         self.variables = variables
         self.env = env
 
+    @property
+    def safe_name(self):
+        return self.name.replace("+", "_")
+
     def __str__(self):
         return self.name
 
