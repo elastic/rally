@@ -124,7 +124,7 @@ License
  
 This software is licensed under the Apache License, version 2 ("ALv2"), quoted below.
 
-Copyright 2015-2017 Elasticsearch <https://www.elastic.co>
+Copyright 2015-2018 Elasticsearch <https://www.elastic.co>
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not
 use this file except in compliance with the License. You may obtain a copy of
