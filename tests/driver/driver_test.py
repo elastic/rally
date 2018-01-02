@@ -395,10 +395,7 @@ class MetricsAggregationTests(TestCase):
 class SchedulerTests(ScheduleTestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
-        self.test_track = track.Track(name="unittest", description="unittest track",
-                                      source_root_url="http://example.org",
-                                      indices=None,
-                                      challenges=None)
+        self.test_track = track.Track(name="unittest")
 
     def test_search_task_one_client(self):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
@@ -522,7 +519,6 @@ class ExecutorTests(TestCase):
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
-                                 source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
 
@@ -573,7 +569,6 @@ class ExecutorTests(TestCase):
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
-                                 source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
 
@@ -614,7 +609,6 @@ class ExecutorTests(TestCase):
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
-                                 source_root_url="http://example.org",
                                  indices=None,
                                  challenges=None)
 

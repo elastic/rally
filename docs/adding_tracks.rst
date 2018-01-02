@@ -4,16 +4,15 @@ Define Custom Workloads: Tracks
 Definition
 ----------
 
-A track is a specification of one ore more benchmarking scenarios with a specific document corpus.
+A track is the specification of one ore more benchmarking scenarios with a specific document corpus.
 
 .. note::
     Please see the :doc:`track reference </track>` for more information on the structure of a track.
 
-
 Example track
 -------------
 
-Let's create an example track step by step. We will call this track "tutorial". The track consists of two components: the data set and the actual track specification which describes the workload that Rally should apply. We will store everything in the directory ``~/rally-tracks/tutorial`` but you can choose any other location.
+Let's create an example track step by step. We will call this track "tutorial". The track consists of two components: the data and the actual track specification which describes the workload that Rally should apply. We will store everything in the directory ``~/rally-tracks/tutorial`` but you can choose any other location.
 
 First, we need some data. `Geonames <http://www.geonames.org/>`_ provides geo data under a `creative commons license <http://creativecommons.org/licenses/by/3.0/>`_. We will download `allCountries.zip <http://download.geonames.org/export/dump/allCountries.zip>`_ (around 300MB), extract it and inspect ``allCountries.txt``.
 
@@ -21,24 +20,24 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
 
     import json
 
-    cols = (("geonameid", "int"),
-            ("name", "string"),
-            ("asciiname", "string"),
-            ("alternatenames", "string"),
-            ("latitude", "double"),
-            ("longitude", "double"),
-            ("feature_class", "string"),
-            ("feature_code", "string"),
-            ("country_code", "string"),
-            ("cc2", "string"),
-            ("admin1_code", "string"),
-            ("admin2_code", "string"),
-            ("admin3_code", "string"),
-            ("admin4_code", "string"),
-            ("population", "long"),
-            ("elevation", "int"),
-            ("dem", "string"),
-            ("timezone", "string"))
+    cols = (("geonameid", "int", True),
+            ("name", "string", True),
+            ("asciiname", "string", False),
+            ("alternatenames", "string", False),
+            ("latitude", "double", True),
+            ("longitude", "double", True),
+            ("feature_class", "string", False),
+            ("feature_code", "string", False),
+            ("country_code", "string", True),
+            ("cc2", "string", False),
+            ("admin1_code", "string", False),
+            ("admin2_code", "string", False),
+            ("admin3_code", "string", False),
+            ("admin4_code", "string", False),
+            ("population", "long", True),
+            ("elevation", "int", False),
+            ("dem", "string", False),
+            ("timezone", "string", False))
 
 
     def main():
@@ -47,13 +46,13 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
                 tup = line.strip().split("\t")
                 record = {}
                 for i in range(len(cols)):
-                    name, type = cols[i]
-                    if tup[i] != "":
+                    name, type, include = cols[i]
+                    if tup[i] != "" and include:
                         if type in ("int", "long"):
                             record[name] = int(tup[i])
                         elif type == "double":
                             record[name] = float(tup[i])
-                        else:
+                        elif type == "string":
                             record[name] = tup[i]
                 print(json.dumps(record, ensure_ascii=False))
 
@@ -63,22 +62,61 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
 
 Store the script as ``toJSON.py`` in our tutorial directory (``~/rally-tracks/tutorial``) and invoke the script with ``python3 toJSON.py > documents.json``.
 
-We also need a mapping file for our documents. For details on how to write a mapping file, see `the Elasticsearch documentation on mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and look at an `example mapping file <https://github.com/elastic/rally-tracks/blob/master/geonames/mappings.json>`_. Place the mapping file in the tutorial directory.
+We also need a mapping file for our documents. Store the following snippet as ``index.json`` in the tutorial directory::
 
-Finally, add a file called ``track.json`` right next to the mapping file::
+    {
+      "settings": {
+        "index.number_of_replicas": 0
+      },
+      "mappings": {
+        "docs": {
+          "dynamic": "strict",
+          "properties": {
+            "geonameid": {
+              "type": "long"
+            },
+            "name": {
+              "type": "text"
+            },
+            "latitude": {
+              "type": "double"
+            },
+            "longitude": {
+              "type": "double"
+            },
+            "country_code": {
+              "type": "text"
+            },
+            "population": {
+              "type": "long"
+            }
+          }
+        }
+      }
+    }
+
+For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
+
+Finally, add a file called ``track.json`` in the tutorial directory::
 
     {
       "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
-          "types": [
+          "auto-managed": false,
+          "body": "index.json",
+          "types": [ "docs" ]
+        }
+      ],
+      "corpora": [
+        {
+          "name": "rally-tutorial",
+          "documents": [
             {
-              "name": "type",
-              "mapping": "mappings.json",
-              "documents": "documents.json",
-              "document-count": 8647880,
-              "uncompressed-bytes": 2790927196
+              "source-file": "documents.json",
+              "document-count": 11658903,
+              "uncompressed-bytes": 1544799789
             }
           ]
         }
@@ -87,10 +125,25 @@ Finally, add a file called ``track.json`` right next to the mapping file::
         {
           "name": "index-and-query",
           "default": true,
-          "index-settings": {
-            "index.number_of_replicas": 0
-          },
           "schedule": [
+            {
+              "operation": {
+                "operation-type": "delete-index"
+              }
+            },
+            {
+              "operation": {
+                "operation-type": "create-index"
+              }
+            },
+            {
+              "operation": {
+                "operation-type": "cluster-health",
+                "request-params": {
+                  "wait_for_status": "green"
+                }
+              }
+            },
             {
               "operation": {
                 "operation-type": "bulk",
@@ -100,8 +153,9 @@ Finally, add a file called ``track.json`` right next to the mapping file::
               "clients": 8
             },
             {
-              "operation": "force-merge",
-              "clients": 1
+              "operation": {
+                "operation-type": "force-merge"
+              }
             },
             {
               "operation": {
@@ -126,9 +180,9 @@ Finally, add a file called ``track.json`` right next to the mapping file::
 
 A few things to note:
 
-* If you define multiple challenges, Rally will run the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
+* The numbers below the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
 * You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
-* The numbers below the ``types`` property are needed to verify integrity and provide progress reports.
+
 
 .. note::
 
@@ -152,9 +206,9 @@ When you invoke ``esrally list tracks --track-path=~/rally-tracks/tutorial``, th
     
     Name        Description                   Documents    Compressed Size  Uncompressed Size  Default Challenge  All Challenges
     ----------  ----------------------------- -----------  ---------------  -----------------  -----------------  ---------------
-    tutorial    Tutorial benchmark for Rally      8647880  N/A              2.6 GB             index-and-query    index-and-query
+    tutorial    Tutorial benchmark for Rally      11658903  N/A              1.4 GB            index-and-query    index-and-query
 
-Congratulations, you have created your first track! You can test it with ``esrally --track-path=~/rally-tracks/tutorial`` and run specific challenges with ``esrally --track-path=~/rally-tracks/tutorial --challenge=index-and-query``.
+Congratulations, you have created your first track! You can test it with ``esrally --distribution-version=6.0.0 --track-path=~/rally-tracks/tutorial``.
 
 .. _add_track_test_mode:
 
@@ -164,9 +218,9 @@ Adding support for test mode
 When you invoke Rally with ``--test-mode``, it switches to a mode that allows you to check your track very quickly for syntax errors. To achieve that, it will postprocess its internal track representation after loading it:
 
 * Iteration-based tasks will run at most one warmup iteration and one measurement iteration.
-* Time-period-based task will run for at most 10 seconds without any warmup.
+* Time-period-based tasks will run for at most 10 seconds without any warmup.
 
-Rally will postprocess all data file names of a track. So instead of ``documents.json.bz2``, Rally will attempt to find ``documents-1k.json.bz2`` and will assume it contains 1.000 documents. However, you need to prepare these data files otherwise this test mode is not supported.
+Rally will postprocess all data file names of a track. So instead of ``documents.json``, Rally will attempt to find ``documents-1k.json`` and will assume it contains 1.000 documents. However, you need to prepare these data files otherwise this test mode is not supported.
 
 The preparation is very easy. Just pick 1.000 documents for every data file in your track. We choose the first 1.000 here but it does not matter usually which part you choose: ``head -n 1000 documents.json > documents-1k.json``.
 
@@ -176,41 +230,57 @@ Structuring your track
 ``track.json`` is just the entry point to a track but you can split your track as you see fit. Suppose you want to add more challenges to the track above but you want to keep them in a separate files. Let's start by storing our challenge in a separate file, e.g in ``challenges/index-and-query.json``. Create the directory and store the following in ``index-and-query.json``::
 
     {
-          "name": "index-and-query",
-          "default": true,
-          "index-settings": {
-            "index.number_of_replicas": 0
-          },
-          "schedule": [
-            {
-              "operation": {
-                "operation-type": "bulk",
-                "bulk-size": 5000
-              }
-              "warmup-time-period": 120,
-              "clients": 8
-            },
-            {
-              "operation": "force-merge",
-              "clients": 1
-            },
-            {
-              "operation": {
-                "name": "query-match-all",
-                "operation-type": "search",
-                "body": {
-                  "query": {
-                    "match_all": {}
-                  }
-                }
-              },
-              "clients": 8,
-              "warmup-iterations": 1000,
-              "iterations": 1000,
-              "target-throughput": 100
+      "name": "index-and-query",
+      "default": true,
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "delete-index"
+          }
+        },
+        {
+          "operation": {
+            "operation-type": "create-index"
+          }
+        },
+        {
+          "operation": {
+            "operation-type": "cluster-health",
+            "request-params": {
+              "wait_for_status": "green"
             }
-          ]
+          }
+        },
+        {
+          "operation": {
+            "operation-type": "bulk",
+            "bulk-size": 5000
+          },
+          "warmup-time-period": 120,
+          "clients": 8
+        },
+        {
+          "operation": {
+            "operation-type": "force-merge"
+          }
+        },
+        {
+          "operation": {
+            "name": "query-match-all",
+            "operation-type": "search",
+            "body": {
+              "query": {
+                "match_all": {}
+              }
+            }
+          },
+          "clients": 8,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
         }
+      ]
+    }
 
 Now modify ``track.json`` so it knows about your new file::
 
@@ -219,13 +289,19 @@ Now modify ``track.json`` so it knows about your new file::
       "indices": [
         {
           "name": "geonames",
-          "types": [
+          "auto-managed": false,
+          "body": "index.json",
+          "types": [ "docs" ]
+        }
+      ],
+      "corpora": [
+        {
+          "name": "rally-tutorial",
+          "documents": [
             {
-              "name": "type",
-              "mapping": "mappings.json",
-              "documents": "documents.json",
-              "document-count": 8647880,
-              "uncompressed-bytes": 2790927196
+              "source-file": "documents.json",
+              "document-count": 11658903,
+              "uncompressed-bytes": 1544799789
             }
           ]
         }
@@ -244,18 +320,39 @@ If you want to reuse operation definitions across challenges, you can also defin
       "indices": [
         {
           "name": "geonames",
-          "types": [
+          "auto-managed": false,
+          "body": "index.json",
+          "types": [ "docs" ]
+        }
+      ],
+      "corpora": [
+        {
+          "name": "rally-tutorial",
+          "documents": [
             {
-              "name": "type",
-              "mapping": "mappings.json",
-              "documents": "documents.json",
-              "document-count": 8647880,
-              "uncompressed-bytes": 2790927196
+              "source-file": "documents.json",
+              "document-count": 11658903,
+              "uncompressed-bytes": 1544799789
             }
           ]
         }
       ],
       "operations": [
+        {
+          "name": "delete",
+          "operation-type": "delete-index"
+        },
+        {
+          "name": "create",
+          "operation-type": "create-index"
+        },
+        {
+          "name": "wait-for-green",
+          "operation-type": "cluster-health",
+          "request-params": {
+            "wait_for_status": "green"
+          }
+        },
         {
           "name": "bulk-index",
           "operation-type": "bulk",
@@ -283,32 +380,37 @@ If you want to reuse operation definitions across challenges, you can also defin
 ``challenges/index-and-query.json`` then becomes::
 
     {
-          "name": "index-and-query",
-          "default": true,
-          "index-settings": {
-            "index.number_of_replicas": 0
-          },
-          "schedule": [
-            {
-              "operation": "bulk-index",
-              "warmup-time-period": 120,
-              "clients": 8
-            },
-            {
-              "operation": "force-merge",
-              "clients": 1
-            },
-            {
-              "operation": "query-match-all",
-              "clients": 8,
-              "warmup-iterations": 1000,
-              "iterations": 1000,
-              "target-throughput": 100
-            }
-          ]
+      "name": "index-and-query",
+      "default": true,
+      "schedule": [
+        {
+          "operation": "delete"
+        },
+        {
+          "operation": "create"
+        },
+        {
+          "operation": "wait-for-green"
+        },
+        {
+          "operation": "bulk-index",
+          "warmup-time-period": 120,
+          "clients": 8
+        },
+        {
+          "operation": "force-merge"
+        },
+        {
+          "operation": "query-match-all",
+          "clients": 8,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
         }
+      ]
+    }
 
-Note how we reference to the operations by their name (i.e. ``bulk-index``, ``force-merge`` and ``query-match-all``).
+Note how we reference to the operations by their name (e.g. ``create``, ``bulk-index``, ``force-merge`` or ``query-match-all``).
 
 If your track consists of multiple challenges, it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
 
@@ -318,18 +420,39 @@ If your track consists of multiple challenges, it can be cumbersome to include t
       "indices": [
         {
           "name": "geonames",
-          "types": [
+          "auto-managed": false,
+          "body": "index.json",
+          "types": [ "docs" ]
+        }
+      ],
+      "corpora": [
+        {
+          "name": "rally-tutorial",
+          "documents": [
             {
-              "name": "type",
-              "mapping": "mappings.json",
-              "documents": "documents.json",
-              "document-count": 8647880,
-              "uncompressed-bytes": 2790927196
+              "source-file": "documents.json",
+              "document-count": 11658903,
+              "uncompressed-bytes": 1544799789
             }
           ]
         }
       ],
       "operations": [
+        {
+          "name": "delete",
+          "operation-type": "delete-index"
+        },
+        {
+          "name": "create",
+          "operation-type": "create-index"
+        },
+        {
+          "name": "wait-for-green",
+          "operation-type": "cluster-health",
+          "request-params": {
+            "wait_for_status": "green"
+          }
+        },
         {
           "name": "bulk-index",
           "operation-type": "bulk",
@@ -360,6 +483,10 @@ We changed two things here. First, we imported helper functions from Rally by ad
 
     If you want to check the final result, please check Rally's log file. Rally will print the fully rendered track there after it has loaded it successfully.
 
+.. note::
+
+    If you define multiple challenges, Rally will run the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
+
 You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but you need to import the Rally helpers a bit differently then. You also need to declare all variables before the ``import`` statement::
 
         {% set clients = 16 %}
@@ -370,7 +497,7 @@ If you use this idiom you can then refer to variables inside your snippets with 
 Sharing your track with others
 ------------------------------
 
-At the moment your track is only available on your local machine but maybe you want to share it with other people in your team. You can share the track itself in any way you want, e.g. you can check it into version control. However, you will most likely not want to commit the potentially huge data file. Therefore, you can expose the data via http (e.g. via S3) and Rally can download it from there. To make this work, you need to add an additional property ``data-url`` at the top-level of your ``track.json`` file which contains the URL from where to download your documents. Rally expects that the URL points to the parent path and will append the document file name automatically.
+At the moment your track is only available on your local machine but maybe you want to share it with other people in your team. You can share the track itself in any way you want, e.g. you can check it into version control. However, you will most likely not want to commit the potentially huge data file. Therefore, you can expose the data via http (e.g. via S3) and Rally can download it from there. To make this work, you need to add an additional property ``base-url`` for each document corpus which contains the URL from where to download your documents. Rally expects that the URL points to the parent path and will append the document file name automatically.
 
 It is also recommended that you compress your document corpus to save network bandwidth. We recommend to use bzip2 compression. You can create a compressed archive with the following command::
 
@@ -382,22 +509,20 @@ If you want to support the test mode, don't forget to also compress your test mo
 
 Then upload ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote location.
 
-Finally, specify the compressed file name in your ``track.json`` file::
+Finally, specify the compressed file name in your ``track.json`` file in the ``source-file`` property and also add the ``base-url`` property::
 
     {
       "description": "Tutorial benchmark for Rally",
-      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
-      "indices": [
+      "corpora": [
         {
-          "name": "geonames",
-          "types": [
+          "name": "rally-tutorial",
+          "documents": [
             {
-              "name": "type",
-              "mapping": "mappings.json",
-              "documents": "documents.json.bz2",
-              "document-count": 8647880,
+              "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "source-file": "documents.json.bz2",
+              "document-count": 11658903,
               "compressed-bytes": 197857614,
-              "uncompressed-bytes": 2790927196
+              "uncompressed-bytes": 1544799789
             }
           ]
         }

@@ -38,33 +38,6 @@ class Index:
         else:
             return False
 
-    @property
-    def number_of_documents(self):
-        num_docs = 0
-        for t in self.types:
-            num_docs += t.number_of_documents
-        return num_docs
-
-    @property
-    def compressed_size_in_bytes(self):
-        size = 0
-        for t in self.types:
-            if t.compressed_size_in_bytes is not None:
-                size += t.compressed_size_in_bytes
-            else:
-                return None
-        return size
-
-    @property
-    def uncompressed_size_in_bytes(self):
-        size = 0
-        for t in self.types:
-            if t.uncompressed_size_in_bytes is not None:
-                size += t.uncompressed_size_in_bytes
-            else:
-                return None
-        return size
-
     def __str__(self):
         return self.name
 
@@ -122,53 +95,18 @@ class Type:
     Defines a type in Elasticsearch.
     """
 
-    def __init__(self, name, mapping=None, document_file=None, document_archive=None, includes_action_and_meta_data=False,
-                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0):
+    def __init__(self, name, mapping=None):
         """
 
         Creates a new type. Mappings are mandatory but the document_archive (and associated properties) are optional.
 
         :param name: The name of this type. Mandatory.
         :param mapping: The type's mapping. Optional.
-        :param document_file: The file name of benchmark documents after decompression. Optional (e.g. for percolation we
-        just need a mapping but no documents)
-        :param document_archive: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for
-        percolation we just need a mapping but no documents)
-        :param includes_action_and_meta_data: True, if the source file already includes the action and meta-data line. False, if it only
-        contains documents.
-        :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
-         a document_archive is given.
-        :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
-         user reporting. Only useful if a document_archive is given (optional but recommended to be set).
-        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only useful if a
-        document_archive is given (optional but recommended to be set).
         """
         if mapping is None:
             mapping = {}
         self.name = name
         self.mapping = mapping
-        self.document_file = document_file
-        self.document_archive = document_archive
-        self.includes_action_and_meta_data = includes_action_and_meta_data
-        self.number_of_documents = number_of_documents
-        self.compressed_size_in_bytes = compressed_size_in_bytes
-        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
-
-    def has_valid_document_data(self):
-        return (self.has_compressed_corpus() or self.has_uncompressed_corpus()) and self.number_of_documents > 0
-
-    def has_compressed_corpus(self):
-        return self.document_archive is not None
-
-    def has_uncompressed_corpus(self):
-        return self.document_file is not None
-
-    @property
-    def number_of_lines(self):
-        if self.includes_action_and_meta_data:
-            return self.number_of_documents * 2
-        else:
-            return self.number_of_documents
 
     def __str__(self, *args, **kwargs):
         return self.name
@@ -186,34 +124,168 @@ class Type:
         return self.name == other.name
 
 
+class Documents:
+    SOURCE_FORMAT_BULK = "bulk"
+
+    def __init__(self, source_format, document_file=None, document_archive=None, base_url=None, includes_action_and_meta_data=False,
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None, target_type=None):
+        """
+
+        :param source_format: The format of these documents. Mandatory.
+        :param document_file: The file name of benchmark documents after decompression. Optional (e.g. for percolation we
+        just need a mapping but no documents)
+        :param document_archive: The file name of the compressed benchmark document name on the remote server. Optional (e.g. for
+        percolation we just need a mapping but no documents)
+        :param base_url: The URL from which to load data if they are not available locally. Optional.
+        :param includes_action_and_meta_data: True, if the source file already includes the action and meta-data line. False, if it only
+        contains documents.
+        :param number_of_documents: The number of documents in the benchmark document. Needed for proper progress reporting. Only needed if
+         a document_archive is given.
+        :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
+         user reporting. Only useful if a document_archive is given (optional but recommended to be set).
+        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only useful if a
+        document_archive is given (optional but recommended to be set).
+        :param target_index: The index to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data`` is ``False``.
+        :param target_type: The document type to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data``
+        is ``False``.
+        """
+
+        self.source_format = source_format
+        self.document_file = document_file
+        self.document_archive = document_archive
+        self.base_url = base_url
+        self.includes_action_and_meta_data = includes_action_and_meta_data
+        self.number_of_documents = number_of_documents
+        self.compressed_size_in_bytes = compressed_size_in_bytes
+        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
+        self.target_index = target_index
+        self.target_type = target_type
+
+    def has_compressed_corpus(self):
+        return self.document_archive is not None
+
+    def has_uncompressed_corpus(self):
+        return self.document_file is not None
+
+    @property
+    def number_of_lines(self):
+        if self.includes_action_and_meta_data:
+            return self.number_of_documents * 2
+        else:
+            return self.number_of_documents
+
+    @property
+    def is_bulk(self):
+        return self.source_format == Documents.SOURCE_FORMAT_BULK
+
+    def __str__(self):
+        return "%s documents from %s" % (self.source_format, self.document_file)
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.source_format) ^ hash(self.document_file) ^ hash(self.document_archive) ^ hash(self.base_url) ^ \
+               hash(self.includes_action_and_meta_data) ^ hash(self.number_of_documents) ^ hash(self.compressed_size_in_bytes) ^ \
+               hash(self.uncompressed_size_in_bytes) ^ hash(self.target_index) ^ hash(self.target_type)
+
+    def __eq__(self, othr):
+        return (isinstance(othr, type(self)) and
+                (self.source_format, self.document_file, self.document_archive, self.base_url, self.includes_action_and_meta_data,
+                 self.number_of_documents, self.compressed_size_in_bytes, self.uncompressed_size_in_bytes,
+                 self.target_type, self.target_type) ==
+                (othr.source_format, othr.document_file, othr.document_archive, othr.base_url, othr.includes_action_and_meta_data,
+                 othr.number_of_documents, othr.compressed_size_in_bytes, othr.uncompressed_size_in_bytes,
+                 othr.target_type, othr.target_type))
+
+
+class DocumentCorpus:
+    SOURCE_FORMAT_BULK = "bulk"
+
+    def __init__(self, name, documents=None):
+        """
+
+        :param name: The name of this document corpus. Mandatory.
+        :param documents: A list of ``Documents`` instances that belong to this corpus.
+        """
+        if documents is None:
+            documents = []
+        self.name = name
+        self.documents = documents
+
+    def number_of_documents(self, source_format):
+        num = 0
+        for doc in self.documents:
+            if doc.source_format == source_format:
+                num += doc.number_of_documents
+        return num
+
+    def compressed_size_in_bytes(self, source_format):
+        num = 0
+        for doc in self.documents:
+            if doc.source_format == source_format and doc.compressed_size_in_bytes is not None:
+                num += doc.compressed_size_in_bytes
+            else:
+                return None
+        return num
+
+    def uncompressed_size_in_bytes(self, source_format):
+        num = 0
+        for doc in self.documents:
+            if doc.source_format == source_format and doc.uncompressed_size_in_bytes is not None:
+                num += doc.uncompressed_size_in_bytes
+            else:
+                return None
+        return num
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name) ^ hash(self.documents)
+
+    def __eq__(self, othr):
+        return (isinstance(othr, type(self)) and
+                (self.name, self.documents) ==
+                (othr.name, othr.documents))
+
+
 class Track:
     """
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description=None, source_root_url=None, meta_data=None, challenges=None, indices=None,
-                 templates=None, has_plugins=False):
+    def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, templates=None, corpora=None,
+                 has_plugins=False):
         """
 
         Creates a new track.
 
         :param name: A short, descriptive name for this track. As per convention, this name should be in lower-case without spaces.
         :param description: A description for this track (should be less than 80 characters).
-        :param source_root_url: The publicly reachable http URL of the root folder for this track (without a trailing slash). Directly
-        below this URL the benchmark document files have to be located.
         :param meta_data: An optional dict of meta-data elements to attach to each metrics record. Default: {}.
         :param challenges: A list of one or more challenges to use. Precondition: If the list is non-empty it contains exactly one element
         with its ``default`` property set to ``True``.
-        :param indices: A list of indices for this track. May be None. One of `indices` or `templates` must be set though.
-        :param templates: A list of index templates for this track. May be None. One of `indices` or `templates` must be set though.
+        :param indices: A list of indices for this track. May be None.
+        :param templates: A list of index templates for this track. May be None.
+        :param corpora: A list of document corpus definitions for this track. May be None.
         :param has_plugins: True iff the track also defines plugins (e.g. custom runners or parameter sources).
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
         self.description = description if description is not None else ""
-        self.source_root_url = source_root_url
         self.challenges = challenges if challenges else []
         self.indices = indices if indices else []
+        self.corpora = corpora if corpora else []
         self.templates = templates if templates else []
         self.has_plugins = has_plugins
 
@@ -240,31 +312,33 @@ class Track:
     @property
     def number_of_documents(self):
         num_docs = 0
-        if self.indices:
-            for index in self.indices:
-                num_docs += index.number_of_documents
+        for corpus in self.corpora:
+            # TODO #341: Improve API to let users define what they want (everything, just specific types, ...)
+            num_docs += corpus.number_of_documents(Documents.SOURCE_FORMAT_BULK)
         return num_docs
 
     @property
     def compressed_size_in_bytes(self):
         size = 0
-        if self.indices:
-            for index in self.indices:
-                if index.compressed_size_in_bytes is not None:
-                    size += index.compressed_size_in_bytes
-                else:
-                    return None
+        for corpus in self.corpora:
+            # TODO #341: Improve API to let users define what they want (everything, just specific types, ...)
+            curr_size = corpus.compressed_size_in_bytes(Documents.SOURCE_FORMAT_BULK)
+            if curr_size is not None:
+                size += curr_size
+            else:
+                return None
         return size
 
     @property
     def uncompressed_size_in_bytes(self):
         size = 0
-        if self.indices:
-            for index in self.indices:
-                if index.uncompressed_size_in_bytes is not None:
-                    size += index.uncompressed_size_in_bytes
-                else:
-                    return None
+        for corpus in self.corpora:
+            # TODO #341: Improve API to let users define what they want (everything, just specific types, ...)
+            curr_size = corpus.uncompressed_size_in_bytes(Documents.SOURCE_FORMAT_BULK)
+            if curr_size is not None:
+                size += curr_size
+            else:
+                return None
         return size
 
     def __str__(self):
@@ -277,13 +351,13 @@ class Track:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.meta_data) ^ hash(self.description) ^ hash(self.source_root_url) ^ hash(self.challenges) ^ \
-               hash(self.indices) ^ hash(self.templates)
+        return hash(self.name) ^ hash(self.meta_data) ^ hash(self.description) ^ hash(self.challenges) ^ \
+               hash(self.indices) ^ hash(self.templates) ^ hash(self.corpora)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.meta_data, self.description, self.source_root_url, self.challenges, self.indices, self.templates) ==
-                (othr.name, othr.meta_data, othr.description, othr.source_root_url, othr.challenges, othr.indices, othr.templates))
+                (self.name, self.meta_data, self.description, self.challenges, self.indices, self.templates, self.corpora) ==
+                (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.templates, othr.corpora))
 
 
 class Challenge:
@@ -472,7 +546,8 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None, clients=1,
+    def __init__(self, name, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None,
+                 clients=1,
                  completes_parent=False, schedule="deterministic", params=None):
         self.name = name
         self.operation = operation

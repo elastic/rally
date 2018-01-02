@@ -128,13 +128,16 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_corpus(track_name="unit-test",
-                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                              data_root="/tmp",
-                              type=track.Type(name="test-type", mapping=None, document_file="docs.json", document_archive="docs.json.bz2",
-                                              number_of_documents=5, compressed_size_in_bytes=200, uncompressed_size_in_bytes=2000),
-                              offline=False,
-                              test_mode=False)
+        loader.prepare_document_set(track_name="unit-test",
+                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                 document_file="docs.json",
+                                                                 document_archive="docs.json.bz2",
+                                                                 number_of_documents=5,
+                                                                 compressed_size_in_bytes=200,
+                                                                 uncompressed_size_in_bytes=2000),
+                                    data_root="/tmp",
+                                    offline=False,
+                                    test_mode=False)
 
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -146,13 +149,16 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_corpus(track_name="unit-test",
-                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                              data_root="/tmp",
-                              type=track.Type(name="test-type", mapping=None, document_file="docs.json", document_archive="docs.json.bz2",
-                                              number_of_documents=5, compressed_size_in_bytes=200, uncompressed_size_in_bytes=2000),
-                              offline=False,
-                              test_mode=False)
+        loader.prepare_document_set(track_name="unit-test",
+                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                 document_file="docs.json",
+                                                                 document_archive="docs.json.bz2",
+                                                                 number_of_documents=5,
+                                                                 compressed_size_in_bytes=200,
+                                                                 uncompressed_size_in_bytes=2000),
+                                    data_root="/tmp",
+                                    offline=False,
+                                    test_mode=False)
 
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -169,14 +175,16 @@ class TrackPreparationTests(TestCase):
         get_size.side_effect = [200, 1]
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                                  document_archive="docs.json.bz2", number_of_documents=5, compressed_size_in_bytes=200,
-                                                  uncompressed_size_in_bytes=2000),
-                                  offline=False,
-                                  test_mode=False)
+            loader.prepare_document_set(track_name="unit-test",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     document_file="docs.json",
+                                                                     document_archive="docs.json.bz2",
+                                                                     number_of_documents=5,
+                                                                     compressed_size_in_bytes=200,
+                                                                     uncompressed_size_in_bytes=2000),
+                                        data_root="/tmp",
+                                        offline=False,
+                                        test_mode=False)
         self.assertEqual("[/tmp/docs.json] is corrupt. Extracted [1] bytes but [2000] bytes are expected.", ctx.exception.args[0])
 
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
@@ -193,14 +201,17 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 200
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                                  document_archive="docs.json.bz2", number_of_documents=5, compressed_size_in_bytes=200,
-                                                  uncompressed_size_in_bytes=2000),
-                                  offline=False,
-                                  test_mode=False)
+            loader.prepare_document_set(track_name="unit-test",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                     document_file="docs.json",
+                                                                     document_archive="docs.json.bz2",
+                                                                     number_of_documents=5,
+                                                                     compressed_size_in_bytes=200,
+                                                                     uncompressed_size_in_bytes=2000),
+                                        data_root="/tmp",
+                                        offline=False,
+                                        test_mode=False)
         self.assertEqual("Decompressing [/tmp/docs.json.bz2] did not create [/tmp/docs.json]. Please check with the track author if the "
                          "compressed archive has been created correctly.", ctx.exception.args[0])
 
@@ -212,7 +223,8 @@ class TrackPreparationTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
-    def test_download_document_archive_if_no_file_available(self, is_file, get_size, ensure_dir, download, decompress, prepare_file_offset_table):
+    def test_download_document_archive_if_no_file_available(self, is_file, get_size, ensure_dir, download, decompress,
+                                                            prepare_file_offset_table):
         # uncompressed file does not exist
         # compressed file does not exist
         # file check for compressed file before download attempt (for potential error message)
@@ -229,18 +241,21 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_corpus(track_name="unit-test",
-                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                              data_root="/tmp",
-                              type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                              document_archive="docs.json.bz2", number_of_documents=5, compressed_size_in_bytes=200,
-                                              uncompressed_size_in_bytes=2000),
-                              offline=False,
-                              test_mode=False)
+        loader.prepare_document_set(track_name="unit-test",
+                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                 base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                 document_file="docs.json",
+                                                                 document_archive="docs.json.bz2",
+                                                                 number_of_documents=5,
+                                                                 compressed_size_in_bytes=200,
+                                                                 uncompressed_size_in_bytes=2000),
+                                    data_root="/tmp",
+                                    offline=False,
+                                    test_mode=False)
 
         ensure_dir.assert_called_with("/tmp")
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json.bz2",
+        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2",
                                     "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY)
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -260,17 +275,21 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_corpus(track_name="unit-test",
-                              source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                              data_root="/tmp",
-                              type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                              # --> We don't provide a document archive here <--
-                                              document_archive=None, number_of_documents=5, uncompressed_size_in_bytes=2000),
-                              offline=False,
-                              test_mode=False)
+        loader.prepare_document_set(track_name="unit-test",
+                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                 base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                 document_file="docs.json",
+                                                                 # --> We don't provide a document archive here <--
+                                                                 document_archive=None,
+                                                                 number_of_documents=5,
+                                                                 compressed_size_in_bytes=200,
+                                                                 uncompressed_size_in_bytes=2000),
+                                    data_root="/tmp",
+                                    offline=False,
+                                    test_mode=False)
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json",
+        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                     "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -282,13 +301,15 @@ class TrackPreparationTests(TestCase):
         is_file.return_value = False
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
-                                  offline=True,
-                                  test_mode=False)
+            loader.prepare_document_set(track_name="unit-test",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                     document_file="docs.json",
+                                                                     number_of_documents=5,
+                                                                     uncompressed_size_in_bytes=2000),
+                                        data_root="/tmp",
+                                        offline=True,
+                                        test_mode=False)
 
         self.assertEqual("Cannot find /tmp/docs.json. Please disable offline mode and retry again.", ctx.exception.args[0])
 
@@ -303,15 +324,19 @@ class TrackPreparationTests(TestCase):
         is_file.return_value = False
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url=None,
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
-                                  offline=False,
-                                  test_mode=False)
+            loader.prepare_document_set(track_name="unit-test",
+                                        data_root="/tmp",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     base_url=None,
+                                                                     document_file="docs.json",
+                                                                     document_archive=None,
+                                                                     number_of_documents=5,
+                                                                     uncompressed_size_in_bytes=2000),
 
-        self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no source URL is provided in the track.",
+                                        offline=False,
+                                        test_mode=False)
+
+        self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no base URL is provided.",
                          ctx.exception.args[0])
 
         ensure_dir.assert_not_called()
@@ -328,16 +353,17 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 100
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url=None,
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
-                                  offline=False,
-                                  test_mode=False)
+            loader.prepare_document_set(track_name="unit-test",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     document_file="docs.json",
+                                                                     number_of_documents=5,
+                                                                     uncompressed_size_in_bytes=2000),
+                                        data_root="/tmp",
+                                        offline=False,
+                                        test_mode=False)
 
         self.assertEqual("/tmp/docs.json is present but does not have the expected size of 2000 bytes and it cannot be downloaded because "
-                         "no source URL is provided in the track.", ctx.exception.args[0])
+                         "no base URL is provided.", ctx.exception.args[0])
 
         ensure_dir.assert_not_called()
         download.assert_not_called()
@@ -355,19 +381,21 @@ class TrackPreparationTests(TestCase):
                                                       404, "", None, None)
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs-1k.json",
-                                                  number_of_documents=5, uncompressed_size_in_bytes=None),
-                                  offline=False,
-                                  test_mode=True)
+            loader.prepare_document_set(track_name="unit-test",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                     document_file="docs-1k.json",
+                                                                     number_of_documents=5,
+                                                                     uncompressed_size_in_bytes=None),
+                                        data_root="/tmp",
+                                        offline=False,
+                                        test_mode=True)
 
         self.assertEqual("Track [unit-test] does not support test mode. Please ask the track author to add it or disable test mode "
                          "and retry.", ctx.exception.args[0])
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs-1k.json",
                                     "/tmp/docs-1k.json", None, progress_indicator=mock.ANY)
 
     @mock.patch("esrally.utils.net.download")
@@ -379,23 +407,25 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+        download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                                       500, "Internal Server Error", None, None)
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_corpus(track_name="unit-test",
-                                  source_root_url="http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test",
-                                  data_root="/tmp",
-                                  type=track.Type(name="test-type", mapping=None, document_file="docs.json",
-                                                  number_of_documents=5, uncompressed_size_in_bytes=2000),
-                                  offline=False,
-                                  test_mode=False)
+            loader.prepare_document_set(track_name="unit-test",
+                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                     document_file="docs.json",
+                                                                     number_of_documents=5,
+                                                                     uncompressed_size_in_bytes=2000),
+                                        data_root="/tmp",
+                                        offline=False,
+                                        test_mode=False)
 
-        self.assertEqual("Could not download [http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json] "
+        self.assertEqual("Could not download [http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json] "
                          "to [/tmp/docs.json] (HTTP status: 500, reason: Internal Server Error)", ctx.exception.args[0])
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs.json",
+        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                     "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
 
 
@@ -465,7 +495,7 @@ class TemplateRenderTests(TestCase):
                     "dynamic-key-1": '"dkey1": "value1"',
                     "dynamic-key-2": '"dkey2": "value2"',
                     "dynamic-key-3": '"dkey3": "value3"',
-                 }),
+                }),
             template_name="unittest", glob_helper=key_globber, clock=StaticClock)
 
         expected = """
@@ -502,7 +532,7 @@ class TemplateRenderTests(TestCase):
                     "unittest": template,
                     "dynamic-key-1": '"dkey1": {{ _clients }}',
                     "dynamic-key-2": '"dkey2": {{ _bulk_size }}',
-                 }),
+                }),
             template_name="unittest", template_vars={"clients": 8}, glob_helper=key_globber, clock=StaticClock)
 
         expected = """
@@ -521,16 +551,19 @@ class TemplateRenderTests(TestCase):
 class TrackPostProcessingTests(TestCase):
     def test_post_processes_track_spec(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
             "indices": [
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": [
+                    "types": ["test-type"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "unittest",
+                    "documents": [
                         {
-                            "name": "test-type",
-                            "documents": "documents.json.bz2",
+                            "source-file": "documents.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000
@@ -593,19 +626,20 @@ class TrackPostProcessingTests(TestCase):
         }
 
         expected_post_processed = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
             "indices": [
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": [
+                    "types": ["test-type"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "unittest",
+                    "documents": [
                         {
-                            "name": "test-type",
-                            "documents": "documents.json.bz2",
-                            "document-count": 10,
-                            "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "source-file": "documents-1k.json.bz2",
+                            "document-count": 1000
                         }
                     ]
                 }
@@ -669,16 +703,19 @@ class TrackPostProcessingTests(TestCase):
 
     def test_creates_index_auto_management_operations(self):
         track_specification = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
             "indices": [
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": [
+                    "types": ["test-type"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "unittest",
+                    "documents": [
                         {
-                            "name": "test-type",
-                            "documents": "documents.json.bz2",
+                            "source-file": "documents.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000
@@ -701,16 +738,19 @@ class TrackPostProcessingTests(TestCase):
         }
 
         expected_post_processed = {
-            "short-description": "short description for unit test",
-            "description": "longer description of this track for unit test",
             "indices": [
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": [
+                    "types": ["test-type"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "unittest",
+                    "documents": [
                         {
-                            "name": "test-type",
-                            "documents": "documents.json.bz2",
+                            "source-file": "documents.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000
@@ -782,20 +822,20 @@ class TrackPathTests(TestCase):
             track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Bulk), clients=4)
         ])
         another_challenge = track.Challenge("other", default=False)
-        t = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge],
-                        indices=[
-                            track.Index(name="test",
-                                        auto_managed=True,
-                                        types=[track.Type("docs",
-                                                          mapping={},
-                                                          document_file="docs/documents.json",
-                                                          document_archive="docs/documents.json.bz2")])
-                        ])
+        t = track.Track(name="u", challenges=[another_challenge, default_challenge],
+                        corpora=[
+                            track.DocumentCorpus("unittest", documents=[
+                                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                document_file="docs/documents.json",
+                                                document_archive="docs/documents.json.bz2")
+                            ])
+                        ],
+                        indices=[track.Index(name="test", types=["docs"])])
 
         loader.set_absolute_data_path(cfg, t)
 
-        self.assertEqual("/data/unittest/docs/documents.json", t.indices[0].types[0].document_file)
-        self.assertEqual("/data/unittest/docs/documents.json.bz2", t.indices[0].types[0].document_archive)
+        self.assertEqual("/data/unittest/docs/documents.json", t.corpora[0].documents[0].document_file)
+        self.assertEqual("/data/unittest/docs/documents.json.bz2", t.corpora[0].documents[0].document_archive)
 
 
 class TrackFilterTests(TestCase):
@@ -918,8 +958,8 @@ class TrackSpecificationReaderTests(TestCase):
     def test_can_read_track_info(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index", "types": [{"name": "test-type"}]}],
+            "corpora": [],
             "operations": [],
             "challenges": []
         }
@@ -927,7 +967,6 @@ class TrackSpecificationReaderTests(TestCase):
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
-        self.assertEqual("https://localhost/data", resulting_track.source_root_url)
 
     def test_document_count_mandatory_if_file_present(self):
         track_specification = {
@@ -1209,29 +1248,33 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parse_valid_track_specification(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "index-historical",
-                    "types": [
+                    "body": "body.json",
+                    "types": ["main", "secondary"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "base-url": "https://localhost/data",
+                    "documents": [
                         {
-                            "name": "main",
-                            "documents": "documents-main.json.bz2",
+                            "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
-                            "mapping": "main-type-mappings.json"
+                            "target-index": "index-historical",
+                            "target-type": "main"
                         },
                         {
-                            "name": "secondary",
-                            "documents": "documents-secondary.json.bz2",
+                            "source-file": "documents-secondary.json.bz2",
                             "includes-action-and-meta-data": True,
                             "document-count": 20,
                             "compressed-bytes": 200,
-                            "uncompressed-bytes": 20000,
-                            "mapping": "secondary-type-mappings.json"
+                            "uncompressed-bytes": 20000
                         }
-
                     ]
                 }
             ],
@@ -1278,23 +1321,49 @@ class TrackSpecificationReaderTests(TestCase):
             ]
         }
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
-            "/mappings/secondary-type-mappings.json": ['{"secondary": "empty-for-test"}'],
+            "/mappings/body.json": ['{"mappings": {"main": "empty-for-test", "secondary": "empty-for-test"}}']
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
+        # indices
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual("index-historical", resulting_track.indices[0].name)
+        self.assertDictEqual({"mappings": {"main": "empty-for-test", "secondary": "empty-for-test"}}, resulting_track.indices[0].body)
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0].name)
-        self.assertFalse(resulting_track.indices[0].types[0].includes_action_and_meta_data)
-        self.assertEqual("documents-main.json.bz2", resulting_track.indices[0].types[0].document_archive)
-        self.assertEqual("documents-main.json", resulting_track.indices[0].types[0].document_file)
-        self.assertDictEqual({"main": "empty-for-test"}, resulting_track.indices[0].types[0].mapping)
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
-        self.assertDictEqual({"secondary": "empty-for-test"}, resulting_track.indices[0].types[1].mapping)
-        self.assertTrue(resulting_track.indices[0].types[1].includes_action_and_meta_data)
+        # corpora
+        self.assertEqual(1, len(resulting_track.corpora))
+        self.assertEqual("test", resulting_track.corpora[0].name)
+        self.assertEqual(2, len(resulting_track.corpora[0].documents))
+
+        docs_primary = resulting_track.corpora[0].documents[0]
+        self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_primary.source_format)
+        self.assertEqual("documents-main.json", docs_primary.document_file)
+        self.assertEqual("documents-main.json.bz2", docs_primary.document_archive)
+        self.assertEqual("https://localhost/data", docs_primary.base_url)
+        self.assertFalse(docs_primary.includes_action_and_meta_data)
+        self.assertEqual(10, docs_primary.number_of_documents)
+        self.assertEqual(100, docs_primary.compressed_size_in_bytes)
+        self.assertEqual(10000, docs_primary.uncompressed_size_in_bytes)
+        self.assertEqual("index-historical", docs_primary.target_index)
+        self.assertEqual("main", docs_primary.target_type)
+
+        docs_secondary = resulting_track.corpora[0].documents[1]
+        self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_secondary.source_format)
+        self.assertEqual("documents-secondary.json", docs_secondary.document_file)
+        self.assertEqual("documents-secondary.json.bz2", docs_secondary.document_archive)
+        self.assertEqual("https://localhost/data", docs_secondary.base_url)
+        self.assertTrue(docs_secondary.includes_action_and_meta_data)
+        self.assertEqual(20, docs_secondary.number_of_documents)
+        self.assertEqual(200, docs_secondary.compressed_size_in_bytes)
+        self.assertEqual(20000, docs_secondary.uncompressed_size_in_bytes)
+        # This is defined by the action-and-meta-data line!
+        self.assertIsNone(docs_secondary.target_index)
+        self.assertIsNone(docs_secondary.target_type)
+
+        # challenges
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
         self.assertEqual("Default challenge", resulting_track.challenges[0].description)
@@ -1860,4 +1929,5 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
-                         "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.", ctx.exception.args[0])
+                         "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.",
+                         ctx.exception.args[0])

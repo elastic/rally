@@ -109,14 +109,18 @@ Anatomy of a track
 A track JSON file consists of the following sections:
 
 * indices
+* templates
+* corpora
 * operations
 * challenges
 
-In the ``indices`` section you describe the relevant indices. Rally can auto-manage them for you: it can download the associated data files, create and destroy the index and apply the relevant mappings. Sometimes, you may want to have full control over the index. Then you can specify ``"auto-managed": false`` on an index. Rally will then assume the index is already present. However, there are some disadvantages with this approach. First of all, this can only work if you set up the cluster by yourself and use the pipeline ``benchmark-only``. Second, the index is out of control of Rally, which means that you need to keep track for yourself of the index configuration. Third, it does not play nice with the ``laps`` feature (which you can use to run multiple iterations). Usually, Rally will destroy and recreate all specified indices for each lap but if you use ``"auto-managed": false``, it cannot do that. As a consequence it will produce bogus metrics if your track specifies that Rally should run bulk-index operations (as you'll just overwrite existing documents from lap 2 on). So please use extra care if you don't let Rally manage the track's indices.
+In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally.
+
+In the ``corpora`` section you define all document corpora (i.e. data files) that Rally should use for this track.
 
 In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
 
-In the ``challenge`` or ``challenges`` section you describe one or more execution schedules respectively. Each schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline. Think of a challenge as a scenario that you want to test for your data set. An example challenge is to index with 2 clients at maximum throughput while searching with another two clients with 10 operations per second.
+In the ``challenge`` or ``challenges`` section you describe one or more execution schedules respectively. Each schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline. Think of a challenge as a scenario that you want to test for your data. An example challenge is to index with two clients at maximum throughput while searching with another two clients with ten operations per second.
 
 Track elements
 ==============
@@ -127,7 +131,6 @@ Each track defines the following info attributes:
 
 * ``version`` (optional): An integer describing the track specification version in use. Rally uses it to detect incompatible future track specification versions and raise an error. See the table below for a reference of valid versions.
 * ``description`` (optional): A human-readable description of the track. Although it is optional, we recommend providing it.
-* ``data-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding data for this track. This element is not needed if data are only generated on the fly by a custom runner.
 
 =========================== =================
 Track Specification Version Rally version
@@ -142,8 +145,7 @@ Example::
 
     {
         "version": 1,
-        "description": "POIs from Geonames",
-        "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames"
+        "description": "POIs from Geonames"
     }
 
 meta
@@ -176,16 +178,7 @@ Each index in this list consists of the following properties:
 * ``name`` (mandatory): The name of the index.
 * ``body`` (optional): File name of the corresponding index definition that will be used as body in the create index API call.
 * ``auto-managed`` (optional, defaults to ``true``): Controls whether Rally or the user takes care of creating / destroying the index. If this setting is ``false``, Rally will neither create nor delete this index but just assume its presence.
-* types (optional): A list of types in this index.
-
-Each type consists of the following properties:
-
-* ``name`` (mandatory): Name of the type.
-* ``documents`` (optional): File name of the corresponding documents that should be indexed. For local use, this file can be a ``.json`` file. If you provide a ``data-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
-* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
-* ``document-count`` (mandatory if ``documents`` is set): Number of documents in the documents file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
-* ``compressed-bytes`` (optional but recommended if ``documents`` is set): The size in bytes of the compressed document file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
-* ``uncompressed-bytes`` (optional but recommended if ``documents`` is set): The size in bytes of the documents file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
+* ``types`` (optional): A list of type names in this index.
 
 Example::
 
@@ -193,22 +186,14 @@ Example::
         {
           "name": "geonames",
           "body": "geonames-index.json",
-          "types": [
-            {
-              "name": "type",
-              "documents": "documents.json.bz2",
-              "document-count": 8647880,
-              "compressed-bytes": 197857614,
-              "uncompressed-bytes": 2790927196
-            }
-          ]
+          "types": ["docs"]
         }
     ]
 
 templates
 .........
 
-The ``indices`` section contains a list of all index templates that Rally should create.
+The ``templates`` section contains a list of all index templates that Rally should create.
 
 * ``name`` (mandatory): Index template name
 * ``index-pattern`` (mandatory): Index pattern that matches the index template. This must match the definition in the index template file.
@@ -225,6 +210,84 @@ Example::
             "template": "default-template.json"
         }
     ]
+
+corpora
+.......
+
+The ``corpora`` section contains all document corpora that are used by this track. Note that you can reuse document corpora across tracks; just copy & paste the respective corpora definitions. It consists of the following properties:
+
+* ``name`` (mandatory): Name of this document corpus. As this name is also used by Rally in directory names, it is recommended to only use lower-case names without whitespaces for maximum compatibility across file systems.
+* ``documents`` (mandatory): A list of documents files.
+
+Each entry in the ``documents`` list consists of the following properties:
+
+* ``base-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding source file.
+* ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
+* ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
+* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
+* ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
+* ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
+* ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
+* ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-type``: Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``.
+
+To avoid repetition, you can specify default values on document corpus level for the following properties:
+
+* ``base-url``
+* ``source-format``
+* ``includes-action-and-meta-data``
+* ``target-index``
+* ``target-type``
+
+Examples
+
+Here we define a single document corpus with one set of documents::
+
+      "corpora": [
+        {
+          "name": "geonames",
+          "documents": [
+            {
+              "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "source-file": "documents.json.bz2",
+              "document-count": 11396505,
+              "compressed-bytes": 264698741,
+              "uncompressed-bytes": 3547614383,
+              "target-index": "geonames",
+              "target-type": "docs"
+            }
+          ]
+        }
+      ]
+
+We can also define default values on document corpus level but override some of them (``base-url`` for the last entry)::
+
+      "corpora": [
+        {
+          "name": "http_logs",
+          "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/http_logs",
+          "target-type": "docs",
+          "documents": [
+            {
+              "source-file": "documents-181998.json.bz2",
+              "document-count": 2708746,
+              "target-index": "logs-181998"
+            },
+            {
+              "source-file": "documents-191998.json.bz2",
+              "document-count": 9697882,
+              "target-index": "logs-191998"
+            },
+            {
+              "base-url": "http://example.org/corpora/http_logs",
+              "source-file": "documents-201998.json.bz2",
+              "document-count": 13053463,
+              "target-index": "logs-201998"
+            }
+          ]
+        }
+      ]
+
 
 operations
 ..........
@@ -244,8 +307,8 @@ bulk
 
 With the operation type ``bulk`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. It supports the following properties:
 
-* ``index`` (optional): An index name that defines which indices should be targeted by this indexing operation. Only needed if the ``index`` section contains more than one index and you don't want to index all of them with this operation.
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
+* ``corpora`` (optional): A list of document corpus names that should be targeted by this bulk-index operation. Only needed if the ``corpora`` section contains more than one document corpus and you don't want to index all of them with this operation.
 * ``batch-size`` (optional): Defines how many documents Rally will read at once. This is an expert setting and only meant to avoid accidental bottlenecks for very small bulk sizes (e.g. if you want to benchmark with a bulk-size of 1, you should set batch-size higher).
 * ``pipeline`` (optional): Defines the name of an (existing) ingest pipeline that should be used (only supported from Elasticsearch 5.0).
 * ``conflicts`` (optional): Type of index conflicts to simulate. If not specified, no conflicts will be simulated. Valid values are: 'sequential' (A document id is replaced with a document id with a sequentially increasing id), 'random' (A document id is replaced with a document id with a random other id).
@@ -634,7 +697,6 @@ In the following snippet we define two operations ``force-merge`` and a ``match-
      ],
      "challenge": {
        "name": "just-query",
-       "description": "",
        "schedule": [
          {
            "operation": "force-merge",
@@ -656,7 +718,6 @@ If we do not want to reuse these operations, we can also define them inline. Not
    {
      "challenge": {
        "name": "just-query",
-       "description": "",
        "schedule": [
          {
            "operation": {
@@ -689,7 +750,6 @@ Contrary to the ``query``, the ``force-merge`` operation does not take any param
    {
      "challenge": {
        "name": "just-query",
-       "description": "",
        "schedule": [
          {
            "operation": "force-merge",

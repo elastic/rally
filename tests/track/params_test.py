@@ -364,34 +364,42 @@ class InvocationGeneratorTests(TestCase):
         self.assertEqual((5834, 583, 1166), params.bounds(3500, 5, 6, includes_action_and_meta_data=True))
 
     def test_calculate_number_of_bulks(self):
-        t1 = self.t(1)
-        t2 = self.t(2)
+        docs1 = self.docs(1)
+        docs2 = self.docs(2)
 
-        self.assertEqual(1, self.number_of_bulks([self.idx("a", [t1])], 0, 1, 1))
-        self.assertEqual(1, self.number_of_bulks([self.idx("a", [t1])], 0, 1, 2))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 1, 1))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 1, 2))
         self.assertEqual(20, self.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 0, 1, 1))
+            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 1))
         self.assertEqual(11, self.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 0, 1, 2))
+            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 2))
         self.assertEqual(11, self.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 0, 1, 3))
+            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 3))
         self.assertEqual(11, self.number_of_bulks(
-            [self.idx("a", [t2, t2, t2, t2, t1]),
-             self.idx("b", [t2, t2, t2, t2, t2, t1])], 0, 1, 100))
+            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 100))
 
-        self.assertEqual(2, self.number_of_bulks([self.idx("a", [self.t(800)])], 0, 3, 250))
-        self.assertEqual(1, self.number_of_bulks([self.idx("a", [self.t(800)])], 0, 3, 267))
-        self.assertEqual(1, self.number_of_bulks([self.idx("a", [self.t(80)])], 0, 3, 267))
+        self.assertEqual(2, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 3, 250))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 3, 267))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 0, 3, 267))
         # this looks odd at first but we are prioritizing number of clients above bulk size
-        self.assertEqual(1, self.number_of_bulks([self.idx("a", [self.t(80)])], 1, 3, 267))
-        self.assertEqual(1, self.number_of_bulks([self.idx("a", [self.t(80)])], 2, 3, 267))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 1, 3, 267))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 2, 3, 267))
 
     @staticmethod
-    def number_of_bulks(indices, partition_index, total_partitions, bulk_size):
-        return params.number_of_bulks(indices, partition_index, total_partitions, bulk_size)
+    def corpus(name, docs):
+        return track.DocumentCorpus(name, documents=docs)
+
+    @staticmethod
+    def docs(num_docs):
+        return track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=num_docs)
+
+    @staticmethod
+    def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
+        return params.number_of_bulks(corpora, partition_index, total_partitions, bulk_size)
 
     def test_build_conflicting_ids(self):
         self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
@@ -443,15 +451,20 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("'batch-size' must be a multiple of 'bulk-size'", ctx.exception.args[0])
 
     def test_create_with_metadata_in_source_file_but_conflicts(self):
-        type1 = track.Type("type1", mapping={}, number_of_documents=10, includes_action_and_meta_data=True)
-        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            document_archive="docs.json.bz2",
+                            document_file="docs.json",
+                            number_of_documents=10,
+                            includes_action_and_meta_data=True)
+        ])
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "conflicts": "random"
             })
 
-        self.assertEqual("Cannot generate id conflicts [random] as type [index1] in index [type1] already contains "
+        self.assertEqual("Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains "
                          "an action and meta-data line.", ctx.exception.args[0])
 
     def test_create_with_unknown_id_conflicts(self):
@@ -470,12 +483,26 @@ class BulkIndexParamSourceTests(TestCase):
             "pipeline": "test-pipeline"
         }))
 
-    def test_passes_all_indices_by_default(self):
-        index1 = track.Index(name="index1", auto_managed=True, types=[])
-        index2 = track.Index(name="index2", auto_managed=True, types=[])
+    def test_passes_all_corpora_by_default(self):
+        corpora = [
+            track.DocumentCorpus(name="default", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=10,
+                                target_index="test-idx",
+                                target_type="test-type"
+                                )
+            ]),
+            track.DocumentCorpus(name="special", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=100,
+                                target_index="test-idx2",
+                                target_type="type"
+                                )
+            ]),
+        ]
 
         source = params.BulkIndexParamSource(
-            track=track.Track(name="unit-test", indices=[index1, index2]),
+            track=track.Track(name="unit-test", corpora=corpora),
             params={
                 "conflicts": "random",
                 "bulk-size": 5000,
@@ -484,16 +511,30 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
-        self.assertEqual(partition.indices, [index1, index2])
+        self.assertEqual(partition.corpora, corpora)
 
-    def test_filters_indices(self):
-        index1 = track.Index(name="index1", auto_managed=True, types=[])
-        index2 = track.Index(name="index2", auto_managed=True, types=[])
+    def test_filters_corpora(self):
+        corpora = [
+            track.DocumentCorpus(name="default", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=10,
+                                target_index="test-idx",
+                                target_type="test-type"
+                                )
+            ]),
+            track.DocumentCorpus(name="special", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=100,
+                                target_index="test-idx2",
+                                target_type="type"
+                                )
+            ]),
+        ]
 
         source = params.BulkIndexParamSource(
-            track=track.Track(name="unit-test", indices=[index1, index2]),
+            track=track.Track(name="unit-test", corpora=corpora),
             params={
-                "index": "index2",
+                "corpora": ["special"],
                 "conflicts": "random",
                 "bulk-size": 5000,
                 "batch-size": 20000,
@@ -501,24 +542,28 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
-        self.assertEqual(partition.indices, [index2])
+        self.assertEqual(partition.corpora, [corpora[1]])
 
-    def test_raises_exception_if_no_index_matches(self):
-        index1 = track.Index(name="index1", auto_managed=True, types=[])
-
-        source = params.BulkIndexParamSource(
-            track=track.Track(name="unit-test", indices=[index1]),
-            params={
-                "index": "does_not_exist",
-                "conflicts": "random",
-                "bulk-size": 5000,
-                "batch-size": 20000,
-                "pipeline": "test-pipeline"
-            })
+    def test_raises_exception_if_no_corpus_matches(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
 
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
-            source.partition(0, 1)
-        self.assertEqual("The provided index [does_not_exist] does not match any of the indices [index1].", ctx.exception.args[0])
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "corpora": "does_not_exist",
+                    "conflicts": "random",
+                    "bulk-size": 5000,
+                    "batch-size": 20000,
+                    "pipeline": "test-pipeline"
+                })
+
+        self.assertEqual("The provided corpus ['does_not_exist'] does not match any of the corpora ['default'].", ctx.exception.args[0])
 
 
 class BulkDataGeneratorTests(TestCase):
@@ -545,17 +590,21 @@ class BulkDataGeneratorTests(TestCase):
 
     @classmethod
     def create_test_reader(cls, batches):
-        def inner_create_test_reader(index, type, *args):
-            return BulkDataGeneratorTests.TestBulkReader(index, type, batches)
+        def inner_create_test_reader(docs, *args):
+            return BulkDataGeneratorTests.TestBulkReader(docs.target_index, docs.target_type, batches)
 
         return inner_create_test_reader
 
     def test_generate_two_bulks(self):
-        self.maxDiff = None
-        type1 = track.Type("type1", mapping={}, number_of_documents=10)
-        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )
+        ])
 
-        bulks = params.bulk_data_based(num_clients=1, client_index=0, indices=[index1],
+        bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus],
                                        batch_size=5, bulk_size=5, id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
@@ -569,8 +618,8 @@ class BulkDataGeneratorTests(TestCase):
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-1",
             "bulk-size": 5,
-            "index": index1,
-            "type": type1,
+            "index": "test-idx",
+            "type": "test-type",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
         }, all_bulks[0])
@@ -580,17 +629,89 @@ class BulkDataGeneratorTests(TestCase):
             "body": ["6", "7", "8"],
             "bulk-id": "0-2",
             "bulk-size": 3,
-            "index": index1,
-            "type": type1,
+            "index": "test-idx",
+            "type": "test-type",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
         }, all_bulks[1])
 
-    def test_internal_params_take_precedence(self):
-        type1 = track.Type("type1", mapping={}, number_of_documents=3)
-        index1 = track.Index(name="index1", auto_managed=True, types=[type1])
+    def test_generate_bulks_from_multiple_corpora(self):
+        corpora = [
+            track.DocumentCorpus(name="default", documents=[
+                        track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                        number_of_documents=5,
+                                        target_index="logs-2018-01",
+                                        target_type="docs"
+                                        ),
+                        track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                        number_of_documents=5,
+                                        target_index="logs-2018-02",
+                                        target_type="docs"
+                                        ),
 
-        bulks = params.bulk_data_based(num_clients=1, client_index=0, indices=[index1], batch_size=3, bulk_size=3,
+                    ]),
+            track.DocumentCorpus(name="special", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=5,
+                                target_index="logs-2017-01",
+                                target_type="docs"
+                                )
+            ])
+
+            ]
+
+        bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=corpora,
+                                       batch_size=5, bulk_size=5, id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
+                                       original_params={
+                                           "my-custom-parameter": "foo",
+                                           "my-custom-parameter-2": True
+                                       }, create_reader=BulkDataGeneratorTests.
+                                       create_test_reader([["1", "2", "3", "4", "5"]]))
+        all_bulks = list(bulks)
+        self.assertEqual(3, len(all_bulks))
+        self.assertEqual({
+            "action_metadata_present": True,
+            "body": ["1", "2", "3", "4", "5"],
+            "bulk-id": "0-1",
+            "bulk-size": 5,
+            "index": "logs-2018-01",
+            "type": "docs",
+            "my-custom-parameter": "foo",
+            "my-custom-parameter-2": True
+        }, all_bulks[0])
+
+        self.assertEqual({
+            "action_metadata_present": True,
+            "body": ["1", "2", "3", "4", "5"],
+            "bulk-id": "0-2",
+            "bulk-size": 5,
+            "index": "logs-2018-02",
+            "type": "docs",
+            "my-custom-parameter": "foo",
+            "my-custom-parameter-2": True
+        }, all_bulks[1])
+
+        self.assertEqual({
+            "action_metadata_present": True,
+            "body": ["1", "2", "3", "4", "5"],
+            "bulk-id": "0-3",
+            "bulk-size": 5,
+            "index": "logs-2017-01",
+            "type": "docs",
+            "my-custom-parameter": "foo",
+            "my-custom-parameter-2": True
+        }, all_bulks[2])
+
+    def test_internal_params_take_precedence(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=3,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )
+        ])
+
+        bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus], batch_size=3, bulk_size=3,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
                                        original_params={
                                            "body": "foo",
@@ -605,8 +726,8 @@ class BulkDataGeneratorTests(TestCase):
             "body": ["1", "2", "3"],
             "bulk-id": "0-1",
             "bulk-size": 3,
-            "index": index1,
-            "type": type1,
+            "index": "test-idx",
+            "type": "test-type",
             "custom-param": "bar"
         }, all_bulks[0])
 
@@ -738,7 +859,7 @@ class CreateIndexParamSourceTests(TestCase):
         }, p["request-params"])
 
     def test_create_index_from_track_with_settings(self):
-        type1 = track.Type("type1", number_of_documents=3)
+        type1 = track.Type("type1")
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
         index2 = track.Index(name="index2", auto_managed=True, types=[type1], body={
             "settings": {
@@ -757,7 +878,7 @@ class CreateIndexParamSourceTests(TestCase):
         })
 
         index3 = track.Index(name="index3", auto_managed=True, types=[
-            track.Type("typeA", number_of_documents=3, mapping={
+            track.Type("typeA", mapping={
                 "typeA": {
                     "properties": {
                         "name": {
@@ -766,7 +887,7 @@ class CreateIndexParamSourceTests(TestCase):
                     }
                 }
             }),
-            track.Type("typeB", number_of_documents=5, mapping={
+            track.Type("typeB", mapping={
                 "typeB": {
                     "properties": {
                         "name": {
@@ -843,7 +964,7 @@ class CreateIndexParamSourceTests(TestCase):
         }, body)
 
     def test_create_index_from_track_without_settings(self):
-        type1 = track.Type("type1", number_of_documents=3)
+        type1 = track.Type("type1")
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
         index2 = track.Index(name="index2", auto_managed=True, types=[type1], body={
             "settings": {
@@ -893,7 +1014,7 @@ class CreateIndexParamSourceTests(TestCase):
         }, body)
 
     def test_filter_index(self):
-        type1 = track.Type("type1", number_of_documents=3)
+        type1 = track.Type("type1")
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
         index2 = track.Index(name="index2", auto_managed=True, types=[type1])
         index3 = track.Index(name="index3", auto_managed=True, types=[type1])
@@ -1097,7 +1218,7 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
 class SearchParamSourceTests(TestCase):
     def test_passes_request_parameters(self):
-        type1 = track.Type("type1", mapping={}, number_of_documents=3)
+        type1 = track.Type("type1", mapping={})
         index1 = track.Index(name="index1", auto_managed=True, types=[type1])
 
         source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
@@ -1153,6 +1274,3 @@ class SearchParamSourceTests(TestCase):
         second = copy.deepcopy(search.params(choice=lambda d: d[1]))
 
         self.assertNotEqual(first, second)
-
-
-

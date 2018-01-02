@@ -13,6 +13,7 @@ Below is an example of a track with the previous syntax::
 
     {
       "description": "Tutorial benchmark for Rally",
+      "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
       "indices": [
         {
           "name": "geonames",
@@ -53,10 +54,17 @@ Before Rally 0.9.0, indices have been created implicitly. We will remove this ab
         {
           "name": "geonames",
           "body": "index.json",
-          "types": [
+          "auto-managed": false,
+          "types": [ "type" ]
+        }
+      ],
+      "corpora": [
+        {
+          "name": "geonames",
+          "documents": [
             {
-              "name": "type",
-              "documents": "documents.json",
+              "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "source-file": "documents.json",
               "document-count": 8647880,
               "uncompressed-bytes": 2790927196
             }
@@ -99,6 +107,27 @@ Before Rally 0.9.0, indices have been created implicitly. We will remove this ab
 
 Let's go through the necessary changes one by one.
 
+Define the document corpus separately
+"""""""""""""""""""""""""""""""""""""
+
+Previously you had to define the document corpus together with the document type. In order to allow you to reuse existing document corpora across tracks, you now need to specify any document corpora separately::
+
+    "corpora": [
+      {
+        "name": "geonames",
+        "documents": [
+          {
+            "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+            "source-file": "documents.json",
+            "document-count": 8647880,
+            "uncompressed-bytes": 2790927196
+          }
+        ]
+      }
+    ]
+
+Note that this is just a simple example that should cover the most basic case. Be sure to check the :doc:`track reference </track>` for all details.
+
 Change the index definition
 """""""""""""""""""""""""""
 
@@ -107,18 +136,11 @@ The new index definition now looks as follows::
         {
           "name": "geonames",
           "body": "index.json",
-          "auto-managed": false
-          "types": [
-            {
-              "name": "type",
-              "documents": "documents.json",
-              "document-count": 8647880,
-              "uncompressed-bytes": 2790927196
-            }
-          ]
+          "auto-managed": false,
+          "types": [ "type" ]
         }
 
-We have added a ``body`` property to the index and removed the ``mapping`` property from the type. Just put all type mappings now into the ``mappings`` property of the index definition. For more details, please refer to the `create index API documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_.
+We have added a ``body`` property to the index and removed the ``mapping`` property from the type. In fact, the only information that we need about the document type is its name, hence it is now a simple list of strings. Just put all type mappings now into the ``mappings`` property of the index definition. For more details, please refer to the `create index API documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_.
 
 Secondly, we have disabled index auto-management by setting ``auto-managed`` to ``false``. This allows us to define explicit tasks below to manage our index. Note that index auto-management is still working in Rally 0.9.0 but it will be removed with the next minor release Rally 0.10.0.
 

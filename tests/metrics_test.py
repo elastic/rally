@@ -588,10 +588,9 @@ class EsRaceStoreTests(TestCase):
             track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
 
-        t = track.Track(name="unittest", description="unittest track",
-                        source_root_url="http://example.org",
-                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping={})])],
-                        challenges=[track.Challenge(name="index", default=True, index_settings=None, schedule=schedule)])
+        t = track.Track(name="unittest",
+                        indices=[track.Index(name="tests", types=["test-type"])],
+                        challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tag="let-me-test", track=t, track_params={"shard-count": 3},
@@ -692,9 +691,8 @@ class EsResultsStoreTests(TestCase):
             track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
 
-        t = track.Track(name="unittest-track", description="unittest track",
-                        source_root_url="http://example.org",
-                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping={})])],
+        t = track.Track(name="unittest-track",
+                        indices=[track.Index(name="tests", auto_managed=True, types=["test-type"])],
                         challenges=[track.Challenge(name="index", default=True, index_settings=None, schedule=schedule)])
 
         c = cluster.Cluster([], [], None)
@@ -965,10 +963,9 @@ class FileRaceStoreTests(TestCase):
             track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
 
-        t = track.Track(name="unittest", description="unittest track",
-                        source_root_url="http://example.org",
-                        indices=[track.Index(name="tests", auto_managed=True, types=[track.Type(name="test-type", mapping={})])],
-                        challenges=[track.Challenge(name="index", default=True, index_settings=None, schedule=schedule)])
+        t = track.Track(name="unittest",
+                        indices=[track.Index(name="tests", types=["test-type"])],
+                        challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tag="let-me-test", track=t, track_params={"clients": 12},

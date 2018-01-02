@@ -203,11 +203,6 @@
       "minimum": 1,
       "description": "The version of the track specification format that is being used (optional)."
     },
-    "data-url": {
-      "type": "string",
-      "format": "uri",
-      "description": "The root URL for track data. Has to be a publicly accessible http or https URL. If not specified, Rally will not attempt to download data and assume that it will be available locally."
-    },
     "meta": {
       "type": "object",
       "description": "Meta-information which will be added to each metrics-record of this track."
@@ -263,22 +258,66 @@
           "types": {
             "type": "array",
             "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "corpora": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Corpus",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the document corpus."
+          },
+          "base-url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The default base URL for this document corpus. Has to be a publicly accessible http or https URL. If not specified, Rally will not attempt to download data and assume that it will be available locally."
+          },
+          "source-format": {
+            "type": "string",
+            "description": "Defines in which format Rally should interpret the data file specified by 'source-file'. Currently, only 'bulk' is supported."
+          },
+          "includes-action-and-meta-data": {
+            "type": "boolean",
+            "description": "Whether or not the source file already contains an action-and-meta-data line (default: false)."
+          },
+          "target-index": {
+            "type": "string",
+            "description": "The name of the associated index (if any)."
+          },
+          "target-type": {
+            "type": "string",
+            "description": "The name of the associated document type (if any)."
+          },
+          "documents": {
+            "type": "array",
+            "minItems": 1,
             "uniqueItems": true,
             "items": {
-              "title": "Type",
               "type": "object",
               "properties": {
-                "name": {
+                "base-url": {
                   "type": "string",
-                  "description": "Name of the type to create."
+                  "format": "uri",
+                  "description": "The root URL for these documents."
                 },
-                "mapping": {
+                "source-file": {
                   "type": "string",
-                  "description": "File name of the corresponding mapping file. Example: mappings-mytype.json"
+                  "description": "Name of file containing documents. This file has to be compressed either as bz2, zip or tar.gz and must contain exactly one JSON file with the same name (Examples: documents.json.bz2, documents.zip (which should contain one file called 'documents.json'))."
                 },
-                "documents": {
+                "source-format": {
                   "type": "string",
-                  "description": "File name of the corresponding documents that should be indexed. This file has to be compressed either as bz2, zip or tar.gz and must contain exactly one JSON file with the same name (Examples: documents.json.bz2, documents.zip (which should contain one file called 'documents.json'))."
+                  "description": "Defines in which format Rally should interpret the data file specified by 'source-file'. Currently, only 'bulk' is supported."
                 },
                 "document-count": {
                   "type": "integer",
@@ -298,17 +337,25 @@
                   "type": "integer",
                   "minimum": 1,
                   "description": "The size in bytes of the documents file after decompression."
+                },
+                "target-index": {
+                  "type": "string",
+                  "description": "The name of the associated index (if any)."
+                },
+                "target-type": {
+                  "type": "string",
+                  "description": "The name of the associated document type (if any)."
                 }
               },
               "required": [
-                "name"
+                "source-file"
               ]
             }
           }
         },
         "required": [
           "name",
-          "types"
+          "documents"
         ]
       }
     },

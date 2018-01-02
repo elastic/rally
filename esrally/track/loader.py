@@ -107,13 +107,13 @@ def set_absolute_data_path(cfg, t):
     :param cfg: The config object.
     :param t: The track to modify.
     """
-    data_root = data_dir(cfg, t.name)
-    for index in t.indices:
-        for t in index.types:
-            if t.document_archive:
-                t.document_archive = os.path.join(data_root, t.document_archive)
-            if t.document_file:
-                t.document_file = os.path.join(data_root, t.document_file)
+    for corpus in t.corpora:
+        data_root = data_dir(cfg, t.name, corpus.name)
+        for document_set in corpus.documents:
+            if document_set.document_archive:
+                document_set.document_archive = os.path.join(data_root, document_set.document_archive)
+            if document_set.document_file:
+                document_set.document_file = os.path.join(data_root, document_set.document_file)
 
 
 def is_simple_track_mode(cfg):
@@ -128,7 +128,7 @@ def track_repo(cfg, fetch=True, update=True):
         return GitTrackRepository(cfg, fetch, update)
 
 
-def data_dir(cfg, track_name):
+def data_dir(cfg, track_name, corpus_name):
     if is_simple_track_mode(cfg):
         track_path = cfg.opts("track", "track.path")
         r = SimpleTrackRepository(track_path)
@@ -136,7 +136,7 @@ def data_dir(cfg, track_name):
         # in the distributed case. However, the user is responsible to ensure that this is actually the case.
         return r.track_dir(track_name)
     else:
-        return os.path.join(cfg.opts("benchmarks", "local.dataset.cache"), track_name)
+        return os.path.join(cfg.opts("benchmarks", "local.dataset.cache"), corpus_name)
 
 
 class GitTrackRepository:
@@ -192,7 +192,7 @@ class SimpleTrackRepository:
         return [self.track_name]
 
     def track_dir(self, track_name):
-        assert track_name == self.track_name
+        assert track_name == self.track_name, "Expect provided track name [%s] to match [%s]" % (track_name, self.track_name)
         return self._track_dir
 
     def track_file(self, track_name):
@@ -216,30 +216,25 @@ def prepare_track(track, cfg):
     :param track: A track that is about to be run.
     :param cfg: The config object.
     """
-    if not track.source_root_url:
-        logger.info("Track [%s] does not specify a source root URL. Assuming data are available locally." % track.name)
-
-    data_root = data_dir(cfg, track.name)
-    logger.info("Resolved data root directory for track [%s] to [%s]." % (track.name, data_root))
-    for index in track.indices:
-        for type in index.types:
-            if type.has_valid_document_data():
-                offline = cfg.opts("system", "offline.mode")
-                test_mode = cfg.opts("track", "test.mode.enabled")
-                prepare_corpus(track.name, track.source_root_url, data_root, type, offline, test_mode)
-            else:
-                logger.info("Type [%s] in index [%s] does not define documents. No data are indexed from a file for this type." %
-                            (type.name, index.name))
+    offline = cfg.opts("system", "offline.mode")
+    test_mode = cfg.opts("track", "test.mode.enabled")
+    for corpus in track.corpora:
+        data_root = data_dir(cfg, track.name, corpus.name)
+        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s]." %
+                    (corpus.name, track.name, data_root))
+        for document_set in corpus.documents:
+            if document_set.is_bulk:
+                prepare_document_set(track.name, document_set, data_root, offline, test_mode)
 
 
-def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_mode):
+def prepare_document_set(track_name, document_set, data_root, offline, test_mode):
     def is_locally_available(file_name):
         return os.path.isfile(file_name)
 
     def has_expected_size(file_name, expected_size):
         return expected_size is None or os.path.getsize(file_name) == expected_size
 
-    def decompress_corpus(archive_path, documents_path, uncompressed_size):
+    def decompress(archive_path, documents_path, uncompressed_size):
         if uncompressed_size:
             console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
                          (archive_path, documents_path, convert.bytes_to_gb(uncompressed_size)),
@@ -259,16 +254,16 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
             raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
                                        (documents_path, extracted_bytes, uncompressed_size))
 
-    def download_corpus(root_url, target_path, size_in_bytes, detail_on_missing_root_url, track_name, offline, test_mode):
+    def download(base_url, target_path, size_in_bytes, detail_on_missing_root_url, track_name, offline, test_mode):
         file_name = os.path.basename(target_path)
 
-        if not root_url:
-            raise exceptions.DataError("%s and it cannot be downloaded because no source URL is provided in the track."
+        if not base_url:
+            raise exceptions.DataError("%s and it cannot be downloaded because no base URL is provided."
                                        % detail_on_missing_root_url)
         if offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
-        data_url = "%s/%s" % (source_root_url, file_name)
+        data_url = "%s/%s" % (base_url, file_name)
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
@@ -300,7 +295,7 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
         if not os.path.isfile(target_path):
             raise exceptions.SystemSetupError(
                 "Cannot download from %s to %s. Please verify that data are available at %s and "
-                "check your internet connection." % (data_url, target_path, data_url))
+                "check your Internet connection." % (data_url, target_path, data_url))
 
         actual_size = os.path.getsize(target_path)
         if size_in_bytes is not None and actual_size != size_in_bytes:
@@ -315,34 +310,23 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
             raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
                                        % (document_file_path, track, expected_number_of_lines, lines_read))
 
-    # TODO: Remove me after some grace period.
-    # Hack to migrate data from the existing logging track.
-    if track_name == "http_logs" and source_root_url == "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/http_logs":
-        logger.info("Attempting to migrate data from logging track to http_logs.")
-        logging_root = io.normalize_path(os.path.join(data_root, os.path.pardir, "logging"))
-        if os.path.exists(logging_root) and not os.path.exists(data_root):
-            logger.info("Directory [%s] exists. Migrating data to [%s]." % (logging_root, data_root))
-            os.rename(logging_root, data_root)
-        else:
-            logger.info("[%s] does not exist or [%s] is already present. Skipping migration." % (logging_root, data_root))
-
-    full_document_path = os.path.join(data_root, type.document_file)
-    full_archive_path = os.path.join(data_root, type.document_archive) if type.has_compressed_corpus() else None
+    full_document_path = os.path.join(data_root, document_set.document_file)
+    full_archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
     while True:
         if is_locally_available(full_document_path) and \
-                has_expected_size(full_document_path, type.uncompressed_size_in_bytes):
+                has_expected_size(full_document_path, document_set.uncompressed_size_in_bytes):
             break
-        elif type.has_compressed_corpus() and \
+        elif document_set.has_compressed_corpus() and \
                 is_locally_available(full_archive_path) and \
-                has_expected_size(full_archive_path, type.compressed_size_in_bytes):
-            decompress_corpus(full_archive_path, full_document_path, type.uncompressed_size_in_bytes)
+                has_expected_size(full_archive_path, document_set.compressed_size_in_bytes):
+            decompress(full_archive_path, full_document_path, document_set.uncompressed_size_in_bytes)
         else:
-            if type.has_compressed_corpus():
+            if document_set.has_compressed_corpus():
                 target_path = full_archive_path
-                expected_size = type.compressed_size_in_bytes
-            elif type.has_uncompressed_corpus():
+                expected_size = document_set.compressed_size_in_bytes
+            elif document_set.has_uncompressed_corpus():
                 target_path = full_document_path
-                expected_size = type.uncompressed_size_in_bytes
+                expected_size = document_set.uncompressed_size_in_bytes
             else:
                 # this should not happen in practice as the JSON schema should take care of this
                 raise exceptions.RallyAssertionError("Track %s specifies documents but neither a compressed nor an uncompressed corpus" %
@@ -354,9 +338,9 @@ def prepare_corpus(track_name, source_root_url, data_root, type, offline, test_m
             else:
                 msg = "%s is missing" % target_path
 
-            download_corpus(source_root_url, target_path, expected_size, msg, track_name, offline, test_mode)
+            download(document_set.base_url, target_path, expected_size, msg, track_name, offline, test_mode)
 
-    create_file_offset_table(full_document_path, type.number_of_lines)
+    create_file_offset_table(full_document_path, document_set.number_of_lines)
 
 
 def render_template(loader, template_name, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
@@ -465,7 +449,7 @@ def post_process_for_index_auto_management(t, expected_cluster_health):
             if challenge.index_settings:
                 if t.name not in DEFAULT_TRACKS:
                     console.warn("Track [%s] defines the deprecated property 'index-settings'. Please create indices explicitly with "
-                                 "[create-index] and the respective index settings there instead." % t.name)
+                                 "[create-index] and define the respective index settings there instead." % t.name)
                 create_index_params["settings"] = challenge.index_settings
             if len(t.templates) > 0:
                 # check if the user has defined a create index template operation
@@ -524,20 +508,29 @@ def post_process_for_index_auto_management(t, expected_cluster_health):
 
 def post_process_for_test_mode(t):
     logger.info("Preparing track [%s] for test mode." % str(t))
-    for index in t.indices:
-        for type in index.types:
-            if type.has_valid_document_data():
-                logger.info("Reducing corpus size to 1000 documents for [%s/%s]" % (index, type))
-                type.number_of_documents = 1000
+    for corpus in t.corpora:
+        logger.info("Reducing corpus size to 1000 documents for [%s]" % corpus.name)
+        for document_set in corpus.documents:
+            # TODO #341: Should we allow this for snapshots too?
+            if document_set.is_bulk:
+                document_set.number_of_documents = 1000
 
-                path, ext = io.splitext(type.document_archive)
-                path_2, ext_2 = io.splitext(path)
+                if document_set.has_compressed_corpus():
+                    path, ext = io.splitext(document_set.document_archive)
+                    path_2, ext_2 = io.splitext(path)
 
-                type.document_archive = "%s-1k%s%s" % (path_2, ext_2, ext)
-                type.document_file = "%s-1k%s" % (path_2, ext_2)
+                    document_set.document_archive = "%s-1k%s%s" % (path_2, ext_2, ext)
+                    document_set.document_file = "%s-1k%s" % (path_2, ext_2)
+                elif document_set.has_uncompressed_corpus():
+                    path, ext = io.splitext(corpus.document_file)
+                    document_set.document_file = "%s-1k%s" % (path, ext)
+                else:
+                    raise exceptions.RallyAssertionError("Document corpus [%s] has neither compressed nor uncompressed corpus." %
+                                                         corpus.name)
+
                 # we don't want to check sizes
-                type.compressed_size_in_bytes = None
-                type.uncompressed_size_in_bytes = None
+                document_set.compressed_size_in_bytes = None
+                document_set.uncompressed_size_in_bytes = None
 
     for challenge in t.challenges:
         for task in challenge.schedule:
@@ -671,16 +664,29 @@ class TrackSpecificationReader:
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
         description = self._r(track_specification, "description", mandatory=False, default_value="")
-        source_root_url = self._r(track_specification, "data-url", mandatory=False)
+
         meta_data = self._r(track_specification, "meta", mandatory=False)
         indices = [self._create_index(idx, mapping_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
         templates = [self._create_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
+        corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
+        # TODO: Remove this in Rally 0.10.0
+        if corpora:
+            logger.info("Track [%s] defines a 'corpora' block. Ignoring any legacy corpora definitions on document types." % self.name)
+        else:
+            logger.warning("Track [%s] does not define a 'corpora' block. Creating corpora definitions based on document types (will "
+                           "be removed with the next minor release)." % self.name)
+            corpora = self._create_legacy_corpora(track_specification)
+            # Check whether we have legacy documents; otherwise there is no need for a warning...
+            if corpora:
+                console.warn("Track %s defines corpora together with document types. Please use a dedicated 'corpora' block now. "
+                             "See the migration guide for details." % self.name, logger=logger)
+
         challenges = self._create_challenges(track_specification)
 
-        return track.Track(name=self.name, meta_data=meta_data, description=description, source_root_url=source_root_url,
-                           challenges=challenges, indices=indices, templates=templates)
+        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
+                           templates=templates, corpora=corpora)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -721,14 +727,6 @@ class TrackSpecificationReader:
 
         types = [self._create_type(type_spec, mapping_dir)
                  for type_spec in self._r(index_spec, "types", mandatory=auto_managed, default_value=[])]
-        valid_document_data = False
-        for type in types:
-            if type.has_valid_document_data():
-                valid_document_data = True
-                break
-        if not valid_document_data:
-            console.warn("None of the types for index [%s] defines documents. Please check that you either don't want to index data or "
-                         "parameter sources are defined for indexing." % index_name, logger=logger)
 
         return track.Index(name=index_name, body=body, auto_managed=auto_managed, types=types)
 
@@ -741,41 +739,123 @@ class TrackSpecificationReader:
             template_content = json.load(f)
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
-    def _create_type(self, type_spec, mapping_dir):
-        docs = self._r(type_spec, "documents", mandatory=False)
-        if docs:
-            if io.is_archive(docs):
-                document_archive = docs
-                document_file = io.splitext(docs)[0]
+    def _create_corpora(self, corpora_specs, indices):
+        document_corpora = []
+        known_corpora_names = set()
+        for corpus_spec in corpora_specs:
+            name = self._r(corpus_spec, "name")
+
+            if name in known_corpora_names:
+                self._error("Duplicate document corpus name [%s]." % name)
+            known_corpora_names.add(name)
+
+            corpus = track.DocumentCorpus(name=name)
+            # defaults on corpus level
+            default_base_url = self._r(corpus_spec, "base-url", mandatory=False, default_value=None)
+            default_source_format = self._r(corpus_spec, "source-format", mandatory=False, default_value=track.Documents.SOURCE_FORMAT_BULK)
+            default_action_and_meta_data = self._r(corpus_spec, "includes-action-and-meta-data", mandatory=False, default_value=False)
+
+            if len(indices) == 1:
+                corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False, default_value=indices[0].name)
             else:
-                document_archive = None
-                document_file = docs
-            number_of_documents = self._r(type_spec, "document-count")
-            compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
-            uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
-        else:
-            document_archive = None
-            document_file = None
-            number_of_documents = 0
-            compressed_bytes = 0
-            uncompressed_bytes = 0
+                corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False)
 
-        mapping_file = self._r(type_spec, "mapping", mandatory=False)
-        if mapping_file:
-            with self.source(os.path.join(mapping_dir, mapping_file), "rt") as f:
-                mapping = json.load(f)
-        else:
-            mapping = None
+            if len(indices) == 1 and len(indices[0].types) == 1:
+                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0].name)
+            else:
+                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False)
 
-        return track.Type(name=self._r(type_spec, "name"),
-                          mapping=mapping,
-                          document_file=document_file,
-                          document_archive=document_archive,
-                          includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data", mandatory=False,
-                                                                default_value=False),
-                          number_of_documents=number_of_documents,
-                          compressed_size_in_bytes=compressed_bytes,
-                          uncompressed_size_in_bytes=uncompressed_bytes)
+            for doc_spec in self._r(corpus_spec, "documents"):
+                base_url = self._r(doc_spec, "base-url", mandatory=False, default_value=default_base_url)
+                source_format = self._r(doc_spec, "source-format", mandatory=False, default_value=default_source_format)
+
+                if source_format == track.Documents.SOURCE_FORMAT_BULK:
+                    docs = self._r(doc_spec, "source-file")
+                    if io.is_archive(docs):
+                        document_archive = docs
+                        document_file = io.splitext(docs)[0]
+                    else:
+                        document_archive = None
+                        document_file = docs
+                    num_docs = self._r(doc_spec, "document-count")
+                    compressed_bytes = self._r(doc_spec, "compressed-bytes", mandatory=False)
+                    uncompressed_bytes = self._r(doc_spec, "uncompressed-bytes", mandatory=False)
+
+                    includes_action_and_meta_data = self._r(doc_spec, "includes-action-and-meta-data", mandatory=False,
+                                                            default_value=default_action_and_meta_data)
+                    if includes_action_and_meta_data:
+                        target_idx = None
+                        target_type = None
+                    else:
+                        # we need an index and a type name if no meta-data are present
+                        target_idx = self._r(doc_spec, "target-index", mandatory=corpus_target_idx is None,
+                                             default_value=corpus_target_idx, error_ctx=docs)
+                        target_type = self._r(doc_spec, "target-type", mandatory=corpus_target_type is None,
+                                              default_value=corpus_target_type, error_ctx=docs)
+
+                    docs = track.Documents(source_format=source_format,
+                                           document_file=document_file,
+                                           document_archive=document_archive,
+                                           base_url=base_url,
+                                           includes_action_and_meta_data=includes_action_and_meta_data,
+                                           number_of_documents=num_docs,
+                                           compressed_size_in_bytes=compressed_bytes,
+                                           uncompressed_size_in_bytes=uncompressed_bytes,
+                                           target_index=target_idx, target_type=target_type)
+                    corpus.documents.append(docs)
+                else:
+                    self._error("Unknown source-format [%s] in document corpus [%s]." % (source_format, name))
+
+            document_corpora.append(corpus)
+        return document_corpora
+
+    def _create_legacy_corpora(self, track_specification):
+        base_url = self._r(track_specification, "data-url", mandatory=False)
+        legacy_corpus = track.DocumentCorpus(name=self.name)
+        for idx in self._r(track_specification, "indices", mandatory=False, default_value=[]):
+            index_name = self._r(idx, "name")
+            for type_spec in self._r(idx, "types", mandatory=False, default_value=[]):
+                type_name = self._r(type_spec, "name")
+                docs = self._r(type_spec, "documents", mandatory=False)
+                if docs:
+                    if io.is_archive(docs):
+                        document_archive = docs
+                        document_file = io.splitext(docs)[0]
+                    else:
+                        document_archive = None
+                        document_file = docs
+                    number_of_documents = self._r(type_spec, "document-count")
+                    compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
+                    uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
+
+                    docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                           document_file=document_file,
+                                           document_archive=document_archive,
+                                           base_url=base_url,
+                                           includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data",
+                                                                                 mandatory=False,
+                                                                                 default_value=False),
+                                           number_of_documents=number_of_documents,
+                                           compressed_size_in_bytes=compressed_bytes,
+                                           uncompressed_size_in_bytes=uncompressed_bytes,
+                                           target_index=index_name, target_type=type_name)
+                    legacy_corpus.documents.append(docs)
+
+        return [legacy_corpus]
+
+    def _create_type(self, type_spec, mapping_dir):
+        # TODO: Allow only strings in Rally 0.10.0 (we still needs this atm in order to allow users to define mapping files)
+        if isinstance(type_spec, str):
+            return track.Type(name=type_spec)
+        else:
+            mapping_file = self._r(type_spec, "mapping", mandatory=False)
+            if mapping_file:
+                with self.source(os.path.join(mapping_dir, mapping_file), "rt") as f:
+                    mapping = json.load(f)
+            else:
+                mapping = None
+
+            return track.Type(name=self._r(type_spec, "name"), mapping=mapping)
 
     def _create_challenges(self, track_spec):
         ops = self.parse_operations(self._r(track_spec, "operations", mandatory=False, default_value=[]))
@@ -953,7 +1033,7 @@ class TrackSpecificationReader:
             # TODO #370: Remove this warning.
             # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
             if op_type_name == "index" and \
-                            self.name not in DEFAULT_TRACKS and \
+                    self.name not in DEFAULT_TRACKS and \
                     not self.index_op_type_warning_issued:
                 console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
                              "operation type to [bulk]." % self.name)
