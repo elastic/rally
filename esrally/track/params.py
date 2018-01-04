@@ -442,19 +442,21 @@ class BulkIndexParamSource(ParamSource):
         except ValueError:
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
-    def used_corpora(self, track, params):
+    def used_corpora(self, t, params):
         corpora = []
-        track_corpora_names = [corpus.name for corpus in track.corpora]
+        track_corpora_names = [corpus.name for corpus in t.corpora]
         corpora_names = params.get("corpora", track_corpora_names)
         if isinstance(corpora_names, str):
             corpora_names = [corpora_names]
 
-        for corpus in track.corpora:
+        for corpus in t.corpora:
             if corpus.name in corpora_names:
-                corpora.append(corpus)
+                filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK, target_indices=params.get("indices"))
+                if filtered_corpus.number_of_documents(source_format=track.Documents.SOURCE_FORMAT_BULK) > 0:
+                    corpora.append(filtered_corpus)
 
         # the track has corpora but none of them match
-        if track.corpora and not corpora:
+        if t.corpora and not corpora:
             raise exceptions.RallyAssertionError("The provided corpus %s does not match any of the corpora %s." %
                                                  (corpora_names, track_corpora_names))
 
@@ -511,13 +513,12 @@ def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
     bulks = 0
     for corpus in corpora:
         for docs in corpus.documents:
-            if docs.is_bulk:
-                _, num_docs, _ = bounds(docs.number_of_documents, partition_index, total_partitions,
-                                        docs.includes_action_and_meta_data)
-                complete_bulks, rest = (num_docs // bulk_size, num_docs % bulk_size)
-                bulks += complete_bulks
-                if rest > 0:
-                    bulks += 1
+            _, num_docs, _ = bounds(docs.number_of_documents, partition_index, total_partitions,
+                                    docs.includes_action_and_meta_data)
+            complete_bulks, rest = (num_docs // bulk_size, num_docs % bulk_size)
+            bulks += complete_bulks
+            if rest > 0:
+                bulks += 1
     return bulks
 
 
@@ -564,15 +565,14 @@ def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id
     readers = []
     for corpus in corpora:
         for docs in corpus.documents:
-            if docs.is_bulk:
-                offset, num_docs, num_lines = bounds(docs.number_of_documents, client_index, num_clients,
-                                                     docs.includes_action_and_meta_data)
-                if num_docs > 0:
-                    logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
-                                "from corpus [%s]." % (client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name))
-                    readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts))
-                else:
-                    logger.info("Task-relative client at index [%d] skips [%s] (no documents to read)." % (client_index, corpus.name))
+            offset, num_docs, num_lines = bounds(docs.number_of_documents, client_index, num_clients,
+                                                 docs.includes_action_and_meta_data)
+            if num_docs > 0:
+                logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
+                            "from corpus [%s]." % (client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name))
+                readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts))
+            else:
+                logger.info("Task-relative client at index [%d] skips [%s] (no documents to read)." % (client_index, corpus.name))
     return readers
 
 

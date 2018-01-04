@@ -65,3 +65,61 @@ class IndexTests(TestCase):
     def test_str(self):
         self.assertEqual("test", str(track.Index("test")))
 
+
+class DocumentCorpusTests(TestCase):
+    def test_do_not_filter(self):
+        corpus = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+            track.Documents(source_format="other", number_of_documents=6, target_index="logs-02"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7, target_index="logs-03"),
+            track.Documents(source_format=None, number_of_documents=8, target_index=None)
+        ])
+
+        filtered_corpus = corpus.filter()
+
+        self.assertEqual(corpus.name, filtered_corpus.name)
+        self.assertListEqual(corpus.documents, filtered_corpus.documents)
+
+    def test_filter_documents_by_format(self):
+        corpus = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+            track.Documents(source_format="other", number_of_documents=6, target_index="logs-02"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7, target_index="logs-03"),
+            track.Documents(source_format=None, number_of_documents=8, target_index=None)
+        ])
+
+        filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK)
+
+        self.assertEqual("test", filtered_corpus.name)
+        self.assertEqual(2, len(filtered_corpus.documents))
+        self.assertEqual("logs-01", filtered_corpus.documents[0].target_index)
+        self.assertEqual("logs-03", filtered_corpus.documents[1].target_index)
+
+    def test_filter_documents_by_indices(self):
+        corpus = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+            track.Documents(source_format="other", number_of_documents=6, target_index="logs-02"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7, target_index="logs-03"),
+            track.Documents(source_format=None, number_of_documents=8, target_index=None)
+        ])
+
+        filtered_corpus = corpus.filter(target_indices=["logs-02"])
+
+        self.assertEqual("test", filtered_corpus.name)
+        self.assertEqual(1, len(filtered_corpus.documents))
+        self.assertEqual("logs-02", filtered_corpus.documents[0].target_index)
+
+    def test_filter_documents_by_format_and_indices(self):
+        corpus = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=6, target_index="logs-02"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7, target_index="logs-03"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=8, target_index=None)
+        ])
+
+        filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK, target_indices=["logs-01", "logs-02"])
+
+        self.assertEqual("test", filtered_corpus.name)
+        self.assertEqual(2, len(filtered_corpus.documents))
+        self.assertEqual("logs-01", filtered_corpus.documents[0].target_index)
+        self.assertEqual("logs-02", filtered_corpus.documents[1].target_index)

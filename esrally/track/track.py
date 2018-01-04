@@ -203,8 +203,6 @@ class Documents:
 
 
 class DocumentCorpus:
-    SOURCE_FORMAT_BULK = "bulk"
-
     def __init__(self, name, documents=None):
         """
 
@@ -240,6 +238,18 @@ class DocumentCorpus:
             else:
                 return None
         return num
+
+    def filter(self, source_format=None, target_indices=None):
+        filtered = []
+        for d in self.documents:
+            # skip if source format or target index does not match
+            if source_format and d.source_format != source_format:
+                continue
+            if target_indices and d.target_index not in target_indices:
+                continue
+
+            filtered.append(d)
+        return DocumentCorpus(self.name, filtered)
 
     def __str__(self):
         return self.name
