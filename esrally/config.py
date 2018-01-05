@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 12
+    CURRENT_CONFIG_VERSION = 13
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -267,7 +267,7 @@ class ConfigFactory:
         self.i = i
         self.sec_i = sec_i
         self.o = o
-        self.assume_defaults = False
+        self.prompter = None
 
     def create_config(self, config_file, advanced_config=False, assume_defaults=False):
         """
@@ -279,7 +279,7 @@ class ConfigFactory:
         :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
         configuration in CI run. Default: False.
         """
-        self.assume_defaults = assume_defaults
+        self.prompter = Prompter(self.i, self.sec_i, self.o, assume_defaults)
         if advanced_config:
             self.o("Running advanced configuration. You can get additional help at:")
             self.o("")
@@ -328,7 +328,7 @@ class ConfigFactory:
             self.o("")
             self.o("You can still benchmark binary distributions with e.g.:")
             self.o("")
-            self.o("  %s --distribution-version=5.0.0" % PROGRAM_NAME)
+            self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
             self.o("********************************************************************************")
             self.o("")
 
@@ -337,6 +337,22 @@ class ConfigFactory:
             root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory", default_value=root_dir))
         else:
             self.o("* Setting up benchmark data directory in %s" % root_dir)
+
+        if benchmark_from_sources:
+            if not java_9_home or jvm.is_early_access_release(java_9_home):
+                raw_java_9_home = self._ask_property("Enter the JDK 9 root directory", check_path_exists=True, mandatory=False)
+                if raw_java_9_home and jvm.major_version(raw_java_9_home) == 9 and not jvm.is_early_access_release(raw_java_9_home):
+                    java_9_home = io.normalize_path(raw_java_9_home) if raw_java_9_home else None
+                else:
+                    benchmark_from_sources = False
+                    self.o("********************************************************************************")
+                    self.o("You don't have a valid JDK 9 installation and cannot benchmark source builds.")
+                    self.o("")
+                    self.o("You can still benchmark binary distributions with e.g.:")
+                    self.o("")
+                    self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
+                    self.o("********************************************************************************")
+                    self.o("")
 
         if benchmark_from_sources:
             # We try to autodetect an existing ES source directory
@@ -363,7 +379,7 @@ class ConfigFactory:
             java_home = auto_detected_java_home
             local_benchmarks = True
         else:
-            raw_java_home = self._ask_property("Enter the JDK root directory", check_path_exists=True, mandatory=False)
+            raw_java_home = self._ask_property("Enter the JDK root directory (version 8 or later)", check_path_exists=True, mandatory=False)
             java_home = io.normalize_path(raw_java_home) if raw_java_home else None
             if not java_home:
                 local_benchmarks = False
@@ -431,9 +447,11 @@ class ConfigFactory:
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
 
+        config["runtime"] = {}
         if java_home:
-            config["runtime"] = {}
             config["runtime"]["java.home"] = java_home
+        if java_9_home:
+            config["runtime"]["java9.home"] = java_9_home
 
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
@@ -473,9 +491,9 @@ class ConfigFactory:
             self.o("  %s" % PROGRAM_NAME)
             self.o("")
         elif local_benchmarks:
-            self.o("To benchmark Elasticsearch 5.0.0 with the default benchmark, run:")
+            self.o("To benchmark Elasticsearch 6.0.0 with the default benchmark, run:")
             self.o("")
-            self.o("  %s --distribution-version=5.0.0" % PROGRAM_NAME)
+            self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
             self.o("")
         else:
             # we've already printed an info for the user. No need to repeat that.
@@ -533,6 +551,18 @@ class ConfigFactory:
 
     def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, choices=None, sensitive=False,
                       default_value=None):
+        return self.prompter.ask_property(prompt, mandatory, check_path_exists, check_pattern, choices, sensitive, default_value)
+
+
+class Prompter:
+    def __init__(self, i=input, sec_i=getpass.getpass, o=console.println, assume_defaults=False):
+        self.i = i
+        self.sec_i = sec_i
+        self.o = o
+        self.assume_defaults = assume_defaults
+
+    def ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, choices=None, sensitive=False,
+                     default_value=None):
         if default_value is not None:
             final_prompt = "%s (default: %s): " % (prompt, default_value)
         elif not mandatory:
@@ -560,7 +590,7 @@ class ConfigFactory:
                     value = default_value
 
             if mandatory or value is not None:
-                if check_path_exists and not os.path.exists(value):
+                if check_path_exists and not io.exists(value):
                     self.o("'%s' does not exist. Please check and retry." % value)
                     continue
                 if check_pattern is not None and not check_pattern.match(str(value)):
@@ -574,7 +604,8 @@ class ConfigFactory:
             return value
 
 
-def migrate(config_file, current_version, target_version, out=print):
+def migrate(config_file, current_version, target_version, out=print, i=input):
+    prompter = Prompter(i=i, o=out, assume_defaults=False)
     logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, target_version))
     # Something is really fishy. We don't want to downgrade the configuration.
     if current_version >= target_version:
@@ -748,6 +779,44 @@ def migrate(config_file, current_version, target_version, out=print):
         else:
             logger.info("No section named [source] found in config. Advancing without changes.")
         current_version = 12
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 12 and target_version > current_version:
+        # the current configuration allows to benchmark from sources
+        if "build" in config and "gradle.bin" in config["build"]:
+            java_9_home = io.guess_java_home(major_version=9)
+            from esrally.utils import jvm
+            if java_9_home and not jvm.is_early_access_release(java_9_home):
+                logger.debug("Autodetected a JDK 9 installation at [%s]" % java_9_home)
+                if "runtime" not in config:
+                    config["runtime"] = {}
+                config["runtime"]["java9.home"] = java_9_home
+            else:
+                logger.debug("Could not autodetect a JDK 9 installation. Checking [java.home] already points to a JDK 9.")
+                detected = False
+                if "runtime" in config:
+                    java_home = config["runtime"]["java.home"]
+                    if jvm.major_version(java_home) == 9 and not jvm.is_early_access_release(java_home):
+                        config["runtime"]["java9.home"] = java_home
+                        detected = True
+
+                if not detected:
+                    logger.debug("Could not autodetect a JDK 9 installation. Asking user.")
+                    raw_java_9_home = prompter.ask_property("Enter the JDK 9 root directory", check_path_exists=True, mandatory=False)
+                    if raw_java_9_home and jvm.major_version(raw_java_9_home) == 9 and not jvm.is_early_access_release(raw_java_9_home):
+                        java_9_home = io.normalize_path(raw_java_9_home) if raw_java_9_home else None
+                        config["runtime"]["java9.home"] = java_9_home
+                    else:
+                        out("********************************************************************************")
+                        out("You don't have a valid JDK 9 installation and cannot benchmark source builds.")
+                        out("")
+                        out("You can still benchmark binary distributions with e.g.:")
+                        out("")
+                        out("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
+                        out("********************************************************************************")
+                        out("")
+
+        current_version = 13
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

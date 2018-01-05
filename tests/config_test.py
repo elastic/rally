@@ -256,7 +256,7 @@ class ConfigFactoryTests(TestCase):
                 print("%s::%s: %s" % (section, k, v))
 
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("12", config_store.config["meta"]["config.version"])
+        self.assertEqual("13", config_store.config["meta"]["config.version"])
 
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
@@ -274,6 +274,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java9/home", config_store.config["runtime"]["java.home"])
+        self.assertEqual("/tests/java9/home", config_store.config["runtime"]["java9.home"])
 
         self.assertTrue("benchmarks" in config_store.config)
         self.assertEqual("${node:root.dir}/data", config_store.config["benchmarks"]["local.dataset.cache"])
@@ -305,17 +306,23 @@ class ConfigFactoryTests(TestCase):
                          config_store.config["distributions"]["release.url"])
         self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
+    @mock.patch("esrally.utils.jvm.major_version")
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
     @mock.patch("esrally.utils.io.normalize_path")
     @mock.patch("os.path.exists")
-    def test_create_simple_config_no_java_detected(self, path_exists, normalize_path, guess_install_location, guess_java_home):
+    def test_create_simple_config_no_java_detected(self, path_exists, normalize_path, guess_install_location, guess_java_home,
+                                                   major_jvm_version, jvm_is_early_access_release):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
         guess_java_home.return_value = None
-        normalize_path.return_value = "/tests/java8/home"
+        normalize_path.side_effect = ["/home/user/.rally/benchmarks", "/tests/java9/home", "/tests/java8/home",
+                                      "/home/user/.rally/benchmarks/src"]
+        major_jvm_version.return_value = 9
+        jvm_is_early_access_release.return_value = False
         path_exists.return_value = True
 
-        f = config.ConfigFactory(i=MockInput(["/Projects/elasticsearch/src", "/tests/java8/home"]), o=null_output)
+        f = config.ConfigFactory(i=MockInput(["/tests/java9/home", "/Projects/elasticsearch/src", "/tests/java8/home"]), o=null_output)
 
         config_store = InMemoryConfigStore("test")
         f.create_config(config_store)
@@ -330,14 +337,15 @@ class ConfigFactoryTests(TestCase):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
         guess_java_home.return_value = None
 
-        # the input is the question for the JDK home directory - the user does not define one
-        f = config.ConfigFactory(i=MockInput([""]), o=null_output)
+        # the input is the question for the JDK home and the JDK 9 home directory - the user does not define one
+        f = config.ConfigFactory(i=MockInput(["", ""]), o=null_output)
 
         config_store = InMemoryConfigStore("test")
         f.create_config(config_store)
 
         self.assertIsNotNone(config_store.config)
-        self.assertFalse("runtime" in config_store.config)
+        self.assertFalse("java.home" in config_store.config["runtime"])
+        self.assertFalse("java9.home" in config_store.config["runtime"])
 
     @mock.patch("esrally.utils.jvm.is_early_access_release")
     @mock.patch("esrally.utils.io.guess_java_home")
@@ -345,7 +353,7 @@ class ConfigFactoryTests(TestCase):
     def test_create_advanced_config(self, guess_install_location, guess_java_home, is_ea_release):
         guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
         guess_java_home.side_effect = ["/tests/java8/home", "/tests/java9/home"]
-        is_ea_release.return_value = True
+        is_ea_release.return_value = False
 
         f = config.ConfigFactory(i=MockInput([
             # benchmark root directory
@@ -373,7 +381,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("12", config_store.config["meta"]["config.version"])
+        self.assertEqual("13", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
@@ -383,6 +391,7 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
+        self.assertEqual("/tests/java9/home", config_store.config["runtime"]["java9.home"])
         self.assertTrue("benchmarks" in config_store.config)
 
         self.assertTrue("reporting" in config_store.config)
@@ -785,4 +794,128 @@ class ConfigMigrationTests(TestCase):
         # did all the migrations but nothing moved
         path_rename.assert_not_called()
 
+    def test_migrate_from_12_to_13_without_gradle(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 12
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 12, 13, out=null_output)
 
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("13", config_file.config["meta"]["config.version"])
+
+    @mock.patch("esrally.utils.io.guess_java_home")
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
+    def test_migrate_from_12_to_13_with_gradle_and_jdk8_autodetect_jdk9(self, is_early_access_release, guess_java_home):
+        guess_java_home.return_value = "/usr/lib/java9"
+        is_early_access_release.return_value = False
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 12
+            },
+            "build": {
+                "gradle.bin": "/usr/local/bin/gradle"
+            },
+            "runtime": {
+                "java.home": "/usr/lib/java8"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 12, 13, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("13", config_file.config["meta"]["config.version"])
+        self.assertEqual("/usr/lib/java8", config_file.config["runtime"]["java.home"])
+        self.assertEqual("/usr/lib/java9", config_file.config["runtime"]["java9.home"])
+
+    @mock.patch("esrally.utils.io.guess_java_home")
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
+    @mock.patch("esrally.utils.jvm.major_version")
+    def test_migrate_from_12_to_13_with_gradle_and_jdk9(self, major_version, is_early_access_release, guess_java_home):
+        guess_java_home.return_value = None
+        is_early_access_release.return_value = False
+        major_version.return_value = 9
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 12
+            },
+            "build": {
+                "gradle.bin": "/usr/local/bin/gradle"
+            },
+            "runtime": {
+                "java.home": "/usr/lib/java9"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 12, 13, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("13", config_file.config["meta"]["config.version"])
+        self.assertEqual("/usr/lib/java9", config_file.config["runtime"]["java.home"])
+        self.assertEqual("/usr/lib/java9", config_file.config["runtime"]["java9.home"])
+
+    @mock.patch("esrally.utils.io.guess_java_home")
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
+    @mock.patch("esrally.utils.jvm.major_version")
+    def test_migrate_from_12_to_13_with_gradle_and_jdk8_ask_user_and_skip(self, major_version, is_early_access_release, guess_java_home):
+        guess_java_home.return_value = None
+        is_early_access_release.return_value = False
+        major_version.return_value = 8
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 12
+            },
+            "build": {
+                "gradle.bin": "/usr/local/bin/gradle"
+            },
+            "runtime": {
+                "java.home": "/usr/lib/java8"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 12, 13, out=null_output, i=MockInput(inputs=[""]))
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("13", config_file.config["meta"]["config.version"])
+        self.assertEqual("/usr/lib/java8", config_file.config["runtime"]["java.home"])
+        self.assertTrue("java9.home" not in config_file.config["runtime"])
+
+    @mock.patch("esrally.utils.io.exists")
+    @mock.patch("esrally.utils.io.guess_java_home")
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
+    @mock.patch("esrally.utils.jvm.major_version")
+    def test_migrate_from_12_to_13_with_gradle_and_jdk8_ask_user_enter_valid(self, major_version, is_early_access_release, guess_java_home,
+                                                                             path_exists):
+        guess_java_home.return_value = None
+        is_early_access_release.return_value = False
+        major_version.side_effect = [8, 9]
+        path_exists.return_value = True
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 12
+            },
+            "build": {
+                "gradle.bin": "/usr/local/bin/gradle"
+            },
+            "runtime": {
+                "java.home": "/usr/lib/java8"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 12, 13, out=null_output, i=MockInput(inputs=["/usr/lib/java9"]))
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("13", config_file.config["meta"]["config.version"])
+        self.assertEqual("/usr/lib/java8", config_file.config["runtime"]["java.home"])
+        self.assertEqual("/usr/lib/java9", config_file.config["runtime"]["java9.home"])
