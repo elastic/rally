@@ -18,7 +18,7 @@ First, :doc:`install </install>` and :doc:`configure </configuration>` Rally on 
 
 .. note::
 
-   Rally Daemon will listen on port 1900 so please ensure to open that port on your firewall.
+   Rally Daemon will listen on port 1900 and the actor system that Rally uses internally require access to arbitrary (unprivileged) ports. Please be sure to open up these ports between the Rally nodes.
 
 Starting
 --------
