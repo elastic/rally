@@ -841,7 +841,10 @@ class TrackSpecificationReader:
                                            target_index=index_name, target_type=type_name)
                     legacy_corpus.documents.append(docs)
 
-        return [legacy_corpus]
+        if legacy_corpus.documents:
+            return [legacy_corpus]
+        else:
+            return []
 
     def _create_type(self, type_spec, mapping_dir):
         # TODO: Allow only strings in Rally 0.10.0 (we still needs this atm in order to allow users to define mapping files)
