@@ -66,8 +66,8 @@ Rally will use several techniques to install and configure plugins:
 
 As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples:
 
-* Run a benchmark with the ``x-pack`` plugin in the ``security`` configuration: ``--elasticsearch-plugins=xpack:security``
-* Run a benchmark with the ``x-pack`` plugin in the ``security`` and the ``graph`` configuration: ``--elasticsearch-plugins=xpack:security+graph``
+* Run a benchmark with the ``x-pack`` plugin in the ``security`` configuration: ``--elasticsearch-plugins=x-pack:security``
+* Run a benchmark with the ``x-pack`` plugin in the ``security`` and the ``graph`` configuration: ``--elasticsearch-plugins=x-pack:security+graph``
 
 .. note::
     To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --cluster-health=yellow``
