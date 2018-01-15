@@ -200,11 +200,15 @@ class DriverActor(actor.RallyActor):
                 logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
         except BaseException as e:
             logger.exception("Main driver encountered a fatal exception. Shutting down.")
-            if self.coordinator:
-                self.coordinator.close()
-            self.status = "exiting"
-            for driver in self.coordinator.drivers:
-                self.send(driver, thespian.actors.ActorExitRequest())
+            try:
+                if self.coordinator:
+                    self.coordinator.close()
+                self.status = "exiting"
+                for driver in self.coordinator.drivers:
+                    self.send(driver, thespian.actors.ActorExitRequest())
+            except BaseException:
+                logger.exception("Another exception has occurred while handling a fatal exception already.")
+            # no matter what - notify the coordinator so we terminate the benchmark.
             self.send(self.start_sender, actor.BenchmarkFailure("Could not execute benchmark", e))
 
     def start_benchmark(self, msg, sender):
@@ -460,7 +464,7 @@ class Driver:
 
     def close(self):
         self.progress_reporter.finish()
-        if self.metrics_store:
+        if self.metrics_store and self.metrics_store.opened:
             self.metrics_store.close()
 
     def update_samples(self, samples):
