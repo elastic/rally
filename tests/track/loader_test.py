@@ -844,7 +844,6 @@ class TrackFilterTests(TestCase):
         self.assertEqual(0, len(loader.filters_from_included_tasks([])))
 
     def test_create_filters_from_mixed_included_tasks(self):
-        from esrally.track import track
         filters = loader.filters_from_included_tasks(["force-merge", "type:search"])
         self.assertListEqual([track.TaskNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
 
@@ -859,7 +858,6 @@ class TrackFilterTests(TestCase):
         self.assertEqual("Invalid format for included tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
 
     def test_filters_tasks(self):
-        from esrally.track import track
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],

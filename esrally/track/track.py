@@ -510,6 +510,29 @@ class TaskOpTypeFilter:
         return "filter for operation type [%s]" % self.op_type
 
 
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class AdminTaskFilter(metaclass=Singleton):
+    """
+    Matches all tasks that execute administrative actions.
+    """
+    def matches(self, task):
+        try:
+            return OperationType.from_hyphenated_string(task.operation.type).admin_op
+        except KeyError:
+            return False
+
+    def __str__(self, *args, **kwargs):
+        return "filter for admin tasks"
+
+
 # Schedule elements
 class Parallel:
     def __init__(self, tasks, clients=None):

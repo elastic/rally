@@ -395,16 +395,19 @@ def filter_included_tasks(t, filters):
     if not filters:
         return t
     else:
+        # always include administrative tasks
+        complete_filters = [track.AdminTaskFilter()] + filters
+
         for challenge in t.challenges:
             # don't modify the schedule while iterating over it
             tasks_to_remove = []
             for task in challenge.schedule:
-                if not match(task, filters):
+                if not match(task, complete_filters):
                     tasks_to_remove.append(task)
                 else:
                     leafs_to_remove = []
                     for leaf_task in task:
-                        if not match(leaf_task, filters):
+                        if not match(leaf_task, complete_filters):
                             leafs_to_remove.append(leaf_task)
                     for leaf_task in leafs_to_remove:
                         logger.info("Removing sub-task [%s] from challenge [%s] due to task filter." % (leaf_task, challenge))
