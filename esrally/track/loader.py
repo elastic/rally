@@ -14,7 +14,7 @@ from esrally.utils import io, convert, net, console, modules, repo
 
 logger = logging.getLogger("rally.track")
 
-DEFAULT_TRACKS = ["geonames", "geopoint", "noaa", "logging", "http_logs", "nyc_taxis", "pmc", "percolator", "nested"]
+DEFAULT_TRACKS = ["geonames", "geopoint", "noaa", "http_logs", "nyc_taxis", "pmc", "percolator", "nested"]
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
