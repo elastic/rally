@@ -19,7 +19,7 @@ REVISION_PATTERN = r"(\w.*?):(.*)"
 
 def create(cfg, sources, distribution, build, challenge_root_path, plugins):
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
-    java_home = _java_home(cfg)
+    java9_home = _java9_home(cfg)
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
     build_needed = any([build for _, _, build in supply_requirements.values()])
@@ -29,7 +29,7 @@ def create(cfg, sources, distribution, build, challenge_root_path, plugins):
     if build_needed:
         gradle = cfg.opts("build", "gradle.bin")
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, gradle, java_home, challenge_root_path)
+        builder = Builder(es_src_dir, gradle, java9_home, challenge_root_path)
     else:
         builder = None
 
@@ -68,14 +68,15 @@ def create(cfg, sources, distribution, build, challenge_root_path, plugins):
     return CompositeSupplier(suppliers)
 
 
-def _java_home(cfg):
+def _java9_home(cfg):
     from esrally import config
     try:
-        return cfg.opts("runtime", "java.home")
+        return cfg.opts("runtime", "java9.home")
     except config.ConfigError:
-        logger.exception("Cannot determine Java home.")
-        raise exceptions.SystemSetupError("No JDK is configured. You cannot benchmark Elasticsearch on this machine. Please install"
-                                          " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
+        logger.exception("Cannot determine Java 9 home.")
+        raise exceptions.SystemSetupError("No JDK 9 is configured. You cannot benchmark source builds of Elasticsearch on this machine. "
+                                          "Please install a JDK 9 and reconfigure Rally with %s configure" % PROGRAM_NAME)
+
 
 
 def _required_version(version):

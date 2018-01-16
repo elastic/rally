@@ -239,6 +239,7 @@ class MetricsStore:
         self._car_name = None
         self._lap = lap
         self._environment_name = cfg.opts("system", "env.name")
+        self.opened = False
         if meta_info is None:
             self._meta_info = {
                 MetaInfoScope.cluster: {},
@@ -292,6 +293,7 @@ class MetricsStore:
                 logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
         self._stop_watch.start()
+        self.opened = True
 
     def reset_relative_time(self):
         """
@@ -322,6 +324,7 @@ class MetricsStore:
         self.flush()
         self.clear_meta_info()
         self.lap = None
+        self.opened = False
 
     def add_meta_info(self, scope, scope_key, key, value):
         """
@@ -700,9 +703,10 @@ class EsMetricsStore(MetricsStore):
         return self._index_template_provider.metrics_template()
 
     def flush(self, refresh=True):
-        self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-        logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
-                    (len(self._docs), self._invocation, self._track, self._challenge, self._car))
+        if self._docs:
+            self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
+            logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
+                        (len(self._docs), self._invocation, self._track, self._challenge, self._car))
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:

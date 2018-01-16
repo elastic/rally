@@ -14,7 +14,7 @@ from esrally.utils import io, convert, net, console, modules, repo
 
 logger = logging.getLogger("rally.track")
 
-DEFAULT_TRACKS = ["geonames", "geopoint", "noaa", "logging", "http_logs", "nyc_taxis", "pmc", "percolator", "nested"]
+DEFAULT_TRACKS = ["geonames", "geopoint", "noaa", "http_logs", "nyc_taxis", "pmc", "percolator", "nested"]
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -107,13 +107,22 @@ def set_absolute_data_path(cfg, t):
     :param cfg: The config object.
     :param t: The track to modify.
     """
+
+    def first_existing(root_dirs, f):
+        for root_dir in root_dirs:
+            p = os.path.join(root_dir, f)
+            if os.path.exists(p):
+                return p
+        return None
+
     for corpus in t.corpora:
         data_root = data_dir(cfg, t.name, corpus.name)
         for document_set in corpus.documents:
+            # At this point we can assume that the file is available locally. Check which path exists and set it.
             if document_set.document_archive:
-                document_set.document_archive = os.path.join(data_root, document_set.document_archive)
+                document_set.document_archive = first_existing(data_root, document_set.document_archive)
             if document_set.document_file:
-                document_set.document_file = os.path.join(data_root, document_set.document_file)
+                document_set.document_file = first_existing(data_root, document_set.document_file)
 
 
 def is_simple_track_mode(cfg):
@@ -129,14 +138,23 @@ def track_repo(cfg, fetch=True, update=True):
 
 
 def data_dir(cfg, track_name, corpus_name):
+    """
+    Determines potential data directories for the provided track and corpus name.
+
+    :param cfg: The config object.
+    :param track_name: Name of the current track.
+    :param corpus_name: Name of the current corpus.
+    :return: A list containing either one or two elements. Each element contains a path to a directory which may contain document files.
+    """
+    corpus_dir = os.path.join(cfg.opts("benchmarks", "local.dataset.cache"), corpus_name)
     if is_simple_track_mode(cfg):
         track_path = cfg.opts("track", "track.path")
         r = SimpleTrackRepository(track_path)
         # data should always be stored in the track's directory. If the user uses the same directory on all machines this will even work
         # in the distributed case. However, the user is responsible to ensure that this is actually the case.
-        return r.track_dir(track_name)
+        return [r.track_dir(track_name), corpus_dir]
     else:
-        return os.path.join(cfg.opts("benchmarks", "local.dataset.cache"), corpus_name)
+        return [corpus_dir]
 
 
 class GitTrackRepository:
@@ -209,32 +227,42 @@ def operation_parameters(t, op):
         return params.param_source_for_operation(op.type, t, op.params)
 
 
-def prepare_track(track, cfg):
+def prepare_track(t, cfg):
     """
     Ensures that all track data are available for running the benchmark.
 
-    :param track: A track that is about to be run.
+    :param t: A track that is about to be run.
     :param cfg: The config object.
     """
     offline = cfg.opts("system", "offline.mode")
     test_mode = cfg.opts("track", "test.mode.enabled")
-    for corpus in track.corpora:
-        data_root = data_dir(cfg, track.name, corpus.name)
-        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s]." %
-                    (corpus.name, track.name, data_root))
+    for corpus in t.corpora:
+        data_root = data_dir(cfg, t.name, corpus.name)
+        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s." % (corpus.name, t.name, data_root))
+        prep = DocumentSetPreparator(t.name, offline, test_mode)
+
         for document_set in corpus.documents:
             if document_set.is_bulk:
-                prepare_document_set(track.name, document_set, data_root, offline, test_mode)
+                if len(data_root) == 1:
+                    prep.prepare_document_set(document_set, data_root[0])
+                # attempt to prepare everything in the current directory and fallback to the corpus directory
+                elif not prep.prepare_bundled_document_set(document_set, data_root[0]):
+                    prep.prepare_document_set(document_set, data_root[1])
 
 
-def prepare_document_set(track_name, document_set, data_root, offline, test_mode):
-    def is_locally_available(file_name):
+class DocumentSetPreparator:
+    def __init__(self, track_name, offline, test_mode):
+        self.track_name = track_name
+        self.offline = offline
+        self.test_mode = test_mode
+
+    def is_locally_available(self, file_name):
         return os.path.isfile(file_name)
 
-    def has_expected_size(file_name, expected_size):
+    def has_expected_size(self, file_name, expected_size):
         return expected_size is None or os.path.getsize(file_name) == expected_size
 
-    def decompress(archive_path, documents_path, uncompressed_size):
+    def decompress(self, archive_path, documents_path, uncompressed_size):
         if uncompressed_size:
             console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
                          (archive_path, documents_path, convert.bytes_to_gb(uncompressed_size)),
@@ -254,13 +282,13 @@ def prepare_document_set(track_name, document_set, data_root, offline, test_mode
             raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
                                        (documents_path, extracted_bytes, uncompressed_size))
 
-    def download(base_url, target_path, size_in_bytes, detail_on_missing_root_url, track_name, offline, test_mode):
+    def download(self, base_url, target_path, size_in_bytes, detail_on_missing_root_url):
         file_name = os.path.basename(target_path)
 
         if not base_url:
             raise exceptions.DataError("%s and it cannot be downloaded because no base URL is provided."
                                        % detail_on_missing_root_url)
-        if offline:
+        if self.offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
         data_url = "%s/%s" % (base_url, file_name)
@@ -273,14 +301,14 @@ def prepare_document_set(track_name, document_set, data_root, offline, test_mode
                 logger.info("Downloading data from [%s] to [%s]." % (data_url, target_path))
 
             # we want to have a bit more accurate download progress as these files are typically very large
-            progress = net.Progress("[INFO] Downloading data for track %s" % track_name, accuracy=1)
+            progress = net.Progress("[INFO] Downloading data for track %s" % self.track_name, accuracy=1)
             net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
             progress.finish()
             logger.info("Downloaded data from [%s] to [%s]." % (data_url, target_path))
         except urllib.error.HTTPError as e:
-            if e.code == 404 and test_mode:
+            if e.code == 404 and self.test_mode:
                 raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
-                                           "disable test mode and retry." % track_name)
+                                           "disable test mode and retry." % self.track_name)
             else:
                 msg = "Could not download [%s] to [%s]" % (data_url, target_path)
                 if e.reason:
@@ -302,7 +330,7 @@ def prepare_document_set(track_name, document_set, data_root, offline, test_mode
             raise exceptions.DataError("[%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected." %
                                        (target_path, actual_size, size_in_bytes))
 
-    def create_file_offset_table(document_file_path, expected_number_of_lines):
+    def create_file_offset_table(self, document_file_path, expected_number_of_lines):
         # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
         lines_read = io.prepare_file_offset_table(document_file_path)
         if lines_read and lines_read != expected_number_of_lines:
@@ -310,37 +338,94 @@ def prepare_document_set(track_name, document_set, data_root, offline, test_mode
             raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
                                        % (document_file_path, track, expected_number_of_lines, lines_read))
 
-    full_document_path = os.path.join(data_root, document_set.document_file)
-    full_archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
-    while True:
-        if is_locally_available(full_document_path) and \
-                has_expected_size(full_document_path, document_set.uncompressed_size_in_bytes):
-            break
-        elif document_set.has_compressed_corpus() and \
-                is_locally_available(full_archive_path) and \
-                has_expected_size(full_archive_path, document_set.compressed_size_in_bytes):
-            decompress(full_archive_path, full_document_path, document_set.uncompressed_size_in_bytes)
-        else:
-            if document_set.has_compressed_corpus():
-                target_path = full_archive_path
-                expected_size = document_set.compressed_size_in_bytes
-            elif document_set.has_uncompressed_corpus():
-                target_path = full_document_path
-                expected_size = document_set.uncompressed_size_in_bytes
-            else:
-                # this should not happen in practice as the JSON schema should take care of this
-                raise exceptions.RallyAssertionError("Track %s specifies documents but neither a compressed nor an uncompressed corpus" %
-                                                     track_name)
-            # provide a specific error message in case there is no download URL
-            if is_locally_available(target_path):
-                # convert expected_size eagerly to a string as it might be None (but in that case we'll never see that error message)
-                msg = "%s is present but does not have the expected size of %s bytes" % (target_path, str(expected_size))
-            else:
-                msg = "%s is missing" % target_path
+    def prepare_document_set(self, document_set, data_root):
+        """
+        Prepares a document set locally.
 
-            download(document_set.base_url, target_path, expected_size, msg, track_name, offline, test_mode)
+        Precondition: The document set contains either a compressed or an uncompressed document file reference.
+        Postcondition: Either following files will be present locally:
 
-    create_file_offset_table(full_document_path, document_set.number_of_lines)
+            * The compressed document file (if specified originally in the corpus)
+            * The uncompressed document file
+            * A file offset table based on the document file
+
+            Or this method will raise an appropriate Exception (download error, inappropriate specification of files, ...).
+
+        :param document_set: A document set.
+        :param data_root: The data root directory for this document set.
+        """
+        doc_path = os.path.join(data_root, document_set.document_file)
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+        while True:
+            if self.is_locally_available(doc_path) and \
+                    self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
+                break
+            elif document_set.has_compressed_corpus() and \
+                    self.is_locally_available(archive_path) and \
+                    self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
+                self.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
+            else:
+                if document_set.has_compressed_corpus():
+                    target_path = archive_path
+                    expected_size = document_set.compressed_size_in_bytes
+                elif document_set.has_uncompressed_corpus():
+                    target_path = doc_path
+                    expected_size = document_set.uncompressed_size_in_bytes
+                else:
+                    # this should not happen in practice as the JSON schema should take care of this
+                    raise exceptions.RallyAssertionError("Track %s specifies documents but no corpus" % self.track_name)
+                # provide a specific error message in case there is no download URL
+                if self.is_locally_available(target_path):
+                    # convert expected_size eagerly to a string as it might be None (but in that case we'll never see that error message)
+                    msg = "%s is present but does not have the expected size of %s bytes" % (target_path, str(expected_size))
+                else:
+                    msg = "%s is missing" % target_path
+
+                self.download(document_set.base_url, target_path, expected_size, msg)
+
+        self.create_file_offset_table(doc_path, document_set.number_of_lines)
+
+    def prepare_bundled_document_set(self, document_set, data_root):
+        """
+        Prepares a document set that comes "bundled" with the track, i.e. the data files are in the same directory as the track.
+        This is a "lightweight" version of #prepare_document_set() which assumes that at least one file is already present in the
+        current directory. It will attempt to find the appropriate files, decompress if necessary and create a file offset table.
+
+        Precondition: The document set contains either a compressed or an uncompressed document file reference.
+        Postcondition: If this method returns ``True``, the following files will be present locally:
+
+            * The compressed document file (if specified originally in the corpus)
+            * The uncompressed document file
+            * A file offset table based on the document file
+
+        If this method returns ``False`` either the document size is wrong or any files have not been found.
+
+        :param document_set: A document set.
+        :param data_root: The data root directory for this document set (should be the same as the track file).
+        :return: See postcondition.
+        """
+        doc_path = os.path.join(data_root, document_set.document_file)
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+
+        while True:
+            if self.is_locally_available(doc_path):
+                if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
+                    self.create_file_offset_table(doc_path, document_set.number_of_lines)
+                    return True
+                else:
+                    raise exceptions.DataError("%s is present but does not have the expected size of %s bytes." %
+                                               (doc_path, str(document_set.uncompressed_size_in_bytes)))
+
+            if document_set.has_compressed_corpus() and self.is_locally_available(archive_path):
+                if self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
+                    self.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
+                else:
+                    # treat this is an error because if the file is present but the size does not match, something is really fishy.
+                    # It is likely that the user is currently creating a new track and did not specify the file size correctly.
+                    raise exceptions.DataError("%s is present but does not have the expected size of %s bytes." %
+                                               (archive_path, str(document_set.compressed_size_in_bytes)))
+            else:
+                return False
 
 
 def render_template(loader, template_name, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
@@ -395,16 +480,19 @@ def filter_included_tasks(t, filters):
     if not filters:
         return t
     else:
+        # always include administrative tasks
+        complete_filters = [track.AdminTaskFilter()] + filters
+
         for challenge in t.challenges:
             # don't modify the schedule while iterating over it
             tasks_to_remove = []
             for task in challenge.schedule:
-                if not match(task, filters):
+                if not match(task, complete_filters):
                     tasks_to_remove.append(task)
                 else:
                     leafs_to_remove = []
                     for leaf_task in task:
-                        if not match(leaf_task, filters):
+                        if not match(leaf_task, complete_filters):
                             leafs_to_remove.append(leaf_task)
                     for leaf_task in leafs_to_remove:
                         logger.info("Removing sub-task [%s] from challenge [%s] due to task filter." % (leaf_task, challenge))
@@ -841,7 +929,10 @@ class TrackSpecificationReader:
                                            target_index=index_name, target_type=type_name)
                     legacy_corpus.documents.append(docs)
 
-        return [legacy_corpus]
+        if legacy_corpus.documents:
+            return [legacy_corpus]
+        else:
+            return []
 
     def _create_type(self, type_spec, mapping_dir):
         # TODO: Allow only strings in Rally 0.10.0 (we still needs this atm in order to allow users to define mapping files)

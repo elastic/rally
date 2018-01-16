@@ -128,16 +128,15 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_document_set(track_name="unit-test",
-                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                 document_file="docs.json",
-                                                                 document_archive="docs.json.bz2",
-                                                                 number_of_documents=5,
-                                                                 compressed_size_in_bytes=200,
-                                                                 uncompressed_size_in_bytes=2000),
-                                    data_root="/tmp",
-                                    offline=False,
-                                    test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                            document_file="docs.json",
+                                                            document_archive="docs.json.bz2",
+                                                            number_of_documents=5,
+                                                            compressed_size_in_bytes=200,
+                                                            uncompressed_size_in_bytes=2000),
+                               data_root="/tmp")
 
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -149,16 +148,15 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_document_set(track_name="unit-test",
-                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                 document_file="docs.json",
-                                                                 document_archive="docs.json.bz2",
-                                                                 number_of_documents=5,
-                                                                 compressed_size_in_bytes=200,
-                                                                 uncompressed_size_in_bytes=2000),
-                                    data_root="/tmp",
-                                    offline=False,
-                                    test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                            document_file="docs.json",
+                                                            document_archive="docs.json.bz2",
+                                                            number_of_documents=5,
+                                                            compressed_size_in_bytes=200,
+                                                            uncompressed_size_in_bytes=2000),
+                               data_root="/tmp")
 
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -174,17 +172,16 @@ class TrackPreparationTests(TestCase):
         # uncompressed is corrupt, only 1 byte available
         get_size.side_effect = [200, 1]
 
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     document_file="docs.json",
-                                                                     document_archive="docs.json.bz2",
-                                                                     number_of_documents=5,
-                                                                     compressed_size_in_bytes=200,
-                                                                     uncompressed_size_in_bytes=2000),
-                                        data_root="/tmp",
-                                        offline=False,
-                                        test_mode=False)
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                document_file="docs.json",
+                                                                document_archive="docs.json.bz2",
+                                                                number_of_documents=5,
+                                                                compressed_size_in_bytes=200,
+                                                                uncompressed_size_in_bytes=2000),
+                                   data_root="/tmp")
         self.assertEqual("[/tmp/docs.json] is corrupt. Extracted [1] bytes but [2000] bytes are expected.", ctx.exception.args[0])
 
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
@@ -200,18 +197,17 @@ class TrackPreparationTests(TestCase):
         # compressed file size is 200
         get_size.return_value = 200
 
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                     document_file="docs.json",
-                                                                     document_archive="docs.json.bz2",
-                                                                     number_of_documents=5,
-                                                                     compressed_size_in_bytes=200,
-                                                                     uncompressed_size_in_bytes=2000),
-                                        data_root="/tmp",
-                                        offline=False,
-                                        test_mode=False)
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                document_file="docs.json",
+                                                                document_archive="docs.json.bz2",
+                                                                number_of_documents=5,
+                                                                compressed_size_in_bytes=200,
+                                                                uncompressed_size_in_bytes=2000),
+                                   data_root="/tmp")
         self.assertEqual("Decompressing [/tmp/docs.json.bz2] did not create [/tmp/docs.json]. Please check with the track author if the "
                          "compressed archive has been created correctly.", ctx.exception.args[0])
 
@@ -241,17 +237,16 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_document_set(track_name="unit-test",
-                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                 base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                 document_file="docs.json",
-                                                                 document_archive="docs.json.bz2",
-                                                                 number_of_documents=5,
-                                                                 compressed_size_in_bytes=200,
-                                                                 uncompressed_size_in_bytes=2000),
-                                    data_root="/tmp",
-                                    offline=False,
-                                    test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                            document_file="docs.json",
+                                                            document_archive="docs.json.bz2",
+                                                            number_of_documents=5,
+                                                            compressed_size_in_bytes=200,
+                                                            uncompressed_size_in_bytes=2000),
+                               data_root="/tmp")
 
         ensure_dir.assert_called_with("/tmp")
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
@@ -275,18 +270,17 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        loader.prepare_document_set(track_name="unit-test",
-                                    document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                 base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                 document_file="docs.json",
-                                                                 # --> We don't provide a document archive here <--
-                                                                 document_archive=None,
-                                                                 number_of_documents=5,
-                                                                 compressed_size_in_bytes=200,
-                                                                 uncompressed_size_in_bytes=2000),
-                                    data_root="/tmp",
-                                    offline=False,
-                                    test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                            document_file="docs.json",
+                                                            # --> We don't provide a document archive here <--
+                                                            document_archive=None,
+                                                            number_of_documents=5,
+                                                            compressed_size_in_bytes=200,
+                                                            uncompressed_size_in_bytes=2000),
+                               data_root="/tmp")
 
         ensure_dir.assert_called_with("/tmp")
         download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
@@ -300,16 +294,15 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=True, test_mode=False)
+
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                     document_file="docs.json",
-                                                                     number_of_documents=5,
-                                                                     uncompressed_size_in_bytes=2000),
-                                        data_root="/tmp",
-                                        offline=True,
-                                        test_mode=False)
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                document_file="docs.json",
+                                                                number_of_documents=5,
+                                                                uncompressed_size_in_bytes=2000),
+                                   data_root="/tmp")
 
         self.assertEqual("Cannot find /tmp/docs.json. Please disable offline mode and retry again.", ctx.exception.args[0])
 
@@ -323,18 +316,16 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        data_root="/tmp",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     base_url=None,
-                                                                     document_file="docs.json",
-                                                                     document_archive=None,
-                                                                     number_of_documents=5,
-                                                                     uncompressed_size_in_bytes=2000),
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
 
-                                        offline=False,
-                                        test_mode=False)
+        with self.assertRaises(exceptions.DataError) as ctx:
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                base_url=None,
+                                                                document_file="docs.json",
+                                                                document_archive=None,
+                                                                number_of_documents=5,
+                                                                uncompressed_size_in_bytes=2000),
+                                   data_root="/tmp")
 
         self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no base URL is provided.",
                          ctx.exception.args[0])
@@ -352,15 +343,14 @@ class TrackPreparationTests(TestCase):
         # but it's size is wrong
         get_size.return_value = 100
 
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     document_file="docs.json",
-                                                                     number_of_documents=5,
-                                                                     uncompressed_size_in_bytes=2000),
-                                        data_root="/tmp",
-                                        offline=False,
-                                        test_mode=False)
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                document_file="docs.json",
+                                                                number_of_documents=5,
+                                                                uncompressed_size_in_bytes=2000),
+                                   data_root="/tmp")
 
         self.assertEqual("/tmp/docs.json is present but does not have the expected size of 2000 bytes and it cannot be downloaded because "
                          "no base URL is provided.", ctx.exception.args[0])
@@ -380,16 +370,15 @@ class TrackPreparationTests(TestCase):
         download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
                                                       404, "", None, None)
 
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=True)
+
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                     document_file="docs-1k.json",
-                                                                     number_of_documents=5,
-                                                                     uncompressed_size_in_bytes=None),
-                                        data_root="/tmp",
-                                        offline=False,
-                                        test_mode=True)
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                document_file="docs-1k.json",
+                                                                number_of_documents=5,
+                                                                uncompressed_size_in_bytes=None),
+                                   data_root="/tmp")
 
         self.assertEqual("Track [unit-test] does not support test mode. Please ask the track author to add it or disable test mode "
                          "and retry.", ctx.exception.args[0])
@@ -410,16 +399,15 @@ class TrackPreparationTests(TestCase):
         download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                                       500, "Internal Server Error", None, None)
 
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
         with self.assertRaises(exceptions.DataError) as ctx:
-            loader.prepare_document_set(track_name="unit-test",
-                                        document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                     base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                     document_file="docs.json",
-                                                                     number_of_documents=5,
-                                                                     uncompressed_size_in_bytes=2000),
-                                        data_root="/tmp",
-                                        offline=False,
-                                        test_mode=False)
+            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                                                                document_file="docs.json",
+                                                                number_of_documents=5,
+                                                                uncompressed_size_in_bytes=2000),
+                                   data_root="/tmp")
 
         self.assertEqual("Could not download [http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json] "
                          "to [/tmp/docs.json] (HTTP status: 500, reason: Internal Server Error)", ctx.exception.args[0])
@@ -427,6 +415,123 @@ class TrackPreparationTests(TestCase):
         ensure_dir.assert_called_with("/tmp")
         download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                     "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_prepare_bundled_document_set_if_document_file_available(self, is_file, get_size, decompress, prepare_file_offset_table):
+        is_file.return_value = True
+        # check only uncompressed
+        get_size.side_effect = [2000]
+        prepare_file_offset_table.return_value = 5
+
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        self.assertTrue(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                                    document_file="docs.json",
+                                                                                    document_archive="docs.json.bz2",
+                                                                                    number_of_documents=5,
+                                                                                    compressed_size_in_bytes=200,
+                                                                                    uncompressed_size_in_bytes=2000),
+                                                       data_root="."))
+
+        prepare_file_offset_table.assert_called_with("./docs.json")
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_prepare_bundled_document_set_does_nothing_if_no_document_files(self, is_file, get_size, decompress, prepare_file_offset_table):
+        # no files present
+        is_file.return_value = False
+
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        self.assertFalse(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                                     document_file="docs.json",
+                                                                                     document_archive="docs.json.bz2",
+                                                                                     number_of_documents=5,
+                                                                                     compressed_size_in_bytes=200,
+                                                                                     uncompressed_size_in_bytes=2000),
+                                                        data_root="."))
+
+        decompress.assert_not_called()
+        prepare_file_offset_table.assert_not_called()
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_prepare_bundled_document_set_decompresses_compressed_docs(self, is_file, get_size, decompress, prepare_file_offset_table):
+        # uncompressed is missing
+        # decompressed is present
+        # check if uncompressed is present after decompression
+        # final loop iteration - uncompressed is present now
+        is_file.side_effect = [False, True, True, True]
+        # compressed
+        # uncompressed after decompression
+        # uncompressed in final loop iteration
+        get_size.side_effect = [200, 2000, 2000]
+        prepare_file_offset_table.return_value = 5
+
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        self.assertTrue(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                                    document_file="docs.json",
+                                                                                    document_archive="docs.json.bz2",
+                                                                                    number_of_documents=5,
+                                                                                    compressed_size_in_bytes=200,
+                                                                                    uncompressed_size_in_bytes=2000),
+                                                       data_root="."))
+
+        prepare_file_offset_table.assert_called_with("./docs.json")
+
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_prepare_bundled_document_set_error_compressed_docs_wrong_size(self, is_file, get_size):
+        # uncompressed is missing
+        # decompressed is present
+        is_file.side_effect = [False, True]
+        # compressed has wrong size
+        get_size.side_effect = [150]
+
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                        document_file="docs.json",
+                                                                        document_archive="docs.json.bz2",
+                                                                        number_of_documents=5,
+                                                                        compressed_size_in_bytes=200,
+                                                                        uncompressed_size_in_bytes=2000),
+                                           data_root=".")
+
+        self.assertEqual("./docs.json.bz2 is present but does not have the expected size of 200 bytes.", ctx.exception.args[0])
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_prepare_bundled_document_set_uncompressed_docs_wrong_size(self, is_file, get_size, decompress, prepare_file_offset_table):
+        # uncompressed is present
+        is_file.side_effect = [True]
+        # uncompressed
+        get_size.side_effect = [1500]
+
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                                        document_file="docs.json",
+                                                                        document_archive="docs.json.bz2",
+                                                                        number_of_documents=5,
+                                                                        compressed_size_in_bytes=200,
+                                                                        uncompressed_size_in_bytes=2000),
+                                           data_root=".")
+        self.assertEqual("./docs.json is present but does not have the expected size of 2000 bytes.", ctx.exception.args[0])
+
+        prepare_file_offset_table.assert_not_called()
 
 
 class TemplateRenderTests(TestCase):
@@ -811,9 +916,12 @@ class TrackPostProcessingTests(TestCase):
 
 
 class TrackPathTests(TestCase):
-    def test_sets_absolute_path(self):
+    @mock.patch("os.path.exists")
+    def test_sets_absolute_path(self, path_exists):
         from esrally import config
         from esrally.track import track
+
+        path_exists.return_value = True
 
         cfg = config.Config()
         cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
@@ -844,7 +952,6 @@ class TrackFilterTests(TestCase):
         self.assertEqual(0, len(loader.filters_from_included_tasks([])))
 
     def test_create_filters_from_mixed_included_tasks(self):
-        from esrally.track import track
         filters = loader.filters_from_included_tasks(["force-merge", "type:search"])
         self.assertListEqual([track.TaskNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
 
@@ -859,7 +966,6 @@ class TrackFilterTests(TestCase):
         self.assertEqual("Invalid format for included tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
 
     def test_filters_tasks(self):
-        from esrally.track import track
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],

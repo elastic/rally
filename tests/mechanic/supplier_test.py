@@ -335,7 +335,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java.home", "/usr/local/bin/java8/")
+        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
         composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", plugins=[])
@@ -352,7 +352,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java.home", "/usr/local/bin/java8/")
+        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
@@ -383,7 +383,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java.home", "/usr/local/bin/java8/")
+        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
@@ -406,7 +406,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java.home", "/usr/local/bin/java8/")
+        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/opt/gradle")
@@ -437,7 +437,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java.home", "/usr/local/bin/java8/")
+        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/opt/gradle")
