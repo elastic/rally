@@ -167,6 +167,16 @@ Example::
 
 In this example, Rally will install the ``analysis-icu`` plugin and the ``x-pack`` plugin with the ``security`` configuration. See the reference documentation about :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
 
+``plugin-params``
+~~~~~~~~~~~~~~~~~
+
+Allows to override variables of Elasticsearch plugins.
+
+Example::
+
+    esrally --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+
+This enables the HTTP exporter of `X-Pack Monitoring <https://www.elastic.co/products/x-pack/monitoring>`_ and exports the data to the configured monitoring host.
 
 ``pipeline``
 ~~~~~~~~~~~~

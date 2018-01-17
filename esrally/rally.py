@@ -278,6 +278,11 @@ def create_arg_parser():
             help="define the Elasticsearch plugins to install. (default: install no plugins).",
             default="")
         p.add_argument(
+            "--plugin-params",
+            help="define a comma-separate list of key:value pairs that are injected verbatim to all plugins as variables",
+            default=""
+        )
+        p.add_argument(
             "--target-hosts",
             help="define a comma-separated list of host:port pairs which should be targeted iff using the pipeline 'benchmark-only' "
                  "(default: localhost:9200).",
@@ -649,6 +654,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", kv_to_map(csv_to_list(args.plugin_params)))
     cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)

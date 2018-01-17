@@ -58,15 +58,15 @@ def list_plugins(cfg):
         console.println("No Elasticsearch plugins are available.\n")
 
 
-def load_plugin(repo, name, config):
+def load_plugin(repo, name, config, plugin_params={}):
     if config is not None:
         logger.info("Loading plugin [%s] with configuration(s) [%s]." % (name, config))
     else:
         logger.info("Loading plugin [%s] with default configuration." % name)
-    return PluginLoader(repo).load_plugin(name, config)
+    return PluginLoader(repo).load_plugin(name, config, plugin_params)
 
 
-def load_plugins(repo, plugin_names):
+def load_plugins(repo, plugin_names, plugin_params={}):
     def name_and_config(p):
         plugin_spec = p.split(":")
         if len(plugin_spec) == 1:
@@ -79,7 +79,7 @@ def load_plugins(repo, plugin_names):
     plugins = []
     for plugin in plugin_names:
         plugin_name, plugin_config = name_and_config(plugin)
-        plugins.append(load_plugin(repo, plugin_name, plugin_config))
+        plugins.append(load_plugin(repo, plugin_name, plugin_config, plugin_params))
     return plugins
 
 
@@ -251,7 +251,7 @@ class PluginLoader:
     def _core_plugin(self, name):
         return next((p for p in self._core_plugins() if p.name == name and p.config is None), None)
 
-    def load_plugin(self, name, config_names):
+    def load_plugin(self, name, config_names, plugin_params={}):
         root_path = self._plugin_root_path(name)
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
@@ -300,6 +300,8 @@ class PluginLoader:
                 if "variables" in config.sections():
                     for k, v in config["variables"].items():
                         variables[k] = v
+                # add all plugin params here to override any defaults
+                variables.update(plugin_params)
 
             # maybe one of the configs is really just for providing variables. However, we still require one config base overall.
             if len(config_paths) == 0:

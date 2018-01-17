@@ -39,6 +39,7 @@ To see which plugins are available, run ``esrally list elasticsearch-plugins``::
     repository-s3
     store-smb
     x-pack                   monitoring-local
+    x-pack                   monitoring-http
     x-pack                   security
 
 Rally supports plugins only for Elasticsearch 5.0 or better. As the availability of plugins may change from release to release we recommend that you include the ``--distribution-version`` parameter when listing plugins. By default Rally assumes that you want to benchmark the latest master version of Elasticsearch.
@@ -71,6 +72,12 @@ As mentioned above, Rally also allows you to specify a plugin configuration and 
 
 .. note::
     To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --cluster-health=yellow``
+
+You can also override plugin variables with ``--plugin-params`` which is needed for example if you want to use the ``monitoring-http`` configuration in order to export monitoring data. You can export monitoring data e.g. with the following configuration::
+
+    --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+
+The ``monitoring_user`` and ``monitoring_password`` parameters are optional, the other parameters are mandatory. For more details on the configuration options, please see the `Monitoring plugin documentation <https://www.elastic.co/guide/en/x-pack/current/monitoring-production.html>`_.
 
 If you are behind a proxy, please set the environment variable ``ES_JAVA_OPTS`` accordingly on each target machine as described in the `Elasticsearch plugin documentation <https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html#_proxy_settings>`_.
 
@@ -217,6 +224,7 @@ Rally will now know about ``myplugin`` and its two configurations. Let's check t
     repository-s3
     store-smb
     x-pack                   monitoring-local
+    x-pack                   monitoring-http
     x-pack                   security
 
 As ``myplugin`` is not a core plugin, the Elasticsearch plugin manager does not know from where to install it, so we need to add the download URL to ``~/.rally/rally.ini`` as before::

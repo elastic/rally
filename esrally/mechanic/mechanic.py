@@ -505,7 +505,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
     else:
         repo = team.team_repo(cfg)
         car = team.load_car(repo, cfg.opts("mechanic", "car.names"))
-        plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"))
+        plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
 
     if sources or distribution:
         s = supplier.create(cfg, sources, distribution, build, challenge_root_path, plugins)
