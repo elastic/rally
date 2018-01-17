@@ -1,3 +1,30 @@
+### 0.9.0
+
+#### Enhancements
+
+* [#398](https://github.com/elastic/rally/issues/398): Allow to override plugin variables
+* [#387](https://github.com/elastic/rally/issues/387): Require JDK 9 for source builds
+* [#384](https://github.com/elastic/rally/issues/384): Provide a specific error message if data file is present but wrong size
+* [#383](https://github.com/elastic/rally/issues/383): Abort current benchmark in case of attempted duplicate starts
+* [#376](https://github.com/elastic/rally/issues/376): Record indexing throttle time
+* [#366](https://github.com/elastic/rally/issues/366): Separate document corpus definition from indices
+* [#361](https://github.com/elastic/rally/issues/361): Don't measure every operation
+* [#359](https://github.com/elastic/rally/issues/359): Allow to define index settings per index
+* [#348](https://github.com/elastic/rally/issues/348): Prefer default data directory when --track-path is given
+* [#293](https://github.com/elastic/rally/issues/293): Allow users to explicitly define index management operations
+
+#### Bug Fixes
+
+* [#396](https://github.com/elastic/rally/issues/396): Rally requires a team repo even if used as a load generator
+* [#394](https://github.com/elastic/rally/issues/394): Error in track preparation can hang benchmarks
+
+#### Doc Changes
+
+* [#397](https://github.com/elastic/rally/pull/397): Add a gentle reminder to update the Rally kernel with the important elasticsearch system configurations
+* [#389](https://github.com/elastic/rally/issues/389): Syntax error in elasticsearch_plugins documentation
+* [#388](https://github.com/elastic/rally/pull/388): Update rally daemon port requirements
+* [#355](https://github.com/elastic/rally/issues/355): Run In Kubernetes
+
 ### 0.8.1
 
 #### Enhancements
