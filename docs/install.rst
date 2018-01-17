@@ -95,6 +95,11 @@ A JDK is required on all machines where you want to launch Elasticsearch. If you
 
 We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK, please see your operating system's documentation pages.
 
+
+.. note::
+
+   If you have Rally download, install and benchmark a local copy of Elasticsearch (i.e., the `default Rally behavior <http://esrally.readthedocs.io/en/stable/quickstart.html#run-your-first-race>`_) be sure to configure the Operating System (OS) of your Rally server with the `recommended kernel settings <https://www.elastic.co/guide/en/elasticsearch/reference/master/system-config.html>`_
+
 Installing Rally
 ----------------
 
