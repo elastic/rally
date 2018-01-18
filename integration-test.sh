@@ -61,6 +61,14 @@ function set_up() {
     perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${config_file_path}
     perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${config_file_path}
 
+    # if the build defines these variables we'll explicitly override the detection result
+    if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
+        info "Setting java.home to ${RUNTIME_JAVA_HOME}"
+        info "Setting java9.home to ${JAVA_HOME}"
+        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${config_file_path}
+        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${config_file_path}
+    fi
+
     # Download and Elasticsearch metrics store
     pushd .
     mkdir -p .rally_it/cache
