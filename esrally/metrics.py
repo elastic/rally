@@ -135,11 +135,16 @@ class EsClientFactory:
             auth = (user, password)
         else:
             auth = None
+        if secure:
+            from elasticsearch.connection import create_ssl_context
+            ssl_context = create_ssl_context(cafile=certifi.where())
+        else:
+            ssl_context = None
+
         logger.info("Creating connection to metrics store at %s:%s" % (host, port))
         import elasticsearch
         self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
-                                                   use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where(),
-                                                   timeout=120, request_timeout=120)
+                                                   ssl_context=ssl_context, timeout=120, request_timeout=120)
 
     def create(self):
         return EsClient(self._client)
