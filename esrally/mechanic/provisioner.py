@@ -67,9 +67,14 @@ class ConfigLoader:
 
 
 def _render_template(env, variables, file_name):
-    template = env.get_template(io.basename(file_name))
-    # force a new line at the end. Jinja seems to remove it.
-    return template.render(variables) + "\n"
+    try:
+        template = env.get_template(io.basename(file_name))
+        # force a new line at the end. Jinja seems to remove it.
+        return template.render(variables) + "\n"
+    except jinja2.exceptions.TemplateSyntaxError as e:
+        raise exceptions.InvalidSyntax("%s in %s" % (str(e), file_name))
+    except BaseException as e:
+        raise exceptions.SystemSetupError("%s in %s" % (str(e), file_name))
 
 
 def plain_text(file):
@@ -483,12 +488,17 @@ class DockerProvisioner:
         }
 
     def _render_template(self, loader, template_name, variables):
-        env = jinja2.Environment(loader=loader)
-        for k, v in variables.items():
-            env.globals[k] = v
-        template = env.get_template(template_name)
+        try:
+            env = jinja2.Environment(loader=loader)
+            for k, v in variables.items():
+                env.globals[k] = v
+            template = env.get_template(template_name)
 
-        return template.render()
+            return template.render()
+        except jinja2.exceptions.TemplateSyntaxError as e:
+            raise exceptions.InvalidSyntax("%s in %s" % (str(e), template_name))
+        except BaseException as e:
+            raise exceptions.SystemSetupError("%s in %s" % (str(e), template_name))
 
     def _render_template_from_file(self, variables):
         compose_file = "%s/resources/docker-compose.yml" % self.rally_root
