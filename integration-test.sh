@@ -164,7 +164,9 @@ function tear_down() {
     # just let tear down finish
     set +e
     # terminate metrics store
-    kill -9 ${ES_PID}
+    if [ "${ES_PID}" != "-1" ]; then
+        kill -9 ${ES_PID}
+    fi
 
     rm -f ~/.rally/rally*integration-test.ini
     rm -rf .rally_it/cache/elasticsearch-"${ES_METRICS_STORE_VERSION}"
