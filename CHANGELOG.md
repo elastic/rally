@@ -1,3 +1,9 @@
+### 0.9.1
+
+#### Bug Fixes
+
+* [#399](https://github.com/elastic/rally/issues/399): 0.9.0 - Unable to run race due to missing JDK9
+
 ### 0.9.0
 
 #### Enhancements
