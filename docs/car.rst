@@ -82,7 +82,7 @@ Let's open ``vanilla/config/jvm.options`` to see how this variable is used (we'l
     -Xms{{heap_size}}
     -Xmx{{heap_size}}
 
-So Rally reads all variables and the template files and replaces the variables in the final configuration. Note that Rally does not know anything about ``jvm.options`` or ``elasticsearch.yml``. For Rally, these are just plain text templates that need to be copied to the Elasticsearch directory before running a benchmark. Under the hood, Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language. This allows you to use Jinja2 expressions in your carr configuration files.
+So Rally reads all variables and the template files and replaces the variables in the final configuration. Note that Rally does not know anything about ``jvm.options`` or ``elasticsearch.yml``. For Rally, these are just plain text templates that need to be copied to the Elasticsearch directory before running a benchmark. Under the hood, Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language. This allows you to use Jinja2 expressions in your car configuration files.
 
 If you open ``vanilla/config/elasticsearch.yml`` you will see a few variables that are not defined in the ``.ini`` file:
 
