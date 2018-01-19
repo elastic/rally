@@ -304,6 +304,38 @@ class DeleteIndexTemplateParamSource(ParamSource):
 
 
 # TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
+#
+# Usage example:
+#
+#
+# {
+#     "name": "term",
+#     "operation": {
+#         "operation-type": "search",
+#         "cache": false,
+#         "body-params": {
+#             "query.term.useragent": [
+#                 "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.53 Safari/525.19",
+#                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; Trident/7.0; .NET4.0E; .NET4.0C; rv:11.0) like Gecko",
+#                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; WOW64; Trident/7.0; Touch; rv:11.0) like Gecko"
+#             ]
+#         },
+#         "index": "logs-*",
+#         "body": {
+#             "query": {
+#                 "term": {
+#                     "useragent": "Opera/5.11 (Windows 98; U) [en]"
+#                 }
+#             }
+#         }
+#     },
+#     "clients": 1,
+#     "target-throughput": 100,
+#     "warmup-iterations": 100,
+#     "iterations": 100
+# }
+#
+#
 class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
