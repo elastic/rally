@@ -22,14 +22,6 @@ echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
 
-make clean
-echo "Building docs"
-make docs
-
-echo "Running tests"
-# run integration tests, note that this requires that tox is properly set up
-tox
-
 echo "Updating author information"
 git log --format='%aN' | sort -u > AUTHORS
 # This will produce a non-zero exit code iff there are changes.

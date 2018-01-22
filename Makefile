@@ -18,4 +18,8 @@ coverage:
 	coverage run setup.py test
 	coverage html
 
-.PHONY: clean docs test integration-test benchmark coverage
+# usage: e.g. make release current=0.9.2 next=0.9.3
+release: clean docs integration-test
+	./release.sh $(current) $(next)
+
+.PHONY: clean docs test integration-test benchmark coverage release
