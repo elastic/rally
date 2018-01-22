@@ -55,6 +55,31 @@ class StaticStopWatch:
         return 0
 
 
+class ExtractUserTagsTests(TestCase):
+    def test_no_tags_returns_empty_dict(self):
+        cfg = config.Config()
+        self.assertEqual(0, len(metrics.extract_user_tags_from_config(cfg)))
+
+    def test_missing_comma_raises_error(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "race", "user.tag", "invalid")
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            metrics.extract_user_tags_from_config(cfg)
+        self.assertEqual("User tag keys and values have to separated by a ':'. Invalid value [invalid]", ctx.exception.args[0])
+
+    def test_missing_value_raises_error(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "race", "user.tag", "invalid1,invalid2")
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            metrics.extract_user_tags_from_config(cfg)
+        self.assertEqual("User tag keys and values have to separated by a ':'. Invalid value [invalid1,invalid2]", ctx.exception.args[0])
+
+    def test_extracts_proper_user_tags(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "race", "user.tag", "os:Linux,cpu:ARM")
+        self.assertDictEqual({"os": "Linux", "cpu": "ARM"}, metrics.extract_user_tags_from_config(cfg))
+
+
 class EsClientTests(TestCase):
     class TransportMock:
         def __init__(self, hosts):
@@ -593,7 +618,7 @@ class EsRaceStoreTests(TestCase):
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
-                            pipeline="from-sources", user_tag="let-me-test", track=t, track_params={"shard-count": 3},
+                            pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
                             cluster=EsRaceStoreTests.DictHolder(
@@ -630,7 +655,9 @@ class EsRaceStoreTests(TestCase):
             "environment": "unittest",
             "trial-timestamp": "20160131T000000Z",
             "pipeline": "from-sources",
-            "user-tag": "let-me-test",
+            "user-tags": {
+                "os": "Linux"
+            },
             "track": "unittest",
             "track-params": {
                 "shard-count": 3
@@ -701,7 +728,7 @@ class EsResultsStoreTests(TestCase):
         node.plugins.append("x-pack")
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
-                            pipeline="from-sources", user_tag="let-me-test", track=t, track_params=None,
+                            pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
                             cluster=c,
@@ -733,7 +760,9 @@ class EsResultsStoreTests(TestCase):
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
-                "user-tag": "let-me-test",
+                "user-tags": {
+                    "os": "Linux"
+                },
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
@@ -750,7 +779,9 @@ class EsResultsStoreTests(TestCase):
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
-                "user-tag": "let-me-test",
+                "user-tags": {
+                    "os": "Linux"
+                },
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
@@ -772,7 +803,9 @@ class EsResultsStoreTests(TestCase):
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
-                "user-tag": "let-me-test",
+                "user-tags": {
+                    "os": "Linux"
+                },
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
@@ -968,7 +1001,7 @@ class FileRaceStoreTests(TestCase):
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
-                            pipeline="from-sources", user_tag="let-me-test", track=t, track_params={"clients": 12},
+                            pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
                             cluster=FileRaceStoreTests.DictHolder(

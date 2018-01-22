@@ -43,9 +43,6 @@
         "pipeline": {
           "type": "keyword"
         },
-        "user-tag": {
-          "type": "keyword"
-        },
         "track": {
           "type": "keyword"
         },

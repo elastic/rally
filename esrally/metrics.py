@@ -211,6 +211,37 @@ def metrics_store_class(cfg):
         return InMemoryMetricsStore
 
 
+def extract_user_tags_from_config(cfg):
+    """
+    Extracts user tags into a structured dict
+
+    :param cfg: The current configuration object.
+    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
+    """
+    user_tags = cfg.opts("race", "user.tag", mandatory=False)
+    return extract_user_tags_from_string(user_tags)
+
+
+def extract_user_tags_from_string(user_tags):
+    """
+    Extracts user tags into a structured dict
+
+    :param user_tags: A string containing user tags (tags separated by comma, key and value separated by colon).
+    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
+    """
+    user_tags_dict = {}
+    if user_tags and user_tags.strip() != "":
+        try:
+            for user_tag in user_tags.split(","):
+                user_tag_key, user_tag_value = user_tag.split(":")
+                user_tags_dict[user_tag_key] = user_tag_value
+        except ValueError:
+            msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
+    return user_tags_dict
+
+
 class SampleType(IntEnum):
     Warmup = 0,
     Normal = 1
@@ -281,17 +312,11 @@ class MetricsStore:
 
         logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
                     (self._invocation, self._track, self._challenge, self._car))
-        user_tags = self._config.opts("race", "user.tag", mandatory=False)
-        if user_tags and user_tags.strip() != "":
-            try:
-                for user_tag in user_tags.split(","):
-                    user_tag_key, user_tag_value = user_tag.split(":")
-                    # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
-                    self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % user_tag_key, user_tag_value)
-            except ValueError:
-                msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-                logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
+
+        user_tags = extract_user_tags_from_config(self._config)
+        for k, v in user_tags.items():
+            # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
+            self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
         self._stop_watch.start()
         self.opened = True
 
@@ -1011,18 +1036,18 @@ def race_store(cfg):
 def list_races(cfg):
     def format_dict(d):
         if d:
-            return ",".join(["%s=%s" % (k, v) for k, v in d.items()])
+            return ", ".join(["%s=%s" % (k, v) for k, v in d.items()])
         else:
             return None
 
     races = []
     for race in race_store(cfg).list():
         races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge, race.car_name,
-                      race.user_tag])
+                      format_dict(race.user_tags)])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tag"]))
+        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
     else:
         console.println("")
         console.println("No recent races found.")
@@ -1033,16 +1058,16 @@ def create_race(cfg, track, challenge):
     environment_name = cfg.opts("system", "env.name")
     trial_timestamp = cfg.opts("system", "time.start")
     total_laps = cfg.opts("race", "laps")
-    user_tag = cfg.opts("race", "user.tag")
+    user_tags = extract_user_tags_from_config(cfg)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
     rally_version = version.version()
 
-    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, track_params, challenge, car, total_laps)
+    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car, total_laps)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, track_params, challenge, car,
+    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
                  total_laps, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
@@ -1052,7 +1077,7 @@ class Race:
         self.environment_name = environment_name
         self.trial_timestamp = trial_timestamp
         self.pipeline = pipeline
-        self.user_tag = user_tag
+        self.user_tags = user_tags
         self.track = track
         self.track_params = track_params
         self.challenge = challenge
@@ -1099,7 +1124,7 @@ class Race:
             "environment": self.environment_name,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "pipeline": self.pipeline,
-            "user-tag": self.user_tag,
+            "user-tags": self.user_tags,
             "track": self.track_name,
             "challenge": self.challenge_name,
             "car": self.car,
@@ -1120,7 +1145,7 @@ class Race:
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "distribution-version": self.cluster.distribution_version,
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
-            "user-tag": self.user_tag,
+            "user-tags": self.user_tags,
             "track": self.track_name,
             "challenge": self.challenge_name,
             "car": self.car_name,
@@ -1149,9 +1174,17 @@ class Race:
 
     @classmethod
     def from_dict(cls, d):
+        # for backwards compatibility with Rally < 0.9.2
+        if "user-tag" in d:
+            user_tags = extract_user_tags_from_string(d["user-tag"])
+        elif "user-tags" in d:
+            user_tags = d["user-tags"]
+        else:
+            user_tags = {}
+
         # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
-        return Race(d["rally-version"], d["environment"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], d["user-tag"],
+        return Race(d["rally-version"], d["environment"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
                     d["track"], d.get("track-params"), d["challenge"], d["car"], d["total-laps"], results=d["results"])
 
 
