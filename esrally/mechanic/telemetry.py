@@ -755,9 +755,13 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
                 }
             }
         })
-        value = results["aggregations"]["max_bucket_processing_time"]["value"]
-        if value:
-            self.metrics_store.put_value_cluster_level("ml_max_processing_time_millis", value, "ms")
+        try:
+            value = results["aggregations"]["max_bucket_processing_time"]["value"]
+            if value:
+                self.metrics_store.put_value_cluster_level("ml_max_processing_time_millis", value, "ms")
+        except KeyError:
+            # no ML running
+            pass
 
 
 class IndexSize(InternalTelemetryDevice):
