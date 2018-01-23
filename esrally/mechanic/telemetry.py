@@ -731,6 +731,35 @@ class IndexStats(InternalTelemetryDevice):
             return default_value
 
 
+class MlBucketProcessingTime(InternalTelemetryDevice):
+    def __init__(self, client, metrics_store):
+        super().__init__()
+        self.client = client
+        self.metrics_store = metrics_store
+
+    def detach_from_cluster(self, cluster):
+        results = self.client.search(index=".ml-anomalies-*", body={
+            "size": 0,
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"result_type": "bucket"}},
+                        # TODO: We could restrict this by job id if we need to measure multiple jobs...
+                        # {"term": {"job_id": "job_id"}}
+                    ]
+                }
+            },
+            "aggs": {
+                "max_bucket_processing_time": {
+                    "max": {"field": "processing_time_ms"}
+                }
+            }
+        })
+        value = results["aggregations"]["max_bucket_processing_time"]["value"]
+        if value:
+            self.metrics_store.put_value_cluster_level("ml_max_processing_time_millis", value, "ms")
+
+
 class IndexSize(InternalTelemetryDevice):
     """
     Measures the final size of the index

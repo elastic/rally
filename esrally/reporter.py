@@ -143,6 +143,9 @@ class StatsCalculator:
         result.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
         result.merge_part_time_points = self.sum("merge_parts_total_time_points")
 
+        logger.debug("Gathering ML max processing time.")
+        result.ml_max_processing_time = self.one("ml_max_processing_time_millis")
+
         logger.debug("Gathering CPU usage metrics.")
         result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
 
@@ -231,6 +234,7 @@ class Stats:
         self.refresh_time = self.v(d, "refresh_time")
         self.flush_time = self.v(d, "flush_time")
         self.merge_throttle_time = self.v(d, "merge_throttle_time")
+        self.ml_max_processing_time = self.v(d, "ml_max_processing_time")
 
         self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
         self.merge_part_time_stored_fields = self.v(d, "merge_part_time_stored_fields")
@@ -366,6 +370,7 @@ class SummaryReporter:
         metrics_table = []
         metrics_table += self.report_total_times(stats)
         metrics_table += self.report_merge_part_times(stats)
+        metrics_table += self.report_ml_max_processing_time(stats)
 
         metrics_table += self.report_cpu_usage(stats)
         metrics_table += self.report_gc_times(stats)
@@ -454,6 +459,11 @@ class SummaryReporter:
             self.line("Merge time (norms)", "", stats.merge_part_time_norms, unit, convert.ms_to_minutes),
             self.line("Merge time (vectors)", "", stats.merge_part_time_vectors, unit, convert.ms_to_minutes),
             self.line("Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
+        )
+
+    def report_ml_max_processing_time(self, stats):
+        return self.join(
+            self.line("Max Processing Time (ML)", "", convert.ms_to_seconds(stats.ml_max_processing_time), "s")
         )
 
     def report_cpu_usage(self, stats):

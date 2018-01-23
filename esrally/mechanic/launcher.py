@@ -45,7 +45,8 @@ class ClusterLauncher:
             telemetry.ClusterMetaDataInfo(es),
             telemetry.ClusterEnvironmentInfo(es, self.metrics_store),
             telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store)
+            telemetry.IndexStats(es, self.metrics_store),
+            telemetry.MlBucketProcessingTime(es, self.metrics_store)
         ])
 
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
