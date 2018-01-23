@@ -676,7 +676,20 @@ class TrackFileReader:
             raise exceptions.SystemSetupError("Track %s does not exist" % track_name)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
             logger.exception("Could not load [%s]." % track_spec_file)
-            raise TrackSyntaxError("Could not load '%s'" % track_spec_file, e)
+            # TODO: Check whether we can improve this.
+            # Jinja classes cause serialization problems:
+            #
+            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/TCPTransport.py", line 1431, in _addedDataToIncoming
+            # rdata, extra = inc.data
+            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/TCPTransport.py", line 185, in data
+            # def data(self): return self._rData.completed()
+            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/streamBuffer.py", line 80, in completed
+            # return self._deserialize(self._buf), self._extra
+            # TypeError: __init__() missing 1 required positional argument: 'lineno'
+            # (rdata="", extra="")
+            #
+            # => Convert to string early on:
+            raise TrackSyntaxError("Could not load '%s'" % track_spec_file, str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:

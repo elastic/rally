@@ -548,7 +548,17 @@ def dispatch_sub_command(cfg, sub_command):
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
-        console.error("Cannot %s. %s" % (sub_command, e))
+        msg = str(e.message)
+        nesting = 0
+        while hasattr(e, "cause") and e.cause:
+            nesting += 1
+            e = e.cause
+            if hasattr(e, "message"):
+                msg += "\n%s%s" % ("\t" * nesting, e.message)
+            else:
+                msg += "\n%s%s" % ("\t" * nesting, str(e))
+
+        console.error("Cannot %s. %s" % (sub_command, msg))
         console.println("")
         print_help_on_errors()
         return False
