@@ -462,7 +462,7 @@ If you want it to create all indices that have been declared in the ``indices`` 
 
 If you want it to create one specific index instead, you can specify the following properties:
 
-* ``index`` (mandatory): The name of the index that should be created.
+* ``index`` (mandatory): One or more names of the indices that should be created. If only one index should be created, you can use a string otherwise this needs to be a list of strings.
 * ``body`` (optional): The body for the create index API call.
 * ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
 
@@ -517,7 +517,7 @@ If you want it to delete all indices that have been declared in the ``indices`` 
 
 If you want it to delete one specific index (pattern) instead, you can specify the following properties:
 
-* ``index`` (mandatory): The name of the index that should be deleted.
+* ``index`` (mandatory): One or more names of the indices that should be deleted. If only one index should be deleted, you can use a string otherwise this needs to be a list of strings.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
 * ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
 

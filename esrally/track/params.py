@@ -152,10 +152,12 @@ class CreateIndexParamSource(ParamSource):
         self.request_params = params.get("request-params", {})
         self.index_definitions = []
         if track.indices:
-            filter_index = params.get("index")
+            filter_idx = params.get("index")
+            if isinstance(filter_idx, str):
+                filter_idx = [filter_idx]
             settings = params.get("settings")
             for idx in track.indices:
-                if not filter_index or idx.name == filter_index:
+                if not filter_idx or idx.name in filter_idx:
                     body = idx.body
                     if body and settings:
                         if "settings" in body:
@@ -181,10 +183,14 @@ class CreateIndexParamSource(ParamSource):
 
                     self.index_definitions.append((idx.name, body))
         else:
-            # TODO: Should we allow to create multiple indices at once?
             try:
                 # only 'index' is mandatory, the body is optional (may be ok to create an index without a body)
-                self.index_definitions.append((params["index"], params.get("body")))
+                idx = params["index"]
+                body = params.get("body")
+                if isinstance(idx, str):
+                    idx = [idx]
+                for i in idx:
+                    self.index_definitions.append((i, body))
             except KeyError:
                 raise exceptions.InvalidSyntax("Please set the property 'index' for the create-index operation")
 
@@ -208,8 +214,10 @@ class DeleteIndexParamSource(ParamSource):
         self.index_definitions = []
         target_index = params.get("index")
         if target_index:
-            # TODO: Should we allow to delete multiple indices at once?
-            self.index_definitions.append(target_index)
+            if isinstance(target_index, str):
+                target_index = [target_index]
+            for idx in target_index:
+                self.index_definitions.append(idx)
         elif track.indices:
             for idx in track.indices:
                 self.index_definitions.append(idx.name)
