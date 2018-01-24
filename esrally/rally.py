@@ -376,11 +376,7 @@ def create_arg_parser():
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
             default=None)
-        # This is a highly experimental option and will likely be removed
-        p.add_argument(
-            "--data-paths",
-            help=argparse.SUPPRESS,
-            default=None)
+        # TODO: Remove in Rally 0.10.0 (there will be no index auto-management anymore)
         p.add_argument(
             "--auto-manage-indices",
             choices=["true", "false"],
@@ -665,7 +661,6 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", kv_to_map(csv_to_list(args.plugin_params)))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
         # force-preserve the cluster nodes.

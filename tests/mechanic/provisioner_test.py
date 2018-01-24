@@ -26,23 +26,20 @@ class BareProvisionerTests(TestCase):
             variables={"heap": "4g"}),
             node_name="rally-node-0",
             node_root_dir="~/.rally/benchmarks/races/unittest",
-            data_root_paths=["/var/elasticsearch"],
             all_node_ips=["10.17.22.22", "10.17.22.23"],
             ip="10.17.22.23",
-            http_port=9200
-        )
+            http_port=9200)
 
         p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
                                         es_installer=installer,
                                         plugin_installers=[],
                                         preserve=True,
-                                        apply_config=null_apply_config
-                                        )
+                                        apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
         self.assertEqual(installer.car, node_config.car)
         self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
-        self.assertEqual(["/var/elasticsearch/data"], node_config.data_paths)
+        self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
 
         self.assertEqual(1, len(apply_config_calls))
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
@@ -56,7 +53,7 @@ class BareProvisionerTests(TestCase):
             "heap": "4g",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
-            "data_paths": ["/var/elasticsearch/data"],
+            "data_paths": ["/opt/elasticsearch-5.0.0/data"],
             "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
@@ -80,8 +77,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
                                                        http_port=9200,
-                                                       node_root_dir="~/.rally/benchmarks/races/unittest",
-                                                       data_root_paths=["/tmp/some-data-path"])
+                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
         installer.cleanup(preserve=True)
 
         mock_path_exists.assert_not_called()
@@ -97,8 +93,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
                                                        http_port=9200,
-                                                       node_root_dir="~/.rally/benchmarks/races/unittest",
-                                                       data_root_paths=["/tmp/some-data-path"])
+                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
 
         installer.data_paths = ["/tmp/some/data-path-dir"]
         installer.cleanup(preserve=True)
@@ -117,8 +112,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
                                                        ip="10.17.22.23",
                                                        http_port=9200,
-                                                       node_root_dir="~/.rally/benchmarks/races/unittest",
-                                                       data_root_paths=["/var/elasticsearch"])
+                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
 
         installer.install("/data/builds/distributions")
         self.assertEqual(installer.es_home_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
@@ -126,7 +120,7 @@ class ElasticsearchInstallerTests(TestCase):
         self.assertEqual({
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
-            "data_paths": ["/var/elasticsearch/data"],
+            "data_paths": ["/install/elasticsearch-5.0.0-SNAPSHOT/data"],
             "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
@@ -138,7 +132,7 @@ class ElasticsearchInstallerTests(TestCase):
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT"
         }, installer.variables)
 
-        self.assertEqual(installer.data_paths, ["/var/elasticsearch/data"])
+        self.assertEqual(installer.data_paths, ["/install/elasticsearch-5.0.0-SNAPSHOT/data"])
 
 
 class PluginInstallerTests(TestCase):

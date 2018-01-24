@@ -17,12 +17,11 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     http_port = cfg.opts("provisioning", "node.http.port")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     preserve = cfg.opts("mechanic", "preserve.install")
-    data_root_paths = cfg.opts("mechanic", "node.datapaths")
 
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
-    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, data_root_paths, all_node_ips, ip, http_port)
+    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, all_node_ips, ip, http_port)
     plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve)
@@ -213,13 +212,12 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, node_name, node_root_dir, data_root_paths, all_node_ips, ip, http_port):
+    def __init__(self, car, node_name, node_root_dir, all_node_ips, ip, http_port):
         self.car = car
         self.node_name = node_name
         self.node_root_dir = node_root_dir
         self.install_dir = "%s/install" % node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
-        self.data_root_paths = data_root_paths
         self.all_node_ips = all_node_ips
         self.node_ip = ip
         self.http_port = http_port
@@ -278,8 +276,7 @@ class ElasticsearchInstaller:
         return self.car.config_paths
 
     def _data_paths(self):
-        roots = self.data_root_paths if self.data_root_paths else [self.es_home_path]
-        return [os.path.join(root, "data") for root in roots]
+        return [os.path.join(self.es_home_path, "data")]
 
 
 class InstallHookHandler:
