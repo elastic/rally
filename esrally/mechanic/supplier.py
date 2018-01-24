@@ -471,7 +471,7 @@ class Builder:
                                           (gradle_opts, self.java_home, src_dir, self.gradle, task, log_file)):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
-            with open(log_file, "r") as f:
+            with open(log_file, "r", encoding="utf-8") as f:
                 msg += "\t"
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"

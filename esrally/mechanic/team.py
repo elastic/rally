@@ -209,7 +209,7 @@ class PluginLoader:
         core_plugins = []
         core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
         if os.path.exists(core_plugins_path):
-            with open(core_plugins_path, "rt") as f:
+            with open(core_plugins_path, mode="rt", encoding="utf-8") as f:
                 for line in f:
                     if not line.startswith("#"):
                         # be forward compatible and allow additional values (comma-separated). At the moment, we only use the plugin name.

@@ -130,7 +130,7 @@ def _apply_config(source_root_path, target_root_path, config_vars):
             if plain_text(source_file):
                 logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
                 # automatically merge config snippets from plugins (e.g. if they want to add config to elasticsearch.yml)
-                with open(target_file, "a") as f:
+                with open(target_file, mode="a", encoding="utf-8") as f:
                     f.write(_render_template(env, config_vars, source_file))
             else:
                 logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
@@ -451,7 +451,7 @@ class DockerProvisioner:
                     mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
                     if plain_text(source_file):
                         logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
-                        with open(target_file, "a") as f:
+                        with open(target_file, mode="a", encoding="utf-8") as f:
                             f.write(_render_template(env, self.config_vars, source_file))
                     else:
                         logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
@@ -460,7 +460,7 @@ class DockerProvisioner:
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
 
-        with open(self.binary_path, "wt") as f:
+        with open(self.binary_path, mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
         return NodeConfiguration(self.car, self.node_ip, self.node_name, self.node_root_dir, self.binary_path,

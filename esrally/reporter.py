@@ -57,7 +57,7 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
                     (normalized_report_file, report_file, report_format))
         # ensure that the parent folder already exists when we try to write the file...
         rio.ensure_dir(rio.dirname(normalized_report_file))
-        with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
+        with open(normalized_report_file, mode="a+", encoding="utf-8") as f:
             f.writelines(formatter(headers, data_plain, write_header))
 
 

@@ -263,7 +263,7 @@ class MergeParts(InternalTelemetryDevice):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if not io.is_archive(log_file):
                 logger.debug("Analyzing merge times in [%s]" % log_path)
-                with open(log_path) as f:
+                with open(log_path, mode="rt", encoding="utf-8") as f:
                     self._extract_merge_times(f, merge_times)
             else:
                 logger.debug("Skipping archived logs in [%s]." % log_path)

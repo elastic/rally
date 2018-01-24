@@ -1166,7 +1166,7 @@ def load_race_configs(cfg):
     if chart_spec_path:
         import json
         race_configs = []
-        with open(io.normalize_path(chart_spec_path), mode="rt", encoding="UTF-8") as f:
+        with open(io.normalize_path(chart_spec_path), mode="rt", encoding="utf-8") as f:
             for item in json.load(f):
                 # load track based on its name and replace it
                 item["track"] = load_track(cfg, item["track"])
@@ -1211,7 +1211,7 @@ def generate(cfg):
 
     output_path = cfg.opts("generator", "output.path")
     if output_path:
-        with open(io.normalize_path(output_path), mode="wt", encoding="UTF-8") as f:
+        with open(io.normalize_path(output_path), mode="wt", encoding="utf-8") as f:
             print(json.dumps(structures, indent=4), file=f)
     else:
         print(json.dumps(structures, indent=4))

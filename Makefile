@@ -8,8 +8,17 @@ docs:
 test:
 	python3 setup.py test
 
-integration-test:
+it:
 	tox
+
+it34:
+	tox -e py34
+
+it35:
+	tox -e py35
+
+it36:
+	tox -e py36
 
 benchmark:
 	python3 setup.py pytest --addopts="-s benchmarks"
@@ -19,7 +28,7 @@ coverage:
 	coverage html
 
 # usage: e.g. make release current=0.9.2 next=0.9.3
-release: clean docs integration-test
+release: clean docs it
 	./release.sh $(current) $(next)
 
-.PHONY: clean docs test integration-test benchmark coverage release
+.PHONY: clean docs test it it34 it35 it36 benchmark coverage release

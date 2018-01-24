@@ -42,12 +42,12 @@ class ConfigFile:
 
     def load(self, interpolation=configparser.ExtendedInterpolation()):
         config = configparser.ConfigParser(interpolation=interpolation)
-        config.read(self.location)
+        config.read(self.location, encoding="utf-8")
         return config
 
     def store(self, config):
         io.ensure_dir(self.config_dir)
-        with open(self.location, "w") as configfile:
+        with open(self.location, "wt", encoding="utf-8") as configfile:
             config.write(configfile)
 
     def backup(self):

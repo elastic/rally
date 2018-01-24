@@ -163,7 +163,8 @@ class IndexTemplateProvider:
         return self._read("results-template")
 
     def _read(self, template_name):
-        return open("%s/resources/%s.json" % (self.script_dir, template_name)).read()
+        with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
+            return f.read()
 
 
 class MetaInfoScope(Enum):
@@ -1246,8 +1247,8 @@ class FileRaceStore(RaceStore):
         import json
         io.ensure_dir(self.race_path)
         # if the user has overridden the effective start date we guarantee a unique file name but do not let them use them for tournaments.
-        with open(self._output_file_name(doc), mode="w", encoding="UTF-8") as f:
-            f.write(json.dumps(doc, indent=True))
+        with open(self._output_file_name(doc), mode="wt", encoding="utf-8") as f:
+            f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
     def _output_file_name(self, doc):
         if self.user_provided_start_timestamp:
@@ -1276,7 +1277,7 @@ class FileRaceStore(RaceStore):
         for result in results:
             # noinspection PyBroadException
             try:
-                with open(result) as f:
+                with open(result, mode="rt", encoding="utf-8") as f:
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logger.exception("Could not load race file [%s] (incompatible format?) Skipping..." % result)

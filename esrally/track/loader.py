@@ -651,7 +651,8 @@ class TrackFileReader:
 
     def __init__(self, cfg):
         track_schema_file = "%s/resources/track-schema.json" % (cfg.opts("node", "rally.root"))
-        self.track_schema = json.loads(open(track_schema_file).read())
+        with open(track_schema_file, mode="rt", encoding="utf-8") as f:
+            self.track_schema = json.loads(f.read())
         override_auto_manage_indices = cfg.opts("track", "auto_manage_indices")
         self.track_params = cfg.opts("track", "params")
         self.read_track = TrackSpecificationReader(override_auto_manage_indices)
