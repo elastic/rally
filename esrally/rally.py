@@ -146,7 +146,12 @@ def create_arg_parser():
         metavar="artifact",
         help="The artifact to create. Possible values are: charts",
         choices=["charts"])
-
+    # We allow to either have a chart-spec-path *or* define a chart-spec on the fly with track, challenge and car. Convincing
+    # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
+    generate_parser.add_argument(
+        "--chart-spec-path",
+        help="path to a JSON file containing all combinations of charts to generate"
+    )
     generate_parser.add_argument(
         "--track",
         help="define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
@@ -160,28 +165,28 @@ def create_arg_parser():
     #    default="")
     generate_parser.add_argument(
         "--challenge",
-        required=True,
         help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
     generate_parser.add_argument(
         "--car",
-        required=True,
-        help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
-        default="defaults")  # optimized for local usage
+        help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME)
+    generate_parser.add_argument(
+        "--node-count",
+        type=positive_number,
+        help="The number of Elasticsearch nodes to use in charts.")
     generate_parser.add_argument(
         "--chart-type",
         help="Chart type to generate. Default: time-series",
         choices=["time-series", "bar"],
         default="time-series")
     generate_parser.add_argument(
-        "--node-count",
-        type=positive_number,
-        help="The number of Elasticsearch nodes to use in charts.",
-        required=True)
-    generate_parser.add_argument(
         "--quiet",
         help="suppress as much as output as possible (default: false).",
         default=False,
         action="store_true")
+    generate_parser.add_argument(
+        "--output-path",
+        help="Output file name (default: stdout).",
+        default=None)
 
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
@@ -704,7 +709,17 @@ def main():
         cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
     if sub_command == "generate":
         cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
-        cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
+        cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+
+        if args.chart_spec_path and (args.track or args.challenge or args.car or args.node_count):
+            console.println("You need to specify either --chart-spec-path or --track, --challenge, --car and "
+                            "--node-count but not both.")
+            exit(1)
+        if args.chart_spec_path:
+            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
+        else:
+            # other options are stored elsewhere already
+            cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
     cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
     if args.cluster_health != "green":
