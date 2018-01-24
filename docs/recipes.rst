@@ -1,7 +1,13 @@
 Tips and Tricks
 ===============
 
-This section covers various tips and tricks when using Rally in a recipe-style fashion.
+This section covers various tips and tricks in a recipe-style fashion.
+
+Choosing the right hardware
+---------------------------
+
+Use an SSD on the load generator machine. If you run bulk-indexing benchmarks, Rally will read a data file from disk. Usually, you will configure multiple clients. Each client reads a portion of this file. To the disk this appears as a random access and spinning disks perform poorly there. To avoid an accidental bottleneck on client-side you should therefore use an SSD on each load generator machine.
+
 
 Benchmarking an existing cluster
 --------------------------------
