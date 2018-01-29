@@ -1,6 +1,8 @@
 import logging
 from enum import Enum, unique
 
+from esrally import exceptions
+
 logger = logging.getLogger("rally.track")
 
 
@@ -310,14 +312,18 @@ class Track:
     def find_challenge_or_default(self, name):
         """
         :param name: The name of the challenge to find.
-        :return: The challenge with the given name. The default challenge, if the name is "" or ``None``. Otherwise, returns ``None``.
+        :return: The challenge with the given name. The default challenge, if the name is "" or ``None``.
         """
         if name in [None, ""]:
             return self.default_challenge
+        else:
+            return self.find_challenge(name)
+
+    def find_challenge(self, name):
         for challenge in self.challenges:
             if challenge.name == name:
                 return challenge
-        return None
+        raise exceptions.InvalidName("Unknown challenge [%s] for track [%s]" % (name, self.name))
 
     @property
     def number_of_documents(self):

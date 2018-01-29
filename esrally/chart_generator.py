@@ -5,6 +5,15 @@ from esrally import track, config, exceptions
 from esrally.utils import io
 
 
+def index_label(challenge, car, plugins, node_count):
+    label = "%s-%s" % (challenge, car)
+    if plugins:
+        label += "-%s" % plugins.replace(":", "-").replace(",", "+")
+    if node_count > 1:
+        label += " (%d nodes)" % node_count
+    return label
+
+
 class BarCharts:
     @staticmethod
     def gc(title, environment, track, combination_name, challenge, car, node_count):
@@ -530,14 +539,14 @@ class BarCharts:
     def index(environment, track, cci, title):
         filters = []
         for idx, item in enumerate(cci):
-            combination_name, challenge, car, node_count, index_op = item
-            label = "%s-%s" % (challenge, car) if node_count == 1 else "%s-%s (%d nodes)" % (challenge, car, node_count)
+            combination_name, challenge, car, plugins, node_count, index_task = item
+            label = index_label(challenge, car, plugins, node_count)
             filters.append({
                 "input": {
                     "query": {
                         "query_string": {
                             "analyze_wildcard": True,
-                            "query": "task:%s AND %s" % (index_op, filter_string(combination_name, track, challenge, car, node_count))
+                            "query": "task:%s AND %s" % (index_task, filter_string(combination_name, track, challenge, car, node_count))
                         }
                     }
                 },
@@ -756,11 +765,26 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
                 "filter": "environment:\"%s\" AND active:true AND %s" %
                           (environment, filter_string(combination_name, track, challenge, car, node_count)),
-                "annotations": []
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:gc) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -812,7 +836,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:%s AND track:\"%s\"" % (environment, track),
+                        "filter": "environment:\"%s\" AND track:\"%s\"" % (environment, track),
                         "split_filters": [
                             {
                                 "filter": "name:index_size",
@@ -834,11 +858,26 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
                 "filter": "environment:\"%s\" AND active:true AND %s" %
                           (environment, filter_string(combination_name, track, challenge, car, node_count)),
-                "annotations": []
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:io) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -875,6 +914,7 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4()),
                         "color": "rgba(0,191, 179, 1)",
                         "split_mode": "everything",
+                        "label": "50th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -897,6 +937,7 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4()),
                         "color": "rgba(254, 209, 10, 1)",
                         "split_mode": "everything",
+                        "label": "90th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -919,6 +960,7 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4()),
                         "color": "rgba(0, 120,160, 1)",
                         "split_mode": "everything",
+                        "label": "99th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -941,6 +983,7 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4()),
                         "color": "rgba(223, 73, 152, 1)",
                         "split_mode": "everything",
+                        "label": "100th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -966,14 +1009,29 @@ class TimeSeriesCharts:
                 "axis_position": "left",
                 "axis_formatter": "number",
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "background_color_rules": [
                     {
                         "id": str(uuid.uuid4())
                     }
                 ],
-                "drop_last_bucket": 0,
                 "filter": "environment:\"%s\" AND task:\"%s\" AND name:\"%s\" AND active:true AND %s" %
-                          (environment, q, metric, filter_string(combination_name, track, challenge, car, node_count))
+                          (environment, q, metric, filter_string(combination_name, track, challenge, car, node_count)),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:query) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -999,8 +1057,8 @@ class TimeSeriesCharts:
         filters = []
         colors = ["rgba(0,191,179,1)", "rgba(254,209,10,1)", "rgba(0,120,160,1)", "rgba(223,73,152,1)", "rgba(147,201,14,1)"]
         for idx, item in enumerate(cci):
-            combination_name, challenge, car, node_count, index_task = item
-            label = "%s-%s" % (challenge, car) if node_count == 1 else "%s-%s (%d nodes)" % (challenge, car, node_count)
+            combination_name, challenge, car, plugins, node_count, index_task = item
+            label = index_label(challenge, car, plugins, node_count)
             filters.append(
                 {
                     "filter": "task:%s AND %s" % (index_task, filter_string(combination_name, track, challenge, car, node_count)),
@@ -1048,10 +1106,25 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
                 "filter": "environment:\"%s\" AND track:\"%s\" AND name:throughput AND active:true" % (environment, track),
-                "annotations": []
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:indexing) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -1090,11 +1163,12 @@ def generate_index_ops(chart_type, race_configs, environment):
                 challenge = combination["challenge"]
                 car = combination["car"]
                 node_count = int(combination.get("node-count", 1))
+                plugins = combination.get("plugins")
                 for task in t.find_challenge_or_default(challenge).schedule:
                     for sub_task in task:
                         # TODO: Remove "index" after some grace period
                         if sub_task.operation.type in [track.OperationType.Bulk.name, track.OperationType.Index.name]:
-                            cci.append((combination_name, challenge, car, node_count, sub_task.name))
+                            cci.append((combination_name, challenge, car, plugins, node_count, sub_task.name))
             all_tracks.append((t.name, cci))
         return all_tracks
 
@@ -1115,13 +1189,16 @@ def default_tracks(race_configs):
             challenge = combination["challenge"]
             car = combination["car"]
             node_count = int(combination.get("node-count", 1))
+            # only generate some charts for the default combination (we might want to make this configurable)
+            default_combination = combination.get("default-combination", False)
             ops = []
-            for task in t.find_challenge_or_default(challenge).schedule:
-                for sub_task in task:
-                    # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
-                    if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
-                        ops.append(sub_task.name)
-            all_tracks.append((t.name, combination_name, challenge, car, node_count, ops))
+            if default_combination:
+                for task in t.find_challenge(challenge).schedule:
+                    for sub_task in task:
+                        # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
+                        if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
+                            ops.append(sub_task.name)
+                all_tracks.append((t.name, combination_name, challenge, car, node_count, ops))
 
     return all_tracks
 
