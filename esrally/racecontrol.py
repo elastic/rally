@@ -92,6 +92,11 @@ class BenchmarkActor(actor.RallyActor):
         self.mechanic = None
         self.main_driver = None
 
+    def receiveMsg_PoisonMessage(self, msg, sender):
+        logger.info("BenchmarkActor got notified of poison message [%s] (forwarding)." % (str(msg)))
+        self.error = True
+        self.send(self.start_sender, msg)
+
     def receiveUnrecognizedMessage(self, msg, sender):
         logger.info("BenchmarkActor received unknown message [%s] (ignoring)." % (str(msg)))
 
@@ -164,9 +169,7 @@ class BenchmarkActor(actor.RallyActor):
 
     def setup(self, msg, sender):
         self.start_sender = sender
-        self.mechanic = self.createActor(mechanic.MechanicActor,
-                                         #globalName="/rally/mechanic/coordinator",
-                                         targetActorRequirements={"coordinator": True})
+        self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
 
         self.cfg = msg.cfg
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set but there are rare
@@ -208,9 +211,7 @@ class BenchmarkActor(actor.RallyActor):
         self.metrics_store.lap = lap
         logger.info("Telling mechanic of benchmark start.")
         self.send(self.mechanic, mechanic.OnBenchmarkStart(lap))
-        self.main_driver = self.createActor(driver.DriverActor,
-                                            #globalName="/rally/driver/coordinator",
-                                            targetActorRequirements={"coordinator": True})
+        self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
         logger.info("Telling driver to start benchmark.")
         self.send(self.main_driver, driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info, lap))
 

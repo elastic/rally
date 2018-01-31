@@ -220,7 +220,6 @@ class MechanicActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
-        self.node_ids = []
         self.cfg = None
         self.metrics_store = None
         self.race_control = None
@@ -239,12 +238,12 @@ class MechanicActor(actor.RallyActor):
         self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        # something went wrong with a child actor
+        logger.info("MechanicActor#receiveMessage poison(msg = [%s] sender = [%s])" % (str(msg.poisonMessage), str(sender)))
+        # something went wrong with a child actor (or another actor with which we have communicated)
         if isinstance(msg.poisonMessage, StartEngine):
             failmsg = "Could not start benchmark candidate. Are Rally daemons on all targeted machines running?"
         else:
-            failmsg = "[%s] sent to a child actor has resulted in PoisonMessage. " \
-                      "Could not communicate with benchmark candidate (unknown reason)" % str(msg.poisonMessage)
+            failmsg = msg.details
         logger.error(failmsg)
         self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
@@ -372,8 +371,7 @@ class MechanicActor(actor.RallyActor):
         for m in self.children:
             self.send(m, thespian.actors.ActorExitRequest())
         self.children = []
-        # self terminate + slave nodes
-        self.send(self.myAddress, thespian.actors.ActorExitRequest())
+        # do not self-terminate, let the parent actor handle this
 
 
 @thespian.actors.requireCapability('coordinator')
