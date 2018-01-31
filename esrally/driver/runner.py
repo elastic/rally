@@ -726,6 +726,23 @@ class DeleteIndexTemplate(Runner):
         return "delete-index-template"
 
 
+class RawRequest(Runner):
+    def __call__(self, es, params):
+        request_params = {}
+        if "ignore" in params:
+            request_params["ignore"] = params["ignore"]
+        request_params.update(params.get("request-params", {}))
+
+        es.transport.perform_request(method=params.get("method", "GET"),
+                                     url=mandatory(params, "path", self),
+                                     headers=params.get("headers"),
+                                     body=params.get("body"),
+                                     params=request_params)
+
+    def __repr__(self, *args, **kwargs):
+        return "raw-request"
+
+
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
 class Retry(Runner):
@@ -800,6 +817,7 @@ register_runner(track.OperationType.ForceMerge.name, ForceMerge())
 register_runner(track.OperationType.IndicesStats.name, IndicesStats())
 register_runner(track.OperationType.NodesStats.name, NodeStats())
 register_runner(track.OperationType.Search.name, Query())
+register_runner(track.OperationType.RawRequest.name, RawRequest())
 
 # We treat the following as administrative commands and thus already start to wrap them in a retry.
 register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))

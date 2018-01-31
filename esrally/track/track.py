@@ -432,6 +432,7 @@ class OperationType(Enum):
     NodesStats = 2
     Search = 3
     Bulk = 4
+    RawRequest = 5
     # administrative actions
     ForceMerge = 1001
     ClusterHealth = 1002
@@ -462,6 +463,8 @@ class OperationType(Enum):
             return OperationType.ClusterHealth
         elif v == "bulk":
             return OperationType.Bulk
+        elif v == "raw-request":
+            return OperationType.RawRequest
         elif v == "put-pipeline":
             return OperationType.PutPipeline
         elif v == "refresh":

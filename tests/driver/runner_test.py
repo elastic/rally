@@ -1226,6 +1226,101 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         es.indices.delete_template.assert_not_called()
 
 
+class RawRequestRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_issue_request_with_defaults(self, es):
+        r = runner.RawRequest()
+
+        params = {
+            "path": "/_cat/count"
+        }
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with(method="GET",
+                                                             url="/_cat/count",
+                                                             headers=None,
+                                                             body=None,
+                                                             params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_issue_delete_index(self, es):
+        r = runner.RawRequest()
+
+        params = {
+            "method": "DELETE",
+            "path": "/twitter",
+            "ignore": [400, 404],
+            "request-params": {
+                "pretty": "true"
+            }
+        }
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with(method="DELETE",
+                                                             url="/twitter",
+                                                             headers=None,
+                                                             body=None,
+                                                             params={"ignore": [400, 404], "pretty": "true"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_issue_create_index(self, es):
+        r = runner.RawRequest()
+
+        params = {
+            "method": "POST",
+            "path": "/twitter",
+            "body": {
+                "settings": {
+                    "index": {
+                        "number_of_replicas": 0
+                    }
+                }
+            }
+        }
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with(method="POST",
+                                                             url="/twitter",
+                                                             headers=None,
+                                                             body={
+                                                                 "settings": {
+                                                                     "index": {
+                                                                         "number_of_replicas": 0
+                                                                     }
+                                                                 }
+                                                             },
+                                                             params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_issue_msearch(self, es):
+        r = runner.RawRequest()
+
+        params = {
+            "path": "/_msearch",
+            "headers": {
+                "Content-Type": "application/x-ndjson"
+            },
+            "body": [
+                {"index": "test"},
+                {"query": {"match_all": {}}, "from": 0, "size": 10},
+                {"index": "test", "search_type": "dfs_query_then_fetch"},
+                {"query": {"match_all": {}}}
+            ]
+        }
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with(method="GET",
+                                                             url="/_msearch",
+                                                             headers={"Content-Type": "application/x-ndjson"},
+                                                             body=[
+                                                                 {"index": "test"},
+                                                                 {"query": {"match_all": {}}, "from": 0, "size": 10},
+                                                                 {"index": "test", "search_type": "dfs_query_then_fetch"},
+                                                                 {"query": {"match_all": {}}}
+                                                             ],
+                                                             params={})
+
+
 class RetryTests(TestCase):
     def test_is_transparent_on_success_when_no_retries(self):
         delegate = mock.Mock()
