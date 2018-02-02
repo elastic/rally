@@ -515,7 +515,7 @@ class NodeMechanicActor(actor.RallyActor):
                                    msg.distribution, msg.external, msg.docker)
             nodes = self.mechanic.start_engine()
             self.running = True
-            self.send(msg.reply_to, NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
+            self.send(getattr(msg, "reply_to", sender), NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
         except Exception:
             logger.exception("Cannot process message [%s]" % msg)
             # avoid "can't pickle traceback objects"
