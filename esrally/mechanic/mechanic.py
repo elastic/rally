@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import thespian.actors
 
-from esrally import actor, client, paths, config, metrics, exceptions, time
+from esrally import actor, client, paths, config, metrics, exceptions
 from esrally.utils import console, net
 from esrally.mechanic import supplier, provisioner, launcher, team
 
@@ -217,6 +217,7 @@ class MechanicActor(actor.RallyActor):
     """
     This actor coordinates all associated mechanics on remote hosts (which do the actual work).
     """
+
     def __init__(self):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
@@ -376,6 +377,12 @@ class MechanicActor(actor.RallyActor):
 
 @thespian.actors.requireCapability('coordinator')
 class Dispatcher(thespian.actors.ActorTypeDispatcher):
+    def __init__(self):
+        super().__init__()
+        self.start_sender = None
+        self.pending = None
+        self.remotes = None
+
     """This Actor receives a copy of the startmsg (with the computed hosts
        attached) and creates a NodeMechanicActor on each targeted
        remote host.  It uses Thespian SystemRegistration to get
@@ -386,9 +393,11 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
        reply-to back to the actor that made the request of the
        Dispatcher.
     """
+
     def receiveMsg_StartEngine(self, startmsg, sender):
         all_ips_and_ports = to_ip_port(startmsg.hosts)
         all_node_ips = extract_all_node_ips(all_ips_and_ports)
+        self.start_sender = sender
         self.pending = []
         self.remotes = defaultdict(list)
 
@@ -403,6 +412,7 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
                 self.remotes[ip].append(submsg)
 
         if self.remotes:
+            console.info("Waiting for all remote Rally nodes to startup...")
             # Now register with the ActorSystem to be told about all
             # remote nodes (via the ActorSystemConventionUpdate below).
             self.notifyOnSystemRegistrationChanges(True)
@@ -414,20 +424,22 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
 
     def receiveMsg_ActorSystemConventionUpdate(self, convmsg, sender):
         if not convmsg.remoteAdded:
-            logging.getLogger("rally.mechanic")\
-                   .warning("Remote %s exited during NodeMechanicActor startup process.",
-                            convmsg.remoteAdminAddress)
-            # remote system went away... TBD handling
-            return
-        remote_ip = convmsg.remoteCapabilities.get('ip', None)
-        for eachmsg in self.remotes[remote_ip]:
-            self.pending.append((self.createActor(NodeMechanicActor,
-                                                  targetActorRequirements={"ip": remote_ip}),
-                                 eachmsg))
-        if remote_ip in self.remotes:
-            del self.remotes[remote_ip]
-        if not self.remotes:
-            self.send_all_pending()
+            logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.", convmsg.remoteAdminAddress)
+            self.start_sender(actor.BenchmarkFailure("Remote Rally node [%s] has been shutdown prematurely." % convmsg.remoteAdminAddress))
+        else:
+            remote_ip = convmsg.remoteCapabilities.get('ip', None)
+            logger.info("Remote Rally node [%s] has started." % remote_ip)
+
+            for eachmsg in self.remotes[remote_ip]:
+                self.pending.append((self.createActor(NodeMechanicActor,
+                                                      targetActorRequirements={"ip": remote_ip}),
+                                     eachmsg))
+            if remote_ip in self.remotes:
+                del self.remotes[remote_ip]
+            if not self.remotes:
+                # Notifications are no longer needed
+                self.notifyOnSystemRegistrationChanges(False)
+                self.send_all_pending()
 
     def send_all_pending(self):
         # Invoked when all remotes have checked in and self.pending is
@@ -436,8 +448,8 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
             self.send(*each)
         self.pending = []
 
-        # Notifications are no longer needed
-        self.notifyOnSystemRegistrationChanges(False)
+    def receiveUnrecognizedMessage(self, msg, sender):
+        logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
 
     # def receiveMsg_ChildActorExited ...
     # def receiveMsg_PoisonMessage ...
@@ -450,6 +462,7 @@ class NodeMechanicActor(actor.RallyActor):
     One instance of this actor is run on each target host and coordinates the actual work of starting / stopping all nodes that should run
     on this host.
     """
+
     def __init__(self):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
