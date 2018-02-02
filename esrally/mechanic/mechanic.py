@@ -412,7 +412,6 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
                 self.remotes[ip].append(submsg)
 
         if self.remotes:
-            console.info("Waiting for all remote Rally nodes to startup...")
             # Now register with the ActorSystem to be told about all
             # remote nodes (via the ActorSystemConventionUpdate below).
             self.notifyOnSystemRegistrationChanges(True)
@@ -448,11 +447,14 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
             self.send(*each)
         self.pending = []
 
-    def receiveUnrecognizedMessage(self, msg, sender):
-        logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+    def receiveMsg_BenchmarkFailure(self, msg, sender):
+        self.send(self.start_sender, msg)
 
     def receiveMsg_PoisonMessage(self, msg, sender):
         self.send(self.start_sender, actor.BenchmarkFailure(msg.details))
+
+    def receiveUnrecognizedMessage(self, msg, sender):
+        logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
 
 
 class NodeMechanicActor(actor.RallyActor):
@@ -517,6 +519,9 @@ class NodeMechanicActor(actor.RallyActor):
     def receiveMsg_ApplyMetricsMetaInfo(self, msg, sender):
         self.metrics_store.merge_meta_info(msg.meta_info)
         self.send(sender, MetricsMetaInfoApplied())
+
+    def receiveMsg_PoisonMessage(self, msg, sender):
+        self.send(sender, actor.BenchmarkFailure(msg.details))
 
     def receiveUnrecognizedMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
