@@ -310,28 +310,33 @@ class InProcessLauncher:
         Reads the output from the ES (node) subprocess.
         """
         while True:
-            l = server.stdout.readline().decode("utf-8")
-            if len(l) == 0:
-                # no more output -> the process has terminated. We can give up now
+            line = server.stdout.readline().decode("utf-8")
+            if len(line) == 0:
+                logger.info("No more output. Process has likely terminated.")
+                self.await_termination(server)
                 startup_event.set()
                 break
-            l = l.rstrip()
+            line = line.rstrip()
             # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
             if not startup_event.isSet():
-                logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+                logger.info("%s (stdout): %s" % (node_name, line))
 
-            if l.find("Initialization Failed") != -1 or l.find("A fatal exception has occurred") != -1:
+            if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
                 logger.error("[%s] encountered initialization errors." % node_name)
                 # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
-                wait = 5
-                while not server.returncode or wait == 0:
-                    time.sleep(0.1)
-                    server.poll()
-                    wait -= 1
+                self.await_termination(server)
                 startup_event.set()
-            if l.endswith("started") and not startup_event.isSet():
+            if line.endswith("started") and not startup_event.isSet():
                 startup_event.set()
                 logger.info("[%s] has successfully started." % node_name)
+
+    def await_termination(self, server, timeout=5):
+        # wait a moment to ensure the process has terminated
+        wait = timeout
+        while not server.returncode or wait == 0:
+            time.sleep(0.1)
+            server.poll()
+            wait -= 1
 
     def stop(self, nodes):
         if self.keep_running:
