@@ -451,8 +451,8 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
     def receiveUnrecognizedMessage(self, msg, sender):
         logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
 
-    # def receiveMsg_ChildActorExited ...
-    # def receiveMsg_PoisonMessage ...
+    def receiveMsg_PoisonMessage(self, msg, sender):
+        self.send(self.start_sender, actor.BenchmarkFailure(msg.details))
 
 
 class NodeMechanicActor(actor.RallyActor):
