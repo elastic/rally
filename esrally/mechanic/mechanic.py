@@ -5,7 +5,7 @@ from collections import defaultdict
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
-from esrally.utils import console, net
+from esrally.utils import net
 from esrally.mechanic import supplier, provisioner, launcher, team
 
 logger = logging.getLogger("rally.mechanic")
@@ -336,10 +336,17 @@ class MechanicActor(actor.RallyActor):
 
     def on_all_nodes_started(self):
         self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
-        self.cluster = self.cluster_launcher.start()
-        # push down all meta data again
-        self.send_to_children_and_transition(self.myAddress,
-                                             ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started", "apply_meta_info")
+        # Workaround because we could raise a LaunchError here and thespian will attempt to retry a failed message.
+        # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
+        # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.
+        try:
+            self.cluster = self.cluster_launcher.start()
+        except BaseException as e:
+            self.send(self.race_control, actor.BenchmarkFailure("Could not launch cluster", e))
+        else:
+            # push down all meta data again
+            self.send_to_children_and_transition(self.myAddress,
+                                                 ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started", "apply_meta_info")
 
     def on_cluster_started(self):
         # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
