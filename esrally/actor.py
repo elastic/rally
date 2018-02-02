@@ -128,7 +128,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
 
 # Defined on top-level to allow pickling
 def configure_utc_formatter(*args, **kwargs):
-    formatter = logging.Formatter(fmt=kwargs["fmt"], datefmt=kwargs["datefmt"])
+    formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
     formatter.converter = time.gmtime
     return formatter
 
@@ -137,16 +137,16 @@ def configure_actor_logging():
     log_dir = "%s/.rally/logs" % os.path.expanduser("~")
     io.ensure_dir(log_dir)
 
-    # actor_log_handler = {"class": "logging.handlers.SysLogHandler", "address": "/var/run/syslog"}
-    # actor_messages_handler = {"class": "logging.handlers.SysLogHandler", "address": "/var/run/syslog"}
-
     return {
         "version": 1,
         "formatters": {
             "normal": {
                 "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
-                #"()": 'esrally.actor.configure_utc_formatter'
+                # paraphrasing from 70a4bc8: If we use thespian directory functionality, we need to remove the callable formatter.
+                # A potential other solution would then be to enforce UTC timezones by setting the TZ env variable before we start
+                # the actor system.
+                "()": "esrally.actor.configure_utc_formatter"
             },
         },
         "filters": {
@@ -157,7 +157,7 @@ def configure_actor_logging():
         "handlers": {
             "rally_log_handler": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
-                "filename": "%s/rally-actors.log" % log_dir,
+                "filename": "%s/rally-actor-messages.log" % log_dir,
                 "when": "midnight",
                 "backupCount": 14,
                 "encoding": "UTF-8",
