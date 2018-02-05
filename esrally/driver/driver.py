@@ -1258,10 +1258,11 @@ def time_period_based(sched, warmup_time_period, time_period, runner, params):
                 yield (next_scheduled, sample_type, percent_completed, runner, params.params())
                 next_scheduled = sched.next(next_scheduled)
         else:
+            param_source_knows_progress = hasattr(params, "percent_completed")
             while True:
                 sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
                 # does not contribute at all to completion. Hence, we cannot define completion.
-                percent_completed = None
+                percent_completed = params.percent_completed if param_source_knows_progress else None
                 yield (next_scheduled, sample_type, percent_completed, runner, params.params())
                 next_scheduled = sched.next(next_scheduled)
     else:

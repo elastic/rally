@@ -26,6 +26,27 @@ class DriverTestParamSource:
         return self._params
 
 
+class DriverTestParamSourceWithProgress:
+    def __init__(self, track=None, params=None, **kwargs):
+        if params is None:
+            params = {}
+        self._indices = track.indices
+        self._params = params
+        self.percent_completed = 0.0
+
+    def partition(self, partition_index, total_partitions):
+        return self
+
+    def size(self):
+        return self._params["size"] if "size" in self._params else None
+
+    def params(self):
+        # just provide a simple progress indication. The important point is
+        # that we define it at all not so much what the actual values is.
+        self.percent_completed += 0.01
+        return self._params
+
+
 class DriverTests(TestCase):
     def __init__(self, methodName='runTest'):
         super().__init__(methodName)
@@ -395,6 +416,7 @@ class MetricsAggregationTests(TestCase):
 class SchedulerTests(ScheduleTestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        params.register_param_source_for_name("driver-test-param-source-with-progress", DriverTestParamSourceWithProgress)
         self.test_track = track.Track(name="unittest")
 
     def test_search_task_one_client(self):
@@ -450,7 +472,7 @@ class SchedulerTests(ScheduleTestCase):
             (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "size": 11}),
         ], list(invocations))
 
-    def test_eternal_schedule(self):
+    def test_eternal_schedule_without_progress_indication(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
@@ -463,6 +485,21 @@ class SchedulerTests(ScheduleTestCase):
             (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+        ], invocations, eternal_schedule=True)
+
+    def test_eternal_schedule_with_progress_indication(self):
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"]},
+                                                        param_source="driver-test-param-source-with-progress"),
+                          warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
+
+        invocations = driver.schedule_for(self.test_track, task, 0)
+
+        self.assert_schedule([
+            (0.0, metrics.SampleType.Normal, 0.0, {"body": ["a"]}),
+            (1.0, metrics.SampleType.Normal, 0.01, {"body": ["a"]}),
+            (2.0, metrics.SampleType.Normal, 0.02, {"body": ["a"]}),
+            (3.0, metrics.SampleType.Normal, 0.03, {"body": ["a"]}),
+            (4.0, metrics.SampleType.Normal, 0.04, {"body": ["a"]}),
         ], invocations, eternal_schedule=True)
 
     def test_schedule_for_time_based(self):
