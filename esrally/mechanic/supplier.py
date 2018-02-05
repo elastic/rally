@@ -467,8 +467,10 @@ class Builder:
         else:
             gradle_opts = ""
 
-        if process.run_subprocess("%sexport JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
-                                          (gradle_opts, self.java_home, src_dir, self.gradle, task, log_file)):
+        build_cmd = "%sexport JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" % (gradle_opts, self.java_home, src_dir, self.gradle, task, log_file)
+        logger.info("Running build command [%s]" % build_cmd)
+
+        if process.run_subprocess(build_cmd):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
             with open(log_file, "r", encoding="utf-8") as f:
