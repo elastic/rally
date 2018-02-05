@@ -51,22 +51,28 @@ function set_up() {
     kill_rally_processes
     kill_related_es_processes
 
+    # configure for tests with an in-memory metrics store
+    esrally configure --assume-defaults --configuration-name="integration-test"
+    local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
     # configure for tests with an Elasticsearch metrics store
     esrally configure --assume-defaults --configuration-name="es-integration-test"
     # configure Elasticsearch instead of in-memory after the fact
-    local config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
+    local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
-    perl -i -pe 's/datastore\.type.*/datastore.type = elasticsearch/g' ${config_file_path}
-    perl -i -pe 's/datastore\.host.*/datastore.host = localhost/g'  ${config_file_path}
-    perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${config_file_path}
-    perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${config_file_path}
+    perl -i -pe 's/datastore\.type.*/datastore.type = elasticsearch/g' ${es_config_file_path}
+    perl -i -pe 's/datastore\.host.*/datastore.host = localhost/g'  ${es_config_file_path}
+    perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${es_config_file_path}
+    perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${es_config_file_path}
 
     # if the build defines these variables we'll explicitly override the detection result
     if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
         info "Setting java.home to ${RUNTIME_JAVA_HOME}"
         info "Setting java9.home to ${JAVA_HOME}"
-        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${config_file_path}
-        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${config_file_path}
+        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${es_config_file_path}
+        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${es_config_file_path}
+
+        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${in_memory_config_file_path}
+        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${in_memory_config_file_path}
     fi
 
     # Download and Elasticsearch metrics store
@@ -101,7 +107,8 @@ function random_configuration() {
 
 function test_configure() {
     info "test configure()"
-    esrally configure --assume-defaults --configuration-name=integration-test
+    # just run to test the configuration procedure, don't use this configuration in other tests.
+    esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
 function test_list() {
