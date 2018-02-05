@@ -756,6 +756,7 @@ class EsResultsStoreTests(TestCase):
 
         expected_docs = [
             {
+                "rally-version": "0.4.4",
                 "environment": "unittest",
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
@@ -775,6 +776,7 @@ class EsResultsStoreTests(TestCase):
                 }
             },
             {
+                "rally-version": "0.4.4",
                 "environment": "unittest",
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
@@ -799,6 +801,7 @@ class EsResultsStoreTests(TestCase):
                 }
             },
             {
+                "rally-version": "0.4.4",
                 "environment": "unittest",
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",

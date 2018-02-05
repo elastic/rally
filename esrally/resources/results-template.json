@@ -37,6 +37,9 @@
         "active": {
           "type": "boolean"
         },
+        "rally-version": {
+          "type": "keyword"
+        },
         "environment": {
           "type": "keyword"
         },

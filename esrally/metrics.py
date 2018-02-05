@@ -318,6 +318,8 @@ class MetricsStore:
         for k, v in user_tags.items():
             # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
             self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
+        # Don't store it for each metrics record as it's probably sufficient on race level
+        # self.add_meta_info(MetaInfoScope.cluster, None, "rally_version", version.version())
         self._stop_watch.start()
         self.opened = True
 
@@ -1142,6 +1144,7 @@ class Race:
         :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
         """
         result_template = {
+            "rally-version": self.rally_version,
             "environment": self.environment_name,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "distribution-version": self.cluster.distribution_version,
