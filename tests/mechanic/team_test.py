@@ -27,10 +27,10 @@ class CarLoaderTests(TestCase):
         self.assertCountEqual(["default", "32gheap", "missing_config_base", "empty_config_base", "ea", "verbose"], self.loader.car_names())
 
     def test_load_known_car(self):
-        car = team.load_car(self.repo, ["default"])
+        car = team.load_car(self.repo, ["default"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
         self.assertEqual("default", car.name)
         self.assertEqual([os.path.join(current_dir, "data", "cars", "vanilla")], car.config_paths)
-        self.assertEqual({"heap_size": "1g"}, car.variables)
+        self.assertDictEqual({"heap_size": "1g", "data_paths": ["/mnt/disk0", "/mnt/disk1"]}, car.variables)
         self.assertEqual({}, car.env)
 
     def test_load_car_with_mixin_single_config_base(self):

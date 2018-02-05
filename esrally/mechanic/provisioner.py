@@ -276,7 +276,16 @@ class ElasticsearchInstaller:
         return self.car.config_paths
 
     def _data_paths(self):
-        return [os.path.join(self.es_home_path, "data")]
+        if "data_paths" in self.car.variables:
+            data_paths = self.car.variables["data_paths"]
+            if isinstance(data_paths, str):
+                return [data_paths]
+            elif isinstance(data_paths, list):
+                return data_paths
+            else:
+                raise exceptions.SystemSetupError("Expected [data_paths] to be either a string or a list but was [%s]." % type(data_paths))
+        else:
+            return [os.path.join(self.es_home_path, "data")]
 
 
 class InstallHookHandler:

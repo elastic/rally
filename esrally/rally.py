@@ -268,7 +268,7 @@ def create_arg_parser():
         )
         p.add_argument(
             "--track-params",
-            help="define a comma-separate list of key:value pairs that are injected verbatim to the track as variables",
+            help="define a comma-separated list of key:value pairs that are injected verbatim to the track as variables",
             default=""
         )
         p.add_argument(
@@ -279,12 +279,17 @@ def create_arg_parser():
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
         p.add_argument(
+            "--car-params",
+            help="define a comma-separated list of key:value pairs that are injected verbatim as variables for the car",
+            default=""
+        )
+        p.add_argument(
             "--elasticsearch-plugins",
             help="define the Elasticsearch plugins to install. (default: install no plugins).",
             default="")
         p.add_argument(
             "--plugin-params",
-            help="define a comma-separate list of key:value pairs that are injected verbatim to all plugins as variables",
+            help="define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables",
             default=""
         )
         p.add_argument(
@@ -665,6 +670,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", kv_to_map(csv_to_list(args.car_params)))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", kv_to_map(csv_to_list(args.plugin_params)))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)

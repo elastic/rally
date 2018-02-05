@@ -22,14 +22,14 @@ def list_cars(cfg):
     console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
-def load_car(repo, name):
+def load_car(repo, name, car_params={}):
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
     all_variables = {}
     all_env = {}
 
     for n in name:
-        descriptor = CarLoader(repo).load_car(n)
+        descriptor = CarLoader(repo).load_car(n, car_params)
         for p in descriptor.config_paths:
             if p not in all_config_paths:
                 all_config_paths.append(p)
@@ -116,7 +116,7 @@ class CarLoader:
     def _car_file(self, name):
         return os.path.join(self.cars_dir, "%s.ini" % name)
 
-    def load_car(self, name):
+    def load_car(self, name, car_params={}):
         car_config_file = self._car_file(name)
         if not io.exists(car_config_file):
             raise exceptions.SystemSetupError("Unknown car [%s]. List the available cars with %s list cars." % (name, PROGRAM_NAME))
@@ -145,6 +145,9 @@ class CarLoader:
         if "variables" in config.sections():
             for k, v in config["variables"].items():
                 variables[k] = v
+        # add all car params here to override any defaults
+        variables.update(car_params)
+
         env = {}
         if "env" in config.sections():
             for k, v in config["env"].items():

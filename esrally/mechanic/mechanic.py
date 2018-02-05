@@ -590,7 +590,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         plugins = []
     else:
         repo = team.team_repo(cfg)
-        car = team.load_car(repo, cfg.opts("mechanic", "car.names"))
+        car = team.load_car(repo, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
         plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
 
     if sources or distribution:

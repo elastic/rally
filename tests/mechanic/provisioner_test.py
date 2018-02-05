@@ -88,14 +88,14 @@ class ElasticsearchInstallerTests(TestCase):
     def test_cleanup(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = True
 
-        installer = provisioner.ElasticsearchInstaller(car=team.Car("defaults", "/tmp"),
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(name="defaults",
+                                                                    config_paths="/tmp",
+                                                                    variables={"data_paths": "/tmp/some/data-path-dir"}),
                                                        node_name="rally-node-0",
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
                                                        http_port=9200,
                                                        node_root_dir="~/.rally/benchmarks/races/unittest")
-
-        installer.data_paths = ["/tmp/some/data-path-dir"]
         installer.cleanup(preserve=True)
 
         expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/challenge/es-bin")]
@@ -106,8 +106,9 @@ class ElasticsearchInstallerTests(TestCase):
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
-    def test_prepare(self, mock_rm, mock_ensure_dir, mock_decompress):
-        installer = provisioner.ElasticsearchInstaller(car=team.Car("defaults", "/tmp"),
+    def test_prepare_default_data_paths(self, mock_rm, mock_ensure_dir, mock_decompress):
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(name="defaults",
+                                                                    config_paths="/tmp"),
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
                                                        ip="10.17.22.23",
@@ -133,6 +134,40 @@ class ElasticsearchInstallerTests(TestCase):
         }, installer.variables)
 
         self.assertEqual(installer.data_paths, ["/install/elasticsearch-5.0.0-SNAPSHOT/data"])
+
+    @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-5.0.0-SNAPSHOT"])
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("shutil.rmtree")
+    def test_prepare_user_provided_data_path(self, mock_rm, mock_ensure_dir, mock_decompress):
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(name="defaults",
+                                                                    config_paths="/tmp",
+                                                                    variables={"data_paths": "/tmp/some/data-path-dir"}),
+                                                       node_name="rally-node-0",
+                                                       all_node_ips=["10.17.22.22", "10.17.22.23"],
+                                                       ip="10.17.22.23",
+                                                       http_port=9200,
+                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
+
+        installer.install("/data/builds/distributions")
+        self.assertEqual(installer.es_home_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
+
+        self.assertEqual({
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "data_paths": ["/tmp/some/data-path-dir"],
+            "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
+            "node_ip": "10.17.22.23",
+            "network_host": "10.17.22.23",
+            "http_port": "9200-9300",
+            "transport_port": "9300-9400",
+            "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
+            "minimum_master_nodes": 2,
+            "node_count_per_host": 1,
+            "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT"
+        }, installer.variables)
+
+        self.assertEqual(installer.data_paths, ["/tmp/some/data-path-dir"])
 
 
 class PluginInstallerTests(TestCase):
