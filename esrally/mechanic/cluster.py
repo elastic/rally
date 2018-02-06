@@ -44,7 +44,7 @@ class Node:
         if self.telemetry:
             self.telemetry.on_benchmark_stop()
 
-    def __str__(self) -> str:
+    def __repr__(self):
         return self.node_name
 
 
