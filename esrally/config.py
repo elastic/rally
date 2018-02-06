@@ -6,13 +6,13 @@ import re
 import shutil
 from enum import Enum
 
-from esrally import time, PROGRAM_NAME, DOC_LINK
+from esrally import time, PROGRAM_NAME, DOC_LINK, exceptions
 from esrally.utils import io, git, console, convert
 
 logger = logging.getLogger("rally.config")
 
 
-class ConfigError(BaseException):
+class ConfigError(exceptions.RallyError):
     pass
 
 
