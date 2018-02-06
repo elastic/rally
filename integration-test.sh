@@ -45,6 +45,23 @@ function kill_related_es_processes() {
     set -e
 }
 
+function replace_java_homes() {
+    local f=${1}
+
+    # Rally may or may not have auto-detected java.home and java9.home.
+    # Either replace the existing value or append it if not present.
+    if grep -q "java.home" "${f}"; then
+        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" "${f}"
+    else
+        perl -i -pe "s|\[runtime\]|[runtime]\njava.home = ${RUNTIME_JAVA_HOME}|g" "${f}"
+    fi
+
+    if grep -q "java9.home" "${f}"; then
+        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" "${f}"
+    else
+        perl -i -pe "s|\[runtime\]|[runtime]\njava9.home = ${JAVA_HOME}|g" "${f}"
+    fi
+}
 
 function set_up() {
     info "setting up"
@@ -68,11 +85,8 @@ function set_up() {
     if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
         info "Setting java.home to ${RUNTIME_JAVA_HOME}"
         info "Setting java9.home to ${JAVA_HOME}"
-        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${es_config_file_path}
-        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${es_config_file_path}
-
-        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${in_memory_config_file_path}
-        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${in_memory_config_file_path}
+        replace_java_homes ${es_config_file_path}
+        replace_java_homes ${in_memory_config_file_path}
     fi
 
     # Download and Elasticsearch metrics store
