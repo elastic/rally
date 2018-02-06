@@ -190,7 +190,7 @@ class BareProvisioner:
         plugin_variables = {}
         mandatory_plugins = []
         for installer in self.plugin_installers:
-            mandatory_plugins.append(installer.plugin_name)
+            mandatory_plugins.append(installer.sub_plugin_name)
             plugin_variables.update(installer.variables)
 
         cluster_settings = {}
@@ -375,6 +375,11 @@ class PluginInstaller:
     @property
     def plugin_name(self):
         return self.plugin.name
+
+    @property
+    def sub_plugin_name(self):
+        # if a plugin consists of multiple plugins (e.g. x-pack) we're interested in that name
+        return self.variables.get("plugin_name", self.plugin_name)
 
 
 class NoOpProvisioner:
