@@ -269,7 +269,7 @@ class ConfigFactory:
         self.o = o
         self.prompter = None
 
-    def create_config(self, config_file, advanced_config=False, assume_defaults=False):
+    def create_config(self, config_file, advanced_config=False, assume_defaults=False, use_gradle_wrapper=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
@@ -278,6 +278,7 @@ class ConfigFactory:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
         configuration in CI run. Default: False.
+        :param use_gradle_wrapper: If True, use the Gradle wrapper, otherwise use the system's Gradle version. Default: False.
         """
         self.prompter = Prompter(self.i, self.sec_i, self.o, assume_defaults)
         if advanced_config:
@@ -300,7 +301,7 @@ class ConfigFactory:
         # Autodetect settings
         self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
-        gradle_bin = io.guess_install_location("gradle")
+        gradle_bin = "./gradlew" if use_gradle_wrapper else io.guess_install_location("gradle")
         java_8_home = io.guess_java_home(major_version=8)
         java_9_home = io.guess_java_home(major_version=9)
         from esrally.utils import jvm

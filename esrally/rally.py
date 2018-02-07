@@ -219,6 +219,12 @@ def create_arg_parser():
             help="Automatically accept all options with default values (default: false)",
             default=False,
             action="store_true")
+        # TODO #412: Remove this option. Rally will then always use the Gradle Wrapper.
+        # undocumented - only as a workaround to ensure integration tests are always working, even if Gradle is not installed.
+        p.add_argument(
+            "--use-gradle-wrapper",
+            default=False,
+            action="store_true")
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -429,7 +435,10 @@ def derive_sub_command(args, cfg):
 
 def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
-        config.ConfigFactory().create_config(cfg.config_file, advanced_config=args.advanced_config, assume_defaults=args.assume_defaults)
+        config.ConfigFactory().create_config(cfg.config_file,
+                                             advanced_config=args.advanced_config,
+                                             assume_defaults=args.assume_defaults,
+                                             use_gradle_wrapper=args.use_gradle_wrapper)
         exit(0)
     else:
         if cfg.config_present():

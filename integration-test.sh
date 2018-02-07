@@ -63,24 +63,16 @@ function replace_java_homes() {
     fi
 }
 
-function ensure_gradle_is_set() {
-    local f=${1}
-
-    if ! grep -q "gradle.bin" "${f}"; then
-        echo -e "[build]\ngradle.bin = ./gradlew" >> "${f}"
-    fi
-}
-
 function set_up() {
     info "setting up"
     kill_rally_processes
     kill_related_es_processes
 
     # configure for tests with an in-memory metrics store
-    esrally configure --assume-defaults --configuration-name="integration-test"
+    esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
     local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
     # configure for tests with an Elasticsearch metrics store
-    esrally configure --assume-defaults --configuration-name="es-integration-test"
+    esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
     # configure Elasticsearch instead of in-memory after the fact
     local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
@@ -96,8 +88,6 @@ function set_up() {
         replace_java_homes ${es_config_file_path}
         replace_java_homes ${in_memory_config_file_path}
     fi
-    ensure_gradle_is_set ${es_config_file_path}
-    ensure_gradle_is_set ${in_memory_config_file_path}
 
     # Download and Elasticsearch metrics store
     pushd .
