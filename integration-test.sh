@@ -63,6 +63,14 @@ function replace_java_homes() {
     fi
 }
 
+function ensure_gradle_is_set() {
+    local f=${1}
+
+    if ! grep -q "gradle.bin" "${f}"; then
+        echo -e "[build]\ngradle.bin = ./gradlew" >> "${f}"
+    fi
+}
+
 function set_up() {
     info "setting up"
     kill_rally_processes
@@ -88,6 +96,8 @@ function set_up() {
         replace_java_homes ${es_config_file_path}
         replace_java_homes ${in_memory_config_file_path}
     fi
+    ensure_gradle_is_set ${es_config_file_path}
+    ensure_gradle_is_set ${in_memory_config_file_path}
 
     # Download and Elasticsearch metrics store
     pushd .
