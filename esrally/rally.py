@@ -158,11 +158,6 @@ def create_arg_parser():
         # we set the default value later on because we need to determine whether the user has provided this value.
         # default="geonames"
     )
-    # Not sure whether we should allow that / need that
-    # generate_parser.add_argument(
-    #    "--track-params",
-    #    help="define a comma-separate list of key:value pairs that are injected verbatim to the track as variables",
-    #    default="")
     generate_parser.add_argument(
         "--challenge",
         help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
