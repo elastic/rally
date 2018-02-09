@@ -130,6 +130,11 @@ class EsClientFactory:
         secure = self._config.opts("reporting", "datastore.secure") == "True"
         user = self._config.opts("reporting", "datastore.user")
         password = self._config.opts("reporting", "datastore.password")
+        # poor man's boolean conversion
+        verify_certs = self._config.opts("reporting", "datastore.verify_certs", default_value="True", mandatory=False) == "True"
+        ca_certs = self._config.opts("reporting", "datastore.ca_certs", default_value=None, mandatory=False)
+        if ca_certs is None and verify_certs:
+            ca_certs = certifi.where()
 
         if user and password:
             auth = (user, password)
@@ -138,7 +143,7 @@ class EsClientFactory:
         logger.info("Creating connection to metrics store at %s:%s" % (host, port))
         import elasticsearch
         self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
-                                                   use_ssl=secure, http_auth=auth, verify_certs=True, ca_certs=certifi.where(),
+                                                   use_ssl=secure, http_auth=auth, verify_certs=verify_certs, ca_certs=ca_certs,
                                                    timeout=120, request_timeout=120)
 
     def create(self):
