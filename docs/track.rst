@@ -4,7 +4,7 @@ Track Reference
 Definition
 ==========
 
-A track is a specification of one ore more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and the operations that are invoked. Its most important attributes are:
+A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and the operations that are invoked. Its most important attributes are:
 
 * One or more indices, each with one or more types
 * The queries to issue
