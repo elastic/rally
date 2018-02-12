@@ -738,23 +738,28 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
         self.metrics_store = metrics_store
 
     def detach_from_cluster(self, cluster):
-        results = self.client.search(index=".ml-anomalies-*", body={
-            "size": 0,
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"result_type": "bucket"}},
-                        # TODO: We could restrict this by job id if we need to measure multiple jobs...
-                        # {"term": {"job_id": "job_id"}}
-                    ]
+        import elasticsearch
+        try:
+            results = self.client.search(index=".ml-anomalies-*", body={
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"term": {"result_type": "bucket"}},
+                            # TODO: We could restrict this by job id if we need to measure multiple jobs...
+                            # {"term": {"job_id": "job_id"}}
+                        ]
+                    }
+                },
+                "aggs": {
+                    "max_bucket_processing_time": {
+                        "max": {"field": "processing_time_ms"}
+                    }
                 }
-            },
-            "aggs": {
-                "max_bucket_processing_time": {
-                    "max": {"field": "processing_time_ms"}
-                }
-            }
-        })
+            })
+        except elasticsearch.TransportError:
+            logger.exception("Could not retrieve ML bucket processing time.")
+            return
         try:
             value = results["aggregations"]["max_bucket_processing_time"]["value"]
             if value:
