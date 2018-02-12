@@ -350,10 +350,12 @@ class InProcessLauncher:
             if not self.keep_running:
                 stop_watch = self._clock.stop_watch()
                 stop_watch.start()
-                os.kill(process.pid, signal.SIGINT)
                 try:
+                    os.kill(process.pid, signal.SIGINT)
                     process.wait(10.0)
                     logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
+                except ProcessLookupError:
+                    logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
                 except subprocess.TimeoutExpired:
                     # kill -9
                     logger.warning("Node [%s] did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node_name)
