@@ -4,7 +4,7 @@ Define Custom Workloads: Tracks
 Definition
 ----------
 
-A track is the specification of one ore more benchmarking scenarios with a specific document corpus.
+A track is the specification of one or more benchmarking scenarios with a specific document corpus.
 
 .. note::
     Please see the :doc:`track reference </track>` for more information on the structure of a track.
