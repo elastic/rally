@@ -55,6 +55,7 @@ class BareProvisionerTests(TestCase):
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-5.0.0/data"],
             "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
             "http_port": "9200-9300",
