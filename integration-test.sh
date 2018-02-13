@@ -83,6 +83,12 @@ function set_up() {
 
     # if the build defines these variables we'll explicitly override the detection result
     if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
+        info "Initial configuration for ${in_memory_config_file_path}:"
+        cat "${in_memory_config_file_path}"
+
+        info "Initial configuration for ${es_config_file_path}:"
+        cat "${es_config_file_path}"
+
         info "Setting java.home to ${RUNTIME_JAVA_HOME}"
         info "Setting java9.home to ${JAVA_HOME}"
         replace_java_homes ${es_config_file_path}
