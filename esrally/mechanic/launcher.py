@@ -309,26 +309,34 @@ class InProcessLauncher:
         """
         Reads the output from the ES (node) subprocess.
         """
+        lines_to_log = 0
         while True:
             line = server.stdout.readline().decode("utf-8")
             if len(line) == 0:
-                logger.info("No more output. Process has likely terminated.")
+                logger.info("%s (stdout): No more output. Process has likely terminated." % node_name)
                 self.await_termination(server)
                 startup_event.set()
                 break
             line = line.rstrip()
-            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
-            if not startup_event.isSet():
-                logger.info("%s (stdout): %s" % (node_name, line))
 
-            if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
-                logger.error("[%s] encountered initialization errors." % node_name)
-                # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
-                self.await_termination(server)
-                startup_event.set()
-            if line.endswith("started") and not startup_event.isSet():
-                startup_event.set()
-                logger.info("[%s] has successfully started." % node_name)
+            # if an error occurs, log the next few lines
+            if "error" in line.lower():
+                lines_to_log = 10
+            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
+            if not startup_event.isSet() or lines_to_log > 0:
+                logger.info("%s (stdout): %s" % (node_name, line))
+                lines_to_log -= 1
+
+            # no need to check as soon as we have detected node startup
+            if not startup_event.isSet():
+                if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
+                    logger.error("[%s] encountered initialization errors." % node_name)
+                    # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
+                    self.await_termination(server)
+                    startup_event.set()
+                if line.endswith("started") and not startup_event.isSet():
+                    startup_event.set()
+                    logger.info("[%s] has successfully started." % node_name)
 
     def await_termination(self, server, timeout=5):
         # wait a moment to ensure the process has terminated
