@@ -89,6 +89,12 @@ function set_up() {
         replace_java_homes ${in_memory_config_file_path}
     fi
 
+    info "Final configuration for ${in_memory_config_file_path}:"
+    cat "${in_memory_config_file_path}"
+
+    info "Final configuration for ${es_config_file_path}:"
+    cat "${es_config_file_path}"
+
     # Download and Elasticsearch metrics store
     pushd .
     mkdir -p .rally_it/cache
