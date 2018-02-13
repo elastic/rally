@@ -45,55 +45,34 @@ function kill_related_es_processes() {
     set -e
 }
 
-function replace_java_homes() {
-    local f=${1}
-
-    # Rally may or may not have auto-detected java.home and java9.home.
-    # Either replace the existing value or append it if not present.
-    if grep -q "java.home" "${f}"; then
-        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" "${f}"
-    else
-        perl -i -pe "s|\[runtime\]|[runtime]\njava.home = ${RUNTIME_JAVA_HOME}|g" "${f}"
-    fi
-
-    if grep -q "java9.home" "${f}"; then
-        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" "${f}"
-    else
-        perl -i -pe "s|\[runtime\]|[runtime]\njava9.home = ${JAVA_HOME}|g" "${f}"
-    fi
-}
-
 function set_up() {
     info "setting up"
     kill_rally_processes
     kill_related_es_processes
 
-    # configure for tests with an in-memory metrics store
-    esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
     local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
-    # configure for tests with an Elasticsearch metrics store
-    esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
-    # configure Elasticsearch instead of in-memory after the fact
     local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
+
+    # if the build defines these variables we'll explicitly use them instead of auto-detection
+    if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
+        # configure for tests with an in-memory metrics store
+        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
+        # configure for tests with an Elasticsearch metrics store
+        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
+    else
+        # configure for tests with an in-memory metrics store
+        esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
+        # configure for tests with an Elasticsearch metrics store
+        esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
+
+    fi
+
+    # configure Elasticsearch instead of in-memory after the fact
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
     perl -i -pe 's/datastore\.type.*/datastore.type = elasticsearch/g' ${es_config_file_path}
     perl -i -pe 's/datastore\.host.*/datastore.host = localhost/g'  ${es_config_file_path}
     perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${es_config_file_path}
     perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${es_config_file_path}
-
-    # if the build defines these variables we'll explicitly override the detection result
-    if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
-        info "Initial configuration for ${in_memory_config_file_path}:"
-        cat "${in_memory_config_file_path}"
-
-        info "Initial configuration for ${es_config_file_path}:"
-        cat "${es_config_file_path}"
-
-        info "Setting java.home to ${RUNTIME_JAVA_HOME}"
-        info "Setting java9.home to ${JAVA_HOME}"
-        replace_java_homes ${es_config_file_path}
-        replace_java_homes ${in_memory_config_file_path}
-    fi
 
     info "Final configuration for ${in_memory_config_file_path}:"
     cat "${in_memory_config_file_path}"

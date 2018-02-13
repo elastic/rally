@@ -220,6 +220,9 @@ def create_arg_parser():
             "--use-gradle-wrapper",
             default=False,
             action="store_true")
+        # undocumented - only as a workaround for integration tests
+        p.add_argument("--java-home", default=None)
+        p.add_argument("--runtime-java-home", default=None)
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -433,7 +436,9 @@ def ensure_configuration_present(cfg, args, sub_command):
         config.ConfigFactory().create_config(cfg.config_file,
                                              advanced_config=args.advanced_config,
                                              assume_defaults=args.assume_defaults,
-                                             use_gradle_wrapper=args.use_gradle_wrapper)
+                                             use_gradle_wrapper=args.use_gradle_wrapper,
+                                             java_home=args.java_home,
+                                             runtime_java_home=args.runtime_java_home)
         exit(0)
     else:
         if cfg.config_present():

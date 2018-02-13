@@ -269,7 +269,8 @@ class ConfigFactory:
         self.o = o
         self.prompter = None
 
-    def create_config(self, config_file, advanced_config=False, assume_defaults=False, use_gradle_wrapper=False):
+    def create_config(self, config_file, advanced_config=False, assume_defaults=False, use_gradle_wrapper=False,
+                      java_home=None, runtime_java_home=None):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
@@ -302,8 +303,9 @@ class ConfigFactory:
         self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
         gradle_bin = "./gradlew" if use_gradle_wrapper else io.guess_install_location("gradle")
-        java_8_home = io.guess_java_home(major_version=8)
-        java_9_home = io.guess_java_home(major_version=9)
+
+        java_8_home = runtime_java_home if runtime_java_home else io.guess_java_home(major_version=8)
+        java_9_home = java_home if java_home else io.guess_java_home(major_version=9)
         from esrally.utils import jvm
         if java_8_home:
             auto_detected_java_home = java_8_home
