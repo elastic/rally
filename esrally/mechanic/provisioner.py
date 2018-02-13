@@ -218,6 +218,7 @@ class ElasticsearchInstaller:
         self.node_root_dir = node_root_dir
         self.install_dir = "%s/install" % node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
+        self.heap_dump_dir = "%s/heapdump" % node_root_dir
         self.all_node_ips = all_node_ips
         self.node_ip = ip
         self.http_port = http_port
@@ -228,6 +229,7 @@ class ElasticsearchInstaller:
         logger.info("Preparing candidate locally in [%s]." % self.install_dir)
         io.ensure_dir(self.install_dir)
         io.ensure_dir(self.node_log_dir)
+        io.ensure_dir(self.heap_dump_dir)
 
         logger.info("Unzipping %s to %s" % (binary, self.install_dir))
         io.decompress(binary, self.install_dir)
@@ -252,6 +254,7 @@ class ElasticsearchInstaller:
             "node_name": self.node_name,
             "data_paths": self.data_paths,
             "log_path": self.node_log_dir,
+            "heap_dump_path": self.heap_dump_dir,
             # this is the node's IP address as specified by the user when invoking Rally
             "node_ip": self.node_ip,
             # this is the IP address that the node will be bound to. Rally will bind to the node's IP address (but not to 0.0.0.0). The
