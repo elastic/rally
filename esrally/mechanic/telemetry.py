@@ -46,6 +46,11 @@ class Telemetry:
             if self._enabled(device):
                 device.attach_to_cluster(cluster)
 
+    def on_pre_node_start(self, node_name):
+        for device in self.devices:
+            if self._enabled(device):
+                device.on_pre_node_start(node_name)
+
     def attach_to_node(self, node):
         for device in self.devices:
             if self._enabled(device):
@@ -86,6 +91,9 @@ class TelemetryDevice:
         return {}
 
     def attach_to_cluster(self, cluster):
+        pass
+
+    def on_pre_node_start(self, node_name):
         pass
 
     def attach_to_node(self, node):
@@ -230,6 +238,19 @@ class PerfStat(TelemetryDevice):
                 logger.warning("perf stat did not terminate")
             self.log.close()
             self.attached = False
+
+
+class StartupTime(InternalTelemetryDevice):
+    def __init__(self, metrics_store, stopwatch=time.StopWatch):
+        self.metrics_store = metrics_store
+        self.timer = stopwatch()
+
+    def on_pre_node_start(self, node_name):
+        self.timer.start()
+
+    def attach_to_node(self, node):
+        self.timer.stop()
+        self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
 
 
 class MergeParts(InternalTelemetryDevice):

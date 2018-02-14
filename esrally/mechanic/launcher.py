@@ -12,7 +12,7 @@ from esrally.utils import console, process, jvm
 logger = logging.getLogger("rally.launcher")
 
 
-def wait_for_rest_layer(es, max_attempts=10):
+def wait_for_rest_layer(es, max_attempts=20):
     for attempt in range(max_attempts):
         import elasticsearch
         try:
@@ -21,10 +21,10 @@ def wait_for_rest_layer(es, max_attempts=10):
         except elasticsearch.TransportError as e:
             if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
                 logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
-                time.sleep(2)
+                time.sleep(1)
             elif e.status_code == 401:
                 logger.debug("Could not authenticate yet (probably x-pack initializing).")
-                time.sleep(2)
+                time.sleep(1)
             else:
                 raise e
     return False
@@ -52,7 +52,7 @@ class ClusterLauncher:
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
         c = cluster.Cluster(hosts, [], t)
         logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-        if wait_for_rest_layer(es, max_attempts=20):
+        if wait_for_rest_layer(es, max_attempts=40):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
             t.attach_to_cluster(c)
             logger.info("Telemetry devices are now attached to the cluster.")
@@ -230,11 +230,12 @@ class InProcessLauncher:
             telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.MergeParts(self.metrics_store, node_configuration.log_path),
+            telemetry.StartupTime(self.metrics_store),
         ]
 
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
-
         env = self._prepare_env(car, node_name, t)
+        t.on_pre_node_start(node_name)
         node_process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(node_process, host_name, node_name, t)
         logger.info("Node [%s] has successfully started. Attaching telemetry devices." % node_name)
