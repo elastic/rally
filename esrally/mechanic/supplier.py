@@ -191,7 +191,7 @@ class ElasticsearchSourceSupplier:
 
     def resolve_binary(self):
         try:
-            return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
+            return glob.glob("%s/distribution/archives/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
 
