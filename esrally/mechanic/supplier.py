@@ -11,7 +11,7 @@ from esrally.exceptions import BuildError, SystemSetupError
 logger = logging.getLogger("rally.supplier")
 
 CLEAN_TASK = "clean"
-ASSEMBLE_TASK = ":distribution:tar:assemble"
+ASSEMBLE_TASK = ":distribution:archives:tar:assemble"
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"

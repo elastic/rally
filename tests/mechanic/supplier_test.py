@@ -127,7 +127,7 @@ class BuilderTests(TestCase):
             # Actual call
             mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle :distribution:tar:assemble >> logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle :distribution:archives:tar:assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -146,8 +146,8 @@ class BuilderTests(TestCase):
             mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1" %
                       supplier.Builder.JAVA_9_GRADLE_OPTS),
             # Return value check
-            mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle :distribution:tar:assemble "
-                      ">> logs/build.log 2>&1" % supplier.Builder.JAVA_9_GRADLE_OPTS),
+            mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle "
+                      ":distribution:archives:tar:assemble >> logs/build.log 2>&1" % supplier.Builder.JAVA_9_GRADLE_OPTS),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
