@@ -530,7 +530,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "task:\"%s\" AND task:\"%s\" AND %s" %
+                    "query": "name:\"%s\" AND task:\"%s\" AND %s" %
                              (metric, q, filter_string(environment, combination_name, track, challenge, car, node_count)),
                     "analyze_wildcard": True
                 }
