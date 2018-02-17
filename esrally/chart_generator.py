@@ -35,6 +35,9 @@ def format_title(environment, track_name, suffix=None):
 
 
 class BarCharts:
+    UI_STATE_JSON = json.dumps({})
+    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
+
     @staticmethod
     def gc(title, environment, track, combination_name, challenge, car, node_count):
         vis_state = {
@@ -208,7 +211,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -390,7 +393,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -544,7 +547,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -720,7 +723,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
