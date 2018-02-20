@@ -145,7 +145,11 @@ class FlightRecorder(TelemetryDevice):
         # this is more robust in case we want to use custom settings
         # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
         #
-        # in that case change to: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
+        # in that case change to:
+        #
+        # Java 8: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
+        # Java 9+: "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,settings=es-memory-profiling,filename=%s"
+
         if self.java_major_version < 9:
             return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
                                     "-XX:+FlightRecorder "
