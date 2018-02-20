@@ -1,3 +1,26 @@
+### 0.9.2
+
+#### Enhancements
+
+* [#418](https://github.com/elastic/rally/issues/418): Measure Elasticsearch startup time
+* [#417](https://github.com/elastic/rally/issues/417): Set heap dump path
+* [#416](https://github.com/elastic/rally/issues/416): Improve logging when gathering index time related metrics
+* [#413](https://github.com/elastic/rally/issues/413): Cannot report to ES cluster with self-signed certificate or in-house certificate authority
+* [#411](https://github.com/elastic/rally/issues/411): Store Rally version in results meta-data
+* [#410](https://github.com/elastic/rally/issues/410): Allow parameter sources to indicate progress
+* [#409](https://github.com/elastic/rally/issues/409): Allow to override car variables
+* [#407](https://github.com/elastic/rally/issues/407): Upgrade to thespian 3.9.2
+* [#405](https://github.com/elastic/rally/pull/405): Improve internal message handling
+* [#404](https://github.com/elastic/rally/issues/404): Add a raw request runner
+* [#402](https://github.com/elastic/rally/issues/402): Enforce UTF-8 encoding for file I/O
+* [#392](https://github.com/elastic/rally/issues/392): Formatting for user-tags on rally-results
+
+#### Doc Changes
+
+* [#415](https://github.com/elastic/rally/pull/415): Fix typo
+* [#400](https://github.com/elastic/rally/pull/400): Fixing minor spelling error in car docs
+* [#386](https://github.com/elastic/rally/issues/386): Dead GitHub Link on Rally Docs
+
 ### 0.9.1
 
 #### Bug Fixes
