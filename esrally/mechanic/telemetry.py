@@ -704,12 +704,16 @@ class IndexStats(InternalTelemetryDevice):
             self.first_time = False
 
     def on_benchmark_stop(self):
+        import json
+        logger.info("Gathering indices stats for all primaries on benchmark stop.")
         p = self.primaries_index_stats()
+        logger.info("Returned indices stats:\n%s" % json.dumps(p, indent=2))
         # actually this is add_count
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
         for metric_key, value in self.index_times(p).items():
+            logger.info("Adding [%s] = [%s] to metrics store." % (str(metric_key), str(value)))
             self.add_metrics(value, metric_key, "ms")
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
@@ -719,12 +723,11 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
 
     def primaries_index_stats(self):
-        logger.info("Gathering indices stats.")
-        import elasticsearch
+        # noinspection PyBroadException
         try:
             stats = self.client.indices.stats(metric="_all", level="shards")
             return stats["_all"]["primaries"]
-        except elasticsearch.TransportError:
+        except BaseException:
             logger.exception("Could not retrieve index stats.")
             return {}
 
