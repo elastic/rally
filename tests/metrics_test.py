@@ -748,6 +748,12 @@ class EsResultsStoreTests(TestCase):
                                                 "unit": "docs/s"
                                             }
                                         }
+                                    ],
+                                    "node_metrics": [
+                                        {
+                                            "node": "rally-node-0",
+                                            "startup_time": 3.4
+                                        }
                                     ]
                                 })
                             )
@@ -774,6 +780,27 @@ class EsResultsStoreTests(TestCase):
                 "value": {
                     "single": 5
                 }
+            },
+            {
+                "rally-version": "0.4.4",
+                "environment": "unittest",
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-version": "5.0.0",
+                "distribution-major-version": 5,
+                "user-tags": {
+                    "os": "Linux"
+                },
+                "track": "unittest-track",
+                "challenge": "index",
+                "car": "4gheap",
+                "node-count": 1,
+                "plugins": ["x-pack"],
+                "active": True,
+                "node": "rally-node-0",
+                "name": "startup_time",
+                "value": {
+                    "single": 3.4
+                },
             },
             {
                 "rally-version": "0.4.4",

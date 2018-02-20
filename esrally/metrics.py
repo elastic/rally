@@ -599,6 +599,20 @@ class MetricsStore:
         """
         return self._get(name, task, operation_type, sample_type, lap, lambda doc: doc["value"])
 
+    def get_raw(self, name, task=None, operation_type=None, sample_type=None, lap=None, mapper=lambda doc: doc):
+        """
+        Gets all raw records for the given metric name.
+
+        :param name: The metric name to query.
+        :param task The task name to query. Optional.
+        :param operation_type The operation type to query. Optional.
+        :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param lap The lap to query. Optional. By default, all laps are considered.
+        :param mapper A record mapper. By default, the complete record is returned.
+        :return: A list of all raw records for the given metric.
+        """
+        return self._get(name, task, operation_type, sample_type, lap, mapper)
+
     def get_unit(self, name, task=None):
         """
         Gets the unit for the given metric name.

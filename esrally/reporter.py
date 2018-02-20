@@ -126,6 +126,13 @@ class StatsCalculator:
                         self.single_latency(t, metric_name="service_time"),
                         self.error_rate(t)
                     )
+        logger.debug("Gathering node startup time metrics.")
+        startup_times = self.store.get_raw("node_startup_time")
+        for startup_time in startup_times:
+            if "meta" in startup_time and "node_name" in startup_time["meta"]:
+                result.add_node_metrics(startup_time["meta"]["node_name"], startup_time["value"])
+            else:
+                logger.debug("Skipping incomplete startup time record [%s]." % str(startup_time))
 
         logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
@@ -228,6 +235,7 @@ class StatsCalculator:
 class Stats:
     def __init__(self, d=None):
         self.op_metrics = self.v(d, "op_metrics", default=[])
+        self.node_metrics = self.v(d, "node_metrics", default=[])
         self.total_time = self.v(d, "total_time")
         self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
         self.merge_time = self.v(d, "merge_time")
@@ -281,6 +289,10 @@ class Stats:
                         all_results.append(
                             {"task": item["task"], "operation": item["operation"], "name": "error_rate",
                              "value": {"single": item["error_rate"]}})
+            elif metric == "node_metrics":
+                for item in value:
+                    if "startup_time" in item:
+                        all_results.append({"node": item["node"], "name": "startup_time", "value": {"single": item["startup_time"]}})
             elif value is not None:
                 result = {
                     "name": metric,
@@ -303,6 +315,12 @@ class Stats:
             "latency": latency,
             "service_time": service_time,
             "error_rate": error_rate
+        })
+
+    def add_node_metrics(self, node, startup_time):
+        self.node_metrics.append({
+            "node": node,
+            "startup_time": startup_time
         })
 
     def tasks(self):
