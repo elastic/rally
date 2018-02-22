@@ -1,3 +1,9 @@
+### 0.9.3
+
+#### Bug Fixes
+
+* [#420](https://github.com/elastic/rally/issues/420): Cannot benchmark multi-node cluster with benchmark-only pipeline
+
 ### 0.9.2
 
 #### Enhancements
