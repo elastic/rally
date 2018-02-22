@@ -271,12 +271,12 @@ class MechanicActor(actor.RallyActor):
         else:
             logger.info("Cluster consisting of %s will be provisioned by Rally." % hosts)
             msg.hosts = hosts
+            # Initialize the children array to have the right size to
+            # ensure waiting for all responses
+            self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
             self.send(self.createActor(Dispatcher), msg)
         self.status = "starting"
         self.received_responses = []
-        # Initialize the children array to have the right size to
-        # ensure waiting for all responses
-        self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
 
     def receiveMsg_NodesStarted(self, msg, sender):
         self.metrics_store.merge_meta_info(msg.system_meta_info)
