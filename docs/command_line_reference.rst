@@ -141,6 +141,14 @@ You can use ``--include-tasks`` to specify a comma-separated list of tasks that 
 
 Selects the team repository that Rally should use to resolve cars. By default the ``default`` team repository is used, which is available in the Github project `rally-teams <https://github.com/elastic/rally-teams>`__. See the documentation about :doc:`cars </car>` on how to add your own team repositories.
 
+``team-path``
+~~~~~~~~~~~~~
+
+A directory that contains a team configuration. ``--team-path`` and ``--team-repository`` are mutually exclusive. See the :doc:`car reference </car>` for the required directory structure.
+
+Example::
+
+   esrally --team-path=~/Projects/es-teams
 
 ``car``
 ~~~~~~~
