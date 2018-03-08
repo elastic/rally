@@ -1426,8 +1426,20 @@ class TrackSpecificationReaderTests(TestCase):
                 }
             ]
         }
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/body.json": ['{"mappings": {"main": "empty-for-test", "secondary": "empty-for-test"}}']
+        reader = loader.TrackSpecificationReader(
+            track_params={"number_of_shards": 3},
+            source=io.DictStringFileSourceFactory({
+            "/mappings/body.json": ["""
+            {
+                "settings": {
+                    "number_of_shards": {{ number_of_shards }}
+                },            
+                "mappings": {
+                    "main": "empty-for-test", 
+                    "secondary": "empty-for-test"
+                }
+            }
+            """]
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
@@ -1435,7 +1447,16 @@ class TrackSpecificationReaderTests(TestCase):
         # indices
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual("index-historical", resulting_track.indices[0].name)
-        self.assertDictEqual({"mappings": {"main": "empty-for-test", "secondary": "empty-for-test"}}, resulting_track.indices[0].body)
+        self.assertDictEqual({
+            "settings": {
+                "number_of_shards": 3
+            },
+            "mappings":
+                {
+                    "main": "empty-for-test",
+                    "secondary": "empty-for-test"
+                }
+        }, resulting_track.indices[0].body)
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0].name)
         self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
@@ -1492,8 +1513,17 @@ class TrackSpecificationReaderTests(TestCase):
             "operations": [],
             "challenges": []
         }
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/default-template.json": ['{"some-index-template": "empty-for-test"}'],
+        reader = loader.TrackSpecificationReader(
+            track_params={"index_pattern": "*"},
+            source=io.DictStringFileSourceFactory({
+                "/mappings/default-template.json": ["""
+                {
+                    "index_patterns": [ "{{index_pattern}}"],
+                    "settings": {
+                        "number_of_shards": {{ number_of_shards | default(1) }} 
+                    }                    
+                }
+                """],
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
@@ -1502,7 +1532,13 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(1, len(resulting_track.templates))
         self.assertEqual("my-index-template", resulting_track.templates[0].name)
         self.assertEqual("*", resulting_track.templates[0].pattern)
-        self.assertEqual({"some-index-template": "empty-for-test"}, resulting_track.templates[0].content)
+        self.assertDictEqual(
+            {
+                "index_patterns": ["*"],
+                "settings": {
+                    "number_of_shards": 1
+                }
+            }, resulting_track.templates[0].content)
         self.assertEqual(0, len(resulting_track.challenges))
 
     def test_types_are_optional_for_user_managed_indices(self):
