@@ -190,7 +190,7 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=None, car=None):
+def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -202,10 +202,10 @@ def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=No
     store = cls(cfg)
     logger.info("Creating %s" % str(store))
 
-    selected_invocation = cfg.opts("system", "time.start") if invocation is None else invocation
+    invocation = cfg.opts("system", "time.start")
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
-    store.open(selected_invocation, track, challenge, selected_car, create=not read_only)
+    store.open(invocation, track, challenge, selected_car, create=not read_only)
     return store
 
 
