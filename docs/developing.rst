@@ -23,6 +23,8 @@ Installation Instructions for Development
 
     git clone https://github.com/elastic/rally.git
     cd rally
+    virtualenv -p python3 .venv
+    source .venv/bin/activate
     ./rally
 
 
