@@ -185,7 +185,7 @@ class Config:
         """
         :param section: The configuration section.
         :param key: The configuration key.
-        :return: True iff a value for the specified key exists in the specified configuration section.  
+        :return: True iff a value for the specified key exists in the specified configuration section.
         """
         return self.opts(section, key, mandatory=False) is not None
 
@@ -648,33 +648,39 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         config["reporting"].pop("output.html.report.filename")
     if current_version == 3 and target_version > current_version:
         root_dir = config["system"]["root.dir"]
-        out("*****************************************************************************************")
-        out("")
-        out("You have an old configuration of Rally. Rally has now a much simpler setup")
-        out("routine which will autodetect lots of settings for you and it also does not")
-        out("require you to setup a metrics store anymore.")
-        out("")
-        out("Rally will now migrate your configuration but if you don't need advanced features")
-        out("like a metrics store, then you should delete the configuration directory:")
-        out("")
-        out("  rm -rf %s" % config_file.config_dir)
-        out("")
-        out("and then rerun Rally's configuration routine:")
-        out("")
-        out("  %s configure" % PROGRAM_NAME)
-        out("")
-        out("Please also note you have %.1f GB of data in your current benchmark directory at"
-            % convert.bytes_to_gb(io.get_size(root_dir)))
-        out()
-        out("  %s" % root_dir)
-        out("")
-        out("You might want to clean up this directory also.")
-        out()
-        out("For more details please see %s" % console.format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
-        out("")
-        out("*****************************************************************************************")
-        out("")
-        out("Pausing for 10 seconds to let you consider this message.")
+        out(
+            """
+            *****************************************************************************************
+
+            You have an old configuration of Rally. Rally has now a much simpler setup
+            routine which will autodetect lots of settings for you and it also does not
+            require you to setup a metrics store anymore.
+
+            Rally will now migrate your configuration but if you don't need advanced features
+            like a metrics store, then you should delete the configuration directory:
+
+              rm -rf {0}
+
+            and then rerun Rally's configuration routine:
+
+              {1} configure
+
+            Please also note you have {2:.1f} GB of data in your current benchmark directory at
+
+              {3}
+
+            You might want to clean up this directory also.
+
+            For more details please see {4}
+
+            *****************************************************************************************
+
+            Pausing for 10 seconds to let you consider this message.
+            """.format(config_file.config_dir,
+                       PROGRAM_NAME,
+                       convert.bytes_to_gb(io.get_size(root_dir)),
+                       root_dir,
+                       console.format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030")))
         time.sleep(10)
         logger.info("Migrating config from version [3] to [4]")
         current_version = 4
