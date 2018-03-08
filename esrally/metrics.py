@@ -202,10 +202,10 @@ def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None):
     store = cls(cfg)
     logger.info("Creating %s" % str(store))
 
-    invocation = cfg.opts("system", "time.start")
+    trial_timestamp = cfg.opts("system", "time.start")
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
-    store.open(invocation, track, challenge, selected_car, create=not read_only)
+    store.open(trial_timestamp, track, challenge, selected_car, create=not read_only)
     return store
 
 
@@ -267,7 +267,7 @@ class MetricsStore:
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
         self._config = cfg
-        self._invocation = None
+        self._trial_timestamp = None
         self._track = None
         self._track_params = cfg.opts("track", "params")
         self._challenge = None
@@ -286,11 +286,11 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
 
-    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
-        Opens a metrics store for a specific invocation, track, challenge and car.
+        Opens a metrics store for a specific trial timestamp, track, challenge and car.
 
-        :param invocation: The invocation (timestamp).
+        :param trial_timestamp: The trial (timestamp).
         :param track_name: Track name.
         :param challenge_name: Challenge name.
         :param car_name: Car name.
@@ -299,24 +299,24 @@ class MetricsStore:
         False when it is just opened for reading (as we can assume all necessary indices exist at this point).
         """
         if ctx:
-            self._invocation = ctx["invocation"]
+            self._trial_timestamp = ctx["trial-timestamp"]
             self._track = ctx["track"]
             self._challenge = ctx["challenge"]
             self._car = ctx["car"]
         else:
-            self._invocation = time.to_iso8601(invocation)
+            self._trial_timestamp = time.to_iso8601(trial_timestamp)
             self._track = track_name
             self._challenge = challenge_name
             self._car = car_name
-        assert self._invocation is not None, "Attempting to open metrics store without an invocation"
+        assert self._trial_timestamp is not None, "Attempting to open metrics store without a trial timestamp"
         assert self._track is not None, "Attempting to open metrics store without a track"
         assert self._challenge is not None, "Attempting to open metrics store without a challenge"
         assert self._car is not None, "Attempting to open metrics store without a car"
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
-        logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
-                    (self._invocation, self._track, self._challenge, self._car))
+        logger.info("Opening metrics store for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]" %
+                    (self._trial_timestamp, self._track, self._challenge, self._car))
 
         user_tags = extract_user_tags_from_config(self._config)
         for k, v in user_tags.items():
@@ -412,7 +412,7 @@ class MetricsStore:
     @property
     def open_context(self):
         return {
-            "invocation": self._invocation,
+            "trial-timestamp": self._trial_timestamp,
             "track": self._track,
             "challenge": self._challenge,
             "car": self._car
@@ -526,7 +526,7 @@ class MetricsStore:
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            "trial-timestamp": self._invocation,
+            "trial-timestamp": self._trial_timestamp,
             "environment": self._environment_name,
             "track": self._track,
             "lap": self._lap,
@@ -728,9 +728,9 @@ class EsMetricsStore(MetricsStore):
         self._index_template_provider = index_template_provider_class(cfg)
         self._docs = None
 
-    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
-        MetricsStore.open(self, invocation, track_name, challenge_name, car_name, ctx, create)
+        MetricsStore.open(self, trial_timestamp, track_name, challenge_name, car_name, ctx, create)
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
@@ -742,7 +742,7 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._invocation)
+        ts = time.from_is8601(self._trial_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _get_template(self):
@@ -751,8 +751,8 @@ class EsMetricsStore(MetricsStore):
     def flush(self, refresh=True):
         if self._docs:
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
-                        (len(self._docs), self._invocation, self._track, self._challenge, self._car))
+            logger.info("Successfully added %d metrics documents for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]." %
+                        (len(self._docs), self._trial_timestamp, self._track, self._challenge, self._car))
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
@@ -862,7 +862,7 @@ class EsMetricsStore(MetricsStore):
                 "filter": [
                     {
                         "term": {
-                            "trial-timestamp": self._invocation
+                            "trial-timestamp": self._trial_timestamp
                         }
                     },
                     {

@@ -543,8 +543,8 @@ class ComparisonReporter:
         self.plain = False
 
     def report(self, r1, r2):
-        logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], challenge=[%s], car=[%s]) and "
-                    "contender (invocation=[%s], track=[%s], challenge=[%s], car=[%s])" %
+        logger.info("Generating comparison report for baseline (trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]) and "
+                    "contender (trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s])" %
                     (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
                      r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally

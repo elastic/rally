@@ -344,8 +344,8 @@ class Driver:
         car_name = self.config.opts("mechanic", "car.names")
 
         logger.info("Benchmark for track [%s], challenge [%s] and car %s is about to start." % (track_name, challenge_name, car_name))
-        invocation = self.config.opts("system", "time.start")
-        self.metrics_store.open(invocation, track_name, challenge_name, car_name)
+        trial_timestamp = self.config.opts("system", "time.start")
+        self.metrics_store.open(trial_timestamp, track_name, challenge_name, car_name)
 
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
