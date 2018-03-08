@@ -279,6 +279,9 @@ def create_arg_parser():
             "--challenge",
             help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
         p.add_argument(
+            "--team-path",
+            help="define the path to the car and plugin configurations to use.")
+        p.add_argument(
             "--car",
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
@@ -676,8 +679,12 @@ def main():
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
+    if args.team_path:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
+    else:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", kv_to_map(csv_to_list(args.car_params)))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", kv_to_map(csv_to_list(args.plugin_params)))

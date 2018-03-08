@@ -94,6 +94,11 @@ These values are derived by Rally internally based on command line flags and you
 
 If you specify multiple configurations, e.g. ``--car="4gheap,ea"``, Rally will apply them in order. It will first read all variables in ``4gheap.ini``, then in ``ea.ini``. Afterwards, it will copy all configuration files from the corresponding config base of ``4gheap`` and *append* all configuration files from ``ea``. This also shows when to define a separate "car" and when to define a "mixin": If you need to amend configuration files, use a mixin, if you need to have a specific configuration, define a car.
 
+Simple customizations
+^^^^^^^^^^^^^^^^^^^^^
+
+For simple customizations you can create the directory hierarchy as outlined above and use the ``--team-path`` command line parameter to refer to this configuration. For more complex use cases and distributed multi-node benchmarks, we recommend to use custom team repositories.
+
 Custom Team Repositories
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

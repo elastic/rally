@@ -589,9 +589,9 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         car = None
         plugins = []
     else:
-        repo = team.team_repo(cfg)
-        car = team.load_car(repo, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
-        plugins = team.load_plugins(repo, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
+        team_path = team.team_path(cfg)
+        car = team.load_car(team_path, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
+        plugins = team.load_plugins(team_path, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
 
     if sources or distribution:
         s = supplier.create(cfg, sources, distribution, build, challenge_root_path, plugins)

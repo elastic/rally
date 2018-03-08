@@ -11,7 +11,7 @@ logger = logging.getLogger("rally.team")
 
 
 def list_cars(cfg):
-    loader = CarLoader(team_repo(cfg))
+    loader = CarLoader(team_path(cfg))
     cars = []
     for name in loader.car_names():
         cars.append(loader.load_car(name))
@@ -50,7 +50,7 @@ def load_car(repo, name, car_params={}):
 
 
 def list_plugins(cfg):
-    plugins = PluginLoader(team_repo(cfg)).plugins()
+    plugins = PluginLoader(team_path(cfg)).plugins()
     if plugins:
         console.println("Available Elasticsearch plugins:\n")
         console.println(tabulate.tabulate([[p.name, p.config] for p in plugins], headers=["Name", "Configuration"]))
@@ -83,25 +83,27 @@ def load_plugins(repo, plugin_names, plugin_params={}):
     return plugins
 
 
-def team_repo(cfg, update=True):
-    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    repo_name = cfg.opts("mechanic", "repository.name")
-    offline = cfg.opts("system", "offline.mode")
-    remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
-    root = cfg.opts("node", "root.dir")
-    team_repositories = cfg.opts("mechanic", "team.repository.dir")
-    teams_dir = os.path.join(root, team_repositories)
+def team_path(cfg):
+    root_path = cfg.opts("mechanic", "team.path", mandatory=False)
+    if root_path:
+        return root_path
+    else:
+        distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+        repo_name = cfg.opts("mechanic", "repository.name")
+        offline = cfg.opts("system", "offline.mode")
+        remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
+        root = cfg.opts("node", "root.dir")
+        team_repositories = cfg.opts("mechanic", "team.repository.dir")
+        teams_dir = os.path.join(root, team_repositories)
 
-    current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
-    if update:
+        current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
         current_team_repo.update(distribution_version)
-    return current_team_repo
+        return current_team_repo.repo_dir
 
 
 class CarLoader:
-    def __init__(self, repo):
-        self.repo = repo
-        self.cars_dir = os.path.join(self.repo.repo_dir, "cars")
+    def __init__(self, team_root_path):
+        self.cars_dir = os.path.join(team_root_path, "cars")
 
     def car_names(self):
         def __car_name(path):
@@ -199,9 +201,8 @@ class Car:
 
 
 class PluginLoader:
-    def __init__(self, repo):
-        self.repo = repo
-        self.plugins_root_path = os.path.join(self.repo.repo_dir, "plugins")
+    def __init__(self, team_root_path):
+        self.plugins_root_path = os.path.join(team_root_path, "plugins")
 
     def plugins(self):
         known_plugins = self._core_plugins() + self._configured_plugins()
