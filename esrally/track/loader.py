@@ -1146,7 +1146,7 @@ class TrackSpecificationReader:
             params = op_spec
 
         try:
-            # TODO #370: Remove this warning.
+            # TODO #435: Remove this warning.
             # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
             if op_type_name == "index" and \
                     self.name not in DEFAULT_TRACKS and \

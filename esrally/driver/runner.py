@@ -808,7 +808,7 @@ class Retry(Runner):
         return "retryable %s" % repr(self.delegate)
 
 
-# TODO #370: Remove this registration and replace with a new Index runner.
+# TODO #435: Remove this registration
 # Old (deprecated) name
 register_runner(track.OperationType.Index.name, BulkIndex())
 # New name
