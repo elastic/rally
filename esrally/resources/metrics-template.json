@@ -32,6 +32,9 @@
         "relative-time": {
           "type": "long"
         },
+        "trial-id": {
+          "type": "keyword"
+        },
         "trial-timestamp": {
           "type": "date",
           "format": "basic_date_time_no_millis",

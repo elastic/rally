@@ -167,6 +167,7 @@ class EsClientTests(TestCase):
 
 class EsMetricsTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    TRIAL_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
     def setUp(self):
         self.cfg = config.Config()
@@ -182,12 +183,13 @@ class EsMetricsTests(TestCase):
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
         self.metrics_store.lap = 1
 
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
+            "trial-id": EsMetricsTests.TRIAL_ID,
             "trial-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
@@ -197,7 +199,7 @@ class EsMetricsTests(TestCase):
                 "shard-count": 3
             },
             "lap": 1,
-            "challenge": "append-no-conflicts",
+            "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
             "value": throughput,
@@ -211,13 +213,14 @@ class EsMetricsTests(TestCase):
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
         self.metrics_store.lap = 1
 
         self.metrics_store.put_count_cluster_level(name="indexing_throughput", count=throughput, unit="docs/s",
                                                    absolute_time=0, relative_time=10)
         expected_doc = {
             "@timestamp": 0,
+            "trial-id": EsMetricsTests.TRIAL_ID,
             "trial-timestamp": "20160131T000000Z",
             "relative-time": 10000000,
             "environment": "unittest",
@@ -227,7 +230,7 @@ class EsMetricsTests(TestCase):
                 "shard-count": 3
             },
             "lap": 1,
-            "challenge": "append-no-conflicts",
+            "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
             "value": throughput,
@@ -243,7 +246,7 @@ class EsMetricsTests(TestCase):
         throughput = 5000
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
         self.metrics_store.lap = 1
 
         # Ensure we also merge in cluster level meta info
@@ -257,6 +260,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
+            "trial-id": EsMetricsTests.TRIAL_ID,
             "trial-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
@@ -266,7 +270,7 @@ class EsMetricsTests(TestCase):
                 "shard-count": 3
             },
             "lap": 1,
-            "challenge": "append-no-conflicts",
+            "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
             "value": throughput,
@@ -301,7 +305,7 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
@@ -309,27 +313,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-timestamp": "20160131T000000Z"
-                            }
-                        },
-                        {
-                            "term": {
-                                "environment": "unittest"
-                            }
-                        },
-                        {
-                            "term": {
-                                "track": "test"
-                            }
-                        },
-                        {
-                            "term": {
-                                "challenge": "append-no-conflicts"
-                            }
-                        },
-                        {
-                            "term": {
-                                "car": "defaults"
+                                "trial-id": EsMetricsTests.TRIAL_ID
                             }
                         },
                         {
@@ -369,7 +353,7 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
@@ -377,27 +361,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-timestamp": "20160131T000000Z"
-                            }
-                        },
-                        {
-                            "term": {
-                                "environment": "unittest"
-                            }
-                        },
-                        {
-                            "term": {
-                                "track": "test"
-                            }
-                        },
-                        {
-                            "term": {
-                                "challenge": "append-no-conflicts"
-                            }
-                        },
-                        {
-                            "term": {
-                                "car": "defaults"
+                                "trial-id": EsMetricsTests.TRIAL_ID
                             }
                         },
                         {
@@ -523,7 +487,7 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
@@ -531,27 +495,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-timestamp": "20160131T000000Z"
-                            }
-                        },
-                        {
-                            "term": {
-                                "environment": "unittest"
-                            }
-                        },
-                        {
-                            "term": {
-                                "track": "test"
-                            }
-                        },
-                        {
-                            "term": {
-                                "challenge": "append-no-conflicts"
-                            }
-                        },
-                        {
-                            "term": {
-                                "car": "defaults"
+                                "trial-id": EsMetricsTests.TRIAL_ID
                             }
                         },
                         {
@@ -589,6 +533,7 @@ class EsMetricsTests(TestCase):
 
 class EsRaceStoreTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    TRIAL_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
     class DictHolder:
         def __init__(self, d):
@@ -617,7 +562,8 @@ class EsRaceStoreTests(TestCase):
                         indices=[track.Index(name="tests", types=["test-type"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=EsRaceStoreTests.TRIAL_ID,
+                            trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
@@ -653,6 +599,7 @@ class EsRaceStoreTests(TestCase):
         expected_doc = {
             "rally-version": "0.4.4",
             "environment": "unittest",
+            "trial-id": EsRaceStoreTests.TRIAL_ID,
             "trial-timestamp": "20160131T000000Z",
             "pipeline": "from-sources",
             "user-tags": {
@@ -697,6 +644,7 @@ class EsRaceStoreTests(TestCase):
 
 class EsResultsStoreTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    TRIAL_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
     def setUp(self):
         self.cfg = config.Config()
@@ -727,7 +675,8 @@ class EsResultsStoreTests(TestCase):
         node = c.add_node("localhost", "rally-node-0")
         node.plugins.append("x-pack")
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=EsResultsStoreTests.TRIAL_ID,
+                            trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
@@ -764,6 +713,7 @@ class EsResultsStoreTests(TestCase):
             {
                 "rally-version": "0.4.4",
                 "environment": "unittest",
+                "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -784,6 +734,7 @@ class EsResultsStoreTests(TestCase):
             {
                 "rally-version": "0.4.4",
                 "environment": "unittest",
+                "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -805,6 +756,7 @@ class EsResultsStoreTests(TestCase):
             {
                 "rally-version": "0.4.4",
                 "environment": "unittest",
+                "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -830,6 +782,7 @@ class EsResultsStoreTests(TestCase):
             {
                 "rally-version": "0.4.4",
                 "environment": "unittest",
+                "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -852,6 +805,9 @@ class EsResultsStoreTests(TestCase):
 
 
 class InMemoryMetricsStoreTests(TestCase):
+    TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    TRIAL_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
+
     def setUp(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -864,7 +820,8 @@ class InMemoryMetricsStoreTests(TestCase):
 
     def test_get_value(self):
         throughput = 5000
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         self.metrics_store.put_count_cluster_level("indexing_throughput", 1, "docs/s", sample_type=metrics.SampleType.Warmup)
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
@@ -872,20 +829,23 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
 
         self.assertEqual(1, self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Warmup))
         self.assertEqual(throughput, self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Normal))
 
     def test_get_percentile(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         for i in range(1, 1001):
             self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
 
         self.metrics_store.close()
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
 
         self.assert_equal_percentiles("query_latency", [100.0], {100.0: 1000.0})
         self.assert_equal_percentiles("query_latency", [99.0], {99.0: 990.0})
@@ -895,14 +855,16 @@ class InMemoryMetricsStoreTests(TestCase):
         self.assert_equal_percentiles("query_latency", [99, 99.9, 100], {99: 990.0, 99.9: 999.0, 100: 1000.0})
 
     def test_get_median(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         for i in range(1, 1001):
             self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
 
         self.metrics_store.close()
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
 
         self.assertAlmostEqual(500.5, self.metrics_store.get_median("query_latency", lap=1))
 
@@ -914,7 +876,8 @@ class InMemoryMetricsStoreTests(TestCase):
                                    msg=str(percentile) + "th percentile differs")
 
     def test_externalize_and_bulk_add(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
 
@@ -932,7 +895,8 @@ class InMemoryMetricsStoreTests(TestCase):
         self.assertEqual(1000, self.metrics_store.get_one("final_index_size"))
 
     def test_meta_data_per_document(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "cluster-name", "test")
 
@@ -955,16 +919,19 @@ class InMemoryMetricsStoreTests(TestCase):
         }, self.metrics_store.docs[1]["meta"])
 
     def test_get_error_rate_zero_without_samples(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         self.metrics_store.close()
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
 
         self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
 
     def test_get_error_rate_by_sample_type(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Warmup,
                                                    meta_data={"success": False})
@@ -973,13 +940,15 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
 
         self.assertEqual(1.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
         self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
 
     def test_get_error_rate_mixed(self):
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.lap = 1
         self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
@@ -994,7 +963,8 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
 
         self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
         self.assertEqual(0.2, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
@@ -1002,6 +972,7 @@ class InMemoryMetricsStoreTests(TestCase):
 
 class FileRaceStoreTests(TestCase):
     TRIAL_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    TRIAL_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
     class DictHolder:
         def __init__(self, d):
@@ -1030,7 +1001,8 @@ class FileRaceStoreTests(TestCase):
                         indices=[track.Index(name="tests", types=["test-type"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=FileRaceStoreTests.TRIAL_ID,
+                            trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap",
                             total_laps=12,
