@@ -757,9 +757,10 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, override_auto_manage_indices=None, source=io.FileSource):
+    def __init__(self, override_auto_manage_indices=None, track_params=None, source=io.FileSource):
         self.name = None
         self.override_auto_manage_indices = override_auto_manage_indices
+        self.track_params = track_params if track_params else {}
         self.source = source
         self.index_op_type_warning_issued = False
 
@@ -770,7 +771,7 @@ class TrackSpecificationReader:
         meta_data = self._r(track_specification, "meta", mandatory=False)
         indices = [self._create_index(idx, mapping_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
-        templates = [self._create_template(tpl, mapping_dir)
+        templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
         # TODO: Remove this in Rally 0.10.0
@@ -816,7 +817,7 @@ class TrackSpecificationReader:
         body_file = self._r(index_spec, "body", mandatory=False)
         if body_file:
             with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
-                body = json.load(f)
+                body = self._load_template(f.read(), index_name)
         else:
             body = None
 
@@ -832,14 +833,24 @@ class TrackSpecificationReader:
 
         return track.Index(name=index_name, body=body, auto_managed=auto_managed, types=types)
 
-    def _create_template(self, tpl_spec, mapping_dir):
+    def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         index_pattern = self._r(tpl_spec, "index-pattern")
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
         template_file = os.path.join(mapping_dir, self._r(tpl_spec, "template"))
         with self.source(template_file, "rt") as f:
-            template_content = json.load(f)
+            template_content = self._load_template(f.read(), name)
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
+
+    def _load_template(self, contents, description):
+        try:
+            rendered = render_template(loader=jinja2.DictLoader({"default": contents}),
+                                       template_name="default",
+                                       template_vars=self.track_params)
+            return json.loads(rendered)
+        except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
+            logger.exception("Could not load file template for %s." % description)
+            raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
     def _create_corpora(self, corpora_specs, indices):
         document_corpora = []
