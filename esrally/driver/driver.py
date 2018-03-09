@@ -1230,9 +1230,16 @@ def schedule_for(current_track, task, client_index):
                     "time period of [%s] seconds." % (task.schedule, task, str(warmup_time_period), str(task.time_period)))
         return time_period_based(sched, warmup_time_period, task.time_period, runner_for_op, params_for_op)
     else:
+        warmup_iterations = task.warmup_iterations if task.warmup_iterations else 0
+        if task.iterations:
+            iterations = task.iterations
+        elif params_for_op.size():
+            iterations = params_for_op.size() - warmup_iterations
+        else:
+            iterations = 1
         logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%d] warmup iterations and "
-                    "[%d] iterations." % (task.schedule, op, task.warmup_iterations, task.iterations))
-        return iteration_count_based(sched, task.warmup_iterations, task.iterations, runner_for_op, params_for_op)
+                    "[%d] iterations." % (task.schedule, op, warmup_iterations, iterations))
+        return iteration_count_based(sched, warmup_iterations, iterations, runner_for_op, params_for_op)
 
 
 def time_period_based(sched, warmup_time_period, time_period, runner, params):

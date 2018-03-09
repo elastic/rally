@@ -588,7 +588,7 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None,
+    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None, time_period=None,
                  clients=1,
                  completes_parent=False, schedule="deterministic", params=None):
         self.name = name

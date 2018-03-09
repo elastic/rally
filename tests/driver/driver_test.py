@@ -452,6 +452,47 @@ class SchedulerTests(ScheduleTestCase):
         ]
         self.assert_schedule(expected_schedule, schedule)
 
+    def test_schedule_param_source_determines_iterations_no_warmup(self):
+        # we neither define any time-period nor any iteration count on the task.
+        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 3},
+                                                        param_source="driver-test-param-source"),
+                          clients=1, params={"target-throughput": 4, "clients": 4})
+
+        invocations = driver.schedule_for(self.test_track, task, 0)
+
+        self.assert_schedule([
+            (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "size": 3}),
+            (1.0, metrics.SampleType.Normal, 2 / 3, {"body": ["a"], "size": 3}),
+            (2.0, metrics.SampleType.Normal, 3 / 3, {"body": ["a"], "size": 3}),
+        ], list(invocations))
+
+    def test_schedule_param_source_determines_iterations_including_warmup(self):
+        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
+                                                        param_source="driver-test-param-source"),
+                          warmup_iterations=2, clients=1, params={"target-throughput": 4, "clients": 4})
+
+        invocations = driver.schedule_for(self.test_track, task, 0)
+
+        self.assert_schedule([
+            (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "size": 5}),
+            (1.0, metrics.SampleType.Warmup, 2 / 5, {"body": ["a"], "size": 5}),
+            (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
+            (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
+            (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
+        ], list(invocations))
+
+    def test_schedule_defaults_to_iteration_based(self):
+        # no time-period and no iterations specified on the task. Also, the parameter source does not define a size.
+        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"]},
+                                                        param_source="driver-test-param-source"),
+                          clients=1, params={"target-throughput": 4, "clients": 4})
+
+        invocations = driver.schedule_for(self.test_track, task, 0)
+
+        self.assert_schedule([
+            (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"]}),
+        ], list(invocations))
+
     def test_schedule_for_warmup_time_based(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"),
