@@ -625,11 +625,11 @@ def post_process_for_test_mode(t):
             # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
             for leaf_task in task:
                 # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
-                if leaf_task.warmup_iterations > leaf_task.clients:
+                if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                     count = leaf_task.clients
                     logger.info("Resetting warmup iterations to %d for [%s]" % (count, str(leaf_task)))
                     leaf_task.warmup_iterations = count
-                if leaf_task.iterations > leaf_task.clients:
+                if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                     count = leaf_task.clients
                     logger.info("Resetting measurement iterations to %d for [%s]" % (count, str(leaf_task)))
                     leaf_task.iterations = count
@@ -1054,8 +1054,8 @@ class TrackSpecificationReader:
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
         # use same default values as #parseTask() in case the 'parallel' element did not specify anything
-        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False, default_value=0)
-        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False, default_value=1)
+        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False)
+        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False)
         default_warmup_time_period = self._r(ops_spec, "warmup-time-period", error_ctx="parallel", mandatory=False)
         default_time_period = self._r(ops_spec, "time-period", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
@@ -1079,7 +1079,7 @@ class TrackSpecificationReader:
                             "this name exists." % (challenge_name, completed_by))
         return track.Parallel(tasks, clients)
 
-    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1,
+    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=None, default_iterations=None,
                    default_warmup_time_period=None, default_time_period=None, completed_by_name=None):
 
         op_spec = task_spec["operation"]
@@ -1106,10 +1106,10 @@ class TrackSpecificationReader:
                           schedule=schedule,
                           # this is to provide scheduler-specific parameters for custom schedulers.
                           params=task_spec)
-        if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
+        if task.warmup_iterations is not None and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
                         "mix time periods and iterations." % (op.name, challenge_name, task.warmup_iterations, task.time_period))
-        elif task.warmup_time_period is not None and task.iterations != default_iterations:
+        elif task.warmup_time_period is not None and task.iterations is not None:
             self._error("Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
                         "mix time periods and iterations." % (op.name, challenge_name, task.warmup_time_period, task.iterations))
 

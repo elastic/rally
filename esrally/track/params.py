@@ -113,8 +113,8 @@ class ParamSource:
         * It will either run an operation for a pre-determined number of times or
         * It can run until the parameter source is exhausted.
 
-        In the former case, return just 1. In the latter case, you should determine the number of times that `#params()` will be invoked.
-        With that number, Rally can show the progress made so far to the user.
+        In the former case, you should determine the number of times that `#params()` will be invoked. With that number, Rally can show
+        the progress made so far to the user. In the latter case, return ``None``.
 
         :return:  The "size" of this parameter source or ``None`` if should run eternally.
         """
