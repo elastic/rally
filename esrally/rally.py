@@ -5,8 +5,6 @@ import logging.handlers
 import os
 import sys
 import time
-import faulthandler
-import signal
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
@@ -644,8 +642,6 @@ def main():
 
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
-    # allow to see a thread-dump on SIGQUIT
-    faulthandler.register(signal.SIGQUIT, file=sys.stderr)
 
     pre_configure_logging()
     arg_parser = create_arg_parser()
