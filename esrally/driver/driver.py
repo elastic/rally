@@ -326,9 +326,12 @@ class Driver:
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.throughput_calculator = ThroughputCalculator()
-        # create - but do not yet open - the metrics store as an internal timer starts when we open it.
-        cls = metrics.metrics_store_class(self.config)
-        self.metrics_store = cls(cfg=self.config, meta_info=metrics_meta_info, lap=lap)
+        self.metrics_store = metrics.metrics_store(cfg=self.config,
+                                                   track=self.track.name,
+                                                   challenge=self.challenge.name,
+                                                   meta_info=metrics_meta_info,
+                                                   lap=lap,
+                                                   read_only=False)
         for host in self.config.opts("driver", "load_driver_hosts"):
             if host != "localhost":
                 self.load_driver_hosts.append(net.resolve(host))
@@ -339,13 +342,9 @@ class Driver:
         self.target.on_prepare_track(preps, self.config, self.track)
 
     def after_track_prepared(self):
-        track_name = self.track.name
-        challenge_name = self.challenge.name
-        car_name = self.config.opts("mechanic", "car.names")
-
-        logger.info("Benchmark for track [%s], challenge [%s] and car %s is about to start." % (track_name, challenge_name, car_name))
-        invocation = self.config.opts("system", "time.start")
-        self.metrics_store.open(invocation, track_name, challenge_name, car_name)
+        logger.info("Benchmark is about to start.")
+        # ensure relative time starts when the benchmark starts.
+        self.reset_relative_time()
 
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations

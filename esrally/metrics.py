@@ -190,7 +190,7 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=None, car=None):
+def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None, lap=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -199,13 +199,14 @@ def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=No
     :return: A metrics store implementation.
     """
     cls = metrics_store_class(cfg)
-    store = cls(cfg)
+    store = cls(cfg=cfg, meta_info=meta_info, lap=lap)
     logger.info("Creating %s" % str(store))
 
-    selected_invocation = cfg.opts("system", "time.start") if invocation is None else invocation
+    trial_id = cfg.opts("system", "trial.id")
+    trial_timestamp = cfg.opts("system", "time.start")
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
-    store.open(selected_invocation, track, challenge, selected_car, create=not read_only)
+    store.open(trial_id, trial_timestamp, track, challenge, selected_car, create=not read_only)
     return store
 
 
@@ -267,7 +268,8 @@ class MetricsStore:
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
         self._config = cfg
-        self._invocation = None
+        self._trial_id = None
+        self._trial_timestamp = None
         self._track = None
         self._track_params = cfg.opts("track", "params")
         self._challenge = None
@@ -286,11 +288,12 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
 
-    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
-        Opens a metrics store for a specific invocation, track, challenge and car.
+        Opens a metrics store for a specific trial, track, challenge and car.
 
-        :param invocation: The invocation (timestamp).
+        :param trial_id: The trial id. This attribute is sufficient to uniquely identify a challenge.
+        :param trial_timestamp: The trial timestamp as a datetime.
         :param track_name: Track name.
         :param challenge_name: Challenge name.
         :param car_name: Car name.
@@ -299,24 +302,27 @@ class MetricsStore:
         False when it is just opened for reading (as we can assume all necessary indices exist at this point).
         """
         if ctx:
-            self._invocation = ctx["invocation"]
+            self._trial_id = ctx["trial-id"]
+            self._trial_timestamp = ctx["trial-timestamp"]
             self._track = ctx["track"]
             self._challenge = ctx["challenge"]
             self._car = ctx["car"]
         else:
-            self._invocation = time.to_iso8601(invocation)
+            self._trial_id = trial_id
+            self._trial_timestamp = time.to_iso8601(trial_timestamp)
             self._track = track_name
             self._challenge = challenge_name
             self._car = car_name
-        assert self._invocation is not None, "Attempting to open metrics store without an invocation"
+        assert self._trial_id is not None, "Attempting to open metrics store without a trial id"
+        assert self._trial_timestamp is not None, "Attempting to open metrics store without a trial timestamp"
         assert self._track is not None, "Attempting to open metrics store without a track"
         assert self._challenge is not None, "Attempting to open metrics store without a challenge"
         assert self._car is not None, "Attempting to open metrics store without a car"
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
-        logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
-                    (self._invocation, self._track, self._challenge, self._car))
+        logger.info("Opening metrics store for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]" %
+                    (self._trial_timestamp, self._track, self._challenge, self._car))
 
         user_tags = extract_user_tags_from_config(self._config)
         for k, v in user_tags.items():
@@ -412,7 +418,8 @@ class MetricsStore:
     @property
     def open_context(self):
         return {
-            "invocation": self._invocation,
+            "trial-id": self._trial_id,
+            "trial-timestamp": self._trial_timestamp,
             "track": self._track,
             "challenge": self._challenge,
             "car": self._car
@@ -526,7 +533,8 @@ class MetricsStore:
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            "trial-timestamp": self._invocation,
+            "trial-id": self._trial_id,
+            "trial-timestamp": self._trial_timestamp,
             "environment": self._environment_name,
             "track": self._track,
             "lap": self._lap,
@@ -728,9 +736,9 @@ class EsMetricsStore(MetricsStore):
         self._index_template_provider = index_template_provider_class(cfg)
         self._docs = None
 
-    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
-        MetricsStore.open(self, invocation, track_name, challenge_name, car_name, ctx, create)
+        MetricsStore.open(self, trial_id, trial_timestamp, track_name, challenge_name, car_name, ctx, create)
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
@@ -742,7 +750,7 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._invocation)
+        ts = time.from_is8601(self._trial_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _get_template(self):
@@ -751,8 +759,8 @@ class EsMetricsStore(MetricsStore):
     def flush(self, refresh=True):
         if self._docs:
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
-                        (len(self._docs), self._invocation, self._track, self._challenge, self._car))
+            logger.info("Successfully added %d metrics documents for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]." %
+                        (len(self._docs), self._trial_timestamp, self._track, self._challenge, self._car))
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
@@ -862,27 +870,7 @@ class EsMetricsStore(MetricsStore):
                 "filter": [
                     {
                         "term": {
-                            "trial-timestamp": self._invocation
-                        }
-                    },
-                    {
-                        "term": {
-                            "environment": self._environment_name
-                        }
-                    },
-                    {
-                        "term": {
-                            "track": self._track
-                        }
-                    },
-                    {
-                        "term": {
-                            "challenge": self._challenge
-                        }
-                    },
-                    {
-                        "term": {
-                            "car": self._car_name
+                            "trial-id": self._trial_id
                         }
                     },
                     {
@@ -1076,7 +1064,8 @@ def list_races(cfg):
 
 def create_race(cfg, track, challenge):
     car = cfg.opts("mechanic", "car.names")
-    environment_name = cfg.opts("system", "env.name")
+    environment = cfg.opts("system", "env.name")
+    trial_id = cfg.opts("system", "trial.id")
     trial_timestamp = cfg.opts("system", "time.start")
     total_laps = cfg.opts("race", "laps")
     user_tags = extract_user_tags_from_config(cfg)
@@ -1084,11 +1073,11 @@ def create_race(cfg, track, challenge):
     track_params = cfg.opts("track", "params")
     rally_version = version.version()
 
-    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car, total_laps)
+    return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car, total_laps)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
+    def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
                  total_laps, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
@@ -1096,6 +1085,7 @@ class Race:
             lap_results = []
         self.rally_version = rally_version
         self.environment_name = environment_name
+        self.trial_id = trial_id
         self.trial_timestamp = trial_timestamp
         self.pipeline = pipeline
         self.user_tags = user_tags
@@ -1104,7 +1094,7 @@ class Race:
         self.challenge = challenge
         self.car = car
         self.total_laps = total_laps
-        # will be set later - contains hosts, revision, distribution_version, ...s
+        # will be set later - contains hosts, revision, distribution_version, ...
         self.cluster = cluster
         self.lap_results = lap_results
         self.results = results
@@ -1143,6 +1133,7 @@ class Race:
         d = {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
+            "trial-id": self.trial_id,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "pipeline": self.pipeline,
             "user-tags": self.user_tags,
@@ -1164,6 +1155,7 @@ class Race:
         result_template = {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
+            "trial-id": self.trial_id,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "distribution-version": self.cluster.distribution_version,
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
@@ -1206,7 +1198,7 @@ class Race:
 
         # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
-        return Race(d["rally-version"], d["environment"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
+        return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
                     d["track"], d.get("track-params"), d["challenge"], d["car"], d["total-laps"], results=d["results"])
 
 
@@ -1359,10 +1351,10 @@ class EsRaceStore(RaceStore):
 
     def find_by_timestamp(self, timestamp):
         filters = [{
-            "term": {
-                "environment": self.environment_name
-            }
-        },
+                "term": {
+                    "environment": self.environment_name
+                }
+            },
             {
                 "term": {
                     "trial-timestamp": timestamp

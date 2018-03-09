@@ -5,6 +5,7 @@ import logging.handlers
 import os
 import sys
 import time
+import uuid
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
@@ -662,6 +663,7 @@ def main():
         cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
 
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
+    cfg.add(config.Scope.applicationOverride, "system", "trial.id", str(uuid.uuid4()))
 
     # per node?
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
