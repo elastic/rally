@@ -447,6 +447,7 @@ class ConfigFactory:
             # the Elasticsearch directory is just the last path component (relative to the source root directory)
             config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
 
+        if gradle_bin:
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
 
