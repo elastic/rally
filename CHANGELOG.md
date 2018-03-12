@@ -1,3 +1,22 @@
+### 0.9.4
+
+#### Enhancements
+
+* [#437](https://github.com/elastic/rally/pull/437): Bump pytest* versions and beautify make test output
+* [#434](https://github.com/elastic/rally/pull/434): Remove Python faulthandler
+* [#431](https://github.com/elastic/rally/issues/431): Add a unique race id
+* [#429](https://github.com/elastic/rally/issues/429): Allow to use track parameters also in index / template definitions
+* [#426](https://github.com/elastic/rally/issues/426): Allow simpler configuration of cluster configuration
+* [#377](https://github.com/elastic/rally/issues/377): Index-append operation only indexing bulk-size * clients documents
+
+#### Bug Fixes
+
+* [#423](https://github.com/elastic/rally/issues/423): esrally fails after initial config run if JDK9 is not installed
+
+#### Doc Changes
+
+* [#424](https://github.com/elastic/rally/pull/424): Clarify use of virtualenv in developing doc
+
 ### 0.9.3
 
 #### Bug Fixes
