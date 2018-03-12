@@ -24,4 +24,3 @@ It also requires:
 * A [PyPI account](https://pypi.org/account/register/) with admin access for the esrally project in order to upload the release.
 * A [Readthedocs account](https://readthedocs.org/accounts/signup/) with admin access for the esrally project in order to maintain the documentation.
 * GPG is properly setup for signing the release tag for your git user (see `git config user.name` and `git config user.email`).
-

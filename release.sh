@@ -6,14 +6,7 @@
 # pip3 install --pre github3.py (see changelog.py)
 
 # fail this script immediately if any command fails with a non-zero exit code
-set -e
-
-# test number of parameters
-if [ $# != 2 ]
-then
-    echo "Usage: $0 RELEASE_VERSION NEXT_VERSION"
-    exit 1
-fi
+set -eu
 
 RELEASE_VERSION=$1
 NEXT_RELEASE="$2.dev0"

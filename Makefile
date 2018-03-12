@@ -27,8 +27,11 @@ coverage:
 	coverage run setup.py test
 	coverage html
 
-# usage: e.g. make release current=0.9.2 next=0.9.3
-release: clean docs it
-	./release.sh $(current) $(next)
+release-checks:
+	./release-checks.sh $(release_version) $(next_version)
 
-.PHONY: clean docs test it it34 it35 it36 benchmark coverage release
+# usage: e.g. make release release_version=0.9.2 next_version=0.9.3
+release: release-checks clean docs it
+	./release.sh $(release_version) $(next_version)
+
+.PHONY: clean docs test it it34 it35 it36 benchmark coverage release release-checks
