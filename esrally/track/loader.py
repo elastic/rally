@@ -778,8 +778,6 @@ class TrackSpecificationReader:
         if corpora:
             logger.info("Track [%s] defines a 'corpora' block. Ignoring any legacy corpora definitions on document types." % self.name)
         else:
-            logger.warning("Track [%s] does not define a 'corpora' block. Creating corpora definitions based on document types (will "
-                           "be removed with the next minor release)." % self.name)
             corpora = self._create_legacy_corpora(track_specification)
             # Check whether we have legacy documents; otherwise there is no need for a warning...
             if corpora:
@@ -843,6 +841,7 @@ class TrackSpecificationReader:
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
+        logger.info("Loading template [%s]." % description)
         try:
             rendered = render_template(loader=jinja2.DictLoader({"default": contents}),
                                        template_name="default",
@@ -928,33 +927,38 @@ class TrackSpecificationReader:
         for idx in self._r(track_specification, "indices", mandatory=False, default_value=[]):
             index_name = self._r(idx, "name")
             for type_spec in self._r(idx, "types", mandatory=False, default_value=[]):
-                type_name = self._r(type_spec, "name")
-                docs = self._r(type_spec, "documents", mandatory=False)
-                if docs:
-                    if io.is_archive(docs):
-                        document_archive = docs
-                        document_file = io.splitext(docs)[0]
-                    else:
-                        document_archive = None
-                        document_file = docs
-                    number_of_documents = self._r(type_spec, "document-count")
-                    compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
-                    uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
+                # only do this if this is a legacy type definition - otherwise this is a new type definition and we don't define
+                # any corpora for this track.
+                if isinstance(type_spec, dict):
+                    type_name = self._r(type_spec, "name")
+                    docs = self._r(type_spec, "documents", mandatory=False)
+                    if docs:
+                        if io.is_archive(docs):
+                            document_archive = docs
+                            document_file = io.splitext(docs)[0]
+                        else:
+                            document_archive = None
+                            document_file = docs
+                        number_of_documents = self._r(type_spec, "document-count")
+                        compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
+                        uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
 
-                    docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                           document_file=document_file,
-                                           document_archive=document_archive,
-                                           base_url=base_url,
-                                           includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data",
-                                                                                 mandatory=False,
-                                                                                 default_value=False),
-                                           number_of_documents=number_of_documents,
-                                           compressed_size_in_bytes=compressed_bytes,
-                                           uncompressed_size_in_bytes=uncompressed_bytes,
-                                           target_index=index_name, target_type=type_name)
-                    legacy_corpus.documents.append(docs)
+                        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                               document_file=document_file,
+                                               document_archive=document_archive,
+                                               base_url=base_url,
+                                               includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data",
+                                                                                     mandatory=False,
+                                                                                     default_value=False),
+                                               number_of_documents=number_of_documents,
+                                               compressed_size_in_bytes=compressed_bytes,
+                                               uncompressed_size_in_bytes=uncompressed_bytes,
+                                               target_index=index_name, target_type=type_name)
+                        legacy_corpus.documents.append(docs)
 
         if legacy_corpus.documents:
+            logger.warning("Track [%s] does not define a 'corpora' block. Creating corpora definitions based on document types (will "
+                           "be removed with the next minor release)." % self.name)
             return [legacy_corpus]
         else:
             return []
@@ -1151,8 +1155,8 @@ class TrackSpecificationReader:
             if op_type_name == "index" and \
                     self.name not in DEFAULT_TRACKS and \
                     not self.index_op_type_warning_issued:
-                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
-                             "operation type to [bulk]." % self.name)
+                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operation %s. Please rename this "
+                             "operation type to [bulk]." % (self.name, op_name))
                 # Don't spam the console...
                 self.index_op_type_warning_issued = True
 
