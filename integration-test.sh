@@ -13,9 +13,23 @@ readonly DISTRIBUTIONS=(2.4.6 5.6.7)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_VERSION="6.2.1"
+readonly MIN_CURL_VERSION=(7 12 3)
 
 ES_PID=-1
 
+function check_prerequisites() {
+    local curl_major_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 1,1)
+    local curl_minor_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 2,2)
+    local curl_patch_release=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 3,3)
+
+    if [[ $curl_major_version < ${MIN_CURL_VERSION[0]} ]] || \
+       [[ $curl_major_version == ${MIN_CURL_VERSION[0]} && $curl_minor_version < ${MIN_CURL_VERSION[1]} ]] || \
+       [[ $curl_major_version == ${MIN_CURL_VERSION[0]} && $curl_minor_version == ${MIN_CURL_VERSION[1]} && $curl_patch_release < ${MIN_CURL_VERSION[2]} ]]
+    then
+        echo "Minimum curl version required is ${MIN_CURL_VERSION[0]}.${MIN_CURL_VERSION[1]}.${MIN_CURL_VERSION[2]} ; please upgrade your curl."
+        exit 1
+    fi
+}
 
 function log() {
     local ts=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
@@ -85,9 +99,11 @@ function set_up() {
     mkdir -p .rally_it/cache
     cd .rally_it/cache
     if [ ! -f elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz ]; then
-        curl -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz
+        # If curl fails immediately, executing all retries will take up to (2**retries)-1 seconds.
+        curl --retry 8 -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz || { rm elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz; exit 1; }
     fi
-    tar -xzf elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz
+    # Delete and exit if archive is somehow corrupted, despite getting downloaded correctly.
+    tar -xzf elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz || { rm elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz; exit 1; }
     cd elasticsearch-"${ES_METRICS_STORE_VERSION}"
     bin/elasticsearch &
     # store PID so we can kill ES later
@@ -200,6 +216,8 @@ function main {
     set_up
     run_test
 }
+
+check_prerequisites
 
 trap "tear_down" EXIT
 
