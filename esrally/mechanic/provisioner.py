@@ -151,23 +151,13 @@ class BareProvisioner:
         self.apply_config = apply_config
 
     def prepare(self, binary):
-        self._install_binary(binary)
-        return self._configure()
-
-    def cleanup(self):
-        self.es_installer.cleanup(self.preserve)
-
-    def _install_binary(self, binaries):
         if not self.preserve:
             console.info("Rally will delete the benchmark candidate after the benchmark")
-        self.es_installer.install(binaries["elasticsearch"])
+        self.es_installer.install(binary["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
 
-        for installer in self.plugin_installers:
-            installer.install(self.es_installer.es_home_path, binaries.get(installer.plugin_name))
-
-    def _configure(self):
+        # determine after installation because some variables will depend on the install directory
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
 
@@ -175,6 +165,7 @@ class BareProvisioner:
             self.apply_config(p, target_root_path, provisioner_vars)
 
         for installer in self.plugin_installers:
+            installer.install(target_root_path, binary.get(installer.plugin_name))
             for plugin_config_path in installer.config_source_paths:
                 self.apply_config(plugin_config_path, target_root_path, provisioner_vars)
 
@@ -185,6 +176,9 @@ class BareProvisioner:
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
                                  self.es_installer.data_paths)
+
+    def cleanup(self):
+        self.es_installer.cleanup(self.preserve)
 
     def _provisioner_variables(self):
         plugin_variables = {}
