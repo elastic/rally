@@ -102,10 +102,10 @@ function set_up() {
     cd .rally_it/cache
     if [[ ! -f $ES_ARTIFACT ]]; then
         # If curl fails immediately, executing all retries will take up to (2**retries)-1 seconds.
-        curl --retry 8 -O https://artifacts.elastic.co/downloads/elasticsearch/"${ELASTICSEARCH_ARTIFACT}" || { rm "${ELASTICSEARCH_ARTIFACT}"; exit 1; }
+        curl --retry 8 -O https://artifacts.elastic.co/downloads/elasticsearch/"${ES_ARTIFACT}" || { rm -f "${ES_ARTIFACT}"; exit 1; }
     fi
     # Delete and exit if archive is somehow corrupted, despite getting downloaded correctly.
-    tar -xzf "${ES_ARTIFACT}" || { rm "${ES_ARTIFACT}"; exit 1; }
+    tar -xzf "${ES_ARTIFACT}" || { rm -f "${ES_ARTIFACT}"; exit 1; }
     cd "${ES_ARTIFACT_PATH}"
     bin/elasticsearch &
     # store PID so we can kill ES later
