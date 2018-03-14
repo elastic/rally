@@ -13,6 +13,8 @@ readonly DISTRIBUTIONS=(2.4.6 5.6.7)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_VERSION="6.2.1"
+readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
+readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
 
 ES_PID=-1
@@ -98,13 +100,13 @@ function set_up() {
     pushd .
     mkdir -p .rally_it/cache
     cd .rally_it/cache
-    if [ ! -f elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz ]; then
+    if [[ ! -f $ES_ARTIFACT ]]; then
         # If curl fails immediately, executing all retries will take up to (2**retries)-1 seconds.
-        curl --retry 8 -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz || { rm elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz; exit 1; }
+        curl --retry 8 -O https://artifacts.elastic.co/downloads/elasticsearch/"${ELASTICSEARCH_ARTIFACT}" || { rm "${ELASTICSEARCH_ARTIFACT}"; exit 1; }
     fi
     # Delete and exit if archive is somehow corrupted, despite getting downloaded correctly.
-    tar -xzf elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz || { rm elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz; exit 1; }
-    cd elasticsearch-"${ES_METRICS_STORE_VERSION}"
+    tar -xzf "${ES_ARTIFACT}" || { rm "${ES_ARTIFACT}"; exit 1; }
+    cd "${ES_ARTIFACT_PATH}"
     bin/elasticsearch &
     # store PID so we can kill ES later
     ES_PID=$!
@@ -205,7 +207,7 @@ function tear_down() {
     fi
 
     rm -f ~/.rally/rally*integration-test.ini
-    rm -rf .rally_it/cache/elasticsearch-"${ES_METRICS_STORE_VERSION}"
+    rm -rf .rally_it/cache/"${ES_ARTIFACT_PATH}"
     set -e
     kill_rally_processes
     # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
