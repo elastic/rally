@@ -587,6 +587,15 @@ def dispatch_sub_command(cfg, sub_command):
         return False
 
 
+def to_dict(arg):
+    if io.has_extension(arg, ".json"):
+        import json
+        with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
+            return json.load(f)
+    else:
+        return kv_to_map(csv_to_list(arg))
+
+
 def csv_to_list(csv):
     if csv is None:
         return None
@@ -684,8 +693,8 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", kv_to_map(csv_to_list(args.car_params)))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", kv_to_map(csv_to_list(args.plugin_params)))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", to_dict(args.car_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", to_dict(args.plugin_params))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
         # force-preserve the cluster nodes.
@@ -715,7 +724,7 @@ def main():
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
-    cfg.add(config.Scope.applicationOverride, "track", "params", kv_to_map(csv_to_list(args.track_params)))
+    cfg.add(config.Scope.applicationOverride, "track", "params", to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)

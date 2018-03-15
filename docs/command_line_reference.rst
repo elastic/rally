@@ -74,7 +74,7 @@ Selects the track that Rally should run. By default the ``geonames`` track is ru
 
 With this parameter you can inject variables into tracks. The supported variables depend on the track and you should check the track JSON file to see which variables can be provided.
 
-It accepts a list of comma-separated key-value pairs. The key-value pairs have to be delimited by a colon.
+It accepts a list of comma-separated key-value pairs or a JSON file name. The key-value pairs have to be delimited by a colon.
 
 **Examples**:
 
@@ -106,6 +106,14 @@ When we run this track, we can override these defaults:
 
 * ``--track-params="replica_count:1,shard_count:3"`` will set the number of replicas to 1 and the number of shards to 3.
 * ``--track-params="replica_count:1"`` will just set the number of replicas to 1 and just keep the default value of 5 shards.
+* ``--track-params="params.json"`` will read the track parameters from a JSON file (defined below)
+
+Example JSON file::
+
+   {
+      "replica_count": 1,
+      "shard_count": 3
+   }
 
 All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
 
@@ -167,7 +175,7 @@ Rally will configure Elasticsearch with 4GB of heap (``4gheap``) and enable Java
 ``car-params``
 ~~~~~~~~~~~~~~
 
-Allows to override config variables of Elasticsearch.
+Allows to override config variables of Elasticsearch. It accepts a list of comma-separated key-value pairs or a JSON file name. The key-value pairs have to be delimited by a colon.
 
 **Example**
 
@@ -175,7 +183,7 @@ Allows to override config variables of Elasticsearch.
 
    esrally --car="4gheap" --car-params="data_paths:'/opt/elasticsearch'"
 
-The variables that are exposed depend on the `car's configuration <https://github.com/elastic/rally-teams/tree/master/cars>`__. In addition, Rally implements special handling for the variable ``data_paths`` (by default the values for variable is determined by Rally).
+The variables that are exposed depend on the `car's configuration <https://github.com/elastic/rally-teams/tree/master/cars>`__. In addition, Rally implements special handling for the variable ``data_paths`` (by default the value for this variable is determined by Rally).
 
 
 ``elasticsearch-plugins``
@@ -192,7 +200,7 @@ In this example, Rally will install the ``analysis-icu`` plugin and the ``x-pack
 ``plugin-params``
 ~~~~~~~~~~~~~~~~~
 
-Allows to override variables of Elasticsearch plugins.
+Allows to override variables of Elasticsearch plugins. It accepts a list of comma-separated key-value pairs or a JSON file name. The key-value pairs have to be delimited by a colon.
 
 Example::
 
