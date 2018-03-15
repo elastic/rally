@@ -485,7 +485,7 @@ class MetricsStore:
                store will derive the timestamp automatically.
         :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
-       :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
+        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
         self._put(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
                   relative_time, meta_data)
