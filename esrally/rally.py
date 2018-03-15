@@ -592,6 +592,8 @@ def to_dict(arg):
     if io.has_extension(arg, ".json"):
         with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
             return json.load(f)
+    elif arg.startswith("{"):
+        return json.loads(arg)
     else:
         return kv_to_map(csv_to_list(arg))
 
