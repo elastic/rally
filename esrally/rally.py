@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import uuid
+import json
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
@@ -589,7 +590,6 @@ def dispatch_sub_command(cfg, sub_command):
 
 def to_dict(arg):
     if io.has_extension(arg, ".json"):
-        import json
         with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
             return json.load(f)
     else:
