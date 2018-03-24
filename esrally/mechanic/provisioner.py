@@ -7,12 +7,13 @@ from enum import Enum
 import jinja2
 
 from esrally import exceptions
-from esrally.utils import io, console, process, modules
+from esrally.utils import io, console, process, modules, versions
 
 logger = logging.getLogger("rally.provisioner")
 
 
 def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
+    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
@@ -24,7 +25,7 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, all_node_ips, ip, http_port)
     plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
 
-    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve)
+    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
 
 
 def no_op_provisioner():
@@ -143,11 +144,12 @@ class BareProvisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, apply_config=_apply_config):
+    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, distribution_version=None, apply_config=_apply_config):
         self.preserve = preserve
         self._cluster_settings = cluster_settings
         self.es_installer = es_installer
         self.plugin_installers = plugin_installers
+        self.distribution_version = distribution_version
         self.apply_config = apply_config
 
     def prepare(self, binary):
@@ -184,7 +186,17 @@ class BareProvisioner:
         plugin_variables = {}
         mandatory_plugins = []
         for installer in self.plugin_installers:
-            mandatory_plugins.append(installer.plugin_name)
+            # For Elasticsearch < 6.3 more specific plugin names are required for mandatory plugin check
+            # Details in: https://github.com/elastic/elasticsearch/pull/28710
+            try:
+                if ((versions.major_version(self.distribution_version) == 6 and
+                     versions.minor_version(self.distribution_version) < 3) or
+                    (versions.major_version(self.distribution_version) < 6)):
+                    mandatory_plugins.append(installer.sub_plugin_name)
+                else:
+                    raise NameError
+            except (NameError, TypeError, exceptions.InvalidSyntax):
+                mandatory_plugins.append(installer.plugin_name)
             plugin_variables.update(installer.variables)
 
         cluster_settings = {}
@@ -372,6 +384,11 @@ class PluginInstaller:
     @property
     def plugin_name(self):
         return self.plugin.name
+
+    @property
+    def sub_plugin_name(self):
+        # if a plugin consists of multiple plugins (e.g. x-pack) we're interested in that name
+        return self.variables.get("plugin_name", self.plugin_name)
 
 
 class NoOpProvisioner:
