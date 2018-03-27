@@ -66,7 +66,7 @@ As you can see above, Rally autodetects if git, Gradle and a JDK are installed. 
 
 As you can see, Rally tells you that you cannot build Elasticsearch from sources but you can still benchmark official binary distributions.
 
-It's also possible that Rally cannot automatically find your JDK 8 or JDK 9 home directory. In that case, it will ask you later in the configuration process. If you do not provide a JDK home directory, Rally cannot start Elasticsearch on this machine but you can still use it as a load generator to :doc:`benchmark remote clusters </recipes>`.
+It's also possible that Rally cannot automatically find your JDK 8 or JDK 10 home directory. In that case, it will ask you later in the configuration process. If you do not provide a JDK home directory, Rally cannot start Elasticsearch on this machine but you can still use it as a load generator to :doc:`benchmark remote clusters </recipes>`.
 
 After running the initial detection, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``) or will choose a default directory::
 
@@ -122,7 +122,7 @@ Rally will ask you a few more things in the advanced setup:
 
 * **Benchmark data directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different data directory here.
 * **Elasticsearch project directory**: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with Gradle in this directory (it runs ``gradle clean`` and ``gradle :distribution:tar:assemble``).
-* **JDK root directory**: Rally will only ask this if it could not autodetect the JDK home by itself. Just enter the root directory of the JDK you want to use. By default, Rally will choose Java 8 if available and fallback to Java 9.
+* **JDK root directory**: Rally will only ask this if it could not autodetect the JDK home by itself. Just enter the root directory of the JDK you want to use. By default, Rally will choose Java 8 if available and fallback to Java 10.
 * **Metrics store type**: You can choose between ``in-memory`` which requires no additional setup or ``elasticsearch`` which requires that you start a dedicated Elasticsearch instance to store metrics but gives you much more flexibility to analyse results.
 * **Metrics store settings** (only for metrics store type ``elasticsearch``): Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. When using self-signed certificates on the Elasticsearch metrics store, certificate verification can be turned off by setting the ``datastore.ssl.verification_mode`` setting to ``none``. Alternatively you can enter the path to the certificate authority's signing certificate in ``datastore.ssl.certificate_authorities``. Both settings are optional.
 * **Name for this benchmark environment** (only for metrics store type ``elasticsearch``): You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different environments by choosing a different name.

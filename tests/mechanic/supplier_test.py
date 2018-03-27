@@ -134,20 +134,19 @@ class BuilderTests(TestCase):
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.jvm.major_version")
-    def test_build_on_jdk_9(self, jvm_major_version, mock_run_subprocess):
-        jvm_major_version.return_value = 9
+    def test_build_on_jdk_10(self, jvm_major_version, mock_run_subprocess):
+        jvm_major_version.return_value = 10
         mock_run_subprocess.return_value = False
 
-        b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk9", log_dir="logs")
+        b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk10", log_dir="logs")
         b.build([supplier.CLEAN_TASK, supplier.ASSEMBLE_TASK])
 
         calls = [
             # Actual call
-            mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1" %
-                      supplier.Builder.JAVA_9_GRADLE_OPTS),
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export GRADLE_OPTS=\"%s\"; export JAVA_HOME=/opt/jdk9; cd /src; /usr/local/gradle "
-                      ":distribution:archives:tar:assemble >> logs/build.log 2>&1" % supplier.Builder.JAVA_9_GRADLE_OPTS),
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; /usr/local/gradle "
+                      ":distribution:archives:tar:assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -335,7 +334,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
+        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
         composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", plugins=[])
@@ -352,7 +351,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
+        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
@@ -383,7 +382,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
+        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
@@ -406,7 +405,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
+        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/opt/gradle")
@@ -437,7 +436,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java9.home", "/usr/local/bin/java9/")
+        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
         cfg.add(config.Scope.application, "build", "gradle.bin", "/opt/gradle")
