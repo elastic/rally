@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 13
+    CURRENT_CONFIG_VERSION = 14
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -305,13 +305,13 @@ class ConfigFactory:
         gradle_bin = "./gradlew" if use_gradle_wrapper else io.guess_install_location("gradle")
 
         java_8_home = runtime_java_home if runtime_java_home else io.guess_java_home(major_version=8)
-        java_9_home = java_home if java_home else io.guess_java_home(major_version=9)
+        java_10_home = java_home if java_home else io.guess_java_home(major_version=10)
         from esrally.utils import jvm
         if java_8_home:
             auto_detected_java_home = java_8_home
         # Don't auto-detect an EA release and bring trouble to the user later on. They can still configure it manually if they want to.
-        elif java_9_home and not jvm.is_early_access_release(java_9_home):
-            auto_detected_java_home = java_9_home
+        elif java_10_home and not jvm.is_early_access_release(java_10_home):
+            auto_detected_java_home = java_10_home
         else:
             auto_detected_java_home = None
 
@@ -342,14 +342,14 @@ class ConfigFactory:
             self.o("* Setting up benchmark data directory in %s" % root_dir)
 
         if benchmark_from_sources:
-            if not java_9_home or jvm.is_early_access_release(java_9_home):
-                raw_java_9_home = self._ask_property("Enter the JDK 9 root directory", check_path_exists=True, mandatory=False)
-                if raw_java_9_home and jvm.major_version(raw_java_9_home) == 9 and not jvm.is_early_access_release(raw_java_9_home):
-                    java_9_home = io.normalize_path(raw_java_9_home) if raw_java_9_home else None
+            if not java_10_home or jvm.is_early_access_release(java_10_home):
+                raw_java_10_home = self._ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
+                if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
+                    java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
                 else:
                     benchmark_from_sources = False
                     self.o("********************************************************************************")
-                    self.o("You don't have a valid JDK 9 installation and cannot benchmark source builds.")
+                    self.o("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
                     self.o("")
                     self.o("You can still benchmark binary distributions with e.g.:")
                     self.o("")
@@ -454,8 +454,8 @@ class ConfigFactory:
         config["runtime"] = {}
         if java_home:
             config["runtime"]["java.home"] = java_home
-        if java_9_home:
-            config["runtime"]["java9.home"] = java_9_home
+        if java_10_home:
+            config["runtime"]["java10.home"] = java_10_home
 
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
@@ -827,6 +827,44 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                         out("")
 
         current_version = 13
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 13 and target_version > current_version:
+        # This version replaced java9.home with java10.home
+        if "build" in config and "gradle.bin" in config["build"]:
+            java_10_home = io.guess_java_home(major_version=10)
+            from esrally.utils import jvm
+            if java_10_home and not jvm.is_early_access_release(java_10_home):
+                logger.debug("Autodetected a JDK 10 installation at [%s]" % java_10_home)
+                if "runtime" not in config:
+                    config["runtime"] = {}
+                config["runtime"]["java10.home"] = java_10_home
+            else:
+                logger.debug("Could not autodetect a JDK 10 installation. Checking [java.home] already points to a JDK 10.")
+                detected = False
+                if "runtime" in config:
+                    java_home = config["runtime"]["java.home"]
+                    if jvm.major_version(java_home) == 10 and not jvm.is_early_access_release(java_home):
+                        config["runtime"]["java10.home"] = java_home
+                        detected = True
+
+                if not detected:
+                    logger.debug("Could not autodetect a JDK 10 installation. Asking user.")
+                    raw_java_10_home = prompter.ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
+                    if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
+                        java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
+                        config["runtime"]["java10.home"] = java_10_home
+                    else:
+                        out("********************************************************************************")
+                        out("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
+                        out("")
+                        out("You can still benchmark binary distributions with e.g.:")
+                        out("")
+                        out("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
+                        out("********************************************************************************")
+                        out("")
+
+        current_version = 14
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done
