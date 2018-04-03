@@ -341,5 +341,3 @@ class PluginDescriptor:
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and (self.name, self.config, self.core_plugin) == (other.name, other.config, other.core_plugin)
-
-
