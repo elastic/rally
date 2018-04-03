@@ -26,17 +26,6 @@ def major_version(version):
     return major
 
 
-def minor_version(version):
-    """
-    Determines the minor version of a given version string.
-
-    :param version: A version string in the format major.minor.path-suffix (suffix is optional)
-    :return: The minor version (as int). In case the version string is invalid, an ``exceptions.InvalidSyntax`` is raised.
-    """
-    _, minor, _, _ = components(version)
-    return minor
-
-
 def components(version, strict=True):
     """
     Determines components of a version string.
