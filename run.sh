@@ -31,8 +31,8 @@ REMOTE="origin"
 
 # While we could also check via the presence of `VIRTUAL_ENV` this is a bit more reliable.
 # Check for both pyvenv and normal venv environments
-# https://legacy.python.org/dev/peps/pep-0405/
-if python3 -c 'import sys; sys.exit(0) if ".pyenv" in sys.base_prefix else exit(0) if hasattr(sys,"real_path") else exit(1)' >/dev/null 2>&1
+# https://www.python.org/dev/peps/pep-0405/
+if python3 -c 'import os, sys; sys.exit(0) if "VIRTUAL_ENV" in os.environ else sys.exit(1)' >/dev/null 2>&1
 then
     IN_VIRTUALENV=1
 else
