@@ -19,7 +19,7 @@ readonly MIN_CURL_VERSION=(7 12 3)
 
 ES_PID=-1
 
-function check_prerequisites() {
+function check_prerequisites {
     local curl_major_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 1,1)
     local curl_minor_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 2,2)
     local curl_patch_release=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 3,3)
@@ -33,23 +33,23 @@ function check_prerequisites() {
     fi
 }
 
-function log() {
+function log {
     local ts=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
     echo "[${ts}] [${1}] ${2}"
 }
 
-function info() {
+function info {
     log "INFO" "${1}"
 }
 
-function kill_rally_processes() {
+function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
     killall -9 esrally
     set -e
 }
 
-function kill_related_es_processes() {
+function kill_related_es_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
     # killall matching ES instances - we cannot use killall as we also want to ensure "rally" is "somewhere" in the command line.
@@ -61,7 +61,7 @@ function kill_related_es_processes() {
     set -e
 }
 
-function set_up() {
+function set_up {
     info "setting up"
     kill_rally_processes
     kill_related_es_processes
@@ -122,19 +122,19 @@ function set_up() {
     popd
 }
 
-function random_configuration() {
+function random_configuration {
     local num_configs=${#CONFIGURATIONS[*]}
     # we cannot simply return string values in a bash script
     eval "$1='${CONFIGURATIONS[$((RANDOM%num_configs))]}'"
 }
 
-function test_configure() {
+function test_configure {
     info "test configure()"
     # just run to test the configuration procedure, don't use this configuration in other tests.
     esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_list() {
+function test_list {
     local cfg
     random_configuration cfg
 
@@ -150,7 +150,7 @@ function test_list() {
     esrally list telemetry --configuration-name="${cfg}"
 }
 
-function test_sources() {
+function test_sources {
     local cfg
     random_configuration cfg
 
@@ -163,7 +163,7 @@ function test_sources() {
     esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car=verbose_iw --laps=2
 }
 
-function test_distributions() {
+function test_distributions {
     local cfg
 
     for dist in "${DISTRIBUTIONS[@]}"
@@ -178,7 +178,7 @@ function test_distributions() {
     done
 }
 
-function test_benchmark_only() {
+function test_benchmark_only {
     # we just use our metrics cluster for these benchmarks. It's not ideal but simpler.
     local cfg
     local dist
@@ -189,7 +189,7 @@ function test_benchmark_only() {
     esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
 }
 
-function run_test() {
+function run_test {
     test_configure
     test_list
     test_sources
@@ -197,7 +197,7 @@ function run_test() {
     test_benchmark_only
 }
 
-function tear_down() {
+function tear_down {
     info "tearing down"
     # just let tear down finish
     set +e
