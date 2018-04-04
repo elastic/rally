@@ -808,10 +808,6 @@ class Retry(Runner):
         return "retryable %s" % repr(self.delegate)
 
 
-# TODO #435: Remove this registration
-# Old (deprecated) name
-register_runner(track.OperationType.Index.name, BulkIndex())
-# New name
 register_runner(track.OperationType.Bulk.name, BulkIndex())
 register_runner(track.OperationType.ForceMerge.name, ForceMerge())
 register_runner(track.OperationType.IndicesStats.name, IndicesStats())

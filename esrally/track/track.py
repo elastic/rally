@@ -426,7 +426,6 @@ class Challenge:
 
 @unique
 class OperationType(Enum):
-    Index = 0
     # for the time being we are not considering this action as administrative
     IndicesStats = 1
     NodesStats = 2
@@ -449,9 +448,7 @@ class OperationType(Enum):
 
     @classmethod
     def from_hyphenated_string(cls, v):
-        if v == "index":
-            return OperationType.Index
-        elif v == "force-merge":
+        if v == "force-merge":
             return OperationType.ForceMerge
         elif v == "index-stats":
             return OperationType.IndicesStats

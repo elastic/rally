@@ -1185,8 +1185,7 @@ def generate_index_ops(chart_type, race_config, environment):
             plugins = combination.get("plugins")
             for task in t.find_challenge_or_default(challenge).schedule:
                 for sub_task in task:
-                    # TODO: Remove "index" after some grace period
-                    if sub_task.operation.type in [track.OperationType.Bulk.name, track.OperationType.Index.name]:
+                    if sub_task.operation.type == track.OperationType.Bulk.name:
                         cci.append((combination_name, combination_label, challenge, car, plugins, node_count, sub_task.name))
         return t.name, cci
 
