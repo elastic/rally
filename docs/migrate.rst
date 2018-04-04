@@ -1,6 +1,14 @@
 Migration Guide
 ===============
 
+Migrating to Rally 0.10.0
+-------------------------
+
+Removal of operation type ``index``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the operation type ``index`` which has been deprecated with Rally 0.8.0. Please use ``bulk`` instead as operation type.
+
 Migrating to Rally 0.9.0
 ------------------------
 
