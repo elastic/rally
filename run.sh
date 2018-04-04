@@ -13,8 +13,8 @@ readonly HUMAN_NAME="${__RALLY_INTERNAL_HUMAN_NAME}"
 
 install_esrally_with_setuptools () {
     # Check if optional parameter with Rally binary path, points to an existing executable file.
-    if [[ -n ${1} ]]; then
-     if [[ -f ${1} && -x ${1} ]]; then return; fi
+    if [[ $# -ge 1 && -n $1 ]]; then
+        if [[ -f $1 && -x $1 ]]; then return; fi
     fi
 
     if [[ ${IN_VIRTUALENV} == 0 ]]; then
