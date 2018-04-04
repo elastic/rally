@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 14
+    CURRENT_CONFIG_VERSION = 15
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -269,8 +269,7 @@ class ConfigFactory:
         self.o = o
         self.prompter = None
 
-    def create_config(self, config_file, advanced_config=False, assume_defaults=False, use_gradle_wrapper=False,
-                      java_home=None, runtime_java_home=None):
+    def create_config(self, config_file, advanced_config=False, assume_defaults=False, java_home=None, runtime_java_home=None):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
@@ -279,9 +278,10 @@ class ConfigFactory:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
         configuration in CI run. Default: False.
-        :param use_gradle_wrapper: If True, use the Gradle wrapper, otherwise use the system's Gradle version. Default: False.
         """
+        benchmark_from_sources = True
         self.prompter = Prompter(self.i, self.sec_i, self.o, assume_defaults)
+
         if advanced_config:
             self.o("Running advanced configuration. You can get additional help at:")
             self.o("")
@@ -302,7 +302,6 @@ class ConfigFactory:
         # Autodetect settings
         self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
-        gradle_bin = "./gradlew" if use_gradle_wrapper else io.guess_install_location("gradle")
 
         java_8_home = runtime_java_home if runtime_java_home else io.guess_java_home(major_version=8)
         java_10_home = java_home if java_home else io.guess_java_home(major_version=10)
@@ -316,24 +315,10 @@ class ConfigFactory:
             auto_detected_java_home = None
 
         self.print_detection_result("git    ", git_path)
-        self.print_detection_result("gradle ", gradle_bin)
         self.print_detection_result("JDK    ", auto_detected_java_home,
                                     warn_if_missing=True,
                                     additional_message="You cannot benchmark Elasticsearch on this machine without a JDK.")
         self.o("")
-
-        # users that don't have Gradle available cannot benchmark from sources
-        benchmark_from_sources = gradle_bin
-
-        if not benchmark_from_sources:
-            self.o("********************************************************************************")
-            self.o("You don't have the required software to benchmark Elasticsearch source builds.")
-            self.o("")
-            self.o("You can still benchmark binary distributions with e.g.:")
-            self.o("")
-            self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
-            self.o("********************************************************************************")
-            self.o("")
 
         root_dir = io.normalize_path(os.path.abspath(os.path.join(config_file.config_dir, "benchmarks")))
         if advanced_config:
@@ -341,42 +326,40 @@ class ConfigFactory:
         else:
             self.o("* Setting up benchmark data directory in %s" % root_dir)
 
-        if benchmark_from_sources:
-            if not java_10_home or jvm.is_early_access_release(java_10_home):
-                raw_java_10_home = self._ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
-                if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
-                    java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
-                else:
-                    benchmark_from_sources = False
-                    self.o("********************************************************************************")
-                    self.o("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
-                    self.o("")
-                    self.o("You can still benchmark binary distributions with e.g.:")
-                    self.o("")
-                    self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
-                    self.o("********************************************************************************")
-                    self.o("")
-
-        if benchmark_from_sources:
-            # We try to autodetect an existing ES source directory
-            guess = self._guess_es_src_dir()
-            if guess:
-                source_dir = guess
-                logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
+        if not java_10_home or jvm.is_early_access_release(java_10_home):
+            raw_java_10_home = self._ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
+            if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
+                java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
             else:
-                default_src_dir = os.path.join(root_dir, "src", "elasticsearch")
-                logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
-                source_dir = default_src_dir
-
-            if advanced_config:
-                source_dir = io.normalize_path(self._ask_property("Enter your Elasticsearch project directory:",
-                                                                  default_value=source_dir))
-            if not advanced_config:
-                self.o("* Setting up benchmark source directory in %s" % source_dir)
+                benchmark_from_sources = False
+                self.o("********************************************************************************")
+                self.o("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
+                self.o("")
+                self.o("You can still benchmark binary distributions with e.g.:")
+                self.o("")
+                self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
+                self.o("********************************************************************************")
                 self.o("")
 
-            # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
-            repo_url = "https://github.com/elastic/elasticsearch.git"
+        # We try to autodetect an existing ES source directory
+        guess = self._guess_es_src_dir()
+        if guess:
+            source_dir = guess
+            logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
+        else:
+            default_src_dir = os.path.join(root_dir, "src", "elasticsearch")
+            logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
+            source_dir = default_src_dir
+
+        if advanced_config:
+            source_dir = io.normalize_path(self._ask_property("Enter your Elasticsearch project directory:",
+                                                              default_value=source_dir))
+        if not advanced_config:
+            self.o("* Setting up benchmark source directory in %s" % source_dir)
+            self.o("")
+
+        # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
+        repo_url = "https://github.com/elastic/elasticsearch.git"
 
         if auto_detected_java_home:
             java_home = auto_detected_java_home
@@ -437,19 +420,13 @@ class ConfigFactory:
         config["node"] = {}
         config["node"]["root.dir"] = root_dir
 
-        if benchmark_from_sources:
-            # user has provided the Elasticsearch directory but the root for Elasticsearch and related plugins will be one level above
-            final_source_dir = io.normalize_path(os.path.abspath(os.path.join(source_dir, os.pardir)))
-            config["node"]["src.root.dir"] = final_source_dir
+        final_source_dir = io.normalize_path(os.path.abspath(os.path.join(source_dir, os.pardir)))
+        config["node"]["src.root.dir"] = final_source_dir
 
-            config["source"] = {}
-            config["source"]["remote.repo.url"] = repo_url
-            # the Elasticsearch directory is just the last path component (relative to the source root directory)
-            config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
-
-        if gradle_bin:
-            config["build"] = {}
-            config["build"]["gradle.bin"] = gradle_bin
+        config["source"] = {}
+        config["source"]["remote.repo.url"] = repo_url
+        # the Elasticsearch directory is just the last path component (relative to the source root directory)
+        config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
 
         config["runtime"] = {}
         if java_home:
@@ -749,7 +726,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
             if "local.src.dir" in config["source"]:
                 previous_root = config["source"].pop("local.src.dir")
                 logger.info("Set [source][local.src.dir] to [%s]." % previous_root)
-                # if this directory was Rally's default location, then move it on the file system because to allow for checkouts of plugins
+                # if this directory was Rally's default location, then move it on the file system to allow for checkouts of plugins
                 # in the sibling directory.
                 if previous_root == os.path.join(config["node"]["root.dir"], "src"):
                     new_root_dir_all_sources = previous_root
@@ -865,6 +842,32 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                         out("")
 
         current_version = 14
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 14 and target_version > current_version:
+        # Be agnostic about build tools. Let use specify build commands for plugins and elasticsearch
+        # but also use gradlew by default for Elasticsearch and Core plugin builds, if nothing else has been specified.
+
+        def migrate_source_plugin_build_tasks(config):
+            if 'source' not in config:
+                return
+            for k, v in config['source'].items():
+                plugin_match = re.match('^plugin\.([^.]+)\.build\.task$',k)
+                if plugin_match != None and len(plugin_match.groups()) > 0 :
+                    plugin_name = plugin_match.group(1)
+                    new_key = "plugin.{}.build.command".format(plugin_name)
+                    new_value = "./gradlew {}".format(v)
+                    config['source'].pop(k)
+                    config['source'][new_key] = new_value
+                    logger.info("Migrating build.task for plugin [{}] from [{}] to [{}].".format(plugin_match.group(1), v, new_value))
+
+        logger.info("Migrating configuration version from 14 to 15.")
+        if "build" in config:
+            logger.info("Removing [build] section as part of the configuration migration. Rally now uses ./gradlew to build Elasticsearch.")
+            config.pop("build", None)
+        migrate_source_plugin_build_tasks(config)
+
+        current_version = 15
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

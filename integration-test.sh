@@ -72,14 +72,14 @@ function set_up {
     # if the build defines these variables we'll explicitly use them instead of auto-detection
     if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
         # configure for tests with an in-memory metrics store
-        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
+        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --assume-defaults --configuration-name="integration-test"
         # configure for tests with an Elasticsearch metrics store
-        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
+        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --assume-defaults --configuration-name="es-integration-test"
     else
         # configure for tests with an in-memory metrics store
-        esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
+        esrally configure --assume-defaults --configuration-name="integration-test"
         # configure for tests with an Elasticsearch metrics store
-        esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
+        esrally configure --assume-defaults --configuration-name="es-integration-test"
 
     fi
 

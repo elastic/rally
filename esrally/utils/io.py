@@ -375,7 +375,7 @@ def guess_install_location(binary_name, fallback=None):
     """
     Checks whether a given binary is available on the user's path.
 
-    :param binary_name: The name of the binary, e.g. tail, gradle, mvn.
+    :param binary_name: The name of the binary, e.g. tail, mvn.
     :param fallback: A fallback to return if the binary could not be found on the path.
     :return: The full path to the provided binary or the provided fallback.
     """
