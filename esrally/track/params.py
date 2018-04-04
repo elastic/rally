@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+import math
 import types
 import inspect
 from enum import Enum
@@ -482,6 +483,14 @@ class BulkIndexParamSource(ParamSource):
         except ValueError:
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
+        try:
+            self.ingest_percentage = float(params.get("ingest-percentage", 100.0))
+            if self.ingest_percentage <= 0 or self.ingest_percentage > 100.0:
+                raise exceptions.InvalidSyntax(
+                    "'ingest-percentage' must be in the range (0.0, 100.0] but was {:.1f}".format(self.ingest_percentage))
+        except ValueError:
+            raise exceptions.InvalidSyntax("'ingest-percentage' must be numeric")
+
     def used_corpora(self, t, params):
         corpora = []
         track_corpora_names = [corpus.name for corpus in t.corpora]
@@ -504,7 +513,7 @@ class BulkIndexParamSource(ParamSource):
 
     def partition(self, partition_index, total_partitions):
         return PartitionBulkIndexParamSource(self.corpora, partition_index, total_partitions, self.batch_size, self.bulk_size,
-                                             self.id_conflicts, self.pipeline, self._params)
+                                             self.ingest_percentage, self.id_conflicts, self.pipeline, self._params)
 
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
@@ -514,7 +523,7 @@ class BulkIndexParamSource(ParamSource):
 
 
 class PartitionBulkIndexParamSource:
-    def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, id_conflicts=None,
+    def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, ingest_percentage, id_conflicts=None,
                  pipeline=None, original_params=None):
         """
 
@@ -523,14 +532,17 @@ class PartitionBulkIndexParamSource:
         :param total_partitions: The total number of partitions (i.e. clients) for bulk index operations.
         :param batch_size: The number of documents to read in one go.
         :param bulk_size: The size of bulk index operations (number of documents per bulk).
+        :param ingest_percentage: A number between (0.0, 100.0] that defines how much of the whole corpus should be ingested.
         :param id_conflicts: The type of id conflicts.
         :param pipeline: The name of the ingest pipeline to run.
+        :param original_params: The original dict passed to the parent parameter source.
         """
         self.corpora = corpora
         self.partition_index = partition_index
         self.total_partitions = total_partitions
         self.batch_size = batch_size
         self.bulk_size = bulk_size
+        self.ingest_percentage = ingest_percentage
         self.id_conflicts = id_conflicts
         self.pipeline = pipeline
         self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
@@ -543,7 +555,8 @@ class PartitionBulkIndexParamSource:
         return next(self.internal_params)
 
     def size(self):
-        return number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
+        all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
+        return math.ceil((all_bulks * self.ingest_percentage) / 100)
 
 
 def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
