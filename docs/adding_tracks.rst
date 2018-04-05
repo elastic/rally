@@ -100,11 +100,11 @@ For details on the allowed syntax, see the Elasticsearch documentation on `mappi
 Finally, add a file called ``track.json`` in the tutorial directory::
 
     {
+      "version": 2,
       "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
-          "auto-managed": false,
           "body": "index.json",
           "types": [ "docs" ]
         }
@@ -285,11 +285,11 @@ Structuring your track
 Now modify ``track.json`` so it knows about your new file::
 
     {
+      "version": 2,
       "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
-          "auto-managed": false,
           "body": "index.json",
           "types": [ "docs" ]
         }
@@ -316,11 +316,11 @@ We replaced the challenge content with  ``{% include "challenges/index-and-query
 If you want to reuse operation definitions across challenges, you can also define them in a separate ``operations`` block and just refer to them by name in the corresponding challenge::
 
     {
+      "version": 2,
       "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
-          "auto-managed": false,
           "body": "index.json",
           "types": [ "docs" ]
         }
@@ -416,11 +416,11 @@ If your track consists of multiple challenges, it can be cumbersome to include t
 
     {% import "rally.helpers" as rally %}
     {
+      "version": 2,
       "description": "Tutorial benchmark for Rally",
       "indices": [
         {
           "name": "geonames",
-          "auto-managed": false,
           "body": "index.json",
           "types": [ "docs" ]
         }
@@ -512,6 +512,7 @@ Then upload ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote l
 Finally, specify the compressed file name in your ``track.json`` file in the ``source-file`` property and also add the ``base-url`` property::
 
     {
+      "version": 2,
       "description": "Tutorial benchmark for Rally",
       "corpora": [
         {

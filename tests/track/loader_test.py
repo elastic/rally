@@ -679,7 +679,7 @@ class TrackPostProcessingTests(TestCase):
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index",
+                    "operation-type": "bulk",
                     "bulk-size": 5000
                 },
                 {
@@ -752,7 +752,7 @@ class TrackPostProcessingTests(TestCase):
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index",
+                    "operation-type": "bulk",
                     "bulk-size": 5000
                 },
                 {
@@ -805,108 +805,6 @@ class TrackPostProcessingTests(TestCase):
 
         self.assertEqual(self.as_track(expected_post_processed),
                          loader.post_process_for_test_mode(self.as_track(track_specification)))
-
-    def test_creates_index_auto_management_operations(self):
-        track_specification = {
-            "indices": [
-                {
-                    "name": "test-index",
-                    "body": "test-index-body.json",
-                    "types": ["test-type"]
-                }
-            ],
-            "corpora": [
-                {
-                    "name": "unittest",
-                    "documents": [
-                        {
-                            "source-file": "documents.json.bz2",
-                            "document-count": 10,
-                            "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
-                        }
-                    ]
-                }
-            ],
-            "challenge": {
-                "name": "default-challenge",
-                "schedule": [
-                    {
-                        "operation": {
-                            "operation-type": "index",
-                            "bulk-size": 5000
-                        },
-                        "warmup-time-period": 120
-                    }
-                ]
-            }
-        }
-
-        expected_post_processed = {
-            "indices": [
-                {
-                    "name": "test-index",
-                    "body": "test-index-body.json",
-                    "types": ["test-type"]
-                }
-            ],
-            "corpora": [
-                {
-                    "name": "unittest",
-                    "documents": [
-                        {
-                            "source-file": "documents.json.bz2",
-                            "document-count": 10,
-                            "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
-                        }
-                    ]
-                }
-            ],
-            "challenge": {
-                "name": "default-challenge",
-                "schedule": [
-                    {
-                        "name": "auto-delete-indices",
-                        "operation": {
-                            "name": "auto-delete-indices",
-                            "operation-type": "delete-index",
-                            "include-in-reporting": False,
-                            "only-if-exists": True
-                        }
-                    },
-                    {
-                        "name": "auto-create-indices",
-                        "operation": {
-                            "name": "auto-create-indices",
-                            "operation-type": "create-index",
-                            "include-in-reporting": False
-                        }
-                    },
-                    {
-                        "name": "auto-check-cluster-health",
-                        "operation": {
-                            "name": "auto-check-cluster-health",
-                            "operation-type": "cluster-health",
-                            "include-in-reporting": False,
-                            "request-params": {
-                                "wait_for_status": "green"
-                            }
-                        }
-                    },
-                    {
-                        "operation": {
-                            "operation-type": "index",
-                            "bulk-size": 5000
-                        },
-                        "warmup-time-period": 120
-                    }
-                ]
-            }
-        }
-
-        self.assertEqual(self.as_track(expected_post_processed),
-                         loader.post_process_for_index_auto_management(self.as_track(track_specification), "green"))
 
     def as_track(self, track_specification):
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
@@ -972,7 +870,7 @@ class TrackFilterTests(TestCase):
             "operations": [
                 {
                     "name": "bulk-index",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 },
                 {
                     "name": "node-stats",
@@ -1064,7 +962,7 @@ class TrackSpecificationReaderTests(TestCase):
     def test_can_read_track_info(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "types": [{"name": "test-type"}]}],
+            "indices": [{"name": "test-index", "types": ["test-type"]}],
             "corpora": [],
             "operations": [],
             "challenges": []
@@ -1077,9 +975,15 @@ class TrackSpecificationReaderTests(TestCase):
     def test_document_count_mandatory_if_file_present(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
-            "indices": [{"name": "test-index", "types": [{"name": "docs", "documents": "documents.json.bz2"}]}],
-            "operations": [],
+            "indices": [{"name": "test-index", "types": ["docs"]}],
+            "corpora": [
+                {
+                    "name": "test",
+                    "base-url": "https://localhost/data",
+                    "documents": [{ "source-file": "documents-main.json.bz2"}
+                    ]
+                }
+            ],
             "challenges": []
         }
         reader = loader.TrackSpecificationReader()
@@ -1090,18 +994,22 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parse_with_mixed_warmup_iterations_and_measurement(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "test-index",
-                    "types": [
+                    "body": "index.json",
+                    "types": [ "docs" ]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "documents": [
                         {
-                            "name": "main",
-                            "documents": "documents-main.json.bz2",
+                            "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "mapping": "main-type-mappings.json"
+                            "uncompressed-bytes": 10000
                         }
                     ]
                 }
@@ -1109,7 +1017,7 @@ class TrackSpecificationReaderTests(TestCase):
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index",
+                    "operation-type": "bulk",
                     "bulk-size": 5000,
                 }
             ],
@@ -1131,7 +1039,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
 
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
@@ -1142,26 +1050,30 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parse_missing_challenge_or_challenges(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "test-index",
-                    "types": [
+                    "body": "index.json",
+                    "types": [ "docs" ]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "documents": [
                         {
-                            "name": "main",
-                            "documents": "documents-main.json.bz2",
+                            "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "mapping": "main-type-mappings.json"
+                            "uncompressed-bytes": 10000
                         }
                     ]
                 }
-            ]
+            ],
             # no challenge or challenges element
         }
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
@@ -1171,18 +1083,22 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parse_challenge_and_challenges_are_defined(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "test-index",
-                    "types": [
+                    "body": "index.json",
+                    "types": [ "docs" ]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "documents": [
                         {
-                            "name": "main",
-                            "documents": "documents-main.json.bz2",
+                            "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "mapping": "main-type-mappings.json"
+                            "uncompressed-bytes": 10000
                         }
                     ]
                 }
@@ -1192,7 +1108,7 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": []
         }
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
@@ -1202,18 +1118,22 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
             "description": "description for unit test",
-            "data-url": "https://localhost/data",
             "indices": [
                 {
                     "name": "test-index",
-                    "types": [
+                    "body": "index.json",
+                    "types": [ "docs" ]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "documents": [
                         {
-                            "name": "main",
-                            "documents": "documents-main.json.bz2",
+                            "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "mapping": "main-type-mappings.json"
+                            "uncompressed-bytes": 10000
                         }
                     ]
                 }
@@ -1243,7 +1163,7 @@ class TrackSpecificationReaderTests(TestCase):
         }
 
         reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/main-type-mappings.json": ['{"main": "empty-for-test"}'],
+            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
@@ -1458,8 +1378,8 @@ class TrackSpecificationReaderTests(TestCase):
                 }
         }, resulting_track.indices[0].body)
         self.assertEqual(2, len(resulting_track.indices[0].types))
-        self.assertEqual("main", resulting_track.indices[0].types[0].name)
-        self.assertEqual("secondary", resulting_track.indices[0].types[1].name)
+        self.assertEqual("main", resulting_track.indices[0].types[0])
+        self.assertEqual("secondary", resulting_track.indices[0].types[1])
         # corpora
         self.assertEqual(1, len(resulting_track.corpora))
         self.assertEqual("test", resulting_track.corpora[0].name)
@@ -1541,30 +1461,14 @@ class TrackSpecificationReaderTests(TestCase):
             }, resulting_track.templates[0].content)
         self.assertEqual(0, len(resulting_track.challenges))
 
-    def test_types_are_optional_for_user_managed_indices(self):
-        track_specification = {
-            "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
-            "operations": [],
-            "challenges": []
-        }
-        reader = loader.TrackSpecificationReader()
-        resulting_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual("unittest", resulting_track.name)
-        self.assertEqual("description for unit test", resulting_track.description)
-        self.assertEqual(1, len(resulting_track.indices))
-        self.assertEqual(0, len(resulting_track.templates))
-        self.assertEqual("test-index", resulting_track.indices[0].name)
-        self.assertEqual(0, len(resulting_track.indices[0].types))
-
     def test_unique_challenge_names(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1598,11 +1502,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_not_more_than_one_default_challenge_possible(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1638,11 +1542,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_at_least_one_default_challenge(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1674,11 +1578,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_exactly_one_default_challenge(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1712,11 +1616,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_selects_sole_challenge_implicitly_as_default(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenge": {
@@ -1737,7 +1641,7 @@ class TrackSpecificationReaderTests(TestCase):
     def test_inline_operations(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "challenge": {
                 "name": "challenge",
                 "schedule": [
@@ -1765,11 +1669,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_supports_target_throughput(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenge": {
@@ -1789,11 +1693,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_supports_target_interval(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1815,19 +1719,19 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_default_values(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 },
                 {
                     "name": "index-2",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 },
                 {
                     "name": "index-3",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 },
             ],
             "challenges": [
@@ -1890,11 +1794,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_default_clients_does_not_propagate(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1944,15 +1848,15 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_completed_by_set(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 },
                 {
                     "name": "index-2",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -1996,15 +1900,15 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_completed_by_set_no_task_matches(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 },
                 {
                     "name": "index-2",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [
@@ -2038,11 +1942,11 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_completed_by_set_multiple_tasks_match(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "index"
+                    "operation-type": "bulk"
                 }
             ],
             "challenges": [

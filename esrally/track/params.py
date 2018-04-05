@@ -166,21 +166,10 @@ class CreateIndexParamSource(ParamSource):
                             body["settings"].update(settings)
                         else:
                             body["settings"] = settings
-                    elif not body:
-                        # this is just needed because we will output this in the middle of the benchmark and will thus write
-                        # this on the same line as the progress message.
-                        console.println("")
-                        console.warn("Creating index %s based on deprecated type mappings. Please specify an index body instead. "
-                                     "For details please see the migration guide in the docs." % idx.name, logger=logger)
-                        # TODO #366: Deprecate this syntax. We should only specify all mappings in the body property.
-                        # check all types and merge their mappings
+                    elif not body and settings:
                         body = {
-                            "mappings": {}
+                            "settings": settings
                         }
-                        if settings:
-                            body["settings"] = settings
-                        for t in idx.types:
-                            body["mappings"].update(t.mapping)
 
                     self.index_definitions.append((idx.name, body))
         else:
@@ -351,7 +340,7 @@ class SearchParamSource(ParamSource):
         if len(track.indices) == 1:
             default_index = track.indices[0].name
             if len(track.indices[0].types) == 1:
-                default_type = track.indices[0].types[0].name
+                default_type = track.indices[0].types[0]
             else:
                 default_type = None
         else:

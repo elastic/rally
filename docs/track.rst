@@ -144,7 +144,7 @@ The ``version`` property has been introduced with Rally 0.7.3. Rally versions be
 Example::
 
     {
-        "version": 1,
+        "version": 2,
         "description": "POIs from Geonames"
     }
 
@@ -171,13 +171,12 @@ E.g. a key defined on a task, will override the same key defined on a challenge.
 indices
 .......
 
-The ``indices`` section contains a list of all indices that are used by this track. By default Rally will assume that it can destroy and create these indices at will.
+The ``indices`` section contains a list of all indices that are used by this track.
 
 Each index in this list consists of the following properties:
 
 * ``name`` (mandatory): The name of the index.
 * ``body`` (optional): File name of the corresponding index definition that will be used as body in the create index API call.
-* ``auto-managed`` (optional, defaults to ``true``): Controls whether Rally or the user takes care of creating / destroying the index. If this setting is ``false``, Rally will neither create nor delete this index but just assume its presence.
 * ``types`` (optional): A list of type names in this index.
 
 Example::
@@ -666,7 +665,7 @@ Each challenge consists of the following properties:
 * ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
 * ``description`` (optional): A human readable description of the challenge.
 * ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need define ``"default": true`` on exactly one challenge.
-* ``index-settings`` (optional): Defines the index settings of the benchmark candidate when an index is created. Note that these settings are only applied if the index is auto-managed.
+* ``index-settings`` (optional): Defines the index settings of the benchmark candidate when an index is created.
 * ``schedule`` (mandatory): Defines the concrete execution order of operations. It is described in more detail below.
 
 .. note::
