@@ -25,6 +25,9 @@
         "enabled": true
       },
       "properties": {
+        "trial-id": {
+          "type": "keyword"
+        },
         "trial-timestamp": {
           "type": "date",
           "format": "basic_date_time_no_millis",
@@ -37,10 +40,10 @@
         "active": {
           "type": "boolean"
         },
-        "environment": {
+        "rally-version": {
           "type": "keyword"
         },
-        "user-tag": {
+        "environment": {
           "type": "keyword"
         },
         "track": {

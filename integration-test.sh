@@ -9,31 +9,47 @@ readonly CONFIGURATIONS=(integration-test es-integration-test)
 #
 #       java.lang.UnsupportedOperationException: Boot class path mechanism is not supported
 #
-readonly DISTRIBUTIONS=(2.4.5 5.5.2)
+readonly DISTRIBUTIONS=(2.4.6 5.6.7)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
-readonly ES_METRICS_STORE_VERSION="5.0.0"
+readonly ES_METRICS_STORE_VERSION="6.2.1"
+readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
+readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
+readonly MIN_CURL_VERSION=(7 12 3)
 
 ES_PID=-1
 
+function check_prerequisites {
+    local curl_major_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 1,1)
+    local curl_minor_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 2,2)
+    local curl_patch_release=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 3,3)
 
-function log() {
+    if [[ $curl_major_version < ${MIN_CURL_VERSION[0]} ]] || \
+       [[ $curl_major_version == ${MIN_CURL_VERSION[0]} && $curl_minor_version < ${MIN_CURL_VERSION[1]} ]] || \
+       [[ $curl_major_version == ${MIN_CURL_VERSION[0]} && $curl_minor_version == ${MIN_CURL_VERSION[1]} && $curl_patch_release < ${MIN_CURL_VERSION[2]} ]]
+    then
+        echo "Minimum curl version required is ${MIN_CURL_VERSION[0]}.${MIN_CURL_VERSION[1]}.${MIN_CURL_VERSION[2]} ; please upgrade your curl."
+        exit 1
+    fi
+}
+
+function log {
     local ts=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
     echo "[${ts}] [${1}] ${2}"
 }
 
-function info() {
+function info {
     log "INFO" "${1}"
 }
 
-function kill_rally_processes() {
+function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
     killall -9 esrally
     set -e
 }
 
-function kill_related_es_processes() {
+function kill_related_es_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
     # killall matching ES instances - we cannot use killall as we also want to ensure "rally" is "somewhere" in the command line.
@@ -45,39 +61,52 @@ function kill_related_es_processes() {
     set -e
 }
 
-
-function set_up() {
+function set_up {
     info "setting up"
     kill_rally_processes
     kill_related_es_processes
 
-    # configure for tests with an Elasticsearch metrics store
-    esrally configure --assume-defaults --configuration-name="es-integration-test"
-    # configure Elasticsearch instead of in-memory after the fact
-    local config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
-    # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
-    perl -i -pe 's/datastore\.type.*/datastore.type = elasticsearch/g' ${config_file_path}
-    perl -i -pe 's/datastore\.host.*/datastore.host = localhost/g'  ${config_file_path}
-    perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${config_file_path}
-    perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${config_file_path}
+    local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
+    local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
 
-    # if the build defines these variables we'll explicitly override the detection result
+    # if the build defines these variables we'll explicitly use them instead of auto-detection
     if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
-        info "Setting java.home to ${RUNTIME_JAVA_HOME}"
-        info "Setting java9.home to ${JAVA_HOME}"
-        perl -i -pe "s|java\.home.*|java.home = ${RUNTIME_JAVA_HOME}|g" ${config_file_path}
-        perl -i -pe "s|java9\.home.*|java9.home = ${JAVA_HOME}|g" ${config_file_path}
+        # configure for tests with an in-memory metrics store
+        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
+        # configure for tests with an Elasticsearch metrics store
+        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
+    else
+        # configure for tests with an in-memory metrics store
+        esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="integration-test"
+        # configure for tests with an Elasticsearch metrics store
+        esrally configure --use-gradle-wrapper --assume-defaults --configuration-name="es-integration-test"
+
     fi
+
+    # configure Elasticsearch instead of in-memory after the fact
+    # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
+    perl -i -pe 's/datastore\.type.*/datastore.type = elasticsearch/g' ${es_config_file_path}
+    perl -i -pe 's/datastore\.host.*/datastore.host = localhost/g'  ${es_config_file_path}
+    perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${es_config_file_path}
+    perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${es_config_file_path}
+
+    info "Final configuration for ${in_memory_config_file_path}:"
+    cat "${in_memory_config_file_path}"
+
+    info "Final configuration for ${es_config_file_path}:"
+    cat "${es_config_file_path}"
 
     # Download and Elasticsearch metrics store
     pushd .
     mkdir -p .rally_it/cache
     cd .rally_it/cache
-    if [ ! -f elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz ]; then
-        curl -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz
+    if [[ ! -f $ES_ARTIFACT ]]; then
+        # If curl fails immediately, executing all retries will take up to (2**retries)-1 seconds.
+        curl --retry 8 -O https://artifacts.elastic.co/downloads/elasticsearch/"${ES_ARTIFACT}" || { rm -f "${ES_ARTIFACT}"; exit 1; }
     fi
-    tar -xzf elasticsearch-"${ES_METRICS_STORE_VERSION}".tar.gz
-    cd elasticsearch-"${ES_METRICS_STORE_VERSION}"
+    # Delete and exit if archive is somehow corrupted, despite getting downloaded correctly.
+    tar -xzf "${ES_ARTIFACT}" || { rm -f "${ES_ARTIFACT}"; exit 1; }
+    cd "${ES_ARTIFACT_PATH}"
     bin/elasticsearch &
     # store PID so we can kill ES later
     ES_PID=$!
@@ -93,18 +122,19 @@ function set_up() {
     popd
 }
 
-function random_configuration() {
+function random_configuration {
     local num_configs=${#CONFIGURATIONS[*]}
     # we cannot simply return string values in a bash script
     eval "$1='${CONFIGURATIONS[$((RANDOM%num_configs))]}'"
 }
 
-function test_configure() {
+function test_configure {
     info "test configure()"
-    esrally configure --assume-defaults --configuration-name=integration-test
+    # just run to test the configuration procedure, don't use this configuration in other tests.
+    esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_list() {
+function test_list {
     local cfg
     random_configuration cfg
 
@@ -120,7 +150,7 @@ function test_list() {
     esrally list telemetry --configuration-name="${cfg}"
 }
 
-function test_sources() {
+function test_sources {
     local cfg
     random_configuration cfg
 
@@ -133,7 +163,7 @@ function test_sources() {
     esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car=verbose_iw --laps=2
 }
 
-function test_distributions() {
+function test_distributions {
     local cfg
 
     for dist in "${DISTRIBUTIONS[@]}"
@@ -148,7 +178,7 @@ function test_distributions() {
     done
 }
 
-function test_benchmark_only() {
+function test_benchmark_only {
     # we just use our metrics cluster for these benchmarks. It's not ideal but simpler.
     local cfg
     local dist
@@ -159,7 +189,7 @@ function test_benchmark_only() {
     esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
 }
 
-function run_test() {
+function run_test {
     test_configure
     test_list
     test_sources
@@ -167,7 +197,7 @@ function run_test() {
     test_benchmark_only
 }
 
-function tear_down() {
+function tear_down {
     info "tearing down"
     # just let tear down finish
     set +e
@@ -177,7 +207,7 @@ function tear_down() {
     fi
 
     rm -f ~/.rally/rally*integration-test.ini
-    rm -rf .rally_it/cache/elasticsearch-"${ES_METRICS_STORE_VERSION}"
+    rm -rf .rally_it/cache/"${ES_ARTIFACT_PATH}"
     set -e
     kill_rally_processes
     # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
@@ -188,6 +218,8 @@ function main {
     set_up
     run_test
 }
+
+check_prerequisites
 
 trap "tear_down" EXIT
 

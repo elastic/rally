@@ -4,7 +4,7 @@ Track Reference
 Definition
 ==========
 
-A track is a specification of one ore more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and the operations that are invoked. Its most important attributes are:
+A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and the operations that are invoked. Its most important attributes are:
 
 * One or more indices, each with one or more types
 * The queries to issue
@@ -308,9 +308,10 @@ bulk
 With the operation type ``bulk`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. It supports the following properties:
 
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
+* ``ingest-percentage`` (optional, defaults to 100): A number between (0, 100] that defines how much of the document corpus will be bulk-indexed.
 * ``corpora`` (optional): A list of document corpus names that should be targeted by this bulk-index operation. Only needed if the ``corpora`` section contains more than one document corpus and you don't want to index all of them with this operation.
 * ``indices`` (optional): A list of index names that defines which indices should be used by this bulk-index operation. Rally will then only select the documents files that have a matching ``target-index`` specified.
-* ``batch-size`` (optional): Defines how many documents Rally will read at once. This is an expert setting and only meant to avoid accidental bottlenecks for very small bulk sizes (e.g. if you want to benchmark with a bulk-size of 1, you should set batch-size higher).
+* ``batch-size`` (optional): Defines how many documents Rally will read at once. This is an expert setting and only meant to avoid accidental bottlenecks for very small bulk sizes (e.g. if you want to benchmark with a bulk-size of 1, you should set ``batch-size`` higher).
 * ``pipeline`` (optional): Defines the name of an (existing) ingest pipeline that should be used (only supported from Elasticsearch 5.0).
 * ``conflicts`` (optional): Type of index conflicts to simulate. If not specified, no conflicts will be simulated. Valid values are: 'sequential' (A document id is replaced with a document id with a sequentially increasing id), 'random' (A document id is replaced with a document id with a random other id).
 
@@ -462,7 +463,7 @@ If you want it to create all indices that have been declared in the ``indices`` 
 
 If you want it to create one specific index instead, you can specify the following properties:
 
-* ``index`` (mandatory): The name of the index that should be created.
+* ``index`` (mandatory): One or more names of the indices that should be created. If only one index should be created, you can use a string otherwise this needs to be a list of strings.
 * ``body`` (optional): The body for the create index API call.
 * ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
 
@@ -517,7 +518,7 @@ If you want it to delete all indices that have been declared in the ``indices`` 
 
 If you want it to delete one specific index (pattern) instead, you can specify the following properties:
 
-* ``index`` (mandatory): The name of the index that should be deleted.
+* ``index`` (mandatory): One or more names of the indices that should be deleted. If only one index should be deleted, you can use a string otherwise this needs to be a list of strings.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
 * ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
 
@@ -640,6 +641,18 @@ With the following snippet we will delete the `default`` index template::
     If ``delete-matching-indices`` is set to ``true``, indices with the provided ``index-pattern`` are deleted regardless whether the index template has previously existed.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+raw-request
+~~~~~~~~~~~
+
+With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`. The ``raw-request`` operation supports the following parameters:
+
+* ``method`` (optional, defaults to ``GET``): The HTTP request method to use
+* ``path`` (mandatory): Path for the API call (excluding host and port)
+* ``header`` (optional): A structure containing any request headers as key-value pairs.
+* ``body`` (optional): The document body.
+* ``request-params`` (optional): A structure containing HTTP request parameters.
+* ``ignore`` (optional): An array of HTTP response status codes to ignore (i.e. consider as successful).
 
 challenge
 .........

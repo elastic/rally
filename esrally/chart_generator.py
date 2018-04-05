@@ -2,11 +2,44 @@ import uuid
 import json
 
 from esrally import track, config, exceptions
+from esrally.utils import io, console
+
+color_scheme_rgba = [
+    "rgba(0,191,179,1)",
+    "rgba(0,169,224,1)",
+    "rgba(240,78,152,1)",
+    "rgba(255,205,0,1)",
+    "rgba(0,118,168,1)",
+    "rgba(147,201,14,1)",
+    "rgba(100,100,100,1)",
+]
+
+
+def index_label(combination_label, challenge, car, plugins, node_count):
+    if combination_label:
+        return combination_label
+
+    label = "%s-%s" % (challenge, car)
+    if plugins:
+        label += "-%s" % plugins.replace(":", "-").replace(",", "+")
+    if node_count > 1:
+        label += " (%d nodes)" % node_count
+    return label
+
+
+def format_title(environment, track_name, suffix=None):
+    if suffix:
+        return "%s-%s-%s" % (environment, track_name, suffix)
+    else:
+        return "%s-%s" % (environment, track_name)
 
 
 class BarCharts:
+    UI_STATE_JSON = json.dumps({})
+    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
+
     @staticmethod
-    def gc(title, environment, track, challenge, car, node_count):
+    def gc(title, environment, track, combination_name, challenge, car, node_count):
         vis_state = {
             "title": title,
             "type": "histogram",
@@ -151,7 +184,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tag",
+                        "field": "user-tags.env",
                         "size": 5,
                         "order": "desc",
                         "orderBy": "_term"
@@ -165,8 +198,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "environment:%s AND active:true AND track:%s AND challenge:%s AND car:%s AND node-count:%d" % (
-                        environment, track, challenge, car, node_count),
+                    "query": filter_string(environment, combination_name, track, challenge, car, node_count),
                     "analyze_wildcard": True
                 }
             },
@@ -179,7 +211,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -189,7 +221,7 @@ class BarCharts:
         }
 
     @staticmethod
-    def io(title, environment, track, challenge, car, node_count):
+    def io(title, environment, track, combination_name, challenge, car, node_count):
         vis_state = {
             "title": title,
             "type": "histogram",
@@ -334,7 +366,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tag",
+                        "field": "user-tags.env",
                         "size": 5,
                         "order": "desc",
                         "orderBy": "_term"
@@ -348,8 +380,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "environment:%s AND active:true AND track:%s AND challenge:%s AND car:%s AND node-count:%d" % (
-                        environment, track, challenge, car, node_count),
+                    "query": filter_string(environment, combination_name, track, challenge, car, node_count),
                     "analyze_wildcard": True
                 }
             },
@@ -362,7 +393,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -372,10 +403,10 @@ class BarCharts:
         }
 
     @staticmethod
-    def query(environment, track, challenge, car, node_count, q):
-        title = "%s-%s-%s-p99-latency" % (environment, track, q)
+    def query(environment, track, combination_name, challenge, car, node_count, q):
+        metric = "latency"
+        title = format_title(environment, track, "%s-p99-%s" % (q, metric))
         label = "Query Latency [ms]"
-        metric = "service_time"
 
         vis_state = {
             "title": title,
@@ -488,7 +519,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tag",
+                        "field": "user-tags.env",
                         "size": 10,
                         "order": "desc",
                         "orderBy": "_term"
@@ -502,8 +533,8 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "environment:%s AND active:true AND track:%s AND name:%s AND operation:%s AND challenge:%s AND car:%s AND "
-                             "node-count:%d" % (environment, track, metric, q, challenge, car, node_count),
+                    "query": "name:\"%s\" AND task:\"%s\" AND %s" %
+                             (metric, q, filter_string(environment, combination_name, track, challenge, car, node_count)),
                     "analyze_wildcard": True
                 }
             },
@@ -516,7 +547,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -529,14 +560,15 @@ class BarCharts:
     def index(environment, track, cci, title):
         filters = []
         for idx, item in enumerate(cci):
-            challenge, car, node_count, index_op = item
-            label = "%s-%s" % (challenge, car) if node_count == 1 else "%s-%s (%d nodes)" % (challenge, car, node_count)
+            combination_name, combination_label, challenge, car, plugins, node_count, index_task = item
+            label = index_label(combination_label, challenge, car, plugins, node_count)
             filters.append({
                 "input": {
                     "query": {
                         "query_string": {
                             "analyze_wildcard": True,
-                            "query": "task:%s AND challenge:%s AND car:%s AND node-count:%d" % (index_op, challenge, car, node_count)
+                            "query": "task:\"%s\" AND %s"
+                                     % (index_task, filter_string(environment, combination_name, track, challenge, car, node_count))
                         }
                     }
                 },
@@ -574,7 +606,7 @@ class BarCharts:
                     "enabled": True,
                     "id": "3",
                     "params": {
-                        "field": "user-tag",
+                        "field": "user-tags.env",
                         "order": "desc",
                         "orderBy": "_term",
                         "size": 10
@@ -679,7 +711,7 @@ class BarCharts:
             "query": {
                 "query_string": {
                     "analyze_wildcard": True,
-                    "query": "environment:%s AND active:true AND track:%s AND name:throughput" % (environment, track)
+                    "query": "environment:\"%s\" AND active:true AND name:\"throughput\"" % environment
                 }
             },
             "filter": []
@@ -691,7 +723,7 @@ class BarCharts:
             "_source": {
                 "title": title,
                 "visState": json.dumps(vis_state),
-                "uiStateJSON": "{}",
+                "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
@@ -703,7 +735,7 @@ class BarCharts:
 
 class TimeSeriesCharts:
     @staticmethod
-    def gc(title, environment, track, challenge, car, node_count):
+    def gc(title, environment, track, combination_name, challenge, car, node_count):
         vis_state = {
             "title": title,
             "type": "metrics",
@@ -755,11 +787,25 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": "environment:\"%s\" AND track:\"%s\" AND active:true AND challenge:\"%s\" AND car:\"%s\" AND node-count:%d" %
-                          (environment, track, challenge, car, node_count),
-                "annotations": []
+                "filter": filter_string(environment, combination_name, track, challenge, car, node_count),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:gc) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -781,7 +827,7 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
-    def io(title, environment, track, challenge, car, node_count):
+    def io(title, environment, track, combination_name, challenge, car, node_count):
         vis_state = {
             "title": title,
             "type": "metrics",
@@ -811,7 +857,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:%s AND track:%s" % (environment, track),
+                        "filter": "",
                         "split_filters": [
                             {
                                 "filter": "name:index_size",
@@ -833,11 +879,25 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": "environment:\"%s\" AND track:\"%s\" AND active:true AND challenge:\"%s\" AND car:\"%s\" AND node-count:%d" %
-                          (environment, track, challenge, car, node_count),
-                "annotations": []
+                "filter": filter_string(environment, combination_name, track, challenge, car, node_count),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:io) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -859,9 +919,9 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
-    def query(environment, track, challenge, car, node_count, q):
-        title = "%s-%s-%s-latency" % (environment, track, q)
+    def query(environment, track, combination_name, challenge, car, node_count, q):
         metric = "latency"
+        title = format_title(environment, track, "%s-%s" % (q, metric))
 
         vis_state = {
             "title": title,
@@ -872,8 +932,9 @@ class TimeSeriesCharts:
                 "series": [
                     {
                         "id": str(uuid.uuid4()),
-                        "color": "rgba(0,191, 179, 1)",
+                        "color": color_scheme_rgba[0],
                         "split_mode": "everything",
+                        "label": "50th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -894,8 +955,9 @@ class TimeSeriesCharts:
                     },
                     {
                         "id": str(uuid.uuid4()),
-                        "color": "rgba(254, 209, 10, 1)",
+                        "color": color_scheme_rgba[1],
                         "split_mode": "everything",
+                        "label": "90th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -916,8 +978,9 @@ class TimeSeriesCharts:
                     },
                     {
                         "id": str(uuid.uuid4()),
-                        "color": "rgba(0, 120,160, 1)",
+                        "color": color_scheme_rgba[2],
                         "split_mode": "everything",
+                        "label": "99th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -938,8 +1001,9 @@ class TimeSeriesCharts:
                     },
                     {
                         "id": str(uuid.uuid4()),
-                        "color": "rgba(223, 73, 152, 1)",
+                        "color": color_scheme_rgba[3],
                         "split_mode": "everything",
+                        "label": "100th percentile",
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
@@ -965,15 +1029,29 @@ class TimeSeriesCharts:
                 "axis_position": "left",
                 "axis_formatter": "number",
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "background_color_rules": [
                     {
                         "id": str(uuid.uuid4())
                     }
                 ],
-                "drop_last_bucket": 0,
-                "filter": "track:\"%s\" AND challenge:\"%s\" AND car:\"%s\" AND environment:\"%s\" AND task:\"%s\" AND name:\"%s\" "
-                          "AND node-count:%d AND active:true" %
-                          (track, challenge, car, environment, q, metric, node_count)
+                "filter": "task:\"%s\" AND name:\"%s\" AND %s" %
+                          (q, metric, filter_string(environment, combination_name, track, challenge, car, node_count)),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:query) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -997,16 +1075,15 @@ class TimeSeriesCharts:
     @staticmethod
     def index(environment, track, cci, title):
         filters = []
-        colors = ["rgba(0,191,179,1)", "rgba(254,209,10,1)", "rgba(0,120,160,1)", "rgba(223,73,152,1)", "rgba(147,201,14,1)"]
         for idx, item in enumerate(cci):
-            challenge, car, node_count, index_task = item
-            label = "%s-%s" % (challenge, car) if node_count == 1 else "%s-%s (%d nodes)" % (challenge, car, node_count)
+            combination_name, combination_label, challenge, car, plugins, node_count, index_task = item
+            label = index_label(combination_label, challenge, car, plugins, node_count)
             filters.append(
                 {
-                    "filter": "challenge:\"%s\" AND car:\"%s\" AND task:\"%s\" AND node-count:%d" %
-                              (challenge, car, index_task, node_count),
+                    "filter": "task:\"%s\" AND %s"
+                              % (index_task, filter_string(environment, combination_name, track, challenge, car, node_count)),
                     "label": label,
-                    "color": colors[idx % len(colors)],
+                    "color": color_scheme_rgba[idx % len(color_scheme_rgba)],
                     "id": str(uuid.uuid4())
                 }
             )
@@ -1040,7 +1117,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:%s AND track:%s" % (environment, track),
+                        "filter": "environment:\"%s\" AND track:\"%s\"" % (environment, track),
                         "split_filters": filters,
                         "label": "Indexing Throughput",
                         "value_template": "{{value}} docs/s",
@@ -1049,10 +1126,25 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": "environment:\"%s\" AND track:\"%s\" AND name:throughput AND active:true" % (environment, track),
-                "annotations": []
+                "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true" % (environment, track),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:indexing) "
+                                        "AND environment:\"%s\"" % (track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ]
             },
             "aggs": [],
             "listeners": {}
@@ -1080,77 +1172,177 @@ def load_track(cfg, name=None):
     return track.load_track(cfg)
 
 
-def generate_index_ops(chart_type, race_configs, environment):
+def generate_index_ops(chart_type, race_config, environment):
     def tracks_for_index():
-        all_tracks = []
-        for track_structure in race_configs:
-            t = track_structure["track"]
-            cci = []
-            for combination in track_structure["combinations"]:
-                challenge = combination["challenge"]
-                car = combination["car"]
-                node_count = int(combination.get("node-count", 1))
-                for task in t.find_challenge_or_default(challenge).schedule:
-                    for sub_task in task:
-                        # TODO: Remove "index" after some grace period
-                        if sub_task.operation.type in [track.OperationType.Bulk.name, track.OperationType.Index.name]:
-                            cci.append((challenge, car, node_count, sub_task.name))
-            all_tracks.append((t.name, cci))
-        return all_tracks
-
-    structures = []
-    for t, cci in tracks_for_index():
-        title = "%s-%s-indexing-throughput" % (environment, t)
-        structures.append(chart_type.index(environment, t, cci, title))
-
-    return structures
-
-
-def default_tracks(race_configs):
-    all_tracks = []
-    for track_structure in race_configs:
-        for combination in track_structure["combinations"]:
-            t = track_structure["track"]
+        t = race_config["track"]
+        cci = []
+        for combination in race_config["combinations"]:
+            combination_name = combination.get("name")
+            combination_label = combination.get("label")
             challenge = combination["challenge"]
             car = combination["car"]
             node_count = int(combination.get("node-count", 1))
-            ops = []
+            plugins = combination.get("plugins")
             for task in t.find_challenge_or_default(challenge).schedule:
+                for sub_task in task:
+                    if sub_task.operation.type == track.OperationType.Bulk.name:
+                        cci.append((combination_name, combination_label, challenge, car, plugins, node_count, sub_task.name))
+        return t.name, cci
+
+    t, cci = tracks_for_index()
+    title = format_title(environment, t, "indexing-throughput")
+    return [chart_type.index(environment, t, cci, title)]
+
+
+def default_tracks(race_config):
+    defaults = []
+    for combination in race_config["combinations"]:
+        t = race_config["track"]
+        combination_name = combination.get("name")
+        challenge = combination["challenge"]
+        car = combination["car"]
+        node_count = int(combination.get("node-count", 1))
+        # only generate some charts for the default combination (we might want to make this configurable)
+        default_combination = combination.get("default-combination", False)
+        ops = []
+        if default_combination:
+            for task in t.find_challenge(challenge).schedule:
                 for sub_task in task:
                     # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
                     if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
                         ops.append(sub_task.name)
-            all_tracks.append((t.name, challenge, car, node_count, ops))
+            defaults.append((t.name, combination_name, challenge, car, node_count, ops))
 
-    return all_tracks
+    return defaults
 
 
-def generate_queries(chart_type, race_configs, environment):
+def filter_string(environment, combination_name, t, challenge, car, node_count):
+    if combination_name:
+        return "environment:\"%s\" AND active:true AND user-tags.name:\"%s\"" % (environment, combination_name)
+    else:
+        return "environment:\"%s\" AND active:true AND track:\"%s\" AND challenge:\"%s\" AND car:\"%s\" AND node-count:%d" \
+               % (environment, t, challenge, car, node_count)
+
+
+def generate_queries(chart_type, race_config, environment):
     # output JSON structures
     structures = []
-    for track, challenge, car, node_count, queries in default_tracks(race_configs):
+    for track, combination_name, challenge, car, node_count, queries in default_tracks(race_config):
         for q in queries:
-            structures.append(chart_type.query(environment, track, challenge, car, node_count, q))
+            structures.append(chart_type.query(environment, track, combination_name, challenge, car, node_count, q))
     return structures
 
 
-def generate_io(chart_type, race_configs, environment):
+def generate_io(chart_type, race_config, environment):
     # output JSON structures
     structures = []
-    for track, challenge, car, node_count, queries in default_tracks(race_configs):
-        title = "%s-%s-io" % (environment, track)
-        structures.append(chart_type.io(title, environment, track, challenge, car, node_count))
+    for track, combination_name, challenge, car, node_count, queries in default_tracks(race_config):
+        title = format_title(environment, track, "io")
+        structures.append(chart_type.io(title, environment, track, combination_name, challenge, car, node_count))
 
     return structures
 
 
-def generate_gc(chart_type, race_configs, environment):
+def generate_gc(chart_type, race_config, environment):
     structures = []
-    for track, challenge, car, node_count, queries in default_tracks(race_configs):
-        title = "%s-%s-gc" % (environment, track)
-        structures.append(chart_type.gc(title, environment, track, challenge, car, node_count))
+    for track, combination_name, challenge, car, node_count, queries in default_tracks(race_config):
+        title = format_title(environment, track, "gc")
+        structures.append(chart_type.gc(title, environment, track, combination_name, challenge, car, node_count))
 
     return structures
+
+
+def generate_dashboard(environment, track, charts):
+    panels = []
+
+    width = 6
+    height = 6
+
+    row = 0
+    col = 0
+
+    for idx, chart in enumerate(charts):
+        panel = {
+            "id": chart["_id"],
+            "panelIndex": idx,
+            "row": (row * height) + 1,
+            "col": (col * width) + 1,
+            "size_x": width,
+            "size_y": height,
+            "type": "visualization"
+        }
+        panels.append(panel)
+        # two rows per panel
+        col = (col + 1) % 2
+        if col == 0:
+            row += 1
+
+    return {
+        "_id": str(uuid.uuid4()),
+        "_type": "dashboard",
+        "_source": {
+            "title": format_title(environment, track.name),
+            "hits": 0,
+            "description": "",
+            "panelsJSON": json.dumps(panels),
+            "optionsJSON": "{\"darkTheme\":false}",
+            "uiStateJSON": "{}",
+            "version": 1,
+            "timeRestore": False,
+            "kibanaSavedObjectMeta": {
+                "searchSourceJSON": json.dumps(
+                    {
+                        "filter": [
+                            {
+                                "query": {
+                                    "query_string": {
+                                        "analyze_wildcard": True,
+                                        "query": "*"
+                                    }
+                                }
+                            }
+                        ],
+                        "highlightAll": True,
+                        "version": True
+                    }
+                )
+            }
+        }
+    }
+
+
+def load_race_configs(cfg):
+    chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
+    if chart_spec_path:
+        import json
+        race_configs = []
+        with open(io.normalize_path(chart_spec_path), mode="rt", encoding="utf-8") as f:
+            for item in json.load(f):
+                # load track based on its name and replace it
+                item["track"] = load_track(cfg, item["track"])
+                race_configs.append(item)
+    else:
+        t = load_track(cfg)
+
+        car_names = cfg.opts("mechanic", "car.names")
+        if len(car_names) > 1:
+            raise exceptions.SystemSetupError("Chart generator supports only a single car but got %s" % car_names)
+        else:
+            car_name = car_names[0]
+
+        race_configs = [
+            {
+                "track": t,
+                "combinations": [
+                    {
+                        "challenge": cfg.opts("track", "challenge.name"),
+                        "car": car_name,
+                        "node-count": cfg.opts("generator", "node.count")
+                    }
+                ]
+            }
+        ]
+    return race_configs
 
 
 def generate(cfg):
@@ -1159,31 +1351,27 @@ def generate(cfg):
     else:
         chart_type = BarCharts
 
-    t = load_track(cfg)
-
-    car_names = cfg.opts("mechanic", "car.names")
-    if len(car_names) > 1:
-        raise exceptions.SystemSetupError("Chart generator supports only a single car but got %s" % car_names)
-    else:
-        car_name = car_names[0]
-
-    race_configs = [
-        {
-            "track": t,
-            "combinations": [
-                {
-                    "challenge": cfg.opts("track", "challenge.name"),
-                    "car": car_name,
-                    "node-count": cfg.opts("generator", "node.count")
-                }
-            ]
-        }
-    ]
+    console.info("Loading track data...", flush=True)
+    race_configs = load_race_configs(cfg)
     env = cfg.opts("system", "env.name")
 
-    structures = generate_index_ops(chart_type, race_configs, env) + \
-                 generate_queries(chart_type, race_configs, env) + \
-                 generate_io(chart_type, race_configs, env) + \
-                 generate_gc(chart_type, race_configs, env)
+    structures = []
+    console.info("Generating charts...", flush=True)
+    for race_config in race_configs:
 
-    print(json.dumps(structures, indent=4))
+        charts = generate_index_ops(chart_type, race_config, env) + \
+                 generate_io(chart_type, race_config, env) + \
+                 generate_gc(chart_type, race_config, env) + \
+                 generate_queries(chart_type, race_config, env)
+
+        dashboard = generate_dashboard(env, race_config["track"], charts)
+
+        structures.extend(charts)
+        structures.append(dashboard)
+
+    output_path = cfg.opts("generator", "output.path")
+    if output_path:
+        with open(io.normalize_path(output_path), mode="wt", encoding="utf-8") as f:
+            print(json.dumps(structures, indent=4), file=f)
+    else:
+        print(json.dumps(structures, indent=4))

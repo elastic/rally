@@ -82,7 +82,7 @@ Let's open ``vanilla/config/jvm.options`` to see how this variable is used (we'l
     -Xms{{heap_size}}
     -Xmx{{heap_size}}
 
-So Rally reads all variables and the template files and replaces the variables in the final configuration. Note that Rally does not know anything about ``jvm.options`` or ``elasticsearch.yml``. For Rally, these are just plain text templates that need to be copied to the Elasticsearch directory before running a benchmark. Under the hood, Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language. This allows you to use Jinja2 expressions in your carr configuration files.
+So Rally reads all variables and the template files and replaces the variables in the final configuration. Note that Rally does not know anything about ``jvm.options`` or ``elasticsearch.yml``. For Rally, these are just plain text templates that need to be copied to the Elasticsearch directory before running a benchmark. Under the hood, Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language. This allows you to use Jinja2 expressions in your car configuration files.
 
 If you open ``vanilla/config/elasticsearch.yml`` you will see a few variables that are not defined in the ``.ini`` file:
 
@@ -93,6 +93,11 @@ If you open ``vanilla/config/elasticsearch.yml`` you will see a few variables th
 These values are derived by Rally internally based on command line flags and you cannot override them in your car definition. You also cannot use these names as names for variables because Rally would simply override them.
 
 If you specify multiple configurations, e.g. ``--car="4gheap,ea"``, Rally will apply them in order. It will first read all variables in ``4gheap.ini``, then in ``ea.ini``. Afterwards, it will copy all configuration files from the corresponding config base of ``4gheap`` and *append* all configuration files from ``ea``. This also shows when to define a separate "car" and when to define a "mixin": If you need to amend configuration files, use a mixin, if you need to have a specific configuration, define a car.
+
+Simple customizations
+^^^^^^^^^^^^^^^^^^^^^
+
+For simple customizations you can create the directory hierarchy as outlined above and use the ``--team-path`` command line parameter to refer to this configuration. For more complex use cases and distributed multi-node benchmarks, we recommend to use custom team repositories.
 
 Custom Team Repositories
 ^^^^^^^^^^^^^^^^^^^^^^^^

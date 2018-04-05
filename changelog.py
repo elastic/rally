@@ -17,10 +17,10 @@ def find_milestone(repo, title):
     return None
 
 
-def print_category(heading, issues_list):
-    if issues_list:
+def print_category(heading, issue_list):
+    if issue_list:
         print("#### %s\n" % heading)
-        for issue in issues_list:
+        for issue in issue_list:
             print_issue(issue)
         print("")
 
@@ -37,33 +37,31 @@ def labelled(issue, label_name):
     return False
 
 
-def is_issue(issue):
+def is_pr(issue):
     """
 
     :param issue: an issue. May also be a PR.
-    :return: True iff the issue is a "real" issue.
+    :return: True iff the issue is actually a PR.
     """
-    # return issue.html_url and "issue" in issue.html_url
-    # treat everything as issue
-    return True
+    return issue.html_url and "pull" in issue.html_url
 
 
-def issue_list(i):
-    return [item for item in i if is_issue(item)]
+def pr_list(i):
+    return [item for item in i if is_pr(item)]
 
 
 def list_subtract(a, b):
     return [item for item in a if item not in b]
 
 
-def issues(gh, milestone, with_labels, without_labels=None):
-    issues_labelled = issue_list(gh.issues_on(ORG, REPO, milestone=milestone.number, state="closed", labels=with_labels))
-    filtered_issues = issues_labelled
+def prs(gh, milestone, with_labels, without_labels=None):
+    prs_labelled = pr_list(gh.issues_on(ORG, REPO, milestone=milestone.number, state="closed", labels=with_labels))
+    filtered_prs = prs_labelled
     if without_labels:
         for label in without_labels:
-            issues_not_labelled = issue_list(gh.issues_on(ORG, REPO, milestone=milestone.number, state="closed", labels=label))
-            filtered_issues = list_subtract(filtered_issues, issues_not_labelled)
-    return filtered_issues
+            prs_not_labelled = pr_list(gh.issues_on(ORG, REPO, milestone=milestone.number, state="closed", labels=label))
+            filtered_prs = list_subtract(filtered_prs, prs_not_labelled)
+    return filtered_prs
 
 
 def main():
@@ -88,10 +86,10 @@ def main():
 
     print("### %s\n" % milestone_name)
 
-    print_category("Highlights", issues(gh, milestone, with_labels="highlight"))
-    print_category("Enhancements", issues(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight"]))
-    print_category("Bug Fixes", issues(gh, milestone, with_labels="bug", without_labels=[":Docs", "highlight"]))
-    print_category("Doc Changes", issues(gh, milestone, with_labels=":Docs", without_labels=["highlight"]))
+    print_category("Highlights", prs(gh, milestone, with_labels="highlight"))
+    print_category("Enhancements", prs(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight"]))
+    print_category("Bug Fixes", prs(gh, milestone, with_labels="bug", without_labels=[":Docs", "highlight"]))
+    print_category("Doc Changes", prs(gh, milestone, with_labels=":Docs", without_labels=["highlight"]))
 
 
 if __name__ == '__main__':

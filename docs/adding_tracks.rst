@@ -4,7 +4,7 @@ Define Custom Workloads: Tracks
 Definition
 ----------
 
-A track is the specification of one ore more benchmarking scenarios with a specific document corpus.
+A track is the specification of one or more benchmarking scenarios with a specific document corpus.
 
 .. note::
     Please see the :doc:`track reference </track>` for more information on the structure of a track.
@@ -728,6 +728,11 @@ Let's walk through this code step by step:
     * ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self`` but in certain cases you need to do something more sophisticated. If each clients needs to act differently then you can provide different parameter source instances here.
     * ``size(self)``: This method is needed to help Rally provide a proper progress indication to users if you use a warmup time period. For bulk indexing, this would return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
     * ``params(self)``: This method needs to return a dictionary with all parameters that the corresponding "runner" expects. For the standard case, Rally provides most of these parameters as a convenience, but here you need to define all of them yourself. This method will be invoked once for every iteration during the race. We can see that we randomly select a profession from a list which will be then be executed by the corresponding runner.
+
+For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it for its progress indication. For the implementation, please notes:
+
+* Rally will not check ``percent_completed``, if it can derive progress in any other way.
+* The value of ``percent_completed`` is purely informational and has no influence whatsoever on when Rally considers an operation to be completed.
 
 .. note::
 

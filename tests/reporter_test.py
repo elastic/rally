@@ -10,6 +10,7 @@ class StatsCalculatorTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now())
+        cfg.add(config.Scope.application, "system", "trial.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
         cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
         cfg.add(config.Scope.application, "race", "laps", 1)
@@ -58,9 +59,9 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(6144, stats.index_size)
 
 
-def select(l, name, operation=None):
+def select(l, name, operation=None, node=None):
     for item in l:
-        if item["name"] == name and item.get("operation") == operation:
+        if item["name"] == name and item.get("operation") == operation and item.get("node") == node:
             return item
     return None
 
@@ -89,6 +90,16 @@ class StatsTests(TestCase):
                     "error_rate": 0.0
                 }
             ],
+            "node_metrics": [
+                {
+                    "node": "rally-node-0",
+                    "startup_time": 3.4
+                },
+                {
+                    "node": "rally-node-1",
+                    "startup_time": 4.2
+                }
+            ],
             "young_gc_time": 68,
             "old_gc_time": 0
         }
@@ -105,7 +116,7 @@ class StatsTests(TestCase):
                 "max": 452,
                 "unit": "docs/s"
             }
-        }, select(metric_list, "throughput", "index"))
+        }, select(metric_list, "throughput", operation="index"))
 
         self.assertEqual({
             "name": "service_time",
@@ -115,7 +126,7 @@ class StatsTests(TestCase):
                 "50": 341,
                 "100": 376
             }
-        }, select(metric_list, "service_time", "index"))
+        }, select(metric_list, "service_time", operation="index"))
 
         self.assertEqual({
             "name": "latency",
@@ -125,7 +136,7 @@ class StatsTests(TestCase):
                 "50": 340,
                 "100": 376
             }
-        }, select(metric_list, "latency", "index"))
+        }, select(metric_list, "latency", operation="index"))
 
         self.assertEqual({
             "name": "error_rate",
@@ -134,7 +145,23 @@ class StatsTests(TestCase):
             "value": {
                 "single": 0.0
             }
-        }, select(metric_list, "error_rate", "index"))
+        }, select(metric_list, "error_rate", operation="index"))
+
+        self.assertEqual({
+            "node": "rally-node-0",
+            "name": "startup_time",
+            "value": {
+                "single": 3.4
+            }
+        }, select(metric_list, "startup_time", node="rally-node-0"))
+
+        self.assertEqual({
+            "node": "rally-node-1",
+            "name": "startup_time",
+            "value": {
+                "single": 4.2
+            }
+        }, select(metric_list, "startup_time", node="rally-node-1"))
 
         self.assertEqual({
             "name": "young_gc_time",

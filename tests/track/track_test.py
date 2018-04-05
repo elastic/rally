@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from esrally.track import track
+from esrally import exceptions
 
 
 class TrackTests(TestCase):
@@ -44,10 +45,12 @@ class TrackTests(TestCase):
         default_challenge = track.Challenge("default", description="default challenge", default=True)
         another_challenge = track.Challenge("other", description="non-default challenge", default=False)
 
-        self.assertIsNone(track.Track(name="unittest",
-                                      description="unittest track",
-                                      challenges=[another_challenge, default_challenge])
-                          .find_challenge_or_default("unknown-name"))
+        with self.assertRaises(exceptions.InvalidName) as ctx:
+            track.Track(name="unittest",
+                        description="unittest track",
+                        challenges=[another_challenge, default_challenge]).find_challenge_or_default("unknown-name")
+
+        self.assertEqual("Unknown challenge [unknown-name] for track [unittest]", ctx.exception.args[0])
 
 
 class IndexTests(TestCase):

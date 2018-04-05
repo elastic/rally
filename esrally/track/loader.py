@@ -625,11 +625,11 @@ def post_process_for_test_mode(t):
             # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
             for leaf_task in task:
                 # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
-                if leaf_task.warmup_iterations > leaf_task.clients:
+                if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                     count = leaf_task.clients
                     logger.info("Resetting warmup iterations to %d for [%s]" % (count, str(leaf_task)))
                     leaf_task.warmup_iterations = count
-                if leaf_task.iterations > leaf_task.clients:
+                if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                     count = leaf_task.clients
                     logger.info("Resetting measurement iterations to %d for [%s]" % (count, str(leaf_task)))
                     leaf_task.iterations = count
@@ -651,7 +651,8 @@ class TrackFileReader:
 
     def __init__(self, cfg):
         track_schema_file = "%s/resources/track-schema.json" % (cfg.opts("node", "rally.root"))
-        self.track_schema = json.loads(open(track_schema_file).read())
+        with open(track_schema_file, mode="rt", encoding="utf-8") as f:
+            self.track_schema = json.loads(f.read())
         override_auto_manage_indices = cfg.opts("track", "auto_manage_indices")
         self.track_params = cfg.opts("track", "params")
         self.read_track = TrackSpecificationReader(override_auto_manage_indices)
@@ -676,7 +677,20 @@ class TrackFileReader:
             raise exceptions.SystemSetupError("Track %s does not exist" % track_name)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
             logger.exception("Could not load [%s]." % track_spec_file)
-            raise TrackSyntaxError("Could not load '%s'" % track_spec_file, e)
+            # TODO: Check whether we can improve this.
+            # Jinja classes cause serialization problems:
+            #
+            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/TCPTransport.py", line 1431, in _addedDataToIncoming
+            # rdata, extra = inc.data
+            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/TCPTransport.py", line 185, in data
+            # def data(self): return self._rData.completed()
+            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/streamBuffer.py", line 80, in completed
+            # return self._deserialize(self._buf), self._extra
+            # TypeError: __init__() missing 1 required positional argument: 'lineno'
+            # (rdata="", extra="")
+            #
+            # => Convert to string early on:
+            raise TrackSyntaxError("Could not load '%s'" % track_spec_file, str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:
@@ -743,9 +757,10 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, override_auto_manage_indices=None, source=io.FileSource):
+    def __init__(self, override_auto_manage_indices=None, track_params=None, source=io.FileSource):
         self.name = None
         self.override_auto_manage_indices = override_auto_manage_indices
+        self.track_params = track_params if track_params else {}
         self.source = source
         self.index_op_type_warning_issued = False
 
@@ -756,15 +771,13 @@ class TrackSpecificationReader:
         meta_data = self._r(track_specification, "meta", mandatory=False)
         indices = [self._create_index(idx, mapping_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
-        templates = [self._create_template(tpl, mapping_dir)
+        templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
         # TODO: Remove this in Rally 0.10.0
         if corpora:
             logger.info("Track [%s] defines a 'corpora' block. Ignoring any legacy corpora definitions on document types." % self.name)
         else:
-            logger.warning("Track [%s] does not define a 'corpora' block. Creating corpora definitions based on document types (will "
-                           "be removed with the next minor release)." % self.name)
             corpora = self._create_legacy_corpora(track_specification)
             # Check whether we have legacy documents; otherwise there is no need for a warning...
             if corpora:
@@ -802,7 +815,7 @@ class TrackSpecificationReader:
         body_file = self._r(index_spec, "body", mandatory=False)
         if body_file:
             with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
-                body = json.load(f)
+                body = self._load_template(f.read(), index_name)
         else:
             body = None
 
@@ -818,14 +831,25 @@ class TrackSpecificationReader:
 
         return track.Index(name=index_name, body=body, auto_managed=auto_managed, types=types)
 
-    def _create_template(self, tpl_spec, mapping_dir):
+    def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         index_pattern = self._r(tpl_spec, "index-pattern")
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
         template_file = os.path.join(mapping_dir, self._r(tpl_spec, "template"))
         with self.source(template_file, "rt") as f:
-            template_content = json.load(f)
+            template_content = self._load_template(f.read(), name)
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
+
+    def _load_template(self, contents, description):
+        logger.info("Loading template [%s]." % description)
+        try:
+            rendered = render_template(loader=jinja2.DictLoader({"default": contents}),
+                                       template_name="default",
+                                       template_vars=self.track_params)
+            return json.loads(rendered)
+        except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
+            logger.exception("Could not load file template for %s." % description)
+            raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
     def _create_corpora(self, corpora_specs, indices):
         document_corpora = []
@@ -903,33 +927,38 @@ class TrackSpecificationReader:
         for idx in self._r(track_specification, "indices", mandatory=False, default_value=[]):
             index_name = self._r(idx, "name")
             for type_spec in self._r(idx, "types", mandatory=False, default_value=[]):
-                type_name = self._r(type_spec, "name")
-                docs = self._r(type_spec, "documents", mandatory=False)
-                if docs:
-                    if io.is_archive(docs):
-                        document_archive = docs
-                        document_file = io.splitext(docs)[0]
-                    else:
-                        document_archive = None
-                        document_file = docs
-                    number_of_documents = self._r(type_spec, "document-count")
-                    compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
-                    uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
+                # only do this if this is a legacy type definition - otherwise this is a new type definition and we don't define
+                # any corpora for this track.
+                if isinstance(type_spec, dict):
+                    type_name = self._r(type_spec, "name")
+                    docs = self._r(type_spec, "documents", mandatory=False)
+                    if docs:
+                        if io.is_archive(docs):
+                            document_archive = docs
+                            document_file = io.splitext(docs)[0]
+                        else:
+                            document_archive = None
+                            document_file = docs
+                        number_of_documents = self._r(type_spec, "document-count")
+                        compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
+                        uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
 
-                    docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                           document_file=document_file,
-                                           document_archive=document_archive,
-                                           base_url=base_url,
-                                           includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data",
-                                                                                 mandatory=False,
-                                                                                 default_value=False),
-                                           number_of_documents=number_of_documents,
-                                           compressed_size_in_bytes=compressed_bytes,
-                                           uncompressed_size_in_bytes=uncompressed_bytes,
-                                           target_index=index_name, target_type=type_name)
-                    legacy_corpus.documents.append(docs)
+                        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                               document_file=document_file,
+                                               document_archive=document_archive,
+                                               base_url=base_url,
+                                               includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data",
+                                                                                     mandatory=False,
+                                                                                     default_value=False),
+                                               number_of_documents=number_of_documents,
+                                               compressed_size_in_bytes=compressed_bytes,
+                                               uncompressed_size_in_bytes=uncompressed_bytes,
+                                               target_index=index_name, target_type=type_name)
+                        legacy_corpus.documents.append(docs)
 
         if legacy_corpus.documents:
+            logger.warning("Track [%s] does not define a 'corpora' block. Creating corpora definitions based on document types (will "
+                           "be removed with the next minor release)." % self.name)
             return [legacy_corpus]
         else:
             return []
@@ -1029,8 +1058,8 @@ class TrackSpecificationReader:
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
         # use same default values as #parseTask() in case the 'parallel' element did not specify anything
-        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False, default_value=0)
-        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False, default_value=1)
+        default_warmup_iterations = self._r(ops_spec, "warmup-iterations", error_ctx="parallel", mandatory=False)
+        default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False)
         default_warmup_time_period = self._r(ops_spec, "warmup-time-period", error_ctx="parallel", mandatory=False)
         default_time_period = self._r(ops_spec, "time-period", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
@@ -1054,7 +1083,7 @@ class TrackSpecificationReader:
                             "this name exists." % (challenge_name, completed_by))
         return track.Parallel(tasks, clients)
 
-    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=0, default_iterations=1,
+    def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=None, default_iterations=None,
                    default_warmup_time_period=None, default_time_period=None, completed_by_name=None):
 
         op_spec = task_spec["operation"]
@@ -1081,10 +1110,10 @@ class TrackSpecificationReader:
                           schedule=schedule,
                           # this is to provide scheduler-specific parameters for custom schedulers.
                           params=task_spec)
-        if task.warmup_iterations != default_warmup_iterations and task.time_period is not None:
+        if task.warmup_iterations is not None and task.time_period is not None:
             self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
                         "mix time periods and iterations." % (op.name, challenge_name, task.warmup_iterations, task.time_period))
-        elif task.warmup_time_period is not None and task.iterations != default_iterations:
+        elif task.warmup_time_period is not None and task.iterations is not None:
             self._error("Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
                         "mix time periods and iterations." % (op.name, challenge_name, task.warmup_time_period, task.iterations))
 
@@ -1121,13 +1150,13 @@ class TrackSpecificationReader:
             params = op_spec
 
         try:
-            # TODO #370: Remove this warning.
+            # TODO #435: Remove this warning.
             # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
             if op_type_name == "index" and \
                     self.name not in DEFAULT_TRACKS and \
                     not self.index_op_type_warning_issued:
-                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operations. Please rename this "
-                             "operation type to [bulk]." % self.name)
+                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operation %s. Please rename this "
+                             "operation type to [bulk]." % (self.name, op_name))
                 # Don't spam the console...
                 self.index_op_type_warning_issued = True
 

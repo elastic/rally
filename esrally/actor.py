@@ -1,7 +1,4 @@
-import faulthandler
 import logging
-import signal
-import sys
 import time
 import os
 
@@ -32,11 +29,9 @@ class BenchmarkCancelled:
     pass
 
 
-class RallyActor(thespian.actors.Actor):
-    def __init__(self):
-        super().__init__()
-        # allow to see a thread-dump on SIGQUIT
-        faulthandler.register(signal.SIGQUIT, file=sys.stderr)
+class RallyActor(thespian.actors.ActorTypeDispatcher):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
         self.children = []
         self.received_responses = []
         self.status = None
@@ -109,7 +104,7 @@ class RallyActor(thespian.actors.Actor):
         if self.is_current_status_expected(expected_status):
             logger.info("Transitioning from [%s] to [%s]." % (self.status, new_status))
             self.status = new_status
-            for m in self.children:
+            for m in filter(None, self.children):
                 self.send(m, msg)
         else:
             raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
@@ -127,20 +122,8 @@ class RallyActor(thespian.actors.Actor):
 
 
 # Defined on top-level to allow pickling
-class ActorLogFilter(logging.Filter):
-    def filter(self, log_record):
-        return "actorAddress" in log_record.__dict__
-
-
-# Defined on top-level to allow pickling
-class NotActorLogFilter(logging.Filter):
-    def filter(self, log_record):
-        return "actorAddress" not in log_record.__dict__
-
-
-# Defined on top-level to allow pickling
 def configure_utc_formatter(*args, **kwargs):
-    formatter = logging.Formatter(fmt=kwargs["fmt"], datefmt=kwargs["datefmt"])
+    formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
     formatter.converter = time.gmtime
     return formatter
 
@@ -149,55 +132,37 @@ def configure_actor_logging():
     log_dir = "%s/.rally/logs" % os.path.expanduser("~")
     io.ensure_dir(log_dir)
 
-    # actor_log_handler = {"class": "logging.handlers.SysLogHandler", "address": "/var/run/syslog"}
-    # actor_messages_handler = {"class": "logging.handlers.SysLogHandler", "address": "/var/run/syslog"}
-
     return {
         "version": 1,
         "formatters": {
             "normal": {
-                "fmt": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
+                "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
-                "()": configure_utc_formatter
+                # paraphrasing from 70a4bc8: If we use thespian directory functionality, we need to remove the callable formatter.
+                # A potential other solution would then be to enforce UTC timezones by setting the TZ env variable before we start
+                # the actor system.
+                "()": "esrally.actor.configure_utc_formatter"
             },
-            "actor": {
-                "fmt": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(actorAddress)s => %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-                "()": configure_utc_formatter
-            }
         },
         "filters": {
             "isActorLog": {
-                "()": ActorLogFilter
+                "()": 'thespian.director.ActorAddressLogFilter'
             },
-            "notActorLog": {
-                "()": NotActorLogFilter
-            }
         },
         "handlers": {
             "rally_log_handler": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
-                "filename": "%s/rally-actors.log" % log_dir,
-                "when": "midnight",
-                "backupCount": 14,
-                "encoding": "UTF-8",
-                "formatter": "normal",
-                "filters": ["notActorLog"],
-                "level": root_log_level
-            },
-            "actor_log_handler": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
                 "filename": "%s/rally-actor-messages.log" % log_dir,
                 "when": "midnight",
                 "backupCount": 14,
                 "encoding": "UTF-8",
-                "formatter": "actor",
+                "formatter": "normal",
                 "filters": ["isActorLog"],
                 "level": root_log_level
-            }
+            },
         },
         "root": {
-            "handlers": ["rally_log_handler", "actor_log_handler"],
+            "handlers": ["rally_log_handler"],
             "level": root_log_level
         },
         "loggers": {

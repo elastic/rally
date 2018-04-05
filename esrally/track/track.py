@@ -1,6 +1,8 @@
 import logging
 from enum import Enum, unique
 
+from esrally import exceptions
+
 logger = logging.getLogger("rally.track")
 
 
@@ -310,14 +312,18 @@ class Track:
     def find_challenge_or_default(self, name):
         """
         :param name: The name of the challenge to find.
-        :return: The challenge with the given name. The default challenge, if the name is "" or ``None``. Otherwise, returns ``None``.
+        :return: The challenge with the given name. The default challenge, if the name is "" or ``None``.
         """
         if name in [None, ""]:
             return self.default_challenge
+        else:
+            return self.find_challenge(name)
+
+    def find_challenge(self, name):
         for challenge in self.challenges:
             if challenge.name == name:
                 return challenge
-        return None
+        raise exceptions.InvalidName("Unknown challenge [%s] for track [%s]" % (name, self.name))
 
     @property
     def number_of_documents(self):
@@ -420,12 +426,12 @@ class Challenge:
 
 @unique
 class OperationType(Enum):
-    Index = 0
     # for the time being we are not considering this action as administrative
     IndicesStats = 1
     NodesStats = 2
     Search = 3
     Bulk = 4
+    RawRequest = 5
     # administrative actions
     ForceMerge = 1001
     ClusterHealth = 1002
@@ -442,9 +448,7 @@ class OperationType(Enum):
 
     @classmethod
     def from_hyphenated_string(cls, v):
-        if v == "index":
-            return OperationType.Index
-        elif v == "force-merge":
+        if v == "force-merge":
             return OperationType.ForceMerge
         elif v == "index-stats":
             return OperationType.IndicesStats
@@ -456,6 +460,8 @@ class OperationType(Enum):
             return OperationType.ClusterHealth
         elif v == "bulk":
             return OperationType.Bulk
+        elif v == "raw-request":
+            return OperationType.RawRequest
         elif v == "put-pipeline":
             return OperationType.PutPipeline
         elif v == "refresh":
@@ -579,7 +585,7 @@ class Parallel:
 
 
 class Task:
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=0, iterations=1, warmup_time_period=None, time_period=None,
+    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None, time_period=None,
                  clients=1,
                  completes_parent=False, schedule="deterministic", params=None):
         self.name = name

@@ -57,6 +57,24 @@ class TelemetryTests(TestCase):
         self.assertEqual("127.0.0.1", opts["ES_NET_HOST"])
 
 
+class StartupTimeTests(TestCase):
+    @mock.patch("esrally.time.StopWatch")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_store_calculated_metrics(self, metrics_store_put_value, stop_watch):
+        stop_watch.total_time.return_value = 2
+        metrics_store = metrics.EsMetricsStore(create_config())
+        node = cluster.Node(None, "io", "rally0", None)
+        startup_time = telemetry.StartupTime(metrics_store)
+        # replace with mock
+        startup_time.timer = stop_watch
+
+        startup_time.on_pre_node_start(node.node_name)
+        # ... nodes starts up ...
+        startup_time.attach_to_node(node)
+
+        metrics_store_put_value.assert_called_with("rally0", "node_startup_time", 2, "s")
+
+
 class MergePartsDeviceTests(TestCase):
     def setUp(self):
         self.cfg = create_config()

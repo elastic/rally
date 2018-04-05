@@ -11,7 +11,7 @@ logger = logging.getLogger("rally.team")
 
 
 def list_cars(cfg):
-    loader = CarLoader(team_repo(cfg))
+    loader = CarLoader(team_path(cfg))
     cars = []
     for name in loader.car_names():
         cars.append(loader.load_car(name))
@@ -22,14 +22,14 @@ def list_cars(cfg):
     console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
-def load_car(repo, name):
+def load_car(repo, name, car_params={}):
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
     all_variables = {}
     all_env = {}
 
     for n in name:
-        descriptor = CarLoader(repo).load_car(n)
+        descriptor = CarLoader(repo).load_car(n, car_params)
         for p in descriptor.config_paths:
             if p not in all_config_paths:
                 all_config_paths.append(p)
@@ -50,7 +50,7 @@ def load_car(repo, name):
 
 
 def list_plugins(cfg):
-    plugins = PluginLoader(team_repo(cfg)).plugins()
+    plugins = PluginLoader(team_path(cfg)).plugins()
     if plugins:
         console.println("Available Elasticsearch plugins:\n")
         console.println(tabulate.tabulate([[p.name, p.config] for p in plugins], headers=["Name", "Configuration"]))
@@ -83,25 +83,27 @@ def load_plugins(repo, plugin_names, plugin_params={}):
     return plugins
 
 
-def team_repo(cfg, update=True):
-    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    repo_name = cfg.opts("mechanic", "repository.name")
-    offline = cfg.opts("system", "offline.mode")
-    remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
-    root = cfg.opts("node", "root.dir")
-    team_repositories = cfg.opts("mechanic", "team.repository.dir")
-    teams_dir = os.path.join(root, team_repositories)
+def team_path(cfg):
+    root_path = cfg.opts("mechanic", "team.path", mandatory=False)
+    if root_path:
+        return root_path
+    else:
+        distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+        repo_name = cfg.opts("mechanic", "repository.name")
+        offline = cfg.opts("system", "offline.mode")
+        remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
+        root = cfg.opts("node", "root.dir")
+        team_repositories = cfg.opts("mechanic", "team.repository.dir")
+        teams_dir = os.path.join(root, team_repositories)
 
-    current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
-    if update:
+        current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
         current_team_repo.update(distribution_version)
-    return current_team_repo
+        return current_team_repo.repo_dir
 
 
 class CarLoader:
-    def __init__(self, repo):
-        self.repo = repo
-        self.cars_dir = os.path.join(self.repo.repo_dir, "cars")
+    def __init__(self, team_root_path):
+        self.cars_dir = os.path.join(team_root_path, "cars")
 
     def car_names(self):
         def __car_name(path):
@@ -116,7 +118,7 @@ class CarLoader:
     def _car_file(self, name):
         return os.path.join(self.cars_dir, "%s.ini" % name)
 
-    def load_car(self, name):
+    def load_car(self, name, car_params={}):
         car_config_file = self._car_file(name)
         if not io.exists(car_config_file):
             raise exceptions.SystemSetupError("Unknown car [%s]. List the available cars with %s list cars." % (name, PROGRAM_NAME))
@@ -145,6 +147,9 @@ class CarLoader:
         if "variables" in config.sections():
             for k, v in config["variables"].items():
                 variables[k] = v
+        # add all car params here to override any defaults
+        variables.update(car_params)
+
         env = {}
         if "env" in config.sections():
             for k, v in config["env"].items():
@@ -196,9 +201,8 @@ class Car:
 
 
 class PluginLoader:
-    def __init__(self, repo):
-        self.repo = repo
-        self.plugins_root_path = os.path.join(self.repo.repo_dir, "plugins")
+    def __init__(self, team_root_path):
+        self.plugins_root_path = os.path.join(team_root_path, "plugins")
 
     def plugins(self):
         known_plugins = self._core_plugins() + self._configured_plugins()
@@ -209,7 +213,7 @@ class PluginLoader:
         core_plugins = []
         core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
         if os.path.exists(core_plugins_path):
-            with open(core_plugins_path, "rt") as f:
+            with open(core_plugins_path, mode="rt", encoding="utf-8") as f:
                 for line in f:
                     if not line.startswith("#"):
                         # be forward compatible and allow additional values (comma-separated). At the moment, we only use the plugin name.
@@ -337,5 +341,3 @@ class PluginDescriptor:
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and (self.name, self.config, self.core_plugin) == (other.name, other.config, other.core_plugin)
-
-

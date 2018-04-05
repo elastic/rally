@@ -4,7 +4,7 @@ Glossary
 .. glossary::
 
     track
-        A :doc:`track </track>` is the description of one ore more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and which operations are invoked. List the available tracks with ``esrally list tracks``. Although Rally ships with some tracks out of the box, you should usually :doc:`create your own track</adding_tracks>` based on your own data.
+        A :doc:`track </track>` is the description of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and which operations are invoked. List the available tracks with ``esrally list tracks``. Although Rally ships with some tracks out of the box, you should usually :doc:`create your own track</adding_tracks>` based on your own data.
 
     challenge
         A challenge describes one benchmarking scenario, for example indexing documents at maximum throughput with 4 clients while issuing term and phrase queries from another two clients rate-limited at 10 queries per second each. It is always specified in the context of a track. See the available challenges by listing the corresponding tracks with ``esrally list tracks``.

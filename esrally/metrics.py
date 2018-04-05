@@ -130,6 +130,10 @@ class EsClientFactory:
         secure = self._config.opts("reporting", "datastore.secure") == "True"
         user = self._config.opts("reporting", "datastore.user")
         password = self._config.opts("reporting", "datastore.password")
+        verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
+        ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
+        if ca_path is None and verify:
+            ca_path = certifi.where()
 
         if user and password:
             auth = (user, password)
@@ -137,7 +141,8 @@ class EsClientFactory:
             auth = None
         if secure:
             from elasticsearch.connection import create_ssl_context
-            ssl_context = create_ssl_context(cafile=certifi.where())
+            # TODO: pass `verify` to ssl_context
+            ssl_context = create_ssl_context(cafile=ca_path)
         else:
             ssl_context = None
 
@@ -168,7 +173,8 @@ class IndexTemplateProvider:
         return self._read("results-template")
 
     def _read(self, template_name):
-        return open("%s/resources/%s.json" % (self.script_dir, template_name)).read()
+        with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
+            return f.read()
 
 
 class MetaInfoScope(Enum):
@@ -190,7 +196,7 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=None, car=None):
+def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None, lap=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -199,13 +205,14 @@ def metrics_store(cfg, read_only=True, invocation=None, track=None, challenge=No
     :return: A metrics store implementation.
     """
     cls = metrics_store_class(cfg)
-    store = cls(cfg)
+    store = cls(cfg=cfg, meta_info=meta_info, lap=lap)
     logger.info("Creating %s" % str(store))
 
-    selected_invocation = cfg.opts("system", "time.start") if invocation is None else invocation
+    trial_id = cfg.opts("system", "trial.id")
+    trial_timestamp = cfg.opts("system", "time.start")
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
-    store.open(selected_invocation, track, challenge, selected_car, create=not read_only)
+    store.open(trial_id, trial_timestamp, track, challenge, selected_car, create=not read_only)
     return store
 
 
@@ -214,6 +221,37 @@ def metrics_store_class(cfg):
         return EsMetricsStore
     else:
         return InMemoryMetricsStore
+
+
+def extract_user_tags_from_config(cfg):
+    """
+    Extracts user tags into a structured dict
+
+    :param cfg: The current configuration object.
+    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
+    """
+    user_tags = cfg.opts("race", "user.tag", mandatory=False)
+    return extract_user_tags_from_string(user_tags)
+
+
+def extract_user_tags_from_string(user_tags):
+    """
+    Extracts user tags into a structured dict
+
+    :param user_tags: A string containing user tags (tags separated by comma, key and value separated by colon).
+    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
+    """
+    user_tags_dict = {}
+    if user_tags and user_tags.strip() != "":
+        try:
+            for user_tag in user_tags.split(","):
+                user_tag_key, user_tag_value = user_tag.split(":")
+                user_tags_dict[user_tag_key] = user_tag_value
+        except ValueError:
+            msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
+    return user_tags_dict
 
 
 class SampleType(IntEnum):
@@ -236,7 +274,8 @@ class MetricsStore:
         :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
         self._config = cfg
-        self._invocation = None
+        self._trial_id = None
+        self._trial_timestamp = None
         self._track = None
         self._track_params = cfg.opts("track", "params")
         self._challenge = None
@@ -255,11 +294,12 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
 
-    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
-        Opens a metrics store for a specific invocation, track, challenge and car.
+        Opens a metrics store for a specific trial, track, challenge and car.
 
-        :param invocation: The invocation (timestamp).
+        :param trial_id: The trial id. This attribute is sufficient to uniquely identify a challenge.
+        :param trial_timestamp: The trial timestamp as a datetime.
         :param track_name: Track name.
         :param challenge_name: Challenge name.
         :param car_name: Car name.
@@ -268,35 +308,34 @@ class MetricsStore:
         False when it is just opened for reading (as we can assume all necessary indices exist at this point).
         """
         if ctx:
-            self._invocation = ctx["invocation"]
+            self._trial_id = ctx["trial-id"]
+            self._trial_timestamp = ctx["trial-timestamp"]
             self._track = ctx["track"]
             self._challenge = ctx["challenge"]
             self._car = ctx["car"]
         else:
-            self._invocation = time.to_iso8601(invocation)
+            self._trial_id = trial_id
+            self._trial_timestamp = time.to_iso8601(trial_timestamp)
             self._track = track_name
             self._challenge = challenge_name
             self._car = car_name
-        assert self._invocation is not None, "Attempting to open metrics store without an invocation"
+        assert self._trial_id is not None, "Attempting to open metrics store without a trial id"
+        assert self._trial_timestamp is not None, "Attempting to open metrics store without a trial timestamp"
         assert self._track is not None, "Attempting to open metrics store without a track"
         assert self._challenge is not None, "Attempting to open metrics store without a challenge"
         assert self._car is not None, "Attempting to open metrics store without a car"
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
-        logger.info("Opening metrics store for invocation=[%s], track=[%s], challenge=[%s], car=[%s]" %
-                    (self._invocation, self._track, self._challenge, self._car))
-        user_tags = self._config.opts("race", "user.tag", mandatory=False)
-        if user_tags and user_tags.strip() != "":
-            try:
-                for user_tag in user_tags.split(","):
-                    user_tag_key, user_tag_value = user_tag.split(":")
-                    # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
-                    self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % user_tag_key, user_tag_value)
-            except ValueError:
-                msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-                logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
+        logger.info("Opening metrics store for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]" %
+                    (self._trial_timestamp, self._track, self._challenge, self._car))
+
+        user_tags = extract_user_tags_from_config(self._config)
+        for k, v in user_tags.items():
+            # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
+            self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
+        # Don't store it for each metrics record as it's probably sufficient on race level
+        # self.add_meta_info(MetaInfoScope.cluster, None, "rally_version", version.version())
         self._stop_watch.start()
         self.opened = True
 
@@ -385,7 +424,8 @@ class MetricsStore:
     @property
     def open_context(self):
         return {
-            "invocation": self._invocation,
+            "trial-id": self._trial_id,
+            "trial-timestamp": self._trial_timestamp,
             "track": self._track,
             "challenge": self._challenge,
             "car": self._car
@@ -451,7 +491,7 @@ class MetricsStore:
                store will derive the timestamp automatically.
         :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
                Defaults to None. The metrics store will derive the timestamp automatically.
-       :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
+        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
         self._put(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
                   relative_time, meta_data)
@@ -499,7 +539,8 @@ class MetricsStore:
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            "trial-timestamp": self._invocation,
+            "trial-id": self._trial_id,
+            "trial-timestamp": self._trial_timestamp,
             "environment": self._environment_name,
             "track": self._track,
             "lap": self._lap,
@@ -571,6 +612,20 @@ class MetricsStore:
         :return: A list of all values for the given metric.
         """
         return self._get(name, task, operation_type, sample_type, lap, lambda doc: doc["value"])
+
+    def get_raw(self, name, task=None, operation_type=None, sample_type=None, lap=None, mapper=lambda doc: doc):
+        """
+        Gets all raw records for the given metric name.
+
+        :param name: The metric name to query.
+        :param task The task name to query. Optional.
+        :param operation_type The operation type to query. Optional.
+        :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param lap The lap to query. Optional. By default, all laps are considered.
+        :param mapper A record mapper. By default, the complete record is returned.
+        :return: A list of all raw records for the given metric.
+        """
+        return self._get(name, task, operation_type, sample_type, lap, mapper)
 
     def get_unit(self, name, task=None):
         """
@@ -687,9 +742,9 @@ class EsMetricsStore(MetricsStore):
         self._index_template_provider = index_template_provider_class(cfg)
         self._docs = None
 
-    def open(self, invocation=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
-        MetricsStore.open(self, invocation, track_name, challenge_name, car_name, ctx, create)
+        MetricsStore.open(self, trial_id, trial_timestamp, track_name, challenge_name, car_name, ctx, create)
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
@@ -701,7 +756,7 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._invocation)
+        ts = time.from_is8601(self._trial_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _get_template(self):
@@ -710,8 +765,8 @@ class EsMetricsStore(MetricsStore):
     def flush(self, refresh=True):
         if self._docs:
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            logger.info("Successfully added %d metrics documents for invocation=[%s], track=[%s], challenge=[%s], car=[%s]." %
-                        (len(self._docs), self._invocation, self._track, self._challenge, self._car))
+            logger.info("Successfully added %d metrics documents for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]." %
+                        (len(self._docs), self._trial_timestamp, self._track, self._challenge, self._car))
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
@@ -821,27 +876,7 @@ class EsMetricsStore(MetricsStore):
                 "filter": [
                     {
                         "term": {
-                            "trial-timestamp": self._invocation
-                        }
-                    },
-                    {
-                        "term": {
-                            "environment": self._environment_name
-                        }
-                    },
-                    {
-                        "term": {
-                            "track": self._track
-                        }
-                    },
-                    {
-                        "term": {
-                            "challenge": self._challenge
-                        }
-                    },
-                    {
-                        "term": {
-                            "car": self._car_name
+                            "trial-id": self._trial_id
                         }
                     },
                     {
@@ -1016,18 +1051,18 @@ def race_store(cfg):
 def list_races(cfg):
     def format_dict(d):
         if d:
-            return ",".join(["%s=%s" % (k, v) for k, v in d.items()])
+            return ", ".join(["%s=%s" % (k, v) for k, v in d.items()])
         else:
             return None
 
     races = []
     for race in race_store(cfg).list():
         races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge, race.car_name,
-                      race.user_tag])
+                      format_dict(race.user_tags)])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tag"]))
+        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
     else:
         console.println("")
         console.println("No recent races found.")
@@ -1035,19 +1070,20 @@ def list_races(cfg):
 
 def create_race(cfg, track, challenge):
     car = cfg.opts("mechanic", "car.names")
-    environment_name = cfg.opts("system", "env.name")
+    environment = cfg.opts("system", "env.name")
+    trial_id = cfg.opts("system", "trial.id")
     trial_timestamp = cfg.opts("system", "time.start")
     total_laps = cfg.opts("race", "laps")
-    user_tag = cfg.opts("race", "user.tag")
+    user_tags = extract_user_tags_from_config(cfg)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
     rally_version = version.version()
 
-    return Race(rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, track_params, challenge, car, total_laps)
+    return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car, total_laps)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, trial_timestamp, pipeline, user_tag, track, track_params, challenge, car,
+    def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
                  total_laps, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
@@ -1055,15 +1091,16 @@ class Race:
             lap_results = []
         self.rally_version = rally_version
         self.environment_name = environment_name
+        self.trial_id = trial_id
         self.trial_timestamp = trial_timestamp
         self.pipeline = pipeline
-        self.user_tag = user_tag
+        self.user_tags = user_tags
         self.track = track
         self.track_params = track_params
         self.challenge = challenge
         self.car = car
         self.total_laps = total_laps
-        # will be set later - contains hosts, revision, distribution_version, ...s
+        # will be set later - contains hosts, revision, distribution_version, ...
         self.cluster = cluster
         self.lap_results = lap_results
         self.results = results
@@ -1102,9 +1139,10 @@ class Race:
         d = {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
+            "trial-id": self.trial_id,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "pipeline": self.pipeline,
-            "user-tag": self.user_tag,
+            "user-tags": self.user_tags,
             "track": self.track_name,
             "challenge": self.challenge_name,
             "car": self.car,
@@ -1121,11 +1159,13 @@ class Race:
         :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
         """
         result_template = {
+            "rally-version": self.rally_version,
             "environment": self.environment_name,
+            "trial-id": self.trial_id,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "distribution-version": self.cluster.distribution_version,
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
-            "user-tag": self.user_tag,
+            "user-tags": self.user_tags,
             "track": self.track_name,
             "challenge": self.challenge_name,
             "car": self.car_name,
@@ -1154,9 +1194,17 @@ class Race:
 
     @classmethod
     def from_dict(cls, d):
+        # for backwards compatibility with Rally < 0.9.2
+        if "user-tag" in d:
+            user_tags = extract_user_tags_from_string(d["user-tag"])
+        elif "user-tags" in d:
+            user_tags = d["user-tags"]
+        else:
+            user_tags = {}
+
         # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
-        return Race(d["rally-version"], d["environment"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], d["user-tag"],
+        return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
                     d["track"], d.get("track-params"), d["challenge"], d["car"], d["total-laps"], results=d["results"])
 
 
@@ -1218,8 +1266,8 @@ class FileRaceStore(RaceStore):
         import json
         io.ensure_dir(self.race_path)
         # if the user has overridden the effective start date we guarantee a unique file name but do not let them use them for tournaments.
-        with open(self._output_file_name(doc), mode="w", encoding="UTF-8") as f:
-            f.write(json.dumps(doc, indent=True))
+        with open(self._output_file_name(doc), mode="wt", encoding="utf-8") as f:
+            f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
     def _output_file_name(self, doc):
         if self.user_provided_start_timestamp:
@@ -1248,7 +1296,7 @@ class FileRaceStore(RaceStore):
         for result in results:
             # noinspection PyBroadException
             try:
-                with open(result) as f:
+                with open(result, mode="rt", encoding="utf-8") as f:
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logger.exception("Could not load race file [%s] (incompatible format?) Skipping..." % result)
@@ -1309,10 +1357,10 @@ class EsRaceStore(RaceStore):
 
     def find_by_timestamp(self, timestamp):
         filters = [{
-            "term": {
-                "environment": self.environment_name
-            }
-        },
+                "term": {
+                    "environment": self.environment_name
+                }
+            },
             {
                 "term": {
                     "trial-timestamp": timestamp

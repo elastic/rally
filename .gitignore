@@ -106,3 +106,6 @@ target/
 .rally_it/
 # Virtualenv for development
 .venv/
+
+# Emacs backup files
+*~

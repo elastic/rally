@@ -6,13 +6,13 @@ import re
 import shutil
 from enum import Enum
 
-from esrally import time, PROGRAM_NAME, DOC_LINK
+from esrally import time, PROGRAM_NAME, DOC_LINK, exceptions
 from esrally.utils import io, git, console, convert
 
 logger = logging.getLogger("rally.config")
 
 
-class ConfigError(BaseException):
+class ConfigError(exceptions.RallyError):
     pass
 
 
@@ -42,12 +42,12 @@ class ConfigFile:
 
     def load(self, interpolation=configparser.ExtendedInterpolation()):
         config = configparser.ConfigParser(interpolation=interpolation)
-        config.read(self.location)
+        config.read(self.location, encoding="utf-8")
         return config
 
     def store(self, config):
         io.ensure_dir(self.config_dir)
-        with open(self.location, "w") as configfile:
+        with open(self.location, "wt", encoding="utf-8") as configfile:
             config.write(configfile)
 
     def backup(self):
@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    CURRENT_CONFIG_VERSION = 13
+    CURRENT_CONFIG_VERSION = 14
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -185,7 +185,7 @@ class Config:
         """
         :param section: The configuration section.
         :param key: The configuration key.
-        :return: True iff a value for the specified key exists in the specified configuration section.  
+        :return: True iff a value for the specified key exists in the specified configuration section.
         """
         return self.opts(section, key, mandatory=False) is not None
 
@@ -269,7 +269,8 @@ class ConfigFactory:
         self.o = o
         self.prompter = None
 
-    def create_config(self, config_file, advanced_config=False, assume_defaults=False):
+    def create_config(self, config_file, advanced_config=False, assume_defaults=False, use_gradle_wrapper=False,
+                      java_home=None, runtime_java_home=None):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
@@ -278,6 +279,7 @@ class ConfigFactory:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
         :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
         configuration in CI run. Default: False.
+        :param use_gradle_wrapper: If True, use the Gradle wrapper, otherwise use the system's Gradle version. Default: False.
         """
         self.prompter = Prompter(self.i, self.sec_i, self.o, assume_defaults)
         if advanced_config:
@@ -300,15 +302,16 @@ class ConfigFactory:
         # Autodetect settings
         self.o("* Autodetecting available third-party software")
         git_path = io.guess_install_location("git")
-        gradle_bin = io.guess_install_location("gradle")
-        java_8_home = io.guess_java_home(major_version=8)
-        java_9_home = io.guess_java_home(major_version=9)
+        gradle_bin = "./gradlew" if use_gradle_wrapper else io.guess_install_location("gradle")
+
+        java_8_home = runtime_java_home if runtime_java_home else io.guess_java_home(major_version=8)
+        java_10_home = java_home if java_home else io.guess_java_home(major_version=10)
         from esrally.utils import jvm
         if java_8_home:
             auto_detected_java_home = java_8_home
         # Don't auto-detect an EA release and bring trouble to the user later on. They can still configure it manually if they want to.
-        elif java_9_home and not jvm.is_early_access_release(java_9_home):
-            auto_detected_java_home = java_9_home
+        elif java_10_home and not jvm.is_early_access_release(java_10_home):
+            auto_detected_java_home = java_10_home
         else:
             auto_detected_java_home = None
 
@@ -339,14 +342,14 @@ class ConfigFactory:
             self.o("* Setting up benchmark data directory in %s" % root_dir)
 
         if benchmark_from_sources:
-            if not java_9_home or jvm.is_early_access_release(java_9_home):
-                raw_java_9_home = self._ask_property("Enter the JDK 9 root directory", check_path_exists=True, mandatory=False)
-                if raw_java_9_home and jvm.major_version(raw_java_9_home) == 9 and not jvm.is_early_access_release(raw_java_9_home):
-                    java_9_home = io.normalize_path(raw_java_9_home) if raw_java_9_home else None
+            if not java_10_home or jvm.is_early_access_release(java_10_home):
+                raw_java_10_home = self._ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
+                if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
+                    java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
                 else:
                     benchmark_from_sources = False
                     self.o("********************************************************************************")
-                    self.o("You don't have a valid JDK 9 installation and cannot benchmark source builds.")
+                    self.o("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
                     self.o("")
                     self.o("You can still benchmark binary distributions with e.g.:")
                     self.o("")
@@ -444,14 +447,15 @@ class ConfigFactory:
             # the Elasticsearch directory is just the last path component (relative to the source root directory)
             config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
 
+        if gradle_bin:
             config["build"] = {}
             config["build"]["gradle.bin"] = gradle_bin
 
         config["runtime"] = {}
         if java_home:
             config["runtime"]["java.home"] = java_home
-        if java_9_home:
-            config["runtime"]["java9.home"] = java_9_home
+        if java_10_home:
+            config["runtime"]["java10.home"] = java_10_home
 
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
@@ -645,33 +649,39 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         config["reporting"].pop("output.html.report.filename")
     if current_version == 3 and target_version > current_version:
         root_dir = config["system"]["root.dir"]
-        out("*****************************************************************************************")
-        out("")
-        out("You have an old configuration of Rally. Rally has now a much simpler setup")
-        out("routine which will autodetect lots of settings for you and it also does not")
-        out("require you to setup a metrics store anymore.")
-        out("")
-        out("Rally will now migrate your configuration but if you don't need advanced features")
-        out("like a metrics store, then you should delete the configuration directory:")
-        out("")
-        out("  rm -rf %s" % config_file.config_dir)
-        out("")
-        out("and then rerun Rally's configuration routine:")
-        out("")
-        out("  %s configure" % PROGRAM_NAME)
-        out("")
-        out("Please also note you have %.1f GB of data in your current benchmark directory at"
-            % convert.bytes_to_gb(io.get_size(root_dir)))
-        out()
-        out("  %s" % root_dir)
-        out("")
-        out("You might want to clean up this directory also.")
-        out()
-        out("For more details please see %s" % console.format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030"))
-        out("")
-        out("*****************************************************************************************")
-        out("")
-        out("Pausing for 10 seconds to let you consider this message.")
+        out(
+            """
+            *****************************************************************************************
+
+            You have an old configuration of Rally. Rally has now a much simpler setup
+            routine which will autodetect lots of settings for you and it also does not
+            require you to setup a metrics store anymore.
+
+            Rally will now migrate your configuration but if you don't need advanced features
+            like a metrics store, then you should delete the configuration directory:
+
+              rm -rf {0}
+
+            and then rerun Rally's configuration routine:
+
+              {1} configure
+
+            Please also note you have {2:.1f} GB of data in your current benchmark directory at
+
+              {3}
+
+            You might want to clean up this directory also.
+
+            For more details please see {4}
+
+            *****************************************************************************************
+
+            Pausing for 10 seconds to let you consider this message.
+            """.format(config_file.config_dir,
+                       PROGRAM_NAME,
+                       convert.bytes_to_gb(io.get_size(root_dir)),
+                       root_dir,
+                       console.format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030")))
         time.sleep(10)
         logger.info("Migrating config from version [3] to [4]")
         current_version = 4
@@ -817,6 +827,44 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                         out("")
 
         current_version = 13
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 13 and target_version > current_version:
+        # This version replaced java9.home with java10.home
+        if "build" in config and "gradle.bin" in config["build"]:
+            java_10_home = io.guess_java_home(major_version=10)
+            from esrally.utils import jvm
+            if java_10_home and not jvm.is_early_access_release(java_10_home):
+                logger.debug("Autodetected a JDK 10 installation at [%s]" % java_10_home)
+                if "runtime" not in config:
+                    config["runtime"] = {}
+                config["runtime"]["java10.home"] = java_10_home
+            else:
+                logger.debug("Could not autodetect a JDK 10 installation. Checking [java.home] already points to a JDK 10.")
+                detected = False
+                if "runtime" in config:
+                    java_home = config["runtime"]["java.home"]
+                    if jvm.major_version(java_home) == 10 and not jvm.is_early_access_release(java_home):
+                        config["runtime"]["java10.home"] = java_home
+                        detected = True
+
+                if not detected:
+                    logger.debug("Could not autodetect a JDK 10 installation. Asking user.")
+                    raw_java_10_home = prompter.ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
+                    if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
+                        java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
+                        config["runtime"]["java10.home"] = java_10_home
+                    else:
+                        out("********************************************************************************")
+                        out("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
+                        out("")
+                        out("You can still benchmark binary distributions with e.g.:")
+                        out("")
+                        out("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
+                        out("********************************************************************************")
+                        out("")
+
+        current_version = 14
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done

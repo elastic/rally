@@ -46,3 +46,7 @@ class BuildError(RallyError):
 
 class InvalidSyntax(RallyError):
     pass
+
+
+class InvalidName(RallyError):
+    pass

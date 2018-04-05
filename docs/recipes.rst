@@ -1,7 +1,7 @@
 Tips and Tricks
 ===============
 
-This section covers various tips and tricks when using Rally in a recipe-style fashion.
+This section covers various tips and tricks in a recipe-style fashion.
 
 Benchmarking an existing cluster
 --------------------------------

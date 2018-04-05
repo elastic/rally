@@ -63,6 +63,8 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
             # noinspection PyBroadException
             try:
                 size_from_content_header = int(r.getheader("Content-Length"))
+                if expected_size_in_bytes is None:
+                    expected_size_in_bytes = size_from_content_header
             except BaseException:
                 size_from_content_header = None
 

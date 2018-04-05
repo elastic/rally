@@ -5,8 +5,8 @@ import logging.handlers
 import os
 import sys
 import time
-import faulthandler
-import signal
+import uuid
+import json
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
@@ -146,42 +146,42 @@ def create_arg_parser():
         metavar="artifact",
         help="The artifact to create. Possible values are: charts",
         choices=["charts"])
-
+    # We allow to either have a chart-spec-path *or* define a chart-spec on the fly with track, challenge and car. Convincing
+    # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
+    generate_parser.add_argument(
+        "--chart-spec-path",
+        help="path to a JSON file containing all combinations of charts to generate"
+    )
     generate_parser.add_argument(
         "--track",
         help="define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
         # we set the default value later on because we need to determine whether the user has provided this value.
         # default="geonames"
     )
-    # Not sure whether we should allow that / need that
-    # generate_parser.add_argument(
-    #    "--track-params",
-    #    help="define a comma-separate list of key:value pairs that are injected verbatim to the track as variables",
-    #    default="")
     generate_parser.add_argument(
         "--challenge",
-        required=True,
         help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
     generate_parser.add_argument(
         "--car",
-        required=True,
-        help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
-        default="defaults")  # optimized for local usage
+        help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME)
+    generate_parser.add_argument(
+        "--node-count",
+        type=positive_number,
+        help="The number of Elasticsearch nodes to use in charts.")
     generate_parser.add_argument(
         "--chart-type",
         help="Chart type to generate. Default: time-series",
         choices=["time-series", "bar"],
         default="time-series")
     generate_parser.add_argument(
-        "--node-count",
-        type=positive_number,
-        help="The number of Elasticsearch nodes to use in charts.",
-        required=True)
-    generate_parser.add_argument(
         "--quiet",
         help="suppress as much as output as possible (default: false).",
         default=False,
         action="store_true")
+    generate_parser.add_argument(
+        "--output-path",
+        help="Output file name (default: stdout).",
+        default=None)
 
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
@@ -214,6 +214,15 @@ def create_arg_parser():
             help="Automatically accept all options with default values (default: false)",
             default=False,
             action="store_true")
+        # TODO #412: Remove this option. Rally will then always use the Gradle Wrapper.
+        # undocumented - only as a workaround to ensure integration tests are always working, even if Gradle is not installed.
+        p.add_argument(
+            "--use-gradle-wrapper",
+            default=False,
+            action="store_true")
+        # undocumented - only as a workaround for integration tests
+        p.add_argument("--java-home", default=None)
+        p.add_argument("--runtime-java-home", default=None)
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -263,23 +272,31 @@ def create_arg_parser():
         )
         p.add_argument(
             "--track-params",
-            help="define a comma-separate list of key:value pairs that are injected verbatim to the track as variables",
+            help="define a comma-separated list of key:value pairs that are injected verbatim to the track as variables",
             default=""
         )
         p.add_argument(
             "--challenge",
             help="define the challenge to use. List possible challenges for tracks with `%s list tracks`" % PROGRAM_NAME)
         p.add_argument(
+            "--team-path",
+            help="define the path to the car and plugin configurations to use.")
+        p.add_argument(
             "--car",
             help="define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
             default="defaults")  # optimized for local usage
+        p.add_argument(
+            "--car-params",
+            help="define a comma-separated list of key:value pairs that are injected verbatim as variables for the car",
+            default=""
+        )
         p.add_argument(
             "--elasticsearch-plugins",
             help="define the Elasticsearch plugins to install. (default: install no plugins).",
             default="")
         p.add_argument(
             "--plugin-params",
-            help="define a comma-separate list of key:value pairs that are injected verbatim to all plugins as variables",
+            help="define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables",
             default=""
         )
         p.add_argument(
@@ -376,11 +393,7 @@ def create_arg_parser():
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
             default=None)
-        # This is a highly experimental option and will likely be removed
-        p.add_argument(
-            "--data-paths",
-            help=argparse.SUPPRESS,
-            default=None)
+        # TODO: Remove in Rally 0.10.0 (there will be no index auto-management anymore)
         p.add_argument(
             "--auto-manage-indices",
             choices=["true", "false"],
@@ -423,7 +436,12 @@ def derive_sub_command(args, cfg):
 
 def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
-        config.ConfigFactory().create_config(cfg.config_file, advanced_config=args.advanced_config, assume_defaults=args.assume_defaults)
+        config.ConfigFactory().create_config(cfg.config_file,
+                                             advanced_config=args.advanced_config,
+                                             assume_defaults=args.assume_defaults,
+                                             use_gradle_wrapper=args.use_gradle_wrapper,
+                                             java_home=args.java_home,
+                                             runtime_java_home=args.runtime_java_home)
         exit(0)
     else:
         if cfg.config_present():
@@ -548,7 +566,17 @@ def dispatch_sub_command(cfg, sub_command):
         return True
     except exceptions.RallyError as e:
         logging.exception("Cannot run subcommand [%s]." % sub_command)
-        console.error("Cannot %s. %s" % (sub_command, e))
+        msg = str(e.message)
+        nesting = 0
+        while hasattr(e, "cause") and e.cause:
+            nesting += 1
+            e = e.cause
+            if hasattr(e, "message"):
+                msg += "\n%s%s" % ("\t" * nesting, e.message)
+            else:
+                msg += "\n%s%s" % ("\t" * nesting, str(e))
+
+        console.error("Cannot %s. %s" % (sub_command, msg))
         console.println("")
         print_help_on_errors()
         return False
@@ -558,6 +586,16 @@ def dispatch_sub_command(cfg, sub_command):
         console.println("")
         print_help_on_errors()
         return False
+
+
+def to_dict(arg):
+    if io.has_extension(arg, ".json"):
+        with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
+            return json.load(f)
+    elif arg.startswith("{"):
+        return json.loads(arg)
+    else:
+        return kv_to_map(csv_to_list(arg))
 
 
 def csv_to_list(csv):
@@ -616,8 +654,6 @@ def main():
 
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
-    # allow to see a thread-dump on SIGQUIT
-    faulthandler.register(signal.SIGQUIT, file=sys.stderr)
 
     pre_configure_logging()
     arg_parser = create_arg_parser()
@@ -638,6 +674,7 @@ def main():
         cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
 
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
+    cfg.add(config.Scope.applicationOverride, "system", "trial.id", str(uuid.uuid4()))
 
     # per node?
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
@@ -651,11 +688,15 @@ def main():
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
+    if args.team_path:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
+    else:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", kv_to_map(csv_to_list(args.plugin_params)))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "node.datapaths", csv_to_list(args.data_paths))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", to_dict(args.car_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", to_dict(args.plugin_params))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
         # force-preserve the cluster nodes.
@@ -685,7 +726,7 @@ def main():
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
-    cfg.add(config.Scope.applicationOverride, "track", "params", kv_to_map(csv_to_list(args.track_params)))
+    cfg.add(config.Scope.applicationOverride, "track", "params", to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
@@ -699,7 +740,17 @@ def main():
         cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
     if sub_command == "generate":
         cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
-        cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
+        cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+
+        if args.chart_spec_path and (args.track or args.challenge or args.car or args.node_count):
+            console.println("You need to specify either --chart-spec-path or --track, --challenge, --car and "
+                            "--node-count but not both.")
+            exit(1)
+        if args.chart_spec_path:
+            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
+        else:
+            # other options are stored elsewhere already
+            cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
     cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
     if args.cluster_health != "green":

@@ -17,13 +17,14 @@ class FileSource:
     """
     FileSource is a wrapper around a plain file which simplifies testing of file I/O calls.
     """
-    def __init__(self, file_name, mode):
+    def __init__(self, file_name, mode, encoding="utf-8"):
         self.file_name = file_name
         self.mode = mode
+        self.encoding = encoding
         self.f = None
 
     def open(self):
-        self.f = open(self.file_name, self.mode)
+        self.f = open(self.file_name, mode=self.mode, encoding=self.encoding)
         # allow for chaining
         return self
 
@@ -129,6 +130,7 @@ def ensure_dir(directory, mode=0o777):
     :param mode: The permission flags to use (if it does not exist).
     """
     if directory:
+        # TODO Python 3.7 compatibility: Set umask first. See https://docs.python.org/3.7/whatsnew/3.7.html#changes-in-the-python-api
         try:
             # avoid a race condition by trying to create the checkout directory
             os.makedirs(directory, mode)
@@ -278,8 +280,8 @@ def prepare_file_offset_table(data_file_path):
     if not os.path.exists(offset_file_path) or os.path.getmtime(offset_file_path) < os.path.getmtime(data_file_path):
         console.info("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True, logger=logger)
         line_number = 0
-        with open(offset_file_path, mode="w") as offset_file:
-            with open(data_file_path, mode="rt") as data_file:
+        with open(offset_file_path, mode="wt", encoding="utf-8") as offset_file:
+            with open(data_file_path, mode="rt", encoding="utf-8") as data_file:
                 while True:
                     line = data_file.readline()
                     if len(line) == 0:
@@ -324,7 +326,7 @@ def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
     remaining_lines = number_of_lines_to_skip
     # can we fast forward?
     if os.path.exists(offset_file_path):
-        with open(offset_file_path) as offsets:
+        with open(offset_file_path, mode="rt", encoding="utf-8") as offsets:
             for line in offsets:
                 line_number, offset_in_bytes = [int(i) for i in line.strip().split(";")]
                 if line_number <= number_of_lines_to_skip:

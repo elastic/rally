@@ -25,6 +25,9 @@
         "enabled": true
       },
       "properties": {
+        "trial-id": {
+          "type": "keyword"
+        },
         "trial-timestamp": {
           "type": "date",
           "format": "basic_date_time_no_millis",
@@ -41,9 +44,6 @@
           "type": "keyword"
         },
         "pipeline": {
-          "type": "keyword"
-        },
-        "user-tag": {
           "type": "keyword"
         },
         "track": {

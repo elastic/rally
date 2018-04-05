@@ -34,7 +34,7 @@ install_requires = [
     "jsonschema==2.5.1",
     "Jinja2==2.9.5",
     # remote messaging
-    "thespian==3.8.3",
+    "thespian==3.9.2",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
@@ -42,8 +42,8 @@ install_requires = [
 ]
 
 tests_require = [
-    "pytest==3.0.6",
-    "pytest-benchmark==3.0.0"
+    "pytest==3.4.2",
+    "pytest-benchmark==3.1.1"
 ]
 
 # we call the tool rally, but it will be published as esrally on pypi

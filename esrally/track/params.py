@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+import math
 import types
 import inspect
 from enum import Enum
@@ -113,8 +114,8 @@ class ParamSource:
         * It will either run an operation for a pre-determined number of times or
         * It can run until the parameter source is exhausted.
 
-        In the former case, return just 1. In the latter case, you should determine the number of times that `#params()` will be invoked.
-        With that number, Rally can show the progress made so far to the user.
+        In the former case, you should determine the number of times that `#params()` will be invoked. With that number, Rally can show
+        the progress made so far to the user. In the latter case, return ``None``.
 
         :return:  The "size" of this parameter source or ``None`` if should run eternally.
         """
@@ -152,10 +153,12 @@ class CreateIndexParamSource(ParamSource):
         self.request_params = params.get("request-params", {})
         self.index_definitions = []
         if track.indices:
-            filter_index = params.get("index")
+            filter_idx = params.get("index")
+            if isinstance(filter_idx, str):
+                filter_idx = [filter_idx]
             settings = params.get("settings")
             for idx in track.indices:
-                if not filter_index or idx.name == filter_index:
+                if not filter_idx or idx.name in filter_idx:
                     body = idx.body
                     if body and settings:
                         if "settings" in body:
@@ -181,10 +184,14 @@ class CreateIndexParamSource(ParamSource):
 
                     self.index_definitions.append((idx.name, body))
         else:
-            # TODO: Should we allow to create multiple indices at once?
             try:
                 # only 'index' is mandatory, the body is optional (may be ok to create an index without a body)
-                self.index_definitions.append((params["index"], params.get("body")))
+                idx = params["index"]
+                body = params.get("body")
+                if isinstance(idx, str):
+                    idx = [idx]
+                for i in idx:
+                    self.index_definitions.append((i, body))
             except KeyError:
                 raise exceptions.InvalidSyntax("Please set the property 'index' for the create-index operation")
 
@@ -208,8 +215,10 @@ class DeleteIndexParamSource(ParamSource):
         self.index_definitions = []
         target_index = params.get("index")
         if target_index:
-            # TODO: Should we allow to delete multiple indices at once?
-            self.index_definitions.append(target_index)
+            if isinstance(target_index, str):
+                target_index = [target_index]
+            for idx in target_index:
+                self.index_definitions.append(idx)
         elif track.indices:
             for idx in track.indices:
                 self.index_definitions.append(idx.name)
@@ -304,6 +313,38 @@ class DeleteIndexTemplateParamSource(ParamSource):
 
 
 # TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
+#
+# Usage example:
+#
+#
+# {
+#     "name": "term",
+#     "operation": {
+#         "operation-type": "search",
+#         "cache": false,
+#         "body-params": {
+#             "query.term.useragent": [
+#                 "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.53 Safari/525.19",
+#                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; Trident/7.0; .NET4.0E; .NET4.0C; rv:11.0) like Gecko",
+#                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; WOW64; Trident/7.0; Touch; rv:11.0) like Gecko"
+#             ]
+#         },
+#         "index": "logs-*",
+#         "body": {
+#             "query": {
+#                 "term": {
+#                     "useragent": "Opera/5.11 (Windows 98; U) [en]"
+#                 }
+#             }
+#         }
+#     },
+#     "clients": 1,
+#     "target-throughput": 100,
+#     "warmup-iterations": 100,
+#     "iterations": 100
+# }
+#
+#
 class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
@@ -442,6 +483,14 @@ class BulkIndexParamSource(ParamSource):
         except ValueError:
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
+        try:
+            self.ingest_percentage = float(params.get("ingest-percentage", 100.0))
+            if self.ingest_percentage <= 0 or self.ingest_percentage > 100.0:
+                raise exceptions.InvalidSyntax(
+                    "'ingest-percentage' must be in the range (0.0, 100.0] but was {:.1f}".format(self.ingest_percentage))
+        except ValueError:
+            raise exceptions.InvalidSyntax("'ingest-percentage' must be numeric")
+
     def used_corpora(self, t, params):
         corpora = []
         track_corpora_names = [corpus.name for corpus in t.corpora]
@@ -464,7 +513,7 @@ class BulkIndexParamSource(ParamSource):
 
     def partition(self, partition_index, total_partitions):
         return PartitionBulkIndexParamSource(self.corpora, partition_index, total_partitions, self.batch_size, self.bulk_size,
-                                             self.id_conflicts, self.pipeline, self._params)
+                                             self.ingest_percentage, self.id_conflicts, self.pipeline, self._params)
 
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
@@ -474,7 +523,7 @@ class BulkIndexParamSource(ParamSource):
 
 
 class PartitionBulkIndexParamSource:
-    def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, id_conflicts=None,
+    def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, ingest_percentage, id_conflicts=None,
                  pipeline=None, original_params=None):
         """
 
@@ -483,14 +532,17 @@ class PartitionBulkIndexParamSource:
         :param total_partitions: The total number of partitions (i.e. clients) for bulk index operations.
         :param batch_size: The number of documents to read in one go.
         :param bulk_size: The size of bulk index operations (number of documents per bulk).
+        :param ingest_percentage: A number between (0.0, 100.0] that defines how much of the whole corpus should be ingested.
         :param id_conflicts: The type of id conflicts.
         :param pipeline: The name of the ingest pipeline to run.
+        :param original_params: The original dict passed to the parent parameter source.
         """
         self.corpora = corpora
         self.partition_index = partition_index
         self.total_partitions = total_partitions
         self.batch_size = batch_size
         self.bulk_size = bulk_size
+        self.ingest_percentage = ingest_percentage
         self.id_conflicts = id_conflicts
         self.pipeline = pipeline
         self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
@@ -503,7 +555,8 @@ class PartitionBulkIndexParamSource:
         return next(self.internal_params)
 
     def size(self):
-        return number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
+        all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
+        return math.ceil((all_bulks * self.ingest_percentage) / 100)
 
 
 def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
@@ -785,10 +838,6 @@ class IndexDataReader:
         return False
 
 
-# TODO #370: Remove this registration.
-# Old name - deprecated
-register_param_source_for_operation(track.OperationType.Index, BulkIndexParamSource)
-# New name
 register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSource)
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndexParamSource)

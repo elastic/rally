@@ -46,6 +46,11 @@ class Telemetry:
             if self._enabled(device):
                 device.attach_to_cluster(cluster)
 
+    def on_pre_node_start(self, node_name):
+        for device in self.devices:
+            if self._enabled(device):
+                device.on_pre_node_start(node_name)
+
     def attach_to_node(self, node):
         for device in self.devices:
             if self._enabled(device):
@@ -86,6 +91,9 @@ class TelemetryDevice:
         return {}
 
     def attach_to_cluster(self, cluster):
+        pass
+
+    def on_pre_node_start(self, node_name):
         pass
 
     def attach_to_node(self, node):
@@ -137,7 +145,11 @@ class FlightRecorder(TelemetryDevice):
         # this is more robust in case we want to use custom settings
         # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
         #
-        # in that case change to: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
+        # in that case change to:
+        #
+        # Java 8: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
+        # Java 9+: "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,settings=es-memory-profiling,filename=%s"
+
         if self.java_major_version < 9:
             return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
                                     "-XX:+FlightRecorder "
@@ -232,6 +244,19 @@ class PerfStat(TelemetryDevice):
             self.attached = False
 
 
+class StartupTime(InternalTelemetryDevice):
+    def __init__(self, metrics_store, stopwatch=time.StopWatch):
+        self.metrics_store = metrics_store
+        self.timer = stopwatch()
+
+    def on_pre_node_start(self, node_name):
+        self.timer.start()
+
+    def attach_to_node(self, node):
+        self.timer.stop()
+        self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
+
+
 class MergeParts(InternalTelemetryDevice):
     """
     Gathers merge parts time statistics. Note that you need to run a track setup which logs these data.
@@ -263,7 +288,7 @@ class MergeParts(InternalTelemetryDevice):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if not io.is_archive(log_file):
                 logger.debug("Analyzing merge times in [%s]" % log_path)
-                with open(log_path) as f:
+                with open(log_path, mode="rt", encoding="utf-8") as f:
                     self._extract_merge_times(f, merge_times)
             else:
                 logger.debug("Skipping archived logs in [%s]." % log_path)
@@ -679,12 +704,16 @@ class IndexStats(InternalTelemetryDevice):
             self.first_time = False
 
     def on_benchmark_stop(self):
+        import json
+        logger.info("Gathering indices stats for all primaries on benchmark stop.")
         p = self.primaries_index_stats()
+        logger.info("Returned indices stats:\n%s" % json.dumps(p, indent=2))
         # actually this is add_count
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
         for metric_key, value in self.index_times(p).items():
+            logger.info("Adding [%s] = [%s] to metrics store." % (str(metric_key), str(value)))
             self.add_metrics(value, metric_key, "ms")
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
@@ -694,12 +723,11 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
 
     def primaries_index_stats(self):
-        logger.info("Gathering indices stats.")
-        import elasticsearch
+        # noinspection PyBroadException
         try:
             stats = self.client.indices.stats(metric="_all", level="shards")
             return stats["_all"]["primaries"]
-        except elasticsearch.TransportError:
+        except BaseException:
             logger.exception("Could not retrieve index stats.")
             return {}
 
@@ -729,6 +757,44 @@ class IndexStats(InternalTelemetryDevice):
         except KeyError:
             logger.warning("Could not determine value at path [%s]. Returning default value [%s]" % (",".join(path), str(default_value)))
             return default_value
+
+
+class MlBucketProcessingTime(InternalTelemetryDevice):
+    def __init__(self, client, metrics_store):
+        super().__init__()
+        self.client = client
+        self.metrics_store = metrics_store
+
+    def detach_from_cluster(self, cluster):
+        import elasticsearch
+        try:
+            results = self.client.search(index=".ml-anomalies-*", body={
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"term": {"result_type": "bucket"}},
+                            # TODO: We could restrict this by job id if we need to measure multiple jobs...
+                            # {"term": {"job_id": "job_id"}}
+                        ]
+                    }
+                },
+                "aggs": {
+                    "max_bucket_processing_time": {
+                        "max": {"field": "processing_time_ms"}
+                    }
+                }
+            })
+        except elasticsearch.TransportError:
+            logger.exception("Could not retrieve ML bucket processing time.")
+            return
+        try:
+            value = results["aggregations"]["max_bucket_processing_time"]["value"]
+            if value:
+                self.metrics_store.put_value_cluster_level("ml_max_processing_time_millis", value, "ms")
+        except KeyError:
+            # no ML running
+            pass
 
 
 class IndexSize(InternalTelemetryDevice):

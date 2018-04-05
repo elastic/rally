@@ -11,6 +11,10 @@ Here is a typical metrics record::
 
     {
           "environment": "nightly",
+          "trial-timestamp": "20160421T042749Z",
+          "trial-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
+          "@timestamp": 1461213093093,
+          "relative-time": 10507328,
           "track": "geonames",
           "track-params": {
             "shard-count": 3
@@ -18,9 +22,6 @@ Here is a typical metrics record::
           "challenge": "append-no-conflicts",
           "car": "defaults",
           "sample-type": "normal",
-          "trial-timestamp": "20160421T042749Z",
-          "@timestamp": 1461213093093,
-          "relative-time": 10507328,
           "name": "throughput",
           "value": 27385,
           "unit": "docs/s",
@@ -38,7 +39,7 @@ Here is a typical metrics record::
             "node_name": "rally-node0",
             "source_revision": "a6c0a81",
             "distribution_version": "5.0.0-SNAPSHOT",
-            "tag_reference": "Github ticket 1234",
+            "tag_reference": "Github ticket 1234"
           }
         }
 
@@ -66,7 +67,12 @@ Rally runs warmup trials but records all samples. Normally, we are just interest
 trial-timestamp
 ~~~~~~~~~~~~~~~
 
-A constant timestamp (always in UTC) that is determined when Rally is invoked. It is intended to group all samples of a benchmark trial.
+A constant timestamp (always in UTC) that is determined when Rally is invoked.
+
+trial-id
+~~~~~~~~
+
+A UUID that changes on every invocation of Rally. It is intended to group all samples of a benchmark trial.
 
 @timestamp
 ~~~~~~~~~~
@@ -127,6 +133,7 @@ Rally stores the following metrics:
 * ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
 * ``disk_io_read_bytes``: number of bytes that have been read from disk during the benchmark. The same caveats apply on Mac OS X as for ``disk_io_write_bytes``.
 * ``cpu_utilization_1s``: CPU usage in percent of the Elasticsearch process based on a one second sample period. The maximum value is N * 100% where N is the number of CPU cores available.
+* ``node_startup_time``: The time in seconds it took from process start until the node is up.
 * ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * ``node_total_young_gen_gc_time``: The total runtime of the young generation garbage collector across the whole cluster as reported by the node stats API.
 * ``segments_count``: Total number of segments as reported by the indices stats API.

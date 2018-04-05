@@ -11,7 +11,7 @@ from esrally.exceptions import BuildError, SystemSetupError
 logger = logging.getLogger("rally.supplier")
 
 CLEAN_TASK = "clean"
-ASSEMBLE_TASK = ":distribution:tar:assemble"
+ASSEMBLE_TASK = ":distribution:archives:tar:assemble"
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
@@ -27,9 +27,9 @@ def create(cfg, sources, distribution, build, challenge_root_path, plugins):
 
     if build_needed:
         gradle = cfg.opts("build", "gradle.bin")
-        java9_home = _java9_home(cfg)
+        java10_home = _java10_home(cfg)
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, gradle, java9_home, challenge_root_path)
+        builder = Builder(es_src_dir, gradle, java10_home, challenge_root_path)
     else:
         builder = None
 
@@ -68,14 +68,14 @@ def create(cfg, sources, distribution, build, challenge_root_path, plugins):
     return CompositeSupplier(suppliers)
 
 
-def _java9_home(cfg):
+def _java10_home(cfg):
     from esrally import config
     try:
-        return cfg.opts("runtime", "java9.home")
+        return cfg.opts("runtime", "java10.home")
     except config.ConfigError:
-        logger.exception("Cannot determine Java 9 home.")
-        raise exceptions.SystemSetupError("No JDK 9 is configured. You cannot benchmark source builds of Elasticsearch on this machine. "
-                                          "Please install a JDK 9 and reconfigure Rally with %s configure" % PROGRAM_NAME)
+        logger.exception("Cannot determine Java 10 home.")
+        raise exceptions.SystemSetupError("No JDK 10 is configured. You cannot benchmark source builds of Elasticsearch on this machine. "
+                                          "Please install a JDK 10 and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
 
 def _required_version(version):
@@ -191,7 +191,7 @@ class ElasticsearchSourceSupplier:
 
     def resolve_binary(self):
         try:
-            return glob.glob("%s/distribution/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
+            return glob.glob("%s/distribution/archives/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
 
@@ -427,13 +427,6 @@ class SourceRepository:
 
 
 class Builder:
-    # Tested with Gradle 4.1 on Java 9-ea+161
-    JAVA_9_GRADLE_OPTS = "--add-opens=java.base/java.io=ALL-UNNAMED " \
-                         "--add-opens=java.base/java.lang=ALL-UNNAMED " \
-                         "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED " \
-                         "--add-opens=java.base/java.util=ALL-UNNAMED " \
-                         "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED " \
-                         "--add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED"
     """
     A builder is responsible for creating an installable binary from the source files.
 
@@ -460,18 +453,14 @@ class Builder:
         log_file = "%s/build.log" % self.log_dir
 
         # we capture all output to a dedicated build log file
-        jvm_major_version = jvm.major_version(self.java_home)
-        if jvm_major_version > 8:
-            logger.info("Detected JVM with major version [%d]. Adjusting JDK module access options for the build." % jvm_major_version)
-            gradle_opts = "export GRADLE_OPTS=\"%s\"; " % Builder.JAVA_9_GRADLE_OPTS
-        else:
-            gradle_opts = ""
 
-        if process.run_subprocess("%sexport JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" %
-                                          (gradle_opts, self.java_home, src_dir, self.gradle, task, log_file)):
+        build_cmd = "export JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" % (self.java_home, src_dir, self.gradle, task, log_file)
+        logger.info("Running build command [%s]" % build_cmd)
+
+        if process.run_subprocess(build_cmd):
             msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
             msg += "=========================================================================================================\n"
-            with open(log_file, "r") as f:
+            with open(log_file, "r", encoding="utf-8") as f:
                 msg += "\t"
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"

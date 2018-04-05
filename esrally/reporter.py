@@ -57,7 +57,7 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
                     (normalized_report_file, report_file, report_format))
         # ensure that the parent folder already exists when we try to write the file...
         rio.ensure_dir(rio.dirname(normalized_report_file))
-        with open(normalized_report_file, mode="a+", encoding="UTF-8") as f:
+        with open(normalized_report_file, mode="a+", encoding="utf-8") as f:
             f.writelines(formatter(headers, data_plain, write_header))
 
 
@@ -126,6 +126,13 @@ class StatsCalculator:
                         self.single_latency(t, metric_name="service_time"),
                         self.error_rate(t)
                     )
+        logger.debug("Gathering node startup time metrics.")
+        startup_times = self.store.get_raw("node_startup_time")
+        for startup_time in startup_times:
+            if "meta" in startup_time and "node_name" in startup_time["meta"]:
+                result.add_node_metrics(startup_time["meta"]["node_name"], startup_time["value"])
+            else:
+                logger.debug("Skipping incomplete startup time record [%s]." % str(startup_time))
 
         logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
@@ -142,6 +149,9 @@ class StatsCalculator:
         result.merge_part_time_norms = self.sum("merge_parts_total_time_norms")
         result.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
         result.merge_part_time_points = self.sum("merge_parts_total_time_points")
+
+        logger.debug("Gathering ML max processing time.")
+        result.ml_max_processing_time = self.one("ml_max_processing_time_millis")
 
         logger.debug("Gathering CPU usage metrics.")
         result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
@@ -225,12 +235,14 @@ class StatsCalculator:
 class Stats:
     def __init__(self, d=None):
         self.op_metrics = self.v(d, "op_metrics", default=[])
+        self.node_metrics = self.v(d, "node_metrics", default=[])
         self.total_time = self.v(d, "total_time")
         self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
         self.merge_time = self.v(d, "merge_time")
         self.refresh_time = self.v(d, "refresh_time")
         self.flush_time = self.v(d, "flush_time")
         self.merge_throttle_time = self.v(d, "merge_throttle_time")
+        self.ml_max_processing_time = self.v(d, "ml_max_processing_time")
 
         self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
         self.merge_part_time_stored_fields = self.v(d, "merge_part_time_stored_fields")
@@ -277,6 +289,10 @@ class Stats:
                         all_results.append(
                             {"task": item["task"], "operation": item["operation"], "name": "error_rate",
                              "value": {"single": item["error_rate"]}})
+            elif metric == "node_metrics":
+                for item in value:
+                    if "startup_time" in item:
+                        all_results.append({"node": item["node"], "name": "startup_time", "value": {"single": item["startup_time"]}})
             elif value is not None:
                 result = {
                     "name": metric,
@@ -299,6 +315,12 @@ class Stats:
             "latency": latency,
             "service_time": service_time,
             "error_rate": error_rate
+        })
+
+    def add_node_metrics(self, node, startup_time):
+        self.node_metrics.append({
+            "node": node,
+            "startup_time": startup_time
         })
 
     def tasks(self):
@@ -366,6 +388,7 @@ class SummaryReporter:
         metrics_table = []
         metrics_table += self.report_total_times(stats)
         metrics_table += self.report_merge_part_times(stats)
+        metrics_table += self.report_ml_max_processing_time(stats)
 
         metrics_table += self.report_cpu_usage(stats)
         metrics_table += self.report_gc_times(stats)
@@ -456,6 +479,11 @@ class SummaryReporter:
             self.line("Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
         )
 
+    def report_ml_max_processing_time(self, stats):
+        return self.join(
+            self.line("Max Processing Time (ML)", "", convert.ms_to_seconds(stats.ml_max_processing_time), "s")
+        )
+
     def report_cpu_usage(self, stats):
         return self.join(
             self.line("Median CPU usage", "", stats.median_cpu_usage, "%")
@@ -515,8 +543,8 @@ class ComparisonReporter:
         self.plain = False
 
     def report(self, r1, r2):
-        logger.info("Generating comparison report for baseline (invocation=[%s], track=[%s], challenge=[%s], car=[%s]) and "
-                    "contender (invocation=[%s], track=[%s], challenge=[%s], car=[%s])" %
+        logger.info("Generating comparison report for baseline (trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]) and "
+                    "contender (trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s])" %
                     (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
                      r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally

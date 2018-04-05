@@ -7,25 +7,25 @@ from enum import Enum
 import jinja2
 
 from esrally import exceptions
-from esrally.utils import io, console, process, modules
+from esrally.utils import io, console, process, modules, versions
 
 logger = logging.getLogger("rally.provisioner")
 
 
 def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
+    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     preserve = cfg.opts("mechanic", "preserve.install")
-    data_root_paths = cfg.opts("mechanic", "node.datapaths")
 
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
-    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, data_root_paths, all_node_ips, ip, http_port)
+    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, all_node_ips, ip, http_port)
     plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
 
-    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve)
+    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
 
 
 def no_op_provisioner():
@@ -131,7 +131,7 @@ def _apply_config(source_root_path, target_root_path, config_vars):
             if plain_text(source_file):
                 logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
                 # automatically merge config snippets from plugins (e.g. if they want to add config to elasticsearch.yml)
-                with open(target_file, "a") as f:
+                with open(target_file, mode="a", encoding="utf-8") as f:
                     f.write(_render_template(env, config_vars, source_file))
             else:
                 logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
@@ -144,31 +144,22 @@ class BareProvisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, apply_config=_apply_config):
+    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, distribution_version=None, apply_config=_apply_config):
         self.preserve = preserve
         self._cluster_settings = cluster_settings
         self.es_installer = es_installer
         self.plugin_installers = plugin_installers
+        self.distribution_version = distribution_version
         self.apply_config = apply_config
 
     def prepare(self, binary):
-        self._install_binary(binary)
-        return self._configure()
-
-    def cleanup(self):
-        self.es_installer.cleanup(self.preserve)
-
-    def _install_binary(self, binaries):
         if not self.preserve:
             console.info("Rally will delete the benchmark candidate after the benchmark")
-        self.es_installer.install(binaries["elasticsearch"])
+        self.es_installer.install(binary["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
 
-        for installer in self.plugin_installers:
-            installer.install(self.es_installer.es_home_path, binaries.get(installer.plugin_name))
-
-    def _configure(self):
+        # determine after installation because some variables will depend on the install directory
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
 
@@ -176,6 +167,7 @@ class BareProvisioner:
             self.apply_config(p, target_root_path, provisioner_vars)
 
         for installer in self.plugin_installers:
+            installer.install(target_root_path, binary.get(installer.plugin_name))
             for plugin_config_path in installer.config_source_paths:
                 self.apply_config(plugin_config_path, target_root_path, provisioner_vars)
 
@@ -187,11 +179,24 @@ class BareProvisioner:
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
                                  self.es_installer.data_paths)
 
+    def cleanup(self):
+        self.es_installer.cleanup(self.preserve)
+
     def _provisioner_variables(self):
         plugin_variables = {}
         mandatory_plugins = []
         for installer in self.plugin_installers:
-            mandatory_plugins.append(installer.plugin_name)
+            # For Elasticsearch < 6.3 more specific plugin names are required for mandatory plugin check
+            # Details in: https://github.com/elastic/elasticsearch/pull/28710
+            # TODO: Remove this section with Elasticsearch <6.3 becomes EOL.
+            try:
+                major, minor, _, _ = versions.components(self.distribution_version)
+                if (major == 6 and minor < 3) or major < 6:
+                    mandatory_plugins.append(installer.sub_plugin_name)
+                else:
+                    mandatory_plugins.append(installer.plugin_name)
+            except (TypeError, exceptions.InvalidSyntax):
+                mandatory_plugins.append(installer.plugin_name)
             plugin_variables.update(installer.variables)
 
         cluster_settings = {}
@@ -213,13 +218,13 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, node_name, node_root_dir, data_root_paths, all_node_ips, ip, http_port):
+    def __init__(self, car, node_name, node_root_dir, all_node_ips, ip, http_port):
         self.car = car
         self.node_name = node_name
         self.node_root_dir = node_root_dir
         self.install_dir = "%s/install" % node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
-        self.data_root_paths = data_root_paths
+        self.heap_dump_dir = "%s/heapdump" % node_root_dir
         self.all_node_ips = all_node_ips
         self.node_ip = ip
         self.http_port = http_port
@@ -230,6 +235,7 @@ class ElasticsearchInstaller:
         logger.info("Preparing candidate locally in [%s]." % self.install_dir)
         io.ensure_dir(self.install_dir)
         io.ensure_dir(self.node_log_dir)
+        io.ensure_dir(self.heap_dump_dir)
 
         logger.info("Unzipping %s to %s" % (binary, self.install_dir))
         io.decompress(binary, self.install_dir)
@@ -254,6 +260,7 @@ class ElasticsearchInstaller:
             "node_name": self.node_name,
             "data_paths": self.data_paths,
             "log_path": self.node_log_dir,
+            "heap_dump_path": self.heap_dump_dir,
             # this is the node's IP address as specified by the user when invoking Rally
             "node_ip": self.node_ip,
             # this is the IP address that the node will be bound to. Rally will bind to the node's IP address (but not to 0.0.0.0). The
@@ -278,8 +285,16 @@ class ElasticsearchInstaller:
         return self.car.config_paths
 
     def _data_paths(self):
-        roots = self.data_root_paths if self.data_root_paths else [self.es_home_path]
-        return [os.path.join(root, "data") for root in roots]
+        if "data_paths" in self.car.variables:
+            data_paths = self.car.variables["data_paths"]
+            if isinstance(data_paths, str):
+                return [data_paths]
+            elif isinstance(data_paths, list):
+                return data_paths
+            else:
+                raise exceptions.SystemSetupError("Expected [data_paths] to be either a string or a list but was [%s]." % type(data_paths))
+        else:
+            return [os.path.join(self.es_home_path, "data")]
 
 
 class InstallHookHandler:
@@ -370,6 +385,11 @@ class PluginInstaller:
     def plugin_name(self):
         return self.plugin.name
 
+    @property
+    def sub_plugin_name(self):
+        # if a plugin consists of multiple plugins (e.g. x-pack) we're interested in that name
+        return self.variables.get("plugin_name", self.plugin_name)
+
 
 class NoOpProvisioner:
     def __init__(self, *args):
@@ -454,7 +474,7 @@ class DockerProvisioner:
                     mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
                     if plain_text(source_file):
                         logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
-                        with open(target_file, "a") as f:
+                        with open(target_file, mode="a", encoding="utf-8") as f:
                             f.write(_render_template(env, self.config_vars, source_file))
                     else:
                         logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
@@ -463,7 +483,7 @@ class DockerProvisioner:
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
 
-        with open(self.binary_path, "wt") as f:
+        with open(self.binary_path, mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
         return NodeConfiguration(self.car, self.node_ip, self.node_name, self.node_root_dir, self.binary_path,

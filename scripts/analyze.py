@@ -182,7 +182,7 @@ def parse_args():
     parser.add_argument(
         "--label",
         help="defines which attribute to use for labelling data series (default: trial-timestamp).",
-        choices=["environment", "trial-timestamp", "user-tag", "challenge", "car"],
+        choices=["environment", "trial-timestamp", "user-tags", "challenge", "car"],
         default="trial-timestamp")
 
     parser.add_argument("path",

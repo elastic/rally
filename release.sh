@@ -6,14 +6,7 @@
 # pip3 install --pre github3.py (see changelog.py)
 
 # fail this script immediately if any command fails with a non-zero exit code
-set -e
-
-# test number of parameters
-if [ $# != 2 ]
-then
-    echo "Usage: $0 RELEASE_VERSION NEXT_VERSION"
-    exit 1
-fi
+set -eu
 
 RELEASE_VERSION=$1
 NEXT_RELEASE="$2.dev0"
@@ -21,14 +14,6 @@ NEXT_RELEASE="$2.dev0"
 echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
-
-make clean
-echo "Building docs"
-make docs
-
-echo "Running tests"
-# run integration tests, note that this requires that tox is properly set up
-tox
 
 echo "Updating author information"
 git log --format='%aN' | sort -u > AUTHORS
@@ -90,6 +75,6 @@ echo ""
 echo "Manual tasks:"
 echo ""
 echo "* Activate version $RELEASE_VERSION: https://readthedocs.org/dashboard/esrally/version/$RELEASE_VERSION/"
-echo "* Close milestone on Github: https://github.com/elastic/rally/milestones/$RELEASE_VERSION"
+echo "* Close milestone on Github: https://github.com/elastic/rally/milestones"
 echo "* Upload offline install package to Github: https://github.com/elastic/rally/releases/edit/$RELEASE_VERSION"
 echo "* Announce on Discuss: https://discuss.elastic.co/c/annoucements"

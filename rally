@@ -27,3 +27,4 @@ __RALLY_INTERNAL_BINARY_NAME="esrally"
 __RALLY_INTERNAL_HUMAN_NAME="Rally"
 
 source run.sh
+

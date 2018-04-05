@@ -12,7 +12,7 @@ from esrally.utils import console, process, jvm
 logger = logging.getLogger("rally.launcher")
 
 
-def wait_for_rest_layer(es, max_attempts=10):
+def wait_for_rest_layer(es, max_attempts=20):
     for attempt in range(max_attempts):
         import elasticsearch
         try:
@@ -21,10 +21,10 @@ def wait_for_rest_layer(es, max_attempts=10):
         except elasticsearch.TransportError as e:
             if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
                 logger.debug("Elasticsearch REST API is not available yet (probably cluster block).")
-                time.sleep(2)
+                time.sleep(1)
             elif e.status_code == 401:
                 logger.debug("Could not authenticate yet (probably x-pack initializing).")
-                time.sleep(2)
+                time.sleep(1)
             else:
                 raise e
     return False
@@ -45,13 +45,14 @@ class ClusterLauncher:
             telemetry.ClusterMetaDataInfo(es),
             telemetry.ClusterEnvironmentInfo(es, self.metrics_store),
             telemetry.NodeStats(es, self.metrics_store),
-            telemetry.IndexStats(es, self.metrics_store)
+            telemetry.IndexStats(es, self.metrics_store),
+            telemetry.MlBucketProcessingTime(es, self.metrics_store)
         ])
 
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
         c = cluster.Cluster(hosts, [], t)
         logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-        if wait_for_rest_layer(es, max_attempts=20):
+        if wait_for_rest_layer(es, max_attempts=40):
             logger.info("REST API is available. Attaching telemetry devices to cluster.")
             t.attach_to_cluster(c)
             logger.info("Telemetry devices are now attached to the cluster.")
@@ -229,11 +230,12 @@ class InProcessLauncher:
             telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.MergeParts(self.metrics_store, node_configuration.log_path),
+            telemetry.StartupTime(self.metrics_store),
         ]
 
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
-
         env = self._prepare_env(car, node_name, t)
+        t.on_pre_node_start(node_name)
         node_process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(node_process, host_name, node_name, t)
         logger.info("Node [%s] has successfully started. Attaching telemetry devices." % node_name)
@@ -308,29 +310,42 @@ class InProcessLauncher:
         """
         Reads the output from the ES (node) subprocess.
         """
+        lines_to_log = 0
         while True:
-            l = server.stdout.readline().decode("utf-8")
-            if len(l) == 0:
-                # no more output -> the process has terminated. We can give up now
+            line = server.stdout.readline().decode("utf-8")
+            if len(line) == 0:
+                logger.info("%s (stdout): No more output. Process has likely terminated." % node_name)
+                self.await_termination(server)
                 startup_event.set()
                 break
-            l = l.rstrip()
-            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
-            if not startup_event.isSet():
-                logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+            line = line.rstrip()
 
-            if l.find("Initialization Failed") != -1 or l.find("A fatal exception has occurred") != -1:
-                logger.error("[%s] encountered initialization errors." % node_name)
-                # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
-                wait = 5
-                while not server.returncode or wait == 0:
-                    time.sleep(0.1)
-                    server.poll()
-                    wait -= 1
-                startup_event.set()
-            if l.endswith("started") and not startup_event.isSet():
-                startup_event.set()
-                logger.info("[%s] has successfully started." % node_name)
+            # if an error occurs, log the next few lines
+            if "error" in line.lower():
+                lines_to_log = 10
+            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
+            if not startup_event.isSet() or lines_to_log > 0:
+                logger.info("%s (stdout): %s" % (node_name, line))
+                lines_to_log -= 1
+
+            # no need to check as soon as we have detected node startup
+            if not startup_event.isSet():
+                if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
+                    logger.error("[%s] encountered initialization errors." % node_name)
+                    # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
+                    self.await_termination(server)
+                    startup_event.set()
+                if line.endswith("started") and not startup_event.isSet():
+                    startup_event.set()
+                    logger.info("[%s] has successfully started." % node_name)
+
+    def await_termination(self, server, timeout=5):
+        # wait a moment to ensure the process has terminated
+        wait = timeout
+        while not server.returncode or wait == 0:
+            time.sleep(0.1)
+            server.poll()
+            wait -= 1
 
     def stop(self, nodes):
         if self.keep_running:
@@ -344,10 +359,12 @@ class InProcessLauncher:
             if not self.keep_running:
                 stop_watch = self._clock.stop_watch()
                 stop_watch.start()
-                os.kill(process.pid, signal.SIGINT)
                 try:
+                    os.kill(process.pid, signal.SIGINT)
                     process.wait(10.0)
                     logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
+                except ProcessLookupError:
+                    logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
                 except subprocess.TimeoutExpired:
                     # kill -9
                     logger.warning("Node [%s] did not shut down itself after 10 seconds; now kill -QUIT node, to see threads:" % node_name)
