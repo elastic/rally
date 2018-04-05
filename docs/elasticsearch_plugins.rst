@@ -103,7 +103,7 @@ Let's discuss these properties one by one:
 
 * ``plugin.my-plugin.remote.repo.url`` (optional): This is needed to let Rally checkout the source code of the plugin. If this is a private repo, credentials need to be setup properly. If the source code is already locally available you may not need to define this property. The remote's name is assumed to be "origin" and this is not configurable. Also, only git is supported as revision control system.
 * ``plugin.my-plugin.src.subdir`` (mandatory): This is the directory to which the plugin will be checked out relative to ``src.root.dir``. In order to allow to build the plugin alongside Elasticsearch, the plugin needs to reside in a subdirectory of ``elasticsearch-extra`` (see also the `Elasticsearch testing documentation <https://github.com/elastic/elasticsearch/blob/master/TESTING.asciidoc#building-with-extra-plugins>`_.
-* ``plugin.my-plugin.build.command`` (mandatory): The full Gradle command to run in order to build the plugin artifact. Note that this command is run from the Elasticsearch source directory as Rally assumes that you want to build your plugin alongside Elasticsearch (otherwise, see the next section).
+* ``plugin.my-plugin.build.command`` (mandatory): The full build command to run in order to build the plugin artifact. Note that this command is run from the Elasticsearch source directory as Rally assumes that you want to build your plugin alongside Elasticsearch (otherwise, see the next section).
 * ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.subdir`` in which the final plugin artifact is located.
 
 .. warning::
@@ -132,7 +132,7 @@ Let's discuss these properties one by one:
 
 * ``plugin.my-plugin.remote.repo.url`` (optional): This is needed to let Rally checkout the source code of the plugin. If this is a private repo, credentials need to be setup properly. If the source code is already locally available you may not need to define this property. The remote's name is assumed to be "origin" and this is not configurable. Also, only git is supported as revision control system.
 * ``plugin.my-plugin.src.dir`` (mandatory): This is the absolute directory to which the source code will be checked out.
-* ``plugin.my-plugin.build.command`` (mandatory): The full Gradle command to run in order to build the plugin artifact. This command is run from the plugin project's root directory.
+* ``plugin.my-plugin.build.command`` (mandatory): The full build command to run in order to build the plugin artifact. This command is run from the plugin project's root directory.
 * ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.dir`` in which the final plugin artifact is located.
 
 .. warning::

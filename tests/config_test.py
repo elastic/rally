@@ -1110,10 +1110,17 @@ class ConfigMigrationTests(TestCase):
         self.assertTrue(config_file.backup_created)
         self.assertEqual("15", config_file.config["meta"]["config.version"])
         self.assertNotIn("build", config_file.config)
-        self.assertIn(
-            "You will need to edit the plugin [{}] section in your rally ini file and change from:\n"
-            "                          "
-            "[{} = {}] to [{} = <the full command>].".format("x-pack",
-                                                             "plugin.x-pack.build.task",
-                                                             ":x-pack-elasticsearch:plugin:assemble",
-                                                             "plugin.x-pack.build.command"), string_buffer.read())
+        self.assertEqual(
+            "\n"
+            "WARNING:"
+            "  The build.task property for plugins has been obsoleted in favor of the full build.command."
+            "  You will need to edit the plugin [{}] section in {} and change from:"
+            "  [{} = {}] to [{} = <the full command>]."
+            "  Please refer to the documentation for more details:"
+            "  {}.\n".format("x-pack",
+                       "in-memory",
+                       "plugin.x-pack.build.task",
+                       ":x-pack-elasticsearch:plugin:assemble",
+                       "plugin.x-pack.build.command",
+                       "https://esrally.readthedocs.io/en/latest/elasticsearch_plugins.html#running-a-benchmark-with-plugins"""
+            ), string_buffer.read())

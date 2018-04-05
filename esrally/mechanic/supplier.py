@@ -446,10 +446,10 @@ class Builder:
         from esrally.utils import jvm
         src_dir = self.src_dir if override_src_dir is None else override_src_dir
 
-        logger.info("Building from sources in [%s]." % src_dir)
-        logger.info("Executing %s..." % (command,))
+        logger.info("Building from sources in [{}].".format(src_dir))
+        logger.info("Executing {}...".format(command))
         io.ensure_dir(self.log_dir)
-        log_file = "%s/build.log" % self.log_dir
+        log_file = "{}/build.log".format(self.log_dir)
 
         # we capture all output to a dedicated build log file
 

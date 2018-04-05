@@ -856,20 +856,18 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                 if plugin_match != None and len(plugin_match.groups()) > 0 :
                     plugin_name = plugin_match.group(1)
                     new_key = "plugin.{}.build.command".format(plugin_name)
-                    out(
-                        """
-                        WARNING:
-                          The build.task property for plugins has been obsoleted in favor of the full build.command.
-                          You will need to edit the plugin [{}] section in your rally ini file and change from:
-                          [{} = {}] to [{} = <the full command>].
-                          Please refer to the documentation for more details:
-                          http://esrally.readthedocs.io/en/stable/elasticsearch_plugins.html#running-a-benchmark-with-plugins.
+                    out("\n"
+                        "WARNING:"
+                        "  The build.task property for plugins has been obsoleted in favor of the full build.command."
+                        "  You will need to edit the plugin [{}] section in {} and change from:"
+                        "  [{} = {}] to [{} = <the full command>]."
+                        "  Please refer to the documentation for more details:"
+                        "  {}.\n".format(plugin_match.group(1), config_file.location, k, v, new_key,
+                                         console.format.link("%selasticsearch_plugins.html#running-a-benchmark-with-plugins" % DOC_LINK)))
 
-                        """.format(plugin_match.group(1), k, v, new_key)
-                    )
         logger.info("Migrating configuration version from 14 to 15.")
         if "build" in config:
-            logger.info("Removing [build] section as part of the configuration migration. Rally now uses ./gradlew to build Elasticsearch.")
+            logger.info("Removing Gradle configuration as Rally now uses the Gradle Wrapper to build Elasticsearch.")
             config.pop("build", None)
         warn_if_plugin_build_task_is_in_use(config)
 
