@@ -122,8 +122,9 @@ class FlightRecorder(TelemetryDevice):
     human_name = "Flight Recorder"
     help = "Enables Java Flight Recorder (requires an Oracle JDK)"
 
-    def __init__(self, log_root, java_major_version):
+    def __init__(self, telemetry_params, log_root, java_major_version):
         super().__init__()
+        self.telemetry_params = telemetry_params
         self.log_root = log_root
         self.java_major_version = java_major_version
 
@@ -142,22 +143,33 @@ class FlightRecorder(TelemetryDevice):
         time.sleep(3)
 
         console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger)
-        # this is more robust in case we want to use custom settings
-        # see http://stackoverflow.com/questions/34882035/how-to-record-allocations-with-jfr-on-command-line
-        #
-        # in that case change to:
-        #
-        # Java 8: -XX:StartFlightRecording=defaultrecording=true,settings=es-memory-profiling
-        # Java 9+: "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,settings=es-memory-profiling,filename=%s"
+
+        java_opts = self.java_opts(log_file)
+
+        logger.info("jfr: Adding JVM arguments: [%s].", java_opts)
+        return {"ES_JAVA_OPTS": java_opts}
+
+    def java_opts(self, log_file):
+        recording_template = self.telemetry_params.get("recording-template")
+        java_opts = "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
 
         if self.java_major_version < 9:
-            return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
-                                    "-XX:+FlightRecorder "
-                                    "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=%s "
-                                    "-XX:StartFlightRecording=defaultrecording=true" % log_file}
+            java_opts += "-XX:+FlightRecorder "
+            java_opts += "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={} ".format(log_file)
+            java_opts += "-XX:StartFlightRecording=defaultrecording=true"
+            if recording_template:
+                logger.info("jfr: Using recording template [%s].", recording_template)
+                java_opts += ",settings={}".format(recording_template)
+            else:
+                logger.info("jfr: Using default recording template.")
         else:
-            return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
-                                    "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=%s" % log_file}
+            java_opts += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
+            if recording_template:
+                logger.info("jfr: Using recording template [%s].", recording_template)
+                java_opts += ",settings={}".format(recording_template)
+            else:
+                logger.info("jfr: Using default recording template.")
+        return java_opts
 
 
 class JitCompiler(TelemetryDevice):
