@@ -39,7 +39,7 @@ To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will t
 
 Supported telemetry parameters:
 
-* ``recording-template``: The name of a custom flight recording template. It is up to you to correctly install those recording template on each target machine. If none is specified, the default recording template of Java flight recorder is used.
+* ``recording-template``: The name of a custom flight recording template. It is up to you to correctly install these recording templates on each target machine. If none is specified, the default recording template of Java flight recorder is used.
 
 .. note::
 
