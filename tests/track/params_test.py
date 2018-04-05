@@ -475,11 +475,39 @@ class BulkIndexParamSourceTests(TestCase):
 
         self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
 
+    def test_create_with_ingest_percentage_too_low(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "bulk-size": 5000,
+                "ingest-percentage": 0.0
+            })
+
+        self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 0.0", ctx.exception.args[0])
+
+    def test_create_with_ingest_percentage_too_high(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "bulk-size": 5000,
+                "ingest-percentage": 100.1
+            })
+
+        self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 100.1", ctx.exception.args[0])
+
+    def test_create_with_ingest_percentage_not_numeric(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "bulk-size": 5000,
+                "ingest-percentage": "100 percent"
+            })
+
+        self.assertEqual("'ingest-percentage' must be numeric", ctx.exception.args[0])
+
     def test_create_valid_param_source(self):
         self.assertIsNotNone(params.BulkIndexParamSource(track.Track(name="unit-test"), params={
             "conflicts": "random",
             "bulk-size": 5000,
             "batch-size": 20000,
+            "ingest-percentage": 20.5,
             "pipeline": "test-pipeline"
         }))
 
@@ -564,6 +592,63 @@ class BulkIndexParamSourceTests(TestCase):
                 })
 
         self.assertEqual("The provided corpus ['does_not_exist'] does not match any of the corpora ['default'].", ctx.exception.args[0])
+
+    def test_ingests_all_documents_by_default(self):
+        corpora = [
+            track.DocumentCorpus(name="default", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=300000,
+                                target_index="test-idx",
+                                target_type="test-type"
+                                )
+            ]),
+            track.DocumentCorpus(name="special", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=700000,
+                                target_index="test-idx2",
+                                target_type="type"
+                                )
+            ]),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000
+            })
+
+        partition = source.partition(0, 1)
+        # # no ingest-percentage specified, should issue all one hundred bulk requests
+        self.assertEqual(100, partition.size())
+
+    def test_restricts_number_of_bulks_if_required(self):
+        corpora = [
+            track.DocumentCorpus(name="default", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=300000,
+                                target_index="test-idx",
+                                target_type="test-type"
+                                )
+            ]),
+            track.DocumentCorpus(name="special", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=700000,
+                                target_index="test-idx2",
+                                target_type="type"
+                                )
+            ]),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-percentage": 2.5
+            })
+
+        partition = source.partition(0, 1)
+        # should issue three bulks of size 10.000
+        self.assertEqual(3, partition.size())
 
 
 class BulkDataGeneratorTests(TestCase):
