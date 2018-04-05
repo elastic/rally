@@ -1,5 +1,6 @@
 import os
 import configparser
+from io import StringIO
 
 from unittest import TestCase
 import unittest.mock as mock
@@ -1102,10 +1103,17 @@ class ConfigMigrationTests(TestCase):
             }
         }
         config_file.store(sample_config)
-        config.migrate(config_file, 14, 15, out=null_output)
+        string_buffer = StringIO()
+        config.migrate(config_file, 14, 15, out=string_buffer.write)
+        string_buffer.seek(0)
 
         self.assertTrue(config_file.backup_created)
         self.assertEqual("15", config_file.config["meta"]["config.version"])
         self.assertNotIn("build", config_file.config)
-        self.assertNotIn("plugin.x-pack.build.task", config_file.config["source"])
-        self.assertEqual("./gradlew :x-pack-elasticsearch:plugin:assemble", config_file.config["source"]["plugin.x-pack.build.command"])
+        self.assertIn(
+            "You will need to edit the plugin [{}] section in your rally ini file and change from:\n"
+            "                          "
+            "[{} = {}] to [{} = <the full command>].".format("x-pack",
+                                                             "plugin.x-pack.build.task",
+                                                             ":x-pack-elasticsearch:plugin:assemble",
+                                                             "plugin.x-pack.build.command"), string_buffer.read())

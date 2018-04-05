@@ -848,24 +848,30 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         # Be agnostic about build tools. Let use specify build commands for plugins and elasticsearch
         # but also use gradlew by default for Elasticsearch and Core plugin builds, if nothing else has been specified.
 
-        def migrate_source_plugin_build_tasks(config):
-            if 'source' not in config:
+        def warn_if_plugin_build_task_is_in_use(config):
+            if "source" not in config:
                 return
-            for k, v in config['source'].items():
+            for k, v in config["source"].items():
                 plugin_match = re.match('^plugin\.([^.]+)\.build\.task$',k)
                 if plugin_match != None and len(plugin_match.groups()) > 0 :
                     plugin_name = plugin_match.group(1)
                     new_key = "plugin.{}.build.command".format(plugin_name)
-                    new_value = "./gradlew {}".format(v)
-                    config['source'].pop(k)
-                    config['source'][new_key] = new_value
-                    logger.info("Migrating build.task for plugin [{}] from [{}] to [{}].".format(plugin_match.group(1), v, new_value))
+                    out(
+                        """
+                        WARNING:
+                          The build.task property for plugins has been obsoleted in favor of the full build.command.
+                          You will need to edit the plugin [{}] section in your rally ini file and change from:
+                          [{} = {}] to [{} = <the full command>].
+                          Please refer to the documentation for more details:
+                          http://esrally.readthedocs.io/en/stable/elasticsearch_plugins.html#running-a-benchmark-with-plugins.
 
+                        """.format(plugin_match.group(1), k, v, new_key)
+                    )
         logger.info("Migrating configuration version from 14 to 15.")
         if "build" in config:
             logger.info("Removing [build] section as part of the configuration migration. Rally now uses ./gradlew to build Elasticsearch.")
             config.pop("build", None)
-        migrate_source_plugin_build_tasks(config)
+        warn_if_plugin_build_task_is_in_use(config)
 
         current_version = 15
         config["meta"]["config.version"] = str(current_version)

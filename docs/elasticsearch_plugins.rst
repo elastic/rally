@@ -107,7 +107,7 @@ Let's discuss these properties one by one:
 * ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.subdir`` in which the final plugin artifact is located.
 
 .. warning::
-    ``plugin.my-plugin.build.command`` has replaced ``plugin.my-plugin.build.task`` in earlier Rally versions. It now requires the *full* build command.
+    ``plugin.my-plugin.build.command`` has replaced ``plugin.my-plugin.build.task`` in earlier Rally versions. It now requires the **full** build command.
 
 In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --revision="elasticsearch:some-elasticsearch-revision,my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``some-elasticsearch-revision`` and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
 
@@ -128,15 +128,15 @@ To make this work, you need to manually edit Rally's configuration file in ``~/.
     plugin.my-plugin.build.command = /usr/local/bin/gradle :my-plugin:plugin:assemble
     plugin.my-plugin.build.artifact.subdir = build/distributions
 
-.. warning::
-    ``plugin.my-plugin.build.command`` has replaced ``plugin.my-plugin.build.task`` in earlier Rally versions. It now requires the *full* build command.
-
 Let's discuss these properties one by one:
 
 * ``plugin.my-plugin.remote.repo.url`` (optional): This is needed to let Rally checkout the source code of the plugin. If this is a private repo, credentials need to be setup properly. If the source code is already locally available you may not need to define this property. The remote's name is assumed to be "origin" and this is not configurable. Also, only git is supported as revision control system.
 * ``plugin.my-plugin.src.dir`` (mandatory): This is the absolute directory to which the source code will be checked out.
 * ``plugin.my-plugin.build.command`` (mandatory): The full Gradle command to run in order to build the plugin artifact. This command is run from the plugin project's root directory.
 * ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.dir`` in which the final plugin artifact is located.
+
+.. warning::
+    ``plugin.my-plugin.build.command`` has replaced ``plugin.my-plugin.build.task`` in earlier Rally versions. It now requires the **full** build command.
 
 In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --distribution-version="elasticsearch-version" --revision="my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``elasticsearch-version`` with the correct release (e.g. 6.0.0) and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
 
