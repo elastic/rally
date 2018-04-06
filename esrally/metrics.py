@@ -132,24 +132,24 @@ class EsClientFactory:
         password = self._config.opts("reporting", "datastore.password")
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
-        if ca_path is None and verify:
-            ca_path = certifi.where()
 
+        from esrally import client
+
+        # Instead of duplicating code, we're just adapting the metrics store specific properties to match the regular client options.
+        client_options = {
+            "use_ssl": secure,
+            "verify_certs": verify,
+            "timeout": 120
+        }
+        if ca_path:
+            client_options["ca_certs"] = ca_path
         if user and password:
-            auth = (user, password)
-        else:
-            auth = None
-        if secure:
-            from elasticsearch.connection import create_ssl_context
-            # TODO: pass `verify` to ssl_context
-            ssl_context = create_ssl_context(cafile=ca_path)
-        else:
-            ssl_context = None
+            client_options["basic_auth_user"] = user
+            client_options["basic_auth_password"] = password
 
-        logger.info("Creating connection to metrics store at %s:%s" % (host, port))
-        import elasticsearch
-        self._client = elasticsearch.Elasticsearch(hosts=[{"host": host, "port": port}],
-                                                   ssl_context=ssl_context, timeout=120, request_timeout=120)
+        logger.info("Creating connection to metrics store at %s:%s", host, port)
+        factory = client.EsClientFactory(hosts=[{"host": host, "port": port}], client_options=client_options)
+        self._client = factory.create()
 
     def create(self):
         return EsClient(self._client)
