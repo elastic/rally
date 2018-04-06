@@ -25,7 +25,7 @@ Let's go through an example step by step: First run ``esrally``::
 
     Running simple configuration. Run the advanced configuration with:
 
-      rally configure --advanced-config
+      esrally configure --advanced-config
 
     * Autodetecting available third-party software
       git    : [OK]
@@ -41,7 +41,7 @@ As you can see above, Rally autodetects if git and a JDK are installed. It also 
 
     You can still benchmark binary distributions with e.g.:
 
-      rally --distribution-version=6.0.0
+      esrally --distribution-version=6.0.0
     ********************************************************************************
 
 As you can see, Rally tells you that you cannot build Elasticsearch from sources but you can still benchmark official binary distributions.
