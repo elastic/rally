@@ -272,12 +272,23 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 
 This activates Java flight recorder and the JIT compiler telemetry devices.
 
+``telemetry-params``
+~~~~~~~~~~~~~~~~~~~~
+
+Allows to set parameters for telemetry devices. It accepts a list of comma-separated key-value pairs or a JSON file name. The key-value pairs have to be delimited by a colon. See the :doc:`telemetry devices </telemetry>` documentation for a list of supported parameters.
+
+Example::
+
+    esrally --telemetry=jfr --telemetry-params="recording-template:'profile'"
+
+This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
+
 .. _clr_revision:
 
 ``revision``
 ~~~~~~~~~~~~
 
-If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which will Rally create for you), you can specify the git revision of Elasticsearch that you want to benchmark. But note that Rally does only support Gradle as build tool which effectively means that it will only support this for Elasticsearch 5.0 or better. The default value is ``current``.
+If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which Rally will create for you), you can specify the git revision of Elasticsearch that you want to benchmark. But note that Rally uses and expects the Gradle Wrapper in the Elasticsearch repository (``./gradlew``) which effectively means that it will only support this for Elasticsearch 5.0 or better. The default value is ``current``.
 
 You can specify the revision in different formats:
 
@@ -444,22 +455,6 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 
 .. note::
    This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
-
-``cluster-health``
-~~~~~~~~~~~~~~~~~~
-
-.. warning::
-   This option is deprecated and will be removed in a future version of Rally. For details, please see the respective `Github ticket #364 <https://github.com/elastic/rally/issues/364>`_.
-
-Rally checks whether the cluster health is "green" before it runs a benchmark against it. The main reason is that we don't want to benchmark a cluster which is shuffling shards around or might start doing so. If you really need to run a benchmark against a cluster that is "yellow" or "red", then you can explicitly override Rally's default behavior. It is even possible to skip this check entirely by providing ``--cluster-health=skip``. But please think twice before doing so and rather eliminate the root cause.
-
-**Example**
-
- ::
-
-   esrally --cluster-health=yellow
-
-
 
 ``advanced-config``
 ~~~~~~~~~~~~~~~~~~~

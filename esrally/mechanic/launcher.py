@@ -220,8 +220,9 @@ class InProcessLauncher:
         logger.info("Starting node [%s] based on car [%s]." % (node_name, car))
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
+        telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         node_telemetry = [
-            telemetry.FlightRecorder(node_telemetry_dir, java_major_version),
+            telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
             telemetry.JitCompiler(node_telemetry_dir),
             telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.PerfStat(node_telemetry_dir),

@@ -10,9 +10,7 @@ Simple Configuration
 
 By default, Rally will run a simpler configuration routine and autodetect as much settings as possible or choose defaults for you. If you need more control you can run Rally with ``esrally configure --advanced-config``.
 
-Rally can build Elasticsearch either from sources or use an `official binary distribution <https://www.elastic.co/downloads/elasticsearch>`_. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool was switched from Maven to Gradle. As Rally only supports Gradle, it is limited to Elasticsearch 5.0 and above.
-
-If you want to build Elasticsearch from sources, Gradle needs to be installed prior to running the configuration routine.
+Rally can build Elasticsearch either from sources or use an `official binary distribution <https://www.elastic.co/downloads/elasticsearch>`_. If you have Rally build Elasticsearch from sources, it can only be used to benchmark Elasticsearch 5.0 and above. The reason is that with Elasticsearch 5.0 the build tool switched from Maven to Gradle. As Rally utilizes the Gradle Wrapper, it is limited to Elasticsearch 5.0 and above.
 
 Let's go through an example step by step: First run ``esrally``::
 
@@ -25,63 +23,45 @@ Let's go through an example step by step: First run ``esrally``::
     /_/ |_|\__,_/_/_/\__, /
                     /____/
 
-    Running simple configuration. You can run the advanced configuration with:
+    Running simple configuration. Run the advanced configuration with:
 
       esrally configure --advanced-config
 
     * Autodetecting available third-party software
       git    : [OK]
-      gradle : [OK]
       JDK    : [OK]
 
     * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
+    Enter the JDK 10 root directory (Press Enter to skip):
 
-As you can see above, Rally autodetects if git, Gradle and a JDK are installed. If you don't have Gradle, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you don't have Gradle installed::
-
-    dm@io:~ $ esrally
-
-        ____        ____
-       / __ \____ _/ / /_  __
-      / /_/ / __ `/ / / / / /
-     / _, _/ /_/ / / / /_/ /
-    /_/ |_|\__,_/_/_/\__, /
-                    /____/
-
-    Running simple configuration. You can run the advanced configuration with:
-
-      esrally configure --advanced-config
-
-    * Autodetecting available third-party software
-      git    : [OK]
-      gradle : [MISSING]
-      JDK 8  : [OK]
+As you can see above, Rally autodetects if git and a JDK are installed. It also searches for a JDK 10; if you don't have it, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you press Enter and don't specify a path for JDK 10::
 
     ********************************************************************************
-    You don't have the required software to benchmark Elasticsearch source builds.
+    You don't have a valid JDK 10 installation and cannot benchmark source builds.
 
     You can still benchmark binary distributions with e.g.:
 
-      esrally --distribution-version=5.0.0
+      esrally --distribution-version=6.0.0
     ********************************************************************************
 
 As you can see, Rally tells you that you cannot build Elasticsearch from sources but you can still benchmark official binary distributions.
 
-It's also possible that Rally cannot automatically find your JDK 8 or JDK 10 home directory. In that case, it will ask you later in the configuration process. If you do not provide a JDK home directory, Rally cannot start Elasticsearch on this machine but you can still use it as a load generator to :doc:`benchmark remote clusters </recipes>`.
+It's also possible that Rally cannot automatically your JDK home directory. In that case, it will ask you later in the configuration process. If you do not provide a JDK home directory, Rally cannot start Elasticsearch on this machine but you can still use it as a load generator to :doc:`benchmark remote clusters </recipes>`.
 
-After running the initial detection, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``) or will choose a default directory::
+If you specify a valid path for JDK 10, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``) or will choose a default directory::
 
     * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
     * Setting up benchmark source directory in /Users/dm/.rally/benchmarks/src/elasticsearch
 
-If Rally has not found Gradle in the first step, it will not ask you for a source directory and just go on.
+If a valid path for JDK 10 was not found (or entered), it will not ask you for a source directory and just go on.
 
 Now Rally is done::
 
     Configuration successfully written to /Users/dm/.rally/rally.ini. Happy benchmarking!
 
-    To benchmark Elasticsearch with the default benchmark, run:
+    To benchmark Elasticsearch 6.0.0 with the default benchmark, run:
 
-      esrally
+      esrally --distribution-version=6.0.0
 
     More info about Rally:
 
@@ -121,7 +101,7 @@ Configuration Options
 Rally will ask you a few more things in the advanced setup:
 
 * **Benchmark data directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different data directory here.
-* **Elasticsearch project directory**: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with Gradle in this directory (it runs ``gradle clean`` and ``gradle :distribution:tar:assemble``).
+* **Elasticsearch project directory**: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with the Gradle Wrapper in this directory (it runs ``./gradlew clean`` and ``./gradlew :distribution:tar:assemble``).
 * **JDK root directory**: Rally will only ask this if it could not autodetect the JDK home by itself. Just enter the root directory of the JDK you want to use. By default, Rally will choose Java 8 if available and fallback to Java 10.
 * **Metrics store type**: You can choose between ``in-memory`` which requires no additional setup or ``elasticsearch`` which requires that you start a dedicated Elasticsearch instance to store metrics but gives you much more flexibility to analyse results.
 * **Metrics store settings** (only for metrics store type ``elasticsearch``): Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. When using self-signed certificates on the Elasticsearch metrics store, certificate verification can be turned off by setting the ``datastore.ssl.verification_mode`` setting to ``none``. Alternatively you can enter the path to the certificate authority's signing certificate in ``datastore.ssl.certificate_authorities``. Both settings are optional.

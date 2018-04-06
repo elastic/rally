@@ -214,12 +214,6 @@ def create_arg_parser():
             help="Automatically accept all options with default values (default: false)",
             default=False,
             action="store_true")
-        # TODO #412: Remove this option. Rally will then always use the Gradle Wrapper.
-        # undocumented - only as a workaround to ensure integration tests are always working, even if Gradle is not installed.
-        p.add_argument(
-            "--use-gradle-wrapper",
-            default=False,
-            action="store_true")
         # undocumented - only as a workaround for integration tests
         p.add_argument("--java-home", default=None)
         p.add_argument("--runtime-java-home", default=None)
@@ -322,18 +316,16 @@ def create_arg_parser():
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
                        default="continue")
-        # TODO #380: Remove this. We will turn off index auto management and our standard tracks will provide a track parameter for this.
-        # This parameter is deprecated. We will replace this with an explicit call in our tracks.
-        p.add_argument(
-            "--cluster-health",
-            choices=["red", "yellow", "green", "skip"],
-            help="Expected cluster health at the beginning of the benchmark (default: green)",
-            default="green")
         p.add_argument(
             "--telemetry",
             help="enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
                  "with `%s list telemetry`" % PROGRAM_NAME,
             default="")
+        p.add_argument(
+            "--telemetry-params",
+            help="define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters",
+            default=""
+        )
         p.add_argument(
             "--distribution-repository",
             help="define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
@@ -393,12 +385,6 @@ def create_arg_parser():
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
             default=None)
-        # TODO: Remove in Rally 0.10.0 (there will be no index auto-management anymore)
-        p.add_argument(
-            "--auto-manage-indices",
-            choices=["true", "false"],
-            help=argparse.SUPPRESS,
-            default=None)
         # keeps the cluster running after the benchmark, only relevant if Rally provisions the cluster
         p.add_argument(
             "--keep-cluster-running",
@@ -439,7 +425,6 @@ def ensure_configuration_present(cfg, args, sub_command):
         config.ConfigFactory().create_config(cfg.config_file,
                                              advanced_config=args.advanced_config,
                                              assume_defaults=args.assume_defaults,
-                                             use_gradle_wrapper=args.use_gradle_wrapper,
                                              java_home=args.java_home,
                                              runtime_java_home=args.runtime_java_home)
         exit(0)
@@ -705,6 +690,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
@@ -730,7 +716,6 @@ def main():
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
-    cfg.add(config.Scope.applicationOverride, "track", "auto_manage_indices", to_bool(args.auto_manage_indices))
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
@@ -752,9 +737,6 @@ def main():
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
-    cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
-    if args.cluster_health != "green":
-        console.warn("--cluster-health is deprecated and will be removed in a future version of Rally.")
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))

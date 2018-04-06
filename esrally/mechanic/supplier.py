@@ -10,8 +10,9 @@ from esrally.exceptions import BuildError, SystemSetupError
 
 logger = logging.getLogger("rally.supplier")
 
-CLEAN_TASK = "clean"
-ASSEMBLE_TASK = ":distribution:archives:tar:assemble"
+GRADLE_BINARY = "./gradlew"
+CLEAN_COMMAND = "{} clean".format(GRADLE_BINARY)
+ASSEMBLE_COMMAND = "{} :distribution:archives:tar:assemble".format(GRADLE_BINARY)
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
@@ -26,10 +27,9 @@ def create(cfg, sources, distribution, build, challenge_root_path, plugins):
     suppliers = []
 
     if build_needed:
-        gradle = cfg.opts("build", "gradle.bin")
         java10_home = _java10_home(cfg)
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, gradle, java10_home, challenge_root_path)
+        builder = Builder(es_src_dir, java10_home, challenge_root_path)
     else:
         builder = None
 
@@ -184,7 +184,7 @@ class ElasticsearchSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            self.builder.build([CLEAN_TASK, ASSEMBLE_TASK])
+            self.builder.build([CLEAN_COMMAND, ASSEMBLE_COMMAND])
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
@@ -230,8 +230,8 @@ class ExternalPluginSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            task = _config_value(self.src_config, "plugin.%s.build.task" % self.plugin.name)
-            self.builder.build([task], override_src_dir=self.override_build_dir)
+            command = _config_value(self.src_config, "plugin.{}.build.command".format(self.plugin.name))
+            self.builder.build([command], override_src_dir=self.override_build_dir)
 
     def add(self, binaries):
         binaries[self.plugin.name] = self.resolve_binary()
@@ -262,8 +262,8 @@ class CorePluginSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            task = ":plugins:%s:assemble" % self.plugin.name
-            self.builder.build([task])
+            command = "{} :plugins:{}:assemble".format(GRADLE_BINARY, self.plugin.name)
+            self.builder.build([command])
 
     def add(self, binaries):
         binaries[self.plugin.name] = self.resolve_binary()
@@ -433,38 +433,37 @@ class Builder:
     It is not intended to be used directly but should be triggered by its mechanic.
     """
 
-    def __init__(self, src_dir, gradle=None, java_home=None, log_dir=None):
+    def __init__(self, src_dir, java_home=None, log_dir=None):
         self.src_dir = src_dir
-        self.gradle = gradle
         self.java_home = java_home
         self.log_dir = log_dir
 
-    def build(self, tasks, override_src_dir=None):
-        for task in tasks:
-            self.run(task, override_src_dir)
+    def build(self, commands, override_src_dir=None):
+        for command in commands:
+            self.run(command, override_src_dir)
 
-    def run(self, task, override_src_dir=None):
+    def run(self, command, override_src_dir=None):
         from esrally.utils import jvm
         src_dir = self.src_dir if override_src_dir is None else override_src_dir
 
-        logger.info("Building from sources in [%s]." % src_dir)
-        logger.info("Executing %s %s..." % (self.gradle, task))
+        logger.info("Building from sources in [{}].".format(src_dir))
+        logger.info("Executing {}...".format(command))
         io.ensure_dir(self.log_dir)
-        log_file = "%s/build.log" % self.log_dir
+        log_file = "{}/build.log".format(self.log_dir)
 
         # we capture all output to a dedicated build log file
 
-        build_cmd = "export JAVA_HOME=%s; cd %s; %s %s >> %s 2>&1" % (self.java_home, src_dir, self.gradle, task, log_file)
-        logger.info("Running build command [%s]" % build_cmd)
+        build_cmd = "export JAVA_HOME={}; cd {}; {} >> {} 2>&1".format(self.java_home, src_dir, command, log_file)
+        logger.info("Running build command [{}]".format(build_cmd))
 
         if process.run_subprocess(build_cmd):
-            msg = "Executing '%s %s' failed. The last 20 lines in the build log file are:\n" % (self.gradle, task)
+            msg = "Executing '{}' failed. The last 20 lines in the build log file are:\n".format(command)
             msg += "=========================================================================================================\n"
             with open(log_file, "r", encoding="utf-8") as f:
                 msg += "\t"
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
-            msg += "The full build log is available at [%s]." % log_file
+            msg += "The full build log is available at [{}].".format(log_file)
 
             raise BuildError(msg)
 

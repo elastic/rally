@@ -67,11 +67,9 @@ def load_track(cfg):
         track_dir = repo.track_dir(track_name)
         reader = TrackFileReader(cfg)
         included_tasks = cfg.opts("track", "include.tasks")
-        expected_cluster_health = cfg.opts("driver", "cluster.health")
 
         current_track = reader.read(track_name, repo.track_file(track_name), track_dir)
         current_track = filter_included_tasks(current_track, filters_from_included_tasks(included_tasks))
-        current_track = post_process_for_index_auto_management(current_track, expected_cluster_health)
         plugin_reader = TrackPluginReader(track_dir)
         current_track.has_plugins = plugin_reader.can_load()
 
@@ -522,78 +520,6 @@ def filters_from_included_tasks(included_tasks):
     return filters
 
 
-def post_process_for_index_auto_management(t, expected_cluster_health):
-    auto_managed_indices = any([index.auto_managed for index in t.indices])
-    # spare users this warning for our default tracks
-    if auto_managed_indices and t.name not in DEFAULT_TRACKS:
-        console.warn("Track [%s] uses index auto-management which will be removed soon. Please add [delete-index] and [create-index] "
-                     "tasks at the beginning of each relevant challenge and turn off index auto-management for each index. For details "
-                     "please see the migration guide in the docs." % t.name)
-    if auto_managed_indices or len(t.templates) > 0:
-        for challenge in t.challenges:
-            tasks = []
-            # TODO: Remove the index settings element. We can do this much better now with the create-index operation.
-            create_index_params = {"include-in-reporting": False}
-            if challenge.index_settings:
-                if t.name not in DEFAULT_TRACKS:
-                    console.warn("Track [%s] defines the deprecated property 'index-settings'. Please create indices explicitly with "
-                                 "[create-index] and define the respective index settings there instead." % t.name)
-                create_index_params["settings"] = challenge.index_settings
-            if len(t.templates) > 0:
-                # check if the user has defined a create index template operation
-                user_creates_templates = any(task.matches(track.TaskOpTypeFilter(track.OperationType.CreateIndexTemplate.name))
-                                             for task in challenge.schedule)
-                # We attempt to still do this automatically but issue a warning so that the user will create it themselves.
-                if not user_creates_templates:
-                    console.warn("Track [%s] defines %d index template(s) but soon Rally will not create them implicitly anymore. Please "
-                                 "add [delete-index-template] and [create-index-template] tasks at the beginning of the challenge %s."
-                                 % (t.name, len(t.templates), challenge.name), logger=logger)
-                    tasks.append(track.Task(name="auto-delete-index-templates",
-                                            operation=track.Operation(name="auto-delete-index-templates",
-                                                                      operation_type=track.OperationType.DeleteIndexTemplate.name,
-                                                                      params={
-                                                                          "include-in-reporting": False,
-                                                                          "only-if-exists": True
-                                                                      })))
-                    tasks.append(track.Task(name="auto-create-index-templates",
-                                            operation=track.Operation(name="auto-create-index-templates",
-                                                                      operation_type=track.OperationType.CreateIndexTemplate.name,
-                                                                      params=create_index_params.copy())))
-
-            if auto_managed_indices:
-                tasks.append(track.Task(name="auto-delete-indices",
-                                        operation=track.Operation(name="auto-delete-indices",
-                                                                  operation_type=track.OperationType.DeleteIndex.name,
-                                                                  params={
-                                                                      "include-in-reporting": False,
-                                                                      "only-if-exists": True
-                                                                  })))
-                tasks.append(track.Task(name="auto-create-indices",
-                                        operation=track.Operation(name="auto-create-indices",
-                                                                  operation_type=track.OperationType.CreateIndex.name,
-                                                                  params=create_index_params.copy())))
-
-            # check if the user has already defined a cluster-health operation
-            user_checks_cluster_health = any(task.matches(track.TaskOpTypeFilter(track.OperationType.ClusterHealth.name))
-                                             for task in challenge.schedule)
-
-            if expected_cluster_health != "skip" and not user_checks_cluster_health:
-                tasks.append(track.Task(name="auto-check-cluster-health",
-                                        operation=track.Operation(name="auto-check-cluster-health",
-                                                                  operation_type=track.OperationType.ClusterHealth.name,
-                                                                  params={
-                                                                      "include-in-reporting": False,
-                                                                      "request-params": {
-                                                                          "wait_for_status": expected_cluster_health
-                                                                      }
-                                                                  })))
-
-            challenge.prepend_tasks(tasks)
-        return t
-    else:
-        return t
-
-
 def post_process_for_test_mode(t):
     logger.info("Preparing track [%s] for test mode." % str(t))
     for corpus in t.corpora:
@@ -643,19 +569,18 @@ def post_process_for_test_mode(t):
 
 
 class TrackFileReader:
-    # TODO #380: We will increase the version with 0.10.0 in our standard tracks but Rally 0.9.0 will already be prepared for this change.
+    MINIMUM_SUPPORTED_TRACK_VERSION = 2
     MAXIMUM_SUPPORTED_TRACK_VERSION = 2
     """
     Creates a track from a track file.
     """
 
     def __init__(self, cfg):
-        track_schema_file = "%s/resources/track-schema.json" % (cfg.opts("node", "rally.root"))
+        track_schema_file = os.path.join(cfg.opts("node", "rally.root"), "resources", "track-schema.json")
         with open(track_schema_file, mode="rt", encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
-        override_auto_manage_indices = cfg.opts("track", "auto_manage_indices")
         self.track_params = cfg.opts("track", "params")
-        self.read_track = TrackSpecificationReader(override_auto_manage_indices)
+        self.read_track = TrackSpecificationReader()
 
     def read(self, track_name, track_spec_file, mapping_dir):
         """
@@ -667,47 +592,38 @@ class TrackFileReader:
         :return: A corresponding track instance if the track file is valid.
         """
 
-        logger.info("Reading track specification file [%s]." % track_spec_file)
+        logger.info("Reading track specification file [{}].".format(track_spec_file))
         try:
             rendered = render_template_from_file(track_spec_file, self.track_params)
-            logger.info("Final rendered track for '%s': %s" % (track_spec_file, rendered))
+            logger.info("Final rendered track for '{}': {}".format(track_spec_file, rendered))
             track_spec = json.loads(rendered)
         except jinja2.exceptions.TemplateNotFound:
-            logger.exception("Could not load [%s]." % track_spec_file)
-            raise exceptions.SystemSetupError("Track %s does not exist" % track_name)
+            logger.exception("Could not load [{}]".format(track_spec_file))
+            raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
-            logger.exception("Could not load [%s]." % track_spec_file)
-            # TODO: Check whether we can improve this.
-            # Jinja classes cause serialization problems:
-            #
-            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/TCPTransport.py", line 1431, in _addedDataToIncoming
-            # rdata, extra = inc.data
-            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/TCPTransport.py", line 185, in data
-            # def data(self): return self._rData.completed()
-            # File "/usr/local/lib/python3.6/site-packages/thespian-3.8.3-py3.6.egg/thespian/system/transport/streamBuffer.py", line 80, in completed
-            # return self._deserialize(self._buf), self._extra
-            # TypeError: __init__() missing 1 required positional argument: 'lineno'
-            # (rdata="", extra="")
-            #
-            # => Convert to string early on:
-            raise TrackSyntaxError("Could not load '%s'" % track_spec_file, str(e))
+            logger.exception("Could not load [{}].".format(track_spec_file))
+            # Convert to string early on to avoid serialization errors with Jinja exceptions.
+            raise TrackSyntaxError("Could not load '{}'".format(track_spec_file), str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:
             track_version = int(raw_version)
         except ValueError:
             raise exceptions.InvalidSyntax("version identifier for track %s must be numeric but was [%s]" % (track_name, str(raw_version)))
+        if TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION > track_version:
+            raise exceptions.RallyError("Track {} is on version {} but needs to be updated at least to version {} to work with the "
+                                        "current version of Rally.".format(track_name, track_version,
+                                                                           TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION))
         if TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION < track_version:
-            raise exceptions.RallyError("Track %s requires a newer version of Rally. Please upgrade Rally (supported track version: %d, "
-                                        "required track version: %d)" %
-                                        (track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION, track_version))
+            raise exceptions.RallyError("Track {} requires a newer version of Rally. Please upgrade Rally (supported track version: {}, "
+                                        "required track version: {}).".format(track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION,
+                                                                             track_version))
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
             raise TrackSyntaxError(
-                "Track '%s' is invalid.\n\nError details: %s\nInstance: %s\nPath: %s\nSchema path: %s"
-                % (track_name, ve.message,
-                   json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
+                "Track '{}' is invalid.\n\nError details: {}\nInstance: {}\nPath: {}\nSchema path: {}".format(
+                    track_name, ve.message, json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
         return self.read_track(track_name, track_spec, mapping_dir)
 
 
@@ -757,12 +673,10 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, override_auto_manage_indices=None, track_params=None, source=io.FileSource):
+    def __init__(self, track_params=None, source=io.FileSource):
         self.name = None
-        self.override_auto_manage_indices = override_auto_manage_indices
         self.track_params = track_params if track_params else {}
         self.source = source
-        self.index_op_type_warning_issued = False
 
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
@@ -774,16 +688,6 @@ class TrackSpecificationReader:
         templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
-        # TODO: Remove this in Rally 0.10.0
-        if corpora:
-            logger.info("Track [%s] defines a 'corpora' block. Ignoring any legacy corpora definitions on document types." % self.name)
-        else:
-            corpora = self._create_legacy_corpora(track_specification)
-            # Check whether we have legacy documents; otherwise there is no need for a warning...
-            if corpora:
-                console.warn("Track %s defines corpora together with document types. Please use a dedicated 'corpora' block now. "
-                             "See the migration guide for details." % self.name, logger=logger)
-
         challenges = self._create_challenges(track_specification)
 
         return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
@@ -819,17 +723,7 @@ class TrackSpecificationReader:
         else:
             body = None
 
-        if self.override_auto_manage_indices is not None:
-            auto_managed = self.override_auto_manage_indices
-            logger.info("User explicitly forced auto-managed indices to [%s] on the command line." % str(auto_managed))
-        else:
-            auto_managed = self._r(index_spec, "auto-managed", mandatory=False, default_value=True)
-            logger.info("Using index auto-management setting from track which is set to [%s]." % str(auto_managed))
-
-        types = [self._create_type(type_spec, mapping_dir)
-                 for type_spec in self._r(index_spec, "types", mandatory=auto_managed, default_value=[])]
-
-        return track.Index(name=index_name, body=body, auto_managed=auto_managed, types=types)
+        return track.Index(name=index_name, body=body, types=self._r(index_spec, "types", mandatory=False, default_value=[]))
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
@@ -873,7 +767,7 @@ class TrackSpecificationReader:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False)
 
             if len(indices) == 1 and len(indices[0].types) == 1:
-                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0].name)
+                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0])
             else:
                 corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False)
 
@@ -920,62 +814,6 @@ class TrackSpecificationReader:
 
             document_corpora.append(corpus)
         return document_corpora
-
-    def _create_legacy_corpora(self, track_specification):
-        base_url = self._r(track_specification, "data-url", mandatory=False)
-        legacy_corpus = track.DocumentCorpus(name=self.name)
-        for idx in self._r(track_specification, "indices", mandatory=False, default_value=[]):
-            index_name = self._r(idx, "name")
-            for type_spec in self._r(idx, "types", mandatory=False, default_value=[]):
-                # only do this if this is a legacy type definition - otherwise this is a new type definition and we don't define
-                # any corpora for this track.
-                if isinstance(type_spec, dict):
-                    type_name = self._r(type_spec, "name")
-                    docs = self._r(type_spec, "documents", mandatory=False)
-                    if docs:
-                        if io.is_archive(docs):
-                            document_archive = docs
-                            document_file = io.splitext(docs)[0]
-                        else:
-                            document_archive = None
-                            document_file = docs
-                        number_of_documents = self._r(type_spec, "document-count")
-                        compressed_bytes = self._r(type_spec, "compressed-bytes", mandatory=False)
-                        uncompressed_bytes = self._r(type_spec, "uncompressed-bytes", mandatory=False)
-
-                        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                               document_file=document_file,
-                                               document_archive=document_archive,
-                                               base_url=base_url,
-                                               includes_action_and_meta_data=self._r(type_spec, "includes-action-and-meta-data",
-                                                                                     mandatory=False,
-                                                                                     default_value=False),
-                                               number_of_documents=number_of_documents,
-                                               compressed_size_in_bytes=compressed_bytes,
-                                               uncompressed_size_in_bytes=uncompressed_bytes,
-                                               target_index=index_name, target_type=type_name)
-                        legacy_corpus.documents.append(docs)
-
-        if legacy_corpus.documents:
-            logger.warning("Track [%s] does not define a 'corpora' block. Creating corpora definitions based on document types (will "
-                           "be removed with the next minor release)." % self.name)
-            return [legacy_corpus]
-        else:
-            return []
-
-    def _create_type(self, type_spec, mapping_dir):
-        # TODO: Allow only strings in Rally 0.10.0 (we still needs this atm in order to allow users to define mapping files)
-        if isinstance(type_spec, str):
-            return track.Type(name=type_spec)
-        else:
-            mapping_file = self._r(type_spec, "mapping", mandatory=False)
-            if mapping_file:
-                with self.source(os.path.join(mapping_dir, mapping_file), "rt") as f:
-                    mapping = json.load(f)
-            else:
-                mapping = None
-
-            return track.Type(name=self._r(type_spec, "name"), mapping=mapping)
 
     def _create_challenges(self, track_spec):
         ops = self.parse_operations(self._r(track_spec, "operations", mandatory=False, default_value=[]))
@@ -1150,16 +988,6 @@ class TrackSpecificationReader:
             params = op_spec
 
         try:
-            # TODO #435: Remove this warning.
-            # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
-            if op_type_name == "index" and \
-                    self.name not in DEFAULT_TRACKS and \
-                    not self.index_op_type_warning_issued:
-                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operation %s. Please rename this "
-                             "operation type to [bulk]." % (self.name, op_name))
-                # Don't spam the console...
-                self.index_op_type_warning_issued = True
-
             op = track.OperationType.from_hyphenated_string(op_type_name)
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op

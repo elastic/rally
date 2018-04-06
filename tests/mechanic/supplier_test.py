@@ -120,14 +120,14 @@ class BuilderTests(TestCase):
         jvm_major_version.return_value = 8
         mock_run_subprocess.return_value = False
 
-        b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk8", log_dir="logs")
-        b.build([supplier.CLEAN_TASK, supplier.ASSEMBLE_TASK])
+        b = supplier.Builder(src_dir="/src", java_home="/opt/jdk8", log_dir="logs")
+        b.build([supplier.CLEAN_COMMAND, supplier.ASSEMBLE_COMMAND])
 
         calls = [
             # Actual call
-            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; /usr/local/gradle :distribution:archives:tar:assemble >> logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew :distribution:archives:tar:assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -138,14 +138,14 @@ class BuilderTests(TestCase):
         jvm_major_version.return_value = 10
         mock_run_subprocess.return_value = False
 
-        b = supplier.Builder(src_dir="/src", gradle="/usr/local/gradle", java_home="/opt/jdk10", log_dir="logs")
-        b.build([supplier.CLEAN_TASK, supplier.ASSEMBLE_TASK])
+        b = supplier.Builder(src_dir="/src", java_home="/opt/jdk10", log_dir="logs")
+        b.build([supplier.CLEAN_COMMAND, supplier.ASSEMBLE_COMMAND])
 
         calls = [
             # Actual call
-            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; /usr/local/gradle clean >> logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; /usr/local/gradle "
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew "
                       ":distribution:archives:tar:assemble >> logs/build.log 2>&1"),
         ]
 
@@ -163,7 +163,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
         es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", builder=builder)
         es.prepare()
 
-        builder.build.assert_called_once_with([supplier.CLEAN_TASK, supplier.ASSEMBLE_TASK])
+        builder.build.assert_called_once_with([supplier.CLEAN_COMMAND, supplier.ASSEMBLE_COMMAND])
 
     @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
     def test_add_elasticsearch_binary(self):
@@ -408,7 +408,6 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
-        cfg.add(config.Scope.application, "build", "gradle.bin", "/opt/gradle")
         cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
@@ -439,7 +438,6 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
-        cfg.add(config.Scope.application, "build", "gradle.bin", "/opt/gradle")
         cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
         cfg.add(config.Scope.application, "source", "remote.repo.url", "https://github.com/elastic/elasticsearch.git")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.subdir", "elasticsearch-extra/community-plugin")

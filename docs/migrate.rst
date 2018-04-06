@@ -4,10 +4,70 @@ Migration Guide
 Migrating to Rally 0.10.0
 -------------------------
 
+Removal of auto-detection and dependency on Gradle
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the auto-detection and dependency on Gradle, required until now to build from source, in favor of the `Gradle Wrapper <https://docs.gradle.org/current/userguide/gradle_wrapper.html>`_ which is present in the `Elasticsearch repository <https://github.com/elastic/elasticsearch>`_ for all branches >= 5.0.0.
+
+Use full build command in plugin configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 0.10.0 we have removed the property :code:`build.task` for plugin definitions, in the :code:`source` section of the Rally configuration file.
+Instead, a new property :code:`build.command` has been introduced where the **full build command** needs to be supplied.
+
+The earlier syntax, to build a hypothetical plugin called :code:`my-plugin` `alongside Elasticsearch <elasticsearch_plugins.html#plugins-built-alongside-elasticsearch>`_, required::
+
+    plugin.my-plugin.build.task = :my-plugin:plugin:assemble
+
+This needs to be changed to the full command::
+
+    plugin.my-plugin.build.command = ./gradlew :my-plugin:plugin:assemble
+
+Note that if you are configuring `Plugins based on a released Elasticsearch version <elasticsearch_plugins.html#plugins-based-on-a-released-elasticsearch-version>`_ the command specified in :code:`build.command` will be executed from the plugins root directory. It's likely this directory won't have the Gradle Wrapper so you'll need to specify the full path to a Gradle command e.g.::
+
+    plugin.my-plugin.build.command = /usr/local/bin/gradle :my-plugin:plugin:assemble
+
+Please refer to `Building plugins from sources <elasticsearch_plugins.html#building-plugins-from-sources>`_ for more information.
+
 Removal of operation type ``index``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We have removed the operation type ``index`` which has been deprecated with Rally 0.8.0. Please use ``bulk`` instead as operation type.
+
+Removal of the command line parameter ``--cluster-health``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the command line parameter ``--cluster-health`` which has been deprecated with Rally 0.8.0. When using Rally's standard tracks, specify the expected cluster health as a track parameter instead, e.g.: ``--track-params="cluster_health:'yellow'"``.
+
+Removal of index-automanagement
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the possibility that Rally automatically deletes and creates indices. Therefore, you need to add the following definitions explicitly at the beginning of a schedule if you want Rally to create declared indices::
+
+        "schedule": [
+          {
+            "operation": "delete-index"
+          },
+          {
+            "operation": {
+              "operation-type": "create-index",
+              "settings": {
+                "index.number_of_replicas": 0
+              }
+            }
+          },
+          {
+            "operation": {
+              "operation-type": "cluster-health",
+              "request-params": {
+                "wait_for_status": "green"
+              }
+            }
+          }
+
+The example above also shows how to provide per-challenge index settings. If per-challenge index settings are not required, you can just specify them in the index definition file.
+
+This behavior applies similarly to index templates as well.
 
 Migrating to Rally 0.9.0
 ------------------------
