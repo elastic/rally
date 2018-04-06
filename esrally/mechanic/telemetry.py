@@ -696,7 +696,7 @@ class IndexStats(InternalTelemetryDevice):
         # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
         # the cluster so we can at least tell them.
         if self.first_time:
-            index_times = self.index_times(self.primaries_index_stats())
+            index_times = self.index_times(self.index_stats()["primaries"])
             for k, v in index_times.items():
                 if v > 0:
                     console.warn("%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
@@ -706,8 +706,9 @@ class IndexStats(InternalTelemetryDevice):
     def on_benchmark_stop(self):
         import json
         logger.info("Gathering indices stats for all primaries on benchmark stop.")
-        p = self.primaries_index_stats()
-        logger.info("Returned indices stats:\n%s" % json.dumps(p, indent=2))
+        index_stats = self.index_stats()
+        logger.info("Returned indices stats:\n%s" % json.dumps(index_stats, indent=2))
+        p = index_stats["primaries"]
         # actually this is add_count
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
@@ -721,12 +722,14 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "norms_memory_in_bytes"]), "segments_norms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
+        self.add_metrics(self.extract_value(index_stats, ["total", "store", "size_in_bytes"]), "store_size_in_bytes", "byte")
+        self.add_metrics(self.extract_value(index_stats, ["total", "translog", "size_in_bytes"]), "translog_size_in_bytes", "byte")
 
-    def primaries_index_stats(self):
+    def index_stats(self):
         # noinspection PyBroadException
         try:
             stats = self.client.indices.stats(metric="_all", level="shards")
-            return stats["_all"]["primaries"]
+            return stats["_all"]
         except BaseException:
             logger.exception("Could not retrieve index stats.")
             return {}

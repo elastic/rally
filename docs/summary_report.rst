@@ -81,8 +81,20 @@ Total Old Gen GC
 Index size
 ----------
 
-* **Definition**: Final resulting index size after the benchmark.
+* **Definition**: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
 * **Corresponding metrics key**: ``final_index_size_bytes``
+
+Store size
+----------
+
+* **Definition**: The size in bytes of the index (excluding the translog) as reported by the indices stats API.
+* **Corresponding metrics key**: ``store_size_in_bytes``
+
+Translog size
+-------------
+
+* **Definition**: The size in bytes of the translog as reported by the indices stats API.
+* **Corresponding metrics key**: ``translog_size_in_bytes``
 
 Totally written
 ---------------

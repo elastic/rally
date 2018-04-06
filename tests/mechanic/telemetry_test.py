@@ -728,6 +728,17 @@ class IndexStatsTests(TestCase):
                     "flush": {
                         "total_time_in_millis": 100
                     }
+                },
+                "total": {
+                    "store": {
+                        "size_in_bytes": 2113867510
+                    },
+                    "translog": {
+                        "operations": 6840000,
+                        "size_in_bytes": 2647984713,
+                        "uncommitted_operations": 0,
+                        "uncommitted_size_in_bytes": 430
+                    }
                 }
             }
         })
@@ -748,7 +759,8 @@ class IndexStatsTests(TestCase):
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
             # we don't have norms, so nothing should have been called
-            mock.call("segments_points_memory_in_bytes", 512, "byte"),
+            mock.call("store_size_in_bytes", 2113867510, "byte"),
+            mock.call("translog_size_in_bytes", 2647984713, "byte"),
         ], any_order=True)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
