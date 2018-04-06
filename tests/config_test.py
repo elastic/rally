@@ -1,5 +1,6 @@
 import os
 import configparser
+from io import StringIO
 
 from unittest import TestCase
 import unittest.mock as mock
@@ -237,7 +238,7 @@ class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
     def test_create_simple_config(self, guess_install_location, guess_java_home, is_ea_release, working_copy):
-        guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
+        guess_install_location.side_effect = ["/tests/usr/bin/git"]
         guess_java_home.return_value = "/tests/java10/home"
         is_ea_release.return_value = False
         # Rally checks in the parent and sibling directories whether there is an ES working copy. We don't want this detection logic
@@ -256,7 +257,7 @@ class ConfigFactoryTests(TestCase):
                 print("%s::%s: %s" % (section, k, v))
 
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("14", config_store.config["meta"]["config.version"])
+        self.assertEqual("15", config_store.config["meta"]["config.version"])
 
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
@@ -268,9 +269,6 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("source" in config_store.config)
         self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
         self.assertEqual("elasticsearch", config_store.config["source"]["elasticsearch.src.subdir"])
-
-        self.assertTrue("build" in config_store.config)
-        self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
 
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java10/home", config_store.config["runtime"]["java.home"])
@@ -314,7 +312,7 @@ class ConfigFactoryTests(TestCase):
     @mock.patch("os.path.exists")
     def test_create_simple_config_no_java_detected(self, path_exists, normalize_path, guess_install_location, guess_java_home,
                                                    major_jvm_version, jvm_is_early_access_release):
-        guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
+        guess_install_location.side_effect = ["/tests/usr/bin/git"]
         guess_java_home.return_value = None
         normalize_path.side_effect = ["/home/user/.rally/benchmarks", "/tests/java10/home", "/tests/java8/home",
                                       "/home/user/.rally/benchmarks/src"]
@@ -334,7 +332,7 @@ class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
     def test_create_simple_config_no_java_installed(self, guess_install_location, guess_java_home):
-        guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
+        guess_install_location.side_effect = ["/tests/usr/bin/git"]
         guess_java_home.return_value = None
 
         # the input is the question for the JDK home and the JDK 10 home directory - the user does not define one
@@ -351,7 +349,7 @@ class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
     def test_create_advanced_config(self, guess_install_location, guess_java_home, is_ea_release):
-        guess_install_location.side_effect = ["/tests/usr/bin/git", "/tests/usr/bin/gradle"]
+        guess_install_location.side_effect = ["/tests/usr/bin/git"]
         guess_java_home.side_effect = ["/tests/java8/home", "/tests/java10/home"]
         is_ea_release.return_value = False
 
@@ -381,14 +379,12 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("14", config_store.config["meta"]["config.version"])
+        self.assertEqual("15", config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
         self.assertEqual("/var/data/rally", config_store.config["node"]["root.dir"])
         self.assertTrue("source" in config_store.config)
-        self.assertTrue("build" in config_store.config)
-        self.assertEqual("/tests/usr/bin/gradle", config_store.config["build"]["gradle.bin"])
         self.assertTrue("runtime" in config_store.config)
         self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
         self.assertEqual("/tests/java10/home", config_store.config["runtime"]["java10.home"])
@@ -1040,8 +1036,91 @@ class ConfigMigrationTests(TestCase):
         }
         config_file.store(sample_config)
         config.migrate(config_file, 13, 14, out=null_output, i=MockInput(inputs=["/usr/lib/java10"]))
-
         self.assertTrue(config_file.backup_created)
         self.assertEqual("14", config_file.config["meta"]["config.version"])
         self.assertEqual("/usr/lib/java8", config_file.config["runtime"]["java.home"])
         self.assertEqual("/usr/lib/java10", config_file.config["runtime"]["java10.home"])
+
+    def test_migrate_from_14_to_15_without_gradle(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 14
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 14, 15, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("15", config_file.config["meta"]["config.version"])
+
+    def test_migrate_from_14_to_15_with_gradle(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 14
+            },
+            "build": {
+                "gradle.bin": "/usr/local/bin/gradle"
+            },
+            "runtime": {
+                "java.home": "/usr/lib/java8",
+                "java10.home": "/usr/lib/java10"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 14, 15, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("15", config_file.config["meta"]["config.version"])
+        self.assertNotIn("build", config_file.config)
+
+    @mock.patch("esrally.utils.io.guess_java_home")
+    @mock.patch("esrally.utils.jvm.is_early_access_release")
+    @mock.patch("esrally.utils.jvm.major_version")
+    def test_migrate_from_14_to_15_with_source_plugin_definition(self, major_version, is_early_access_release, guess_java_home):
+        guess_java_home.return_value = None
+        is_early_access_release.return_value = False
+        major_version.return_value = 10
+
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 14
+            },
+            "build": {
+                "gradle.bin": "/usr/local/bin/gradle"
+            },
+            "runtime": {
+                "java.home": "/usr/lib/java10",
+                "java10.home": "/usr/lib/java10"
+            },
+            "source": {
+                "plugin.x-pack.remote.repo.url": "git@github.com:elastic/x-pack-elasticsearch.git",
+                "plugin.x-pack.src.subdir": "elasticsearch-extra/x-pack-elasticsearch",
+                "plugin.x-pack.build.task": ":x-pack-elasticsearch:plugin:assemble",
+                "plugin.x-pack.build.artifact.subdir": "plugin/build/distributions"
+            }
+        }
+        config_file.store(sample_config)
+        string_buffer = StringIO()
+        config.migrate(config_file, 14, 15, out=string_buffer.write)
+        string_buffer.seek(0)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("15", config_file.config["meta"]["config.version"])
+        self.assertNotIn("build", config_file.config)
+        self.assertEqual(
+            "\n"
+            "WARNING:"
+            "  The build.task property for plugins has been obsoleted in favor of the full build.command."
+            "  You will need to edit the plugin [{}] section in {} and change from:"
+            "  [{} = {}] to [{} = <the full command>]."
+            "  Please refer to the documentation for more details:"
+            "  {}.\n".format("x-pack",
+                       "in-memory",
+                       "plugin.x-pack.build.task",
+                       ":x-pack-elasticsearch:plugin:assemble",
+                       "plugin.x-pack.build.command",
+                       "https://esrally.readthedocs.io/en/latest/elasticsearch_plugins.html#running-a-benchmark-with-plugins"""
+            ), string_buffer.read())

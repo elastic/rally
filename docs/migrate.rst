@@ -4,6 +4,31 @@ Migration Guide
 Migrating to Rally 0.10.0
 -------------------------
 
+Removal of auto-detection and dependency on Gradle
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the auto-detection and dependency on Gradle, required until now to build from source, in favor of the `Gradle Wrapper <https://docs.gradle.org/current/userguide/gradle_wrapper.html>`_ which is present in the `Elasticsearch repository <https://github.com/elastic/elasticsearch>`_ for all branches >= 5.0.0.
+
+Use full build command in plugin configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 0.10.0 we have removed the property :code:`build.task` for plugin definitions, in the :code:`source` section of the Rally configuration file.
+Instead, a new property :code:`build.command` has been introduced where the **full build command** needs to be supplied.
+
+The earlier syntax, to build a hypothetical plugin called :code:`my-plugin` `alongside Elasticsearch <elasticsearch_plugins.html#plugins-built-alongside-elasticsearch>`_, required::
+
+    plugin.my-plugin.build.task = :my-plugin:plugin:assemble
+
+This needs to be changed to the full command::
+
+    plugin.my-plugin.build.command = ./gradlew :my-plugin:plugin:assemble
+
+Note that if you are configuring `Plugins based on a released Elasticsearch version <elasticsearch_plugins.html#plugins-based-on-a-released-elasticsearch-version>`_ the command specified in :code:`build.command` will be executed from the plugins root directory. It's likely this directory won't have the Gradle Wrapper so you'll need to specify the full path to a Gradle command e.g.::
+
+    plugin.my-plugin.build.command = /usr/local/bin/gradle :my-plugin:plugin:assemble
+
+Please refer to `Building plugins from sources <elasticsearch_plugins.html#building-plugins-from-sources>`_ for more information.
+
 Removal of operation type ``index``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

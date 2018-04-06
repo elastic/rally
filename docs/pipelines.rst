@@ -3,7 +3,7 @@ Pipelines
 
 A pipeline is a series of steps that are performed to get benchmark results. This is *not* intended to customize the actual benchmark but rather what happens before and after a benchmark.
 
-An example will clarify the concept: If you want to benchmark a binary distribution of Elasticsearch, Rally has to download a distribution archive, decompress it, start Elasticsearch and then run the benchmark. However, if you want to benchmark a source build of Elasticsearch, it first has to build a distribution with Gradle. So, in both cases, different steps are involved and that's what pipelines are for.
+An example will clarify the concept: If you want to benchmark a binary distribution of Elasticsearch, Rally has to download a distribution archive, decompress it, start Elasticsearch and then run the benchmark. However, if you want to benchmark a source build of Elasticsearch, it first has to build a distribution using the Gradle Wrapper. So, in both cases, different steps are involved and that's what pipelines are for.
 
 You can get a list of all pipelines with ``esrally list pipelines``::
 
@@ -52,7 +52,7 @@ from-sources-complete
 
 You should use this pipeline when you want to build and benchmark Elasticsearch from sources. This pipeline will only work from Elasticsearch 5.0 onwards because Elasticsearch switched from Maven to Gradle and Rally only supports one build tool in the interest of maintainability.
 
-Remember that you also need to install git and Gradle before and Rally needs to be configured for building for sources. If that's not the case you'll get an error and have to run ``esrally configure`` first. An example invocation::
+Remember that you also need git installed. If that's not the case you'll get an error and have to run ``esrally configure`` first. An example invocation::
 
     esrally --pipeline=from-sources-complete --revision=latest
 
@@ -69,4 +69,3 @@ from-sources-skip-build
 This pipeline is similar to ``from-sources-complete`` except that it assumes you have built the binary once. It saves time if you want to run a benchmark twice for the exact same version of Elasticsearch. Obviously it doesn't make sense to provide a revision: It is always the previously built revision. An example invocation::
 
     esrally --pipeline=from-sources-skip-build
-

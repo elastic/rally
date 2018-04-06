@@ -10,7 +10,6 @@ Please ensure that the following packages are installed before installing Rally 
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8 or 9
 * git 1.9 or better
-* Gradle 3.3 or better
 
 Please check the :doc:`installation guide </install>` for detailed installation instructions for these packages.
 
