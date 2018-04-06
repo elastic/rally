@@ -677,7 +677,6 @@ class TrackSpecificationReader:
         self.name = None
         self.track_params = track_params if track_params else {}
         self.source = source
-        self.index_op_type_warning_issued = False
 
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
@@ -989,16 +988,6 @@ class TrackSpecificationReader:
             params = op_spec
 
         try:
-            # TODO #435: Remove this warning.
-            # Add a deprecation warning but not for built-in tracks (they need to keep the name for backwards compatibility in the meantime)
-            if op_type_name == "index" and \
-                    self.name not in DEFAULT_TRACKS and \
-                    not self.index_op_type_warning_issued:
-                console.warn("The track %s uses the deprecated operation-type [index] for bulk index operation %s. Please rename this "
-                             "operation type to [bulk]." % (self.name, op_name))
-                # Don't spam the console...
-                self.index_op_type_warning_issued = True
-
             op = track.OperationType.from_hyphenated_string(op_type_name)
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
