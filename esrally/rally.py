@@ -329,6 +329,11 @@ def create_arg_parser():
                  "with `%s list telemetry`" % PROGRAM_NAME,
             default="")
         p.add_argument(
+            "--telemetry-params",
+            help="define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters",
+            default=""
+        )
+        p.add_argument(
             "--distribution-repository",
             help="define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
             default="release")
@@ -698,6 +703,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
