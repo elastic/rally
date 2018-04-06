@@ -349,7 +349,6 @@ class Challenge:
                  name,
                  description=None,
                  user_info=None,
-                 index_settings=None,
                  cluster_settings=None,
                  default=False,
                  meta_data=None,
@@ -358,7 +357,6 @@ class Challenge:
         self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.user_info = user_info
-        self.index_settings = index_settings if index_settings else {}
         self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
         self.schedule = schedule if schedule else []
@@ -379,13 +377,13 @@ class Challenge:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.description) ^ hash(self.index_settings) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
+        return hash(self.name) ^ hash(self.description) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
                hash(self.meta_data) ^ hash(self.schedule)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.description, self.index_settings, self.cluster_settings, self.default, self.meta_data, self.schedule) ==
-                (othr.name, othr.description, othr.index_settings, othr.cluster_settings, othr.default, othr.meta_data, othr.schedule))
+                (self.name, self.description, self.cluster_settings, self.default, self.meta_data, self.schedule) ==
+                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.meta_data, othr.schedule))
 
 
 @unique

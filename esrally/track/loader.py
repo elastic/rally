@@ -829,13 +829,7 @@ class TrackSpecificationReader:
             meta_data = self._r(challenge_spec, "meta", error_ctx=name, mandatory=False)
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified
             default = number_of_challenges == 1 or self._r(challenge_spec, "default", error_ctx=name, mandatory=False)
-            # TODO #381: Remove this setting
-            index_settings = self._r(challenge_spec, "index-settings", error_ctx=name, mandatory=False)
             cluster_settings = self._r(challenge_spec, "cluster-settings", error_ctx=name, mandatory=False)
-
-            if index_settings and self.name not in DEFAULT_TRACKS:
-                console.warn("Challenge [%s] in track [%s] defines the [index-settings] property which will be removed soon. For details "
-                             "please see the migration guide in the docs." % (name, self.name))
 
             if default and default_challenge is not None:
                 self._error("Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
@@ -867,7 +861,6 @@ class TrackSpecificationReader:
                                         meta_data=meta_data,
                                         description=description,
                                         user_info=user_info,
-                                        index_settings=index_settings,
                                         cluster_settings=cluster_settings,
                                         default=default,
                                         schedule=schedule)

@@ -668,7 +668,7 @@ class EsResultsStoreTests(TestCase):
 
         t = track.Track(name="unittest-track",
                         indices=[track.Index(name="tests", types=["test-type"])],
-                        challenges=[track.Challenge(name="index", default=True, index_settings=None, schedule=schedule)])
+                        challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         c = cluster.Cluster([], [], None)
         c.distribution_version = "5.0.0"
