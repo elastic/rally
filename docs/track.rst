@@ -70,7 +70,7 @@ If you have added a remote you should also add it in ``~/.rally/rally.ini``, oth
 
     private.url = <<URL_TO_YOUR_ORIGIN>>
 
-If you specify ``--track-repository=private``, Rally will check whether there is a directory ``~/.rally/benchmarks/tracks/private``. If there is none, it will use the provided URL to clone the repo. However, if the directory already exists the property is irrelevant and Rally will just update the local tracking branches before the benchmark starts.
+If you specify ``--track-repository=private``, Rally will check whether there is a directory ``~/.rally/benchmarks/tracks/private``. If there is none, it will use the provided URL to clone the repo. However, if the directory already exists, the property gets ignored and Rally will just update the local tracking branches before the benchmark starts.
 
 You can now verify that everything works by listing all tracks in this track repository::
 
