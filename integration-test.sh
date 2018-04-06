@@ -187,7 +187,7 @@ function test_benchmark_only {
 
     info "test benchmark-only [--configuration-name=${cfg}]"
     kill_rally_processes
-    esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --cluster-health=yellow
+    esrally --logging=console --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --track-params="cluster_health:'yellow'"
 }
 
 function run_test {
