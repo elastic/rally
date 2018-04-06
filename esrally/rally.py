@@ -316,13 +316,6 @@ def create_arg_parser():
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
                        default="continue")
-        # TODO #380: Remove this. We will turn off index auto management and our standard tracks will provide a track parameter for this.
-        # This parameter is deprecated. We will replace this with an explicit call in our tracks.
-        p.add_argument(
-            "--cluster-health",
-            choices=["red", "yellow", "green", "skip"],
-            help="Expected cluster health at the beginning of the benchmark (default: green)",
-            default="green")
         p.add_argument(
             "--telemetry",
             help="enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
@@ -391,12 +384,6 @@ def create_arg_parser():
             "--effective-start-date",
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
-            default=None)
-        # TODO: Remove in Rally 0.10.0 (there will be no index auto-management anymore)
-        p.add_argument(
-            "--auto-manage-indices",
-            choices=["true", "false"],
-            help=argparse.SUPPRESS,
             default=None)
         # keeps the cluster running after the benchmark, only relevant if Rally provisions the cluster
         p.add_argument(
@@ -729,7 +716,6 @@ def main():
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
-    cfg.add(config.Scope.applicationOverride, "track", "auto_manage_indices", to_bool(args.auto_manage_indices))
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
@@ -751,9 +737,6 @@ def main():
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
-    cfg.add(config.Scope.applicationOverride, "driver", "cluster.health", args.cluster_health)
-    if args.cluster_health != "green":
-        console.warn("--cluster-health is deprecated and will be removed in a future version of Rally.")
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))

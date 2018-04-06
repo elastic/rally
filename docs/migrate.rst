@@ -34,6 +34,41 @@ Removal of operation type ``index``
 
 We have removed the operation type ``index`` which has been deprecated with Rally 0.8.0. Please use ``bulk`` instead as operation type.
 
+Removal of the command line parameter ``--cluster-health``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the command line parameter ``--cluster-health`` which has been deprecated with Rally 0.8.0. When using Rally's standard tracks, specify the expected cluster health as a track parameter instead, e.g.: ``--track-params="cluster_health:'yellow'"``.
+
+Removal of index-automanagement
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We have removed the possibility that Rally automatically deletes and creates indices. Therefore, you need to add the following definitions explicitly at the beginning of a schedule if you want Rally to create declared indices::
+
+        "schedule": [
+          {
+            "operation": "delete-index"
+          },
+          {
+            "operation": {
+              "operation-type": "create-index",
+              "settings": {
+                "index.number_of_replicas": 0
+              }
+            }
+          },
+          {
+            "operation": {
+              "operation-type": "cluster-health",
+              "request-params": {
+                "wait_for_status": "green"
+              }
+            }
+          }
+
+The example above also shows how to provide per-challenge index settings. If per-challenge index settings are not required, you can just specify them in the index definition file.
+
+This behavior applies similarly to index templates as well.
+
 Migrating to Rally 0.9.0
 ------------------------
 

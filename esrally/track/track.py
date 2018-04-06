@@ -11,14 +11,13 @@ class Index:
     Defines an index in Elasticsearch.
     """
 
-    def __init__(self, name, body=None, auto_managed=False, types=None):
+    def __init__(self, name, body=None, types=None):
         """
 
         Creates a new index.
 
         :param name: The index name. Mandatory.
         :param body: A dict representation of the index body. Optional.
-        :param auto_managed: True iff Rally should automatically manage this index (i.e. it can create and delete it at will).
         :param types: A list of types. Should contain at least one type.
         """
         if types is None:
@@ -27,7 +26,6 @@ class Index:
             body = {}
         self.name = name
         self.body = body
-        self.auto_managed = auto_managed
         self.types = types
 
     def matches(self, pattern):
@@ -75,40 +73,6 @@ class IndexTemplate:
         self.pattern = pattern
         self.content = content
         self.delete_matching_indices = delete_matching_indices
-
-    def __str__(self, *args, **kwargs):
-        return self.name
-
-    def __repr__(self):
-        r = []
-        for prop, value in vars(self).items():
-            r.append("%s = [%s]" % (prop, repr(value)))
-        return ", ".join(r)
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __eq__(self, other):
-        return self.name == other.name
-
-
-class Type:
-    """
-    Defines a type in Elasticsearch.
-    """
-
-    def __init__(self, name, mapping=None):
-        """
-
-        Creates a new type. Mappings are mandatory but the document_archive (and associated properties) are optional.
-
-        :param name: The name of this type. Mandatory.
-        :param mapping: The type's mapping. Optional.
-        """
-        if mapping is None:
-            mapping = {}
-        self.name = name
-        self.mapping = mapping
 
     def __str__(self, *args, **kwargs):
         return self.name
