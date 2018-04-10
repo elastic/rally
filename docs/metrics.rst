@@ -149,4 +149,6 @@ Rally stores the following metrics:
 * ``indexing_throttle_time``: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time.
 * ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
 * ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
-* ``final_index_size_bytes``: Final resulting index size after the benchmark.
+* ``final_index_size_bytes``: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
+* ``store_size_in_bytes``: The size in bytes of the index (excluding the translog) as reported by the indices stats API.
+* ``translog_size_in_bytes``: The size in bytes of the translog as reported by the indices stats API.

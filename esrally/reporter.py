@@ -168,9 +168,13 @@ class StatsCalculator:
         result.memory_points = self.median("segments_points_memory_in_bytes")
         result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
 
-        # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         logger.debug("Gathering disk metrics.")
+        # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         result.index_size = self.sum("final_index_size_bytes")
+        # we need to use the median here because these two are captured with the indices stats API and thus once per lap. If we'd
+        # sum up the values we'd get wrong results for benchmarks that ran for multiple laps.
+        result.store_size = self.median("store_size_in_bytes")
+        result.translog_size = self.median("translog_size_in_bytes")
         result.bytes_written = self.sum("disk_io_write_bytes")
 
         # convert to int, fraction counts are senseless
@@ -264,6 +268,8 @@ class Stats:
         self.memory_stored_fields = self.v(d, "memory_stored_fields")
 
         self.index_size = self.v(d, "index_size")
+        self.store_size = self.v(d, "store_size")
+        self.translog_size = self.v(d, "translog_size")
         self.bytes_written = self.v(d, "bytes_written")
 
         self.segment_count = self.v(d, "segment_count")
@@ -497,6 +503,8 @@ class SummaryReporter:
 
     def report_disk_usage(self, stats):
         return self.join(
+            self.line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
+            self.line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
             self.line("Index size", "", stats.index_size, "GB", convert.bytes_to_gb),
             self.line("Totally written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
         )
@@ -688,6 +696,10 @@ class ComparisonReporter:
 
     def report_disk_usage(self, baseline_stats, contender_stats):
         return self.join(
+            self.line("Store size", baseline_stats.store_size, contender_stats.store_size, "", "GB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
+            self.line("Translog size", baseline_stats.translog_size, contender_stats.translog_size, "", "GB",
+                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
