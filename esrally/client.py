@@ -13,11 +13,11 @@ class EsClientFactory:
     """
     def __init__(self, hosts, client_options):
         masked_client_options = dict(client_options)
-        if masked_client_options.has_key("basic_auth_password"):
+        if "basic_auth_password" in masked_client_options:
             masked_client_options["basic_auth_password"] = "*****"
-        if masked_client_options.has_key("http_auth"):
-            masked_client_options["http_auth"] = (client_options["basic_auth_user"], "*****")
-        logger.info("Creating ES client connected to %s with options [%s]" % (hosts, masked_client_options))
+        if "http_auth" in masked_client_options:
+            masked_client_options["http_auth"] = (client_options["http_auth"][0], "*****")
+        logger.info("Creating ES client connected to %s with options [%s]", hosts, masked_client_options)
         self.hosts = hosts
         self.client_options = client_options
 
