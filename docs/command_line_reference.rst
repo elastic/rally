@@ -96,14 +96,14 @@ Consider the following track snippet showing a single challenge::
 
 Rally tracks can use the Jinja templating language and the construct ``{{ some_variable|default(0) }}`` that you can see above is a `feature of Jinja <http://jinja.pocoo.org/docs/2.10/templates/#default>`_ to define default values for variables.
 
-We can see that it defines a variables:
+We can see that it defines two variables:
 
 * ``bulk_size`` with a default value of 5000
 * ``clients`` with a default value of 8
 
 When we run this track, we can override these defaults:
 
-* ``--track-params="bulk_size:2000,clients:16"`` will set the bulk size to 2000 and the number of clients for bulk indexing to 8.
+* ``--track-params="bulk_size:2000,clients:16"`` will set the bulk size to 2000 and the number of clients for bulk indexing to 16.
 * ``--track-params="bulk_size:8000"`` will just set the bulk size to 8000 and keep the default value of 8 clients.
 * ``--track-params="params.json"`` will read the track parameters from a JSON file (defined below)
 
