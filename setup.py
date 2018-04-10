@@ -27,7 +27,7 @@ long_description = str_from_file("README.rst")
 #
 ################################################################################################
 install_requires = [
-    "elasticsearch==6.0.0",
+    "elasticsearch==6.2.0",
     "psutil==5.4.0",
     "py-cpuinfo==3.2.0",
     "tabulate==0.8.1",

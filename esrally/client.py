@@ -20,19 +20,39 @@ class EsClientFactory:
         logger.info("Creating ES client connected to %s with options [%s]", hosts, masked_client_options)
         self.hosts = hosts
         self.client_options = client_options
+        self.ssl_context = None
 
-        if self._is_set(client_options, "use_ssl") and self._is_set(client_options, "verify_certs") and "ca_certs" not in client_options:
-            self.client_options["ca_certs"] = certifi.where()
-        elif self._is_set(client_options, "use_ssl") and not self._is_set(client_options, "verify_certs"):
-            logger.warning("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark. "
-                           "Disabling urllib warnings now to avoid a logging storm. "
-                           "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details.")
-            # disable:  "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly \
-            # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
-            urllib3.disable_warnings()
+        # we're using an SSL context now and it is not allowed to have use_ssl present in client options anymore
+        if client_options.pop("use_ssl", False):
+            import ssl
+            from elasticsearch.connection import create_ssl_context
+            logger.info("SSL support: on")
+            client_options["scheme"] = "https"
+
+            self.ssl_context = create_ssl_context(cafile=client_options.pop("ca_certs", certifi.where()))
+
+            if not client_options.pop("verify_certs", True):
+                logger.info("SSL certificate verification: off")
+                self.ssl_context.check_hostname = False
+                self.ssl_context.verify_mode = ssl.CERT_NONE
+
+                logger.warning("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
+                               "benchmark. Disabling urllib warnings now to avoid a logging storm. "
+                               "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details.")
+                # disable:  "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly \
+                # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
+                urllib3.disable_warnings()
+            else:
+                logger.info("SSL certificate verification: on")
+        else:
+            logger.info("SSL support: off")
+            client_options["scheme"] = "http"
+
         if self._is_set(client_options, "basic_auth_user") and self._is_set(client_options, "basic_auth_password"):
-            # Maybe we should remove these keys from the dict?
-            self.client_options["http_auth"] = (client_options["basic_auth_user"], client_options["basic_auth_password"])
+            logger.info("HTTP basic authentication: on")
+            self.client_options["http_auth"] = (client_options.pop("basic_auth_user"), client_options.pop("basic_auth_password"))
+        else:
+            logger.info("HTTP basic authentication: off")
 
     def _is_set(self, client_opts, k):
         try:
@@ -60,8 +80,12 @@ class EsClientFactory:
             def __init__(self, compressed=False, **kwargs):
                 super(ConfigurableHttpConnection, self).__init__(**kwargs)
                 if compressed:
+                    logger.info("HTTP compression: on")
                     self.headers.update(urllib3.make_headers(accept_encoding=True))
                     self.headers.update({"Content-Encoding": "gzip"})
+                else:
+                    logger.info("HTTP compression: off")
                 self.pool = PoolWrap(self.pool, **kwargs)
 
-        return elasticsearch.Elasticsearch(hosts=self.hosts, connection_class=ConfigurableHttpConnection, **self.client_options)
+        return elasticsearch.Elasticsearch(hosts=self.hosts, connection_class=ConfigurableHttpConnection,
+                                           ssl_context=self.ssl_context, **self.client_options)
