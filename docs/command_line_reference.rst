@@ -82,16 +82,15 @@ Consider the following track snippet showing a single challenge::
 
     {
       "name": "index-only",
-      "index-settings": {
-        "index.number_of_replicas": {{ replica_count|default(0) }},
-        "index.number_of_shards": {{ shard_count|default(5) }},
-      },
       "schedule": [
-        {
-          "operation": "bulk-index",
-          "warmup-time-period": 120,
-          "clients": 8
-        }
+         {
+           "operation": {
+             "operation-type": "bulk",
+             "bulk-size": {{ bulk_size|default(5000) }}
+           },
+           "warmup-time-period": 120,
+           "clients": {{ clients|default(8) }}
+         }
       ]
     }
 
@@ -99,28 +98,28 @@ Rally tracks can use the Jinja templating language and the construct ``{{ some_v
 
 We can see that it defines two variables:
 
-* ``replica_count`` with a default value of 0
-* ``shard_count`` with a default value of 5
+* ``bulk_size`` with a default value of 5000
+* ``clients`` with a default value of 8
 
 When we run this track, we can override these defaults:
 
-* ``--track-params="replica_count:1,shard_count:3"`` will set the number of replicas to 1 and the number of shards to 3.
-* ``--track-params="replica_count:1"`` will just set the number of replicas to 1 and just keep the default value of 5 shards.
+* ``--track-params="bulk_size:2000,clients:16"`` will set the bulk size to 2000 and the number of clients for bulk indexing to 16.
+* ``--track-params="bulk_size:8000"`` will just set the bulk size to 8000 and keep the default value of 8 clients.
 * ``--track-params="params.json"`` will read the track parameters from a JSON file (defined below)
 
 Example JSON file::
 
    {
-      "replica_count": 1,
-      "shard_count": 3
+      "bulk_size": 2000,
+      "clients": 16
    }
 
 All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
 
-    Race Timestamp    Track    Track Parameters               Challenge            Car       User Tag
-    ----------------  -------  ------------------------------ -------------------  --------  ---------
-    20160518T122341Z  pmc      replica_count=1                append-no-conflicts  defaults
-    20160518T112341Z  pmc      replica_count=1,shard_count=3  append-no-conflicts  defaults
+    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tag
+    ----------------  -------  ------------------------- -------------------  --------  ---------
+    20160518T122341Z  pmc      bulk_size=8000            append-no-conflicts  defaults
+    20160518T112341Z  pmc      bulk_size=2000,clients=16 append-no-conflicts  defaults
 
 Note that the default values are not recorded or shown (Rally does not know about them).
 

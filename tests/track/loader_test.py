@@ -691,7 +691,6 @@ class TrackPostProcessingTests(TestCase):
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
-                    "index-settings": {},
                     "schedule": [
                         {
                             "clients": 8,
@@ -764,7 +763,6 @@ class TrackPostProcessingTests(TestCase):
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
-                    "index-settings": {},
                     "schedule": [
                         {
                             "clients": 8,
@@ -1024,7 +1022,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "index-settings": {},
                     "schedule": [
                         {
                             "clients": 8,
@@ -1148,7 +1145,6 @@ class TrackSpecificationReaderTests(TestCase):
             "challenges": [
                 {
                     "name": "default-challenge",
-                    "index-settings": {},
                     "schedule": [
                         {
                             "clients": 8,
@@ -1327,9 +1323,6 @@ class TrackSpecificationReaderTests(TestCase):
                         "mixed": True,
                         "max-clients": 8
                     },
-                    "index-settings": {
-                        "index.number_of_replicas": 2
-                    },
                     "schedule": [
                         {
                             "clients": 8,
@@ -1414,8 +1407,6 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
         self.assertEqual("Default challenge", resulting_track.challenges[0].description)
-        self.assertEqual(1, len(resulting_track.challenges[0].index_settings))
-        self.assertEqual(2, resulting_track.challenges[0].index_settings["index.number_of_replicas"])
         self.assertEqual({"mixed": True, "max-clients": 8}, resulting_track.challenges[0].meta_data)
         self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
         self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
