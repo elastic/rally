@@ -18,9 +18,9 @@ install_esrally_with_setuptools () {
     fi
 
     if [[ ${IN_VIRTUALENV} == 0 ]]; then
-        python3 setup.py -q develop --user
+        python3 setup.py -q develop --user --upgrade
     else
-        python3 setup.py -q develop
+        python3 setup.py -q develop --upgrade
     fi
 }
 
