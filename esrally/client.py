@@ -15,6 +15,8 @@ class EsClientFactory:
         masked_client_options = dict(client_options)
         if masked_client_options.has_key("basic_auth_password"):
             masked_client_options["basic_auth_password"] = "*****"
+        if masked_client_options.has_key("http_auth"):
+            masked_client_options["http_auth"] = (client_options["basic_auth_user"], "*****")
         logger.info("Creating ES client connected to %s with options [%s]" % (hosts, masked_client_options))
         self.hosts = hosts
         self.client_options = client_options
