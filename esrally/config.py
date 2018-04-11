@@ -106,6 +106,8 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
+    EARLIEST_SUPPORTED_VERSION = 12
+
     CURRENT_CONFIG_VERSION = 15
 
     """
@@ -586,6 +588,10 @@ class Prompter:
 
 
 def migrate(config_file, current_version, target_version, out=print, i=input):
+    if current_version < Config.EARLIEST_SUPPORTED_VERSION:
+        raise ConfigError("The config file in {} is too old. Please delete it and reconfigure Rally from scratch with {} configure."
+                          .format(config_file.location, PROGRAM_NAME))
+
     prompter = Prompter(i=i, o=out, assume_defaults=False)
     logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, target_version))
     # Something is really fishy. We don't want to downgrade the configuration.
@@ -595,178 +601,6 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
     # but first a backup...
     config_file.backup()
     config = config_file.load(interpolation=None)
-
-    if current_version == 0 and target_version > current_version:
-        logger.info("Migrating config from version [0] to [1]")
-        current_version = 1
-        config["meta"] = {}
-        config["meta"]["config.version"] = str(current_version)
-        # in version 1 we changed some directories from being absolute to being relative
-        config["system"]["log.root.dir"] = "logs"
-        config["provisioning"]["local.install.dir"] = "install"
-        config["reporting"]["report.base.dir"] = "reports"
-    if current_version == 1 and target_version > current_version:
-        logger.info("Migrating config from version [1] to [2]")
-        current_version = 2
-        config["meta"]["config.version"] = str(current_version)
-        # no need to ask the user now if we are about to upgrade to version 4
-        config["reporting"]["datastore.type"] = "in-memory"
-        config["reporting"]["datastore.host"] = ""
-        config["reporting"]["datastore.port"] = ""
-        config["reporting"]["datastore.secure"] = ""
-        config["reporting"]["datastore.user"] = ""
-        config["reporting"]["datastore.password"] = ""
-        config["system"]["env.name"] = "local"
-    if current_version == 2 and target_version > current_version:
-        logger.info("Migrating config from version [2] to [3]")
-        current_version = 3
-        config["meta"]["config.version"] = str(current_version)
-        # Remove obsolete settings
-        config["reporting"].pop("report.base.dir")
-        config["reporting"].pop("output.html.report.filename")
-    if current_version == 3 and target_version > current_version:
-        root_dir = config["system"]["root.dir"]
-        out(
-            """
-            *****************************************************************************************
-
-            You have an old configuration of Rally. Rally has now a much simpler setup
-            routine which will autodetect lots of settings for you and it also does not
-            require you to setup a metrics store anymore.
-
-            Rally will now migrate your configuration but if you don't need advanced features
-            like a metrics store, then you should delete the configuration directory:
-
-              rm -rf {0}
-
-            and then rerun Rally's configuration routine:
-
-              {1} configure
-
-            Please also note you have {2:.1f} GB of data in your current benchmark directory at
-
-              {3}
-
-            You might want to clean up this directory also.
-
-            For more details please see {4}
-
-            *****************************************************************************************
-
-            Pausing for 10 seconds to let you consider this message.
-            """.format(config_file.config_dir,
-                       PROGRAM_NAME,
-                       convert.bytes_to_gb(io.get_size(root_dir)),
-                       root_dir,
-                       console.format.link("https://github.com/elastic/rally/blob/master/CHANGELOG.md#030")))
-        time.sleep(10)
-        logger.info("Migrating config from version [3] to [4]")
-        current_version = 4
-        config["meta"]["config.version"] = str(current_version)
-        if len(config["reporting"]["datastore.host"]) > 0:
-            config["reporting"]["datastore.type"] = "elasticsearch"
-        else:
-            config["reporting"]["datastore.type"] = "in-memory"
-        # Remove obsolete settings
-        config["build"].pop("maven.bin")
-        config["benchmarks"].pop("metrics.stats.disk.device")
-
-    if current_version == 4 and target_version > current_version:
-        config["tracks"] = {}
-        config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
-        current_version = 5
-        config["meta"]["config.version"] = str(current_version)
-
-    if current_version == 5 and target_version > current_version:
-        config["defaults"] = {}
-        config["defaults"]["preserve_benchmark_candidate"] = str(False)
-        current_version = 6
-        config["meta"]["config.version"] = str(current_version)
-
-    if current_version == 6 and target_version > current_version:
-        # Remove obsolete settings
-        config.pop("provisioning")
-        config["system"].pop("log.root.dir")
-        current_version = 7
-        config["meta"]["config.version"] = str(current_version)
-
-    if current_version == 7 and target_version > current_version:
-        # move [system][root.dir] to [node][root.dir]
-        if "node" not in config:
-            config["node"] = {}
-        config["node"]["root.dir"] = config["system"].pop("root.dir")
-        # also move all references!
-        for section in config:
-            for k, v in config[section].items():
-                config[section][k] = v.replace("${system:root.dir}", "${node:root.dir}")
-        current_version = 8
-        config["meta"]["config.version"] = str(current_version)
-    if current_version == 8 and target_version > current_version:
-        config["teams"] = {}
-        config["teams"]["default.url"] = "https://github.com/elastic/rally-teams"
-        current_version = 9
-        config["meta"]["config.version"] = str(current_version)
-    if current_version == 9 and target_version > current_version:
-        config["distributions"] = {}
-        config["distributions"]["release.1.url"] = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-" \
-                                                   "{{VERSION}}.tar.gz"
-        config["distributions"]["release.2.url"] = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/" \
-                                                   "distribution/tar/elasticsearch/{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz"
-        config["distributions"]["release.url"] = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
-        config["distributions"]["release.cache"] = "true"
-        current_version = 10
-        config["meta"]["config.version"] = str(current_version)
-    if current_version == 10 and target_version > current_version:
-        config["runtime"]["java.home"] = config["runtime"].pop("java8.home")
-        current_version = 11
-        config["meta"]["config.version"] = str(current_version)
-    if current_version == 11 and target_version > current_version:
-        # As this is a rather complex migration, we log more than usual to understand potential migration problems better.
-        if "source" in config:
-            if "local.src.dir" in config["source"]:
-                previous_root = config["source"].pop("local.src.dir")
-                logger.info("Set [source][local.src.dir] to [%s]." % previous_root)
-                # if this directory was Rally's default location, then move it on the file system to allow for checkouts of plugins
-                # in the sibling directory.
-                if previous_root == os.path.join(config["node"]["root.dir"], "src"):
-                    new_root_dir_all_sources = previous_root
-                    new_es_sub_dir = "elasticsearch"
-                    new_root = os.path.join(new_root_dir_all_sources, new_es_sub_dir)
-                    # only attempt to move if the directory exists. It may be possible that users never ran a source benchmark although they
-                    # have configured it. In that case the source directory will not yet exist.
-                    if io.exists(previous_root):
-                        logger.info("Previous source directory was at Rally's default location [%s]. Moving to [%s]."
-                                    % (previous_root, new_root))
-                        try:
-                            # we need to do this in two steps as we need to move the sources to a subdirectory
-                            tmp_path = io.normalize_path(os.path.join(new_root_dir_all_sources, os.pardir, "tmp_src_mig"))
-                            os.rename(previous_root, tmp_path)
-                            io.ensure_dir(new_root)
-                            os.rename(tmp_path, new_root)
-                        except OSError:
-                            logger.exception("Could not move source directory from [%s] to [%s]." % (previous_root, new_root))
-                            # A warning is sufficient as Rally should just do a fresh checkout if moving did not work.
-                            console.warn("Elasticsearch source directory could not be moved from [%s] to [%s]. Please check the logs."
-                                         % (previous_root, new_root))
-                    else:
-                        logger.info("Source directory is configured at Rally's default location [%s] but does not exist yet."
-                                    % previous_root)
-                else:
-                    logger.info("Previous source directory was the custom directory [%s]." % previous_root)
-                    new_root_dir_all_sources = io.normalize_path(os.path.join(previous_root, os.path.pardir))
-                    # name of the elasticsearch project directory.
-                    new_es_sub_dir = io.basename(previous_root)
-
-                logger.info("Setting [node][src.root.dir] to [%s]." % new_root_dir_all_sources)
-                config["node"]["src.root.dir"] = new_root_dir_all_sources
-                logger.info("Setting [source][elasticsearch.src.subdir] to [%s]" % new_es_sub_dir)
-                config["source"]["elasticsearch.src.subdir"] = new_es_sub_dir
-            else:
-                logger.info("Key [local.src.dir] not found. Advancing without changes.")
-        else:
-            logger.info("No section named [source] found in config. Advancing without changes.")
-        current_version = 12
-        config["meta"]["config.version"] = str(current_version)
 
     if current_version == 12 and target_version > current_version:
         # the current configuration allows to benchmark from sources

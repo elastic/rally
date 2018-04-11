@@ -419,13 +419,44 @@ class ConfigFactoryTests(TestCase):
 
 
 class ConfigMigrationTests(TestCase):
+    def test_does_not_migrate_outdated_config(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "system": {
+                "root.dir": "in-memory"
+            },
+            "provisioning": {
+
+            },
+            "build": {
+                "maven.bin": "/usr/local/mvn"
+            },
+            "benchmarks": {
+                "metrics.stats.disk.device": "/dev/hdd1"
+            },
+            "reporting": {
+                "report.base.dir": "/tests/rally/reporting",
+                "output.html.report.filename": "index.html"
+            },
+            "runtime": {
+                "java8.home": "/opt/jdk/8",
+            }
+        }
+
+        config_file.store(sample_config)
+        with self.assertRaisesRegex(config.ConfigError, "The config file.*is too old. Please delete it and reconfigure Rally from scratch"):
+            config.migrate(config_file, config.Config.EARLIEST_SUPPORTED_VERSION - 1, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
+
     # catch all test, migrations are checked in more detail in the other tests
     @mock.patch("esrally.utils.io.get_size")
     @mock.patch("esrally.time.sleep")
-    def test_migrate_from_0_to_latest(self, sleep, get_size):
+    def test_migrate_from_earliest_supported_to_latest(self, sleep, get_size):
         get_size.return_value = 0
         config_file = InMemoryConfigStore("test")
         sample_config = {
+            "meta": {
+                "config.version": config.Config.EARLIEST_SUPPORTED_VERSION
+            },
             "system": {
                 "root.dir": "in-memory"
             },
@@ -448,347 +479,10 @@ class ConfigMigrationTests(TestCase):
         }
 
         config_file.store(sample_config)
-        config.migrate(config_file, 0, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
+        config.migrate(config_file, config.Config.EARLIEST_SUPPORTED_VERSION, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
 
         self.assertTrue(config_file.backup_created)
         self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_file.config["meta"]["config.version"])
-
-    def test_migrate_from_2_to_3(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 2
-            },
-            "system": {
-                "root.dir": "in-memory"
-            },
-            "reporting": {
-                "report.base.dir": "/tests/rally/reporting",
-                "output.html.report.filename": "index.html"
-            },
-        }
-
-        config_file.store(sample_config)
-        config.migrate(config_file, 2, 3, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("3", config_file.config["meta"]["config.version"])
-        # Did not delete the section...
-        self.assertTrue("reporting" in config_file.config)
-        # ... but the key
-        self.assertFalse("report.base.dir" in config_file.config["reporting"])
-        self.assertFalse("output.html.report.filename" in config_file.config["reporting"])
-
-    @mock.patch("esrally.utils.io.get_size")
-    @mock.patch("esrally.time.sleep")
-    def test_migrate_from_3_to_4(self, sleep, get_size):
-        get_size.return_value = 0
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 3
-            },
-            "system": {
-                "root.dir": "in-memory"
-            },
-            "reporting": {
-                "datastore.host": ""
-            },
-            "build": {
-                "maven.bin": "/usr/local/mvn"
-            },
-            "benchmarks": {
-                "metrics.stats.disk.device": "/dev/hdd1"
-            }
-        }
-
-        config_file.store(sample_config)
-        config.migrate(config_file, 3, 4, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("4", config_file.config["meta"]["config.version"])
-        # Did not delete the section...
-        self.assertTrue("build" in config_file.config)
-        # ... but the key
-        self.assertFalse("maven.bin" in config_file.config["build"])
-        self.assertTrue("benchmarks" in config_file.config)
-        self.assertFalse("metrics.stats.disk.device" in config_file.config["benchmarks"])
-        self.assertEqual("in-memory", config_file.config["reporting"]["datastore.type"])
-
-    def test_migrate_from_4_to_5(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 4
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 4, 5, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("5", config_file.config["meta"]["config.version"])
-        self.assertTrue("tracks" in config_file.config)
-        self.assertEqual("https://github.com/elastic/rally-tracks", config_file.config["tracks"]["default.url"])
-
-    def test_migrate_from_5_to_6(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 5
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 5, 6, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("6", config_file.config["meta"]["config.version"])
-        self.assertTrue("defaults" in config_file.config)
-        self.assertEqual("False", config_file.config["defaults"]["preserve_benchmark_candidate"])
-
-    def test_migrate_from_6_to_7(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 6
-            },
-            "system": {
-                "log.root.dir": "logs"
-            },
-            "provisioning": {
-                "local.install.dir": "install"
-            },
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 6, 7, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("7", config_file.config["meta"]["config.version"])
-        self.assertTrue("provisioning" not in config_file.config)
-        self.assertTrue("log.root.dir" not in config_file.config["system"])
-
-    def test_migrate_from_7_to_8(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 7
-            },
-            "system": {
-                "root.dir": "~/.rally/benchmarks",
-                "environment.name": "local"
-            },
-            "benchmarks": {
-                "local.dataset.cache": "${system:root.dir}/data",
-                "some.other.cache": "/data"
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 7, 8, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("8", config_file.config["meta"]["config.version"])
-        self.assertTrue("root.dir" not in config_file.config["system"])
-        self.assertEqual("~/.rally/benchmarks", config_file.config["node"]["root.dir"])
-        self.assertEqual("local", config_file.config["system"]["environment.name"])
-        self.assertEqual("${node:root.dir}/data", config_file.config["benchmarks"]["local.dataset.cache"])
-        self.assertEqual("/data", config_file.config["benchmarks"]["some.other.cache"])
-
-    def test_migrate_from_8_to_9(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 8
-            },
-            "system": {
-                "root.dir": "~/.rally/benchmarks",
-                "environment.name": "local"
-            },
-            "benchmarks": {
-                "local.dataset.cache": "${system:root.dir}/data",
-                "some.other.cache": "/data"
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 8, 9, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("9", config_file.config["meta"]["config.version"])
-        self.assertTrue("teams" in config_file.config)
-        self.assertEqual("https://github.com/elastic/rally-teams", config_file.config["teams"]["default.url"])
-
-    def test_migrate_from_9_to_10(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 9
-            },
-            "system": {
-                "root.dir": "~/.rally/benchmarks",
-                "environment.name": "local"
-            },
-            "benchmarks": {
-                "local.dataset.cache": "${system:root.dir}/data",
-                "some.other.cache": "/data"
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 9, 10, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("10", config_file.config["meta"]["config.version"])
-        self.assertTrue("distributions" in config_file.config)
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-                         config_file.config["distributions"]["release.1.url"])
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
-                         "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
-                         config_file.config["distributions"]["release.2.url"])
-        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-                         config_file.config["distributions"]["release.url"])
-        self.assertEqual("true",
-                         config_file.config["distributions"]["release.cache"])
-
-    def test_migrate_from_10_to_11(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 10
-            },
-            "runtime": {
-                "java8.home": "/opt/jdk/8",
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 10, 11, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("11", config_file.config["meta"]["config.version"])
-        self.assertTrue("runtime" in config_file.config)
-        self.assertFalse("java8.home" in config_file.config["runtime"])
-        self.assertEqual("/opt/jdk/8", config_file.config["runtime"]["java.home"])
-
-    @mock.patch("esrally.utils.io.exists")
-    @mock.patch("os.rename")
-    def test_migrate_from_11_to_12_with_default_src_config_repo_checked_out(self, path_rename, path_exists):
-        path_exists.return_value = True
-
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 11
-            },
-            "node": {
-                "root.dir": io.normalize_path("~/.rally/benchmarks")
-            },
-            "source": {
-                "local.src.dir": io.normalize_path("~/.rally/benchmarks/src")
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 11, 12, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("12", config_file.config["meta"]["config.version"])
-        self.assertEqual(io.normalize_path("~/.rally/benchmarks/src"), config_file.config["node"]["src.root.dir"])
-        self.assertEqual("elasticsearch", config_file.config["source"]["elasticsearch.src.subdir"])
-
-        path_rename.assert_has_calls(
-            [
-                mock.call(io.normalize_path("~/.rally/benchmarks/src"), io.normalize_path("~/.rally/benchmarks/tmp_src_mig")),
-                mock.call(io.normalize_path("~/.rally/benchmarks/tmp_src_mig"),
-                          io.normalize_path("~/.rally/benchmarks/src/elasticsearch")),
-             ]
-        )
-
-    @mock.patch("esrally.utils.io.exists")
-    @mock.patch("os.rename")
-    def test_migrate_from_11_to_12_with_default_src_config_repo_not_checked_out(self, path_rename, path_exists):
-        path_exists.return_value = False
-
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 11
-            },
-            "node": {
-                "root.dir": io.normalize_path("~/.rally/benchmarks")
-            },
-            "source": {
-                "local.src.dir": io.normalize_path("~/.rally/benchmarks/src")
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 11, 12, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("12", config_file.config["meta"]["config.version"])
-        self.assertEqual(io.normalize_path("~/.rally/benchmarks/src"), config_file.config["node"]["src.root.dir"])
-        self.assertEqual("elasticsearch", config_file.config["source"]["elasticsearch.src.subdir"])
-        # did all the migrations but nothing moved
-        path_rename.assert_not_called()
-
-    def test_migrate_from_11_to_12_without_src_config(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 11
-            },
-            "node": {
-                "root.dir": "~/.rally/benchmarks"
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 11, 12, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("12", config_file.config["meta"]["config.version"])
-        self.assertFalse("src.root.dir" in config_file.config["node"])
-
-    def test_migrate_from_11_to_12_with_partial_src_config(self):
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 11
-            },
-            "node": {
-                "root.dir": "~/.rally/benchmarks"
-            },
-            "source": {
-                # a source config section without any keys should be treated like a missing source config section
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 11, 12, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("12", config_file.config["meta"]["config.version"])
-        self.assertFalse("src.root.dir" in config_file.config["node"])
-        self.assertFalse("elasticsearch.src.subdir" in config_file.config["source"])
-
-    @mock.patch("esrally.utils.io.exists")
-    @mock.patch("os.rename")
-    def test_migrate_from_11_to_12_with_custom_src_config(self, path_rename, path_exists):
-        path_exists.return_value = False
-
-        config_file = InMemoryConfigStore("test")
-        sample_config = {
-            "meta": {
-                "config.version": 11
-            },
-            "node": {
-                "root.dir": io.normalize_path("~/.rally/benchmarks")
-            },
-            "source": {
-                "local.src.dir": io.normalize_path("~/Projects/elasticsearch/master/es")
-            }
-        }
-        config_file.store(sample_config)
-        config.migrate(config_file, 11, 12, out=null_output)
-
-        self.assertTrue(config_file.backup_created)
-        self.assertEqual("12", config_file.config["meta"]["config.version"])
-        self.assertEqual(io.normalize_path("~/Projects/elasticsearch/master"), config_file.config["node"]["src.root.dir"])
-        self.assertEqual("es", config_file.config["source"]["elasticsearch.src.subdir"])
-        # did all the migrations but nothing moved
-        path_rename.assert_not_called()
 
     def test_migrate_from_12_to_13_without_gradle(self):
         config_file = InMemoryConfigStore("test")
