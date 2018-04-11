@@ -69,7 +69,12 @@ We recommend that you use `Homebrew <https://brew.sh/>`_::
 git
 ~~~
 
-``git 1.9`` or better is required. Verify with ``git --version``.
+Git is not required if **all** of the following conditions are met:
+
+* You are using Rally only as a load generator (``--pipeline=benchmark-only``) or you are referring to Elasticsearch configurations with ``--team-path``
+* You create your own tracks and refer to them with ``--track-path``
+
+In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --version``.
 
 **Debian / Ubuntu**
 

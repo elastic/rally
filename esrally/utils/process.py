@@ -28,17 +28,19 @@ def run_subprocess_with_output(command_line):
     return lines
 
 
-def exit_status_as_bool(runnable):
+def exit_status_as_bool(runnable, quiet=False):
     """
 
     :param runnable: A runnable returning an int as exit status assuming ``0`` is meaning success.
+    :param quiet: Suppress any output (default: False).
     :return: True iff the runnable has terminated successfully.
     """
     try:
         return_code = runnable()
         return return_code == 0 or return_code is None
     except OSError:
-        logger.exception("Could not execute command.")
+        if not quiet:
+            logger.exception("Could not execute command.")
         return False
 
 

@@ -8,7 +8,8 @@ from esrally.utils import io, process
 def probed(f):
     def probe(src, *args, **kwargs):
         # Probe for -C
-        if not process.exit_status_as_bool(lambda: process.run_subprocess_with_logging("git -C %s --version" % src, level=logging.DEBUG)):
+        if not process.exit_status_as_bool(lambda: process.run_subprocess_with_logging("git -C %s --version" % src, level=logging.DEBUG),
+                                           quiet=True):
             version = process.run_subprocess_with_output("git --version")
             if version:
                 version = str(version).strip()
@@ -25,7 +26,7 @@ def is_working_copy(src):
     :param src: A directory. May or may not exist.
     :return: True iff the given directory is a git working copy.
     """
-    return os.path.exists(src) and os.path.exists("%s/.git" % src)
+    return os.path.exists(src) and os.path.exists(os.path.join(src, ".git"))
 
 
 def clone(src, remote):
