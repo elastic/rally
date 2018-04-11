@@ -523,7 +523,7 @@ class Query(Runner):
             "weight": retrieved_pages,
             "pages": retrieved_pages,
             "hits": hits,
-            "unit": "ops",
+            "unit": "pages",
             "timed_out": timed_out,
             "took": took
         }
