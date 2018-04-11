@@ -644,7 +644,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["pages"])
         self.assertEqual(2, results["hits"])
         self.assertEqual(4, results["took"])
-        self.assertEqual("ops", results["unit"])
+        self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
@@ -692,7 +692,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["pages"])
         self.assertEqual(2, results["hits"])
         self.assertEqual(4, results["took"])
-        self.assertEqual("ops", results["unit"])
+        self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
@@ -756,7 +756,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["pages"])
         self.assertEqual(3, results["hits"])
         self.assertEqual(79, results["took"])
-        self.assertEqual("ops", results["unit"])
+        self.assertEqual("pages", results["unit"])
         self.assertTrue(results["timed_out"])
         self.assertFalse("error-type" in results)
 
@@ -812,7 +812,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(1, results["hits"])
-        self.assertEqual("ops", results["unit"])
+        self.assertEqual("pages", results["unit"])
         self.assertEqual(55, results["took"])
         self.assertFalse("error-type" in results)
 
@@ -878,7 +878,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["pages"])
         self.assertEqual(4, results["hits"])
         self.assertEqual(900, results["took"])
-        self.assertEqual("ops", results["unit"])
+        self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
