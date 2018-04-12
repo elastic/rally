@@ -81,6 +81,7 @@ search         use_request_cache       cache
 search         request_params          request-params
 search         items_per_page          results-per-page
 bulk           action_metadata_present action-metadata-present
+force-merge    max_num_segments        max-num-segments
 ============== ======================= =======================
 
 Migrating to Rally 0.9.0
