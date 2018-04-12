@@ -353,13 +353,17 @@ class SearchParamSource(ParamSource):
         query_body = params.get("body", None)
         query_body_params = params.get("body-params", None)
         pages = params.get("pages", None)
-        items_per_page = params.get("results-per-page", None)
+        results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
 
         self.query_params = {
             "index": index_name,
             "type": type_name,
+            "cache": request_cache,
+            # TODO: This is the old name, remove with Rally 1.0
             "use_request_cache": request_cache,
+            "request-params": request_params,
+            # TODO: This is the old name, remove with Rally 1.0
             "request_params": request_params,
             "body": query_body
         }
@@ -369,13 +373,15 @@ class SearchParamSource(ParamSource):
 
         if pages:
             self.query_params["pages"] = pages
-        if items_per_page:
-            self.query_params["items_per_page"] = items_per_page
+        if results_per_page:
+            self.query_params["results-per-page"] = results_per_page
+            # TODO: This is the old name, remove with Rally 1.0
+            self.query_params["items_per_page"] = results_per_page
 
         self.query_body_params = []
         if query_body_params:
             for param, data in query_body_params.items():
-                # TODO #365: Stricly check for allowed syntax. Be lenient in the pre-release and only interpret what's safely possible.
+                # TODO #365: Strictly check for allowed syntax. Be lenient in the pre-release and only interpret what's safely possible.
                 # build path based on param
                 # if not isinstance(data, list):
                 #    raise exceptions.RallyError("%s in body-params defines %s but only lists are allowed. This may be a new syntax "
