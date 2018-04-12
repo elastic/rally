@@ -1265,18 +1265,24 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(5, len(p))
+        self.assertEqual(7, len(p))
         self.assertEqual("index1", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertEqual({
             "_source_include": "some_field"
-        }, p["request_params"])
-        self.assertFalse(p["use_request_cache"])
+        }, p["request-params"])
+        self.assertFalse(p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}
             }
         }, p["body"])
+        # backwards-compatibility options
+        self.assertFalse(p["use_request_cache"])
+        self.assertEqual({
+            "_source_include": "some_field"
+        }, p["request_params"])
+
 
     def test_replaces_body_params(self):
         import copy

@@ -427,14 +427,14 @@ class Query(Runner):
 
     * `index`: The index or indices against which to issue the query.
     * `type`: See `index`
-    * `use_request_cache`: True iff the request cache should be used.
+    * `cache`: True iff the request cache should be used.
     * `body`: Query body
 
     If the following parameters are present in addition, a scroll query will be issued:
 
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
                pages we will terminate earlier.
-    * `items_per_page`: Number of items to retrieve per page.
+    * `results-per-page`: Number of results to retrieve per page.
 
     Returned meta data
 
@@ -457,14 +457,26 @@ class Query(Runner):
         self.es = None
 
     def __call__(self, es, params):
-        if "pages" in params and "items_per_page" in params:
+        # TODO: Remove items_per_page with Rally 1.0.
+        if "pages" in params and ("results-per-page" in params or "items_per_page" in params):
             return self.scroll_query(es, params)
         else:
             return self.request_body_query(es, params)
 
     def request_body_query(self, es, params):
-        request_params = params.get("request_params", {})
-        if "use_request_cache" in params:
+        if "request-params" in params:
+            request_params = params["request-params"]
+        elif "request_params" in params:
+            # TODO: Remove with Rally 1.0.
+            logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
+            request_params = params["request_params"]
+        else:
+            request_params = {}
+        if "cache" in params:
+            request_params["request_cache"] = params["cache"]
+        elif "use_request_cache" in params:
+            # TODO: Remove with Rally 1.0.
+            logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
             request_params["request_cache"] = params["use_request_cache"]
         r = es.search(
             index=params.get("index", "_all"),
@@ -481,7 +493,14 @@ class Query(Runner):
         }
 
     def scroll_query(self, es, params):
-        request_params = params.get("request_params", {})
+        if "request-params" in params:
+            request_params = params["request-params"]
+        elif "request_params" in params:
+            # TODO: Remove with Rally 1.0.
+            logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
+            request_params = params["request_params"]
+        else:
+            request_params = {}
         hits = 0
         retrieved_pages = 0
         timed_out = False
@@ -489,6 +508,22 @@ class Query(Runner):
         self.es = es
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
+        if "cache" in params:
+            cache = params["cache"]
+        elif "use_request_cache" in params:
+            # TODO: Remove with Rally 1.0.
+            logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
+            cache = params["use_request_cache"]
+        else:
+            cache = None
+        if "results-per-page" in params:
+            size = params["results-per-page"]
+        elif "items_per_page" in params:
+            # TODO: Remove with Rally 1.0.
+            logger.warning("Your parameter source uses the deprecated name [items_per_page]. Please change it to [results-per-page].")
+            size = params["items_per_page"]
+        else:
+            size = None
 
         for page in range(total_pages):
             if page == 0:
@@ -498,8 +533,8 @@ class Query(Runner):
                     body=mandatory(params, "body", self),
                     sort="_doc",
                     scroll="10s",
-                    size=params["items_per_page"],
-                    request_cache=params.get("use_request_cache"),
+                    size=size,
+                    request_cache=cache,
                     **request_params
                 )
                 # This should only happen if we concurrently create an index and start searching

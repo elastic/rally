@@ -579,7 +579,7 @@ class QueryRunnerTests(TestCase):
         params = {
             "index": "unittest",
             "type": "type",
-            "use_request_cache": False,
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -626,10 +626,10 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "pages": 1,
-            "items_per_page": 100,
+            "results-per-page": 100,
             "index": "unittest",
             "type": "type",
-            "use_request_cache": False,
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -677,7 +677,7 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "pages": 1,
-            "items_per_page": 100,
+            "results-per-page": 100,
             "body": {
                 "query": {
                     "match_all": {}
@@ -738,10 +738,10 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "pages": 2,
-            "items_per_page": 100,
+            "results-per-page": 100,
             "index": "unittest",
             "type": "type",
-            "use_request_cache": False,
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -795,10 +795,10 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "pages": 5,
-            "items_per_page": 100,
+            "results-per-page": 100,
             "index": "unittest",
             "type": "type",
-            "use_request_cache": False,
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -860,10 +860,10 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "pages": "all",
-            "items_per_page": 100,
+            "results-per-page": 100,
             "index": "unittest",
             "type": "type",
-            "use_request_cache": False,
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -922,7 +922,7 @@ class PutPipelineRunnerTests(TestCase):
         es.ingest.put_pipeline.assert_not_called()
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_param_body_mandatory(self, es):
+    def test_param_id_mandatory(self, es):
         r = runner.PutPipeline()
 
         params = {

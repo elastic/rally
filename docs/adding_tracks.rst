@@ -578,10 +578,6 @@ The data set that is used in the http_logs track starts on 26-04-1998 but we wan
 Custom parameter sources
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. note::
-
-    This is a rather new feature and the API may change! However, the effort to use custom parameter sources is very low.
-
 .. warning::
 
     Your parameter source is on a performance-critical code-path so please double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
@@ -644,7 +640,7 @@ Rally will recognize the parameter source and looks then for a file ``track.py``
             },
             "index": index_name,
             "type": type_name,
-            "use_request_cache": params.get("cache", False)
+            "cache": params.get("cache", False)
         }
 
     def register(registry):
@@ -712,7 +708,7 @@ If you need more control, you need to implement a class. The example above, impl
                 },
                 "index": self._index_name,
                 "type": self._type_name,
-                "use_request_cache": self._cache
+                "cache": self._cache
             }
 
 
