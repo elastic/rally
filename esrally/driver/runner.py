@@ -393,15 +393,23 @@ class ForceMerge(Runner):
         logger.info("Force merging all indices.")
         import elasticsearch
         try:
-            if "max_num_segments" in params:
-                es.indices.forcemerge(index="_all", max_num_segments=params["max_num_segments"])
+            if "max-num-segments" in params:
+                max_num_segments = params["max-num-segments"]
+            elif "max_num_segments" in params:
+                logger.warning("Your parameter source uses the deprecated name [max_num_segments]. Please change it to [max-num-segments].")
+                max_num_segments = params["max_num_segments"]
+            else:
+                max_num_segments = None
+
+            if max_num_segments:
+                es.indices.forcemerge(index="_all", max_num_segments=max_num_segments)
             else:
                 es.indices.forcemerge(index="_all")
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                if "max_num_segments" in params:
-                    es.transport.perform_request("POST", "/_optimize?max_num_segments=%s" % (params["max_num_segments"]))
+                if max_num_segments:
+                    es.transport.perform_request("POST", "/_optimize?max_num_segments={}".format(max_num_segments))
                 else:
                     es.transport.perform_request("POST", "/_optimize")
             else:
