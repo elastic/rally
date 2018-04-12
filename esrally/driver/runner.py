@@ -254,7 +254,15 @@ class BulkIndex(Runner):
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
 
-        with_action_metadata = mandatory(params, "action_metadata_present", self)
+        # TODO: Remove this fallback logic with Rally 1.0
+        if "action_metadata_present" in params:
+            logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
+                           "[action-metadata-present].")
+            action_meta_data_key = "action_metadata_present"
+        else:
+            action_meta_data_key = "action-metadata-present"
+
+        with_action_metadata = mandatory(params, action_meta_data_key, self)
         bulk_size = mandatory(params, "bulk-size", self)
 
         if with_action_metadata:
@@ -287,7 +295,15 @@ class BulkIndex(Runner):
         for line_number, data in enumerate(params["body"]):
 
             line_size = len(data.encode('utf-8'))
-            if params["action_metadata_present"]:
+
+            # TODO: Remove this fallback logic with Rally 1.0
+            if "action_metadata_present" in params:
+                logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
+                               "[action-metadata-present].")
+                action_meta_data_key = "action_metadata_present"
+            else:
+                action_meta_data_key = "action-metadata-present"
+            if params[action_meta_data_key]:
                 if line_number % 2 == 1:
                     total_document_size_bytes += line_size
             else:

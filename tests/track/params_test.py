@@ -699,6 +699,7 @@ class BulkDataGeneratorTests(TestCase):
         all_bulks = list(bulks)
         self.assertEqual(2, len(all_bulks))
         self.assertEqual({
+            "action-metadata-present": True,
             "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-1",
@@ -710,6 +711,7 @@ class BulkDataGeneratorTests(TestCase):
         }, all_bulks[0])
 
         self.assertEqual({
+            "action-metadata-present": True,
             "action_metadata_present": True,
             "body": ["6", "7", "8"],
             "bulk-id": "0-2",
@@ -755,6 +757,7 @@ class BulkDataGeneratorTests(TestCase):
         all_bulks = list(bulks)
         self.assertEqual(3, len(all_bulks))
         self.assertEqual({
+            "action-metadata-present": True,
             "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-1",
@@ -766,6 +769,7 @@ class BulkDataGeneratorTests(TestCase):
         }, all_bulks[0])
 
         self.assertEqual({
+            "action-metadata-present": True,
             "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-2",
@@ -777,6 +781,7 @@ class BulkDataGeneratorTests(TestCase):
         }, all_bulks[1])
 
         self.assertEqual({
+            "action-metadata-present": True,
             "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-3",
@@ -807,6 +812,7 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual(1, len(all_bulks))
         # body must not contain 'foo'!
         self.assertEqual({
+            "action-metadata-present": True,
             "action_metadata_present": True,
             "body": ["1", "2", "3"],
             "bulk-id": "0-1",

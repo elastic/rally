@@ -661,6 +661,8 @@ def bulk_generator(readers, client_index, pipeline, original_params):
                 "type": type,
                 # For our implementation it's always present. Either the original source file already contains this line or the generator
                 # has added it.
+                "action-metadata-present": True,
+                # TODO: This is the old name, remove with Rally 1.0
                 "action_metadata_present": True,
                 "body": bulk,
                 # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.

@@ -74,13 +74,14 @@ Custom Parameter Sources
 
 We have aligned the internal names between parameter sources and runners with the ones that are specified by the user in the track file. If you have implemented custom parameter sources or runners, please adjust the parameter names as follows:
 
-============== ================= =================
-Operation type Old name          New name
-============== ================= =================
-search         use_request_cache cache
-search         request_params    request-params
-search         items_per_page    results-per-page
-============== ================= =================
+============== ======================= =======================
+Operation type Old name                New name
+============== ======================= =======================
+search         use_request_cache       cache
+search         request_params          request-params
+search         items_per_page          results-per-page
+bulk           action_metadata_present action-metadata-present
+============== ======================= =======================
 
 Migrating to Rally 0.9.0
 ------------------------
