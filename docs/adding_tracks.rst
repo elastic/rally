@@ -760,7 +760,7 @@ You cannot only define custom parameter sources but also custom runners. Runners
 * Index stats
 * Nodes stats
 
-If you want to use any other operation, you can define a custom runner. Consider, we want to use the percolate API with an older version of Elasticsearch (note that it has been replaced by the percolate query in Elasticsearch 5.0). To achieve this, we c
+If you want to use any other operation, you can define a custom runner. Consider we want to use the percolate API with an older version of Elasticsearch (note that it has been replaced by the percolate query in Elasticsearch 5.0). To achieve this, we can use the following steps.
 
 In track.json specify an operation with type "percolate" (you can choose this name freely)::
 
