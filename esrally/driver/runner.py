@@ -674,7 +674,7 @@ class PutPipeline(Runner):
     def __call__(self, es, params):
         es.ingest.put_pipeline(id=mandatory(params, "id", self),
                                body=mandatory(params, "body", self),
-                               master_timeout=params.get("master_timeout"),
+                               master_timeout=params.get("master-timeout"),
                                timeout=params.get("timeout"),
                                )
 
