@@ -1,3 +1,33 @@
+### 0.10.0
+
+#### Enhancements
+
+* [#469](https://github.com/elastic/rally/pull/469): Align operation param names with runners
+* [#468](https://github.com/elastic/rally/pull/468) (Breaking): Require at least Rally 0.7.3 for config migration
+* [#466](https://github.com/elastic/rally/pull/466): Don't require git
+* [#464](https://github.com/elastic/rally/pull/464): esrally must not log clear text user passwords
+* [#462](https://github.com/elastic/rally/pull/462): Upgrade Elasticsearch client to 6.2.0
+* [#461](https://github.com/elastic/rally/pull/461) (Breaking): Remove 'index-settings' property
+* [#460](https://github.com/elastic/rally/pull/460): Report store and translog size
+* [#458](https://github.com/elastic/rally/pull/458): Add parameter support to telemetry devices
+* [#456](https://github.com/elastic/rally/pull/456) (Breaking): Remove automatic index management
+* [#454](https://github.com/elastic/rally/pull/454): Allow to ingest a subset of a document corpus
+* [#453](https://github.com/elastic/rally/pull/453) (Breaking): Remove operation type "index"
+* [#441](https://github.com/elastic/rally/pull/441): Allow to pass parameters via a file
+* [#440](https://github.com/elastic/rally/pull/440): Use curl retry features to workaround transient network problems
+
+#### Bug Fixes
+
+* [#467](https://github.com/elastic/rally/pull/467): Return "pages" as unit for scrolls
+* [#465](https://github.com/elastic/rally/pull/465): Default to upgrading packages with setuptools
+* [#449](https://github.com/elastic/rally/pull/449): Fix venv detection with venv and Rally execution on non master
+* [#446](https://github.com/elastic/rally/pull/446): Use more specific name for mandatory plugin check selectively
+
+#### Doc Changes
+
+* [#459](https://github.com/elastic/rally/pull/459): Improve documentation of track repo URL
+* [#457](https://github.com/elastic/rally/pull/457): Be build-tool agnostic
+
 ### 0.9.4
 
 #### Enhancements
