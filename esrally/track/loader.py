@@ -719,7 +719,7 @@ class TrackSpecificationReader:
         body_file = self._r(index_spec, "body", mandatory=False)
         if body_file:
             with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
-                body = self._load_template(f.read(), index_name)
+                body = self._load_template(f.read(), "definition for index {} in {}".format(index_name, body_file))
         else:
             body = None
 
@@ -731,7 +731,7 @@ class TrackSpecificationReader:
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
         template_file = os.path.join(mapping_dir, self._r(tpl_spec, "template"))
         with self.source(template_file, "rt") as f:
-            template_content = self._load_template(f.read(), name)
+            template_content = self._load_template(f.read(), "definition for index template {} in {}".format(name, template_file))
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
