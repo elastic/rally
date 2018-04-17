@@ -580,7 +580,7 @@ class TrackFileReader:
         with open(track_schema_file, mode="rt", encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
         self.track_params = cfg.opts("track", "params")
-        self.read_track = TrackSpecificationReader()
+        self.read_track = TrackSpecificationReader(self.track_params)
 
     def read(self, track_name, track_spec_file, mapping_dir):
         """
