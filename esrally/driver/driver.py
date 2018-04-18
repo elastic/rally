@@ -183,22 +183,27 @@ class DriverActor(actor.RallyActor):
     def receiveUnrecognizedMessage(self, msg, sender):
         logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
 
+    @actor.no_retry("driver")
     def receiveMsg_StartBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
         self.coordinator.start_benchmark(msg.track, msg.lap, msg.metrics_meta_info)
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
+    @actor.no_retry("driver")
     def receiveMsg_TrackPrepared(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg,
                                                     expected_status=None, new_status=None, transition=self.after_track_prepared)
 
+    @actor.no_retry("driver")
     def receiveMsg_JoinPointReached(self, msg, sender):
         self.coordinator.joinpoint_reached(msg.client_id, msg.client_local_timestamp, msg.task)
 
+    @actor.no_retry("driver")
     def receiveMsg_UpdateSamples(self, msg, sender):
         self.coordinator.update_samples(msg.samples)
 
+    @actor.no_retry("driver")
     def receiveMsg_WakeupMessage(self, msg, sender):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
             self.coordinator.reset_relative_time()
@@ -273,6 +278,7 @@ class TrackPreparationActor(actor.RallyActor):
         super().__init__()
         actor.RallyActor.configure_logging(logger)
 
+    @actor.no_retry("track preparator")
     def receiveMsg_PrepareTrack(self, msg, sender):
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
@@ -574,6 +580,7 @@ class LoadGenerator(actor.RallyActor):
         self.start_driving = False
         self.wakeup_interval = LoadGenerator.WAKEUP_INTERVAL_SECONDS
 
+    @actor.no_retry("load generator")
     def receiveMsg_StartLoadGenerator(self, msg, sender):
         logger.info("LoadGenerator[%d] is about to start." % msg.client_id)
         self.master = sender
@@ -594,6 +601,7 @@ class LoadGenerator(actor.RallyActor):
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         self.drive()
 
+    @actor.no_retry("load generator")
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
         logger.info("LoadGenerator[%d] is continuing its work at task index [%d] on [%f], that is in [%s]." %
@@ -601,6 +609,7 @@ class LoadGenerator(actor.RallyActor):
         self.start_driving = True
         self.wakeupAfter(sleep_time)
 
+    @actor.no_retry("load generator")
     def receiveMsg_CompleteCurrentTask(self, msg, sender):
         # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
@@ -612,6 +621,7 @@ class LoadGenerator(actor.RallyActor):
                         % (str(self.client_id), self.current_task))
             self.complete.set()
 
+    @actor.no_retry("load generator")
     def receiveMsg_WakeupMessage(self, msg, sender):
         # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
         if self.start_driving:
@@ -651,6 +661,10 @@ class LoadGenerator(actor.RallyActor):
         if self.executor_future is not None and self.executor_future.running():
             self.cancel.set()
             self.pool.shutdown()
+
+    def receiveMsg_BenchmarkFailure(self, msg, sender):
+        # sent by our no_retry infrastructure; forward to master
+        self.send(self.master, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
         logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))

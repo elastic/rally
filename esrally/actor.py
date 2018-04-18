@@ -29,6 +29,54 @@ class BenchmarkCancelled:
     pass
 
 
+def parametrized(decorator):
+    """
+
+    Helper meta-decorator that allows us to provide parameters to a decorator.
+
+    :param decorator: The decorator that should accept parameters.
+    """
+    def inner(*args, **kwargs):
+        def g(f):
+            return decorator(f, *args, **kwargs)
+        return g
+    return inner
+
+
+@parametrized
+def no_retry(f, actor_name):
+    """
+
+    Decorator intended for Thespian message handlers with the signature ``receiveMsg_$MSG_NAME(self, msg, sender)``. Thespian will
+    assume that a message handler that raises an exception can be retried. It will then retry once and give up afterwards just leaving
+    a trace of that in the actor system's internal log file. However, this is usually *not* what we want in Rally. If handling of a
+    message fails we instead want to notify a node higher up in the actor hierarchy.
+
+    We achieve that by sending a ``BenchmarkFailure`` message to the original sender. Note that this might as well be the current
+    actor (e.g. when handling a ``Wakeup`` message). In that case the actor itself is responsible for forwarding the benchmark failure
+    to its parent actor.
+
+    Example usage:
+
+    @no_retry("special forces actor")
+    def receiveMsg_DefuseBomb(self, msg, sender):
+        # might raise an exception
+        pass
+
+    If this message handler raises an exception, the decorator will turn it into a ``BenchmarkFailure`` message with its ``message``
+    property set to "Error in special forces actor" which is returned to the original sender.
+
+    :param f: The message handler. Does not need to passed directly, this is handled by the decorator infrastructure.
+    :param actor_name: A human readable name of the current actor that should be used in the exception message.
+    """
+    def guard(self, msg, sender):
+        try:
+            return f(self, msg, sender)
+        except BaseException as e:
+            self.send(sender, BenchmarkFailure("Error in {}".format(actor_name), e))
+    return guard
+
+
 class RallyActor(thespian.actors.ActorTypeDispatcher):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)

@@ -248,6 +248,7 @@ class MechanicActor(actor.RallyActor):
         logger.error(failmsg)
         self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
+    @actor.no_retry("mechanic")
     def receiveMsg_StartEngine(self, msg, sender):
         logger.info("Received signal from race control to start engine.")
         self.race_control = sender
@@ -278,6 +279,7 @@ class MechanicActor(actor.RallyActor):
         self.status = "starting"
         self.received_responses = []
 
+    @actor.no_retry("mechanic")
     def receiveMsg_NodesStarted(self, msg, sender):
         self.metrics_store.merge_meta_info(msg.system_meta_info)
 
@@ -291,18 +293,22 @@ class MechanicActor(actor.RallyActor):
 
         self.transition_when_all_children_responded(sender, msg, "starting", "nodes_started", self.on_all_nodes_started)
 
+    @actor.no_retry("mechanic")
     def receiveMsg_MetricsMetaInfoApplied(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
 
+    @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStart(self, msg, sender):
         self.metrics_store.lap = msg.lap
         # in the first lap, we are in state "cluster_started", after that in "benchmark_stopped"
         self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
 
+    @actor.no_retry("mechanic")
     def receiveMsg_BenchmarkStarted(self, msg, sender):
         self.transition_when_all_children_responded(
             sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
 
+    @actor.no_retry("mechanic")
     def receiveMsg_ResetRelativeTime(self, msg, sender):
         if msg.reset_in_seconds > 0:
             self.wakeupAfter(msg.reset_in_seconds)
@@ -315,14 +321,17 @@ class MechanicActor(actor.RallyActor):
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.send(self.race_control, msg)
 
+    @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStop(self, msg, sender):
         self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
 
+    @actor.no_retry("mechanic")
     def receiveMsg_BenchmarkStopped(self, msg, sender):
         self.metrics_store.bulk_add(msg.system_metrics)
         self.transition_when_all_children_responded(
             sender, msg, "benchmark_stopping", "benchmark_stopped", self.on_benchmark_stopped)
 
+    @actor.no_retry("mechanic")
     def receiveMsg_StopEngine(self, msg, sender):
         # detach from cluster and gather all system metrics
         self.cluster_launcher.stop(self.cluster)
@@ -330,6 +339,7 @@ class MechanicActor(actor.RallyActor):
         # cluster from various states and we don't check here for a specific one.
         self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
 
+    @actor.no_retry("mechanic")
     def receiveMsg_NodesStopped(self, msg, sender):
         self.metrics_store.bulk_add(msg.system_metrics)
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
@@ -401,12 +411,13 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
        Dispatcher.
     """
 
+    @actor.no_retry("mechanic dispatcher")
     def receiveMsg_StartEngine(self, startmsg, sender):
-        all_ips_and_ports = to_ip_port(startmsg.hosts)
-        all_node_ips = extract_all_node_ips(all_ips_and_ports)
         self.start_sender = sender
         self.pending = []
         self.remotes = defaultdict(list)
+        all_ips_and_ports = to_ip_port(startmsg.hosts)
+        all_node_ips = extract_all_node_ips(all_ips_and_ports)
 
         for (ip, port), node in nodes_by_host(all_ips_and_ports).items():
             submsg = startmsg.for_nodes(all_node_ips, ip, port, node)
