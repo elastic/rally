@@ -874,7 +874,7 @@ class TimeSeriesCharts:
                             },
                             {
                                 "filter": "name:bytes_written",
-                                "label": "Bytes Written",
+                                "label": "Written",
                                 "color": "rgba(254,209,10,1)",
                                 "id": str(uuid.uuid4())
                             }
