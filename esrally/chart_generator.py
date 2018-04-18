@@ -5,12 +5,19 @@ from esrally import track, config, exceptions
 from esrally.utils import io, console
 
 color_scheme_rgba = [
+    # #00BFB3
     "rgba(0,191,179,1)",
+    # #00A9E0
     "rgba(0,169,224,1)",
+    # #F04E98
     "rgba(240,78,152,1)",
+    # #FFCD00
     "rgba(255,205,0,1)",
+    # #0076A8
     "rgba(0,118,168,1)",
+    # #93C90E
     "rgba(147,201,14,1)",
+    # #646464
     "rgba(100,100,100,1)",
 ]
 
