@@ -73,7 +73,10 @@ def no_retry(f, actor_name):
         try:
             return f(self, msg, sender)
         except BaseException as e:
-            self.send(sender, BenchmarkFailure("Error in {}".format(actor_name), e))
+            msg = "Error in {}".format(actor_name)
+            # log here as the full trace might get lost.
+            logger.exception(msg)
+            self.send(sender, BenchmarkFailure(msg, e))
     return guard
 
 
