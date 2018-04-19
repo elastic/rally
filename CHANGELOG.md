@@ -1,3 +1,13 @@
+### 0.10.1
+
+#### Enhancements
+
+* [#471](https://github.com/elastic/rally/pull/471): Enable actor message handlers to fail immediately
+
+#### Bug Fixes
+
+* [#470](https://github.com/elastic/rally/pull/470): Allow to use track parameters in index definition
+
 ### 0.10.0
 
 #### Enhancements
