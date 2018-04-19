@@ -1273,7 +1273,7 @@ class SearchParamSourceTests(TestCase):
 
         self.assertEqual(7, len(p))
         self.assertEqual("index1", p["index"])
-        self.assertEqual("type1", p["type"])
+        self.assertIsNone(p["type"])
         self.assertEqual({
             "_source_include": "some_field"
         }, p["request-params"])
@@ -1289,6 +1289,33 @@ class SearchParamSourceTests(TestCase):
             "_source_include": "some_field"
         }, p["request_params"])
 
+    def test_user_specified_overrides_defaults(self):
+        index1 = track.Index(name="index1", types=["type1"])
+
+        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+            "index": "_all",
+            "type": "type1",
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        })
+        p = source.params()
+
+        self.assertEqual(7, len(p))
+        self.assertEqual("_all", p["index"])
+        self.assertEqual("type1", p["type"])
+        self.assertDictEqual({}, p["request-params"])
+        self.assertFalse(p["cache"])
+        self.assertEqual({
+            "query": {
+                "match_all": {}
+            }
+        }, p["body"])
+        # backwards-compatibility options
+        self.assertFalse(p["use_request_cache"])
+        self.assertDictEqual({}, p["request_params"])
 
     def test_replaces_body_params(self):
         import copy

@@ -339,16 +339,11 @@ class SearchParamSource(ParamSource):
         super().__init__(track, params, **kwargs)
         if len(track.indices) == 1:
             default_index = track.indices[0].name
-            if len(track.indices[0].types) == 1:
-                default_type = track.indices[0].types[0]
-            else:
-                default_type = None
         else:
             default_index = None
-            default_type = None
 
         index_name = params.get("index", default_index)
-        type_name = params.get("type", default_type)
+        type_name = params.get("type")
         request_cache = params.get("cache", False)
         query_body = params.get("body", None)
         query_body_params = params.get("body-params", None)
