@@ -9,7 +9,9 @@ readonly CONFIGURATIONS=(integration-test es-integration-test)
 #
 #       java.lang.UnsupportedOperationException: Boot class path mechanism is not supported
 #
-readonly DISTRIBUTIONS=(2.4.6 5.6.7)
+# Temporarily disable testing ES 2.x because it does not start with JDK 10 (sets unrecognized JVM options)
+# readonly DISTRIBUTIONS=(2.4.6 5.6.7)
+readonly DISTRIBUTIONS=(5.6.7)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_VERSION="6.2.1"
