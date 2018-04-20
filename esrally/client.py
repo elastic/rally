@@ -12,26 +12,27 @@ class EsClientFactory:
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
     def __init__(self, hosts, client_options):
+        self.hosts = hosts
+        self.client_options = dict(client_options)
+        self.ssl_context = None
+
         masked_client_options = dict(client_options)
         if "basic_auth_password" in masked_client_options:
             masked_client_options["basic_auth_password"] = "*****"
         if "http_auth" in masked_client_options:
-            masked_client_options["http_auth"] = (client_options["http_auth"][0], "*****")
+            masked_client_options["http_auth"] = (masked_client_options["http_auth"][0], "*****")
         logger.info("Creating ES client connected to %s with options [%s]", hosts, masked_client_options)
-        self.hosts = hosts
-        self.client_options = client_options
-        self.ssl_context = None
 
         # we're using an SSL context now and it is not allowed to have use_ssl present in client options anymore
-        if client_options.pop("use_ssl", False):
+        if self.client_options.pop("use_ssl", False):
             import ssl
             from elasticsearch.connection import create_ssl_context
             logger.info("SSL support: on")
-            client_options["scheme"] = "https"
+            self.client_options["scheme"] = "https"
 
-            self.ssl_context = create_ssl_context(cafile=client_options.pop("ca_certs", certifi.where()))
+            self.ssl_context = create_ssl_context(cafile=self.client_options.pop("ca_certs", certifi.where()))
 
-            if not client_options.pop("verify_certs", True):
+            if not self.client_options.pop("verify_certs", True):
                 logger.info("SSL certificate verification: off")
                 self.ssl_context.check_hostname = False
                 self.ssl_context.verify_mode = ssl.CERT_NONE
@@ -46,11 +47,11 @@ class EsClientFactory:
                 logger.info("SSL certificate verification: on")
         else:
             logger.info("SSL support: off")
-            client_options["scheme"] = "http"
+            self.client_options["scheme"] = "http"
 
-        if self._is_set(client_options, "basic_auth_user") and self._is_set(client_options, "basic_auth_password"):
+        if self._is_set(self.client_options, "basic_auth_user") and self._is_set(self.client_options, "basic_auth_password"):
             logger.info("HTTP basic authentication: on")
-            self.client_options["http_auth"] = (client_options.pop("basic_auth_user"), client_options.pop("basic_auth_password"))
+            self.client_options["http_auth"] = (self.client_options.pop("basic_auth_user"), self.client_options.pop("basic_auth_password"))
         else:
             logger.info("HTTP basic authentication: off")
 
