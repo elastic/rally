@@ -79,22 +79,24 @@ class ConflictingIdsBuilderTests(TestCase):
         )
 
     def test_random_conflicts(self):
+        predictable_shuffle = list.reverse
+
         self.assertEqual(
             [
-                "         3",
-                "         3",
-                "         3"
+                "         2",
+                "         1",
+                "         0"
             ],
-            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, rand=lambda x, y: y)
+            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, shuffle=predictable_shuffle)
         )
 
         self.assertEqual(
             [
-                "         8",
-                "         8",
-                "         8"
+                "         7",
+                "         6",
+                "         5"
             ],
-            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, rand=lambda x, y: y)
+            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, shuffle=predictable_shuffle)
         )
 
 
