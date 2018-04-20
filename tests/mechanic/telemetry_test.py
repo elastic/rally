@@ -640,7 +640,7 @@ class ClusterMetaDataInfoTests(TestCase):
         self.assertEqual("unknown", n.fs[1]["spins"])
 
 
-class NodeStatsTests(TestCase):
+class GcTimesSummaryTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     def test_stores_only_diff_of_gc_times(self, metrics_store_node_level, metrics_store_cluster_level):
@@ -669,7 +669,7 @@ class NodeStatsTests(TestCase):
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.NodeStats(client, metrics_store)
+        device = telemetry.GcTimesSummary(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_start()
         # now we'd need to change the node stats response

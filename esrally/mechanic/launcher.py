@@ -44,7 +44,7 @@ class ClusterLauncher:
         t = telemetry.Telemetry(devices=[
             telemetry.ClusterMetaDataInfo(es),
             telemetry.ClusterEnvironmentInfo(es, self.metrics_store),
-            telemetry.NodeStats(es, self.metrics_store),
+            telemetry.GcTimesSummary(es, self.metrics_store),
             telemetry.IndexStats(es, self.metrics_store),
             telemetry.MlBucketProcessingTime(es, self.metrics_store)
         ])

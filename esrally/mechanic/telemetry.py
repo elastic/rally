@@ -637,9 +637,9 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
                 }
 
 
-class NodeStats(InternalTelemetryDevice):
+class GcTimesSummary(InternalTelemetryDevice):
     """
-    Gathers statistics via the Elasticsearch nodes stats API
+    Gathers a summary of the total young gen/old gen GC runtime during the whole race.
     """
     def __init__(self, client, metrics_store):
         super().__init__()
