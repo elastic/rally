@@ -16,12 +16,13 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Available telemetry devices:
 
-   Command    Name                   Description
-   ---------  ---------------------  -----------------------------------------------------
-   jit        JIT Compiler Profiler  Enables JIT compiler logs.
-   gc         GC log                 Enables GC logs.
-   jfr        Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK)
-   perf       perf stat              Reads CPU PMU counters (requires Linux and perf)
+   Command     Name                   Description
+   ----------  ---------------------  -----------------------------------------------------
+   jit         JIT Compiler Profiler  Enables JIT compiler logs.
+   gc          GC log                 Enables GC logs.
+   jfr         Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK)
+   perf        perf stat              Reads CPU PMU counters (requires Linux and perf)
+   node-stats  Node Stats             Regularly samples node stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -68,3 +69,25 @@ perf
 ----
 
 The ``perf`` telemetry device runs ``perf stat`` on each benchmarked node and writes the output to a log file. It can be used to capture low-level CPU statistics. Note that the perf tool, which is only available on Linux, must be installed before using this telemetry device.
+
+node-stats
+----------
+
+.. warning::
+
+    This telemetry device will record a lot of metrics and likely skew your measurement results.
+
+The node-stats telemetry devices regularly calls the node-stats API and records metrics from the following sections:
+
+* Indices stats (key ``indices`` in the node-stats API)
+* Thread pool stats (key ``jvm.thread_pool`` in the node-stats API)
+* JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
+* Circuit breaker stats (key ``breakers`` in the node-stats API)
+
+Supported telemetry parameters:
+
+* ``node-stats-sample-interval`` (default: 1): A positive number greater than zero denoting the sampling interval in seconds.
+* ``node-stats-include-indices`` (default: ``false``): A boolean indicating whether indices stats should be included.
+* ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
+* ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
+* ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.

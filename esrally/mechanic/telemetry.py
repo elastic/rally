@@ -6,7 +6,7 @@ import subprocess
 import threading
 
 import tabulate
-from esrally import metrics, time
+from esrally import metrics, time, exceptions
 from esrally.utils import io, sysstats, process, console, versions
 
 logger = logging.getLogger("rally.telemetry")
@@ -14,7 +14,7 @@ logger = logging.getLogger("rally.telemetry")
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
-    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat]]
+    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat, NodeStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -114,6 +114,26 @@ class TelemetryDevice:
 
 class InternalTelemetryDevice(TelemetryDevice):
     internal = True
+
+
+class SamplerThread(threading.Thread):
+    def __init__(self, recorder):
+        threading.Thread.__init__(self)
+        self.stop = False
+        self.recorder = recorder
+
+    def finish(self):
+        self.stop = True
+        self.join()
+
+    def run(self):
+        # noinspection PyBroadException
+        try:
+            while not self.stop:
+                self.recorder.record()
+                time.sleep(self.recorder.sample_interval)
+        except BaseException as e:
+            logger.exception("Could not determine {}".format(self.recorder))
 
 
 class FlightRecorder(TelemetryDevice):
@@ -254,6 +274,133 @@ class PerfStat(TelemetryDevice):
                 logger.warning("perf stat did not terminate")
             self.log.close()
             self.attached = False
+
+
+class NodeStats(TelemetryDevice):
+    internal = False
+    command = "node-stats"
+    human_name = "Node Stats"
+    help = "Regularly samples node stats"
+
+    """
+    Gathers different node stats.
+    """
+    def __init__(self, telemetry_params, client, metrics_store):
+        super().__init__()
+        self.telemetry_params = telemetry_params
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sampler = None
+
+    def attach_to_cluster(self, cluster):
+        super().attach_to_cluster(cluster)
+
+    def on_benchmark_start(self):
+        recorder = NodeStatsRecorder(self.telemetry_params, self.client, self.metrics_store)
+        self.sampler = SamplerThread(recorder)
+        self.sampler.setDaemon(True)
+        self.sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.sampler:
+            self.sampler.finish()
+
+
+class NodeStatsRecorder:
+    def __init__(self, telemetry_params, client, metrics_store):
+        self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval))
+
+        self.include_indices = telemetry_params.get("node-stats-include-indices", False)
+        self.include_thread_pools = telemetry_params.get("node-stats-include-thread-pools", True)
+        self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
+        self.include_breakers = telemetry_params.get("node-stats-include-breakers", True)
+        self.client = client
+        self.metrics_store = metrics_store
+
+    def __str__(self):
+        return "node stats"
+
+    def record(self):
+        current_sample = self.sample()
+        for node_stats in current_sample:
+            node_name = node_stats["name"]
+            if self.include_indices:
+                self.record_indices_stats(node_name, node_stats,
+                                          include=["indexing", "search", "merges", "query_cache", "segments", "translog",
+                                                   "request_cache"])
+            if self.include_thread_pools:
+                self.record_thread_pool_stats(node_name, node_stats)
+            if self.include_breakers:
+                self.record_circuit_breaker_stats(node_name, node_stats)
+            if self.include_buffer_pools:
+                self.record_jvm_buffer_pool_stats(node_name, node_stats)
+
+        time.sleep(self.sample_interval)
+
+    def record_indices_stats(self, node_name, node_stats, include):
+        indices_stats = node_stats["indices"]
+        for section in include:
+            if section in indices_stats:
+                for metric_name, metric_value in indices_stats[section].items():
+                    self.put_value(node_name,
+                                   metric_name="indices_{}_{}".format(section, metric_name),
+                                   node_stats_metric_name=metric_name,
+                                   metric_value=metric_value)
+
+    def record_thread_pool_stats(self, node_name, node_stats):
+        thread_pool_stats = node_stats["thread_pool"]
+        for pool_name, pool_metrics in thread_pool_stats.items():
+            for metric_name, metric_value in pool_metrics.items():
+                self.put_value(node_name,
+                               metric_name="thread_pool_{}_{}".format(pool_name, metric_name),
+                               node_stats_metric_name=metric_name,
+                               metric_value=metric_value)
+
+    def record_circuit_breaker_stats(self, node_name, node_stats):
+        breaker_stats = node_stats["breakers"]
+        for breaker_name, breaker_metrics in breaker_stats.items():
+            for metric_name, metric_value in breaker_metrics.items():
+                self.put_value(node_name,
+                               metric_name="breaker_{}_{}".format(breaker_name, metric_name),
+                               node_stats_metric_name=metric_name,
+                               metric_value=metric_value)
+
+    def record_jvm_buffer_pool_stats(self, node_name, node_stats):
+        buffer_pool_stats = node_stats["jvm"]["buffer_pools"]
+        for pool_name, pool_metrics in buffer_pool_stats.items():
+            for metric_name, metric_value in pool_metrics.items():
+                self.put_value(node_name,
+                               metric_name="jvm_buffer_pool_{}_{}".format(pool_name, metric_name),
+                               node_stats_metric_name=metric_name,
+                               metric_value=metric_value)
+
+    def put_value(self, node_name, metric_name, node_stats_metric_name, metric_value):
+        if isinstance(metric_value, (int, float)) and not isinstance(metric_value, bool):
+            # auto-recognize metric keys ending with well-known suffixes
+            if node_stats_metric_name.endswith("in_bytes"):
+                self.metrics_store.put_value_node_level(node_name=node_name,
+                                                        name=metric_name,
+                                                        value=metric_value, unit="byte")
+            elif node_stats_metric_name.endswith("in_millis"):
+                self.metrics_store.put_value_node_level(node_name=node_name,
+                                                        name=metric_name,
+                                                        value=metric_value, unit="ms")
+            else:
+                self.metrics_store.put_count_node_level(node_name=node_name,
+                                                        name=metric_name,
+                                                        count=metric_value)
+
+    def sample(self):
+        import elasticsearch
+        try:
+            stats = self.client.nodes.stats(metric="_all")
+        except elasticsearch.TransportError:
+            logger.exception("Could not retrieve node stats.")
+            return {}
+        return stats["nodes"].values()
 
 
 class StartupTime(InternalTelemetryDevice):
@@ -400,7 +547,8 @@ class CpuUsage(InternalTelemetryDevice):
 
     def on_benchmark_start(self):
         if self.node:
-            self.sampler = SampleCpuUsage(self.node, self.metrics_store)
+            recorder = CpuUsageRecorder(self.node, self.metrics_store)
+            self.sampler = SamplerThread(recorder)
             self.sampler.setDaemon(True)
             self.sampler.start()
 
@@ -409,30 +557,25 @@ class CpuUsage(InternalTelemetryDevice):
             self.sampler.finish()
 
 
-class SampleCpuUsage(threading.Thread):
+class CpuUsageRecorder:
     def __init__(self, node, metrics_store):
-        threading.Thread.__init__(self)
-        self.stop = False
         self.node = node
         self.process = sysstats.setup_process_stats(node.process.pid)
         self.metrics_store = metrics_store
+        # the call is blocking already; there is no need for additional waiting in the sampler thread.
+        self.sample_interval = 0
 
-    def finish(self):
-        self.stop = True
-        self.join()
-
-    def run(self):
+    def record(self):
         import psutil
-        # noinspection PyBroadException
         try:
-            while not self.stop:
-                self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",
-                                                        value=sysstats.cpu_utilization(self.process), unit="%")
+            self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",
+                                                    value=sysstats.cpu_utilization(self.process), unit="%")
         # this can happen when the Elasticsearch process has been terminated already and we were not quick enough to stop.
         except psutil.NoSuchProcess:
             pass
-        except BaseException:
-            logger.exception("Could not determine CPU utilization")
+
+    def __str__(self):
+        return "cpu utilization"
 
 
 def store_node_attribute_metadata(metrics_store, nodes_info):
