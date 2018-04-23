@@ -116,7 +116,9 @@ class ClusterLauncherTests(TestCase):
 
         self.assertEqual(["10.0.0.10:9200", "10.0.0.11:9200"], cluster.hosts)
         self.assertIsNotNone(cluster.telemetry)
-        on_post_launch.assert_called_once()
+        # this requires at least Python 3.6
+        # on_post_launch.assert_called_once()
+        self.assertEqual(1, on_post_launch.call_count)
 
     def test_launches_cluster_without_post_launch_handler(self):
         cfg = config.Config()
