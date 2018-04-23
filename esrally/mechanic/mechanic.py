@@ -10,6 +10,8 @@ from esrally.mechanic import supplier, provisioner, launcher, team
 
 logger = logging.getLogger("rally.mechanic")
 
+METRIC_FLUSH_INTERVAL_SECONDS = 30
+
 
 ##############################
 # Public Messages
@@ -214,6 +216,10 @@ def nodes_by_host(ip_port_pairs):
 
 
 class MechanicActor(actor.RallyActor):
+    WAKEUP_RESET_RELATIVE_TIME = "relative_time"
+
+    WAKEUP_FLUSH_METRICS = "flush_metrics"
+
     """
     This actor coordinates all associated mechanics on remote hosts (which do the actual work).
     """
@@ -313,12 +319,19 @@ class MechanicActor(actor.RallyActor):
     @actor.no_retry("mechanic")
     def receiveMsg_ResetRelativeTime(self, msg, sender):
         if msg.reset_in_seconds > 0:
-            self.wakeupAfter(msg.reset_in_seconds)
+            self.wakeupAfter(msg.reset_in_seconds, payload=MechanicActor.WAKEUP_RESET_RELATIVE_TIME)
         else:
             self.reset_relative_time()
 
     def receiveMsg_WakeupMessage(self, msg, sender):
-        self.reset_relative_time()
+        if msg.payload == MechanicActor.WAKEUP_RESET_RELATIVE_TIME:
+            self.reset_relative_time()
+        elif msg.payload == MechanicActor.WAKEUP_FLUSH_METRICS:
+            logger.info("Flushing cluster-wide system metrics store.")
+            self.metrics_store.flush(refresh=False)
+            self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
+        else:
+            raise exceptions.RallyAssertionError("Unknown wakeup reason [{}]".format(msg.payload))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.send(self.race_control, msg)
@@ -369,6 +382,7 @@ class MechanicActor(actor.RallyActor):
                                                 self.cluster.source_revision,
                                                 self.cluster.distribution_version),
                                 self.metrics_store.meta_info))
+        self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
 
     def on_benchmark_started(self):
         self.cluster.on_benchmark_start()
@@ -494,8 +508,6 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
 
 
 class NodeMechanicActor(actor.RallyActor):
-    METRIC_FLUSH_INTERVAL_SECONDS = 30
-
     """
     One instance of this actor is run on each target host and coordinates the actual work of starting / stopping all nodes that should run
     on this host.
@@ -571,13 +583,13 @@ class NodeMechanicActor(actor.RallyActor):
             elif isinstance(msg, OnBenchmarkStart):
                 self.metrics_store.lap = msg.lap
                 self.mechanic.on_benchmark_start()
-                self.wakeupAfter(NodeMechanicActor.METRIC_FLUSH_INTERVAL_SECONDS)
+                self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
                 self.send(sender, BenchmarkStarted())
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 if self.running:
                     logger.info("Flushing system metrics store on host [%s]." % self.host)
                     self.metrics_store.flush(refresh=False)
-                    self.wakeupAfter(NodeMechanicActor.METRIC_FLUSH_INTERVAL_SECONDS)
+                    self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             elif isinstance(msg, OnBenchmarkStop):
                 self.mechanic.on_benchmark_stop()
                 self.metrics_store.flush(refresh=False)
