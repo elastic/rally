@@ -226,6 +226,7 @@ class MechanicActor(actor.RallyActor):
         self.race_control = None
         self.cluster_launcher = None
         self.cluster = None
+        self.plugins = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
         logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
@@ -256,6 +257,7 @@ class MechanicActor(actor.RallyActor):
         cls = metrics.metrics_store_class(self.cfg)
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
+        _, self.plugins = load_team(self.cfg, msg.external)
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
         hosts = self.cfg.opts("client", "hosts")
@@ -345,7 +347,8 @@ class MechanicActor(actor.RallyActor):
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
-        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
+        plugin_handler = PostLaunchPluginHandler(self.plugins)
+        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=plugin_handler)
         # Workaround because we could raise a LaunchError here and thespian will attempt to retry a failed message.
         # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
         # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.
@@ -390,6 +393,21 @@ class MechanicActor(actor.RallyActor):
             self.send(m, thespian.actors.ActorExitRequest())
         self.children = []
         # do not self-terminate, let the parent actor handle this
+
+
+class PostLaunchPluginHandler:
+    def __init__(self, plugins, hook_handler_class=team.PluginBootstrapHookHandler):
+        self.handlers = []
+        if plugins:
+            for plugin in plugins:
+                handler = hook_handler_class(plugin)
+                if handler.can_load():
+                    handler.load()
+                    self.handlers.append(handler)
+
+    def __call__(self, client):
+        for handler in self.handlers:
+            handler.invoke(team.PluginBootstrapPhase.post_launch.name, client=client)
 
 
 @thespian.actors.requireCapability('coordinator')
@@ -590,11 +608,7 @@ class NodeMechanicActor(actor.RallyActor):
 # Internal API (only used by the actor and for tests)
 #####################################################
 
-def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
-           docker=False):
-    races_root = paths.races_root(cfg)
-    challenge_root_path = paths.race_root(cfg)
-    node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
+def load_team(cfg, external):
     # externally provisioned clusters do not support cars / plugins
     if external:
         car = None
@@ -603,6 +617,15 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         team_path = team.team_path(cfg)
         car = team.load_car(team_path, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
         plugins = team.load_plugins(team_path, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
+    return car, plugins
+
+
+def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
+           docker=False):
+    races_root = paths.races_root(cfg)
+    challenge_root_path = paths.race_root(cfg)
+    node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
+    car, plugins = load_team(cfg, external)
 
     if sources or distribution:
         s = supplier.create(cfg, sources, distribution, build, challenge_root_path, plugins)

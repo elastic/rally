@@ -439,58 +439,9 @@ class PluginInstallerTests(TestCase):
         installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
 
         self.assertEqual(0, len(installer.hook_handler.hook_calls))
-        installer.invoke_install_hook(provisioner.ProvisioningPhase.post_install, {"foo": "bar"})
+        installer.invoke_install_hook(team.PluginBootstrapPhase.post_install, {"foo": "bar"})
         self.assertEqual(1, len(installer.hook_handler.hook_calls))
         self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"])
-
-
-class InstallHookHandlerTests(TestCase):
-    class UnitTestComponentLoader:
-        def __init__(self, root_path, component_entry_point, recurse):
-            self.root_path = root_path
-            self.component_entry_point = component_entry_point
-            self.recurse = recurse
-            self.registration_function = None
-
-        def load(self):
-            return self.registration_function
-
-    class UnitTestHook:
-        def __init__(self, phase="post_install"):
-            self.phase = phase
-            self.call_counter = 0
-
-        def post_install_hook(self, config_names, variables, **kwargs):
-            self.call_counter += variables["increment"]
-
-        def register(self, handler):
-            # we can register multiple hooks here
-            handler.register(self.phase, self.post_install_hook)
-            handler.register(self.phase, self.post_install_hook)
-
-    def test_loads_module(self):
-        plugin = team.PluginDescriptor("unittest-plugin")
-        hook = InstallHookHandlerTests.UnitTestHook()
-        handler = provisioner.InstallHookHandler(plugin, loader_class=InstallHookHandlerTests.UnitTestComponentLoader)
-
-        handler.loader.registration_function = hook
-        handler.load()
-
-        handler.invoke("post_install", {"increment": 4})
-
-        # we registered our hook twice. Check that it has been called twice.
-        self.assertEqual(hook.call_counter, 2 * 4)
-
-    def test_cannot_register_for_unknown_phase(self):
-        plugin = team.PluginDescriptor("unittest-plugin")
-        hook = InstallHookHandlerTests.UnitTestHook(phase="this_is_an_unknown_install_phase")
-        handler = provisioner.InstallHookHandler(plugin, loader_class=InstallHookHandlerTests.UnitTestComponentLoader)
-
-        handler.loader.registration_function = hook
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            handler.load()
-        self.assertEqual("Provisioning phase [this_is_an_unknown_install_phase] is unknown. Valid phases are: ['post_install'].",
-                         ctx.exception.args[0])
 
 
 class DockerProvisionerTests(TestCase):

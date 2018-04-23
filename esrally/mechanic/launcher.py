@@ -31,12 +31,35 @@ def wait_for_rest_layer(es, max_attempts=20):
 
 
 class ClusterLauncher:
-    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
+    """
+    The cluster launcher performs cluster-wide tasks that need to be done in the startup / shutdown phase.
+
+    """
+    def __init__(self, cfg, metrics_store, on_post_launch=None, client_factory_class=client.EsClientFactory):
+        """
+
+        Creates a new ClusterLauncher.
+
+        :param cfg: The config object.
+        :param metrics_store: A metrics store that is configured to receive system metrics.
+        :param on_post_launch: An optional function that takes the Elasticsearch client as a parameter. It is invoked after the
+                               REST API is available.
+        :param client_factory_class: A factory class that can create an Elasticsearch client.
+        """
         self.cfg = cfg
         self.metrics_store = metrics_store
+        self.on_post_launch = on_post_launch
         self.client_factory = client_factory_class
 
     def start(self):
+        """
+        Performs final startup tasks.
+
+        Precondition: All cluster nodes have been started.
+        Postcondition: The cluster is ready to receive HTTP requests or a ``LaunchError`` is raised.
+
+        :return: A representation of the launched cluster.
+        """
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         hosts = self.cfg.opts("client", "hosts")
@@ -64,10 +87,16 @@ class ClusterLauncher:
             logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
             self.stop(c)
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
-
+        if self.on_post_launch:
+            self.on_post_launch(es)
         return c
 
     def stop(self, c):
+        """
+        Performs cleanup tasks. This method should be called before nodes are shut down.
+
+        :param c: The cluster that is about to be stopped.
+        """
         c.telemetry.detach_from_cluster(c)
 
 

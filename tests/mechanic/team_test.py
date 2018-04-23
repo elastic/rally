@@ -118,3 +118,52 @@ class PluginLoaderTests(TestCase):
             "var": "0",
             "hello": "true"
         }, plugin.variables)
+
+
+class PluginBootstrapHookHandlerTests(TestCase):
+    class UnitTestComponentLoader:
+        def __init__(self, root_path, component_entry_point, recurse):
+            self.root_path = root_path
+            self.component_entry_point = component_entry_point
+            self.recurse = recurse
+            self.registration_function = None
+
+        def load(self):
+            return self.registration_function
+
+    class UnitTestHook:
+        def __init__(self, phase="post_install"):
+            self.phase = phase
+            self.call_counter = 0
+
+        def post_install_hook(self, config_names, variables, **kwargs):
+            self.call_counter += variables["increment"]
+
+        def register(self, handler):
+            # we can register multiple hooks here
+            handler.register(self.phase, self.post_install_hook)
+            handler.register(self.phase, self.post_install_hook)
+
+    def test_loads_module(self):
+        plugin = team.PluginDescriptor("unittest-plugin")
+        hook = PluginBootstrapHookHandlerTests.UnitTestHook()
+        handler = team.PluginBootstrapHookHandler(plugin, loader_class=PluginBootstrapHookHandlerTests.UnitTestComponentLoader)
+
+        handler.loader.registration_function = hook
+        handler.load()
+
+        handler.invoke("post_install", variables={"increment": 4})
+
+        # we registered our hook twice. Check that it has been called twice.
+        self.assertEqual(hook.call_counter, 2 * 4)
+
+    def test_cannot_register_for_unknown_phase(self):
+        plugin = team.PluginDescriptor("unittest-plugin")
+        hook = PluginBootstrapHookHandlerTests.UnitTestHook(phase="this_is_an_unknown_install_phase")
+        handler = team.PluginBootstrapHookHandler(plugin, loader_class=PluginBootstrapHookHandlerTests.UnitTestComponentLoader)
+
+        handler.loader.registration_function = hook
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            handler.load()
+        self.assertEqual("Phase [this_is_an_unknown_install_phase] is unknown. Valid phases are: ['post_install', 'post_launch'].",
+                         ctx.exception.args[0])

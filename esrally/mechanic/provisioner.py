@@ -2,12 +2,12 @@ import os
 import glob
 import shutil
 import logging
-from enum import Enum
 
 import jinja2
 
 from esrally import exceptions
-from esrally.utils import io, console, process, modules, versions
+from esrally.mechanic import team
+from esrally.utils import io, console, process, versions
 
 logger = logging.getLogger("rally.provisioner")
 
@@ -102,21 +102,6 @@ def cleanup(preserve, install_dir, data_paths):
                 logger.exception("Could not delete [%s]. Skipping..." % install_dir)
 
 
-class ProvisioningPhase(Enum):
-    post_install = 10
-
-    @classmethod
-    def valid(cls, name):
-        for n in ProvisioningPhase.names():
-            if n == name:
-                return True
-        return False
-
-    @classmethod
-    def names(cls):
-        return [p.name for p in list(ProvisioningPhase)]
-
-
 def _apply_config(source_root_path, target_root_path, config_vars):
     for root, dirs, files in os.walk(source_root_path):
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
@@ -173,7 +158,7 @@ class BareProvisioner:
 
         for installer in self.plugin_installers:
             # Never let install hooks modify our original provisioner variables and just provide a copy!
-            installer.invoke_install_hook(ProvisioningPhase.post_install, provisioner_vars.copy())
+            installer.invoke_install_hook(team.PluginBootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
@@ -297,52 +282,8 @@ class ElasticsearchInstaller:
             return [os.path.join(self.es_home_path, "data")]
 
 
-class InstallHookHandler:
-    def __init__(self, plugin, loader_class=modules.ComponentLoader):
-        self.plugin = plugin
-        # Don't allow the loader to recurse. The subdirectories may contain Elasticsearch specific files which we do not want to add to
-        # Rally's Python load path. We may need to define a more advanced strategy in the future.
-        self.loader = loader_class(root_path=self.plugin.root_path, component_entry_point="plugin", recurse=False)
-        self.hooks = {}
-
-    def can_load(self):
-        return self.loader.can_load()
-
-    def load(self):
-        root_module = self.loader.load()
-        try:
-            # every module needs to have a register() method
-            root_module.register(self)
-        except exceptions.RallyError:
-            # just pass our own exceptions transparently.
-            raise
-        except BaseException:
-            msg = "Could not load install hooks in [%s]" % self.loader.root_path
-            logger.exception(msg)
-            raise exceptions.SystemSetupError(msg)
-
-    def register(self, phase, hook):
-        logger.info("Registering install hook [%s] for phase [%s] in plugin [%s]" % (hook.__name__, phase, self.plugin.name))
-        if not ProvisioningPhase.valid(phase):
-            raise exceptions.SystemSetupError("Provisioning phase [%s] is unknown. Valid phases are: %s." %
-                                              (phase, ProvisioningPhase.names()))
-        if phase not in self.hooks:
-            self.hooks[phase] = []
-        self.hooks[phase].append(hook)
-
-    def invoke(self, phase, variables):
-        if phase in self.hooks:
-            logger.info("Invoking phase [%s] for plugin [%s] in config [%s]" % (phase, self.plugin.name, self.plugin.config))
-            for hook in self.hooks[phase]:
-                logger.info("Invoking hook [%s]." % hook.__name__)
-                # hooks should only take keyword arguments to be forwards compatible with Rally!
-                hook(config_names=self.plugin.config, variables=variables)
-        else:
-            logger.debug("Plugin [%s] in config [%s] has no hook registered for phase [%s]." % (self.plugin.name, self.plugin.config, phase))
-
-
 class PluginInstaller:
-    def __init__(self, plugin, hook_handler_class=InstallHookHandler):
+    def __init__(self, plugin, hook_handler_class=team.PluginBootstrapHookHandler):
         self.plugin = plugin
         self.hook_handler = hook_handler_class(self.plugin)
         if self.hook_handler.can_load():
@@ -371,7 +312,7 @@ class PluginInstaller:
                                         (self.plugin_name, str(return_code)))
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables)
+        self.hook_handler.invoke(phase.name, variables=variables)
 
     @property
     def variables(self):

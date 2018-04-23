@@ -1,6 +1,6 @@
-from unittest import TestCase
+from unittest import TestCase, mock
 
-from esrally import config
+from esrally import config, exceptions
 from esrally.mechanic import launcher
 
 
@@ -11,14 +11,15 @@ class MockMetricsStore:
 
 class MockClientFactory:
     def __init__(self, hosts, client_options):
-        pass
+        self.client_options = client_options
 
     def create(self):
-        return MockClient()
+        return MockClient(self.client_options)
 
 
 class MockClient:
-    def __init__(self):
+    def __init__(self, client_options):
+        self.client_options = client_options
         self.cluster = SubClient({
             "cluster_name": "rally-benchmark-cluster",
             "nodes": {
@@ -54,7 +55,13 @@ class MockClient:
         }
 
     def info(self):
+        if self.client_options.get("raise-error-on-info", False):
+            import elasticsearch
+            raise elasticsearch.ConnectionError("Unittest error")
         return self._info
+
+    def search(self, *args, **kwargs):
+        return {}
 
 
 class SubClient:
@@ -73,7 +80,7 @@ class ExternalLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
-        cfg.add(config.Scope.application, "client", "options", [])
+        cfg.add(config.Scope.application, "client", "options", {})
 
         m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         m.start()
@@ -85,10 +92,58 @@ class ExternalLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
-        cfg.add(config.Scope.application, "client", "options", [])
+        cfg.add(config.Scope.application, "client", "options", {})
         cfg.add(config.Scope.application, "mechanic", "distribution.version", "2.3.3")
 
         m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         m.start()
         # did not change user defined value
         self.assertEqual(cfg.opts("mechanic", "distribution.version"), "2.3.3")
+
+
+class ClusterLauncherTests(TestCase):
+    def test_launches_cluster_with_post_launch_handler(self):
+        on_post_launch = mock.Mock()
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
+        cfg.add(config.Scope.application, "client", "options", {})
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+
+        cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(),
+                                                    on_post_launch=on_post_launch, client_factory_class=MockClientFactory)
+        cluster = cluster_launcher.start()
+
+        self.assertEqual(["10.0.0.10:9200", "10.0.0.11:9200"], cluster.hosts)
+        self.assertIsNotNone(cluster.telemetry)
+        on_post_launch.assert_called_once()
+
+    def test_launches_cluster_without_post_launch_handler(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
+        cfg.add(config.Scope.application, "client", "options", {})
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+
+        cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
+        cluster = cluster_launcher.start()
+
+        self.assertEqual(["10.0.0.10:9200", "10.0.0.11:9200"], cluster.hosts)
+        self.assertIsNotNone(cluster.telemetry)
+
+    @mock.patch("time.sleep")
+    def test_error_on_cluster_launch(self, sleep):
+        on_post_launch = mock.Mock()
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "client", "hosts", ["10.0.0.10:9200", "10.0.0.11:9200"])
+        # Simulate that the client will raise an error upon startup
+        cfg.add(config.Scope.application, "client", "options", {"raise-error-on-info": True})
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+
+        cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(),
+                                                    on_post_launch=on_post_launch, client_factory_class=MockClientFactory)
+        with self.assertRaisesRegex(exceptions.LaunchError,
+                                    "Elasticsearch REST API layer is not available. Forcefully terminated cluster."):
+            cluster_launcher.start()
+        on_post_launch.assert_not_called()
