@@ -1,11 +1,12 @@
 import os
 import logging
 import configparser
+from enum import Enum
 
 import tabulate
 
 from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import console, repo, io
+from esrally.utils import console, repo, io, modules
 
 logger = logging.getLogger("rally.team")
 
@@ -341,3 +342,62 @@ class PluginDescriptor:
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and (self.name, self.config, self.core_plugin) == (other.name, other.config, other.core_plugin)
+
+
+class PluginBootstrapPhase(Enum):
+    post_install = 10
+    post_launch = 20
+
+    @classmethod
+    def valid(cls, name):
+        for n in PluginBootstrapPhase.names():
+            if n == name:
+                return True
+        return False
+
+    @classmethod
+    def names(cls):
+        return [p.name for p in list(PluginBootstrapPhase)]
+
+
+class PluginBootstrapHookHandler:
+    def __init__(self, plugin, loader_class=modules.ComponentLoader):
+        self.plugin = plugin
+        # Don't allow the loader to recurse. The subdirectories may contain Elasticsearch specific files which we do not want to add to
+        # Rally's Python load path. We may need to define a more advanced strategy in the future.
+        self.loader = loader_class(root_path=self.plugin.root_path, component_entry_point="plugin", recurse=False)
+        self.hooks = {}
+
+    def can_load(self):
+        return self.loader.can_load()
+
+    def load(self):
+        root_module = self.loader.load()
+        try:
+            # every module needs to have a register() method
+            root_module.register(self)
+        except exceptions.RallyError:
+            # just pass our own exceptions transparently.
+            raise
+        except BaseException:
+            msg = "Could not load plugin bootstrap hooks in [{}]".format(self.loader.root_path)
+            logger.exception(msg)
+            raise exceptions.SystemSetupError(msg)
+
+    def register(self, phase, hook):
+        logger.info("Registering plugin bootstrap hook [%s] for phase [%s] in plugin [%s]", hook.__name__, phase, self.plugin.name)
+        if not PluginBootstrapPhase.valid(phase):
+            raise exceptions.SystemSetupError("Phase [{}] is unknown. Valid phases are: {}.".format(phase, PluginBootstrapPhase.names()))
+        if phase not in self.hooks:
+            self.hooks[phase] = []
+        self.hooks[phase].append(hook)
+
+    def invoke(self, phase, **kwargs):
+        if phase in self.hooks:
+            logger.info("Invoking phase [%s] for plugin [%s] in config [%s]", phase, self.plugin.name, self.plugin.config)
+            for hook in self.hooks[phase]:
+                logger.info("Invoking hook [%s].", hook.__name__)
+                # hooks should only take keyword arguments to be forwards compatible with Rally!
+                hook(config_names=self.plugin.config, **kwargs)
+        else:
+            logger.debug("Plugin [%s] in config [%s] has no hook registered for phase [%s].", self.plugin.name, self.plugin.config, phase)
