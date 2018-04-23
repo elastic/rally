@@ -3,7 +3,7 @@ import collections
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import config, metrics
+from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
 
 
@@ -198,6 +198,340 @@ class GcTests(TestCase):
         self.assertEqual(
             "-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0",
             env["ES_JAVA_OPTS"])
+
+
+class NodStatsRecorderTests(TestCase):
+    def test_negative_sample_interval_forbidden(self):
+        client = Client()
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "node-stats-sample-interval": -1 * random.random()
+        }
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was .*\."):
+            telemetry.NodeStatsRecorder(telemetry_params, client, metrics_store=metrics_store)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_stores_default_nodes_stats(self, metrics_store_put_value, metrics_store_put_count):
+        node_stats_response = {
+            "cluster_name" : "elasticsearch",
+            "nodes" : {
+                "Zbl_e8EyRXmiR47gbHgPfg" : {
+                    "timestamp" : 1524379617017,
+                    "name" : "rally0",
+                    "transport_address" : "127.0.0.1:9300",
+                    "host" : "127.0.0.1",
+                    "ip" : "127.0.0.1:9300",
+                    "roles" : [
+                        "master",
+                        "data",
+                        "ingest"
+                    ],
+                    "indices" : {
+                        "docs" : {
+                            "count" : 0,
+                            "deleted" : 0
+                        },
+                        "store" : {
+                            "size_in_bytes" : 0
+                        },
+                        "indexing" : {
+                            "is_throttled" : False,
+                            "throttle_time_in_millis" : 0
+                        },
+                        "search" : {
+                            "open_contexts" : 0,
+                            "query_total" : 0,
+                            "query_time_in_millis" : 0
+                        },
+                        "merges" : {
+                            "current" : 0,
+                            "current_docs" : 0,
+                            "current_size_in_bytes" : 0
+                        },
+                        "query_cache" : {
+                            "memory_size_in_bytes" : 0,
+                            "total_count" : 0,
+                            "hit_count" : 0,
+                            "miss_count" : 0,
+                            "cache_size" : 0,
+                            "cache_count" : 0,
+                            "evictions" : 0
+                        },
+                        "completion" : {
+                            "size_in_bytes" : 0
+                        },
+                        "segments" : {
+                            "count" : 0,
+                            "memory_in_bytes" : 0,
+                            "max_unsafe_auto_id_timestamp" : -9223372036854775808,
+                            "file_sizes" : { }
+                        },
+                        "translog" : {
+                            "operations" : 0,
+                            "size_in_bytes" : 0,
+                            "uncommitted_operations" : 0,
+                            "uncommitted_size_in_bytes" : 0
+                        },
+                        "request_cache" : {
+                            "memory_size_in_bytes" : 0,
+                            "evictions" : 0,
+                            "hit_count" : 0,
+                            "miss_count" : 0
+                        },
+                        "recovery" : {
+                            "current_as_source" : 0,
+                            "current_as_target" : 0,
+                            "throttle_time_in_millis" : 0
+                        }
+                    },
+                    "jvm" : {
+                        "buffer_pools" : {
+                            "mapped" : {
+                                "count" : 7,
+                                "used_in_bytes" : 3120,
+                                "total_capacity_in_bytes" : 9999
+                            },
+                            "direct" : {
+                                "count" : 6,
+                                "used_in_bytes" : 73868,
+                                "total_capacity_in_bytes" : 73867
+                            }
+                        },
+                        "classes" : {
+                            "current_loaded_count" : 9992,
+                            "total_loaded_count" : 9992,
+                            "total_unloaded_count" : 0
+                        }
+                    },
+                    "thread_pool" : {
+                        "generic" : {
+                            "threads" : 4,
+                            "queue" : 0,
+                            "active" : 0,
+                            "rejected" : 0,
+                            "largest" : 4,
+                            "completed" : 8
+                        }
+                    },
+                    "breakers" : {
+                        "parent" : {
+                            "limit_size_in_bytes" : 726571417,
+                            "limit_size" : "692.9mb",
+                            "estimated_size_in_bytes" : 0,
+                            "estimated_size" : "0b",
+                            "overhead" : 1.0,
+                            "tripped" : 0
+                        }
+                    }
+                }
+            }
+        }
+
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {}
+        recorder = telemetry.NodeStatsRecorder(telemetry_params, client, metrics_store=metrics_store)
+        recorder.record()
+
+        metrics_store_put_count.assert_has_calls([
+            mock.call(node_name="rally0", name="thread_pool_generic_threads", count=4),
+            mock.call(node_name="rally0", name="thread_pool_generic_queue", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_active", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_rejected", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_largest", count=4),
+            mock.call(node_name="rally0", name="thread_pool_generic_completed", count=8),
+            mock.call(node_name="rally0", name="breaker_parent_overhead", count=1.0),
+            mock.call(node_name="rally0", name="breaker_parent_tripped", count=0),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_count", count=7),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_direct_count", count=6),
+        ], any_order=True)
+
+        metrics_store_put_value.assert_has_calls([
+            mock.call(node_name="rally0", name="breaker_parent_limit_size_in_bytes", value=726571417, unit="byte"),
+            mock.call(node_name="rally0", name="breaker_parent_estimated_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_used_in_bytes", value=3120, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_total_capacity_in_bytes", value=9999, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_direct_used_in_bytes", value=73868, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_direct_total_capacity_in_bytes", value=73867, unit="byte"),
+        ], any_order=True)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_stores_all_nodes_stats(self, metrics_store_put_value, metrics_store_put_count):
+        node_stats_response = {
+            "cluster_name" : "elasticsearch",
+            "nodes" : {
+                "Zbl_e8EyRXmiR47gbHgPfg" : {
+                    "timestamp" : 1524379617017,
+                    "name" : "rally0",
+                    "transport_address" : "127.0.0.1:9300",
+                    "host" : "127.0.0.1",
+                    "ip" : "127.0.0.1:9300",
+                    "roles" : [
+                        "master",
+                        "data",
+                        "ingest"
+                    ],
+                    "indices" : {
+                        "docs" : {
+                            "count" : 0,
+                            "deleted" : 0
+                        },
+                        "store" : {
+                            "size_in_bytes" : 0
+                        },
+                        "indexing" : {
+                            "is_throttled" : False,
+                            "throttle_time_in_millis" : 0
+                        },
+                        "search" : {
+                            "open_contexts" : 0,
+                            "query_total" : 0,
+                            "query_time_in_millis" : 0
+                        },
+                        "merges" : {
+                            "current" : 0,
+                            "current_docs" : 0,
+                            "current_size_in_bytes" : 0
+                        },
+                        "query_cache" : {
+                            "memory_size_in_bytes" : 0,
+                            "total_count" : 0,
+                            "hit_count" : 0,
+                            "miss_count" : 0,
+                            "cache_size" : 0,
+                            "cache_count" : 0,
+                            "evictions" : 0
+                        },
+                        "completion" : {
+                            "size_in_bytes" : 0
+                        },
+                        "segments" : {
+                            "count" : 0,
+                            "memory_in_bytes" : 0,
+                            "max_unsafe_auto_id_timestamp" : -9223372036854775808,
+                            "file_sizes" : { }
+                        },
+                        "translog" : {
+                            "operations" : 0,
+                            "size_in_bytes" : 0,
+                            "uncommitted_operations" : 0,
+                            "uncommitted_size_in_bytes" : 0
+                        },
+                        "request_cache" : {
+                            "memory_size_in_bytes" : 0,
+                            "evictions" : 0,
+                            "hit_count" : 0,
+                            "miss_count" : 0
+                        },
+                        "recovery" : {
+                            "current_as_source" : 0,
+                            "current_as_target" : 0,
+                            "throttle_time_in_millis" : 0
+                        }
+                    },
+                    "jvm" : {
+                        "buffer_pools" : {
+                            "mapped" : {
+                                "count" : 7,
+                                "used_in_bytes" : 3120,
+                                "total_capacity_in_bytes" : 9999
+                            },
+                            "direct" : {
+                                "count" : 6,
+                                "used_in_bytes" : 73868,
+                                "total_capacity_in_bytes" : 73867
+                            }
+                        },
+                        "classes" : {
+                            "current_loaded_count" : 9992,
+                            "total_loaded_count" : 9992,
+                            "total_unloaded_count" : 0
+                        }
+                    },
+                    "thread_pool" : {
+                        "generic" : {
+                            "threads" : 4,
+                            "queue" : 0,
+                            "active" : 0,
+                            "rejected" : 0,
+                            "largest" : 4,
+                            "completed" : 8
+                        }
+                    },
+                    "breakers" : {
+                        "parent" : {
+                            "limit_size_in_bytes" : 726571417,
+                            "limit_size" : "692.9mb",
+                            "estimated_size_in_bytes" : 0,
+                            "estimated_size" : "0b",
+                            "overhead" : 1.0,
+                            "tripped" : 0
+                        }
+                    }
+                }
+            }
+        }
+
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "node-stats-include-indices": True
+        }
+        recorder = telemetry.NodeStatsRecorder(telemetry_params, client, metrics_store=metrics_store)
+        recorder.record()
+
+        metrics_store_put_count.assert_has_calls([
+            mock.call(node_name="rally0", name="indices_search_open_contexts", count=0),
+            mock.call(node_name="rally0", name="indices_search_query_total", count=0),
+            mock.call(node_name="rally0", name="indices_merges_current", count=0),
+            mock.call(node_name="rally0", name="indices_merges_current_docs", count=0),
+            mock.call(node_name="rally0", name="indices_query_cache_total_count", count=0),
+            mock.call(node_name="rally0", name="indices_query_cache_hit_count", count=0),
+            mock.call(node_name="rally0", name="indices_query_cache_miss_count", count=0),
+            mock.call(node_name="rally0", name="indices_query_cache_cache_size", count=0),
+            mock.call(node_name="rally0", name="indices_query_cache_cache_count", count=0),
+            mock.call(node_name="rally0", name="indices_query_cache_evictions", count=0),
+            mock.call(node_name="rally0", name="indices_segments_count", count=0),
+            mock.call(node_name="rally0", name="indices_segments_max_unsafe_auto_id_timestamp", count=-9223372036854775808),
+            mock.call(node_name="rally0", name="indices_translog_operations", count=0),
+            mock.call(node_name="rally0", name="indices_translog_uncommitted_operations", count=0),
+            mock.call(node_name="rally0", name="indices_request_cache_evictions", count=0),
+            mock.call(node_name="rally0", name="indices_request_cache_hit_count", count=0),
+            mock.call(node_name="rally0", name="indices_request_cache_miss_count", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_threads", count=4),
+            mock.call(node_name="rally0", name="thread_pool_generic_queue", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_active", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_rejected", count=0),
+            mock.call(node_name="rally0", name="thread_pool_generic_largest", count=4),
+            mock.call(node_name="rally0", name="thread_pool_generic_completed", count=8),
+            mock.call(node_name="rally0", name="breaker_parent_overhead", count=1.0),
+            mock.call(node_name="rally0", name="breaker_parent_tripped", count=0),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_count", count=7),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_direct_count", count=6),
+        ], any_order=True)
+
+        metrics_store_put_value.assert_has_calls([
+            mock.call(node_name="rally0", name="indices_indexing_throttle_time_in_millis", value=0, unit="ms"),
+            mock.call(node_name="rally0", name="indices_search_query_time_in_millis", value=0, unit="ms"),
+            mock.call(node_name="rally0", name="indices_merges_current_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="indices_query_cache_memory_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="indices_segments_memory_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="indices_translog_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="indices_translog_uncommitted_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="indices_request_cache_memory_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="breaker_parent_limit_size_in_bytes", value=726571417, unit="byte"),
+            mock.call(node_name="rally0", name="breaker_parent_estimated_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_used_in_bytes", value=3120, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_total_capacity_in_bytes", value=9999, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_direct_used_in_bytes", value=73868, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_buffer_pool_direct_total_capacity_in_bytes", value=73867, unit="byte"),
+        ], any_order=True)
 
 
 class ClusterEnvironmentInfoTests(TestCase):

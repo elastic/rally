@@ -37,11 +37,14 @@ class ClusterLauncher:
         self.client_factory = client_factory_class
 
     def start(self):
+        enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
+        telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         hosts = self.cfg.opts("client", "hosts")
         client_options = self.cfg.opts("client", "options")
         es = self.client_factory(hosts, client_options).create()
 
-        t = telemetry.Telemetry(devices=[
+        t = telemetry.Telemetry(enabled_devices, devices=[
+            telemetry.NodeStats(telemetry_params, es, self.metrics_store),
             telemetry.ClusterMetaDataInfo(es),
             telemetry.ClusterEnvironmentInfo(es, self.metrics_store),
             telemetry.GcTimesSummary(es, self.metrics_store),
