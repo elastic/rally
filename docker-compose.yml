@@ -1,0 +1,20 @@
+version: '2.2'
+services:
+  rally-release:
+    build:
+      context: .
+      args:
+        NEW_USER_UID: ${UID}
+        NEW_USER: ${USER}
+    container_name: rally-runner
+    volumes:
+      - $SSH_AUTH_SOCK:/ssh-agent
+      - $HOME/.gitconfig:/home/${USER}/.gitconfig
+      - $HOME/.github:/home/${USER}/.github
+      - $HOME/.gnupg:/home/${USER}/.gnupg
+      - $PWD/.:/home/${USER}/rally
+    environment:
+      SSH_AUTH_SOCK: '/ssh-agent'
+    image: rally-release
+    user: ${UID}
+    working_dir: /home/${USER}/rally

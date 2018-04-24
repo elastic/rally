@@ -34,4 +34,11 @@ release-checks:
 release: release-checks clean docs it
 	./release.sh $(release_version) $(next_version)
 
-.PHONY: clean docs test it it34 it35 it36 benchmark coverage release release-checks
+# still run `it` tests locally as Docker on macOS runs in a vm (and is slower)
+release-in-docker: release-checks clean docs it
+	export UID; \
+	export USER; \
+	docker-compose build --pull; `# add --pull here to rebuild a fresh image` \
+	docker-compose run --rm rally-release ./release.sh $(release_version) $(next_version)
+
+.PHONY: clean docs test it it34 it35 it36 benchmark coverage release release-checks release-in-docker
