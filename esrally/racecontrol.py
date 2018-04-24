@@ -287,7 +287,7 @@ def race(cfg, sources=False, build=False, distribution=False, external=False, do
 
 
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
-    configured_hosts = cfg.opts("client", "hosts", mandatory=False)
+    configured_hosts = cfg.opts("client", "hosts", mandatory=False)['default']
     if configured_hosts:
         logger.info("Using configured hosts %s" % configured_hosts)
     else:

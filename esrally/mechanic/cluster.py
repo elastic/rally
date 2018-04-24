@@ -48,6 +48,18 @@ class Node:
         return self.node_name
 
 
+class Clusters(object):
+    def __init__(self, all_hosts, nodes, all_telemetry):
+        self.cluster_names = []
+        self.cluster = {}
+        for cluster_name, cluster_hosts in all_hosts.items():
+            self.cluster[cluster_name] = Cluster(cluster_hosts, [], all_telemetry[cluster_name])
+            self.cluster_names.append(cluster_name)
+
+    @property
+    def default(self):
+        return self.cluster['default']
+
 class Cluster:
     """
     Cluster exposes APIs of the running benchmark candidate.

@@ -11,7 +11,7 @@ import json
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
-from esrally.utils import io, convert, process, console, net
+from esrally.utils import io, convert, process, console, net, config as config_helper
 
 from elasticsearch.client import _normalize_hosts
 
@@ -580,16 +580,7 @@ def to_dict(arg):
     elif arg.startswith("{"):
         return json.loads(arg)
     else:
-        return kv_to_map(csv_to_list(arg))
-
-
-def csv_to_list(csv):
-    if csv is None:
-        return None
-    elif len(csv.strip()) == 0:
-        return []
-    else:
-        return [e.strip() for e in csv.split(",")]
+        return kv_to_map(config_helper.csv_to_list(arg))
 
 
 def to_bool(v):
@@ -673,13 +664,13 @@ def main():
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", config_helper.csv_to_list(args.car))
     if args.team_path:
         cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", config_helper.csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", to_dict(args.car_params))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", to_dict(args.plugin_params))
     if args.keep_cluster_running:
@@ -689,7 +680,7 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", config_helper.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
@@ -714,7 +705,7 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "track", "params", to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
-    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
+    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", config_helper.csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
@@ -739,11 +730,13 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
-    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))
+    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", config_helper.csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        cfg.add(config.Scope.applicationOverride, "client", "hosts", _normalize_hosts(csv_to_list(args.target_hosts)))
-        client_options = kv_to_map(csv_to_list(args.client_options))
+        target_hosts = config_helper.TargetHosts(args.target_hosts)
+        cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts.all_hosts)
+        print(cfg.opts('client','hosts'))
+        client_options = kv_to_map(config_helper.csv_to_list(args.client_options))
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
         if "timeout" not in client_options:
             console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
