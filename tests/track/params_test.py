@@ -1,3 +1,4 @@
+import random
 from unittest import TestCase
 
 from esrally import exceptions
@@ -100,31 +101,53 @@ class ConflictingIdsBuilderTests(TestCase):
 
 class ActionMetaDataTests(TestCase):
     def test_generate_action_meta_data_without_id_conflicts(self):
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type"}}',
-                         next(params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)))
+        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}'),
+                         next(params.GenerateActionMetaData("test_index", "test_type")))
 
     def test_generate_action_meta_data_with_id_conflicts(self):
-        pseudo_random_sequence = iter([
-            # first column == 3 -> we'll draw a "random" id, second column == "random" id
-            3, 1,
-            3, 3,
-            3, 2,
-            0,
-            3, 0])
+        def idx(id):
+            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
 
-        generator = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=[100, 200, 300, 400],
-                                                  rand=lambda x, y: next(pseudo_random_sequence))
+        def conflict(action, id):
+            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % (action, id)
 
-        # first one is always not drawn from a random index
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}', next(generator))
+        pseudo_random_conflicts = iter([
+            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+            0.2,
+            0.25,
+            0.2,
+            # no conflict
+            0.3,
+            # conflict again
+            0.0
+        ])
+
+        chosen_index_of_conflicting_ids = iter([
+            # the "random" index of the id in the array `conflicting_ids` that will produce a conflict
+            1,
+            3,
+            2,
+            0])
+
+        conflict_action = random.choice(["index", "update"])
+
+        generator = params.GenerateActionMetaData("test_index", "test_type",
+                                                  conflicting_ids=[100, 200, 300, 400],
+                                                  conflict_probability=25,
+                                                  on_conflict=conflict_action,
+                                                  rand=lambda: next(pseudo_random_conflicts),
+                                                  randint=lambda x, y: next(chosen_index_of_conflicting_ids))
+
+        # first one is always *not* drawn from a random index
+        self.assertEqual(idx("100"), next(generator))
         # now we start using random ids, i.e. look in the first line of the pseudo-random sequence
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}', next(generator))
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}', next(generator))
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}', next(generator))
-        # "random" returns 0 instead of 3 -> we draw the next sequential one, which is 200
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}', next(generator))
+        self.assertEqual(conflict(conflict_action, "200"), next(generator))
+        self.assertEqual(conflict(conflict_action, "400"), next(generator))
+        self.assertEqual(conflict(conflict_action, "300"), next(generator))
+        # no conflict -> we draw the next sequential one, which is 200
+        self.assertEqual(idx("200"), next(generator))
         # and we're back to random
-        self.assertEqual('{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}', next(generator))
+        self.assertEqual(conflict(conflict_action, "100"), next(generator))
 
     def test_source_file_action_meta_data(self):
         source = params.Slice(io.StringAsFileSource, 0, 5)
@@ -139,7 +162,7 @@ class ActionMetaDataTests(TestCase):
         ]
 
         source.open(data, "r")
-        self.assertEqual(data, list(generator))
+        self.assertEqual([("source", doc) for doc in data], list(generator))
         source.close()
 
 
@@ -155,7 +178,7 @@ class IndexDataReaderTests(TestCase):
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+        am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
@@ -176,7 +199,7 @@ class IndexDataReaderTests(TestCase):
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 3, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+        am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
@@ -199,7 +222,7 @@ class IndexDataReaderTests(TestCase):
         bulk_size = 3
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+        am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
@@ -223,7 +246,7 @@ class IndexDataReaderTests(TestCase):
 
         # only 5 documents to index for this client
         source = params.Slice(io.StringAsFileSource, 0, 5)
-        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=None)
+        am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
         reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
                                         index_name="test_index", type_name="test_type")
@@ -262,6 +285,69 @@ class IndexDataReaderTests(TestCase):
         # lines should include meta-data
         expected_line_sizes = [6, 6, 2]
         self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
+
+    def test_read_bulk_with_id_conflicts(self):
+        pseudo_random_conflicts = iter([
+            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+            0.2,
+            0.25,
+            0.2,
+            # no conflict
+            0.3
+        ])
+
+        chosen_index_of_conflicting_ids = iter([
+            # the "random" index of the id in the array `conflicting_ids` that will produce a conflict
+            1,
+            3,
+            2])
+
+        data = [
+            '{"key": "value1"}',
+            '{"key": "value2"}',
+            '{"key": "value3"}',
+            '{"key": "value4"}',
+            '{"key": "value5"}'
+        ]
+        bulk_size = 2
+
+        source = params.Slice(io.StringAsFileSource, 0, len(data))
+        am_handler = params.GenerateActionMetaData("test_index", "test_type",
+                                                   conflicting_ids=[100, 200, 300, 400],
+                                                   conflict_probability=25,
+                                                   on_conflict="update",
+                                                   rand=lambda: next(pseudo_random_conflicts),
+                                                   randint=lambda x, y: next(chosen_index_of_conflicting_ids))
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
+
+        # consume all bulks
+        bulks = []
+        with reader:
+            for index, type, batch in reader:
+                for bulk_size, bulk in batch:
+                    bulks.append(bulk)
+
+        self.assertEqual([
+            [
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}',
+                '{"key": "value1"}',
+                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}',
+                '{"doc":{"key": "value2"}}'
+            ],
+            [
+                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}',
+                '{"doc":{"key": "value3"}}',
+                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}',
+                '{"doc":{"key": "value4"}}'
+            ],
+            [
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}',
+                '{"key": "value5"}'
+            ]
+
+        ], bulks)
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
         with reader:
@@ -474,6 +560,15 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
+
+    def test_create_with_unknown_on_conflict_setting(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "conflicts": "sequential",
+                "on-conflict": "delete"
+            })
+
+        self.assertEqual("Unknown 'on-conflict' setting [delete]", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_too_low(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
@@ -690,7 +785,9 @@ class BulkDataGeneratorTests(TestCase):
         ])
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus],
-                                       batch_size=5, bulk_size=5, id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
+                                       batch_size=5, bulk_size=5,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+                                       pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -748,7 +845,9 @@ class BulkDataGeneratorTests(TestCase):
             ]
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=corpora,
-                                       batch_size=5, bulk_size=5, id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
+                                       batch_size=5, bulk_size=5,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+                                       pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -802,7 +901,8 @@ class BulkDataGeneratorTests(TestCase):
         ])
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus], batch_size=3, bulk_size=3,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, pipeline=None,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+                                       pipeline=None,
                                        original_params={
                                            "body": "foo",
                                            "custom-param": "bar"
