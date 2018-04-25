@@ -734,8 +734,9 @@ def main():
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
         target_hosts = config_helper.TargetHosts(args.target_hosts)
-        cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts.all_hosts)
-        print(cfg.opts('client','hosts'))
+        cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
+        print("Yo")
+        print(cfg.opts('client','hosts')())
         client_options = kv_to_map(config_helper.csv_to_list(args.client_options))
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
         if "timeout" not in client_options:

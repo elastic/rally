@@ -587,7 +587,9 @@ class LoadGenerator(actor.RallyActor):
         self.client_id = msg.client_id
         self.config = load_local_config(msg.config)
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
-        self.es = client.EsClientFactory(self.config.opts("client", "hosts")["default"], self.config.opts("client", "options")).create()
+        # TODO use iter for create
+        self.es = client.EsClientsFactory()(self.config.opts("client", "hosts").all_hosts, self.config.opts("client", "options"))
+        #self.es = client.EsClientFactory(self.config.opts("client", "hosts")(), self.config.opts("client", "options")).create()
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.tasks = msg.tasks
@@ -986,7 +988,20 @@ class Executor:
                     if rest > 0:
                         time.sleep(rest)
                 start = time.perf_counter()
-                total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params, self.abort_on_error)
+
+                # Pass all es client connections if runner needs to talk multi cluster
+                print(dir(runner))
+                print(runner)
+                if hasattr(runner,"multi_cluster"):
+                    print("Found multi_cluster attribute!")
+                    # Here the runner will receive an es object which is a dict, corresponding to the
+                    # supplied --target-hosts and --client-options cli args
+                    # key is the cluster_name
+                    # value the es client connection for the key
+                    total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params, self.abort_on_error)
+                else:
+                    print("No multi_cluster attribute")
+                    total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es['default'], params, self.abort_on_error)
                 stop = time.perf_counter()
 
                 service_time = stop - start

@@ -21,7 +21,10 @@ def runner_for(operation_type):
 
 def register_runner(operation_type, runner):
     # we'd rather use callable() but this will erroneously also classify a class as callable...
-    if isinstance(runner, types.FunctionType):
+    if hasattr(runner, "multi_cluster"):
+        logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
+        __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
+    elif isinstance(runner, types.FunctionType):
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = DelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
@@ -71,6 +74,19 @@ class DelegatingRunner(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "user-defined runner for [%s]" % self.name
+
+class MultiClusterDelegatingRunner(Runner):
+    multi_cluster = True
+
+    def __init__(self, runnable, name):
+        self.runnable = runnable
+        self.name = name
+
+    def __call__(self, *args):
+        return self.runnable(*args)
+
+    def __repr__(self, *args, **kwargs):
+        return "user-defined multi-cluster enabled runner for [%s]" % self.name
 
 
 def mandatory(params, key, op):

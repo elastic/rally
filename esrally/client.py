@@ -6,6 +6,16 @@ import urllib3
 
 logger = logging.getLogger("rally.client")
 
+class EsClientsFactory:
+    def __call__(self, hosts, client_options):
+        if len(hosts) == 1:
+            return EsClientFactory(hosts, client_options).create()
+        else:
+            es = {}
+            for cluster_name, cluster_hosts in hosts.items():
+                # TODO make client_options a dict like hosts (see utils/config.py)
+                es[cluster_name] = EsClientFactory(cluster_hosts, client_options).create()
+            return es
 
 class EsClientFactory:
     """

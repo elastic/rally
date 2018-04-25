@@ -56,6 +56,10 @@ class Clusters(object):
             self.cluster[cluster_name] = Cluster(cluster_hosts, [], all_telemetry[cluster_name])
             self.cluster_names.append(cluster_name)
 
+    def __call__(self):
+        """Return 'default' cluster"""
+        return self.cluster['default']
+
     @property
     def default(self):
         return self.cluster['default']

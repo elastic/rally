@@ -62,7 +62,7 @@ class ClusterLauncher:
         """
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
-        all_hosts = self.cfg.opts("client", "hosts")
+        all_hosts = self.cfg.opts("client", "hosts").all_hosts
 
         es = {}
         t = {}
@@ -193,7 +193,7 @@ class ExternalLauncher:
         self.client_factory = client_factory_class
 
     def start(self, node_configurations=None):
-        hosts = self.cfg.opts("client", "hosts")['default']
+        hosts = self.cfg.opts("client", "hosts")()
         client_options = self.cfg.opts("client", "options")
         es = self.client_factory(hosts, client_options).create()
 
