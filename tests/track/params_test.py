@@ -1,3 +1,4 @@
+import random
 from unittest import TestCase
 
 from esrally import exceptions
@@ -104,6 +105,12 @@ class ActionMetaDataTests(TestCase):
                          next(params.GenerateActionMetaData("test_index", "test_type")))
 
     def test_generate_action_meta_data_with_id_conflicts(self):
+        def idx(id):
+            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
+
+        def conflict(action, id):
+            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % (action, id)
+
         pseudo_random_conflicts = iter([
             # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
             0.2,
@@ -122,22 +129,25 @@ class ActionMetaDataTests(TestCase):
             2,
             0])
 
+        conflict_action = random.choice(["index", "update"])
+
         generator = params.GenerateActionMetaData("test_index", "test_type",
                                                   conflicting_ids=[100, 200, 300, 400],
                                                   conflict_probability=25,
+                                                  on_conflict=conflict_action,
                                                   rand=lambda: next(pseudo_random_conflicts),
                                                   randint=lambda x, y: next(chosen_index_of_conflicting_ids))
 
-        # first one is always not drawn from a random index
-        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}'), next(generator))
+        # first one is always *not* drawn from a random index
+        self.assertEqual(idx("100"), next(generator))
         # now we start using random ids, i.e. look in the first line of the pseudo-random sequence
-        self.assertEqual(("update", '{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}'), next(generator))
-        self.assertEqual(("update", '{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}'), next(generator))
-        self.assertEqual(("update", '{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}'), next(generator))
-        # "random" returns 0 instead of 3 -> we draw the next sequential one, which is 200
-        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}'), next(generator))
+        self.assertEqual(conflict(conflict_action, "200"), next(generator))
+        self.assertEqual(conflict(conflict_action, "400"), next(generator))
+        self.assertEqual(conflict(conflict_action, "300"), next(generator))
+        # no conflict -> we draw the next sequential one, which is 200
+        self.assertEqual(idx("200"), next(generator))
         # and we're back to random
-        self.assertEqual(("update", '{"update": {"_index": "test_index", "_type": "test_type", "_id": "100"}}'), next(generator))
+        self.assertEqual(conflict(conflict_action, "100"), next(generator))
 
     def test_source_file_action_meta_data(self):
         source = params.Slice(io.StringAsFileSource, 0, 5)
@@ -305,6 +315,7 @@ class IndexDataReaderTests(TestCase):
         am_handler = params.GenerateActionMetaData("test_index", "test_type",
                                                    conflicting_ids=[100, 200, 300, 400],
                                                    conflict_probability=25,
+                                                   on_conflict="update",
                                                    rand=lambda: next(pseudo_random_conflicts),
                                                    randint=lambda x, y: next(chosen_index_of_conflicting_ids))
 
@@ -550,6 +561,15 @@ class BulkIndexParamSourceTests(TestCase):
 
         self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
 
+    def test_create_with_unknown_on_conflict_setting(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "conflicts": "sequential",
+                "on-conflict": "delete"
+            })
+
+        self.assertEqual("Unknown 'on-conflict' setting [delete]", ctx.exception.args[0])
+
     def test_create_with_ingest_percentage_too_low(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
@@ -766,7 +786,8 @@ class BulkDataGeneratorTests(TestCase):
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus],
                                        batch_size=5, bulk_size=5,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, pipeline=None,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+                                       pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -825,7 +846,8 @@ class BulkDataGeneratorTests(TestCase):
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=corpora,
                                        batch_size=5, bulk_size=5,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, pipeline=None,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+                                       pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -879,7 +901,8 @@ class BulkDataGeneratorTests(TestCase):
         ])
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus], batch_size=3, bulk_size=3,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, pipeline=None,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+                                       pipeline=None,
                                        original_params={
                                            "body": "foo",
                                            "custom-param": "bar"

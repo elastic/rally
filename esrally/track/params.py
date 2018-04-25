@@ -442,10 +442,14 @@ class BulkIndexParamSource(ParamSource):
         else:
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
 
-        if self.id_conflicts == IndexIdConflict.RandomConflicts:
+        if self.id_conflicts != IndexIdConflict.NoConflicts:
             self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100)
+            self.on_conflict = params.get("on-conflict", "index")
+            if self.on_conflict not in ["index", "update"]:
+                raise exceptions.InvalidSyntax("Unknown 'on-conflict' setting [{}]".format(self.on_conflict))
         else:
             self.conflict_probability = None
+            self.on_conflict = None
 
         self.corpora = self.used_corpora(track, params)
 
@@ -512,7 +516,7 @@ class BulkIndexParamSource(ParamSource):
 
     def partition(self, partition_index, total_partitions):
         return PartitionBulkIndexParamSource(self.corpora, partition_index, total_partitions, self.batch_size, self.bulk_size,
-                                             self.ingest_percentage, self.id_conflicts, self.conflict_probability,
+                                             self.ingest_percentage, self.id_conflicts, self.conflict_probability, self.on_conflict,
                                              self.pipeline, self._params)
 
     def params(self):
@@ -524,7 +528,7 @@ class BulkIndexParamSource(ParamSource):
 
 class PartitionBulkIndexParamSource:
     def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, ingest_percentage,
-                 id_conflicts, conflict_probability, pipeline=None, original_params=None):
+                 id_conflicts, conflict_probability, on_conflict, pipeline=None, original_params=None):
         """
 
         :param corpora: Specification of affected document corpora.
@@ -535,6 +539,7 @@ class PartitionBulkIndexParamSource:
         :param ingest_percentage: A number between (0.0, 100.0] that defines how much of the whole corpus should be ingested.
         :param id_conflicts: The type of id conflicts.
         :param conflict_probability: A number between (0.0, 100.0] that defines the probability that a document is replaced by another one.
+        :param on_conflict: A string indicating which action should be taken on id conflicts (either "index" or "update").
         :param pipeline: The name of the ingest pipeline to run.
         :param original_params: The original dict passed to the parent parameter source.
         """
@@ -547,7 +552,7 @@ class PartitionBulkIndexParamSource:
         self.id_conflicts = id_conflicts
         self.pipeline = pipeline
         self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
-                                               bulk_size, id_conflicts, conflict_probability, pipeline, original_params)
+                                               bulk_size, id_conflicts, conflict_probability, on_conflict, pipeline, original_params)
 
     def partition(self, partition_index, total_partitions):
         raise exceptions.RallyError("Cannot partition a PartitionBulkIndexParamSource further")
@@ -604,19 +609,20 @@ def chain(*iterables):
                 yield element
 
 
-def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability):
+def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict):
     source = Slice(io.FileSource, offset, num_lines)
 
     if docs.includes_action_and_meta_data:
         am_handler = SourceActionMetaData(source)
     else:
         am_handler = GenerateActionMetaData(docs.target_index, docs.target_type,
-                                            build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability)
+                                            build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability, on_conflict)
 
     return IndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
 
 
-def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, create_reader):
+def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
+                   create_reader):
     readers = []
     for corpus in corpora:
         for docs in corpus.documents:
@@ -625,7 +631,8 @@ def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id
             if num_docs > 0:
                 logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
                             "from corpus [%s]." % (client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name))
-                readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability))
+                readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
+                                             on_conflict))
             else:
                 logger.info("Task-relative client at index [%d] skips [%s] (no documents to read)." % (client_index, corpus.name))
     return readers
@@ -685,7 +692,7 @@ def bulk_generator(readers, client_index, pipeline, original_params):
             yield params
 
 
-def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, pipeline,
+def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, pipeline,
                     original_params, create_reader=create_default_reader):
     """
     Calculates the necessary schedule for bulk operations.
@@ -697,23 +704,28 @@ def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, i
     :param bulk_size: The size of bulk index operations (number of documents per bulk).
     :param id_conflicts: The type of id conflicts to simulate.
     :param conflict_probability: A number between (0.0, 100.0] that defines the probability that a document is replaced by another one.
+    :param on_conflict: A string indicating which action should be taken on id conflicts (either "index" or "update").
     :param pipeline: Name of the ingest pipeline to use. May be None.
     :param original_params: A dict of original parameters that were passed from the track. They will be merged into the returned parameters.
     :param create_reader: A function to create the index reader. By default a file based index reader will be created. This parameter is
                       intended for testing only.
     :return: A generator for the bulk operations of the given client.
     """
-    readers = create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, create_reader)
+    readers = create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
+                             create_reader)
     return bulk_generator(chain(*readers), client_index, pipeline, original_params)
 
 
 class GenerateActionMetaData:
-    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, rand=random.random, randint=random.randint):
+    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None,
+                 rand=random.random, randint=random.randint):
         self.index_name = index_name
         self.type_name = type_name
         self.conflicting_ids = conflicting_ids
+        self.on_conflict = on_conflict
         # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100.
         self.conflict_probability = conflict_probability / 100.0 if conflict_probability else None
+
         self.rand = rand
         self.randint = randint
         self.id_up_to = 0
@@ -725,11 +737,18 @@ class GenerateActionMetaData:
         if self.conflicting_ids is not None:
             if self.id_up_to > 0 and self.rand() <= self.conflict_probability:
                 doc_id = self.conflicting_ids[self.randint(0, self.id_up_to - 1)]
-                return "update", '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
+                action = self.on_conflict
             else:
                 doc_id = self.conflicting_ids[self.id_up_to]
                 self.id_up_to += 1
+                action = "index"
+
+            if action == "index":
                 return "index", '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
+            elif action == "update":
+                return "update", '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
+            else:
+                raise exceptions.RallyAssertionError("Unknown action [{}]".format(action))
         else:
             return "index", '{"index": {"_index": "%s", "_type": "%s"}}' % (self.index_name, self.type_name)
 

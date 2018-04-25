@@ -314,6 +314,7 @@ With the operation type ``bulk`` you can execute `bulk requests <http://www.elas
 * ``pipeline`` (optional): Defines the name of an (existing) ingest pipeline that should be used (only supported from Elasticsearch 5.0).
 * ``conflicts`` (optional): Type of index conflicts to simulate. If not specified, no conflicts will be simulated. Valid values are: 'sequential' (A document id is replaced with a document id with a sequentially increasing id), 'random' (A document id is replaced with a document id with a random other id).
 * ``conflict-probability`` (optional, defaults to 25 percent): A number between (0, 100] that defines how many of the documents will get replaced.
+* ``on-conflict`` (optional, defaults to ``index``): Determines whether Rally should use the action ``index`` or ``update`` on id conflicts.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results.
 
 Example::
