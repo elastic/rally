@@ -38,7 +38,7 @@ echo "$RELEASE_VERSION" > version.txt
 git commit -a -m "Bump version to $RELEASE_VERSION"
 
 # --upgrade is required for virtualenv
-python3 setup.py develop --upgrade
+python3 setup.py develop --upgrade --user
 
 # Check version
 if ! [[ $(esrally --version) =~ "esrally ${RELEASE_VERSION} (git revision" ]]
@@ -60,7 +60,7 @@ git push --tags
 echo "$NEXT_RELEASE" > version.txt
 
 # Install locally for development
-python3 setup.py develop --upgrade
+python3 setup.py develop --upgrade --user
 
 git commit -a -m "Continue in $NEXT_RELEASE"
 git push origin master
