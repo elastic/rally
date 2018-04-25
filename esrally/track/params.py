@@ -581,17 +581,16 @@ def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
     return bulks
 
 
-def build_conflicting_ids(conflicts, docs_to_index, offset, rand=random.randint):
+def build_conflicting_ids(conflicts, docs_to_index, offset, shuffle=random.shuffle):
     if conflicts is None or conflicts == IndexIdConflict.NoConflicts:
         return None
     logger.info("building ids with id conflicts of type [%s]" % conflicts)
     all_ids = [0] * docs_to_index
     for i in range(docs_to_index):
         # always consider the offset as each client will index its own range and we don't want uncontrolled conflicts across clients
-        if conflicts == IndexIdConflict.SequentialConflicts:
-            all_ids[i] = "%10d" % (offset + i)
-        else:  # RandomConflicts
-            all_ids[i] = "%10d" % rand(offset, offset + docs_to_index)
+        all_ids[i] = "%10d" % (offset + i)
+    if conflicts == IndexIdConflict.RandomConflicts:
+        shuffle(all_ids)
     return all_ids
 
 
