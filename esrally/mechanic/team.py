@@ -33,6 +33,12 @@ def list_cars(cfg):
 
 
 def load_car(repo, name, car_params=None):
+    class Component:
+        def __init__(self, root_path, entry_point):
+            self.root_path = root_path
+            self.entry_point = entry_point
+
+    root_path = None
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
     all_config_base_vars = {}
@@ -44,6 +50,13 @@ def load_car(repo, name, car_params=None):
         for p in descriptor.config_paths:
             if p not in all_config_paths:
                 all_config_paths.append(p)
+        for p in descriptor.root_paths:
+            # probe whether we have a root path
+            if BootstrapHookHandler(Component(root_path=p, entry_point=Car.entry_point)).can_load():
+                if not root_path:
+                    root_path = p
+                else:
+                    raise exceptions.SystemSetupError("Invalid car: {}. Multiple bootstrap hooks are forbidden.".format(name))
         all_config_base_vars.update(descriptor.config_base_variables)
         all_car_vars.update(descriptor.variables)
         # env needs to be merged individually, consider ES_JAVA_OPTS="-Xms1G" and ES_JAVA_OPTS="-ea".
@@ -57,13 +70,13 @@ def load_car(repo, name, car_params=None):
                 all_env[k] = all_env[k] + " " + v
 
     if len(all_config_paths) == 0:
-        raise exceptions.SystemSetupError("At least one config base is required for car %s" % name)
-    vars = {}
+        raise exceptions.SystemSetupError("At least one config base is required for car {}".format(name))
+    variables = {}
     # car variables *always* take precedence over config base variables
-    vars.update(all_config_base_vars)
-    vars.update(all_car_vars)
+    variables.update(all_config_base_vars)
+    variables.update(all_car_vars)
 
-    return Car("+".join(name), all_config_paths, vars, all_env)
+    return Car(name, root_path, all_config_paths, variables, all_env)
 
 
 def list_plugins(cfg):
@@ -140,6 +153,7 @@ class CarLoader:
         if not io.exists(car_config_file):
             raise exceptions.SystemSetupError("Unknown car [{}]. List the available cars with {} list cars.".format(name, PROGRAM_NAME))
         config = self._config_loader(car_config_file)
+        root_paths = []
         config_paths = []
         config_base_vars = {}
         description = self._value(config, ["meta", "description"], default="")
@@ -147,8 +161,10 @@ class CarLoader:
         config_bases = self._value(config, ["config", "base"], default="").split(",")
         for base in config_bases:
             if base:
-                config_paths.append(os.path.join(self.cars_dir, base, "templates"))
-                config_file = os.path.join(self.cars_dir, base, "config.ini")
+                root_path = os.path.join(self.cars_dir, base)
+                root_paths.append(root_path)
+                config_paths.append(os.path.join(root_path, "templates"))
+                config_file = os.path.join(root_path, "config.ini")
                 if io.exists(config_file):
                     base_config = self._config_loader(config_file)
                     self._copy_section(base_config, "variables", config_base_vars)
@@ -162,7 +178,7 @@ class CarLoader:
             variables.update(car_params)
 
         env = self._copy_section(config, "env", {})
-        return CarDescriptor(name, description, car_type, config_paths, config_base_vars, variables, env)
+        return CarDescriptor(name, description, car_type, root_paths, config_paths, config_base_vars, variables, env)
 
     def _config_loader(self, file_name):
         config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
@@ -189,10 +205,11 @@ class CarLoader:
 
 
 class CarDescriptor:
-    def __init__(self, name, description, type, config_paths, config_base_variables, variables, env):
+    def __init__(self, name, description, type, root_paths, config_paths, config_base_variables, variables, env):
         self.name = name
         self.description = description
         self.type = type
+        self.root_paths = root_paths
         self.config_paths = config_paths
         self.config_base_variables = config_base_variables
         self.variables = variables
@@ -206,11 +223,15 @@ class CarDescriptor:
 
 
 class Car:
-    def __init__(self, name, config_paths, variables=None, env=None):
+    # name of the initial Python file to load for cars.
+    entry_point = "config"
+
+    def __init__(self, names, root_path, config_paths, variables=None, env=None):
         """
         Creates new settings for a benchmark candidate.
 
-        :param name: A descriptive name for this car.
+        :param names: Descriptive name(s) for this car.
+        :param root_path: The root path from which bootstrap hooks should be loaded if any. May be ``None``.
         :param config_paths: A non-empty list of paths where the raw config can be found.
         :param variables: A dict containing variable definitions that need to be replaced.
         :param env: Environment variables that should be set when launching the benchmark candidate.
@@ -219,14 +240,27 @@ class Car:
             env = {}
         if variables is None:
             variables = {}
-        self.name = name
+        if isinstance(names, str):
+            self.names = [names]
+        else:
+            self.names = names
+        self.root_path = root_path
         self.config_paths = config_paths
         self.variables = variables
         self.env = env
 
     @property
+    def name(self):
+        return "+".join(self.names)
+
+    # Adapter method for BootstrapHookHandler
+    @property
+    def config(self):
+        return self.name
+
+    @property
     def safe_name(self):
-        return self.name.replace("+", "_")
+        return "_".join(self.names)
 
     def __str__(self):
         return self.name
@@ -348,6 +382,9 @@ class PluginLoader:
 
 
 class PluginDescriptor:
+    # name of the initial Python file to load for plugins.
+    entry_point = "plugin"
+
     def __init__(self, name, core_plugin=False, config=None, root_path=None, config_paths=None, variables=None):
         if config_paths is None:
             config_paths = []
@@ -359,8 +396,6 @@ class PluginDescriptor:
         self.root_path = root_path
         self.config_paths = config_paths
         self.variables = variables
-        # name of the initial Python file to load for plugins.
-        self.entry_point = "plugin"
 
     def __str__(self):
         return "Plugin descriptor for [%s]" % self.name
@@ -402,7 +437,7 @@ class BootstrapHookHandler:
         """
         Creates a new BootstrapHookHandler.
 
-        :param component: The component that should be loaded. In practice, this is a PluginDescriptor instance.
+        :param component: The component that should be loaded. In practice, this is a PluginDescriptor or a Car instance.
         :param loader_class: The implementation that loads the provided component's code.
         """
         self.component = component

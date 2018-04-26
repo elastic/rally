@@ -153,7 +153,7 @@ class BuilderTests(TestCase):
 
 class ElasticsearchSourceSupplierTests(TestCase):
     def test_no_build(self):
-        car = team.Car("default", config_paths=[], variables={
+        car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
             "build_command": "./gradlew assemble"
         })
@@ -162,7 +162,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
         # nothing has happened (intentionally) because there is no builder
 
     def test_build(self):
-        car = team.Car("default", config_paths=[], variables={
+        car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
             "build_command": "./gradlew assemble"
         })
@@ -173,7 +173,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
         builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
 
     def test_raises_error_on_missing_car_variable(self):
-        car = team.Car("default", config_paths=[], variables={
+        car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
             # build_command is not defined
         })
@@ -185,10 +185,9 @@ class ElasticsearchSourceSupplierTests(TestCase):
 
         builder.build.assert_not_called()
 
-
     @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
     def test_add_elasticsearch_binary(self):
-        car = team.Car("default", config_paths=[], variables={
+        car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
             "build_command": "./gradlew assemble",
             "artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz"
@@ -363,7 +362,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
-        car = team.Car("default", config_paths=[])
+        car = team.Car("default", root_path=None, config_paths=[])
 
         composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", car=car)
 
@@ -383,7 +382,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
-        car = team.Car("default", config_paths=[])
+        car = team.Car("default", root_path=None, config_paths=[])
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
@@ -417,7 +416,7 @@ class CreateSupplierTests(TestCase):
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
-        car = team.Car("default", config_paths=[])
+        car = team.Car("default", root_path=None, config_paths=[])
 
         # --from-sources-skip-build --revision="community-plugin:current" (distribution version is missing!)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
@@ -442,7 +441,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
-        car = team.Car("default", config_paths=[])
+        car = team.Car("default", root_path=None, config_paths=[])
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
@@ -474,7 +473,7 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "source", "remote.repo.url", "https://github.com/elastic/elasticsearch.git")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.subdir", "elasticsearch-extra/community-plugin")
 
-        car = team.Car("default", config_paths=[], variables={
+        car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
             "build_command": "./gradlew assemble"
         })

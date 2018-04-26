@@ -21,7 +21,8 @@ class BareProvisionerTests(TestCase):
 
         installer = provisioner.ElasticsearchInstaller(car=
         team.Car(
-            name="unit-test-car",
+            names="unit-test-car",
+            root_path=None,
             config_paths=["~/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
             node_name="rally-node-0",
@@ -65,7 +66,6 @@ class BareProvisionerTests(TestCase):
             "node_count_per_host": 1,
             "install_root_path": "/opt/elasticsearch-5.0.0"
         }, config_vars)
-
 
     class NoopHookHandler:
         def __init__(self, plugin):
@@ -123,7 +123,8 @@ class BareProvisionerTests(TestCase):
 
         installer = provisioner.ElasticsearchInstaller(car=
         team.Car(
-            name="unit-test-car",
+            names="unit-test-car",
+            root_path=None,
             config_paths=["~/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
             node_name="rally-node-0",
@@ -198,7 +199,8 @@ class BareProvisionerTests(TestCase):
 
         installer = provisioner.ElasticsearchInstaller(car=
         team.Car(
-            name="unit-test-car",
+            names="unit-test-car",
+            root_path=None,
             config_paths=["~/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
             node_name="rally-node-0",
@@ -255,13 +257,24 @@ class BareProvisionerTests(TestCase):
         }, config_vars)
 
 
+class NoopHookHandler:
+    def __init__(self, component):
+        self.hook_calls = {}
+
+    def can_load(self):
+        return False
+
+    def invoke(self, phase, variables):
+        self.hook_calls[phase] = variables
+
+
 class ElasticsearchInstallerTests(TestCase):
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
     def test_cleanup_nothing_on_preserve(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = False
 
-        installer = provisioner.ElasticsearchInstaller(car=team.Car("defaults", "/tmp"),
+        installer = provisioner.ElasticsearchInstaller(car=team.Car("defaults", None, "/tmp"),
                                                        node_name="rally-node-0",
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
@@ -277,7 +290,8 @@ class ElasticsearchInstallerTests(TestCase):
     def test_cleanup(self, mock_path_exists, mock_rm):
         mock_path_exists.return_value = True
 
-        installer = provisioner.ElasticsearchInstaller(car=team.Car(name="defaults",
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
+                                                                    root_path=None,
                                                                     config_paths="/tmp",
                                                                     variables={"data_paths": "/tmp/some/data-path-dir"}),
                                                        node_name="rally-node-0",
@@ -296,7 +310,8 @@ class ElasticsearchInstallerTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
     def test_prepare_default_data_paths(self, mock_rm, mock_ensure_dir, mock_decompress):
-        installer = provisioner.ElasticsearchInstaller(car=team.Car(name="defaults",
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
+                                                                    root_path=None,
                                                                     config_paths="/tmp"),
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
@@ -330,7 +345,8 @@ class ElasticsearchInstallerTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
     def test_prepare_user_provided_data_path(self, mock_rm, mock_ensure_dir, mock_decompress):
-        installer = provisioner.ElasticsearchInstaller(car=team.Car(name="defaults",
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
+                                                                    root_path=None,
                                                                     config_paths="/tmp",
                                                                     variables={"data_paths": "/tmp/some/data-path-dir"}),
                                                        node_name="rally-node-0",
@@ -360,24 +376,31 @@ class ElasticsearchInstallerTests(TestCase):
 
         self.assertEqual(installer.data_paths, ["/tmp/some/data-path-dir"])
 
+    def test_invokes_hook(self):
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
+                                                                    root_path="/tmp",
+                                                                    config_paths="/tmp/templates",
+                                                                    variables={"data_paths": "/tmp/some/data-path-dir"}),
+                                                       node_name="rally-node-0",
+                                                       all_node_ips=["10.17.22.22", "10.17.22.23"],
+                                                       ip="10.17.22.23",
+                                                       http_port=9200,
+                                                       node_root_dir="~/.rally/benchmarks/races/unittest",
+                                                       hook_handler_class=NoopHookHandler)
+
+        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
+        self.assertEqual(1, len(installer.hook_handler.hook_calls))
+        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"])
+
 
 class PluginInstallerTests(TestCase):
-    class NoopHookHandler:
-        def __init__(self, plugin):
-            self.hook_calls = {}
-
-        def can_load(self):
-            return False
-
-        def invoke(self, phase, variables):
-            self.hook_calls[phase] = variables
-
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_successfully(self, installer_subprocess):
         installer_subprocess.return_value = 0
 
         plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", variables={"active": True})
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
 
         installer.install(es_home_path="/opt/elasticsearch")
 
@@ -389,7 +412,7 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 64
 
         plugin = team.PluginDescriptor(name="unknown")
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             installer.install(es_home_path="/opt/elasticsearch")
@@ -403,7 +426,7 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 74
 
         plugin = team.PluginDescriptor(name="simple")
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
 
         with self.assertRaises(exceptions.SupplyError) as ctx:
             installer.install(es_home_path="/opt/elasticsearch")
@@ -417,7 +440,7 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 12987
 
         plugin = team.PluginDescriptor(name="simple")
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
 
         with self.assertRaises(exceptions.RallyError) as ctx:
             installer.install(es_home_path="/opt/elasticsearch")
@@ -428,7 +451,7 @@ class PluginInstallerTests(TestCase):
 
     def test_pass_plugin_properties(self):
         plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_paths=["/etc/plugin"], variables={"active": True})
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
 
         self.assertEqual("unit-test-plugin", installer.plugin_name)
         self.assertEqual({"active": True}, installer.variables)
@@ -436,7 +459,7 @@ class PluginInstallerTests(TestCase):
 
     def test_invokes_hook(self):
         plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_paths=["/etc/plugin"], variables={"active": True})
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
 
         self.assertEqual(0, len(installer.hook_handler.hook_calls))
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
@@ -456,7 +479,7 @@ class DockerProvisionerTests(TestCase):
 
         rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../esrally"))
 
-        c = team.Car("unit-test-car", "/tmp", variables={
+        c = team.Car("unit-test-car", None, "/tmp", variables={
             "xpack.security.enabled": False
         })
 

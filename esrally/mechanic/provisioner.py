@@ -156,8 +156,9 @@ class BareProvisioner:
             for plugin_config_path in installer.config_source_paths:
                 self.apply_config(plugin_config_path, target_root_path, provisioner_vars)
 
+        # Never let install hooks modify our original provisioner variables and just provide a copy!
+        self.es_installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
         for installer in self.plugin_installers:
-            # Never let install hooks modify our original provisioner variables and just provide a copy!
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
@@ -203,7 +204,7 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, node_name, node_root_dir, all_node_ips, ip, http_port):
+    def __init__(self, car, node_name, node_root_dir, all_node_ips, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
         self.car = car
         self.node_name = node_name
         self.node_root_dir = node_root_dir
@@ -213,6 +214,9 @@ class ElasticsearchInstaller:
         self.all_node_ips = all_node_ips
         self.node_ip = ip
         self.http_port = http_port
+        self.hook_handler = hook_handler_class(self.car)
+        if self.hook_handler.can_load():
+            self.hook_handler.load()
         self.es_home_path = None
         self.data_paths = None
 
@@ -231,6 +235,9 @@ class ElasticsearchInstaller:
         config_path = os.path.join(self.es_home_path, "config")
         logger.info("Deleting pre-bundled Elasticsearch configuration at [%s]" % config_path)
         shutil.rmtree(config_path)
+
+    def invoke_install_hook(self, phase, variables):
+        self.hook_handler.invoke(phase.name, variables=variables)
 
     def cleanup(self, preserve):
         cleanup(preserve, self.install_dir, self.data_paths)
