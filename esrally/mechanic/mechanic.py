@@ -232,7 +232,7 @@ class MechanicActor(actor.RallyActor):
         self.race_control = None
         self.cluster_launcher = None
         self.cluster = None
-        self.plugins = None
+        self.car = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
         logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
@@ -263,7 +263,7 @@ class MechanicActor(actor.RallyActor):
         cls = metrics.metrics_store_class(self.cfg)
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
-        _, self.plugins = load_team(self.cfg, msg.external)
+        self.car, _ = load_team(self.cfg, msg.external)
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
         hosts = self.cfg.opts("client", "hosts")
@@ -360,7 +360,7 @@ class MechanicActor(actor.RallyActor):
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
-        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=PostLaunchHandler(self.plugins))
+        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=PostLaunchHandler([self.car]))
         # Workaround because we could raise a LaunchError here and thespian will attempt to retry a failed message.
         # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
         # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.

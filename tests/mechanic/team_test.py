@@ -19,29 +19,36 @@ class CarLoaderTests(TestCase):
 
     def test_lists_car_names(self):
         # contrary to the name this assertion compares contents but does not care about order.
-        self.assertCountEqual(["default", "32gheap", "missing_config_base", "empty_config_base", "ea", "verbose"], self.loader.car_names())
+        self.assertCountEqual(
+            ["default", "with_hook", "32gheap", "missing_config_base", "empty_config_base", "ea", "verbose", "too_many_hooks"],
+            self.loader.car_names()
+        )
 
     def test_load_known_car(self):
         car = team.load_car(self.team_dir, ["default"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
         self.assertEqual("default", car.name)
         self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
+        self.assertIsNone(car.root_path)
         self.assertDictEqual({
             "heap_size": "1g",
             "clean_command": "./gradlew clean",
             "data_paths": ["/mnt/disk0", "/mnt/disk1"]
         }, car.variables)
         self.assertEqual({}, car.env)
+        self.assertIsNone(car.root_path)
 
     def test_load_car_with_mixin_single_config_base(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea"])
         self.assertEqual("32gheap+ea", car.name)
         self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
+        self.assertIsNone(car.root_path)
         self.assertEqual({
             "heap_size": "32g",
             "clean_command": "./gradlew clean",
             "assertions": "true"
         }, car.variables)
         self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F"}, car.env)
+        self.assertIsNone(car.root_path)
 
     def test_load_car_with_mixin_multiple_config_bases(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea", "verbose"])
@@ -50,6 +57,7 @@ class CarLoaderTests(TestCase):
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates"),
         ], car.config_paths)
+        self.assertIsNone(car.root_path)
         self.assertEqual({
             "heap_size": "32g",
             "clean_command": "./gradlew clean",
@@ -57,6 +65,21 @@ class CarLoaderTests(TestCase):
             "assertions": "true"
         }, car.variables)
         self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F G H I"}, car.env)
+
+    def test_load_car_with_install_hook(self):
+        car = team.load_car(self.team_dir, ["default", "with_hook"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
+        self.assertEqual("default+with_hook", car.name)
+        self.assertEqual([
+            os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
+            os.path.join(current_dir, "data", "cars", "v1", "with_hook", "templates"),
+        ], car.config_paths)
+        self.assertEqual(os.path.join(current_dir, "data", "cars", "v1", "with_hook"), car.root_path)
+        self.assertDictEqual({
+            "heap_size": "1g",
+            "clean_command": "./gradlew clean",
+            "data_paths": ["/mnt/disk0", "/mnt/disk1"]
+        }, car.variables)
+        self.assertEqual({}, car.env)
 
     def test_raises_error_on_unknown_car(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
@@ -72,6 +95,11 @@ class CarLoaderTests(TestCase):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["missing_config_base"])
         self.assertEqual("At least one config base is required for car ['missing_config_base']", ctx.exception.args[0])
+
+    def test_raises_error_if_more_than_one_install_hook(self):
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            team.load_car(self.team_dir, ["too_many_hooks"])
+        self.assertEqual("Invalid car: ['too_many_hooks']. Multiple bootstrap hooks are forbidden.", ctx.exception.args[0])
 
 
 class PluginLoaderTests(TestCase):
