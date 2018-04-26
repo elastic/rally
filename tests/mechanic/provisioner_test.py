@@ -439,7 +439,7 @@ class PluginInstallerTests(TestCase):
         installer = provisioner.PluginInstaller(plugin, hook_handler_class=PluginInstallerTests.NoopHookHandler)
 
         self.assertEqual(0, len(installer.hook_handler.hook_calls))
-        installer.invoke_install_hook(team.PluginBootstrapPhase.post_install, {"foo": "bar"})
+        installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
         self.assertEqual(1, len(installer.hook_handler.hook_calls))
         self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"])
 

@@ -120,7 +120,7 @@ class PluginLoaderTests(TestCase):
         }, plugin.variables)
 
 
-class PluginBootstrapHookHandlerTests(TestCase):
+class BootstrapHookHandlerTests(TestCase):
     class UnitTestComponentLoader:
         def __init__(self, root_path, component_entry_point, recurse):
             self.root_path = root_path
@@ -146,8 +146,8 @@ class PluginBootstrapHookHandlerTests(TestCase):
 
     def test_loads_module(self):
         plugin = team.PluginDescriptor("unittest-plugin")
-        hook = PluginBootstrapHookHandlerTests.UnitTestHook()
-        handler = team.PluginBootstrapHookHandler(plugin, loader_class=PluginBootstrapHookHandlerTests.UnitTestComponentLoader)
+        hook = BootstrapHookHandlerTests.UnitTestHook()
+        handler = team.BootstrapHookHandler(plugin, loader_class=BootstrapHookHandlerTests.UnitTestComponentLoader)
 
         handler.loader.registration_function = hook
         handler.load()
@@ -159,11 +159,11 @@ class PluginBootstrapHookHandlerTests(TestCase):
 
     def test_cannot_register_for_unknown_phase(self):
         plugin = team.PluginDescriptor("unittest-plugin")
-        hook = PluginBootstrapHookHandlerTests.UnitTestHook(phase="this_is_an_unknown_install_phase")
-        handler = team.PluginBootstrapHookHandler(plugin, loader_class=PluginBootstrapHookHandlerTests.UnitTestComponentLoader)
+        hook = BootstrapHookHandlerTests.UnitTestHook(phase="this_is_an_unknown_install_phase")
+        handler = team.BootstrapHookHandler(plugin, loader_class=BootstrapHookHandlerTests.UnitTestComponentLoader)
 
         handler.loader.registration_function = hook
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             handler.load()
-        self.assertEqual("Phase [this_is_an_unknown_install_phase] is unknown. Valid phases are: ['post_install', 'post_launch'].",
+        self.assertEqual("Unknown bootstrap phase [this_is_an_unknown_install_phase]. Valid phases are: ['post_install', 'post_launch'].",
                          ctx.exception.args[0])
