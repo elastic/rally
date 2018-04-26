@@ -327,6 +327,8 @@ class PluginDescriptor:
         self.root_path = root_path
         self.config_paths = config_paths
         self.variables = variables
+        # name of the initial Python file to load for plugins.
+        self.entry_point = "plugin"
 
     def __str__(self):
         return "Plugin descriptor for [%s]" % self.name
@@ -344,28 +346,37 @@ class PluginDescriptor:
         return isinstance(other, type(self)) and (self.name, self.config, self.core_plugin) == (other.name, other.config, other.core_plugin)
 
 
-class PluginBootstrapPhase(Enum):
+class BootstrapPhase(Enum):
     post_install = 10
     post_launch = 20
 
     @classmethod
     def valid(cls, name):
-        for n in PluginBootstrapPhase.names():
+        for n in BootstrapPhase.names():
             if n == name:
                 return True
         return False
 
     @classmethod
     def names(cls):
-        return [p.name for p in list(PluginBootstrapPhase)]
+        return [p.name for p in list(BootstrapPhase)]
 
 
-class PluginBootstrapHookHandler:
-    def __init__(self, plugin, loader_class=modules.ComponentLoader):
-        self.plugin = plugin
+class BootstrapHookHandler:
+    """
+    Responsible for loading and executing component-specific intitialization code.
+    """
+    def __init__(self, component, loader_class=modules.ComponentLoader):
+        """
+        Creates a new BootstrapHookHandler.
+
+        :param component: The component that should be loaded. In practice, this is a PluginDescriptor instance.
+        :param loader_class: The implementation that loads the provided component's code.
+        """
+        self.component = component
         # Don't allow the loader to recurse. The subdirectories may contain Elasticsearch specific files which we do not want to add to
         # Rally's Python load path. We may need to define a more advanced strategy in the future.
-        self.loader = loader_class(root_path=self.plugin.root_path, component_entry_point="plugin", recurse=False)
+        self.loader = loader_class(root_path=self.component.root_path, component_entry_point=self.component.entry_point, recurse=False)
         self.hooks = {}
 
     def can_load(self):
@@ -380,24 +391,25 @@ class PluginBootstrapHookHandler:
             # just pass our own exceptions transparently.
             raise
         except BaseException:
-            msg = "Could not load plugin bootstrap hooks in [{}]".format(self.loader.root_path)
+            msg = "Could not load bootstrap hooks in [{}]".format(self.loader.root_path)
             logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
     def register(self, phase, hook):
-        logger.info("Registering plugin bootstrap hook [%s] for phase [%s] in plugin [%s]", hook.__name__, phase, self.plugin.name)
-        if not PluginBootstrapPhase.valid(phase):
-            raise exceptions.SystemSetupError("Phase [{}] is unknown. Valid phases are: {}.".format(phase, PluginBootstrapPhase.names()))
+        logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)
+        if not BootstrapPhase.valid(phase):
+            raise exceptions.SystemSetupError("Unknown bootstrap phase [{}]. Valid phases are: {}.".format(phase, BootstrapPhase.names()))
         if phase not in self.hooks:
             self.hooks[phase] = []
         self.hooks[phase].append(hook)
 
     def invoke(self, phase, **kwargs):
         if phase in self.hooks:
-            logger.info("Invoking phase [%s] for plugin [%s] in config [%s]", phase, self.plugin.name, self.plugin.config)
+            logger.info("Invoking phase [%s] for component [%s] in config [%s]", phase, self.component.name, self.component.config)
             for hook in self.hooks[phase]:
-                logger.info("Invoking hook [%s].", hook.__name__)
+                logger.info("Invoking bootstrap hook [%s].", hook.__name__)
                 # hooks should only take keyword arguments to be forwards compatible with Rally!
-                hook(config_names=self.plugin.config, **kwargs)
+                hook(config_names=self.component.config, **kwargs)
         else:
-            logger.debug("Plugin [%s] in config [%s] has no hook registered for phase [%s].", self.plugin.name, self.plugin.config, phase)
+            logger.debug("Component [%s] in config [%s] has no hook registered for phase [%s].",
+                         self.component.name, self.component.config, phase)

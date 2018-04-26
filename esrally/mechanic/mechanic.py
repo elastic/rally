@@ -360,8 +360,7 @@ class MechanicActor(actor.RallyActor):
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
-        plugin_handler = PostLaunchPluginHandler(self.plugins)
-        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=plugin_handler)
+        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=PostLaunchHandler(self.plugins))
         # Workaround because we could raise a LaunchError here and thespian will attempt to retry a failed message.
         # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
         # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.
@@ -409,19 +408,19 @@ class MechanicActor(actor.RallyActor):
         # do not self-terminate, let the parent actor handle this
 
 
-class PostLaunchPluginHandler:
-    def __init__(self, plugins, hook_handler_class=team.PluginBootstrapHookHandler):
+class PostLaunchHandler:
+    def __init__(self, components, hook_handler_class=team.BootstrapHookHandler):
         self.handlers = []
-        if plugins:
-            for plugin in plugins:
-                handler = hook_handler_class(plugin)
+        if components:
+            for component in components:
+                handler = hook_handler_class(component)
                 if handler.can_load():
                     handler.load()
                     self.handlers.append(handler)
 
     def __call__(self, client):
         for handler in self.handlers:
-            handler.invoke(team.PluginBootstrapPhase.post_launch.name, client=client)
+            handler.invoke(team.BootstrapPhase.post_launch.name, client=client)
 
 
 @thespian.actors.requireCapability('coordinator')

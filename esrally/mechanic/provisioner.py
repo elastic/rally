@@ -158,7 +158,7 @@ class BareProvisioner:
 
         for installer in self.plugin_installers:
             # Never let install hooks modify our original provisioner variables and just provide a copy!
-            installer.invoke_install_hook(team.PluginBootstrapPhase.post_install, provisioner_vars.copy())
+            installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
@@ -283,7 +283,7 @@ class ElasticsearchInstaller:
 
 
 class PluginInstaller:
-    def __init__(self, plugin, hook_handler_class=team.PluginBootstrapHookHandler):
+    def __init__(self, plugin, hook_handler_class=team.BootstrapHookHandler):
         self.plugin = plugin
         self.hook_handler = hook_handler_class(self.plugin)
         if self.hook_handler.can_load():
