@@ -177,7 +177,7 @@ def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
     :return: The distribution version.
     """
     hosts = cfg.opts("client", "hosts")()
-    client_options = cfg.opts("client", "options")
+    client_options = cfg.opts("client", "options")()
     es = client_factory(hosts, client_options).create()
     return es.info()["version"]["number"]
 

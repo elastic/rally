@@ -436,7 +436,7 @@ def ensure_configuration_present(cfg, args, sub_command):
             exit(64)
 
 
-def list(cfg):
+def cfglist(cfg):
     what = cfg.opts("system", "list.config.option")
     if what == "telemetry":
         telemetry.list_telemetry()
@@ -541,7 +541,7 @@ def dispatch_sub_command(cfg, sub_command):
         if sub_command == "compare":
             reporter.compare(cfg)
         elif sub_command == "list":
-            list(cfg)
+            cfglist(cfg)
         elif sub_command == "race":
             race(cfg)
         elif sub_command == "generate":
@@ -732,16 +732,30 @@ def main():
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", config_helper.csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
+        #ipdb.set_trace()
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        target_hosts = config_helper.TargetHosts(args.target_hosts)
+        target_hosts = config_helper.TargetHosts("--target-hosts", args.target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
         print("Yo")
         print(cfg.opts('client','hosts')())
-        client_options = kv_to_map(config_helper.csv_to_list(args.client_options))
-        cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-        if "timeout" not in client_options:
-            console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
 
+
+        # client_options = kv_to_map(config_helper.csv_to_list(args.client_options))
+        # cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+        # if "timeout" not in client_options:
+        #    console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
+
+        client_options = config_helper.ClientOptions("--client-options", args.client_options)
+        # import ipdb
+        # ipdb.set_trace()
+        cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+        print("** Parsed client options as")
+        print(client_options.all_client_options)
+        if "timeout" not in client_options.default:
+           console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
+        if list(target_hosts.all_hosts) != list(client_options.all_client_options):
+            console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
+            exit(1)
     # split by component?
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)

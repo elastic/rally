@@ -67,8 +67,8 @@ class ClusterLauncher:
         es = {}
         t = {}
         for k,v in all_hosts.items():
-            client_options = self.cfg.opts("client", "options")
-            es[k] = self.client_factory(v, client_options).create()
+            all_client_options = self.cfg.opts("client", "options").all_client_options
+            es[k] = self.client_factory(v, all_client_options).create()
 
             t[k] = telemetry.Telemetry(enabled_devices, devices=[
                 telemetry.NodeStats(telemetry_params, es[k], self.metrics_store),
@@ -194,7 +194,7 @@ class ExternalLauncher:
 
     def start(self, node_configurations=None):
         hosts = self.cfg.opts("client", "hosts")()
-        client_options = self.cfg.opts("client", "options")
+        client_options = self.cfg.opts("client", "options")()
         es = self.client_factory(hosts, client_options).create()
 
         # cannot enable custom telemetry devices here

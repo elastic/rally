@@ -28,8 +28,12 @@ def register_runner(operation_type, runner):
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = DelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
+        print("WTF why is this not logged: {}".format(str(runner)))
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = runner
+        #
+        #__RUNNERS[operation_type] = runner
+        # TODO see if a DelegatingRunner is ok for a conte-manager capable runner object
+        __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
@@ -70,19 +74,20 @@ class DelegatingRunner(Runner):
         self.name = name
 
     def __call__(self, *args):
-        return self.runnable(*args)
+        # Single cluster mode: es parameter passed in runner should be the 'default' value
+        es = args[0]
+        return self.runnable(es['default'], *args[1:])
 
     def __repr__(self, *args, **kwargs):
         return "user-defined runner for [%s]" % self.name
 
 class MultiClusterDelegatingRunner(Runner):
-    multi_cluster = True
-
     def __init__(self, runnable, name):
         self.runnable = runnable
         self.name = name
 
     def __call__(self, *args):
+        # Multi cluster mode: pass the entire es dict and let use handle connections to different clusters in the runner code
         return self.runnable(*args)
 
     def __repr__(self, *args, **kwargs):
