@@ -38,9 +38,6 @@ To see which plugins are available, run ``esrally list elasticsearch-plugins``::
     repository-hdfs
     repository-s3
     store-smb
-    x-pack                   monitoring-local
-    x-pack                   monitoring-http
-    x-pack                   security
 
 Rally supports plugins only for Elasticsearch 5.0 or better. As the availability of plugins may change from release to release we recommend that you include the ``--distribution-version`` parameter when listing plugins. By default Rally assumes that you want to benchmark the latest master version of Elasticsearch.
 
@@ -65,13 +62,13 @@ Rally will use several techniques to install and configure plugins:
 * First, Rally checks whether directory ``plugins/PLUGIN_NAME`` in the currently configured team repository exists. If this is the case, then plugin installation and configuration details will be read from this directory.
 * Next, Rally will use the provided plugin name when running the Elasticsearch plugin installer. With this approach we can avoid to create a plugin configuration directory in the team repository for very simple plugins that do not need any configuration.
 
-As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples:
+As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples (requires Elasticsearch < 6.3.0 because with 6.3.0 x-pack has turned into a module of Elasticsearch which is treated as a "car" in Rally):
 
 * Run a benchmark with the ``x-pack`` plugin in the ``security`` configuration: ``--elasticsearch-plugins=x-pack:security``
 * Run a benchmark with the ``x-pack`` plugin in the ``security`` and the ``graph`` configuration: ``--elasticsearch-plugins=x-pack:security+graph``
 
 .. note::
-    To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --cluster-health=yellow``
+    To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'"``
 
 You can also override plugin variables with ``--plugin-params`` which is needed for example if you want to use the ``monitoring-http`` configuration in order to export monitoring data. You can export monitoring data e.g. with the following configuration::
 
@@ -229,9 +226,6 @@ Rally will now know about ``myplugin`` and its two configurations. Let's check t
     repository-hdfs
     repository-s3
     store-smb
-    x-pack                   monitoring-local
-    x-pack                   monitoring-http
-    x-pack                   security
 
 As ``myplugin`` is not a core plugin, the Elasticsearch plugin manager does not know from where to install it, so we need to add the download URL to ``~/.rally/rally.ini`` as before::
 
