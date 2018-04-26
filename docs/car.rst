@@ -37,28 +37,24 @@ The Anatomy of a car
 
 The default car definitions of Rally are stored in ``~/.rally/benchmarks/teams/default/cars``. There we find the following structure::
 
-    ├── 16gheap.ini
-    ├── 1gheap.ini
-    ├── 2gheap.ini
-    ├── 4gheap.ini
-    ├── defaults.ini
-    ├── ea
-    │   └── config
-    │       └── jvm.options
-    ├── ea.ini
-    ├── vanilla
-    │   └── config
-    │       ├── elasticsearch.yml
-    │       ├── jvm.options
-    │       └── log4j2.properties
-    ├── verbose_iw
-    │   └── config
-    │       ├── elasticsearch.yml
-    │       ├── jvm.options
-    │       └── log4j2.properties
-    └── verbose_iw.ini
+    .
+    └── v1
+        ├── 1gheap.ini
+        ├── 2gheap.ini
+        ├── defaults.ini
+        ├── ea
+        │   └── templates
+        │       └── config
+        │           └── jvm.options
+        ├── ea.ini
+        └── vanilla
+            └── templates
+                └── config
+                    ├── elasticsearch.yml
+                    ├── jvm.options
+                    └── log4j2.properties
 
-Each ``.ini`` file in the top level directory defines a car. And each directory (``ea``, ``vanilla`` or ``verbose_iw``) contains templates for the config files.
+The top-level directory "v1" denotes the configuration format in version 1. Below that directory, each ``.ini`` file defines a car. Each directory (``ea`` or ``vanilla``) contains templates for the config files. Rally will ignore the contents of the top-level directory and only copy the files in the ``templates`` subdirectory.
 
 Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
 
@@ -74,7 +70,7 @@ Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
 
 The name of the car is derived from the ini file name. In the ``meta`` section we can provide a ``description`` and the ``type``. Use ``car`` if a configuration can be used standalone and ``mixin`` if it needs to be combined with other configurations. In the ``config`` section we define that this definition is based on the ``vanilla`` configuration. We also define a variable ``heap_size`` and set it to ``1g``.
 
-Let's open ``vanilla/config/jvm.options`` to see how this variable is used (we'll only show the relevant part here)::
+Let's open ``vanilla/config/templates/jvm.options`` to see how this variable is used (we'll only show the relevant part here)::
 
     # Xms represents the initial size of total heap space
     # Xmx represents the maximum size of total heap space
@@ -84,7 +80,7 @@ Let's open ``vanilla/config/jvm.options`` to see how this variable is used (we'l
 
 So Rally reads all variables and the template files and replaces the variables in the final configuration. Note that Rally does not know anything about ``jvm.options`` or ``elasticsearch.yml``. For Rally, these are just plain text templates that need to be copied to the Elasticsearch directory before running a benchmark. Under the hood, Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language. This allows you to use Jinja2 expressions in your car configuration files.
 
-If you open ``vanilla/config/elasticsearch.yml`` you will see a few variables that are not defined in the ``.ini`` file:
+If you open ``vanilla/templates/config/elasticsearch.yml`` you will see a few variables that are not defined in the ``.ini`` file:
 
 * ``network_host``
 * ``http_port``

@@ -169,12 +169,12 @@ We want to support two configurations for this plugin: ``simple`` which will set
 
 First, we need a template configuration. We will call this a "config base" in Rally. We will just need one config base for this example and will call it "default".
 
-In ``$TEAM_REPO_ROOT`` create the directory structure for the plugin and its config base with `mkdir -p myplugin/default/config` and add the following ``elasticsearch.yml`` in the new directory::
+In ``$TEAM_REPO_ROOT`` create the directory structure for the plugin and its config base with `mkdir -p myplugin/default/templates/config` and add the following ``elasticsearch.yml`` in the new directory::
 
     myplugin.active: true
     myplugin.mode={{my_plugin_mode}}
 
-That's it. Later, Rally will just copy all files in ``myplugin/default`` to the home directory of the Elasticsearch node that it configures. First, Rally will always apply the car's configuration and then plugins can add their configuration on top. This also explains why we have created a ``config/elasticsearch.yml``. Rally will just copy this file and replace template variables on the way.
+That's it. Later, Rally will just copy all files in ``myplugin/default/templates`` to the home directory of the Elasticsearch node that it configures. First, Rally will always apply the car's configuration and then plugins can add their configuration on top. This also explains why we have created a ``config/elasticsearch.yml``. Rally will just copy this file and replace template variables on the way.
 
 .. note::
     If you create a new customization for a plugin, ensure that the plugin name in the team repository matches the core plugin name. Note that hyphens need to be replaced by underscores (e.g. "x-pack" becomes "x_pack"). The reason is that Rally allows to write custom install hooks and the plugin name will become the root package name of the install hook. However, hyphens are not supported in Python which is why we use underscores instead.
