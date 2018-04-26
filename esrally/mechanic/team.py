@@ -35,7 +35,8 @@ def list_cars(cfg):
 def load_car(repo, name, car_params=None):
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
-    all_variables = {}
+    all_config_base_vars = {}
+    all_car_vars = {}
     all_env = {}
 
     for n in name:
@@ -43,7 +44,8 @@ def load_car(repo, name, car_params=None):
         for p in descriptor.config_paths:
             if p not in all_config_paths:
                 all_config_paths.append(p)
-        all_variables.update(descriptor.variables)
+        all_config_base_vars.update(descriptor.config_base_variables)
+        all_car_vars.update(descriptor.variables)
         # env needs to be merged individually, consider ES_JAVA_OPTS="-Xms1G" and ES_JAVA_OPTS="-ea".
         # We want it to be ES_JAVA_OPTS="-Xms1G -ea" in the end.
         for k, v in descriptor.env.items():
@@ -56,7 +58,12 @@ def load_car(repo, name, car_params=None):
 
     if len(all_config_paths) == 0:
         raise exceptions.SystemSetupError("At least one config base is required for car %s" % name)
-    return Car("+".join(name), all_config_paths, all_variables, all_env)
+    vars = {}
+    # car variables *always* take precedence over config base variables
+    vars.update(all_config_base_vars)
+    vars.update(all_car_vars)
+
+    return Car("+".join(name), all_config_paths, vars, all_env)
 
 
 def list_plugins(cfg):
@@ -126,54 +133,68 @@ class CarLoader:
         return map(__car_name, filter(__is_car, os.listdir(self.cars_dir)))
 
     def _car_file(self, name):
-        return os.path.join(self.cars_dir, "%s.ini" % name)
+        return os.path.join(self.cars_dir, "{}.ini".format(name))
 
     def load_car(self, name, car_params=None):
         car_config_file = self._car_file(name)
         if not io.exists(car_config_file):
-            raise exceptions.SystemSetupError("Unknown car [%s]. List the available cars with %s list cars." % (name, PROGRAM_NAME))
-        config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-        # Do not modify the case of option keys but read them as is
-        config.optionxform = lambda option: option
-        config.read(car_config_file)
+            raise exceptions.SystemSetupError("Unknown car [{}]. List the available cars with {} list cars.".format(name, PROGRAM_NAME))
+        config = self._config_loader(car_config_file)
         config_paths = []
-        description = ""
-        car_type = "car"
-        if "meta" in config:
-            description = config["meta"].get("description", description)
-            car_type = config["meta"].get("type", car_type)
-
-        if "config" in config and "base" in config["config"]:
-            config_bases = config["config"]["base"].split(",")
-            for base in config_bases:
-                if base:
-                    config_paths.append(os.path.join(self.cars_dir, base, "templates"))
+        config_base_vars = {}
+        description = self._value(config, ["meta", "description"], default="")
+        car_type = self._value(config, ["meta", "type"], default="car")
+        config_bases = self._value(config, ["config", "base"], default="").split(",")
+        for base in config_bases:
+            if base:
+                config_paths.append(os.path.join(self.cars_dir, base, "templates"))
+                config_file = os.path.join(self.cars_dir, base, "config.ini")
+                if io.exists(config_file):
+                    base_config = self._config_loader(config_file)
+                    self._copy_section(base_config, "variables", config_base_vars)
 
         # it's possible that some cars don't have a config base, e.g. mixins which only override variables
         if len(config_paths) == 0:
-            logger.info("Car [%s] does not define any config paths. Assuming that it is used as a mixin." % name)
-
-        variables = {}
-        if "variables" in config.sections():
-            for k, v in config["variables"].items():
-                variables[k] = v
+            logger.info("Car [%s] does not define any config paths. Assuming that it is used as a mixin.", name)
+        variables = self._copy_section(config, "variables", {})
         # add all car params here to override any defaults
         if car_params:
             variables.update(car_params)
 
-        env = {}
-        if "env" in config.sections():
-            for k, v in config["env"].items():
-                env[k] = v
-        return CarDescriptor(name, description, car_type, config_paths, variables, env)
+        env = self._copy_section(config, "env", {})
+        return CarDescriptor(name, description, car_type, config_paths, config_base_vars, variables, env)
+
+    def _config_loader(self, file_name):
+        config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+        # Do not modify the case of option keys but read them as is
+        config.optionxform = lambda option: option
+        config.read(file_name)
+        return config
+
+    def _value(self, cfg, section_path, default=None):
+        path = [section_path] if (isinstance(section_path, str)) else section_path
+        current_cfg = cfg
+        for k in path:
+            if k in current_cfg:
+                current_cfg = current_cfg[k]
+            else:
+                return default
+        return current_cfg
+
+    def _copy_section(self, cfg, section, target):
+        if section in cfg.sections():
+            for k, v in cfg[section].items():
+                target[k] = v
+        return target
 
 
 class CarDescriptor:
-    def __init__(self, name, description, type, config_paths, variables, env):
+    def __init__(self, name, description, type, config_paths, config_base_variables, variables, env):
         self.name = name
         self.description = description
         self.type = type
         self.config_paths = config_paths
+        self.config_base_variables = config_base_variables
         self.variables = variables
         self.env = env
 

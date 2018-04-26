@@ -54,7 +54,13 @@ The default car definitions of Rally are stored in ``~/.rally/benchmarks/teams/d
                     ├── jvm.options
                     └── log4j2.properties
 
-The top-level directory "v1" denotes the configuration format in version 1. Below that directory, each ``.ini`` file defines a car. Each directory (``ea`` or ``vanilla``) contains templates for the config files. Rally will ignore the contents of the top-level directory and only copy the files in the ``templates`` subdirectory.
+The top-level directory "v1" denotes the configuration format in version 1. Below that directory, each ``.ini`` file defines a car. Each directory (``ea`` or ``vanilla``) contains templates for the config files. Rally will only copy the files in the ``templates`` subdirectory. The top-level directory is reserved for a special file, ``config.ini`` which you can use to define default variables that apply to all cars that are based on this configuration. Below is an example ``config.ini`` file::
+
+    [variables]
+    clean_command=./gradlew clean
+
+This defines the variable ``clean_command`` for all cars that reference this configuration.
+
 
 Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
 
@@ -68,7 +74,7 @@ Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
     [variables]
     heap_size=1g
 
-The name of the car is derived from the ini file name. In the ``meta`` section we can provide a ``description`` and the ``type``. Use ``car`` if a configuration can be used standalone and ``mixin`` if it needs to be combined with other configurations. In the ``config`` section we define that this definition is based on the ``vanilla`` configuration. We also define a variable ``heap_size`` and set it to ``1g``.
+The name of the car is derived from the ``.ini`` file name. In the ``meta`` section we can provide a ``description`` and the ``type``. Use ``car`` if a configuration can be used standalone and ``mixin`` if it needs to be combined with other configurations. In the ``config`` section we define that this definition is based on the ``vanilla`` configuration. We also define a variable ``heap_size`` and set it to ``1g``. Note that variables defined here take precedence over variables defined in the ``config.ini`` file of any of the referenced configurations.
 
 Let's open ``vanilla/config/templates/jvm.options`` to see how this variable is used (we'll only show the relevant part here)::
 
