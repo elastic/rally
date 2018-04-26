@@ -17,18 +17,27 @@ A Rally "car" is a specific configuration of Elasticsearch. You can list the ava
     /_/ |_|\__,_/_/_/\__, /
                     /____/
 
-    Name        Type    Description
-    ----------  ------  ----------------------------------
-    16gheap     car     Sets the Java heap to 16GB
-    1gheap      car     Sets the Java heap to 1GB
-    2gheap      car     Sets the Java heap to 2GB
-    4gheap      car     Sets the Java heap to 4GB
-    8gheap      car     Sets the Java heap to 8GB
-    defaults    car     Sets the Java heap to 1GB
-    verbose_iw  car     Log more detailed merge time stats
-    ea          mixin   Enables Java assertions
+    Name                     Type    Description
+    -----------------------  ------  ----------------------------------
+    16gheap                  car     Sets the Java heap to 16GB
+    1gheap                   car     Sets the Java heap to 1GB
+    2gheap                   car     Sets the Java heap to 2GB
+    4gheap                   car     Sets the Java heap to 4GB
+    8gheap                   car     Sets the Java heap to 8GB
+    defaults                 car     Sets the Java heap to 1GB
+    verbose_iw               car     Log more detailed merge time stats
+    ea                       mixin   Enables Java assertions
+    fp                       mixin   Preserves frame pointers
+    x_pack_ml                mixin   X-Pack Machine Learning
+    x_pack_monitoring_http   mixin   X-Pack Monitoring (HTTP exporter)
+    x_pack_monitoring_local  mixin   X-Pack Monitoring (local exporter)
+    x_pack_security          mixin   X-Pack Security
 
-You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default).
+You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default) or ``--car="4gheap,x_pack_security"`` to benchmark Elasticsearch with X-Pack Security enabled (requires Elasticsearch 6.3.0 or better).
+
+.. note::
+    To benchmark ``x_pack_security`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'"``
+
 
 Similar to :doc:`custom tracks </adding_tracks>`, you can also define your own cars.
 
