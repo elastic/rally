@@ -25,14 +25,22 @@ class CarLoaderTests(TestCase):
         car = team.load_car(self.team_dir, ["default"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
         self.assertEqual("default", car.name)
         self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
-        self.assertDictEqual({"heap_size": "1g", "data_paths": ["/mnt/disk0", "/mnt/disk1"]}, car.variables)
+        self.assertDictEqual({
+            "heap_size": "1g",
+            "clean_command": "./gradlew clean",
+            "data_paths": ["/mnt/disk0", "/mnt/disk1"]
+        }, car.variables)
         self.assertEqual({}, car.env)
 
     def test_load_car_with_mixin_single_config_base(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea"])
         self.assertEqual("32gheap+ea", car.name)
         self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
-        self.assertEqual({"heap_size": "32g", "assertions": "true"}, car.variables)
+        self.assertEqual({
+            "heap_size": "32g",
+            "clean_command": "./gradlew clean",
+            "assertions": "true"
+        }, car.variables)
         self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F"}, car.env)
 
     def test_load_car_with_mixin_multiple_config_bases(self):
@@ -42,7 +50,12 @@ class CarLoaderTests(TestCase):
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates"),
         ], car.config_paths)
-        self.assertEqual({"heap_size": "32g", "assertions": "true"}, car.variables)
+        self.assertEqual({
+            "heap_size": "32g",
+            "clean_command": "./gradlew clean",
+            "verbose_logging": "true",
+            "assertions": "true"
+        }, car.variables)
         self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F G H I"}, car.env)
 
     def test_raises_error_on_unknown_car(self):
