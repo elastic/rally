@@ -639,7 +639,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
     car, plugins = load_team(cfg, external)
 
     if sources or distribution:
-        s = supplier.create(cfg, sources, distribution, build, challenge_root_path, plugins)
+        s = supplier.create(cfg, sources, distribution, build, challenge_root_path, car, plugins)
         p = []
         for node_id in node_ids:
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))

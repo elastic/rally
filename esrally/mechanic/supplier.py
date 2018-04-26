@@ -10,15 +10,13 @@ from esrally.exceptions import BuildError, SystemSetupError
 
 logger = logging.getLogger("rally.supplier")
 
-GRADLE_BINARY = "./gradlew"
-CLEAN_COMMAND = "{} clean".format(GRADLE_BINARY)
-ASSEMBLE_COMMAND = "{} :distribution:archives:tar:assemble".format(GRADLE_BINARY)
-
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
 
 
-def create(cfg, sources, distribution, build, challenge_root_path, plugins):
+def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=None):
+    if plugins is None:
+        plugins = []
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
@@ -36,7 +34,8 @@ def create(cfg, sources, distribution, build, challenge_root_path, plugins):
     es_supplier_type, es_version, es_build = supply_requirements["elasticsearch"]
     if es_supplier_type == "source":
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        suppliers.append(ElasticsearchSourceSupplier(es_version, es_src_dir, remote_url=cfg.opts("source", "remote.repo.url"), builder=builder))
+        suppliers.append(
+            ElasticsearchSourceSupplier(es_version, es_src_dir, remote_url=cfg.opts("source", "remote.repo.url"), car=car, builder=builder))
         repo = None
     else:
         es_src_dir = None
@@ -173,10 +172,11 @@ class CompositeSupplier:
 
 
 class ElasticsearchSourceSupplier:
-    def __init__(self, revision, es_src_dir, remote_url, builder):
+    def __init__(self, revision, es_src_dir, remote_url, car, builder):
         self.revision = revision
         self.src_dir = es_src_dir
         self.remote_url = remote_url
+        self.car = car
         self.builder = builder
 
     def fetch(self):
@@ -184,16 +184,22 @@ class ElasticsearchSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            self.builder.build([CLEAN_COMMAND, ASSEMBLE_COMMAND])
+            self.builder.build([self.value_of("clean_command"), self.value_of("build_command")])
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
 
     def resolve_binary(self):
         try:
-            return glob.glob("%s/distribution/archives/tar/build/distributions/*.tar.gz" % self.src_dir)[0]
+            return glob.glob("{}/{}".format(self.src_dir, self.value_of("artifact_path_pattern")))[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
+
+    def value_of(self, k):
+        try:
+            return self.car.variables[k]
+        except KeyError:
+            raise exceptions.SystemSetupError("Car '{}' misses config variable '{}' to build Elasticsearch.".format(self.car, k))
 
 
 class ExternalPluginSourceSupplier:
@@ -262,8 +268,7 @@ class CorePluginSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            command = "{} :plugins:{}:assemble".format(GRADLE_BINARY, self.plugin.name)
-            self.builder.build([command])
+            self.builder.build(["./gradlew :plugins:{}:assemble".format(self.plugin.name)])
 
     def add(self, binaries):
         binaries[self.plugin.name] = self.resolve_binary()
@@ -443,18 +448,17 @@ class Builder:
             self.run(command, override_src_dir)
 
     def run(self, command, override_src_dir=None):
-        from esrally.utils import jvm
         src_dir = self.src_dir if override_src_dir is None else override_src_dir
 
-        logger.info("Building from sources in [{}].".format(src_dir))
-        logger.info("Executing {}...".format(command))
+        logger.info("Building from sources in [%s].", src_dir)
+        logger.info("Executing %s...", command)
         io.ensure_dir(self.log_dir)
-        log_file = "{}/build.log".format(self.log_dir)
+        log_file = os.path.join(self.log_dir, "build.log")
 
         # we capture all output to a dedicated build log file
 
         build_cmd = "export JAVA_HOME={}; cd {}; {} >> {} 2>&1".format(self.java_home, src_dir, command, log_file)
-        logger.info("Running build command [{}]".format(build_cmd))
+        logger.info("Running build command [%s]", build_cmd)
 
         if process.run_subprocess(build_cmd):
             msg = "Executing '{}' failed. The last 20 lines in the build log file are:\n".format(command)
