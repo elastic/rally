@@ -1,6 +1,70 @@
 Migration Guide
 ===============
 
+Migrating to Rally 0.11.0
+-------------------------
+
+Versioned teams
+~~~~~~~~~~~~~~~
+
+.. note::
+
+    You can skip this section if you do not create custom Rally teams.
+
+We have introduced versioned team specifications and consequently the directory structure changes. All cars and plugins need to reside in a version-specific subdirectory now. Up to now the structure of a team repository was as follows::
+
+    .
+    ├── cars
+    │   ├── 1gheap.ini
+    │   ├── 2gheap.ini
+    │   ├── defaults.ini
+    │   ├── ea
+    │   │   └── config
+    │   │       └── jvm.options
+    │   ├── ea.ini
+    │   └── vanilla
+    │       └── config
+    │           ├── elasticsearch.yml
+    │           ├── jvm.options
+    │           └── log4j2.properties
+    └── plugins
+        ├── core-plugins.txt
+        └── transport_nio
+            ├── default
+            │   └── config
+            │       └── elasticsearch.yml
+            └── transport.ini
+
+Starting with Rally 0.11.0, Rally will look for a directory "v1" within ``cars`` and ``plugins``. The files that should be copied to the Elasticsearch directory, need to be contained in a ``templates`` subdirectory. Therefore, the new structure is as follows::
+
+    .
+    ├── cars
+    │   └── v1
+    │       ├── 1gheap.ini
+    │       ├── 2gheap.ini
+    │       ├── defaults.ini
+    │       ├── ea
+    │       │   └── templates
+    │       │       └── config
+    │       │           └── jvm.options
+    │       ├── ea.ini
+    │       └── vanilla
+    │           └── templates
+    │               └── config
+    │                   ├── elasticsearch.yml
+    │                   ├── jvm.options
+    │                   └── log4j2.properties
+    └── plugins
+        └── v1
+            ├── core-plugins.txt
+            └── transport_nio
+                ├── default
+                │   └── templates
+                │       └── config
+                │           └── elasticsearch.yml
+                └── transport.ini
+
+
 Migrating to Rally 0.10.0
 -------------------------
 

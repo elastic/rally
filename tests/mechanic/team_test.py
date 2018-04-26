@@ -24,14 +24,14 @@ class CarLoaderTests(TestCase):
     def test_load_known_car(self):
         car = team.load_car(self.team_dir, ["default"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
         self.assertEqual("default", car.name)
-        self.assertEqual([os.path.join(current_dir, "data", "cars", "vanilla")], car.config_paths)
+        self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
         self.assertDictEqual({"heap_size": "1g", "data_paths": ["/mnt/disk0", "/mnt/disk1"]}, car.variables)
         self.assertEqual({}, car.env)
 
     def test_load_car_with_mixin_single_config_base(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea"])
         self.assertEqual("32gheap+ea", car.name)
-        self.assertEqual([os.path.join(current_dir, "data", "cars", "vanilla")], car.config_paths)
+        self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
         self.assertEqual({"heap_size": "32g", "assertions": "true"}, car.variables)
         self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F"}, car.env)
 
@@ -39,8 +39,8 @@ class CarLoaderTests(TestCase):
         car = team.load_car(self.team_dir, ["32gheap", "ea", "verbose"])
         self.assertEqual("32gheap+ea+verbose", car.name)
         self.assertEqual([
-            os.path.join(current_dir, "data", "cars", "vanilla"),
-            os.path.join(current_dir, "data", "cars", "verbose_logging"),
+            os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
+            os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates"),
         ], car.config_paths)
         self.assertEqual({"heap_size": "32g", "assertions": "true"}, car.variables)
         self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F G H I"}, car.env)
@@ -103,13 +103,13 @@ class PluginLoaderTests(TestCase):
         self.assertEqual("complex-plugin", plugin.name)
         self.assertCountEqual(["config-a", "config-b"], plugin.config)
 
-        expected_root_path = os.path.join(current_dir, "data", "plugins", "complex_plugin")
+        expected_root_path = os.path.join(current_dir, "data", "plugins", "v1", "complex_plugin")
 
         self.assertEqual(expected_root_path, plugin.root_path)
         # order does matter here! We should not swap it
         self.assertListEqual([
-            os.path.join(expected_root_path, "default"),
-            os.path.join(expected_root_path, "special"),
+            os.path.join(expected_root_path, "default", "templates"),
+            os.path.join(expected_root_path, "special", "templates"),
         ], plugin.config_paths)
 
         self.assertEqual({

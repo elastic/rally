@@ -10,6 +10,15 @@ from esrally.utils import console, repo, io, modules
 
 logger = logging.getLogger("rally.team")
 
+TEAM_FORMAT_VERSION = 1
+
+
+def _path_for(team_root_path, team_member_type):
+    root_path = os.path.join(team_root_path, team_member_type, "v{}".format(TEAM_FORMAT_VERSION))
+    if not os.path.exists(root_path):
+        raise exceptions.SystemSetupError("Path {} for {} does not exist.".format(root_path, team_member_type))
+    return root_path
+
 
 def list_cars(cfg):
     loader = CarLoader(team_path(cfg))
@@ -23,7 +32,7 @@ def list_cars(cfg):
     console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
-def load_car(repo, name, car_params={}):
+def load_car(repo, name, car_params=None):
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
     all_variables = {}
@@ -59,7 +68,7 @@ def list_plugins(cfg):
         console.println("No Elasticsearch plugins are available.\n")
 
 
-def load_plugin(repo, name, config, plugin_params={}):
+def load_plugin(repo, name, config, plugin_params=None):
     if config is not None:
         logger.info("Loading plugin [%s] with configuration(s) [%s]." % (name, config))
     else:
@@ -67,7 +76,7 @@ def load_plugin(repo, name, config, plugin_params={}):
     return PluginLoader(repo).load_plugin(name, config, plugin_params)
 
 
-def load_plugins(repo, plugin_names, plugin_params={}):
+def load_plugins(repo, plugin_names, plugin_params=None):
     def name_and_config(p):
         plugin_spec = p.split(":")
         if len(plugin_spec) == 1:
@@ -104,7 +113,7 @@ def team_path(cfg):
 
 class CarLoader:
     def __init__(self, team_root_path):
-        self.cars_dir = os.path.join(team_root_path, "cars")
+        self.cars_dir = _path_for(team_root_path, "cars")
 
     def car_names(self):
         def __car_name(path):
@@ -119,7 +128,7 @@ class CarLoader:
     def _car_file(self, name):
         return os.path.join(self.cars_dir, "%s.ini" % name)
 
-    def load_car(self, name, car_params={}):
+    def load_car(self, name, car_params=None):
         car_config_file = self._car_file(name)
         if not io.exists(car_config_file):
             raise exceptions.SystemSetupError("Unknown car [%s]. List the available cars with %s list cars." % (name, PROGRAM_NAME))
@@ -138,7 +147,7 @@ class CarLoader:
             config_bases = config["config"]["base"].split(",")
             for base in config_bases:
                 if base:
-                    config_paths.append(os.path.join(self.cars_dir, base))
+                    config_paths.append(os.path.join(self.cars_dir, base, "templates"))
 
         # it's possible that some cars don't have a config base, e.g. mixins which only override variables
         if len(config_paths) == 0:
@@ -149,7 +158,8 @@ class CarLoader:
             for k, v in config["variables"].items():
                 variables[k] = v
         # add all car params here to override any defaults
-        variables.update(car_params)
+        if car_params:
+            variables.update(car_params)
 
         env = {}
         if "env" in config.sections():
@@ -203,7 +213,7 @@ class Car:
 
 class PluginLoader:
     def __init__(self, team_root_path):
-        self.plugins_root_path = os.path.join(team_root_path, "plugins")
+        self.plugins_root_path = _path_for(team_root_path, "plugins")
 
     def plugins(self):
         known_plugins = self._core_plugins() + self._configured_plugins()
@@ -256,7 +266,7 @@ class PluginLoader:
     def _core_plugin(self, name):
         return next((p for p in self._core_plugins() if p.name == name and p.config is None), None)
 
-    def load_plugin(self, name, config_names, plugin_params={}):
+    def load_plugin(self, name, config_names, plugin_params=None):
         root_path = self._plugin_root_path(name)
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
@@ -299,14 +309,15 @@ class PluginLoader:
                     config_bases = config["config"]["base"].split(",")
                     for base in config_bases:
                         if base and base not in known_config_bases:
-                            config_paths.append(os.path.join(root_path, base))
+                            config_paths.append(os.path.join(root_path, base, "templates"))
                         known_config_bases.add(base)
 
                 if "variables" in config.sections():
                     for k, v in config["variables"].items():
                         variables[k] = v
                 # add all plugin params here to override any defaults
-                variables.update(plugin_params)
+                if plugin_params:
+                    variables.update(plugin_params)
 
             # maybe one of the configs is really just for providing variables. However, we still require one config base overall.
             if len(config_paths) == 0:
