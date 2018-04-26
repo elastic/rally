@@ -121,13 +121,13 @@ class BuilderTests(TestCase):
         mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", java_home="/opt/jdk8", log_dir="logs")
-        b.build([supplier.CLEAN_COMMAND, supplier.ASSEMBLE_COMMAND])
+        b.build(["./gradlew clean", "./gradlew assemble"])
 
         calls = [
             # Actual call
             mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew :distribution:archives:tar:assemble >> logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -139,14 +139,13 @@ class BuilderTests(TestCase):
         mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", java_home="/opt/jdk10", log_dir="logs")
-        b.build([supplier.CLEAN_COMMAND, supplier.ASSEMBLE_COMMAND])
+        b.build(["./gradlew clean", "./gradlew assemble"])
 
         calls = [
             # Actual call
             mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew "
-                      ":distribution:archives:tar:assemble >> logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -154,20 +153,47 @@ class BuilderTests(TestCase):
 
 class ElasticsearchSourceSupplierTests(TestCase):
     def test_no_build(self):
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", builder=None)
+        car = team.Car("default", config_paths=[], variables={
+            "clean_command": "./gradlew clean",
+            "build_command": "./gradlew assemble"
+        })
+        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None)
         es.prepare()
         # nothing has happened (intentionally) because there is no builder
 
     def test_build(self):
+        car = team.Car("default", config_paths=[], variables={
+            "clean_command": "./gradlew clean",
+            "build_command": "./gradlew assemble"
+        })
         builder = mock.create_autospec(supplier.Builder)
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", builder=builder)
+        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder)
         es.prepare()
 
-        builder.build.assert_called_once_with([supplier.CLEAN_COMMAND, supplier.ASSEMBLE_COMMAND])
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
+
+    def test_raises_error_on_missing_car_variable(self):
+        car = team.Car("default", config_paths=[], variables={
+            "clean_command": "./gradlew clean",
+            # build_command is not defined
+        })
+        builder = mock.create_autospec(supplier.Builder)
+        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder)
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    "Car 'default' misses config variable 'build_command' to build Elasticsearch."):
+            es.prepare()
+
+        builder.build.assert_not_called()
+
 
     @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
     def test_add_elasticsearch_binary(self):
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", builder=None)
+        car = team.Car("default", config_paths=[], variables={
+            "clean_command": "./gradlew clean",
+            "build_command": "./gradlew assemble",
+            "artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz"
+        })
+        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None)
         binaries = {}
         es.add(binaries=binaries)
         self.assertEqual(binaries, {"elasticsearch": "elasticsearch.tar.gz"})
@@ -337,7 +363,9 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", plugins=[])
+        car = team.Car("default", config_paths=[])
+
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", car=car)
 
         self.assertEqual(1, len(composite_supplier.suppliers))
         self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
@@ -355,11 +383,12 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
+        car = team.Car("default", config_paths=[])
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --pipeline=from-sources-skip-build
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", plugins=[
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", car=car, plugins=[
             core_plugin,
             external_plugin
         ])
@@ -388,9 +417,11 @@ class CreateSupplierTests(TestCase):
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
+        car = team.Car("default", config_paths=[])
+
         # --from-sources-skip-build --revision="community-plugin:current" (distribution version is missing!)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", plugins=[
+            supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", car=car, plugins=[
                 core_plugin,
                 external_plugin
             ])
@@ -411,11 +442,12 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
+        car = team.Car("default", config_paths=[])
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="community-plugin:effab" --distribution-version="6.0.0"
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", plugins=[
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", car=car, plugins=[
             core_plugin,
             external_plugin
         ])
@@ -442,11 +474,15 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "source", "remote.repo.url", "https://github.com/elastic/elasticsearch.git")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.subdir", "elasticsearch-extra/community-plugin")
 
+        car = team.Car("default", config_paths=[], variables={
+            "clean_command": "./gradlew clean",
+            "build_command": "./gradlew assemble"
+        })
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="elasticsearch:abc,community-plugin:effab"
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=True, challenge_root_path="/", plugins=[
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=True, challenge_root_path="/", car=car, plugins=[
             core_plugin,
             external_plugin
         ])
