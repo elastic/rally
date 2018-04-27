@@ -15,7 +15,7 @@ class RegisterRunnerTests(TestCase):
 
         runner.register_runner(operation_type="unit_test", runner=runner_function)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.DelegatingRunner)
+        self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
         self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
 
     def test_runner_class_with_context_manager_should_be_registered_as_is(self):
@@ -45,7 +45,7 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.DelegatingRunner)
+        self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
         self.assertEqual("user-defined runner for [UnitTestRunner]", repr(returned_runner))
 
 
