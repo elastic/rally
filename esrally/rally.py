@@ -622,7 +622,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", config_helper.csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", config_helper.to_dict(args.car_params))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", to_dict(args.plugin_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", config_helper.to_dict(args.plugin_params))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
         # force-preserve the cluster nodes.
