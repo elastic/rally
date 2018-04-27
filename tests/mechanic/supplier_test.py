@@ -180,7 +180,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
         builder = mock.create_autospec(supplier.Builder)
         es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder)
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Car 'default' misses config variable 'build_command' to build Elasticsearch."):
+                                    "Car 'default' is missing config variable 'build_command' to build Elasticsearch."):
             es.prepare()
 
         self.assertEqual(0, builder.build.call_count)

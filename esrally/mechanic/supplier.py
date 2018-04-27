@@ -199,7 +199,7 @@ class ElasticsearchSourceSupplier:
         try:
             return self.car.variables[k]
         except KeyError:
-            raise exceptions.SystemSetupError("Car '{}' misses config variable '{}' to build Elasticsearch.".format(self.car, k))
+            raise exceptions.SystemSetupError("Car '{}' is missing config variable '{}' to build Elasticsearch.".format(self.car, k))
 
 
 class ExternalPluginSourceSupplier:
