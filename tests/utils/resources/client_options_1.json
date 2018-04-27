@@ -1,0 +1,5 @@
+{
+  "default": {"timeout": 60},
+  "remote_1": {"use_ssl":true,"verify_certs":true,"basic_auth_user": "elastic", "basic_auth_password": "changeme"},
+  "remote_2": {"use_ssl":true,"verify_certs":true,"ca_certs":"/path/to/cacert.pem"}
+}

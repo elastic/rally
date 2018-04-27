@@ -573,56 +573,6 @@ def dispatch_sub_command(cfg, sub_command):
         return False
 
 
-def to_dict(arg):
-    if io.has_extension(arg, ".json"):
-        with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
-            return json.load(f)
-    elif arg.startswith("{"):
-        return json.loads(arg)
-    else:
-        return kv_to_map(config_helper.csv_to_list(arg))
-
-
-def to_bool(v):
-    if v is None:
-        return None
-    elif v.lower() == "false":
-        return False
-    elif v.lower() == "true":
-        return True
-    else:
-        raise ValueError("Could not convert value '%s'" % v)
-
-
-def kv_to_map(kvs):
-    def convert(v):
-        # string
-        if v.startswith("'"):
-            return v[1:-1]
-
-        # int
-        try:
-            return int(v)
-        except ValueError:
-            pass
-
-        # float
-        try:
-            return float(v)
-        except ValueError:
-            pass
-
-        # boolean
-        return to_bool(v)
-
-    result = {}
-    for kv in kvs:
-        k, v = kv.split(":")
-        # key is always considered a string, value needs to be converted
-        result[k.strip()] = convert(v.strip())
-    return result
-
-
 def main():
     check_python_version()
 
@@ -671,7 +621,7 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", config_helper.csv_to_list(args.elasticsearch_plugins))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", to_dict(args.car_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", config_helper.to_dict(args.car_params))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", to_dict(args.plugin_params))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
@@ -681,7 +631,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", config_helper.csv_to_list(args.telemetry))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", to_dict(args.telemetry_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", config_helper.to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
@@ -703,7 +653,7 @@ def main():
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
-    cfg.add(config.Scope.applicationOverride, "track", "params", to_dict(args.track_params))
+    cfg.add(config.Scope.applicationOverride, "track", "params", config_helper.to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", config_helper.csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
@@ -734,7 +684,7 @@ def main():
     if sub_command != "list":
         #ipdb.set_trace()
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        target_hosts = config_helper.TargetHosts("--target-hosts", args.target_hosts)
+        target_hosts = config_helper.TargetHosts(args.target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
         print("Yo")
         print(cfg.opts('client','hosts')())
@@ -745,7 +695,7 @@ def main():
         # if "timeout" not in client_options:
         #    console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
 
-        client_options = config_helper.ClientOptions("--client-options", args.client_options)
+        client_options = config_helper.ClientOptions(args.client_options)
         # import ipdb
         # ipdb.set_trace()
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)

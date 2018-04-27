@@ -1,9 +1,10 @@
 import argparse
 import json
 import logging
-from esrally.utils import console
+from esrally.utils import console, io
 
 from elasticsearch.client import _normalize_hosts
+
 
 def csv_to_list(csv):
     if csv is None:
@@ -12,6 +13,7 @@ def csv_to_list(csv):
         return []
     else:
         return [e.strip() for e in csv.split(",")]
+
 
 def to_bool(v):
     if v is None:
@@ -53,20 +55,21 @@ def kv_to_map(kvs):
     return result
 
 
-class CfgStringifiedOptions:
+def to_dict(arg, default_parser=kv_to_map):
+    if io.has_extension(arg, ".json"):
+        with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
+            return json.load(f)
+    elif arg.startswith("{"):
+        return json.loads(arg)
+    else:
+        return default_parser(csv_to_list(arg))
+
+
+class CfgESConnectionOptions:
     """
     Base Class to help either parsing --target-hosts or --client-options
     TODO: read parameters from a specified file
     """
-
-    def __init__(self, argname, argvalue, example_usage, parser=_normalize_hosts):
-        self.__argname = argname
-        self.__options = argvalue
-        self.__parsed_options = None
-        self.example_usage = example_usage
-        self.parser = parser
-
-        self.parse_arg()
 
     def __call__(self):
         """Return a list with the options assigned to the 'default' key"""
@@ -82,54 +85,37 @@ class CfgStringifiedOptions:
     @property
     def default(self):
         """Return a list with the options assigned to the 'default' key"""
-        return self.__parsed_options['default']
+        return self.parsed_options["default"]
 
     @property
     def all_options(self):
         """Return a dict with all parsed options"""
-        return self.__parsed_options
-
-    def parse_arg(self):
-        try:
-            options_dict = json.loads(self.__options)
-
-            if len(options_dict) == 0:
-                raise argparse.ArgumentTypeError("cli argument {} must not be empty JSON object".format(self.__argname))
-            elif len(options_dict) == 1 and 'default' not in options_dict.keys():
-                console.warn(
-                    "cli argument {} declares only one cluster but is not using the 'default' key.\n"
-                    "Silently assuming this the 'default' cluster.\n"
-                    "If you are targetting a single cluster, specifying `--target-hosts=\"ip1:port1,ip2:port2\"` should be enough.\n"
-                    "Otherwise, in the future, please define your clusters like:\n"
-                    "{}".format(self.__argname,self.example_usage)
-                )
-
-                self.__parsed_options = {'default': _normalize_hosts(options_dict[list(options_dict)[0]])}
-
-            elif len(options_dict) > 1 and 'default' not in options_dict.keys():
-                console.println(
-                    "You have specified a number of clusters with {0} "
-                    "but none has the \"default\" key. Please adjust your {0} parameter using the following example: \n"
-                    "{1}\nand try again.".format(self.__argname, self.example_usage))
-                exit(1)
-            else:
-                self.__parsed_options = { key: self.parser(csv_to_list(value))
-                                          for key,value in options_dict.items() }
-
-        except json.decoder.JSONDecodeError:
-            self.__parsed_options = {'default' : self.parser(csv_to_list(self.__options)) }
+        return self.parsed_options
 
 
-class TargetHosts(CfgStringifiedOptions):
-    def __init__(self, argname, argvalue):
-        example_usage = argname+"="+ \
-        """'{"default": "ip1:port1,ip2:port2", "remote_1": "ip2:port2", "remote_2": "ip3:port3,ip4:port4"]}'"""
-        super().__init__(
-            argname,
-            argvalue,
-            example_usage,
-            _normalize_hosts
-        )
+class TargetHosts(CfgESConnectionOptions):
+    def __init__(self, argvalue):
+        self.argname = "--target-hosts"
+        self.argvalue = argvalue
+        self.parsed_options = []
+
+        # example_usage = argname+"="+ \
+        # """'{"default": "ip1:port1,ip2:port2", "remote_1": "ip2:port2", "remote_2": "ip3:port3,ip4:port4"]}'"""
+
+        self.parse_options()
+
+    def parse_options(self):
+        def normalize_to_dict(arg):
+            """
+            Return parsed comma separated host string as dict with "default" key
+            This is needed to support backwards compatible --target-hosts for single clusters that are not
+            defined as a json string or file.
+            """
+
+            return {"default": _normalize_hosts(arg)}
+
+        self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
+
 
     @property
     def all_hosts(self):
@@ -137,20 +123,33 @@ class TargetHosts(CfgStringifiedOptions):
         return self.all_options
 
 
-class ClientOptions(CfgStringifiedOptions):
-    def __init__(self, argname, argvalue):
-        example_usage = argname+"="+ \
-                        '"{\"default\": \"timeout:60\",'\
-                        '\"remote_1\": \"use_ssl:true,verify_certs:true,basic_auth_user:\'elastic\',basic_auth_password:\'changeme\'\"'\
-                        ',\"remote_2\": \"use_ssl:true,verify_certs:true,ca_certs:\'/path/to/cacert.pem\'\"}"'
-        super().__init__(
-            argname,
-            argvalue,
-            example_usage,
-            kv_to_map
-        )
+class ClientOptions(CfgESConnectionOptions):
+    def __init__(self, argvalue):
+        self.argname = "--client-options"
+        self.argvalue = argvalue
+        self.parsed_options = []
+
+        # example_usage = argname+"="+ \
+        #                 '"{\"default\": \"timeout:60\",'\
+        #                 '\"remote_1\": \"use_ssl:true,verify_certs:true,basic_auth_user:\'elastic\',basic_auth_password:\'changeme\'\"'\
+        #                 ',\"remote_2\": \"use_ssl:true,verify_certs:true,ca_certs:\'/path/to/cacert.pem\'\"}"'
+
+        self.parse_options()
+
+    def parse_options(self):
+        def normalize_to_dict(arg):
+            """
+            Return parsed csv client options string as dict with "default" key
+            This is needed to support backwards compatible --client-options for single clusters that are not
+            defined as a json string or file.
+            """
+
+            return {"default": kv_to_map(arg)}
+
+        self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
+
 
     @property
     def all_client_options(self):
-        """Return a dict with all parsed options"""
+        """Return a dict with all client options"""
         return self.all_options

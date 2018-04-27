@@ -32,7 +32,7 @@ def register_runner(operation_type, runner):
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         #
         #__RUNNERS[operation_type] = runner
-        # TODO see if a DelegatingRunner is ok for a conte-manager capable runner object
+        # TODO see if a DelegatingRunner is ok for a context-manager capable runner object
         __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
