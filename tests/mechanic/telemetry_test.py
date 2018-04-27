@@ -95,8 +95,8 @@ class MergePartsDeviceTests(TestCase):
         merge_parts_device.attach_to_node(node)
         merge_parts_device.on_benchmark_stop()
 
-        metrics_store_put_value.assert_not_called()
-        metrics_store_put_count.assert_not_called()
+        self.assertEqual(0, metrics_store_put_value.call_count)
+        self.assertEqual(0, metrics_store_put_count.call_count)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
@@ -1297,6 +1297,6 @@ class IndexSizeTests(TestCase):
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
 
-        run_subprocess.assert_not_called()
-        metrics_store_cluster_count.assert_not_called()
-        get_size.assert_not_called()
+        self.assertEqual(0, run_subprocess.call_count)
+        self.assertEqual(0, metrics_store_cluster_count.call_count)
+        self.assertEqual(0, get_size.call_count)

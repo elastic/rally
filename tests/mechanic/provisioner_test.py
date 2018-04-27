@@ -282,8 +282,8 @@ class ElasticsearchInstallerTests(TestCase):
                                                        node_root_dir="~/.rally/benchmarks/races/unittest")
         installer.cleanup(preserve=True)
 
-        mock_path_exists.assert_not_called()
-        mock_rm.assert_not_called()
+        self.assertEqual(0, mock_path_exists.call_count)
+        self.assertEqual(0, mock_rm.call_count)
 
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")

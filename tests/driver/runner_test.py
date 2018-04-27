@@ -919,7 +919,7 @@ class PutPipelineRunnerTests(TestCase):
                                     "Please add it to your parameter source."):
             r(es, params)
 
-        es.ingest.put_pipeline.assert_not_called()
+        self.assertEqual(0, es.ingest.put_pipeline.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_param_id_mandatory(self, es):
@@ -933,7 +933,7 @@ class PutPipelineRunnerTests(TestCase):
                                     "Please add it to your parameter source."):
             r(es, params)
 
-        es.ingest.put_pipeline.assert_not_called()
+        self.assertEqual(0, es.ingest.put_pipeline.call_count)
 
 
 class ClusterHealthRunnerTests(TestCase):
@@ -1079,7 +1079,7 @@ class CreateIndexRunnerTests(TestCase):
                                     "Please add it to your parameter source."):
             r(es, params)
 
-        es.indices.create.assert_not_called()
+        self.assertEqual(0, es.indices.create.call_count)
 
 
 class DeleteIndexRunnerTests(TestCase):
@@ -1121,7 +1121,7 @@ class DeleteIndexRunnerTests(TestCase):
             mock.call(index="indexA", ignore_unavailable=True, expand_wildcards="none"),
             mock.call(index="indexB", ignore_unavailable=True, expand_wildcards="none")
         ])
-        es.indices.exists.assert_not_called()
+        self.assertEqual(0, es.indices.exists.call_count)
 
 
 class CreateIndexTemplateRunnerTests(TestCase):
@@ -1159,7 +1159,7 @@ class CreateIndexTemplateRunnerTests(TestCase):
                                     "'templates'. Please add it to your parameter source."):
             r(es, params)
 
-        es.indices.put_template.assert_not_called()
+        self.assertEqual(0, es.indices.put_template.call_count)
 
 
 class DeleteIndexTemplateRunnerTests(TestCase):
@@ -1211,7 +1211,7 @@ class DeleteIndexTemplateRunnerTests(TestCase):
 
         es.indices.delete_template.assert_called_once_with(name="templateB", timeout=60)
         # not called because the matching index is empty.
-        es.indices.delete.assert_not_called()
+        self.assertEqual(0, es.indices.delete.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_param_templates_mandatory(self, es):
@@ -1223,7 +1223,7 @@ class DeleteIndexTemplateRunnerTests(TestCase):
                                     "'templates'. Please add it to your parameter source."):
             r(es, params)
 
-        es.indices.delete_template.assert_not_called()
+        self.assertEqual(0, es.indices.delete_template.call_count)
 
 
 class RawRequestRunnerTests(TestCase):

@@ -146,8 +146,8 @@ class DriverTests(TestCase):
 
         self.assertEqual(1, len(d.clients_completed_current_step))
 
-        target.on_task_finished.assert_not_called()
-        target.drive_at.assert_not_called()
+        self.assertEqual(0, target.on_task_finished.call_count)
+        self.assertEqual(0, target.drive_at.call_count)
 
     def test_client_reaches_join_point_which_completes_parent(self):
         target = self.create_test_driver_target()
@@ -738,7 +738,7 @@ class ExecutorTests(TestCase):
         with self.assertRaises(ExpectedUnitTestException):
             execute_schedule()
 
-        es.assert_not_called()
+        self.assertEqual(0, es.call_count)
 
     def test_execute_single_no_return_value(self):
         es = None

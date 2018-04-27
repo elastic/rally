@@ -79,7 +79,7 @@ class RallyRepository(TestCase):
 
         self.assertTrue(r.remote)
 
-        fetch.assert_not_called()
+        self.assertEqual(0, fetch.call_count)
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch")
@@ -139,7 +139,7 @@ class RallyRepository(TestCase):
         r.update(distribution_version="6.0.0")
 
         branches.assert_called_with("/rally-resources/unit-test", remote=False)
-        rebase.assert_not_called()
+        self.assertEqual(0, rebase.call_count)
         checkout.assert_called_with("/rally-resources/unit-test", branch="master")
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
@@ -173,8 +173,8 @@ class RallyRepository(TestCase):
         ]
 
         branches.assert_has_calls(calls)
-        checkout.assert_not_called()
-        rebase.assert_not_called()
+        self.assertEqual(0, checkout.call_count)
+        self.assertEqual(0, rebase.call_count)
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
@@ -204,7 +204,7 @@ class RallyRepository(TestCase):
 
         branches.assert_has_calls(calls)
         checkout.assert_called_with("/rally-resources/unit-test", branch="1")
-        rebase.assert_not_called()
+        self.assertEqual(0, rebase.call_count)
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
@@ -228,7 +228,7 @@ class RallyRepository(TestCase):
         self.assertEqual("Cannot find unittest-resources for distribution version 4.0.0", ctx.exception.args[0])
 
         branches.assert_called_with("/rally-resources/unit-test", remote=False)
-        checkout.assert_not_called()
-        rebase.assert_not_called()
+        self.assertEqual(0, checkout.call_count)
+        self.assertEqual(0, rebase.call_count)
 
 
