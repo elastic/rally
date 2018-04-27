@@ -55,7 +55,8 @@ def load_car(repo, name, car_params=None):
             if BootstrapHookHandler(Component(root_path=p, entry_point=Car.entry_point)).can_load():
                 if not root_path:
                     root_path = p
-                else:
+                # multiple cars are based on the same hook
+                elif root_path != p:
                     raise exceptions.SystemSetupError("Invalid car: {}. Multiple bootstrap hooks are forbidden.".format(name))
         all_config_base_vars.update(descriptor.config_base_variables)
         all_car_vars.update(descriptor.variables)
