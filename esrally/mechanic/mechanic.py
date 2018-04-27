@@ -360,7 +360,9 @@ class MechanicActor(actor.RallyActor):
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
-        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=PostLaunchHandler([self.car]))
+        # we might not have a car if we benchmark external clusters
+        post_launch_handler = PostLaunchHandler([self.car]) if self.car else None
+        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store, on_post_launch=post_launch_handler)
         # Workaround because we could raise a LaunchError here and thespian will attempt to retry a failed message.
         # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
         # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.
