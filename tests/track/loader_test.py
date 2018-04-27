@@ -306,8 +306,8 @@ class TrackPreparationTests(TestCase):
 
         self.assertEqual("Cannot find /tmp/docs.json. Please disable offline mode and retry again.", ctx.exception.args[0])
 
-        ensure_dir.assert_not_called()
-        download.assert_not_called()
+        self.assertEqual(0, ensure_dir.call_count)
+        self.assertEqual(0, download.call_count)
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -330,8 +330,8 @@ class TrackPreparationTests(TestCase):
         self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no base URL is provided.",
                          ctx.exception.args[0])
 
-        ensure_dir.assert_not_called()
-        download.assert_not_called()
+        self.assertEqual(0, ensure_dir.call_count)
+        self.assertEqual(0, download.call_count)
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -355,8 +355,8 @@ class TrackPreparationTests(TestCase):
         self.assertEqual("/tmp/docs.json is present but does not have the expected size of 2000 bytes and it cannot be downloaded because "
                          "no base URL is provided.", ctx.exception.args[0])
 
-        ensure_dir.assert_not_called()
-        download.assert_not_called()
+        self.assertEqual(0, ensure_dir.call_count)
+        self.assertEqual(0, download.call_count)
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -456,8 +456,8 @@ class TrackPreparationTests(TestCase):
                                                                                      uncompressed_size_in_bytes=2000),
                                                         data_root="."))
 
-        decompress.assert_not_called()
-        prepare_file_offset_table.assert_not_called()
+        self.assertEqual(0, decompress.call_count)
+        self.assertEqual(0, prepare_file_offset_table.call_count)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -531,7 +531,7 @@ class TrackPreparationTests(TestCase):
                                            data_root=".")
         self.assertEqual("./docs.json is present but does not have the expected size of 2000 bytes.", ctx.exception.args[0])
 
-        prepare_file_offset_table.assert_not_called()
+        self.assertEqual(0, prepare_file_offset_table.call_count)
 
 
 class TemplateRenderTests(TestCase):

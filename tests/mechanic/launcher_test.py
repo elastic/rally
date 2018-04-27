@@ -148,4 +148,4 @@ class ClusterLauncherTests(TestCase):
         with self.assertRaisesRegex(exceptions.LaunchError,
                                     "Elasticsearch REST API layer is not available. Forcefully terminated cluster."):
             cluster_launcher.start()
-        on_post_launch.assert_not_called()
+        self.assertEqual(0, on_post_launch.call_count)

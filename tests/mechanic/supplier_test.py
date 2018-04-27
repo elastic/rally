@@ -52,8 +52,8 @@ class SourceRepositoryTests(TestCase):
         s.fetch("current")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_clone.assert_not_called()
-        mock_pull.assert_not_called()
+        self.assertEqual(0, mock_clone.call_count)
+        self.assertEqual(0, mock_pull.call_count)
         mock_head_revision.assert_called_with("/src")\
 
 
@@ -71,8 +71,8 @@ class SourceRepositoryTests(TestCase):
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_clone.assert_not_called()
-        mock_pull.assert_not_called()
+        self.assertEqual(0, mock_clone.call_count)
+        self.assertEqual(0, mock_pull.call_count)
         mock_checkout.assert_called_with("/src", "67c2f42")
         mock_head_revision.assert_called_with("/src")
 
@@ -183,7 +183,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
                                     "Car 'default' misses config variable 'build_command' to build Elasticsearch."):
             es.prepare()
 
-        builder.build.assert_not_called()
+        self.assertEqual(0, builder.build.call_count)
 
     @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
     def test_add_elasticsearch_binary(self):
