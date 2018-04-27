@@ -66,32 +66,33 @@ class ClusterLauncher:
 
         es = {}
         t = {}
-        for k,v in all_hosts.items():
+        for cluster_name,cluster_hosts in all_hosts.items():
             all_client_options = self.cfg.opts("client", "options").all_client_options
-            es[k] = self.client_factory(v, all_client_options).create()
+            es[cluster_name] = self.client_factory(cluster_hosts, all_client_options).create()
 
-            t[k] = telemetry.Telemetry(enabled_devices, devices=[
-                telemetry.NodeStats(telemetry_params, es[k], self.metrics_store),
-                telemetry.ClusterMetaDataInfo(es[k]),
-                telemetry.ClusterEnvironmentInfo(es[k], self.metrics_store),
-                telemetry.GcTimesSummary(es[k], self.metrics_store),
-                telemetry.IndexStats(es[k], self.metrics_store),
-                telemetry.MlBucketProcessingTime(es[k], self.metrics_store)
+            t[cluster_name] = telemetry.Telemetry(enabled_devices, devices=[
+                telemetry.NodeStats(telemetry_params, es[cluster_name], self.metrics_store),
+                telemetry.ClusterMetaDataInfo(es[cluster_name]),
+                telemetry.ClusterEnvironmentInfo(es[cluster_name], self.metrics_store),
+                telemetry.GcTimesSummary(es[cluster_name], self.metrics_store),
+                telemetry.IndexStats(es[cluster_name], self.metrics_store),
+                telemetry.MlBucketProcessingTime(es[cluster_name], self.metrics_store)
             ])
 
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
         #c = cluster.Cluster(hosts, [], t)
         clusters = cluster.Clusters(all_hosts, [], t)
-        logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-        for k,v in all_hosts.items():
-            if wait_for_rest_layer(es[k], max_attempts=40):
+        logger.info("All nodes in defined clusters have successfully started. Checking if REST API is available.")
+
+        for cluster_name,cluster_hosts in all_hosts.items():
+            if wait_for_rest_layer(es[cluster_name], max_attempts=40):
                 logger.info("REST API is available. Attaching telemetry devices to cluster.")
-                t[k].attach_to_cluster(clusters.cluster[k])
+                t[cluster_name].attach_to_cluster(clusters.cluster[cluster_name])
                 logger.info("Telemetry devices are now attached to the cluster.")
             else:
                 # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
                 logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
-                self.stop(clusters.cluster[k])
+                self.stop(clusters.cluster[cluster_name])
                 raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
             if self.on_post_launch:
                 self.on_post_launch(es[k])

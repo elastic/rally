@@ -26,17 +26,17 @@ def register_runner(operation_type, runner):
         __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
     elif isinstance(runner, types.FunctionType):
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = DelegatingRunner(runner, runner.__name__)
+        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
         print("WTF why is this not logged: {}".format(str(runner)))
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         #
         #__RUNNERS[operation_type] = runner
-        # TODO see if a DelegatingRunner is ok for a context-manager capable runner object
-        __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
+        # TODO see if a SingleClusterDelegatingRunner is ok for a context-manager capable runner object
+        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner))
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
+        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner))
 
 
 # Only intended for unit-testing!
@@ -68,13 +68,13 @@ class Runner:
         return False
 
 
-class DelegatingRunner(Runner):
+class UniClusterDelegatingRunner(Runner):
     def __init__(self, runnable, name):
         self.runnable = runnable
         self.name = name
 
     def __call__(self, *args):
-        # Single cluster mode: es parameter passed in runner should be the 'default' value
+        # Single cluster mode: es parameter passed in runner is a client object for the "default" cluster
         es = args[0]
         return self.runnable(es['default'], *args[1:])
 
@@ -87,7 +87,7 @@ class MultiClusterDelegatingRunner(Runner):
         self.name = name
 
     def __call__(self, *args):
-        # Multi cluster mode: pass the entire es dict and let use handle connections to different clusters in the runner code
+        # Multi cluster mode: pass the entire es dict and let runner code handle connections to different clusters
         return self.runnable(*args)
 
     def __repr__(self, *args, **kwargs):
