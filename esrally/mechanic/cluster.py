@@ -49,7 +49,18 @@ class Node:
 
 
 class Clusters(object):
+    """
+    Clusters contains instantiated Cluster objects and is needed to support definining
+    multi cluster hosts and client options
+    """
     def __init__(self, all_hosts, nodes, all_telemetry):
+        """
+        Instantiate defined Elasticsearch clusters.
+
+        :param hosts: A dictionary of all target host/port pairs.
+        :param nodes: The nodes of which this cluster consists of. Mandatory.
+        :param telemetry Telemetry attached to this cluster. Mandatory.
+        """
         self.cluster_names = []
         self.cluster = {}
         for cluster_name, cluster_hosts in all_hosts.items():

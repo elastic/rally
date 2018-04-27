@@ -550,7 +550,7 @@ class Driver:
 
 class LoadGenerator(actor.RallyActor):
     """
-    The actual driver that applies load against the default cluster.
+    The actual driver that applies load against the cluster(s).
 
     It will also regularly send measurements to the master node so it can consolidate them.
     """
@@ -591,7 +591,6 @@ class LoadGenerator(actor.RallyActor):
         print("**************** client_options is {}".format(self.config.opts("client", "options").all_client_options))
         self.es = client.EsClientsFactory()(self.config.opts("client", "hosts").all_hosts, self.config.opts("client", "options").all_client_options)
         #self.es = client.EsClientFactory(self.config.opts("client", "hosts")(), self.config.opts("client", "options")).create()
-        print("**************** self.es object looks like {}".format(self.es))
 
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
