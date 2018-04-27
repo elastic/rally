@@ -20,7 +20,7 @@ class CarLoaderTests(TestCase):
     def test_lists_car_names(self):
         # contrary to the name this assertion compares contents but does not care about order.
         self.assertCountEqual(
-            ["default", "with_hook", "32gheap", "missing_config_base", "empty_config_base", "ea", "verbose", "too_many_hooks"],
+            ["default", "with_hook", "32gheap", "missing_cfg_base", "empty_cfg_base", "ea", "verbose", "multi_hook", "another_with_hook"],
             self.loader.car_names()
         )
 
@@ -81,6 +81,23 @@ class CarLoaderTests(TestCase):
         }, car.variables)
         self.assertEqual({}, car.env)
 
+    def test_load_car_with_multiple_bases_referring_same_install_hook(self):
+        car = team.load_car(self.team_dir, ["with_hook", "another_with_hook"])
+        self.assertEqual("with_hook+another_with_hook", car.name)
+        self.assertEqual([
+            os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
+            os.path.join(current_dir, "data", "cars", "v1", "with_hook", "templates"),
+            os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates")
+        ], car.config_paths)
+        self.assertEqual(os.path.join(current_dir, "data", "cars", "v1", "with_hook"), car.root_path)
+        self.assertDictEqual({
+            "heap_size": "16g",
+            "clean_command": "./gradlew clean",
+            "verbose_logging": "true"
+        }, car.variables)
+        self.assertEqual({}, car.env)
+
+
     def test_raises_error_on_unknown_car(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["don_t-know-you"])
@@ -88,18 +105,18 @@ class CarLoaderTests(TestCase):
 
     def test_raises_error_on_empty_config_base(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            team.load_car(self.team_dir, ["empty_config_base"])
-        self.assertEqual("At least one config base is required for car ['empty_config_base']", ctx.exception.args[0])
+            team.load_car(self.team_dir, ["empty_cfg_base"])
+        self.assertEqual("At least one config base is required for car ['empty_cfg_base']", ctx.exception.args[0])
 
     def test_raises_error_on_missing_config_base(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            team.load_car(self.team_dir, ["missing_config_base"])
-        self.assertEqual("At least one config base is required for car ['missing_config_base']", ctx.exception.args[0])
+            team.load_car(self.team_dir, ["missing_cfg_base"])
+        self.assertEqual("At least one config base is required for car ['missing_cfg_base']", ctx.exception.args[0])
 
-    def test_raises_error_if_more_than_one_install_hook(self):
+    def test_raises_error_if_more_than_one_different_install_hook(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            team.load_car(self.team_dir, ["too_many_hooks"])
-        self.assertEqual("Invalid car: ['too_many_hooks']. Multiple bootstrap hooks are forbidden.", ctx.exception.args[0])
+            team.load_car(self.team_dir, ["multi_hook"])
+        self.assertEqual("Invalid car: ['multi_hook']. Multiple bootstrap hooks are forbidden.", ctx.exception.args[0])
 
 
 class PluginLoaderTests(TestCase):
