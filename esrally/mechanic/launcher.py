@@ -68,7 +68,9 @@ class ClusterLauncher:
         t = {}
         for cluster_name,cluster_hosts in all_hosts.items():
             all_client_options = self.cfg.opts("client", "options").all_client_options
-            es[cluster_name] = self.client_factory(cluster_hosts, all_client_options).create()
+            cluster_client_options = all_client_options[cluster_name]
+            all_client_options = self.cfg.opts("client", "options").all_client_options
+            es[cluster_name] = self.client_factory(cluster_hosts, cluster_client_options).create()
 
             t[cluster_name] = telemetry.Telemetry(enabled_devices, devices=[
                 telemetry.NodeStats(telemetry_params, es[cluster_name], self.metrics_store),
@@ -95,19 +97,19 @@ class ClusterLauncher:
                 self.stop(clusters.cluster[cluster_name])
                 raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
             if self.on_post_launch:
-                self.on_post_launch(es[k])
+                self.on_post_launch(es[cluster_name])
 
         print("Finished with clusters")
 
         return clusters
 
-    def stop(self, clusters):
+    def stop(self, c):
         """
         Performs cleanup tasks. This method should be called before nodes are shut down.
 
         :param c: The cluster that is about to be stopped.
         """
-        [cluster.telemetry.detach_from_cluster(cluster) for cluster_name, cluster in clusters.cluster.items()]
+        c.telemetry.detach_from_cluster(c)
 
 
 class DockerLauncher:
