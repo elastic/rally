@@ -992,7 +992,6 @@ class Executor:
                 start = time.perf_counter()
 
                 # Pass all es client connections if runner needs to talk multi cluster
-                print("about to execute single {}".format(params))
                 total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params, self.abort_on_error)
                 stop = time.perf_counter()
 
