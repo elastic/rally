@@ -32,8 +32,7 @@ def register_runner(operation_type, runner):
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         #
         #__RUNNERS[operation_type] = runner
-        # TODO see if a SingleClusterDelegatingRunner is ok for a context-manager capable runner object
-        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner))
+        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner))
@@ -69,9 +68,10 @@ class Runner:
 
 
 class UniClusterDelegatingRunner(Runner):
-    def __init__(self, runnable, name):
+    def __init__(self, runnable, name, context_manager_enabled=False):
         self.runnable = runnable
         self.name = name
+        self.context_manager_enabled = context_manager_enabled
 
     def __call__(self, *args):
         # Single cluster mode: es parameter passed in runner is a client object for the "default" cluster
@@ -79,7 +79,24 @@ class UniClusterDelegatingRunner(Runner):
         return self.runnable(es['default'], *args[1:])
 
     def __repr__(self, *args, **kwargs):
-        return "user-defined runner for [%s]" % self.name
+        if self.context_manager_enabled:
+            return "user-defined context-manager enabled runner for [%s]" % self.name
+        else:
+            return "user-defined runner for [%s]" % self.name
+
+    def __enter__(self):
+        if self.context_manager_enabled:
+            self.runnable.__enter__()
+            return self
+        else:
+            return False
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.context_manager_enabled:
+            return self.runnable.__exit__(exc_type, exc_val, exc_tb)
+        else:
+            return False
+
 
 class MultiClusterDelegatingRunner(Runner):
     def __init__(self, runnable, name):
