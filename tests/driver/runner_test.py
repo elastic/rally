@@ -1,3 +1,4 @@
+import io
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -18,21 +19,35 @@ class RegisterRunnerTests(TestCase):
         self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
         self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
 
-    def test_runner_class_with_context_manager_should_be_registered_as_is(self):
-        class UnitTestRunner:
-            def __enter__(self):
+    def test_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
+        class UnitTestContextManagerRunner:
+            def __call__(self, *args):
+                self.foo = "skata"
                 return self
 
-            def __call__(self, *args):
-                pass
+            def __enter__(self):
+                print("YOOOO I will set fp now")
+                self.fp = io.StringIO("many\nlines\nin\na\nfile")
+                return self.fp
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                return False
+                return self.fp.close()
 
-        test_runner = UnitTestRunner()
+            def __str__(self):
+                return "UnitTestContextManagerRunner"
+
+
+        test_runner = UnitTestContextManagerRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
         returned_runner = runner.runner_for("unit_test")
-        self.assertTrue(test_runner == returned_runner)
+        self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
+        self.assertEqual("user-defined context-manager enabled runner for [UnitTestContextManagerRunner]", repr(returned_runner))
+
+        # test that context_manager functionality gets preserved after wrapping
+        with returned_runner({"default": {}},{}) as fp:
+            file_contents = fp.read()
+        self.assertTrue(file_contents, "many\nlines\nin\na\nfile")
+        self.assertTrue(fp.closed)
 
     def test_runner_class_should_be_wrapped(self):
         class UnitTestRunner:
