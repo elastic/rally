@@ -118,8 +118,48 @@ class TestClientOptions(TestCase):
             {'default': {'timeout':60},
              'remote_1': {'use_ssl': True,'verify_certs': True,'basic_auth_user':'elastic','basic_auth_password':'changeme'},
              'remote_2': {'use_ssl': True,'verify_certs': True, 'ca_certs':'/path/to/cacert.pem'}},
-            config.TargetHosts(os.path.join(os.path.dirname(__file__), "resources/client_options_1.json")).all_hosts)
+            config.ClientOptions(os.path.join(os.path.dirname(__file__), "resources/client_options_1.json")).all_client_options)
 
         self.assertEqual(
             {'default': {'timeout':60}},
-            config.TargetHosts(os.path.join(os.path.dirname(__file__), "resources/client_options_2.json")).all_hosts)
+            config.ClientOptions(os.path.join(os.path.dirname(__file__), "resources/client_options_2.json")).all_client_options)
+
+
+    def test_no_client_option_parses_to_default(self):
+        client_options_string = config.ClientOptions.DEFAULT_CLIENT_OPTIONS
+        target_hosts = None
+
+        self.assertEqual(
+            {"timeout": 60},
+            config.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).default)
+
+        self.assertEqual(
+            {"default": {"timeout": 60}},
+            config.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).all_client_options)
+
+        self.assertEqual(
+            {"timeout": 60},
+            config.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts)())
+
+
+    def test_no_client_option_parses_to_default_with_multicluster(self):
+        client_options_string = config.ClientOptions.DEFAULT_CLIENT_OPTIONS
+        target_hosts = config.TargetHosts('{"default": ["127.0.0.1:9200,10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
+
+        self.assertEqual(
+            {"timeout": 60},
+            config.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).default)
+
+        self.assertEqual(
+            {"default": {"timeout": 60}, "remote": {"timeout": 60}},
+            config.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).all_client_options)
+
+        self.assertEqual(
+            {"timeout": 60},
+            config.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts)())

@@ -68,7 +68,6 @@ def to_dict(arg, default_parser=kv_to_map):
 class CfgESConnectionOptions:
     """
     Base Class to help either parsing --target-hosts or --client-options
-    TODO: read parameters from a specified file
     """
 
     def __call__(self):
@@ -99,15 +98,12 @@ class TargetHosts(CfgESConnectionOptions):
         self.argvalue = argvalue
         self.parsed_options = []
 
-        # example_usage = argname+"="+ \
-        # """'{"default": "ip1:port1,ip2:port2", "remote_1": "ip2:port2", "remote_2": "ip3:port3,ip4:port4"]}'"""
-
         self.parse_options()
 
     def parse_options(self):
         def normalize_to_dict(arg):
             """
-            Return parsed comma separated host string as dict with "default" key
+            Return parsed comma separated host string as dict with "default" key.
             This is needed to support backwards compatible --target-hosts for single clusters that are not
             defined as a json string or file.
             """
@@ -124,29 +120,41 @@ class TargetHosts(CfgESConnectionOptions):
 
 
 class ClientOptions(CfgESConnectionOptions):
-    def __init__(self, argvalue):
+    DEFAULT_CLIENT_OPTIONS = "timeout:60"
+
+    """
+    Convert --client-options arg to a dict.
+    When no --client-options have been specified but multi-cluster --target-hosts are used,
+    apply options defaults for all cluster names.
+    """
+
+    def __init__(self, argvalue, target_hosts=None):
         self.argname = "--client-options"
         self.argvalue = argvalue
+        self.target_hosts = target_hosts
         self.parsed_options = []
 
-        # example_usage = argname+"="+ \
-        #                 '"{\"default\": \"timeout:60\",'\
-        #                 '\"remote_1\": \"use_ssl:true,verify_certs:true,basic_auth_user:\'elastic\',basic_auth_password:\'changeme\'\"'\
-        #                 ',\"remote_2\": \"use_ssl:true,verify_certs:true,ca_certs:\'/path/to/cacert.pem\'\"}"'
-
         self.parse_options()
+
 
     def parse_options(self):
         def normalize_to_dict(arg):
             """
-            Return parsed csv client options string as dict with "default" key
-            This is needed to support backwards compatible --client-options for single clusters that are not
+            When --client-options is a non-json csv string (single cluster mode),
+            return parsed client options as dict with "default" key
+            This is needed to support single cluster use of --client-options when not
             defined as a json string or file.
             """
 
             return {"default": kv_to_map(arg)}
 
-        self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
+        if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts != None:
+            # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.
+            print(ClientOptions.DEFAULT_CLIENT_OPTIONS)
+            self.parsed_options = {cluster_name: kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
+                                   for cluster_name, _ in self.target_hosts.all_hosts.items()}
+        else:
+            self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
 
 
     @property

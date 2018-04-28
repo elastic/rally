@@ -17,8 +17,6 @@ from elasticsearch.client import _normalize_hosts
 
 logger = logging.getLogger("rally.main")
 
-DEFAULT_CLIENT_OPTIONS = "timeout:60"
-
 
 # we want to use some basic logging even before the output to log file is configured
 def pre_configure_logging():
@@ -310,8 +308,8 @@ def create_arg_parser():
         p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
-                 "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
-            default=DEFAULT_CLIENT_OPTIONS)
+                 "(default: {}).".format(config_helper.ClientOptions.DEFAULT_CLIENT_OPTIONS),
+            default=config_helper.ClientOptions.DEFAULT_CLIENT_OPTIONS)
         p.add_argument("--on-error",
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
@@ -682,27 +680,17 @@ def main():
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", config_helper.csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
-        #ipdb.set_trace()
         # Also needed by mechanic (-> telemetry) - duplicate by module?
         target_hosts = config_helper.TargetHosts(args.target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
-        print("Yo")
-        print(cfg.opts('client','hosts')())
-
-
-        # client_options = kv_to_map(config_helper.csv_to_list(args.client_options))
-        # cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-        # if "timeout" not in client_options:
-        #    console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
-
-        client_options = config_helper.ClientOptions(args.client_options)
-        # import ipdb
-        # ipdb.set_trace()
+        client_options = config_helper.ClientOptions(args.client_options, target_hosts=target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+        print("** Parsed all target hosts as")
+        print(target_hosts.all_hosts)
         print("** Parsed client options as")
         print(client_options.all_client_options)
         if "timeout" not in client_options.default:
-           console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
+           console.info("You did not provide an explicit timeout in the client options. Assuming default of 60 seconds.")
         if list(target_hosts.all_hosts) != list(client_options.all_client_options):
             console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
             exit(1)
