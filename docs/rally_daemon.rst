@@ -18,7 +18,7 @@ First, :doc:`install </install>` and :doc:`configure </configuration>` Rally on 
 
 .. note::
 
-   Rally Daemon will listen on port 1900 and the actor system that Rally uses internally require access to arbitrary (unprivileged) ports. Please be sure to open up these ports between the Rally nodes.
+   Rally Daemon will listen on port 1900 and the actor system that Rally uses internally require access to arbitrary (unprivileged) ports. Be sure to open up these ports between the Rally nodes.
 
 Starting
 --------
@@ -34,7 +34,7 @@ On all other nodes, issue::
 
     esrallyd start --node-ip=IP_OF_THIS_NODE --coordinator-ip=IP_OF_COORDINATOR_NODE
 
-After that, all Rally nodes, know about each other and you can use Rally as usual. Please see the :doc:`tips and tricks </recipes>` for more examples.
+After that, all Rally nodes, know about each other and you can use Rally as usual. See the :doc:`tips and tricks </recipes>` for more examples.
 
 Stopping
 --------

@@ -66,7 +66,7 @@ There are a few more directories but the ones above are the most disk-hogging on
 Does Rally spy on me?
 ---------------------
 
-No. Rally does not collect or send any usage data and also the complete source code is open. We do value your feedback a lot though and if you got any ideas for improvements, found a bug or have any other feedback, please head over to `Rally's Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ or `raise an issue on Github <https://github.com/elastic/rally>`_.
+No. Rally does not collect or send any usage data and also the complete source code is open. We do value your feedback a lot though and if you got any ideas for improvements, found a bug or have any other feedback, head over to `Rally's Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ or `raise an issue on Github <https://github.com/elastic/rally>`_.
 
 Do I need an Internet connection?
 ---------------------------------

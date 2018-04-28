@@ -126,12 +126,12 @@ Note that if you are configuring `Plugins based on a released Elasticsearch vers
 
     plugin.my-plugin.build.command = /usr/local/bin/gradle :my-plugin:plugin:assemble
 
-Please refer to `Building plugins from sources <elasticsearch_plugins.html#building-plugins-from-sources>`_ for more information.
+Check `Building plugins from sources <elasticsearch_plugins.html#building-plugins-from-sources>`_ for more information.
 
 Removal of operation type ``index``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-We have removed the operation type ``index`` which has been deprecated with Rally 0.8.0. Please use ``bulk`` instead as operation type.
+We have removed the operation type ``index`` which has been deprecated with Rally 0.8.0. Use ``bulk`` instead as operation type.
 
 Removal of the command line parameter ``--cluster-health``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -171,7 +171,7 @@ This behavior applies similarly to index templates as well.
 Custom Parameter Sources
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-We have aligned the internal names between parameter sources and runners with the ones that are specified by the user in the track file. If you have implemented custom parameter sources or runners, please adjust the parameter names as follows:
+We have aligned the internal names between parameter sources and runners with the ones that are specified by the user in the track file. If you have implemented custom parameter sources or runners, adjust the parameter names as follows:
 
 ============== ======================= =======================
 Operation type Old name                New name
@@ -322,7 +322,7 @@ The new index definition now looks as follows::
           "types": [ "type" ]
         }
 
-We have added a ``body`` property to the index and removed the ``mapping`` property from the type. In fact, the only information that we need about the document type is its name, hence it is now a simple list of strings. Just put all type mappings now into the ``mappings`` property of the index definition. For more details, please refer to the `create index API documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_.
+We have added a ``body`` property to the index and removed the ``mapping`` property from the type. In fact, the only information that we need about the document type is its name, hence it is now a simple list of strings. Just put all type mappings now into the ``mappings`` property of the index definition; see also the `create index API documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_.
 
 Secondly, we have disabled index auto-management by setting ``auto-managed`` to ``false``. This allows us to define explicit tasks below to manage our index. Note that index auto-management is still working in Rally 0.9.0 but it will be removed with the next minor release Rally 0.10.0.
 
@@ -370,7 +370,7 @@ Finally, Rally will check that the cluster health is green. If you want to be ab
 
 If you don't specify anything on the command line, Rally will use the default value but you can e.g. specify ``--track-params="cluster_health:'yellow'"`` so Rally will check for (at least) a yellow cluster health status.
 
-Note that you can customize these operations. Please see the :doc:`track reference </track>` for all details.
+Note that you can :doc:`customize these operations </track>`.
 
 Custom Parameter Sources
 ^^^^^^^^^^^^^^^^^^^^^^^^

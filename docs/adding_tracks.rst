@@ -4,10 +4,7 @@ Define Custom Workloads: Tracks
 Definition
 ----------
 
-A track is the specification of one or more benchmarking scenarios with a specific document corpus.
-
-.. note::
-    Please see the :doc:`track reference </track>` for more information on the structure of a track.
+A track describes one or more benchmarking scenarios. Its structure is described in detail in the :doc:`track reference </track>`.
 
 Example track
 -------------
@@ -481,7 +478,7 @@ We changed two things here. First, we imported helper functions from Rally by ad
 
 .. note::
 
-    If you want to check the final result, please check Rally's log file. Rally will print the fully rendered track there after it has loaded it successfully.
+    Rally's log file contains the fully rendered track after it has loaded it successfully.
 
 .. note::
 
@@ -580,7 +577,7 @@ Custom parameter sources
 
 .. warning::
 
-    Your parameter source is on a performance-critical code-path so please double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
+    Your parameter source is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
 
 Consider the following operation definition::
@@ -726,14 +723,14 @@ Let's walk through this code step by step:
     * ``size(self)``: This method is needed to help Rally provide a proper progress indication to users if you use a warmup time period. For bulk indexing, this would return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
     * ``params(self)``: This method needs to return a dictionary with all parameters that the corresponding "runner" expects. For the standard case, Rally provides most of these parameters as a convenience, but here you need to define all of them yourself. This method will be invoked once for every iteration during the race. We can see that we randomly select a profession from a list which will be then be executed by the corresponding runner.
 
-For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it for its progress indication. For the implementation, please note:
+For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it for its progress indication. However:
 
 * Rally will not check ``percent_completed``, if it can derive progress in any other way.
 * The value of ``percent_completed`` is purely informational and has no influence whatsoever on when Rally considers an operation to be completed.
 
 .. note::
 
-    Be aware that ``params(self)`` is called on a performance-critical path so don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, please double-check that you did not introduce a bottleneck in the load test driver with your custom parameter source.
+    Be aware that ``params(self)`` is called on a performance-critical path so don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that you did not introduce a bottleneck in the load test driver with your custom parameter source.
 
 In the implementation of custom parameter sources you can access the Python standard API. Using any additional libraries is not supported.
 
@@ -746,7 +743,7 @@ Custom runners
 
 .. warning::
 
-    Your runner is on a performance-critical code-path so please double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
+    Your runner is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
 You cannot only define custom parameter sources but also custom runners. Runners execute an operation against Elasticsearch. Out of the box, Rally supports the following operations:
 
@@ -850,7 +847,7 @@ Custom schedulers
 
 .. warning::
 
-    Your scheduler is on a performance-critical code-path so please double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
+    Your scheduler is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
 If you want to rate-limit execution of tasks, you can specify a ``target-throughput`` (in operations per second). For example, Rally will attempt to run this term query 20 times per second::
 
