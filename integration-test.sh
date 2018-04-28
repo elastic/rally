@@ -98,7 +98,7 @@ function set_up {
     info "Final configuration for ${es_config_file_path}:"
     cat "${es_config_file_path}"
 
-    # Download and Elasticsearch metrics store
+    # Download and run Elasticsearch metrics store
     pushd .
     mkdir -p .rally_it/cache
     cd .rally_it/cache
@@ -192,10 +192,15 @@ function test_benchmark_only {
 }
 
 function run_test {
+    echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
     test_configure
+    echo "**************************************** TESTING RALLY LIST COMMANDS *******************************************"
     test_list
+    echo "**************************************** TESTING RALLY WITH ES FROM SOURCES ************************************"
     test_sources
+    echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"
     test_distributions
+    echo "**************************************** TESTING RALLY BENCHMARK-ONLY PIPELINE *********************************"
     test_benchmark_only
 }
 
