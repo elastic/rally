@@ -107,9 +107,13 @@ class ClusterLauncher:
         """
         Performs cleanup tasks. This method should be called before nodes are shut down.
 
-        :param c: The cluster that is about to be stopped.
+        :param c: The cluster (or clusters) that is(are) about to be stopped.
         """
-        c.telemetry.detach_from_cluster(c)
+        if type(c) == cluster.Clusters:
+            for cluster_name  in c.cluster_names:
+                c.cluster[cluster_name].telemetry.detach_from_cluster(c.cluster[cluster_name])
+        else:
+            c.telemetry.detach_from_cluster(c)
 
 
 class DockerLauncher:
