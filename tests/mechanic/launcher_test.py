@@ -120,10 +120,10 @@ class ClusterLauncherTests(TestCase):
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(),
                                                     on_post_launch=on_post_launch, client_factory_class=MockClientFactory)
-        clusters = cluster_launcher.start()
+        cluster = cluster_launcher.start()
 
-        self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], clusters.default.hosts)
-        self.assertIsNotNone(clusters.default.telemetry)
+        self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], cluster.hosts)
+        self.assertIsNotNone(cluster.telemetry)
         # this requires at least Python 3.6
         # on_post_launch.assert_called_once()
         self.assertEqual(1, on_post_launch.call_count)
@@ -136,10 +136,10 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
-        clusters = cluster_launcher.start()
+        cluster = cluster_launcher.start()
 
-        self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], clusters.default.hosts)
-        self.assertIsNotNone(clusters.default.telemetry)
+        self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], cluster.hosts)
+        self.assertIsNotNone(cluster.telemetry)
 
     @mock.patch("time.sleep")
     def test_error_on_cluster_launch(self, sleep):
