@@ -435,7 +435,23 @@ If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally
 
    esrally --pipeline=benchmark-only --target-hosts=10.17.0.5:9200,10.17.0.6:9200
 
+**
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
+
+.. warning::
+   This in an advanced topic. You will not need this functionality if you are not testing against multiple clusters.
+
+``--target-hosts`` can also accept multiple cluster definitions pass as a json string or a .json filename.
+This is useful if you wish to create custom runners, in which case the `es` parameter contains a dictionary of clients against the defined clusters. More details can be found in Custom Runners.
+
+The host:port pairs of the nodes in each cluster can be defined either in a json file or as in-line json.
+When defining multiple clusters one of them must **always** be defined under the ``default`` key. Regular operations will always target the ``default`` cluster.
+
+Examples:
+
+* a json file (ending in .json). Example: ``--target-hosts="target_hosts.json"``
+* a json string. Example: ``--target-hosts="{\"default\": [\"10.17.0.5:9200,10.17.0.6:9200\"], \"remote\": [\"192.168.1.2:39200,192.168.1.2:39201\"]}"
+
 
 ``quiet``
 ~~~~~~~~~
