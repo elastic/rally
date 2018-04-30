@@ -20,22 +20,19 @@ def runner_for(operation_type):
 
 
 def register_runner(operation_type, runner):
-    # we'd rather use callable() but this will erroneously also classify a class as callable...
-    if hasattr(runner, "multi_cluster"):
+    if getattr(runner, "multi_cluster", False) == True:
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
         __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
+    # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, runner.__name__)
+        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
-        print("WTF why is this not logged: {}".format(str(runner)))
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        #
-        #__RUNNERS[operation_type] = runner
-        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
+        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = UniClusterDelegatingRunner(runner, str(runner))
+        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner))
 
 
 # Only intended for unit-testing!
@@ -67,7 +64,7 @@ class Runner:
         return False
 
 
-class UniClusterDelegatingRunner(Runner):
+class SingleClusterDelegatingRunner(Runner):
     def __init__(self, runnable, name, context_manager_enabled=False):
         self.runnable = runnable
         self.name = name

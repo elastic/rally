@@ -16,7 +16,7 @@ class RegisterRunnerTests(TestCase):
 
         runner.register_runner(operation_type="unit_test", runner=runner_function)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
+        self.assertIsInstance(returned_runner, runner.SingleClusterDelegatingRunner)
         self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
 
     def test_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
@@ -40,7 +40,7 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestContextManagerRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
+        self.assertIsInstance(returned_runner, runner.SingleClusterDelegatingRunner)
         self.assertEqual("user-defined context-manager enabled runner for [UnitTestContextManagerRunner]", repr(returned_runner))
 
         # test that context_manager functionality gets preserved after wrapping
@@ -60,7 +60,7 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.UniClusterDelegatingRunner)
+        self.assertIsInstance(returned_runner, runner.SingleClusterDelegatingRunner)
         self.assertEqual("user-defined runner for [UnitTestRunner]", repr(returned_runner))
 
 
