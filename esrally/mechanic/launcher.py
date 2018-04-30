@@ -63,45 +63,42 @@ class ClusterLauncher:
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         all_hosts = self.cfg.opts("client", "hosts").all_hosts
+        default_hosts = self.cfg.opts("client", "hosts").default
 
         es = {}
-        t = {}
-        for cluster_name,cluster_hosts in all_hosts.items():
+        for cluster_name, cluster_hosts in all_hosts.items():
             all_client_options = self.cfg.opts("client", "options").all_client_options
             cluster_client_options = all_client_options[cluster_name]
-            all_client_options = self.cfg.opts("client", "options").all_client_options
             es[cluster_name] = self.client_factory(cluster_hosts, cluster_client_options).create()
 
-            t[cluster_name] = telemetry.Telemetry(enabled_devices, devices=[
-                telemetry.NodeStats(telemetry_params, es[cluster_name], self.metrics_store),
-                telemetry.ClusterMetaDataInfo(es[cluster_name]),
-                telemetry.ClusterEnvironmentInfo(es[cluster_name], self.metrics_store),
-                telemetry.GcTimesSummary(es[cluster_name], self.metrics_store),
-                telemetry.IndexStats(es[cluster_name], self.metrics_store),
-                telemetry.MlBucketProcessingTime(es[cluster_name], self.metrics_store)
-            ])
+        es_default = es["default"]
+
+        t = telemetry.Telemetry(enabled_devices, devices=[
+            telemetry.NodeStats(telemetry_params, es_default, self.metrics_store),
+            telemetry.ClusterMetaDataInfo(es_default),
+            telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+            telemetry.GcTimesSummary(es_default, self.metrics_store),
+            telemetry.IndexStats(es_default, self.metrics_store),
+            telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
+            telemetry.CCRStats(telemetry_params, es_default, self.metrics_store)
+        ])
 
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
-        #c = cluster.Cluster(hosts, [], t)
-        clusters = cluster.Clusters(all_hosts, [], t)
-        logger.info("All nodes in defined clusters have successfully started. Checking if REST API is available.")
+        c = cluster.Cluster(default_hosts, [], t)
 
-        for cluster_name,cluster_hosts in all_hosts.items():
-            if wait_for_rest_layer(es[cluster_name], max_attempts=40):
-                logger.info("REST API is available. Attaching telemetry devices to cluster.")
-                t[cluster_name].attach_to_cluster(clusters.cluster[cluster_name])
-                logger.info("Telemetry devices are now attached to the cluster.")
-            else:
-                # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
-                logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
-                self.stop(clusters.cluster[cluster_name])
-                raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
-            if self.on_post_launch:
-                self.on_post_launch(es[cluster_name])
-
-        print("Finished with clusters")
-
-        return clusters
+        logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
+        if wait_for_rest_layer(es_default, max_attempts=40):
+            logger.info("REST API is available. Attaching telemetry devices to cluster.")
+            t.attach_to_cluster(c)
+            logger.info("Telemetry devices are now attached to the cluster.")
+        else:
+            # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
+            logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
+            self.stop(c)
+            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
+        if self.on_post_launch:
+            self.on_post_launch(es["default"])
+        return c
 
     def stop(self, c):
         """
@@ -109,8 +106,8 @@ class ClusterLauncher:
 
         :param c: The cluster (or clusters) that is(are) about to be stopped.
         """
-        if type(c) == cluster.Clusters:
-            for cluster_name  in c.cluster_names:
+        if type(c) == dict:
+            for cluster_name in c.keys:
                 c.cluster[cluster_name].telemetry.detach_from_cluster(c.cluster[cluster_name])
         else:
             c.telemetry.detach_from_cluster(c)

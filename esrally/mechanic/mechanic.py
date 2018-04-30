@@ -231,7 +231,7 @@ class MechanicActor(actor.RallyActor):
         self.metrics_store = None
         self.race_control = None
         self.cluster_launcher = None
-        self.clusters = None
+        self.cluster = None
         self.car = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
@@ -349,7 +349,7 @@ class MechanicActor(actor.RallyActor):
     @actor.no_retry("mechanic")
     def receiveMsg_StopEngine(self, msg, sender):
         # detach from cluster and gather all system metrics
-        self.cluster_launcher.stop(self.clusters)
+        self.cluster_launcher.stop(self.cluster)
         # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
         # cluster from various states and we don't check here for a specific one.
         self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
@@ -367,7 +367,7 @@ class MechanicActor(actor.RallyActor):
         # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
         # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.
         try:
-            self.clusters = self.cluster_launcher.start()
+            self.cluster = self.cluster_launcher.start()
         except BaseException as e:
             self.send(self.race_control, actor.BenchmarkFailure("Could not launch cluster", e))
         else:
@@ -379,14 +379,14 @@ class MechanicActor(actor.RallyActor):
         # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
         # in ``on_all_nodes_started`` via the ``ClusterLauncher``.
         self.send(self.race_control,
-                  EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.clusters.default.nodes],
-                                                self.clusters.default.source_revision,
-                                                self.clusters.default.distribution_version),
+                  EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.cluster.nodes],
+                                                self.cluster.source_revision,
+                                                self.cluster.distribution_version),
                                 self.metrics_store.meta_info))
         self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
 
     def on_benchmark_started(self):
-        self.clusters.default.on_benchmark_start()
+        self.cluster.on_benchmark_start()
         self.send(self.race_control, BenchmarkStarted())
 
     def reset_relative_time(self):
@@ -396,7 +396,7 @@ class MechanicActor(actor.RallyActor):
             self.send(m, ResetRelativeTime(0))
 
     def on_benchmark_stopped(self):
-        self.clusters.default.on_benchmark_stop()
+        self.cluster.on_benchmark_stop()
         self.metrics_store.flush(refresh=False)
         self.send(self.race_control, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
 
