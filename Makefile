@@ -44,7 +44,7 @@ release: release-checks clean docs it
 	./release.sh $(release_version) $(next_version)
 
 docker-it: nondocs-clean python-caches-clean
-	@if ! export | grep UID; then export UID=$(shell id -u); fi ; \
+	@if ! export | grep UID; then -export UID=$(shell id -u) || export UID; fi ; \
 	if ! export | grep USER; then export USER=$(shell echo $$USER); fi ; \
 	if ! export | grep PWD; then export PWD=$(shell pwd); fi ; \
 	docker-compose build --pull; `# add --pull here to rebuild a fresh image` \
