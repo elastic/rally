@@ -685,10 +685,6 @@ def main():
         cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
         client_options = config_helper.ClientOptions(args.client_options, target_hosts=target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-        print("** Parsed all target hosts as")
-        print(target_hosts.all_hosts)
-        print("** Parsed client options as")
-        print(client_options.all_client_options)
         if "timeout" not in client_options.default:
            console.info("You did not provide an explicit timeout in the client options. Assuming default of 60 seconds.")
         if list(target_hosts.all_hosts) != list(client_options.all_client_options):

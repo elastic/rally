@@ -587,11 +587,7 @@ class LoadGenerator(actor.RallyActor):
         self.client_id = msg.client_id
         self.config = load_local_config(msg.config)
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
-        # TODO use iter for create
-        print("**************** client_options is {}".format(self.config.opts("client", "options").all_client_options))
         self.es = client.EsClientsFactory()(self.config.opts("client", "hosts").all_hosts, self.config.opts("client", "options").all_client_options)
-        #self.es = client.EsClientFactory(self.config.opts("client", "hosts")(), self.config.opts("client", "options")).create()
-
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.tasks = msg.tasks
@@ -990,8 +986,6 @@ class Executor:
                     if rest > 0:
                         time.sleep(rest)
                 start = time.perf_counter()
-
-                # Pass all es client connections if runner needs to talk multi cluster
                 total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params, self.abort_on_error)
                 stop = time.perf_counter()
 
