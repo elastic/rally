@@ -22,11 +22,9 @@ class RegisterRunnerTests(TestCase):
     def test_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
         class UnitTestContextManagerRunner:
             def __call__(self, *args):
-                self.foo = "skata"
                 return self
 
             def __enter__(self):
-                print("YOOOO I will set fp now")
                 self.fp = io.StringIO("many\nlines\nin\na\nfile")
                 return self.fp
 
