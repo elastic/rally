@@ -434,7 +434,7 @@ def ensure_configuration_present(cfg, args, sub_command):
             exit(64)
 
 
-def cfglist(cfg):
+def dispatch_list(cfg):
     what = cfg.opts("system", "list.config.option")
     if what == "telemetry":
         telemetry.list_telemetry()
@@ -539,7 +539,7 @@ def dispatch_sub_command(cfg, sub_command):
         if sub_command == "compare":
             reporter.compare(cfg)
         elif sub_command == "list":
-            cfglist(cfg)
+            dispatch_list(cfg)
         elif sub_command == "race":
             race(cfg)
         elif sub_command == "generate":
