@@ -147,7 +147,7 @@ class ClusterLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
         # Simulate that the client will raise an error upon startup
-        cfg.add(config.Scope.application, "client", "options", opts.ClientOptions('raise-error-on-info:true'))
+        cfg.add(config.Scope.application, "client", "options", opts.ClientOptions("raise-error-on-info:true"))
         #cfg.add(config.Scope.application, "client", "options", {"raise-error-on-info": True})
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
