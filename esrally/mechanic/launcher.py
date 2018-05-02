@@ -96,7 +96,7 @@ class ClusterLauncher:
             self.stop(c)
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         if self.on_post_launch:
-            self.on_post_launch(es["default"])
+            self.on_post_launch(es_default)
         return c
 
     def stop(self, c):
