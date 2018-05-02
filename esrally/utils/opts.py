@@ -65,7 +65,7 @@ def to_dict(arg, default_parser=kv_to_map):
         return default_parser(csv_to_list(arg))
 
 
-class CfgESConnectionOptions:
+class ConnectOptions:
     """
     Base Class to help either parsing --target-hosts or --client-options
     """
@@ -92,7 +92,7 @@ class CfgESConnectionOptions:
         return self.parsed_options
 
 
-class TargetHosts(CfgESConnectionOptions):
+class TargetHosts(ConnectOptions):
     def __init__(self, argvalue):
         self.argname = "--target-hosts"
         self.argvalue = argvalue
@@ -119,7 +119,7 @@ class TargetHosts(CfgESConnectionOptions):
         return self.all_options
 
 
-class ClientOptions(CfgESConnectionOptions):
+class ClientOptions(ConnectOptions):
     DEFAULT_CLIENT_OPTIONS = "timeout:60"
 
     """
