@@ -17,13 +17,13 @@ docs:
 test:
 	python3 setup.py test
 
-it:
+it: python-caches-clean
 	tox
 
-it34:
+it34: python-caches-clean
 	tox -e py34
 
-it35:
+it35: python-caches-clean
 	tox -e py35
 
 it36:
