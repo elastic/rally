@@ -9,7 +9,6 @@ RUN apt-get -y update && \
     openjdk-8-jdk
 
 RUN pip3 install tox virtualenvwrapper twine sphinx sphinx_rtd_theme wheel
-RUN pip3 install --pre github3.py
 
 RUN curl --progress-bar -o openjdk-10.0.1_linux-x64_bin.tar.gz \
     https://download.java.net/java/GA/jdk10/10.0.1/fb4372174a714e6b8c52526dc134031e/10/openjdk-10.0.1_linux-x64_bin.tar.gz && \
