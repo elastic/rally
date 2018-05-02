@@ -434,9 +434,9 @@ If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally
 
    esrally --pipeline=benchmark-only --target-hosts=10.17.0.5:9200,10.17.0.6:9200
 
-** This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
+This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
-You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the Advanced topics section.
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
 
 ``quiet``
 ~~~~~~~~~
@@ -520,7 +520,7 @@ Advanced topics
 ~~~~~~~~~~~~~~~~
 
 Rally can also create client connections for multiple Elasticsearch clusters.
-This is only useful if you want to create :ref:`custom runners <adding_tracks_custom_runners>` that execute operations against remote clusters, for example for Cross Cluster Search or Cross Cluster Replication.
+This is only useful if you want to create :ref:`custom runners <adding_tracks_custom_runners>` that execute operations against multiple clusters, for example for `cross cluster search <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cross-cluster-search.html>`_ or cross cluster replication.
 
 To define the host:port pairs for additional clusters with ``target-hosts`` you can specify either a JSON filename (ending in ``.json``) or an inline JSON string. The JSON object should be a collection of name:value pairs. ``name`` is string for the cluster name and there **must be** one ``default``.
 
@@ -548,7 +548,7 @@ Examples:
     --target-hosts="{\"default\":[\"127.0.0.1:9200\"],\"remote\":[\"127.0.0.1:19200\",\"127.0.0.1:19201\"]}"
 
 .. NOTE::
-   **All** internal :ref:`track operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
+   **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
@@ -562,10 +562,14 @@ Examples, assuming that two clusters have been specified with ``--target-hosts``
 * json file: ``--client-options="client_options1.json"``::
 
     {
-      "default":
-        {"timeout": 60},
-      "remote":
-        {"use_ssl":true,"verify_certs": false,"ca_certs":"/path/to/cacert.pem"}
+      "default": {
+        "timeout": 60
+    },
+      "remote": {
+        "use_ssl": true,
+        "verify_certs": false,
+        "ca_certs": "/path/to/cacert.pem"
+      }
     }
 
 * json inline string defining two clusters::
@@ -573,4 +577,4 @@ Examples, assuming that two clusters have been specified with ``--target-hosts``
     --client-options="{\"default\":{\"timeout\": 60}, \"remote\": {\"use_ssl\":true,\"verify_certs\":false,\"ca_certs\":\"/path/to/cacert.pem\"}}"
 
 .. WARNING::
-   If you use ``client-options`` you must specify options for **every** cluster name defined with ``target-hosts``. An error message will be displayed if there is a mismatch.
+   If you use ``client-options`` you must specify options for **every** cluster name defined with ``target-hosts``. Rally will raise an error if there is a mismatch.
