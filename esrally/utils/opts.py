@@ -1,7 +1,7 @@
 import argparse
 import json
 import logging
-from esrally.utils import console, io
+from esrally.utils import io
 
 from elasticsearch.client import _normalize_hosts
 

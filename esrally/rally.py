@@ -11,7 +11,7 @@ import json
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
-from esrally.utils import io, convert, process, console, net, config as config_helper
+from esrally.utils import io, convert, process, console, net, opts
 
 from elasticsearch.client import _normalize_hosts
 
@@ -308,8 +308,8 @@ def create_arg_parser():
         p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
-                 "(default: {}).".format(config_helper.ClientOptions.DEFAULT_CLIENT_OPTIONS),
-            default=config_helper.ClientOptions.DEFAULT_CLIENT_OPTIONS)
+                 "(default: {}).".format(opts.ClientOptions.DEFAULT_CLIENT_OPTIONS),
+            default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
         p.add_argument("--on-error",
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
@@ -612,15 +612,15 @@ def main():
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", config_helper.csv_to_list(args.car))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", opts.csv_to_list(args.car))
     if args.team_path:
         cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", config_helper.csv_to_list(args.elasticsearch_plugins))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", config_helper.to_dict(args.car_params))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", config_helper.to_dict(args.plugin_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
         # force-preserve the cluster nodes.
@@ -628,8 +628,8 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", config_helper.csv_to_list(args.telemetry))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", config_helper.to_dict(args.telemetry_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", opts.csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", opts.to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
@@ -651,9 +651,9 @@ def main():
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
-    cfg.add(config.Scope.applicationOverride, "track", "params", config_helper.to_dict(args.track_params))
+    cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
-    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", config_helper.csv_to_list(args.include_tasks))
+    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
@@ -678,12 +678,12 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
-    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", config_helper.csv_to_list(args.load_driver_hosts))
+    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        target_hosts = config_helper.TargetHosts(args.target_hosts)
+        target_hosts = opts.TargetHosts(args.target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
-        client_options = config_helper.ClientOptions(args.client_options, target_hosts=target_hosts)
+        client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
         if "timeout" not in client_options.default:
            console.info("You did not provide an explicit timeout in the client options. Assuming default of 60 seconds.")

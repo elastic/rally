@@ -1,7 +1,7 @@
 from unittest import TestCase, mock
 
 from esrally import config, exceptions
-from esrally.utils import config as config_helper
+from esrally.utils import opts
 from esrally.mechanic import launcher
 
 
@@ -77,8 +77,8 @@ class SubClient:
 
 
 class ExternalLauncherTests(TestCase):
-    test_host = config_helper.TargetHosts('127.0.0.1:9200,10.17.0.5:19200')
-    client_options = config_helper.ClientOptions('timeout:60')
+    test_host = opts.TargetHosts("127.0.0.1:9200,10.17.0.5:19200")
+    client_options = opts.ClientOptions("timeout:60")
 
     def test_setup_external_cluster_single_node(self):
         cfg = config.Config()
@@ -107,8 +107,8 @@ class ExternalLauncherTests(TestCase):
 
 
 class ClusterLauncherTests(TestCase):
-    test_host = config_helper.TargetHosts("10.0.0.10:9200,10.0.0.11:9200")
-    client_options = config_helper.ClientOptions('timeout:60')
+    test_host = opts.TargetHosts("10.0.0.10:9200,10.0.0.11:9200")
+    client_options = opts.ClientOptions('timeout:60')
 
     def test_launches_cluster_with_post_launch_handler(self):
         on_post_launch = mock.Mock()
@@ -147,7 +147,7 @@ class ClusterLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
         # Simulate that the client will raise an error upon startup
-        cfg.add(config.Scope.application, "client", "options", config_helper.ClientOptions('raise-error-on-info:true'))
+        cfg.add(config.Scope.application, "client", "options", opts.ClientOptions('raise-error-on-info:true'))
         #cfg.add(config.Scope.application, "client", "options", {"raise-error-on-info": True})
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
