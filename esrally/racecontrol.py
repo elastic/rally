@@ -288,10 +288,10 @@ def race(cfg, sources=False, build=False, distribution=False, external=False, do
 
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
     configured_hosts = cfg.opts("client", "hosts")
-    if len(configured_hosts()) !=0 :
-        logger.info("Using configured hosts %s" % configured_hosts())
+    if len(configured_hosts.default) !=0 :
+        logger.info("Using configured hosts {}".format(configured_hosts.default))
     else:
-        logger.info("Setting default host to [%s:%d]" % (host, port))
+        logger.info("Setting default host to [{}:{}]".format(host, port))
         default_host_object = opts.TargetHosts("{}:{}".format(host,port))
         cfg.add(config.Scope.benchmark, "client", "hosts", default_host_object)
 

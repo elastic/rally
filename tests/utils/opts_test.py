@@ -20,7 +20,6 @@ class ConfigHelperFunctionTests(TestCase):
 
 class TestTargetHosts(TestCase):
     def test_empty_arg_parses_as_empty_list(self):
-        self.assertEqual([], opts.TargetHosts('')())
         self.assertEqual([], opts.TargetHosts('').default)
         self.assertEqual({'default': []}, opts.TargetHosts('').all_hosts)
 
@@ -39,8 +38,7 @@ class TestTargetHosts(TestCase):
 
         self.assertEqual(
             [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}],
-            opts.TargetHosts(target_hosts)()
-        )
+            opts.TargetHosts(target_hosts).default)
 
     def test_jsonstring_parses_as_dict_of_clusters(self):
         target_hosts = '{"default": ["127.0.0.1:9200","10.17.0.5:19200"], "remote_1": ["88.33.22.15:19200"], "remote_2": ["10.18.0.6:19200","10.18.0.7:19201"]}'
@@ -79,8 +77,7 @@ class TestClientOptions(TestCase):
 
         self.assertEqual(
             {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'},
-            opts.ClientOptions(client_options_string)()
-        )
+            opts.ClientOptions(client_options_string).default)
 
         self.assertEqual(
             {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'},
@@ -104,7 +101,7 @@ class TestClientOptions(TestCase):
 
         self.assertEqual(
             {'timeout': 60},
-            opts.ClientOptions(client_options_string)())
+            opts.ClientOptions(client_options_string).default)
 
         self.assertEqual(
             {'default': {'timeout':60},
@@ -142,7 +139,7 @@ class TestClientOptions(TestCase):
         self.assertEqual(
             {"timeout": 60},
             opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts)())
+                                 target_hosts=target_hosts).default)
 
 
     def test_no_client_option_parses_to_default_with_multicluster(self):
@@ -162,4 +159,4 @@ class TestClientOptions(TestCase):
         self.assertEqual(
             {"timeout": 60},
             opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts)())
+                                 target_hosts=target_hosts).default)

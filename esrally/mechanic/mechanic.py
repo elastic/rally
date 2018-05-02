@@ -176,8 +176,8 @@ def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
     :param client_factory: Factory class that creates the Elasticsearch client.
     :return: The distribution version.
     """
-    hosts = cfg.opts("client", "hosts")()
-    client_options = cfg.opts("client", "options")()
+    hosts = cfg.opts("client", "hosts").default
+    client_options = cfg.opts("client", "options").default
     es = client_factory(hosts, client_options).create()
     return es.info()["version"]["number"]
 
@@ -266,7 +266,7 @@ class MechanicActor(actor.RallyActor):
         self.car, _ = load_team(self.cfg, msg.external)
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
-        hosts = self.cfg.opts("client", "hosts")()
+        hosts = self.cfg.opts("client", "hosts").default
         if len(hosts) == 0:
             raise exceptions.LaunchError("No target hosts are configured.")
 

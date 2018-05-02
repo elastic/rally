@@ -192,8 +192,8 @@ class ExternalLauncher:
         self.client_factory = client_factory_class
 
     def start(self, node_configurations=None):
-        hosts = self.cfg.opts("client", "hosts")()
-        client_options = self.cfg.opts("client", "options")()
+        hosts = self.cfg.opts("client", "hosts").default
+        client_options = self.cfg.opts("client", "options").default
         es = self.client_factory(hosts, client_options).create()
 
         # cannot enable custom telemetry devices here

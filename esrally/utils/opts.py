@@ -70,10 +70,6 @@ class ConnectOptions:
     Base Class to help either parsing --target-hosts or --client-options
     """
 
-    def __call__(self):
-        """Return a list with the options assigned to the 'default' key"""
-        return self.default
-
     def __getitem__(self, key):
         """
         Race expects the cfg object to be subscriptable
