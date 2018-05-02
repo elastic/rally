@@ -29,7 +29,8 @@ class RegisterRunnerTests(TestCase):
                 return self.fp
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                return self.fp.close()
+                self.fp.close()
+                return False
 
             def __str__(self):
                 return "UnitTestContextManagerRunner"
