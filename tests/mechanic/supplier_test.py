@@ -498,36 +498,31 @@ class CreateSupplierTests(TestCase):
 class DistributionRepositoryTests(TestCase):
     def test_release_repo_config_with_default_url(self):
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release.2.url": "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
-                             "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
-            "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
             "release.cache": "true"
         }, version="5.5.0")
         self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.5.0.tar.gz", repo.download_url)
         self.assertTrue(repo.cache)
 
-    def test_release_repo_config_with_version_url(self):
+    def test_release_repo_config_with_user_url(self):
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release.2.url": "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
-                             "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
-            "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            # user override
+            "release.url": "https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
             "release.cache": "false"
         }, version="2.4.3")
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/2.4.3/"
-                         "elasticsearch-2.4.3.tar.gz", repo.download_url)
+        self.assertEqual("https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-2.4.3.tar.gz", repo.download_url)
         self.assertFalse(repo.cache)
 
     def test_missing_url(self):
         repo = supplier.DistributionRepository(name="miss", distribution_config={
-            "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
             "release.cache": "true"
         }, version="2.4.3")
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # noinspection PyStatementEffect
             repo.download_url
-        self.assertEqual(
-            "Neither version specific distribution config key [miss.2.url] nor a default distribution config key [miss.url] is defined.",
-            ctx.exception.args[0])
+        self.assertEqual("Neither config key [miss.url] nor [miss_url] is defined.", ctx.exception.args[0])
 
     def test_missing_cache(self):
         repo = supplier.DistributionRepository(name="release", distribution_config={
@@ -547,3 +542,21 @@ class DistributionRepositoryTests(TestCase):
             # noinspection PyStatementEffect
             repo.cache
         self.assertEqual("Value [Invalid] for config key [release.cache] is not a valid boolean value.", ctx.exception.args[0])
+
+    def test_plugin_config_with_default_url(self):
+        repo = supplier.DistributionRepository(name="release", distribution_config={
+            "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip"
+        }, version="5.5.0")
+        self.assertEqual("https://artifacts.example.org/downloads/plugins/example-5.5.0.zip", repo.plugin_download_url("example"))
+
+    def test_plugin_config_with_user_url(self):
+        repo = supplier.DistributionRepository(name="release", distribution_config={
+            "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip",
+            # user override
+            "plugin.example.release.url": "https://mirror.example.org/downloads/plugins/example-{{VERSION}}.zip"
+        }, version="5.5.0")
+        self.assertEqual("https://mirror.example.org/downloads/plugins/example-5.5.0.zip", repo.plugin_download_url("example"))
+
+    def test_missing_plugin_config(self):
+        repo = supplier.DistributionRepository(name="release", distribution_config={}, version="5.5.0")
+        self.assertIsNone(repo.plugin_download_url("not existing"))

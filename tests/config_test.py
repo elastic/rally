@@ -257,7 +257,7 @@ class ConfigFactoryTests(TestCase):
                 print("%s::%s: %s" % (section, k, v))
 
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("15", config_store.config["meta"]["config.version"])
+        self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_store.config["meta"]["config.version"])
 
         self.assertTrue("system" in config_store.config)
         self.assertEqual("local", config_store.config["system"]["env.name"])
@@ -295,13 +295,6 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("False", config_store.config["defaults"]["preserve_benchmark_candidate"])
 
         self.assertTrue("distributions" in config_store.config)
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-                         config_store.config["distributions"]["release.1.url"])
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
-                         "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
-                         config_store.config["distributions"]["release.2.url"])
-        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-                         config_store.config["distributions"]["release.url"])
         self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
     @mock.patch("esrally.utils.jvm.is_early_access_release")
@@ -379,7 +372,7 @@ class ConfigFactoryTests(TestCase):
 
         self.assertIsNotNone(config_store.config)
         self.assertTrue("meta" in config_store.config)
-        self.assertEqual("15", config_store.config["meta"]["config.version"])
+        self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_store.config["meta"]["config.version"])
         self.assertTrue("system" in config_store.config)
         self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
         self.assertTrue("node" in config_store.config)
@@ -408,13 +401,6 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("True", config_store.config["defaults"]["preserve_benchmark_candidate"])
 
         self.assertTrue("distributions" in config_store.config)
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-                         config_store.config["distributions"]["release.1.url"])
-        self.assertEqual("https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/distribution/tar/elasticsearch/"
-                         "{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz",
-                         config_store.config["distributions"]["release.2.url"])
-        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-                         config_store.config["distributions"]["release.url"])
         self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
 
@@ -475,6 +461,9 @@ class ConfigMigrationTests(TestCase):
             },
             "runtime": {
                 "java8.home": "/opt/jdk/8",
+            },
+            "distributions": {
+                "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
             }
         }
 
@@ -818,3 +807,25 @@ class ConfigMigrationTests(TestCase):
                        "plugin.x-pack.build.command",
                        "https://esrally.readthedocs.io/en/latest/elasticsearch_plugins.html#running-a-benchmark-with-plugins"""
             ), string_buffer.read())
+
+    def test_migrate_from_15_to_16(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 15
+            },
+            "distributions": {
+                "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 15, 16, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("16", config_file.config["meta"]["config.version"])
+        # does not remove section
+        self.assertIn("distributions", config_file.config)
+        self.assertNotIn("release.url", config_file.config["distributions"])
+
+
+

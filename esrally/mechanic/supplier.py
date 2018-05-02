@@ -40,8 +40,17 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
     else:
         es_src_dir = None
         distributions_root = os.path.join(cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
+
+        dist_cfg = {}
+        # car / plugin defines defaults...
+        dist_cfg.update(car.variables)
+        for plugin in plugins:
+            for k, v in plugin.variables:
+                dist_cfg["plugin_{}_{}".format(plugin.name, k)] = v
+        # ... but the user can override it in rally.ini
+        dist_cfg.update(cfg.all_opts("distributions"))
         repo = DistributionRepository(name=cfg.opts("mechanic", "distribution.repository"),
-                                      distribution_config=cfg.all_opts("distributions"),
+                                      distribution_config=dist_cfg,
                                       version=es_version)
         suppliers.append(ElasticsearchDistributionSupplier(repo, distributions_root))
 
@@ -333,7 +342,7 @@ class PluginDistributionSupplier:
     def add(self, binaries):
         # if we have multiple plugin configurations for a plugin we will override entries here but as this is always the same
         # key-value pair this is ok.
-        plugin_url = self.repo.plugin_download_url(self.plugin.name)
+        plugin_url = self.repo.plugin_download_url(self.plugin.name, self.plugin.variables)
         if plugin_url:
             binaries[self.plugin.name] = plugin_url
 
@@ -480,34 +489,35 @@ class DistributionRepository:
 
     @property
     def download_url(self):
-        major_version = versions.major_version(self.version)
-        version_url_key = "%s.%s.url" % (self.name, str(major_version))
-        default_url_key = "%s.url" % self.name
-        return self._url_for(version_url_key, default_url_key)
+        # team repo
+        default_key = "{}_url".format(self.name)
+        # rally.ini
+        override_key = "{}.url".format(self.name)
+        return self._url_for(override_key, default_key)
 
     def plugin_download_url(self, plugin_name):
-        major_version = versions.major_version(self.version)
-        version_url_key = "plugin.%s.%s.%s.url" % (plugin_name, self.name, str(major_version))
-        default_url_key = "plugin.%s.%s.url" % (plugin_name, self.name)
-        return self._url_for(version_url_key, default_url_key, mandatory=False)
+        # team repo
+        default_key = "plugin_{}_{}_url".format(plugin_name, self.name)
+        # rally.ini
+        override_key = "plugin.{}.{}.url".format(plugin_name, self.name)
+        return self._url_for(override_key, default_key, mandatory=False)
 
-    def _url_for(self, version_url_key, default_url_key, mandatory=True):
+    def _url_for(self, user_defined_key, default_key, mandatory=True):
         try:
-            if version_url_key in self.cfg:
-                url_template = self.cfg[version_url_key]
+            if user_defined_key in self.cfg:
+                url_template = self.cfg[user_defined_key]
             else:
-                url_template = self.cfg[default_url_key]
+                url_template = self.cfg[default_key]
         except KeyError:
             if mandatory:
-                raise exceptions.SystemSetupError("Neither version specific distribution config key [%s] nor a default distribution "
-                                                  "config key [%s] is defined." % (version_url_key, default_url_key))
+                raise exceptions.SystemSetupError("Neither config key [{}] nor [{}] is defined.".format(user_defined_key, default_key))
             else:
                 return None
         return url_template.replace("{{VERSION}}", self.version)
 
     @property
     def cache(self):
-        k = "%s.cache" % self.name
+        k = "{}.cache".format(self.name)
         try:
             raw_value = self.cfg[k]
         except KeyError:

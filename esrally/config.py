@@ -108,7 +108,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 class Config:
     EARLIEST_SUPPORTED_VERSION = 12
 
-    CURRENT_CONFIG_VERSION = 15
+    CURRENT_CONFIG_VERSION = 16
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -457,11 +457,6 @@ class ConfigFactory:
         config["defaults"]["preserve_benchmark_candidate"] = str(preserve_install)
 
         config["distributions"] = {}
-        config["distributions"]["release.1.url"] = "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-" \
-                                                   "{{VERSION}}.tar.gz"
-        config["distributions"]["release.2.url"] = "https://download.elasticsearch.org/elasticsearch/release/org/elasticsearch/" \
-                                                   "distribution/tar/elasticsearch/{{VERSION}}/elasticsearch-{{VERSION}}.tar.gz"
-        config["distributions"]["release.url"] = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz"
         config["distributions"]["release.cache"] = "true"
 
         config_file.store(config)
@@ -706,6 +701,15 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         warn_if_plugin_build_task_is_in_use(config)
 
         current_version = 15
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 15 and target_version > current_version:
+        if "distributions" in config:
+            # Remove obsolete settings
+            config["distributions"].pop("release.1.url", None)
+            config["distributions"].pop("release.2.url", None)
+            config["distributions"].pop("release.url", None)
+        current_version = 16
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done
