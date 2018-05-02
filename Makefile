@@ -26,7 +26,7 @@ it34: python-caches-clean
 it35: python-caches-clean
 	tox -e py35
 
-it36:
+it36: python-caches-clean
 	tox -e py36
 
 benchmark:
