@@ -582,7 +582,7 @@ class LoadGenerator(actor.RallyActor):
 
     @actor.no_retry("load generator")
     def receiveMsg_StartLoadGenerator(self, msg, sender):
-        def EsClients(all_hosts, all_client_options):
+        def es_clients(all_hosts, all_client_options):
             es = {}
             for cluster_name, cluster_hosts in all_hosts.items():
                 es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create()
@@ -593,7 +593,7 @@ class LoadGenerator(actor.RallyActor):
         self.client_id = msg.client_id
         self.config = load_local_config(msg.config)
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
-        self.es = EsClients(self.config.opts("client", "hosts").all_hosts, self.config.opts("client", "options").all_client_options)
+        self.es = es_clients(self.config.opts("client", "hosts").all_hosts, self.config.opts("client", "options").all_client_options)
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.tasks = msg.tasks
