@@ -423,7 +423,6 @@ By default, Rally will run its load driver on the same machine where you start t
 
 In the example, above Rally will generate load from the hosts ``10.17.20.5`` and ``10.17.20.6``. For this to work, you need to start a Rally daemon on these machines, see :ref:`distributing the load test driver <recipe_distributed_load_driver>` for a complete example.
 
-
 ``target-hosts``
 ~~~~~~~~~~~~~~~~
 
@@ -436,6 +435,8 @@ If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally
    esrally --pipeline=benchmark-only --target-hosts=10.17.0.5:9200,10.17.0.6:9200
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
+
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
 
 ``quiet``
 ~~~~~~~~~
@@ -509,3 +510,71 @@ When you run ``esrally list races``, this will show up again::
     20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4
 
 This will help you recognize a specific race when running ``esrally compare``.
+
+.. _command_line_reference_advanced_topics:
+
+Advanced topics
+---------------
+
+``target-hosts``
+~~~~~~~~~~~~~~~~
+
+Rally can also create client connections for multiple Elasticsearch clusters.
+This is only useful if you want to create :ref:`custom runners <adding_tracks_custom_runners>` that execute operations against multiple clusters, for example for `cross cluster search <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cross-cluster-search.html>`_ or cross cluster replication.
+
+To define the host:port pairs for additional clusters with ``target-hosts`` you can specify either a JSON filename (ending in ``.json``) or an inline JSON string. The JSON object should be a collection of name:value pairs. ``name`` is string for the cluster name and there **must be** one ``default``.
+
+Examples:
+
+* json file: ``--target-hosts="target_hosts1.json"``::
+
+    { "default": ["127.0.0.1:9200","10.127.0.3:19200"] }
+
+* json file defining two clusters: ``--target-hosts="target_hosts2.json"``::
+
+    {
+      "default": [
+        {"host": "127.0.0.1", "port": 9200},
+        {"host": "127.0.0.1", "port": 19200}
+      ],
+      "remote":[
+        {"host": "10.127.0.3", "port": 9200},
+        {"host": "10.127.0.8", "port": 9201}
+      ]
+    }
+
+* json inline string defining two clusters::
+
+    --target-hosts="{\"default\":[\"127.0.0.1:9200\"],\"remote\":[\"127.0.0.1:19200\",\"127.0.0.1:19201\"]}"
+
+.. NOTE::
+   **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
+
+``client-options``
+~~~~~~~~~~~~~~~~~~
+
+``client-options`` can optionally specify options for the Elasticsearch clients when multiple clusters have been defined with ``target-hosts``. If omitted, the default is ``timeout:60`` for all cluster connections.
+
+The format is similar to ``target-hosts``, supporting both filenames ending in ``.json`` or inline JSON, however, the parameters are a collection of name:value pairs, as opposed to arrays.
+
+Examples, assuming that two clusters have been specified with ``--target-hosts``:
+
+* json file: ``--client-options="client_options1.json"``::
+
+    {
+      "default": {
+        "timeout": 60
+    },
+      "remote": {
+        "use_ssl": true,
+        "verify_certs": false,
+        "ca_certs": "/path/to/cacert.pem"
+      }
+    }
+
+* json inline string defining two clusters::
+
+    --client-options="{\"default\":{\"timeout\": 60}, \"remote\": {\"use_ssl\":true,\"verify_certs\":false,\"ca_certs\":\"/path/to/cacert.pem\"}}"
+
+.. WARNING::
+   If you use ``client-options`` you must specify options for **every** cluster name defined with ``target-hosts``. Rally will raise an error if there is a mismatch.

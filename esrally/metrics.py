@@ -1235,7 +1235,7 @@ class RaceStore:
 class CompositeRaceStore:
     """
     Internal helper class to store races as file and to Elasticsearch in case users want Elasticsearch as a race store.
-    
+
     It provides the same API as RaceStore. It delegates writes to all stores and all read operations only the Elasticsearch race store.
     """
     def __init__(self, es_store, es_results_store, file_store):

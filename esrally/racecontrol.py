@@ -6,7 +6,7 @@ import tabulate
 import thespian.actors
 
 from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, PROGRAM_NAME
-from esrally.utils import console, convert
+from esrally.utils import console, convert, opts
 
 logger = logging.getLogger("rally.racecontrol")
 
@@ -287,13 +287,13 @@ def race(cfg, sources=False, build=False, distribution=False, external=False, do
 
 
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
-    configured_hosts = cfg.opts("client", "hosts", mandatory=False)
-    if configured_hosts:
-        logger.info("Using configured hosts %s" % configured_hosts)
+    configured_hosts = cfg.opts("client", "hosts")
+    if len(configured_hosts.default) !=0 :
+        logger.info("Using configured hosts %s", configured_hosts.default)
     else:
-        logger.info("Setting default host to [%s:%d]" % (host, port))
-        cfg.add(config.Scope.benchmark, "client", "hosts", [{"host": host, "port": port}])
-
+        logger.info("Setting default host to [%s:%d]", (host, port))
+        default_host_object = opts.TargetHosts("{}:{}".format(host,port))
+        cfg.add(config.Scope.benchmark, "client", "hosts", default_host_object)
 
 # Poor man's curry
 def from_sources_complete(cfg):

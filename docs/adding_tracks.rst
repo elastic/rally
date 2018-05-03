@@ -195,7 +195,7 @@ A few things to note:
 When you invoke ``esrally list tracks --track-path=~/rally-tracks/tutorial``, the new track should now appear::
 
     dm@io:~ $ esrally list tracks --track-path=~/rally-tracks/tutorial
-    
+
         ____        ____
        / __ \____ _/ / /_  __
       / /_/ / __ `/ / / / / /
@@ -203,7 +203,7 @@ When you invoke ``esrally list tracks --track-path=~/rally-tracks/tutorial``, th
     /_/ |_|\__,_/_/_/\__, /
                     /____/
     Available tracks:
-    
+
     Name        Description                   Documents    Compressed Size  Uncompressed Size  Default Challenge  All Challenges
     ----------  ----------------------------- -----------  ---------------  -----------------  -----------------  ---------------
     tutorial    Tutorial benchmark for Rally      11658903  N/A              1.4 GB            index-and-query    index-and-query
@@ -802,9 +802,6 @@ Similar to a parameter source you also need to bind the name of your operation t
 If you need more control, you can also implement a runner class. The example above, implemented as a class looks as follows::
 
     class PercolateRunner:
-        def __enter__(self):
-            return self
-
         def __call__(self, es, params):
             es.percolate(
                 index="queries",
@@ -819,7 +816,30 @@ If you need more control, you can also implement a runner class. The example abo
         registry.register_runner("percolate", PercolateRunner())
 
 
-The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function. Runners also support Python's `context manager <https://docs.python.org/3/library/stdtypes.html#typecontextmanager>`_ interface. Rally uses a new context for each request. Implementing the context manager interface can be handy for cleanup of resources after executing an operation. Rally uses it for example to clear open scrolls.
+The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function. Runners also support Python's `context manager <https://docs.python.org/3/library/stdtypes.html#typecontextmanager>`_ interface. Rally uses a new context for each request. Implementing the context manager interface can be handy for cleanup of resources after executing an operation. Rally uses it, for example, to clear open scrolls.
+
+If you have specified multiple Elasticsearch clusters using :ref:`target-hosts <command_line_reference_advanced_topics>` you can make Rally pass a dictionary of client connections instead of one for the ``default`` cluster in the ``es`` parameter.
+
+To achieve this you need to:
+
+* Use a runner class
+* Specify ``multi_cluster = True`` as a class attribute
+* Use any of the cluster names specified in :ref:`target-hosts <command_line_reference_advanced_topics>` as a key for the ``es`` dict
+
+Example (assuming Rally has been invoked specifying ``default`` and ``remote`` in `target-hosts`)::
+
+    class CreateIndexInRemoteCluster:
+        multi_cluster = True
+
+        def __call__(self, es, params):
+            es['remote'].indices.create(index='remote-index')
+
+        def __repr__(self, *args, **kwargs):
+            return "create-index-in-remote-cluster"
+
+    def register(registry):
+        registry.register_runner("create-index-in-remote-cluster", CreateIndexInRemoteCluster())
+
 
 .. note::
 

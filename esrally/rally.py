@@ -11,13 +11,11 @@ import json
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
-from esrally.utils import io, convert, process, console, net
+from esrally.utils import io, convert, process, console, net, opts
 
 from elasticsearch.client import _normalize_hosts
 
 logger = logging.getLogger("rally.main")
-
-DEFAULT_CLIENT_OPTIONS = "timeout:60"
 
 
 # we want to use some basic logging even before the output to log file is configured
@@ -310,8 +308,8 @@ def create_arg_parser():
         p.add_argument(
             "--client-options",
             help="define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
-                 "(default: %s)." % DEFAULT_CLIENT_OPTIONS,
-            default=DEFAULT_CLIENT_OPTIONS)
+                 "(default: {}).".format(opts.ClientOptions.DEFAULT_CLIENT_OPTIONS),
+            default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
         p.add_argument("--on-error",
                        choices=["continue", "abort"],
                        help="Either 'continue' or 'abort' when Rally gets an error response (default: continue)",
@@ -436,7 +434,7 @@ def ensure_configuration_present(cfg, args, sub_command):
             exit(64)
 
 
-def list(cfg):
+def dispatch_list(cfg):
     what = cfg.opts("system", "list.config.option")
     if what == "telemetry":
         telemetry.list_telemetry()
@@ -541,7 +539,7 @@ def dispatch_sub_command(cfg, sub_command):
         if sub_command == "compare":
             reporter.compare(cfg)
         elif sub_command == "list":
-            list(cfg)
+            dispatch_list(cfg)
         elif sub_command == "race":
             race(cfg)
         elif sub_command == "generate":
@@ -571,65 +569,6 @@ def dispatch_sub_command(cfg, sub_command):
         console.println("")
         print_help_on_errors()
         return False
-
-
-def to_dict(arg):
-    if io.has_extension(arg, ".json"):
-        with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
-            return json.load(f)
-    elif arg.startswith("{"):
-        return json.loads(arg)
-    else:
-        return kv_to_map(csv_to_list(arg))
-
-
-def csv_to_list(csv):
-    if csv is None:
-        return None
-    elif len(csv.strip()) == 0:
-        return []
-    else:
-        return [e.strip() for e in csv.split(",")]
-
-
-def to_bool(v):
-    if v is None:
-        return None
-    elif v.lower() == "false":
-        return False
-    elif v.lower() == "true":
-        return True
-    else:
-        raise ValueError("Could not convert value '%s'" % v)
-
-
-def kv_to_map(kvs):
-    def convert(v):
-        # string
-        if v.startswith("'"):
-            return v[1:-1]
-
-        # int
-        try:
-            return int(v)
-        except ValueError:
-            pass
-
-        # float
-        try:
-            return float(v)
-        except ValueError:
-            pass
-
-        # boolean
-        return to_bool(v)
-
-    result = {}
-    for kv in kvs:
-        k, v = kv.split(":")
-        # key is always considered a string, value needs to be converted
-        result[k.strip()] = convert(v.strip())
-    return result
 
 
 def main():
@@ -673,15 +612,15 @@ def main():
     if args.distribution_version:
         cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
     cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", csv_to_list(args.car))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", opts.csv_to_list(args.car))
     if args.team_path:
         cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", csv_to_list(args.elasticsearch_plugins))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", to_dict(args.car_params))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", to_dict(args.plugin_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
     if args.keep_cluster_running:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
         # force-preserve the cluster nodes.
@@ -689,8 +628,8 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", csv_to_list(args.telemetry))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", to_dict(args.telemetry_params))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", opts.csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", opts.to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
@@ -712,9 +651,9 @@ def main():
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
-    cfg.add(config.Scope.applicationOverride, "track", "params", to_dict(args.track_params))
+    cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
-    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", csv_to_list(args.include_tasks))
+    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
@@ -739,15 +678,18 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
-    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", csv_to_list(args.load_driver_hosts))
+    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
     if sub_command != "list":
         # Also needed by mechanic (-> telemetry) - duplicate by module?
-        cfg.add(config.Scope.applicationOverride, "client", "hosts", _normalize_hosts(csv_to_list(args.target_hosts)))
-        client_options = kv_to_map(csv_to_list(args.client_options))
+        target_hosts = opts.TargetHosts(args.target_hosts)
+        cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
+        client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-        if "timeout" not in client_options:
-            console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
-
+        if "timeout" not in client_options.default:
+           console.info("You did not provide an explicit timeout in the client options. Assuming default of 60 seconds.")
+        if list(target_hosts.all_hosts) != list(client_options.all_client_options):
+            console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
+            exit(1)
     # split by component?
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)

@@ -1,8 +1,22 @@
+import io
 import unittest.mock as mock
 from unittest import TestCase
 
 from esrally.driver import runner
 from esrally import exceptions
+
+
+class BaseUnitTestContextManagerRunner:
+    def __call__(self, *args):
+        return self
+
+    def __enter__(self):
+        self.fp = io.StringIO("many\nlines\nin\na\nfile")
+        return self.fp
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.fp.close()
+        return False
 
 
 class RegisterRunnerTests(TestCase):
@@ -15,38 +29,77 @@ class RegisterRunnerTests(TestCase):
 
         runner.register_runner(operation_type="unit_test", runner=runner_function)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.DelegatingRunner)
+        self.assertIsInstance(returned_runner, runner.SingleClusterDelegatingRunner)
         self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
 
-    def test_runner_class_with_context_manager_should_be_registered_as_is(self):
-        class UnitTestRunner:
-            def __enter__(self):
-                return self
+    def test_single_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
+        class UnitTestSingleClusterContextManagerRunner(BaseUnitTestContextManagerRunner):
+            def __str__(self):
+                return "UnitTestSingleClusterContextManagerRunner"
 
-            def __call__(self, *args):
-                pass
-
-            def __exit__(self, exc_type, exc_val, exc_tb):
-                return False
-
-        test_runner = UnitTestRunner()
+        test_runner = UnitTestSingleClusterContextManagerRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
         returned_runner = runner.runner_for("unit_test")
-        self.assertTrue(test_runner == returned_runner)
+        self.assertIsInstance(returned_runner, runner.SingleClusterDelegatingRunner)
+        self.assertEqual("user-defined context-manager enabled runner for [UnitTestSingleClusterContextManagerRunner]",
+                         repr(returned_runner))
 
-    def test_runner_class_should_be_wrapped(self):
-        class UnitTestRunner:
+        # test that context_manager functionality gets preserved after wrapping
+        with returned_runner({"default": {}},{}) as fp:
+            file_contents = fp.read()
+        self.assertTrue(file_contents, "many\nlines\nin\na\nfile")
+        self.assertTrue(fp.closed)
+
+    def test_multi_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
+        class UnitTestMultiClusterContextManagerRunner(BaseUnitTestContextManagerRunner):
+            multi_cluster = True
+
+            def __str__(self):
+                return "UnitTestMultiClusterContextManagerRunner"
+
+        test_runner = UnitTestMultiClusterContextManagerRunner()
+        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        returned_runner = runner.runner_for("unit_test")
+        self.assertIsInstance(returned_runner, runner.MultiClusterDelegatingRunner)
+        self.assertEqual("user-defined multi-cluster context-manager enabled runner for [UnitTestMultiClusterContextManagerRunner]",
+                         repr(returned_runner))
+
+        # test that context_manager functionality gets preserved after wrapping
+        with returned_runner({"default": {}},{}) as fp:
+            file_contents = fp.read()
+        self.assertTrue(file_contents, "many\nlines\nin\na\nfile")
+        self.assertTrue(fp.closed)
+
+    def test_single_cluster_runner_class_should_be_wrapped(self):
+        class UnitTestSingleClusterRunner:
             def __call__(self, *args):
                 pass
 
             def __str__(self):
-                return "UnitTestRunner"
+                return "UnitTestSingleClusterRunner"
 
-        test_runner = UnitTestRunner()
+        test_runner = UnitTestSingleClusterRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.DelegatingRunner)
-        self.assertEqual("user-defined runner for [UnitTestRunner]", repr(returned_runner))
+        self.assertIsInstance(returned_runner, runner.SingleClusterDelegatingRunner)
+        self.assertEqual("user-defined runner for [UnitTestSingleClusterRunner]", repr(returned_runner))
+
+    def test_multi_cluster_runner_class_should_be_wrapped(self):
+        class UnitTestMultiClusterRunner:
+            multi_cluster = True
+
+            def __call__(self, *args):
+                pass
+
+            def __str__(self):
+                return "UnitTestMultiClusterRunner"
+
+        test_runner = UnitTestMultiClusterRunner()
+        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        returned_runner = runner.runner_for("unit_test")
+        self.assertIsInstance(returned_runner, runner.MultiClusterDelegatingRunner)
+        self.assertEqual("user-defined multi-cluster enabled runner for [UnitTestMultiClusterRunner]", repr(returned_runner))
+
 
 
 class BulkIndexRunnerTests(TestCase):

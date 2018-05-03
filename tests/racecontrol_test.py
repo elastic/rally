@@ -38,5 +38,3 @@ class RaceControlTests(TestCase):
 
         # ensure we remove it again from the list of registered pipelines to avoid unwanted side effects
         del p
-
-

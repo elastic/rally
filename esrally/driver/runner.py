@@ -20,16 +20,23 @@ def runner_for(operation_type):
 
 
 def register_runner(operation_type, runner):
+    if getattr(runner, "multi_cluster", False) == True:
+        if "__enter__" in dir(runner) and "__exit__" in dir(runner):
+            logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+            __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
+        else:
+            logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+            __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
-    if isinstance(runner, types.FunctionType):
+    elif isinstance(runner, types.FunctionType):
         logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = DelegatingRunner(runner, runner.__name__)
+        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
         logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = runner
+        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
     else:
         logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
-        __RUNNERS[operation_type] = DelegatingRunner(runner, str(runner))
+        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner))
 
 
 # Only intended for unit-testing!
@@ -61,16 +68,63 @@ class Runner:
         return False
 
 
-class DelegatingRunner(Runner):
-    def __init__(self, runnable, name):
+class SingleClusterDelegatingRunner(Runner):
+    def __init__(self, runnable, name, context_manager_enabled=False):
         self.runnable = runnable
         self.name = name
+        self.context_manager_enabled = context_manager_enabled
 
     def __call__(self, *args):
+        # Single cluster mode: es parameter passed in runner is a client object for the "default" cluster
+        es = args[0]
+        return self.runnable(es['default'], *args[1:])
+
+    def __repr__(self, *args, **kwargs):
+        if self.context_manager_enabled:
+            return "user-defined context-manager enabled runner for [%s]" % self.name
+        else:
+            return "user-defined runner for [%s]" % self.name
+
+    def __enter__(self):
+        if self.context_manager_enabled:
+            self.runnable.__enter__()
+            return self
+        else:
+            return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.context_manager_enabled:
+            return self.runnable.__exit__(exc_type, exc_val, exc_tb)
+        else:
+            return False
+
+
+class MultiClusterDelegatingRunner(Runner):
+    def __init__(self, runnable, name, context_manager_enabled=False):
+        self.runnable = runnable
+        self.name = name
+        self.context_manager_enabled = context_manager_enabled
+
+    def __call__(self, *args):
+        # Multi cluster mode: pass the entire es dict and let runner code handle connections to different clusters
         return self.runnable(*args)
 
     def __repr__(self, *args, **kwargs):
-        return "user-defined runner for [%s]" % self.name
+        if self.context_manager_enabled:
+            return "user-defined multi-cluster context-manager enabled runner for [%s]" % self.name
+        else:
+            return "user-defined multi-cluster enabled runner for [%s]" % self.name
+
+    def __enter__(self):
+        if self.context_manager_enabled:
+            self.runnable.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.context_manager_enabled:
+            return self.runnable.__exit__(exc_type, exc_val, exc_tb)
+        else:
+            return False
 
 
 def mandatory(params, key, op):
