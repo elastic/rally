@@ -184,6 +184,7 @@ class BulkIndex(Runner):
         * ``success``: A boolean indicating whether the bulk request has succeeded.
         * ``success-count``: Number of successfully processed items for this request (denoted in ``unit``).
         * ``error-count``: Number of failed items for this request (denoted in ``unit``).
+        * ``took``` Value of the the ``took`` property in the bulk response.
 
         If ``detailed-results`` is ``True`` the following meta data are returned in addition:
 
@@ -207,7 +208,8 @@ class BulkIndex(Runner):
                 "bulk-size": 5000,
                 "success": True,
                 "success-count": 5000,
-                "error-count": 0
+                "error-count": 0,
+                "took": 20
             }
 
         Whereas the response will look as follow if there are bulk errors::
@@ -219,7 +221,8 @@ class BulkIndex(Runner):
                 "bulk-size": 5000,
                 "success": False,
                 "success-count": 4000,
-                "error-count": 1000
+                "error-count": 1000,
+                "took": 20
             }
 
         If ``detailed-results`` is ``True`` a typical return value is::
@@ -235,6 +238,7 @@ class BulkIndex(Runner):
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0,
+                "took": 20,
                 "ops": {
                     "index": {
                         "item-count": 5000,
@@ -266,6 +270,7 @@ class BulkIndex(Runner):
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000,
+                "took": 20,
                 "ops": {
                     "index": {
                         "item-count": 5000,
@@ -390,6 +395,7 @@ class BulkIndex(Runner):
                 bulk_error_count += 1
                 self.extract_error_details(error_details, data)
         stats = {
+            "took": response.get("took"),
             "success": bulk_error_count == 0,
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count,
@@ -413,6 +419,7 @@ class BulkIndex(Runner):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
         stats = {
+            "took": response.get("took"),
             "success": bulk_error_count == 0,
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
