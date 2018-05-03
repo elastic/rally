@@ -57,6 +57,7 @@ The default car definitions of Rally are stored in ``~/.rally/benchmarks/teams/d
         │           └── jvm.options
         ├── ea.ini
         └── vanilla
+            ├── config.ini
             └── templates
                 └── config
                     ├── elasticsearch.yml
@@ -68,8 +69,12 @@ The top-level directory "v1" denotes the configuration format in version 1. Belo
     [variables]
     clean_command=./gradlew clean
 
-This defines the variable ``clean_command`` for all cars that reference this configuration.
+This defines the variable ``clean_command`` for all cars that reference this configuration. Rally will treat the following variable names specially:
 
+* `clean_command`: The command to clean the Elasticsearch project directory.
+* `build_command`: The command to build an Elasticsearch source distribution.
+* `artifact_path_pattern`: A glob pattern to find a previously built source distribution within the project directory.
+* `release_url`: A download URL for Elasticsearch distributions. The placeholder ``{{VERSION}}`` is replaced by Rally with the actual Elasticsearch version.
 
 Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
 

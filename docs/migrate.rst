@@ -64,6 +64,41 @@ Starting with Rally 0.11.0, Rally will look for a directory "v1" within ``cars``
                 │           └── elasticsearch.yml
                 └── transport.ini
 
+It is also required that you create a file ``variables.ini`` for all your car config bases (optional for mixins). Therefore, the full directory structure is::
+
+    .
+    ├── cars
+    │   └── v1
+    │       ├── 1gheap.ini
+    │       ├── 2gheap.ini
+    │       ├── defaults.ini
+    │       ├── ea
+    │       │   └── templates
+    │       │       └── config
+    │       │           └── jvm.options
+    │       ├── ea.ini
+    │       └── vanilla
+    │           ├── config.ini
+    │           └── templates
+    │               └── config
+    │                   ├── elasticsearch.yml
+    │                   ├── jvm.options
+    │                   └── log4j2.properties
+    └── plugins
+        └── v1
+            ├── core-plugins.txt
+            └── transport_nio
+                ├── default
+                │   └── templates
+                │       └── config
+                │           └── elasticsearch.yml
+                └── transport.ini
+
+For distribution-based builds, ``config.ini`` file needs to contain a section ``variables`` and a ``release_url`` property::
+
+    [variables]
+    release_url=https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-oss-{{VERSION}}.tar.gz
+
 
 Migrating to Rally 0.10.0
 -------------------------
