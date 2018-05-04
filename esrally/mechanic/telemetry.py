@@ -863,6 +863,8 @@ class IndexStats(InternalTelemetryDevice):
         logger.info("Gathering indices stats for all primaries on benchmark stop.")
         index_stats = self.index_stats()
         logger.info("Returned indices stats:\n%s" % json.dumps(index_stats, indent=2))
+        if "primaries" not in index_stats:
+            return
         p = index_stats["primaries"]
         # actually this is add_count
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
