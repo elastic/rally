@@ -6,14 +6,11 @@ import os
 import sys
 import time
 import uuid
-import json
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
 from esrally.utils import io, convert, process, console, net, opts
-
-from elasticsearch.client import _normalize_hosts
 
 logger = logging.getLogger("rally.main")
 

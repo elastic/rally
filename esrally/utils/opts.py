@@ -1,9 +1,5 @@
-import argparse
 import json
-import logging
 from esrally.utils import io
-
-from elasticsearch.client import _normalize_hosts
 
 
 def csv_to_list(csv):
@@ -98,6 +94,7 @@ class TargetHosts(ConnectOptions):
 
     def parse_options(self):
         def normalize_to_dict(arg):
+            from elasticsearch.client import _normalize_hosts
             """
             Return parsed comma separated host string as dict with "default" key.
             This is needed to support backwards compatible --target-hosts for single clusters that are not
@@ -107,7 +104,6 @@ class TargetHosts(ConnectOptions):
             return {"default": _normalize_hosts(arg)}
 
         self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
-
 
     @property
     def all_hosts(self):
@@ -132,7 +128,6 @@ class ClientOptions(ConnectOptions):
 
         self.parse_options()
 
-
     def parse_options(self):
         def normalize_to_dict(arg):
             """
@@ -150,7 +145,6 @@ class ClientOptions(ConnectOptions):
                                    for cluster_name in self.target_hosts.all_hosts.keys()}
         else:
             self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
-
 
     @property
     def all_client_options(self):
