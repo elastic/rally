@@ -7,7 +7,6 @@ import sys
 import zlib
 from enum import Enum, IntEnum
 
-import certifi
 import tabulate
 from esrally import time, exceptions, config, version, paths
 from esrally.utils import console, io, versions
@@ -1271,7 +1270,7 @@ class FileRaceStore(RaceStore):
 
     def _output_file_name(self, doc):
         if self.user_provided_start_timestamp:
-            suffix = "_%s_%s_%s" % (doc["track"], doc["challenge"], "+".join(doc["car"]))
+            suffix = "_{}".format(doc.get("user-tags", {}).get("name", doc["trial-id"]))
         else:
             suffix = ""
         return "%s/race%s.json" % (self.race_path, suffix)
