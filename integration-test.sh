@@ -160,9 +160,9 @@ function test_sources {
     info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap] [--elasticsearch-plugins=analysis-icu]"
     kill_rally_processes
     esrally --logging=console --configuration-name="${cfg}" --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
-    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=verbose_iw], [--laps=2]"
+    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=4gheap,ea] [--laps=2]"
     kill_rally_processes
-    esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car=verbose_iw --laps=2
+    esrally --logging=console --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car="4gheap,ea" --laps=2
 }
 
 function test_distributions {

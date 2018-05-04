@@ -25,7 +25,6 @@ A Rally "car" is a specific configuration of Elasticsearch. You can list the ava
     4gheap                   car     Sets the Java heap to 4GB
     8gheap                   car     Sets the Java heap to 8GB
     defaults                 car     Sets the Java heap to 1GB
-    verbose_iw               car     Log more detailed merge time stats
     ea                       mixin   Enables Java assertions
     fp                       mixin   Preserves frame pointers
     x-pack-ml                mixin   X-Pack Machine Learning

@@ -54,7 +54,7 @@ Where ``X`` is one of:
 
 ..
 
-* **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use the car `verbose_iw` for that).
+* **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use `--car-params="verbose_iw_logging_enabled:true"` for that).
 * **Corresponding metrics keys**: ``merge_parts_total_time_*``
 
 
