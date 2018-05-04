@@ -101,7 +101,6 @@ class RegisterRunnerTests(TestCase):
         self.assertEqual("user-defined multi-cluster enabled runner for [UnitTestMultiClusterRunner]", repr(returned_runner))
 
 
-
 class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_missing_params(self, es):
@@ -127,30 +126,6 @@ class BulkIndexRunnerTests(TestCase):
                          "Please add it to your parameter source.", ctx.exception.args[0])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_missing_params(self, es):
-        es.bulk.return_value = {
-            "errors": False
-        }
-        bulk = runner.BulkIndex()
-
-        bulk_params = {
-            "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line"
-            ],
-            "action_metadata_present": True,
-        }
-
-        with self.assertRaises(exceptions.DataError) as ctx:
-            bulk(es, bulk_params)
-        self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'bulk-size'. "
-                         "Please add it to your parameter source.", ctx.exception.args[0])
-
-    @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_success_with_metadata(self, es):
         es.bulk.return_value = {
             "errors": False
@@ -172,6 +147,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = bulk(es, bulk_params)
 
+        self.assertIsNone(result["took"])
         self.assertIsNone(result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -203,6 +179,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = bulk(es, bulk_params)
 
+        self.assertIsNone(result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -216,6 +193,7 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_error(self, es):
         es.bulk.return_value = {
+            "took": 5,
             "errors": True,
             "items": [
                 {
@@ -269,6 +247,7 @@ class BulkIndexRunnerTests(TestCase):
         result = bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
+        self.assertEqual(5, result["took"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -374,6 +353,7 @@ class BulkIndexRunnerTests(TestCase):
         result = bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
+        self.assertEqual(30, result["took"])
         self.assertEqual(4, result["weight"])
         self.assertEqual(4, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -517,6 +497,7 @@ class BulkIndexRunnerTests(TestCase):
         result = bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
+        self.assertEqual(30, result["took"])
         self.assertEqual(6, result["weight"])
         self.assertEqual(6, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
