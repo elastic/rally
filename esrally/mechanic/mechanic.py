@@ -570,7 +570,11 @@ class NodeMechanicActor(actor.RallyActor):
         self.send(sender, MetricsMetaInfoApplied())
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        self.send(sender, actor.BenchmarkFailure(msg.details))
+        if sender != self.myAddress:
+            self.send(sender, actor.BenchmarkFailure(msg.details))
+
+    def receiveMsg_BenchmarkFailure(self, msg, sender):
+        self.send(getattr(msg, "reply_to", sender), msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
         # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
