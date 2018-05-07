@@ -285,6 +285,18 @@ class CorePluginSourceSupplierTests(TestCase):
         self.assertDictEqual(binaries, {"core-plugin": "file:///src/elasticsearch/core-plugin/build/distributions/core-plugin.zip"})
 
 
+class PluginDistributionSupplierTests(TestCase):
+    def test_resolve_plugin_url(self):
+        v = {"plugin_custom-analyzer_release_url": "http://example.org/elasticearch/custom-analyzer-{{VERSION}}.zip"}
+        s = supplier.PluginDistributionSupplier(repo=supplier.DistributionRepository(name="release",
+                                                                                     distribution_config=v,
+                                                                                     version="6.3.0"),
+                                                plugin=team.PluginDescriptor("custom-analyzer"))
+        binaries = {}
+        s.add(binaries)
+        self.assertDictEqual(binaries, {"custom-analyzer": "http://example.org/elasticearch/custom-analyzer-6.3.0.zip"})
+
+
 class CreateSupplierTests(TestCase):
     def test_derive_supply_requirements_es_source_build(self):
         # corresponds to --revision="abc"

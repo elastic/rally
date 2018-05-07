@@ -342,7 +342,7 @@ class PluginDistributionSupplier:
     def add(self, binaries):
         # if we have multiple plugin configurations for a plugin we will override entries here but as this is always the same
         # key-value pair this is ok.
-        plugin_url = self.repo.plugin_download_url(self.plugin.name, self.plugin.variables)
+        plugin_url = self.repo.plugin_download_url(self.plugin.name)
         if plugin_url:
             binaries[self.plugin.name] = plugin_url
 
