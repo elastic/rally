@@ -45,7 +45,7 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
         # car / plugin defines defaults...
         dist_cfg.update(car.variables)
         for plugin in plugins:
-            for k, v in plugin.variables:
+            for k, v in plugin.variables.items():
                 dist_cfg["plugin_{}_{}".format(plugin.name, k)] = v
         # ... but the user can override it in rally.ini
         dist_cfg.update(cfg.all_opts("distributions"))

@@ -384,7 +384,7 @@ class CreateSupplierTests(TestCase):
 
         car = team.Car("default", root_path=None, config_paths=[])
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
-        external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
+        external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False, variables={"enabled": True})
 
         # --pipeline=from-sources-skip-build
         composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", car=car, plugins=[
