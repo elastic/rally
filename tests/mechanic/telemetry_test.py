@@ -376,13 +376,13 @@ class NodStatsRecorderTests(TestCase):
                         "data",
                         "ingest"
                     ],
-                    "indices" : {
-                        "docs" : {
-                            "count" : 0,
-                            "deleted" : 0
+                    "indices": {
+                        "docs": {
+                            "count": 76892364,
+                            "deleted": 324530
                         },
                         "store" : {
-                            "size_in_bytes" : 0
+                            "size_in_bytes": 983409834
                         },
                         "indexing" : {
                             "is_throttled" : False,
@@ -406,6 +406,10 @@ class NodStatsRecorderTests(TestCase):
                             "cache_size" : 0,
                             "cache_count" : 0,
                             "evictions" : 0
+                        },
+                        "fielddata": {
+                            "memory_size_in_bytes": 6936,
+                            "evictions": 17
                         },
                         "completion" : {
                             "size_in_bytes" : 0
@@ -463,6 +467,13 @@ class NodStatsRecorderTests(TestCase):
                             "completed" : 8
                         }
                     },
+                    "transport": {
+                        "server_open": 12,
+                        "rx_count": 77,
+                        "rx_size_in_bytes": 98723498,
+                        "tx_count": 88,
+                        "tx_size_in_bytes": 23879803
+                    },
                     "breakers" : {
                         "parent" : {
                             "limit_size_in_bytes" : 726571417,
@@ -487,6 +498,8 @@ class NodStatsRecorderTests(TestCase):
         recorder.record()
 
         metrics_store_put_count.assert_has_calls([
+            mock.call(node_name="rally0", name="indices_docs_count", count=76892364),
+            mock.call(node_name="rally0", name="indices_docs_deleted", count=324530),
             mock.call(node_name="rally0", name="indices_search_open_contexts", count=0),
             mock.call(node_name="rally0", name="indices_search_query_total", count=0),
             mock.call(node_name="rally0", name="indices_merges_current", count=0),
@@ -497,6 +510,7 @@ class NodStatsRecorderTests(TestCase):
             mock.call(node_name="rally0", name="indices_query_cache_cache_size", count=0),
             mock.call(node_name="rally0", name="indices_query_cache_cache_count", count=0),
             mock.call(node_name="rally0", name="indices_query_cache_evictions", count=0),
+            mock.call(node_name="rally0", name="indices_fielddata_evictions", count=17),
             mock.call(node_name="rally0", name="indices_segments_count", count=0),
             mock.call(node_name="rally0", name="indices_segments_max_unsafe_auto_id_timestamp", count=-9223372036854775808),
             mock.call(node_name="rally0", name="indices_translog_operations", count=0),
@@ -510,6 +524,9 @@ class NodStatsRecorderTests(TestCase):
             mock.call(node_name="rally0", name="thread_pool_generic_rejected", count=0),
             mock.call(node_name="rally0", name="thread_pool_generic_largest", count=4),
             mock.call(node_name="rally0", name="thread_pool_generic_completed", count=8),
+            mock.call(node_name="rally0", name="transport_server_open", count=12),
+            mock.call(node_name="rally0", name="transport_rx_count", count=77),
+            mock.call(node_name="rally0", name="transport_tx_count", count=88),
             mock.call(node_name="rally0", name="breaker_parent_overhead", count=1.0),
             mock.call(node_name="rally0", name="breaker_parent_tripped", count=0),
             mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_count", count=7),
@@ -517,14 +534,18 @@ class NodStatsRecorderTests(TestCase):
         ], any_order=True)
 
         metrics_store_put_value.assert_has_calls([
+            mock.call(node_name="rally0", name="indices_store_size_in_bytes", value=983409834, unit="byte"),
             mock.call(node_name="rally0", name="indices_indexing_throttle_time_in_millis", value=0, unit="ms"),
             mock.call(node_name="rally0", name="indices_search_query_time_in_millis", value=0, unit="ms"),
             mock.call(node_name="rally0", name="indices_merges_current_size_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="indices_query_cache_memory_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="indices_fielddata_memory_size_in_bytes", value=6936, unit="byte"),
             mock.call(node_name="rally0", name="indices_segments_memory_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="indices_translog_size_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="indices_translog_uncommitted_size_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="indices_request_cache_memory_size_in_bytes", value=0, unit="byte"),
+            mock.call(node_name="rally0", name="transport_rx_size_in_bytes", value=98723498, unit="byte"),
+            mock.call(node_name="rally0", name="transport_tx_size_in_bytes", value=23879803, unit="byte"),
             mock.call(node_name="rally0", name="breaker_parent_limit_size_in_bytes", value=726571417, unit="byte"),
             mock.call(node_name="rally0", name="breaker_parent_estimated_size_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_used_in_bytes", value=3120, unit="byte"),

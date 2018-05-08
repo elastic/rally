@@ -317,6 +317,7 @@ class NodeStatsRecorder:
         self.include_thread_pools = telemetry_params.get("node-stats-include-thread-pools", True)
         self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
         self.include_breakers = telemetry_params.get("node-stats-include-breakers", True)
+        self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.client = client
         self.metrics_store = metrics_store
 
@@ -329,14 +330,16 @@ class NodeStatsRecorder:
             node_name = node_stats["name"]
             if self.include_indices:
                 self.record_indices_stats(node_name, node_stats,
-                                          include=["indexing", "search", "merges", "query_cache", "segments", "translog",
-                                                   "request_cache"])
+                                          include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
+                                                   "segments", "translog", "request_cache"])
             if self.include_thread_pools:
                 self.record_thread_pool_stats(node_name, node_stats)
             if self.include_breakers:
                 self.record_circuit_breaker_stats(node_name, node_stats)
             if self.include_buffer_pools:
                 self.record_jvm_buffer_pool_stats(node_name, node_stats)
+            if self.include_network:
+                self.record_network_stats(node_name, node_stats)
 
         time.sleep(self.sample_interval)
 
@@ -374,6 +377,15 @@ class NodeStatsRecorder:
             for metric_name, metric_value in pool_metrics.items():
                 self.put_value(node_name,
                                metric_name="jvm_buffer_pool_{}_{}".format(pool_name, metric_name),
+                               node_stats_metric_name=metric_name,
+                               metric_value=metric_value)
+
+    def record_network_stats(self, node_name, node_stats):
+        transport_stats = node_stats.get("transport")
+        if transport_stats:
+            for metric_name, metric_value in transport_stats.items():
+                self.put_value(node_name,
+                               metric_name="transport_{}".format(metric_name),
                                node_stats_metric_name=metric_name,
                                metric_value=metric_value)
 
