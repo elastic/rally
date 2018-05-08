@@ -83,6 +83,7 @@ The node-stats telemetry devices regularly calls the node-stats API and records 
 * Thread pool stats (key ``jvm.thread_pool`` in the node-stats API)
 * JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
 * Circuit breaker stats (key ``breakers`` in the node-stats API)
+* Network-related stats (key ``transport`` in the node-stats API)
 
 Supported telemetry parameters:
 
@@ -91,3 +92,4 @@ Supported telemetry parameters:
 * ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
+* ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
