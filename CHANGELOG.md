@@ -1,3 +1,23 @@
+### 0.11.0
+
+#### Enhancements
+
+* [#493](https://github.com/elastic/rally/pull/493): Sample more node stats
+* [#490](https://github.com/elastic/rally/pull/490): Record "took" for bulk indexing
+* [#489](https://github.com/elastic/rally/pull/489): Get distribution download URL from car config
+* [#488](https://github.com/elastic/rally/pull/488): Add support for multiple clusters in custom runners
+* [#487](https://github.com/elastic/rally/pull/487): Add new Makefile target to run it tests inside Docker
+* [#485](https://github.com/elastic/rally/pull/485): Allow to benchmark Elasticsearch with and without x-pack
+* [#481](https://github.com/elastic/rally/pull/481): Add post_launch phase for Elasticsearch plugins
+* [#480](https://github.com/elastic/rally/pull/480): Add generic node-stats telemetry device
+* [#477](https://github.com/elastic/rally/pull/477): Improve simulation of bulk-indexing conflicts
+* [#475](https://github.com/elastic/rally/pull/475): Rename telemetry device that gathers GC stats
+* [#473](https://github.com/elastic/rally/pull/473): Don't pass type implicitly for queries
+
+#### Bug Fixes
+
+* [#476](https://github.com/elastic/rally/pull/476): Create unique ids even for random conflicts
+
 ### 0.10.1
 
 #### Enhancements
