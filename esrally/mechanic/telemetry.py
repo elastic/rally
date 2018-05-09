@@ -318,6 +318,7 @@ class NodeStatsRecorder:
         self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
         self.include_breakers = telemetry_params.get("node-stats-include-breakers", True)
         self.include_network = telemetry_params.get("node-stats-include-network", True)
+        self.include_process = telemetry_params.get("node-stats-include-process", True)
         self.client = client
         self.metrics_store = metrics_store
 
@@ -340,6 +341,8 @@ class NodeStatsRecorder:
                 self.record_jvm_buffer_pool_stats(node_name, node_stats)
             if self.include_network:
                 self.record_network_stats(node_name, node_stats)
+            if self.include_process:
+                self.record_process_stats(node_name, node_stats)
 
         time.sleep(self.sample_interval)
 
@@ -386,6 +389,15 @@ class NodeStatsRecorder:
             for metric_name, metric_value in transport_stats.items():
                 self.put_value(node_name,
                                metric_name="transport_{}".format(metric_name),
+                               node_stats_metric_name=metric_name,
+                               metric_value=metric_value)
+
+    def record_process_stats(self, node_name, node_stats):
+        process_stats = node_stats["process"]["cpu"]
+        if process_stats:
+            for metric_name, metric_value in process_stats.items():
+                self.put_value(node_name,
+                               metric_name="process_cpu_{}".format(metric_name),
                                node_stats_metric_name=metric_name,
                                metric_value=metric_value)
 

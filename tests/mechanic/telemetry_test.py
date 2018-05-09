@@ -306,6 +306,18 @@ class NodStatsRecorderTests(TestCase):
                             "total_unloaded_count" : 0
                         }
                     },
+                    "process": {
+                        "timestamp": 1526045135857,
+                        "open_file_descriptors": 312,
+                        "max_file_descriptors": 1048576,
+                        "cpu": {
+                            "percent": 10,
+                            "total_in_millis": 56520
+                        },
+                        "mem": {
+                            "total_virtual_in_bytes": 2472173568
+                        }
+                    },
                     "thread_pool" : {
                         "generic" : {
                             "threads" : 4,
@@ -457,6 +469,18 @@ class NodStatsRecorderTests(TestCase):
                             "total_unloaded_count" : 0
                         }
                     },
+                    "process": {
+                        "timestamp": 1526045135857,
+                        "open_file_descriptors": 312,
+                        "max_file_descriptors": 1048576,
+                        "cpu": {
+                            "percent": 10,
+                            "total_in_millis": 56520
+                        },
+                        "mem": {
+                            "total_virtual_in_bytes": 2472173568
+                        }
+                    },
                     "thread_pool" : {
                         "generic" : {
                             "threads" : 4,
@@ -527,6 +551,7 @@ class NodStatsRecorderTests(TestCase):
             mock.call(node_name="rally0", name="transport_server_open", count=12),
             mock.call(node_name="rally0", name="transport_rx_count", count=77),
             mock.call(node_name="rally0", name="transport_tx_count", count=88),
+            mock.call(node_name="rally0", name="process_cpu_percent", count=10),
             mock.call(node_name="rally0", name="breaker_parent_overhead", count=1.0),
             mock.call(node_name="rally0", name="breaker_parent_tripped", count=0),
             mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_count", count=7),
@@ -546,6 +571,7 @@ class NodStatsRecorderTests(TestCase):
             mock.call(node_name="rally0", name="indices_request_cache_memory_size_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="transport_rx_size_in_bytes", value=98723498, unit="byte"),
             mock.call(node_name="rally0", name="transport_tx_size_in_bytes", value=23879803, unit="byte"),
+            mock.call(node_name="rally0", name="process_cpu_total_in_millis", value=56520, unit="ms"),
             mock.call(node_name="rally0", name="breaker_parent_limit_size_in_bytes", value=726571417, unit="byte"),
             mock.call(node_name="rally0", name="breaker_parent_estimated_size_in_bytes", value=0, unit="byte"),
             mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_used_in_bytes", value=3120, unit="byte"),
