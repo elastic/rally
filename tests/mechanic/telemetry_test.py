@@ -200,7 +200,7 @@ class GcTests(TestCase):
             env["ES_JAVA_OPTS"])
 
 
-class NodStatsRecorderTests(TestCase):
+class NodeStatsRecorderTests(TestCase):
     def test_negative_sample_interval_forbidden(self):
         client = Client()
         cfg = create_config()
