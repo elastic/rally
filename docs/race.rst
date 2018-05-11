@@ -58,7 +58,7 @@ Rally will then start racing on this track. If you have never started Rally befo
     Running index-update                                                           [  0% done]
 
 
-Please be patient as it will take a while to run the benchmark.
+The benchmark will take a while to run, so be patient.
 
 When the race has finished, Rally will show a summary on the command line::
 
@@ -116,6 +116,6 @@ What did Rally just do?
 * It ran the actual benchmark
 * And finally it reported the results
 
-If you are curious about the operations that Rally has run, please inspect the `geopoint track specification <https://github.com/elastic/rally-tracks/blob/5/geopoint/track.json>`_ or start to :doc:`write your own tracks </adding_tracks>`. You can also configure Rally to :doc:`store all data samples in Elasticsearch </configuration>` so you can analyze the results with Kibana. Finally, you may want to :doc:`change the Elasticsearch configuration </car>`.
+If you are curious about the operations that Rally has run, inspect the `geopoint track specification <https://github.com/elastic/rally-tracks/blob/5/geopoint/track.json>`_ or start to :doc:`write your own tracks </adding_tracks>`. You can also configure Rally to :doc:`store all data samples in Elasticsearch </configuration>` so you can analyze the results with Kibana. Finally, you may want to :doc:`change the Elasticsearch configuration </car>`.
 
 

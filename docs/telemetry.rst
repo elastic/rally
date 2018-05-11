@@ -44,7 +44,7 @@ Supported telemetry parameters:
 
 .. note::
 
-   The licensing terms of Java flight recorder do not allow you to run it in production environments without a valid license (for details, please refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
+   The licensing terms of Java flight recorder do not allow you to run it in production environments without a valid license (for details, refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
 
 jit
 ---

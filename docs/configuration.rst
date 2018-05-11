@@ -91,7 +91,7 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
 
 .. note::
 
-   Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so please ensure that this port range is not used by the metrics store.
+   Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so do not use this port range for the metrics store.
 
 Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. However, note that Kibana will not be auto-configured by Rally.
 
@@ -124,13 +124,11 @@ Hence, it needs to connect via http(s) to the outside world. If you are behind a
 
 Afterwards, source the shell profile with ``source ~/.bash_profile`` and verify that the proxy URL is correctly set with ``echo $http_proxy``.
 
-Finally, you can set up git::
+Finally, you can set up git (see also the `Git config documentation <https://git-scm.com/docs/git-config>`_)::
 
     git config --global http.proxy $http_proxy
 
-For details, please refer to the `Git config documentation <https://git-scm.com/docs/git-config>`_.
-
-Please verify that the proxy setup for git works correctly by cloning any repository, e.g. the ``rally-tracks`` repository::
+Verify that the proxy setup for git works correctly by cloning any repository, e.g. the ``rally-tracks`` repository::
 
     git clone https://github.com/elastic/rally-tracks.git
 

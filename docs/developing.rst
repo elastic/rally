@@ -4,14 +4,14 @@ Developing Rally
 Prerequisites
 -------------
 
-Please ensure that the following packages are installed before installing Rally in development mode:
+Install the following software packages:
 
 * Python 3.4 or better available as ``python3`` on the path (verify with: ``python3 --version``)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * JDK 8 or 9
 * git 1.9 or better
 
-Please check the :doc:`installation guide </install>` for detailed installation instructions for these packages.
+Check the :doc:`installation guide </install>` for detailed installation instructions for these packages.
 
 Rally does not support Windows and is only actively tested on MacOS and Linux.
 
@@ -27,7 +27,7 @@ Installation Instructions for Development
     ./rally
 
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
 
 Automatic Updates
 ~~~~~~~~~~~~~~~~~
@@ -73,6 +73,4 @@ There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tr
 How to contribute code
 ----------------------
 
-First of all, please read the `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_.
-
-We strive to be PEP-8 compliant but don't follow it to the letter.
+See the `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_. We strive to be PEP-8 compliant but don't follow it to the letter.

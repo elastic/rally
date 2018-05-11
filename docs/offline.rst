@@ -6,7 +6,7 @@ In some corporate environments servers do not have Internet access. You can stil
 Installation and Configuration
 ------------------------------
 
-We provide a special offline installation package. Please refer to the :ref:`offline installation guide <install_offline-install>` for detailed instructions. After the installation you can just follow the normal :doc:`configuration procedure </configuration>`.
+We provide a special offline installation package. Follow the :ref:`offline installation guide <install_offline-install>` and :doc:`configure Rally as usual </configuration>` afterwards.
 
 Command Line Usage
 ------------------

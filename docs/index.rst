@@ -24,7 +24,8 @@ In general, Rally works with all versions of Elasticsearch starting from 1.x. :d
 Getting Help or Contributing to Rally
 -------------------------------------
 
-Use our `Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ to provide feedback or ask questions about Rally. Please see our `contribution guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_ on guidelines for contributors.
+* Use our `Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ to provide feedback or ask questions about Rally.
+* See our `contribution guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_ on guidelines for contributors.
 
 Source Code
 -----------

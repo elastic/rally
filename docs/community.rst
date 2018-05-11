@@ -1,7 +1,7 @@
 Community Resources
 ===================
 
-Below are a few community resources about Rally. If you find an interesting article, talk or custom tracks, please `raise an issue <https://github.com/elastic/rally/issues>`_  or `open a pull request <https://github.com/elastic/rally/pulls>`_.
+Below are a few community resources about Rally. If you find an interesting article, talk or custom tracks, `raise an issue <https://github.com/elastic/rally/issues>`_  or `open a pull request <https://github.com/elastic/rally/pulls>`_.
 
 Talks
 -----

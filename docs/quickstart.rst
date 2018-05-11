@@ -9,7 +9,7 @@ Install Python 3.4+ including ``pip3``, git 1.9+ and at least JDK 8. If you want
     pip3 install esrally
 
 
-If you have any trouble or need more detailed instructions, please look in the :doc:`detailed installation guide </install>`.
+If you have any trouble or need more detailed instructions, look in the :doc:`detailed installation guide </install>`.
 
 Configure
 ---------

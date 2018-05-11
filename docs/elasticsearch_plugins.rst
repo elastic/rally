@@ -74,9 +74,9 @@ You can also override plugin variables with ``--plugin-params`` which is needed 
 
     --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
 
-The ``monitoring_user`` and ``monitoring_password`` parameters are optional, the other parameters are mandatory. For more details on the configuration options, please see the `Monitoring plugin documentation <https://www.elastic.co/guide/en/x-pack/current/monitoring-production.html>`_.
+The ``monitoring_user`` and ``monitoring_password`` parameters are optional, the other parameters are mandatory. For more details on the configuration options check the `Monitoring plugin documentation <https://www.elastic.co/guide/en/x-pack/current/monitoring-production.html>`_.
 
-If you are behind a proxy, please set the environment variable ``ES_JAVA_OPTS`` accordingly on each target machine as described in the `Elasticsearch plugin documentation <https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html#_proxy_settings>`_.
+If you are behind a proxy, set the environment variable ``ES_JAVA_OPTS`` accordingly on each target machine as described in the `Elasticsearch plugin documentation <https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html#_proxy_settings>`_.
 
 Building plugins from sources
 -----------------------------
@@ -110,7 +110,7 @@ In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: `
 
 * All prerequisites for source builds are installed.
 * The Elasticsearch source revision is compatible with the chosen plugin revision. Note that you do not need to know the revision hash to build against an already released version and can use git tags instead. E.g. if you want to benchmark against Elasticsearch 5.6.1, you can specify ``--revision="elasticsearch:v5.6.1,my-plugin:some-plugin-revision"`` (see e.g. the `Elasticsearch tags on Github <https://github.com/elastic/elasticsearch/tags>`_ or use ``git tag`` in the Elasticsearch source directory on the console).
-* If your plugin needs to be configured, please ensure to create a proper plugin specification (see below).
+* If your plugin needs to be configured, create a proper plugin specification (see below).
 
 .. note::
     Rally can build all `Elasticsearch core plugins <https://github.com/elastic/elasticsearch/tree/master/plugins>`_ out of the box without any further configuration.
@@ -139,7 +139,7 @@ In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: `
 
 * All prerequisites for source builds are installed.
 * The Elasticsearch release is compatible with the chosen plugin revision.
-* If your plugin needs to be configured, please ensure to create a proper plugin specification (see below).
+* If your plugin needs to be configured, create a proper plugin specification (see below).
 
 Anatomy of a plugin specification
 ---------------------------------

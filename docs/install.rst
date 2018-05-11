@@ -11,7 +11,7 @@ Use an SSD on the load generator machine. If you run bulk-indexing benchmarks, R
 Prerequisites
 -------------
 
-Rally does not support Windows and is only actively tested on MacOS and Linux. Before installing Rally, please ensure that the following packages are installed.
+Rally does not support Windows and is only actively tested on MacOS and Linux. Install the following packages first.
 
 Python
 ~~~~~~
@@ -92,7 +92,7 @@ In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --ve
 
 .. note::
 
-   If you use RHEL, please ensure to install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
+   If you use RHEL, install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
 
 **MacOS**
 
@@ -103,7 +103,7 @@ JDK
 
 A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator, no JDK is required.
 
-We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK, please see your operating system's documentation pages.
+We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK check your operating system's documentation pages.
 
 
 .. note::
@@ -119,7 +119,7 @@ Simply install Rally with pip: ``pip3 install esrally``
 
    Depending on your system setup you may need to prepend this command with ``sudo``.
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Please ensure that you have installed the Python development package as documented in the prerequisites section above.
+If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Ensure that you have installed the Python development package as documented in the prerequisites section above.
 
 Non-sudo Install
 ----------------

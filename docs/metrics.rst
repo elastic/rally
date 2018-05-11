@@ -57,7 +57,7 @@ track, track-params, challenge, car
 
 This is the track, challenge and car for which the metrics record has been produced. If the user has provided track parameters with the command line parameter, ``--track-params``, each of them is listed here too.
 
-If you specify a car with mixins, it will be stored as one string separated with "+", e.g. ``--car="4gheap,ea"`` will be stored as ``4gheap+ea`` in the metrics store in order to simplify querying in Kibana. For more details, please see the :doc:`cars </car>` documentation.
+If you specify a car with mixins, it will be stored as one string separated with "+", e.g. ``--car="4gheap,ea"`` will be stored as ``4gheap+ea`` in the metrics store in order to simplify querying in Kibana. Check the :doc:`cars </car>` documentation for more details.
 
 sample-type
 ~~~~~~~~~~~
