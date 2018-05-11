@@ -32,7 +32,7 @@ First of all, we need to decide on a track. So, we run ``esrally list tracks``::
     percolator  Percolator benchmark based on AOL queries              2000000  102.7 kB           104.9 MB             append-no-conflicts      append-no-conflicts,appe...
     pmc         Full text benchmark with academic papers from PMC       574199  5.5 GB             21.7 GB              append-no-conflicts      append-no-conflicts,appe...
 
-We're interested in a full text benchmark, so we'll choose to run ``pmc``. If you have your own data that you want to use for benchmarks :doc:`create your own track</adding_tracks>` instead; the metrics you'll gather which be representative and much more useful than some default track.
+We're interested in a full text benchmark, so we'll choose to run ``pmc``. If you have your own data that you want to use for benchmarks :doc:`create your own track</adding_tracks>` instead; the metrics you'll gather will be more representative and useful than some default track.
 
 Next, we need to know which machines to target which is easy as we can see that from the diagram above.
 

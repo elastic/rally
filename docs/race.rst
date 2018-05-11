@@ -58,7 +58,7 @@ Rally will then start racing on this track. If you have never started Rally befo
     Running index-update                                                           [  0% done]
 
 
-Be patient as it will take a while to run the benchmark.
+The benchmark will take a while to run, so be patient.
 
 When the race has finished, Rally will show a summary on the command line::
 
