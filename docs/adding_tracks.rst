@@ -565,7 +565,7 @@ You can find an example in the ``http_logs`` track::
       }
     }
 
-The data set that is used in the ``http_logs` track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
+The data set that is used in the ``http_logs`` track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
 
 .. _adding_tracks_custom_param_sources:
 
