@@ -34,7 +34,7 @@ jfr
 The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Java Flight Recorder ships only with Oracle JDK, so Rally assumes that Oracle JDK is used for benchmarking.
 
 To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will then write a flight recording file which can be opened in `Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_. Rally prints the location of the flight recording file on the command line.
- 
+
 .. image:: jfr-es.png
    :alt: Sample Java Flight Recording
 
@@ -94,5 +94,4 @@ Supported telemetry parameters:
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
-* ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be
-included.
+* ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
