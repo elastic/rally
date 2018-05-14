@@ -93,5 +93,6 @@ Supported telemetry parameters:
 * ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
+* ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether JVM heap stats should be included.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
