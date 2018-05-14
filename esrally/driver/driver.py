@@ -644,7 +644,9 @@ class LoadGenerator(actor.RallyActor):
                 e = self.executor_future.exception(timeout=0)
                 if e:
                     logger.info("LoadGenerator[%s] has detected a benchmark failure. Notifying master..." % str(self.client_id))
-                    self.send(self.master, actor.BenchmarkFailure("Error in load generator [%d]" % self.client_id, e))
+                    # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
+                    # deserialized on the receiver so we convert it here to a plain string.
+                    self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.client_id), str(e)))
                 else:
                     logger.info("LoadGenerator[%s] is ready for the next task." % str(self.client_id))
                     self.executor_future = None
