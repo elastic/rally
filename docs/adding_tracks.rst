@@ -9,11 +9,11 @@ A track describes one or more benchmarking scenarios. Its structure is described
 Example track
 -------------
 
-Let's create an example track step by step. We will call this track "tutorial". The track consists of two components: the data and the actual track specification which describes the workload that Rally should apply. We will store everything in the directory ``~/rally-tracks/tutorial`` but you can choose any other location.
+We will create the track "tutorial" step by step. We store everything in the directory ``~/rally-tracks/tutorial`` but you can choose any other location.
 
-First, we need some data. `Geonames <http://www.geonames.org/>`_ provides geo data under a `creative commons license <http://creativecommons.org/licenses/by/3.0/>`_. We will download `allCountries.zip <http://download.geonames.org/export/dump/allCountries.zip>`_ (around 300MB), extract it and inspect ``allCountries.txt``.
+First, get some data. `Geonames <http://www.geonames.org/>`_ provides geo data under a `creative commons license <http://creativecommons.org/licenses/by/3.0/>`_. Download `allCountries.zip <http://download.geonames.org/export/dump/allCountries.zip>`_ (around 300MB), extract it and inspect ``allCountries.txt``.
 
-You will note that the file is tab-delimited but we need JSON to bulk-index data with Elasticsearch. So we can use a small script to do the conversion for us::
+The file is tab-delimited but to bulk-index data with Elasticsearch we need JSON. Convert the data with the following script::
 
     import json
 
@@ -57,9 +57,9 @@ You will note that the file is tab-delimited but we need JSON to bulk-index data
     if __name__ == "__main__":
         main()
 
-Store the script as ``toJSON.py`` in our tutorial directory (``~/rally-tracks/tutorial``) and invoke the script with ``python3 toJSON.py > documents.json``.
+Store the script as ``toJSON.py`` in the tutorial directory (``~/rally-tracks/tutorial``). Invoke it with ``python3 toJSON.py > documents.json``.
 
-We also need a mapping file for our documents. Store the following snippet as ``index.json`` in the tutorial directory::
+Then store the following mapping file as ``index.json`` in the tutorial directory::
 
     {
       "settings": {
@@ -94,7 +94,7 @@ We also need a mapping file for our documents. Store the following snippet as ``
 
 For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
 
-Finally, add a file called ``track.json`` in the tutorial directory::
+Finally, store the track as ``track.json`` in the tutorial directory::
 
     {
       "version": 2,
@@ -175,11 +175,7 @@ Finally, add a file called ``track.json`` in the tutorial directory::
     }
 
 
-A few things to note:
-
-* The numbers below the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
-* You can add as many queries as you want. We use the `official Python Elasticsearch client <http://elasticsearch-py.readthedocs.org/>`_ to issue queries.
-
+The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
 
 .. note::
 
@@ -189,7 +185,7 @@ A few things to note:
 
     We have defined a `JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_ which you can use to check how to define your track. You should also check the tracks provided by Rally for inspiration.
 
-When you invoke ``esrally list tracks --track-path=~/rally-tracks/tutorial``, the new track should now appear::
+The new track appears when you run ``esrally list tracks --track-path=~/rally-tracks/tutorial``::
 
     dm@io:~ $ esrally list tracks --track-path=~/rally-tracks/tutorial
 
@@ -212,19 +208,17 @@ Congratulations, you have created your first track! You can test it with ``esral
 Adding support for test mode
 ----------------------------
 
-When you invoke Rally with ``--test-mode``, it switches to a mode that allows you to check your track very quickly for syntax errors. To achieve that, it will postprocess its internal track representation after loading it:
+You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation as follows:
 
-* Iteration-based tasks will run at most one warmup iteration and one measurement iteration.
-* Time-period-based tasks will run for at most 10 seconds without any warmup.
+* Iteration-based tasks run at most one warmup iteration and one measurement iteration.
+* Time-period-based tasks run at most for 10 seconds without warmup.
 
-Rally will postprocess all data file names of a track. So instead of ``documents.json``, Rally will attempt to find ``documents-1k.json`` and will assume it contains 1.000 documents. However, you need to prepare these data files otherwise this test mode is not supported.
-
-The preparation is very easy. Just pick 1.000 documents for every data file in your track. We choose the first 1.000 here but it does not matter usually which part you choose: ``head -n 1000 documents.json > documents-1k.json``.
+Rally also postprocesses all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
 
 Structuring your track
 ----------------------
 
-``track.json`` is just the entry point to a track but you can split your track as you see fit. Suppose you want to add more challenges to the track above but you want to keep them in a separate files. Let's start by storing our challenge in a separate file, e.g in ``challenges/index-and-query.json``. Create the directory and store the following in ``index-and-query.json``::
+``track.json`` is the entry point to a track but you can split your track as you see fit. Suppose you want to add more challenges to the track but keep them in separate files. Create a ``challenges`` directory and store the following in ``challenges/index-and-query.json``::
 
     {
       "name": "index-and-query",
@@ -279,7 +273,7 @@ Structuring your track
       ]
     }
 
-Now modify ``track.json`` so it knows about your new file::
+Include the new file in ``track.json``::
 
     {
       "version": 2,
@@ -310,7 +304,7 @@ Now modify ``track.json`` so it knows about your new file::
 
 We replaced the challenge content with  ``{% include "challenges/index-and-query.json" %}`` which tells Rally to include the challenge from the provided file. You can use ``include`` on arbitrary parts of your track.
 
-If you want to reuse operation definitions across challenges, you can also define them in a separate ``operations`` block and just refer to them by name in the corresponding challenge::
+To reuse operation definitions across challenges, you can define them in a separate ``operations`` block and refer to them by name in the corresponding challenge::
 
     {
       "version": 2,
@@ -409,7 +403,7 @@ If you want to reuse operation definitions across challenges, you can also defin
 
 Note how we reference to the operations by their name (e.g. ``create``, ``bulk-index``, ``force-merge`` or ``query-match-all``).
 
-If your track consists of multiple challenges, it can be cumbersome to include them all explicitly. Therefore Rally brings a ``collect`` helper that collects all related files for you. Let's adapt our track to use it::
+You can also use Rally's collect helper to simplify including multiple challenges::
 
     {% import "rally.helpers" as rally %}
     {
@@ -474,7 +468,10 @@ If your track consists of multiple challenges, it can be cumbersome to include t
       ]
     }
 
-We changed two things here. First, we imported helper functions from Rally by adding ``{% import "rally.helpers" as rally %}`` in line 1. Second, we used Rally's ``collect`` helper to find and include all JSON files in the "challenges" subdirectory with the statement ``{{ rally.collect(parts="challenges/*.json") }}``. When you add new challenges in this directory, Rally will automatically pick them up.
+The changes are:
+
+1. We import helper functions from Rally by adding ``{% import "rally.helpers" as rally %}`` in line 1.
+2. We use Rally's ``collect`` helper to find and include all JSON files in the ``challenges`` subdirectory with the statement ``{{ rally.collect(parts="challenges/*.json") }}``.
 
 .. note::
 
@@ -482,31 +479,31 @@ We changed two things here. First, we imported helper functions from Rally by ad
 
 .. note::
 
-    If you define multiple challenges, Rally will run the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
+    If you define multiple challenges, Rally runs the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 
-You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but you need to import the Rally helpers a bit differently then. You also need to declare all variables before the ``import`` statement::
+You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but then you need to import the Rally helpers a bit differently. You also need to declare all variables before the ``import`` statement::
 
         {% set clients = 16 %}
         {% import "rally.helpers" as rally with context %}
 
-If you use this idiom you can then refer to variables inside your snippets with ``{{ clients }}``.
+If you use this idiom you can refer to the ``clients`` variable inside your snippets with ``{{ clients }}``.
 
 Sharing your track with others
 ------------------------------
 
-At the moment your track is only available on your local machine but maybe you want to share it with other people in your team. You can share the track itself in any way you want, e.g. you can check it into version control. However, you will most likely not want to commit the potentially huge data file. Therefore, you can expose the data via http (e.g. via S3) and Rally can download it from there. To make this work, you need to add an additional property ``base-url`` for each document corpus which contains the URL from where to download your documents. Rally expects that the URL points to the parent path and will append the document file name automatically.
+So far the track is only available on your local machine. To share your track you could check it into version control. To avoid committing the potentially huge data file you can expose it via http (e.g. via an S3 bucket) and reference it in your track with the property ``base-url``. Rally expects that the URL points to the parent path and appends the document file name automatically.
 
-It is also recommended that you compress your document corpus to save network bandwidth. We recommend to use bzip2 compression. You can create a compressed archive with the following command::
+You should also compress your document corpus to save network bandwidth; bzip2 works well. You can create a compressed archive with the following command::
 
     bzip2 -9 -c documents.json > documents.json.bz2
 
-If you want to support the test mode, don't forget to also compress your test mode corpus with::
+If you want to support Rally's test mode, also compress your test mode corpus with::
 
     bzip2 -9 -c documents-1k.json > documents-1k.json.bz2
 
 Then upload ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote location.
 
-Finally, specify the compressed file name in your ``track.json`` file in the ``source-file`` property and also add the ``base-url`` property::
+Finally, specify the compressed file name in the ``source-file`` property and also add the ``base-url`` property::
 
     {
       "version": 2,
@@ -538,18 +535,18 @@ Advanced topics
 Template Language
 ^^^^^^^^^^^^^^^^^
 
-Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language. This allows you to use Jinja2 expressions in track files.
+Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language so you can use Jinja2 expressions in track files.
 
 
-Extension Points
-""""""""""""""""
+Extensions
+""""""""""
 
-Rally also provides a few extension points to Jinja2:
+Rally also provides a few extensions to Jinja2:
 
-* ``now``: This is a global variable that represents the current date and time when the template is evaluated by Rally.
-* ``days_ago()``: This is a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
+* ``now``: a global variable that represents the current date and time when the template is evaluated by Rally.
+* ``days_ago()``: a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
-You can find an example in the http_logs track::
+You can find an example in the ``http_logs`` track::
 
     {
       "name": "range",
@@ -568,7 +565,7 @@ You can find an example in the http_logs track::
       }
     }
 
-The data set that is used in the http_logs track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
+The data set that is used in the ``http_logs`` track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
 
 .. _adding_tracks_custom_param_sources:
 
@@ -594,7 +591,7 @@ Consider the following operation definition::
       }
     }
 
-This query is defined statically in the track specification but sometimes you may want to vary parameters, e.g. search also for "mechanic" or "nurse". In this case, you can write your own "parameter source" with a little bit of Python code.
+This query is defined statically but if you want to vary parameters, for example to search also for "mechanic" or "nurse, you can write your own "parameter source" in Python.
 
 First, define the name of your parameter source in the operation definition::
 
@@ -605,7 +602,7 @@ First, define the name of your parameter source in the operation definition::
       "professions": ["mechanic", "physician", "nurse"]
     }
 
-Rally will recognize the parameter source and looks then for a file ``track.py`` in the same directory as the corresponding JSON file. This file contains the implementation of the parameter source::
+Rally recognizes the parameter source and looks for a file ``track.py`` next to ``track.json``. This file contains the implementation of the parameter source::
 
     import random
 
@@ -647,9 +644,9 @@ The example above shows a simple case that is sufficient if the operation to whi
 
 The function ``random_profession`` is the actual parameter source. Rally will bind the name "my-custom-term-param-source" to this function by calling ``register``. ``register`` is called by Rally before the track is executed.
 
-The parameter source function needs to declare the parameters ``track``, ``params`` and ``**kwargs``. `track` contains a structured representation of the current track and ``params`` contains all parameters that have been defined in the operation definition in ``track.json``. The third parameter is there to ensure a more stable API as Rally evolves. We use it in the example to read the professions to choose.
+The parameter source function needs to declare the parameters ``track``, ``params`` and ``**kwargs``. ``track`` contains a structured representation of the current track and ``params`` contains all parameters that have been defined in the operation definition in ``track.json``. We use it in the example to read the professions to choose. The third parameter is there to ensure a more stable API as Rally evolves.
 
-We also derive an appropriate index and document type from the track's index definitions but allow the user to override this choice with the ``index`` or ``type`` parameters as you can see below::
+We also derive an appropriate index and document type from the track's index definitions but allow the user to override this choice with the ``index`` or ``type`` parameters::
 
     {
       "name": "term",
@@ -661,7 +658,7 @@ We also derive an appropriate index and document type from the track's index def
     }
 
 
-If you need more control, you need to implement a class. The example above, implemented as a class looks as follows::
+If you need more control, you need to implement a class. Below is the implementation of the same parameter source as a class::
 
     import random
 
@@ -713,26 +710,23 @@ If you need more control, you need to implement a class. The example above, impl
         registry.register_param_source("my-custom-term-param-source", TermParamSource)
 
 
-Let's walk through this code step by step:
+In ``register`` you bind the name in the track specification to your parameter source implementation class similar to the previous example. ``TermParamSource`` is the actual parameter source and needs to fulfill a few requirements:
 
-* Note the method ``register`` where you need to bind the name in the track specification to your parameter source implementation class similar to the simple example.
-* The class ``TermParamSource`` is the actual parameter source and needs to fulfill a few requirements:
+* The constructor needs to have the signature ``__init__(self, track, params, **kwargs)``.
+* ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self``. If each client needs to act differently then you can provide different parameter source instances here as well.
+* ``size(self)``: This method helps Rally to provide a proper progress indication to users if you use a warmup time period. For bulk indexing, return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
+* ``params(self)``: This method returns a dictionary with all parameters that the corresponding "runner" expects. This method will be invoked once for every iteration during the race. In the example, we parameterize the query by randomly selecting a profession from a list.
 
-    * It needs to have a constructor with the signature ``__init__(self, track, params, **kwargs)``. You don't need to store these parameters if you don't need them.
-    * ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self`` but in certain cases you need to do something more sophisticated. If each clients needs to act differently then you can provide different parameter source instances here.
-    * ``size(self)``: This method is needed to help Rally provide a proper progress indication to users if you use a warmup time period. For bulk indexing, this would return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
-    * ``params(self)``: This method needs to return a dictionary with all parameters that the corresponding "runner" expects. For the standard case, Rally provides most of these parameters as a convenience, but here you need to define all of them yourself. This method will be invoked once for every iteration during the race. We can see that we randomly select a profession from a list which will be then be executed by the corresponding runner.
+For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it to indicate progress. However:
 
-For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it for its progress indication. However:
-
-* Rally will not check ``percent_completed``, if it can derive progress in any other way.
-* The value of ``percent_completed`` is purely informational and has no influence whatsoever on when Rally considers an operation to be completed.
+* Rally will not check ``percent_completed`` if it can derive progress in any other way.
+* The value of ``percent_completed`` is purely informational and does not influence when Rally considers an operation to be completed.
 
 .. note::
 
-    Be aware that ``params(self)`` is called on a performance-critical path so don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that you did not introduce a bottleneck in the load test driver with your custom parameter source.
+    The method ``params(self)`` is called on a performance-critical path. Don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that your custom parameter source does not introduce a bottleneck.
 
-In the implementation of custom parameter sources you can access the Python standard API. Using any additional libraries is not supported.
+Custom parameter sources can use the Python standard API but using any additional libraries is not supported.
 
 You can also implement your parameter sources and runners in multiple Python files but the main entry point is always ``track.py``. The root package name of your plugin is the name of your track.
 
@@ -745,17 +739,12 @@ Custom runners
 
     Your runner is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
-You cannot only define custom parameter sources but also custom runners. Runners execute an operation against Elasticsearch. Out of the box, Rally supports the following operations:
+Runners execute an operation against Elasticsearch. Rally supports many operations out of the box already, see the :doc:`track reference </track>` for a complete list. If you want to call any other Elasticsearch API, define a custom runner.
 
-* Bulk indexing
-* Force merge
-* Searches
-* Index stats
-* Nodes stats
+Consider we want to use the percolate API with an older version of Elasticsearch which is not supported by Rally. To achieve this, we implement a custom runner in the following steps.
 
-If you want to use any other operation, you can define a custom runner. Consider we want to use the percolate API with an older version of Elasticsearch (note that it has been replaced by the percolate query in Elasticsearch 5.0). To achieve this, we can use the following steps.
+In ``track.json`` set the ``operation-type`` to "percolate" (you can choose this name freely)::
 
-In track.json specify an operation with type "percolate" (you can choose this name freely)::
 
     {
       "name": "percolator_with_content_google",
@@ -785,12 +774,12 @@ Then create a file ``track.py`` next to ``track.json`` and implement the followi
 
 The function ``percolate`` is the actual runner and takes the following parameters:
 
-* ``es``, which is the Elasticsearch Python client
-* ``params`` which is a dict of parameters provided by its corresponding parameter source. Treat this parameter as read only and do not attempt to write to it.
+* ``es``, is an instance of the Elasticsearch Python client
+* ``params`` is a ``dict`` of parameters provided by its corresponding parameter source. Treat this parameter as read-only.
 
-This function can return either:
+This function can return:
 
-* Nothing at all. Then Rally will assume that by default ``1`` and ``"ops"`` (see below)
+* Nothing at all. Then Rally will assume by default ``1`` and ``"ops"`` (see below).
 * A tuple of ``weight`` and a ``unit``, which is usually ``1`` and ``"ops"``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
 * A ``dict`` with arbitrary keys. If the ``dict`` contains the key ``weight`` it is assumed to be numeric and chosen as weight as defined above. The key ``unit`` is treated similarly. All other keys are added to the ``meta`` section of the corresponding service time and latency metrics records.
 
@@ -849,14 +838,14 @@ Custom schedulers
 
     Your scheduler is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
-If you want to rate-limit execution of tasks, you can specify a ``target-throughput`` (in operations per second). For example, Rally will attempt to run this term query 20 times per second::
+If you want to rate-limit execution of tasks, you can specify a ``target-throughput`` (in operations per second). For example, Rally attempts to run this term query 20 times per second::
 
   {
     "operation": "term",
     "target-throughput": 20
   }
 
-By default, Rally will use a `deterministic distribution <https://en.wikipedia.org/wiki/Degenerate_distribution>`_ to determine when to schedule the next operation. This means, that it will execute the term query at 0, 50ms, 100ms, 150ms and so on. Note that the scheduler is aware of the number of clients. Consider this example::
+By default, Rally uses a `deterministic distribution <https://en.wikipedia.org/wiki/Degenerate_distribution>`_ to determine when to schedule the next operation. Hence it executes the term query at 0, 50ms, 100ms, 150ms and so on. The scheduler is also aware of the number of clients. Consider this example::
 
   {
     "operation": "term",
@@ -866,7 +855,7 @@ By default, Rally will use a `deterministic distribution <https://en.wikipedia.o
 
 If Rally would not take the number of clients into account and would still issue requests (from each of the four clients) at the same points in time (i.e. 0, 50ms, 100ms, 150ms, ...), it would run at a target throughput of 4 * 20 = 80 operations per second. Hence, Rally will automatically reduce the rate at which each client will execute requests. Each client will issue requests at 0, 200ms, 400ms, 600ms, 800ms, 1000ms and so on. Each client issues five requests per second but as there are four of them, we still have a target throughput of 20 operations per second. You should keep this in mind, when writing your own custom schedules.
 
-If you want to create a custom scheduler, create a file ``track.py`` next to ``track.json`` and implement the following two functions::
+To create a custom scheduler, create a file ``track.py`` next to ``track.json`` and implement the following two functions::
 
     import random
 
@@ -884,7 +873,9 @@ You can then use your custom scheduler as follows::
     "schedule": "my_random"
   }
 
-The function ``random_schedule`` returns a floating point number which represents the next point in time when Rally should execute the given operation. This point in time is measured in seconds relative to the beginning of the execution of this task. The parameter ``current`` is the last return value of your function and is 0 for the first invocation. So, for example, this scheduler could return the following series: 0, 0.119, 0.622, 1.29, 1.343, 1.984, 2.233. Note that this implementation is usually not sufficient as it does not take into account the number of clients. Therefore, you will typically want to implement a full-blown scheduler which can also take parameters. Below is an example for our random scheduler::
+The function ``random_schedule`` returns a floating point number which represents the next point in time when Rally should execute the given operation. This point in time is measured in seconds relative to the beginning of the execution of this task. The parameter ``current`` is the last return value of your function and is ``0.0`` for the first invocation. So, for example, this scheduler could return the following series: 0, 0.119, 0.622, 1.29, 1.343, 1.984, 2.233.
+
+This implementation is usually not sufficient as it does not take into account the number of clients. Therefore, you typically want to implement a full-blown scheduler which can also take parameters. Below is an example for our random scheduler::
 
     import random
 
@@ -903,7 +894,7 @@ The function ``random_schedule`` returns a floating point number which represent
     def register(registry):
         registry.register_scheduler("my_random", RandomScheduler)
 
-This implementation will now achieve the same rate independent of the number of clients. Additionally, we can pass the lower and upper bound for the random function from our track::
+This implementation achieves the same rate independent of the number of clients. Additionally, we can pass the lower and upper bound for the random function from the track::
 
     {
         "operation": "term",
