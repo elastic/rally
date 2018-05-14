@@ -175,7 +175,7 @@ Finally, store the track as ``track.json`` in the tutorial directory::
     }
 
 
-The numbers below the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
+The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
 
 .. note::
 
@@ -208,10 +208,10 @@ Congratulations, you have created your first track! You can test it with ``esral
 Adding support for test mode
 ----------------------------
 
-You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation then:
+You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation as follows:
 
 * Iteration-based tasks run at most one warmup iteration and one measurement iteration.
-* Time-period-based tasks run for at most 10 seconds without warmup.
+* Time-period-based tasks run at most for 10 seconds without warmup.
 
 Rally also postprocesses all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
 
@@ -403,7 +403,7 @@ To reuse operation definitions across challenges, you can define them in a separ
 
 Note how we reference to the operations by their name (e.g. ``create``, ``bulk-index``, ``force-merge`` or ``query-match-all``).
 
-It can be cumbersome to include multiple challenges explicitly so you can use Rally's ``collect`` helper instead::
+You can also use Rally's collect helper to simplify including multiple challenges::
 
     {% import "rally.helpers" as rally %}
     {
@@ -481,7 +481,7 @@ The changes are:
 
     If you define multiple challenges, Rally runs the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 
-You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but you need to import the Rally helpers a bit differently then. You also need to declare all variables before the ``import`` statement::
+You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but then you need to import the Rally helpers a bit differently. You also need to declare all variables before the ``import`` statement::
 
         {% set clients = 16 %}
         {% import "rally.helpers" as rally with context %}
@@ -527,7 +527,7 @@ Finally, specify the compressed file name in the ``source-file`` property and al
 
 Specifying ``compressed-bytes`` (file size of ``documents.json.bz2``) and ``uncompressed-bytes`` (file size of ``documents.json``) is optional but helps Rally to provide progress indicators and also verify integrity.
 
-You've now mastered the basics of track development for Rally. It's time to pat yourself on the back before you dive into the advanced topics.
+You've now mastered the basics of track development for Rally. It's time to pat yourself on the back before you dive into the advanced topics!
 
 Advanced topics
 ---------------
@@ -535,13 +535,13 @@ Advanced topics
 Template Language
 ^^^^^^^^^^^^^^^^^
 
-Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as template language so you can use Jinja2 expressions in track files.
+Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language so you can use Jinja2 expressions in track files.
 
 
-Extension Points
-""""""""""""""""
+Extensions
+""""""""""
 
-Rally also provides a few extension points to Jinja2:
+Rally also provides a few extensions to Jinja2:
 
 * ``now``: a global variable that represents the current date and time when the template is evaluated by Rally.
 * ``days_ago()``: a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
@@ -774,8 +774,8 @@ Then create a file ``track.py`` next to ``track.json`` and implement the followi
 
 The function ``percolate`` is the actual runner and takes the following parameters:
 
-* ``es``, which is the Elasticsearch Python client
-* ``params`` which is a ``dict`` of parameters provided by its corresponding parameter source. Treat this parameter as read-only.
+* ``es``, is an instance of the Elasticsearch Python client
+* ``params`` is a ``dict`` of parameters provided by its corresponding parameter source. Treat this parameter as read-only.
 
 This function can return:
 
