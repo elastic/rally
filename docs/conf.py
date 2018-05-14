@@ -35,7 +35,7 @@ rst_prolog = '''
 
 # General information about the project.
 project = "Rally"
-copyright = "%i, Copyright Elasticsearch B.V." % year
+copyright = "%i, Elasticsearch B.V." % year
 author = "Daniel Mitterdorfer"
 
 # The version info for the project you're documenting, acts as replacement for
