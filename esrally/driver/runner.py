@@ -39,20 +39,20 @@ def register_runner(operation_type, runner):
     logger = logging.getLogger(__name__)
     if getattr(runner, "multi_cluster", False) == True:
         if "__enter__" in dir(runner) and "__exit__" in dir(runner):
-            logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+            logger.info("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
             __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
         else:
-            logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+            logger.info("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
             __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
-        logger.info("Registering runner function [%s] for [%s]." % (str(runner), str(operation_type)))
+        logger.info("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
-        logger.info("Registering context-manager capable runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+        logger.info("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
     else:
-        logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
+        logger.info("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner))
 
 
@@ -813,7 +813,7 @@ class DeleteIndex(Runner):
                 es.indices.delete(index=index_name, **request_params)
                 ops += 1
             elif only_if_exists and es.indices.exists(index=index_name):
-                self.logger.info("Index [%s] already exists. Deleting it." % index_name)
+                self.logger.info("Index [%s] already exists. Deleting it.", index_name)
                 es.indices.delete(index=index_name, **request_params)
                 ops += 1
 
@@ -857,7 +857,7 @@ class DeleteIndexTemplate(Runner):
                 es.indices.delete_template(name=template_name, **request_params)
                 ops_count += 1
             elif only_if_exists and es.indices.exists_template(template_name):
-                self.logger.info("Index template [%s] already exists. Deleting it." % template_name)
+                self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 es.indices.delete_template(name=template_name, **request_params)
                 ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
@@ -942,7 +942,7 @@ class Retry(Runner):
                 if last_attempt or not retry_on_timeout:
                     raise e
                 elif e.status_code == 408:
-                    self.logger.debug("%s has timed out." % repr(self.delegate))
+                    self.logger.debug("%s has timed out.", repr(self.delegate))
                     time.sleep(sleep_time)
                 else:
                     raise e

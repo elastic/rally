@@ -35,11 +35,11 @@ def register_scheduler(name, scheduler):
         raise exceptions.SystemSetupError("A scheduler with the name [%s] is already registered." % name)
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     if isinstance(scheduler, types.FunctionType):
-        logger.debug("Registering function [%s] for [%s]." % (str(scheduler), str(name)))
+        logger.debug("Registering function [%s] for [%s].", str(scheduler), str(name))
         # lazy initialize a delegating scheduler
         __SCHEDULERS[name] = lambda params: DelegatingScheduler(params, scheduler)
     else:
-        logger.debug("Registering object [%s] for [%s]." % (str(scheduler), str(name)))
+        logger.debug("Registering object [%s] for [%s].", str(scheduler), str(name))
         __SCHEDULERS[name] = scheduler
 
 

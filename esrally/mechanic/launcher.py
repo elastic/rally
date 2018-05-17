@@ -144,7 +144,7 @@ class DockerLauncher:
         t.setDaemon(True)
         t.start()
         if startup_event.wait(timeout=DockerLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            self.logger.info("Started node=%s with pid=%s" % (node_name, p.pid))
+            self.logger.info("Started node=%s with pid=%s", node_name, p.pid)
             return p
         else:
             msg = "Could not start node '%s' within timeout period of %s seconds." % (
@@ -163,14 +163,14 @@ class DockerLauncher:
             l = l.rstrip()
 
             if l.find("Initialization Failed") != -1:
-                self.logger.warning("[%s] has started with initialization errors." % node_name)
+                self.logger.warning("[%s] has started with initialization errors.", node_name)
                 startup_event.set()
             # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
             if not startup_event.isSet():
-                self.logger.info("%s: %s" % (node_name, l.replace("\n", "\n%s (stdout): " % node_name)))
+                self.logger.info("%s: %s", node_name, l.replace("\n", "\n%s (stdout): " % node_name))
             if l.endswith("] started") and not startup_event.isSet():
                 startup_event.set()
-                self.logger.info("[%s] has successfully started." % node_name)
+                self.logger.info("[%s] has successfully started.", node_name)
 
     def stop(self, nodes):
         if self.keep_running:
@@ -208,7 +208,7 @@ class ExternalLauncher:
         user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
         distribution_version = es.info()["version"]["number"]
         if not user_defined_version or user_defined_version.strip() == "":
-            self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]" % distribution_version)
+            self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         elif user_defined_version != distribution_version:
             console.warn(
@@ -244,7 +244,7 @@ class InProcessLauncher:
         # We also do this only once per host otherwise we would kill instances that we've just launched.
         process.kill_running_es_instances(self.races_root_dir)
         java_major_version = jvm.major_version(self.java_home)
-        self.logger.info("Detected Java major version [%s]." % java_major_version)
+        self.logger.info("Detected Java major version [%s].", java_major_version)
 
         node_count_on_host = len(node_configurations)
         return [self._start_node(node_configuration, node_count_on_host, java_major_version) for node_configuration in node_configurations]
@@ -257,7 +257,7 @@ class InProcessLauncher:
         data_paths = node_configuration.data_paths
         node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
 
-        self.logger.info("Starting node [%s] based on car [%s]." % (node_name, car))
+        self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
@@ -279,9 +279,9 @@ class InProcessLauncher:
         t.on_pre_node_start(node_name)
         node_process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(node_process, host_name, node_name, t)
-        self.logger.info("Node [%s] has successfully started. Attaching telemetry devices." % node_name)
+        self.logger.info("Node [%s] has successfully started. Attaching telemetry devices.", node_name)
         t.attach_to_node(node)
-        self.logger.info("Telemetry devices are now attached to node [%s]." % node_name)
+        self.logger.info("Telemetry devices are now attached to node [%s].", node_name)
 
         return node
 
@@ -305,7 +305,7 @@ class InProcessLauncher:
         else:
             self.logger.info("JVM does not support [%s]. Please consider a JDK upgrade.", exit_on_oome_flag)
 
-        self.logger.info("env for [%s]: %s" % (node_name, str(env)))
+        self.logger.info("env for [%s]: %s", node_name, str(env))
         return env
 
     def _set_env(self, env, k, v, separator=' '):
@@ -333,7 +333,7 @@ class InProcessLauncher:
                 self.logger.error(msg)
                 raise exceptions.LaunchError(msg)
             else:
-                self.logger.info("Started node [%s] with PID [%s]" % (node_name, process.pid))
+                self.logger.info("Started node [%s] with PID [%s]", node_name, process.pid)
                 return process
         else:
             msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
@@ -355,7 +355,7 @@ class InProcessLauncher:
         while True:
             line = server.stdout.readline().decode("utf-8")
             if len(line) == 0:
-                self.logger.info("%s (stdout): No more output. Process has likely terminated." % node_name)
+                self.logger.info("%s (stdout): No more output. Process has likely terminated.", node_name)
                 self.await_termination(server)
                 startup_event.set()
                 break
@@ -366,19 +366,19 @@ class InProcessLauncher:
                 lines_to_log = 10
             # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
             if not startup_event.isSet() or lines_to_log > 0:
-                self.logger.info("%s (stdout): %s" % (node_name, line))
+                self.logger.info("%s (stdout): %s", node_name, line)
                 lines_to_log -= 1
 
             # no need to check as soon as we have detected node startup
             if not startup_event.isSet():
                 if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
-                    self.logger.error("[%s] encountered initialization errors." % node_name)
+                    self.logger.error("[%s] encountered initialization errors.", node_name)
                     # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
                     self.await_termination(server)
                     startup_event.set()
                 if line.endswith("started") and not startup_event.isSet():
                     startup_event.set()
-                    self.logger.info("[%s] has successfully started." % node_name)
+                    self.logger.info("[%s] has successfully started.", node_name)
 
     def await_termination(self, server, timeout=5):
         # wait a moment to ensure the process has terminated
@@ -390,9 +390,9 @@ class InProcessLauncher:
 
     def stop(self, nodes):
         if self.keep_running:
-            self.logger.info("Keeping [%d] nodes on this host running." % len(nodes))
+            self.logger.info("Keeping [%d] nodes on this host running.", len(nodes))
         else:
-            self.logger.info("Shutting down [%d] nodes on this host." % len(nodes))
+            self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         for node in nodes:
             process = node.process
             node_name = node.node_name
@@ -403,26 +403,26 @@ class InProcessLauncher:
                 try:
                     os.kill(process.pid, signal.SIGINT)
                     process.wait(10.0)
-                    self.logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
+                    self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
                 except ProcessLookupError:
-                    self.logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
+                    self.logger.warning("No process found with PID [%s] for node [%s]", process.pid, node_name)
                 except subprocess.TimeoutExpired:
                     # kill -9
                     self.logger.warning("Node [%s] did not shut down after 10 seconds; now kill -QUIT node, to see threads:", node_name)
                     try:
                         os.kill(process.pid, signal.SIGQUIT)
                     except OSError:
-                        self.logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
+                        self.logger.warning("No process found with PID [%s] for node [%s]", process.pid, node_name)
                         break
                     try:
                         process.wait(120.0)
-                        self.logger.info("Done shutdown node [%s] in [%.1f] s." % (node_name, stop_watch.split_time()))
+                        self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
                         break
                     except subprocess.TimeoutExpired:
                         pass
-                    self.logger.info("kill -KILL node [%s]" % node_name)
+                    self.logger.info("kill -KILL node [%s]", node_name)
                     try:
                         process.kill()
                     except ProcessLookupError:
-                        self.logger.warning("No process found with PID [%s] for node [%s]" % (process.pid, node_name))
+                        self.logger.warning("No process found with PID [%s] for node [%s]", process.pid, node_name)
                 node.telemetry.detach_from_node(node, running=False)

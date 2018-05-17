@@ -74,7 +74,7 @@ def load_track(cfg):
         else:
             return current_track
     except FileNotFoundError:
-        logging.getLogger(__name__).exception("Cannot load track [%s]" % track_name)
+        logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
         raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
                                           (track_name, PROGRAM_NAME))
 
@@ -229,7 +229,7 @@ def prepare_track(t, cfg):
     test_mode = cfg.opts("track", "test.mode.enabled")
     for corpus in t.corpora:
         data_root = data_dir(cfg, t.name, corpus.name)
-        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s." % (corpus.name, t.name, data_root))
+        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s.", corpus.name, t.name, data_root)
         prep = DocumentSetPreparator(t.name, offline, test_mode)
 
         for document_set in corpus.documents:
@@ -288,15 +288,15 @@ class DocumentSetPreparator:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
                 size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
-                self.logger.info("Downloading data from [%s] (%s MB) to [%s]." % (data_url, size_in_mb, target_path))
+                self.logger.info("Downloading data from [%s] (%s MB) to [%s].", data_url, size_in_mb, target_path)
             else:
-                self.logger.info("Downloading data from [%s] to [%s]." % (data_url, target_path))
+                self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
 
             # we want to have a bit more accurate download progress as these files are typically very large
             progress = net.Progress("[INFO] Downloading data for track %s" % self.track_name, accuracy=1)
             net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
             progress.finish()
-            self.logger.info("Downloaded data from [%s] to [%s]." % (data_url, target_path))
+            self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
         except urllib.error.HTTPError as e:
             if e.code == 404 and self.test_mode:
                 raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
@@ -309,7 +309,7 @@ class DocumentSetPreparator:
                     msg += " (HTTP status: %s)" % str(e.code)
                 raise exceptions.DataError(msg)
         except urllib.error.URLError:
-            self.logger.exception("Could not download [%s] to [%s]." % (data_url, target_path))
+            self.logger.exception("Could not download [%s] to [%s].", data_url, target_path)
             raise exceptions.DataError("Could not download [%s] to [%s]." % (data_url, target_path))
 
         if not os.path.isfile(target_path):
@@ -489,10 +489,10 @@ def filter_included_tasks(t, filters):
                         if not match(leaf_task, complete_filters):
                             leafs_to_remove.append(leaf_task)
                     for leaf_task in leafs_to_remove:
-                        logger.info("Removing sub-task [%s] from challenge [%s] due to task filter." % (leaf_task, challenge))
+                        logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
                         task.remove_task(leaf_task)
             for task in tasks_to_remove:
-                logger.info("Removing task [%s] from challenge [%s] due to task filter." % (task, challenge))
+                logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
                 challenge.remove_task(task)
 
     return t
@@ -518,9 +518,9 @@ def filters_from_included_tasks(included_tasks):
 
 def post_process_for_test_mode(t):
     logger = logging.getLogger(__name__)
-    logger.info("Preparing track [%s] for test mode." % str(t))
+    logger.info("Preparing track [%s] for test mode.", str(t))
     for corpus in t.corpora:
-        logger.info("Reducing corpus size to 1000 documents for [%s]" % corpus.name)
+        logger.info("Reducing corpus size to 1000 documents for [%s]", corpus.name)
         for document_set in corpus.documents:
             # TODO #341: Should we allow this for snapshots too?
             if document_set.is_bulk:
@@ -550,18 +550,18 @@ def post_process_for_test_mode(t):
                 # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
                 if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                     count = leaf_task.clients
-                    logger.info("Resetting warmup iterations to %d for [%s]" % (count, str(leaf_task)))
+                    logger.info("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
                     leaf_task.warmup_iterations = count
                 if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                     count = leaf_task.clients
-                    logger.info("Resetting measurement iterations to %d for [%s]" % (count, str(leaf_task)))
+                    logger.info("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
                     leaf_task.iterations = count
                 if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                     leaf_task.warmup_time_period = 0
-                    logger.info("Resetting warmup time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.warmup_time_period))
+                    logger.info("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period)
                 if leaf_task.time_period is not None and leaf_task.time_period > 10:
                     leaf_task.time_period = 10
-                    logger.info("Resetting measurement time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.time_period))
+                    logger.info("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
     return t
 
 
@@ -734,14 +734,14 @@ class TrackSpecificationReader:
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
-        self.logger.info("Loading template [%s]." % description)
+        self.logger.info("Loading template [%s].", description)
         try:
             rendered = render_template(loader=jinja2.DictLoader({"default": contents}),
                                        template_name="default",
                                        template_vars=self.track_params)
             return json.loads(rendered)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
-            self.logger.exception("Could not load file template for %s." % description)
+            self.logger.exception("Could not load file template for %s.", description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
     def _create_corpora(self, corpora_specs, indices):
@@ -984,9 +984,9 @@ class TrackSpecificationReader:
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
             op_type = op.name
-            self.logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
+            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type, op_name)
         except KeyError:
-            self.logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
+            self.logger.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
             op_type = op_type_name
 
         try:

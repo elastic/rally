@@ -113,7 +113,7 @@ class StatsCalculator:
             for task in tasks:
                 if task.operation.include_in_reporting:
                     t = task.name
-                    self.logger.debug("Gathering request metrics for [%s]." % t)
+                    self.logger.debug("Gathering request metrics for [%s].", t)
                     result.add_op_metrics(
                         t,
                         task.operation.name,
@@ -128,7 +128,7 @@ class StatsCalculator:
             if "meta" in startup_time and "node_name" in startup_time["meta"]:
                 result.add_node_metrics(startup_time["meta"]["node_name"], startup_time["value"])
             else:
-                self.logger.debug("Skipping incomplete startup time record [%s]." % str(startup_time))
+                self.logger.debug("Skipping incomplete startup time record [%s].", str(startup_time))
 
         self.logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")

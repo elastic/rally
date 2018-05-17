@@ -58,17 +58,17 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
 
         if supplier_type == "source":
             if CorePluginSourceSupplier.can_handle(plugin):
-                logger.info("Adding core plugin source supplier for [%s]." % plugin.name)
+                logger.info("Adding core plugin source supplier for [%s].", plugin.name)
                 assert es_src_dir is not None, "Cannot build core plugin %s when Elasticsearch is not built from source." % plugin.name
                 suppliers.append(CorePluginSourceSupplier(plugin, es_src_dir, builder))
             elif ExternalPluginSourceSupplier.can_handle(plugin):
-                logger.info("Adding external plugin source supplier for [%s]." % plugin.name)
+                logger.info("Adding external plugin source supplier for [%s].", plugin.name)
                 suppliers.append(ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder))
             else:
                 raise exceptions.RallyError("Plugin %s can neither be treated as core nor as external plugin. Requirements: %s" %
                                             (plugin.name, supply_requirements[plugin.name]))
         else:
-            logger.info("Adding plugin distribution supplier for [%s]." % plugin.name)
+            logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
             assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
             suppliers.append(PluginDistributionSupplier(repo, plugin))
 
@@ -301,22 +301,21 @@ class ElasticsearchDistributionSupplier:
         io.ensure_dir(self.distributions_root)
         distribution_path = "%s/elasticsearch-%s.tar.gz" % (self.distributions_root, self.version)
         download_url = self.repo.download_url
-        self.logger.info("Resolved download URL [%s] for version [%s]" % (download_url, self.version))
+        self.logger.info("Resolved download URL [%s] for version [%s]", download_url, self.version)
         if not os.path.isfile(distribution_path) or not self.repo.cache:
             try:
-                self.logger.info("Starting download of Elasticsearch [%s]" % self.version)
+                self.logger.info("Starting download of Elasticsearch [%s]", self.version)
                 progress = net.Progress("[INFO] Downloading Elasticsearch %s" % self.version)
                 net.download(download_url, distribution_path, progress_indicator=progress)
                 progress.finish()
-                self.logger.info("Successfully downloaded Elasticsearch [%s]." % self.version)
+                self.logger.info("Successfully downloaded Elasticsearch [%s].", self.version)
             except urllib.error.HTTPError:
                 console.println("[FAILED]")
-                logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (self.version, download_url))
+                self.logger.exception("Cannot download Elasticsearch distribution for version [%s] from [%s].", self.version, download_url)
                 raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
                                                   "version [%s] is correct." % (download_url, self.version))
         else:
-            self.logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." %
-                             (self.version, distribution_path))
+            self.logger.info("Skipping download for version [%s]. Found an existing binary at [%s].", self.version, distribution_path)
 
         self.distribution_path = distribution_path
 
@@ -408,32 +407,32 @@ class SourceRepository:
                 console.println("Downloading sources for %s from %s to %s." % (self.name, self.remote_url, self.src_dir))
                 git.clone(self.src_dir, self.remote_url)
             elif os.path.isdir(self.src_dir) and may_skip_init:
-                self.logger.info("Skipping repository initialization for %s." % self.name)
+                self.logger.info("Skipping repository initialization for %s.", self.name)
             else:
                 exceptions.SystemSetupError("A remote repository URL is mandatory for %s" % self.name)
 
     def _update(self, revision):
         if self.has_remote() and revision == "latest":
-            self.logger.info("Fetching latest sources for %s from origin." % self.name)
+            self.logger.info("Fetching latest sources for %s from origin.", self.name)
             git.pull(self.src_dir)
         elif revision == "current":
-            self.logger.info("Skip fetching sources for %s." % self.name)
+            self.logger.info("Skip fetching sources for %s.", self.name)
         elif self.has_remote() and revision.startswith("@"):
             # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             git_ts_revision = revision[1:]
-            self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s." % (git_ts_revision, self.name))
+            self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
             git.pull_ts(self.src_dir, git_ts_revision)
         elif self.has_remote():  # assume a git commit hash
-            self.logger.info("Fetching from remote and checking out revision [%s] for %s." % (revision, self.name))
+            self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
             git.pull_revision(self.src_dir, revision)
         else:
-            self.logger.info("Checking out local revision [%s] for %s." % (revision, self.name))
+            self.logger.info("Checking out local revision [%s] for %s.", revision, self.name)
             git.checkout(self.src_dir, revision)
         if git.is_working_copy(self.src_dir):
             git_revision = git.head_revision(self.src_dir)
-            self.logger.info("User-specified revision [%s] for [%s] results in git revision [%s]" % (revision, self.name, git_revision))
+            self.logger.info("User-specified revision [%s] for [%s] results in git revision [%s]", revision, self.name, git_revision)
         else:
-            self.logger.info("Skipping git revision resolution for %s (%s is not a git repository)." % (self.name, self.src_dir))
+            self.logger.info("Skipping git revision resolution for %s (%s is not a git repository).", self.name, self.src_dir)
 
     @classmethod
     def is_commit_hash(cls, revision):

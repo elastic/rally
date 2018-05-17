@@ -83,22 +83,22 @@ def plain_text(file):
 def cleanup(preserve, install_dir, data_paths):
     logger = logging.getLogger(__name__)
     if preserve:
-        logger.info("Preserving benchmark candidate installation at [%s]." % install_dir)
+        logger.info("Preserving benchmark candidate installation at [%s].", install_dir)
         console.info("Keeping benchmark candidate including index at [%s] (will need several GB)." % install_dir)
     else:
-        logger.info("Wiping benchmark candidate installation at [%s]." % install_dir)
+        logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
             if os.path.exists(path):
                 try:
                     shutil.rmtree(path)
                 except OSError:
-                    logger.exception("Could not delete [%s]. Skipping..." % path)
+                    logger.exception("Could not delete [%s]. Skipping...", path)
 
         if os.path.exists(install_dir):
             try:
                 shutil.rmtree(install_dir)
             except OSError:
-                logger.exception("Could not delete [%s]. Skipping..." % install_dir)
+                logger.exception("Could not delete [%s]. Skipping...", install_dir)
 
 
 def _apply_config(source_root_path, target_root_path, config_vars):
@@ -114,12 +114,12 @@ def _apply_config(source_root_path, target_root_path, config_vars):
             source_file = os.path.join(root, name)
             target_file = os.path.join(absolute_target_root, name)
             if plain_text(source_file):
-                logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
+                logger.info("Reading config template file [%s] and writing to [%s].", source_file, target_file)
                 # automatically merge config snippets from plugins (e.g. if they want to add config to elasticsearch.yml)
                 with open(target_file, mode="a", encoding="utf-8") as f:
                     f.write(_render_template(env, config_vars, source_file))
             else:
-                logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
+                logger.info("Treating [%s] as binary and copying as is to [%s].", source_file, target_file)
                 shutil.copy(source_file, target_file)
 
 
@@ -222,19 +222,19 @@ class ElasticsearchInstaller:
         self.logger = logging.getLogger(__name__)
 
     def install(self, binary):
-        self.logger.info("Preparing candidate locally in [%s]." % self.install_dir)
+        self.logger.info("Preparing candidate locally in [%s].", self.install_dir)
         io.ensure_dir(self.install_dir)
         io.ensure_dir(self.node_log_dir)
         io.ensure_dir(self.heap_dump_dir)
 
-        self.logger.info("Unzipping %s to %s" % (binary, self.install_dir))
+        self.logger.info("Unzipping %s to %s", binary, self.install_dir)
         io.decompress(binary, self.install_dir)
         self.es_home_path = glob.glob("%s/elasticsearch*" % self.install_dir)[0]
         self.data_paths = self._data_paths()
 
     def delete_pre_bundled_configuration(self):
         config_path = os.path.join(self.es_home_path, "config")
-        self.logger.info("Deleting pre-bundled Elasticsearch configuration at [%s]" % config_path)
+        self.logger.info("Deleting pre-bundled Elasticsearch configuration at [%s]", config_path)
         shutil.rmtree(config_path)
 
     def invoke_install_hook(self, phase, variables):
@@ -301,16 +301,16 @@ class PluginInstaller:
     def install(self, es_home_path, plugin_url=None):
         installer_binary_path = os.path.join(es_home_path, "bin", "elasticsearch-plugin")
         if plugin_url:
-            self.logger.info("Installing [%s] into [%s] from [%s]" % (self.plugin_name, es_home_path, plugin_url))
+            self.logger.info("Installing [%s] into [%s] from [%s]", self.plugin_name, es_home_path, plugin_url)
             install_cmd = '%s install --batch "%s"' % (installer_binary_path, plugin_url)
         else:
-            self.logger.info("Installing [%s] into [%s]" % (self.plugin_name, es_home_path))
+            self.logger.info("Installing [%s] into [%s]", self.plugin_name, es_home_path)
             install_cmd = '%s install --batch "%s"' % (installer_binary_path, self.plugin_name)
 
         return_code = process.run_subprocess_with_logging(install_cmd)
         # see: https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html
         if return_code == 0:
-            self.logger.info("Successfully installed [%s]." % self.plugin_name)
+            self.logger.info("Successfully installed [%s].", self.plugin_name)
         elif return_code == 64:
             # most likely this is an unknown plugin
             raise exceptions.SystemSetupError("Unknown plugin [%s]" % self.plugin_name)
@@ -424,15 +424,15 @@ class DockerProvisioner:
                     target_file = os.path.join(absolute_target_root, name)
                     mounts[target_file] = os.path.join("/usr/share/elasticsearch", relative_root, name)
                     if plain_text(source_file):
-                        self.logger.info("Reading config template file [%s] and writing to [%s]." % (source_file, target_file))
+                        self.logger.info("Reading config template file [%s] and writing to [%s].", source_file, target_file)
                         with open(target_file, mode="a", encoding="utf-8") as f:
                             f.write(_render_template(env, self.config_vars, source_file))
                     else:
-                        self.logger.info("Treating [%s] as binary and copying as is to [%s]." % (source_file, target_file))
+                        self.logger.info("Treating [%s] as binary and copying as is to [%s].", source_file, target_file)
                         shutil.copy(source_file, target_file)
 
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
-        self.logger.info("Starting Docker container with configuration:\n%s" % docker_cfg)
+        self.logger.info("Starting Docker container with configuration:\n%s", docker_cfg)
 
         with open(self.binary_path, mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)

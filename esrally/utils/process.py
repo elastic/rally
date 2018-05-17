@@ -51,11 +51,11 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     :return: The process exit code as an int.
     """
     logger = logging.getLogger(__name__)
-    logger.debug("Running subprocess [%s] with logging." % command_line)
+    logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
     if header is not None:
         logger.info(header)
-    logger.debug("Invoking subprocess '%s'" % command_line)
+    logger.debug("Invoking subprocess '%s'", command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
         has_output = True
         while has_output:
@@ -64,7 +64,7 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
                 logger.log(level=level, msg=line)
             else:
                 has_output = False
-    logger.debug("Subprocess [%s] finished with return code [%s]." % (command_line, str(command_line_process.returncode)))
+    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
     return command_line_process.returncode
 
 
@@ -78,7 +78,7 @@ def kill_running_es_instances(trait):
     def elasticsearch_process(p):
         return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any(trait in e for e in p.cmdline())
 
-    logging.getLogger(__name__).info("Killing all processes which match [java], [elasticsearch] and [%s]" % trait)
+    logging.getLogger(__name__).info("Killing all processes which match [java], [elasticsearch] and [%s]", trait)
     kill_all(elasticsearch_process)
 
 
@@ -98,7 +98,7 @@ def find_all_other_rally_processes():
 
 def kill_all(predicate):
     def kill(p):
-        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
+        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, p.cmdline())
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
         # sockets that are still open.

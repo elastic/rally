@@ -386,7 +386,7 @@ def race(cfg):
 def with_actor_system(runnable, cfg):
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
-    logger.info("Actor system already running locally? [%s]" % str(already_running))
+    logger.info("Actor system already running locally? [%s]", str(already_running))
     try:
         actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
@@ -428,7 +428,7 @@ def with_actor_system(runnable, cfg):
                     logger.warning("User interrupted shutdown of internal actor system.")
                     console.info("Please wait a moment for Rally's internal components to shutdown.")
             if not shutdown_complete and times_interrupted > 0:
-                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
+                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
                 console.println("")
                 console.warn("Terminating now at the risk of leaving child processes behind.")
                 console.println("")
@@ -458,7 +458,7 @@ def dispatch_sub_command(cfg, sub_command):
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
         return True
     except exceptions.RallyError as e:
-        logging.exception("Cannot run subcommand [%s]." % sub_command)
+        logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
         msg = str(e.message)
         nesting = 0
         while hasattr(e, "cause") and e.cause:
@@ -474,7 +474,7 @@ def dispatch_sub_command(cfg, sub_command):
         print_help_on_errors()
         return False
     except BaseException as e:
-        logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
+        logging.getLogger(__name__).exception("A fatal error occurred while running subcommand [%s].", sub_command)
         console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors()
@@ -603,10 +603,10 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
 
-    logger.info("OS [%s]" % str(os.uname()))
-    logger.info("Python [%s]" % str(sys.implementation))
-    logger.info("Rally version [%s]" % version.version())
-    logger.info("Command line arguments: %s" % args)
+    logger.info("OS [%s]", str(os.uname()))
+    logger.info("Python [%s]", str(sys.implementation))
+    logger.info("Rally version [%s]", version.version())
+    logger.info("Command line arguments: %s", args)
     # Configure networking
     net.init()
     if not args.offline:

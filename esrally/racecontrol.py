@@ -90,12 +90,12 @@ class BenchmarkActor(actor.RallyActor):
         self.main_driver = None
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding)." % (str(msg)))
+        self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
         self.error = True
         self.send(self.start_sender, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("BenchmarkActor received unknown message [%s] (ignoring)." % (str(msg)))
+        self.logger.info("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
 
     def receiveMsg_Setup(self, msg, sender):
         self.setup(msg, sender)
@@ -125,7 +125,7 @@ class BenchmarkActor(actor.RallyActor):
         self.send(self.start_sender, msg)
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
-        self.logger.info("Received a benchmark failure from [%s] and will forward it now." % sender)
+        self.logger.info("Received a benchmark failure from [%s] and will forward it now.", sender)
         self.error = True
         self.send(self.start_sender, msg)
 
@@ -160,7 +160,7 @@ class BenchmarkActor(actor.RallyActor):
             reporter.summarize(self.race, self.cfg)
             self.race_store.store_race(self.race)
         else:
-            self.logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r]." % (self.cancelled, self.error))
+            self.logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r].", self.cancelled, self.error)
         self.metrics_store.close()
         self.send(self.start_sender, Success())
 
@@ -176,7 +176,7 @@ class BenchmarkActor(actor.RallyActor):
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
             if not distribution_version:
                 raise exceptions.SystemSetupError("A distribution version is required. Please specify it with --distribution-version.")
-            self.logger.info("Automatically derived distribution version [%s]" % distribution_version)
+            self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
 
         t = track.load_track(self.cfg)
@@ -233,14 +233,14 @@ class LapCounter:
 
     def before_lap(self):
         self.current_lap += 1
-        self.logger.info("Starting lap [%d/%d]" % (self.current_lap, self.race.total_laps))
+        self.logger.info("Starting lap [%d/%d]", self.current_lap, self.race.total_laps)
         if self.race.total_laps > 1:
             msg = "Lap [%d/%d]" % (self.current_lap, self.race.total_laps)
             console.println(console.format.bold(msg))
             console.println(console.format.underline_for(msg))
 
     def after_lap(self):
-        self.logger.info("Finished lap [%d/%d]" % (self.current_lap, self.race.total_laps))
+        self.logger.info("Finished lap [%d/%d]", self.current_lap, self.race.total_laps)
         if self.race.total_laps > 1:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
@@ -361,10 +361,10 @@ def run(cfg):
             name = "from-distribution"
         else:
             name = "from-sources-complete"
-        logger.info("User specified no pipeline. Automatically derived pipeline [%s]." % name)
+        logger.info("User specified no pipeline. Automatically derived pipeline [%s].", name)
         cfg.add(config.Scope.applicationOverride, "race", "pipeline", name)
     else:
-        logger.info("User specified pipeline [%s]." % name)
+        logger.info("User specified pipeline [%s].", name)
 
     try:
         pipeline = pipelines[name]

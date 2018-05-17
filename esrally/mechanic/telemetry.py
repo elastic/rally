@@ -267,7 +267,7 @@ class PerfStat(TelemetryDevice):
 
     def detach_from_node(self, node, running):
         if self.attached and running:
-            self.logger.info("Dumping PMU counters for node [%s]" % node.node_name)
+            self.logger.info("Dumping PMU counters for node [%s]", node.node_name)
             os.kill(self.process.pid, signal.SIGINT)
             try:
                 self.process.wait(10.0)
@@ -464,7 +464,7 @@ class MergeParts(InternalTelemetryDevice):
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if io.is_archive(log_path):
-                self.logger.info("Decompressing [%s] to analyze merge times..." % log_path)
+                self.logger.info("Decompressing [%s] to analyze merge times...", log_path)
                 io.decompress(log_path, self.node_log_dir)
 
         # we need to add up times from all files
@@ -472,14 +472,14 @@ class MergeParts(InternalTelemetryDevice):
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if not io.is_archive(log_file):
-                self.logger.debug("Analyzing merge times in [%s]" % log_path)
+                self.logger.debug("Analyzing merge times in [%s]", log_path)
                 with open(log_path, mode="rt", encoding="utf-8") as f:
                     self._extract_merge_times(f, merge_times)
             else:
-                self.logger.debug("Skipping archived logs in [%s]." % log_path)
+                self.logger.debug("Skipping archived logs in [%s].", log_path)
         if merge_times:
             self._store_merge_times(merge_times)
-        self.logger.info("Finished analyzing merge times. Extracted [%s] different merge time components." % len(merge_times))
+        self.logger.info("Finished analyzing merge times. Extracted [%s] different merge time components.", len(merge_times))
 
     def _extract_merge_times(self, file, merge_times):
         for line in file.readlines():
@@ -887,7 +887,7 @@ class IndexStats(InternalTelemetryDevice):
         import json
         self.logger.info("Gathering indices stats for all primaries on benchmark stop.")
         index_stats = self.index_stats()
-        self.logger.info("Returned indices stats:\n%s" % json.dumps(index_stats, indent=2))
+        self.logger.info("Returned indices stats:\n%s", json.dumps(index_stats, indent=2))
         if "primaries" not in index_stats:
             return
         p = index_stats["primaries"]
@@ -896,7 +896,7 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
         for metric_key, value in self.index_times(p).items():
-            self.logger.info("Adding [%s] = [%s] to metrics store." % (str(metric_key), str(value)))
+            self.logger.info("Adding [%s] = [%s] to metrics store.", str(metric_key), str(value))
             self.add_metrics(value, metric_key, "ms")
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")

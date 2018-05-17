@@ -630,7 +630,7 @@ def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id
                 readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                                              on_conflict))
             else:
-                logger.info("Task-relative client at index [%d] skips [%s] (no documents to read)." % (client_index, corpus.name))
+                logger.info("Task-relative client at index [%d] skips [%s] (no documents to read).", client_index, corpus.name)
     return readers
 
 
@@ -772,11 +772,11 @@ class Slice:
         logger = logging.getLogger(__name__)
         self.source = self.source_class(file_name, mode).open()
         # skip offset number of lines
-        logger.info("Skipping %d lines in [%s]." % (self.offset, file_name))
+        logger.info("Skipping %d lines in [%s].", self.offset, file_name)
         start = time.perf_counter()
         io.skip_lines(file_name, self.source, self.offset)
         end = time.perf_counter()
-        logger.info("Skipping %d lines took %f s." % (self.offset, end - start))
+        logger.info("Skipping %d lines took %f s.", self.offset, end - start)
         return self
 
     def close(self):
@@ -841,7 +841,7 @@ class IndexDataReader:
                 raise StopIteration()
             return self.index_name, self.type_name, batch
         except IOError:
-            logging.getLogger(__name__).exception("Could not read [%s]" % self.data_file)
+            logging.getLogger(__name__).exception("Could not read [%s]", self.data_file)
 
     def read_bulk(self):
         docs_in_bulk = 0

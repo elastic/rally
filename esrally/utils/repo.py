@@ -46,7 +46,7 @@ class RallyRepository:
                     try:
                         git.rebase(self.repo_dir, branch=branch)
                     except exceptions.SupplyError:
-                        self.logger.exception("Cannot rebase due to local changes in [%s]" % self.repo_dir)
+                        self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
                         console.warn(
                             "Local changes in [%s] prevent %s update from remote. Please commit your changes." %
                             (self.repo_dir, self.resource_name))
@@ -57,7 +57,7 @@ class RallyRepository:
                     self.logger.warning(msg)
             branch = versions.best_match(git.branches(self.repo_dir, remote=False), distribution_version)
             if branch:
-                self.logger.info("Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.repo_dir, distribution_version))
+                self.logger.info("Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
                 git.checkout(self.repo_dir, branch=branch)
             else:
                 raise exceptions.SystemSetupError("Cannot find %s for distribution version %s" % (self.resource_name, distribution_version))
