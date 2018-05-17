@@ -6,10 +6,8 @@ import re
 import shutil
 from enum import Enum
 
-from esrally import time, PROGRAM_NAME, DOC_LINK, exceptions
+from esrally import PROGRAM_NAME, DOC_LINK, exceptions
 from esrally.utils import io, git, console, convert
-
-logger = logging.getLogger("rally.config")
 
 
 class ConfigError(exceptions.RallyError):
@@ -52,7 +50,7 @@ class ConfigFile:
 
     def backup(self):
         config_file = self.location
-        logger.info("Creating a backup of the current config file at [%s]." % config_file)
+        logging.getLogger(__name__).info("Creating a backup of the current config file at [%s].", config_file)
         shutil.copyfile(config_file, "%s.bak" % config_file)
 
     @property
@@ -85,7 +83,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
     else:
         # force unattended configuration - we don't need to raise errors if some bits are missing. Depending on the node role and the
         # configuration it may be fine that e.g. Java is missing (no need for that on a load driver node).
-        ConfigFactory(o=logger.info).create_config(cfg.config_file, advanced_config=False, assume_defaults=True)
+        ConfigFactory(o=logging.getLogger(__name__).info).create_config(cfg.config_file, advanced_config=False, assume_defaults=True)
         # reload and continue
         if cfg.config_present():
             cfg.load_config()
@@ -270,6 +268,7 @@ class ConfigFactory:
         self.sec_i = sec_i
         self.o = o
         self.prompter = None
+        self.logger = logging.getLogger(__name__)
 
     def create_config(self, config_file, advanced_config=False, assume_defaults=False, java_home=None, runtime_java_home=None):
         """
@@ -297,9 +296,9 @@ class ConfigFactory:
 
         if config_file.present:
             self.o("\nWARNING: Will overwrite existing config file at [%s]\n" % config_file.location)
-            logger.debug("Detected an existing configuration file at [%s]" % config_file.location)
+            self.logger.debug("Detected an existing configuration file at [%s]", config_file.location)
         else:
-            logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine." % config_file.location)
+            self.logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine.", config_file.location)
 
         # Autodetect settings
         self.o("* Autodetecting available third-party software")
@@ -347,10 +346,10 @@ class ConfigFactory:
         guess = self._guess_es_src_dir()
         if guess:
             source_dir = guess
-            logger.debug("Autodetected Elasticsearch project directory at [%s]." % source_dir)
+            self.logger.debug("Autodetected Elasticsearch project directory at [%s].", source_dir)
         else:
             default_src_dir = os.path.join(root_dir, "src", "elasticsearch")
-            logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default." % default_src_dir)
+            self.logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default.", default_src_dir)
             source_dir = default_src_dir
 
         if advanced_config:
@@ -484,7 +483,7 @@ class ConfigFactory:
         self.o("* Ask a question on the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
-        logger.debug("Autodetected %s at [%s]" % (what, result))
+        self.logger.debug("Autodetected %s at [%s]", what, result)
         if additional_message:
             message = " (%s)" % additional_message
         else:
@@ -583,12 +582,13 @@ class Prompter:
 
 
 def migrate(config_file, current_version, target_version, out=print, i=input):
+    logger = logging.getLogger(__name__)
     if current_version < Config.EARLIEST_SUPPORTED_VERSION:
         raise ConfigError("The config file in {} is too old. Please delete it and reconfigure Rally from scratch with {} configure."
                           .format(config_file.location, PROGRAM_NAME))
 
     prompter = Prompter(i=i, o=out, assume_defaults=False)
-    logger.info("Upgrading configuration from version [%s] to [%s]." % (current_version, target_version))
+    logger.info("Upgrading configuration from version [%s] to [%s].", current_version, target_version)
     # Something is really fishy. We don't want to downgrade the configuration.
     if current_version >= target_version:
         raise ConfigError("The existing config file is available in a later version already. Expected version <= [%s] but found [%s]"
@@ -603,7 +603,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
             java_9_home = io.guess_java_home(major_version=9)
             from esrally.utils import jvm
             if java_9_home and not jvm.is_early_access_release(java_9_home):
-                logger.debug("Autodetected a JDK 9 installation at [%s]" % java_9_home)
+                logger.debug("Autodetected a JDK 9 installation at [%s]", java_9_home)
                 if "runtime" not in config:
                     config["runtime"] = {}
                 config["runtime"]["java9.home"] = java_9_home
@@ -641,7 +641,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
             java_10_home = io.guess_java_home(major_version=10)
             from esrally.utils import jvm
             if java_10_home and not jvm.is_early_access_release(java_10_home):
-                logger.debug("Autodetected a JDK 10 installation at [%s]" % java_10_home)
+                logger.debug("Autodetected a JDK 10 installation at [%s]", java_10_home)
                 if "runtime" not in config:
                     config["runtime"] = {}
                 config["runtime"]["java10.home"] = java_10_home
@@ -714,4 +714,4 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
 
     # all migrations done
     config_file.store(config)
-    logger.info("Successfully self-upgraded configuration to version [%s]" % target_version)
+    logger.info("Successfully self-upgraded configuration to version [%s]", target_version)

@@ -5,7 +5,7 @@ from esrally import exceptions
 from esrally.utils import repo
 
 
-class RallyRepository(TestCase):
+class RallyRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_fails_in_offline_mode_if_not_a_git_repo(self, is_working_copy):
         is_working_copy.return_value = False

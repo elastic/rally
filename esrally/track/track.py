@@ -1,9 +1,6 @@
-import logging
 from enum import Enum, unique
 
 from esrally import exceptions
-
-logger = logging.getLogger("rally.track")
 
 
 class Index:

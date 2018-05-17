@@ -6,11 +6,8 @@ import bz2
 import gzip
 import zipfile
 import tarfile
-import logging
 
 from esrally.utils import console
-
-logger = logging.getLogger("rally.utils.io")
 
 
 class FileSource:
@@ -278,7 +275,7 @@ def prepare_file_offset_table(data_file_path):
     offset_file_path = "%s.offset" % data_file_path
     # recreate only if necessary as this can be time-consuming
     if not os.path.exists(offset_file_path) or os.path.getmtime(offset_file_path) < os.path.getmtime(data_file_path):
-        console.info("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True, logger=logger)
+        console.info("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True)
         line_number = 0
         with open(offset_file_path, mode="wt", encoding="utf-8") as offset_file:
             with open(data_file_path, mode="rt", encoding="utf-8") as data_file:
@@ -292,7 +289,6 @@ def prepare_file_offset_table(data_file_path):
         console.println("[OK]")
         return line_number
     else:
-        logger.info("Skipping creation of file offset table at [%s] as it is still valid." % offset_file_path)
         return None
 
 
@@ -304,10 +300,7 @@ def remove_file_offset_table(data_file_path):
     :param data_file_path: The path to a text file that is readable by this process.
     """
     offset_file_path = "%s.offset" % data_file_path
-    try:
-        os.remove(offset_file_path)
-    except OSError as e:
-        logger.debug("Error while attempting to delete [%s]: [%s]" % (offset_file_path, e))
+    os.remove(offset_file_path)
 
 
 def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
