@@ -141,7 +141,7 @@ class BulkIndexRunnerTests(TestCase):
                 "action_meta_data",
                 "index_line"
             ],
-            "action_metadata_present": True,
+            "action-metadata-present": True,
             "bulk-size": 3
         }
 
@@ -171,7 +171,7 @@ class BulkIndexRunnerTests(TestCase):
                 "index_line",
                 "index_line"
             ],
-            "action_metadata_present": False,
+            "action-metadata-present": False,
             "bulk-size": 3,
             "index": "test-index",
             "type": "test-type"
@@ -239,7 +239,7 @@ class BulkIndexRunnerTests(TestCase):
                 "action_meta_data",
                 "index_line"
             ],
-            "action_metadata_present": True,
+            "action-metadata-present": True,
             "bulk-size": 3,
             "index": "test"
         }
@@ -344,7 +344,7 @@ class BulkIndexRunnerTests(TestCase):
                 "action_meta_data",
                 "update_line"
             ],
-            "action_metadata_present": True,
+            "action-metadata-present": True,
             "detailed-results": False,
             "bulk-size": 4,
             "index": "test"
@@ -488,7 +488,7 @@ class BulkIndexRunnerTests(TestCase):
                 '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "3" } }',
                 '{"location" : [-0.1533367, 51.5261779]}'
             ],
-            "action_metadata_present": True,
+            "action-metadata-present": True,
             "bulk-size": 6,
             "detailed-results": True,
             "index": "test"
