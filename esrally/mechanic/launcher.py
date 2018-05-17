@@ -303,7 +303,7 @@ class InProcessLauncher:
             self.logger.info("Setting [%s] to detect out of memory errors during the benchmark.", exit_on_oome_flag)
             self._set_env(env, "ES_JAVA_OPTS", exit_on_oome_flag)
         else:
-            self.logger.info("JVM does not support [%s]. Please consider a JDK upgrade.", exit_on_oome_flag)
+            self.logger.info("JVM does not support [%s]. A JDK upgrade is recommended.", exit_on_oome_flag)
 
         self.logger.info("env for [%s]: %s", node_name, str(env))
         return env
