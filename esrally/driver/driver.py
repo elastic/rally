@@ -10,9 +10,6 @@ from esrally import actor, config, exceptions, metrics, track, client, paths, PR
 from esrally.driver import runner, scheduler
 from esrally.utils import convert, console, net
 
-logger = logging.getLogger("rally.driver")
-profile_logger = logging.getLogger("rally.profile")
-
 
 ##################################
 #
@@ -143,29 +140,28 @@ class DriverActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        actor.RallyActor.configure_logging(logger)
         self.start_sender = None
         self.coordinator = None
         self.status = "init"
         self.post_process_timer = 0
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
-        logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
+        self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
         self.coordinator.close()
         self.send(self.start_sender, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
-        logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
+        self.logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
         self.coordinator.close()
         self.send(self.start_sender, msg)
 
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
-        logger.info("Main driver received a notification that the benchmark has been cancelled.")
+        self.logger.info("Main driver received a notification that the benchmark has been cancelled.")
         self.coordinator.close()
         self.send(self.start_sender, msg)
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
+        self.logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
         self.status = "exiting"
 
     def receiveMsg_ChildActorExited(self, msg, sender):
@@ -173,15 +169,15 @@ class DriverActor(actor.RallyActor):
         if msg.childAddress in self.coordinator.drivers:
             driver_index = self.coordinator.drivers.index(msg.childAddress)
             if self.status == "exiting":
-                logger.info("Load generator [%d] has exited." % driver_index)
+                self.logger.info("Load generator [%d] has exited." % driver_index)
             else:
-                logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
+                self.logger.error("Load generator [%d] has exited prematurely. Aborting benchmark." % driver_index)
                 self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely." % driver_index))
         else:
-            logger.info("A track preparator has exited.")
+            self.logger.info("A track preparator has exited.")
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
+        self.logger.info("Main driver received unknown message [%s] (ignoring)." % (str(msg)))
 
     @actor.no_retry("driver")
     def receiveMsg_StartBenchmark(self, msg, sender):
@@ -276,13 +272,12 @@ def load_local_config(coordinator_config):
 class TrackPreparationActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
-        actor.RallyActor.configure_logging(logger)
 
     @actor.no_retry("track preparator")
     def receiveMsg_PrepareTrack(self, msg, sender):
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
-        logger.info("Preparing track [%s]" % msg.track.name)
+        self.logger.info("Preparing track [%s]" % msg.track.name)
         # for "proper" track repositories this will ensure that all state is identical to the coordinator node. For simple tracks
         # the track is usually self-contained but in some cases (plugins are defined) we still need to ensure that the track
         # is present on all machines.
@@ -304,6 +299,7 @@ class Driver:
         :param target: A target that will be notified of important events.
         :param config: The current config object.
         """
+        self.logger = logging.getLogger(__name__)
         self.target = target
         self.config = config
         self.track = None
@@ -348,7 +344,7 @@ class Driver:
         self.target.on_prepare_track(preps, self.config, self.track)
 
     def after_track_prepared(self):
-        logger.info("Benchmark is about to start.")
+        self.logger.info("Benchmark is about to start.")
         # ensure relative time starts when the benchmark starts.
         self.reset_relative_time()
 
@@ -357,16 +353,16 @@ class Driver:
         self.number_of_steps = len(allocator.join_points) - 1
         self.tasks_per_join_point = allocator.tasks_per_joinpoint
 
-        logger.info("Benchmark consists of [%d] steps executed by (at most) [%d] clients as specified by the allocation matrix:\n%s" %
+        self.logger.info("Benchmark consists of [%d] steps executed by (at most) [%d] clients as specified by the allocation matrix:\n%s" %
                     (self.number_of_steps, len(self.allocations), self.allocations))
 
         for client_id in range(allocator.clients):
             # allocate clients round-robin to all defined hosts
             host = self.load_driver_hosts[client_id % len(self.load_driver_hosts)]
-            logger.info("Allocating load generator [%d] on [%s]" % (client_id, host))
+            self.logger.info("Allocating load generator [%d] on [%s]" % (client_id, host))
             self.drivers.append(self.target.create_client(client_id, host))
         for client_id, driver in enumerate(self.drivers):
-            logger.info("Starting load generator [%d]." % client_id)
+            self.logger.info("Starting load generator [%d]." % client_id)
             self.target.start_load_generator(driver, client_id, self.config, self.track, self.allocations[client_id])
 
         self.update_progress_message()
@@ -374,10 +370,10 @@ class Driver:
     def joinpoint_reached(self, client_id, client_local_timestamp, task):
         self.currently_completed += 1
         self.clients_completed_current_step[client_id] = (client_local_timestamp, time.perf_counter())
-        logger.info("[%d/%d] drivers reached join point [%d/%d]." %
+        self.logger.info("[%d/%d] drivers reached join point [%d/%d]." %
                     (self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps))
         if self.currently_completed == len(self.drivers):
-            logger.info("All drivers completed their operations until join point [%d/%d]." %
+            self.logger.info("All drivers completed their operations until join point [%d/%d]." %
                         (self.current_step + 1, self.number_of_steps))
             # we can go on to the next step
             self.currently_completed = 0
@@ -390,17 +386,17 @@ class Driver:
             self.most_recent_sample_per_client = {}
             self.current_step += 1
 
-            logger.info("Postprocessing samples...")
+            self.logger.info("Postprocessing samples...")
             self.post_process_samples()
             m = self.metrics_store.to_externalizable(clear=True)
 
             if self.finished():
-                logger.info("All steps completed.")
-                logger.info("Closing metrics store...")
+                self.logger.info("All steps completed.")
+                self.logger.info("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
                 del self.metrics_store
-                logger.info("Sending benchmark results...")
+                self.logger.info("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)
             else:
                 if self.config.opts("track", "test.mode.enabled"):
@@ -419,32 +415,32 @@ class Driver:
                 for client_id, driver in enumerate(self.drivers):
                     client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
                     client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
-                    logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])" %
+                    self.logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])" %
                                 (client_id, client_start_timestamp, start_next_task))
                     self.target.drive_at(driver, client_start_timestamp)
         else:
             current_join_point = task
             # we need to actively send CompleteCurrentTask messages to all remaining clients.
             if current_join_point.preceding_task_completes_parent and not self.complete_current_task_sent:
-                logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet."
+                self.logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet."
                             % (current_join_point, current_join_point.clients_executing_completing_task))
                 # are all clients executing said task already done? if so we need to notify the remaining clients
                 all_clients_finished = True
                 for client_id in current_join_point.clients_executing_completing_task:
                     if client_id not in self.clients_completed_current_step:
-                        logger.info("Client id [%s] did not yet finish." % client_id)
+                        self.logger.info("Client id [%s] did not yet finish." % client_id)
                         # do not break here so we can see all remaining clients in the log output.
                         all_clients_finished = False
                 if all_clients_finished:
                     # As we are waiting for other clients to finish, we would send this message over and over again. Hence we need to
                     # memorize whether we have already sent it for the current step.
                     self.complete_current_task_sent = True
-                    logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
+                    self.logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
                     for client_id, driver in enumerate(self.drivers):
                         self.target.complete_current_task(driver)
 
     def reset_relative_time(self):
-        logger.info("Resetting relative time of request metrics store.")
+        self.logger.info("Resetting relative time of request metrics store.")
         self.metrics_store.reset_relative_time()
 
     def finished(self):
@@ -508,11 +504,11 @@ class Driver:
                                                        relative_time=sample.relative_time, meta_data=meta_data)
 
         end = time.perf_counter()
-        logger.info("Storing latency and service time took [%f] seconds." % (end - start))
+        self.logger.info("Storing latency and service time took [%f] seconds." % (end - start))
         start = end
         aggregates = self.throughput_calculator.calculate(raw_samples)
         end = time.perf_counter()
-        logger.info("Calculating throughput took [%f] seconds." % (end - start))
+        self.logger.info("Calculating throughput took [%f] seconds." % (end - start))
         start = end
         for task, samples in aggregates.items():
             meta_data = self.merge(
@@ -527,7 +523,7 @@ class Driver:
                                                            sample_type=sample_type, absolute_time=absolute_time,
                                                            relative_time=relative_time, meta_data=meta_data)
         end = time.perf_counter()
-        logger.info("Storing throughput took [%f] seconds." % (end - start))
+        self.logger.info("Storing throughput took [%f] seconds." % (end - start))
         start = end
         # this will be a noop for the in-memory metrics store. If we use an ES metrics store however, this will ensure that we already send
         # the data and also clear the in-memory buffer. This allows users to see data already while running the benchmark. In cases where
@@ -537,8 +533,8 @@ class Driver:
         # no need for frequent refreshes.
         self.metrics_store.flush(refresh=False)
         end = time.perf_counter()
-        logger.info("Flushing the metrics store took [%f] seconds." % (end - start))
-        logger.info("Postprocessing [%d] raw samples took [%f] seconds in total." % (len(raw_samples), (end - total_start)))
+        self.logger.info("Flushing the metrics store took [%f] seconds." % (end - start))
+        self.logger.info("Postprocessing [%d] raw samples took [%f] seconds in total." % (len(raw_samples), (end - total_start)))
 
     def merge(self, *args):
         result = {}
@@ -559,7 +555,6 @@ class LoadGenerator(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        actor.RallyActor.configure_logging(logger)
         self.master = None
         self.client_id = None
         self.es = None
@@ -588,7 +583,7 @@ class LoadGenerator(actor.RallyActor):
                 es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create()
             return es
 
-        logger.info("LoadGenerator[%d] is about to start." % msg.client_id)
+        self.logger.info("LoadGenerator[%d] is about to start." % msg.client_id)
         self.master = sender
         self.client_id = msg.client_id
         self.config = load_local_config(msg.config)
@@ -603,6 +598,7 @@ class LoadGenerator(actor.RallyActor):
         # we need to wake up more often in test mode
         if self.config.opts("track", "test.mode.enabled"):
             self.wakeup_interval = 0.5
+        runner.register_default_runners()
         if self.track.has_plugins:
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         self.drive()
@@ -610,7 +606,7 @@ class LoadGenerator(actor.RallyActor):
     @actor.no_retry("load generator")
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
-        logger.info("LoadGenerator[%d] is continuing its work at task index [%d] on [%f], that is in [%s]." %
+        self.logger.info("LoadGenerator[%d] is continuing its work at task index [%d] on [%f], that is in [%s]." %
                     (self.client_id, self.current_task_index, msg.client_start_timestamp, sleep_time))
         self.start_driving = True
         self.wakeupAfter(sleep_time)
@@ -620,10 +616,10 @@ class LoadGenerator(actor.RallyActor):
         # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
         if self.at_joinpoint():
-            logger.info("LoadGenerator[%s] has received CompleteCurrentTask but is currently at [%s]. Ignoring."
+            self.logger.info("LoadGenerator[%s] has received CompleteCurrentTask but is currently at [%s]. Ignoring."
                         % (str(self.client_id), self.current_task))
         else:
-            logger.info("LoadGenerator[%s] has received CompleteCurrentTask. Completing current task [%s]."
+            self.logger.info("LoadGenerator[%s] has received CompleteCurrentTask. Completing current task [%s]."
                         % (str(self.client_id), self.current_task))
             self.complete.set()
 
@@ -631,41 +627,41 @@ class LoadGenerator(actor.RallyActor):
     def receiveMsg_WakeupMessage(self, msg, sender):
         # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
         if self.start_driving:
-            logger.info("LoadGenerator[%s] starts driving now." % str(self.client_id))
+            self.logger.info("LoadGenerator[%s] starts driving now." % str(self.client_id))
             self.start_driving = False
             self.drive()
         else:
             current_samples = self.send_samples()
             if self.cancel.is_set():
-                logger.info("LoadGenerator[%s] has detected that benchmark has been cancelled. Notifying master..." %
+                self.logger.info("LoadGenerator[%s] has detected that benchmark has been cancelled. Notifying master..." %
                             str(self.client_id))
                 self.send(self.master, actor.BenchmarkCancelled())
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
-                    logger.info("LoadGenerator[%s] has detected a benchmark failure. Notifying master..." % str(self.client_id))
+                    self.logger.info("LoadGenerator[%s] has detected a benchmark failure. Notifying master..." % str(self.client_id))
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
                     self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.client_id), str(e)))
                 else:
-                    logger.info("LoadGenerator[%s] is ready for the next task." % str(self.client_id))
+                    self.logger.info("LoadGenerator[%s] is ready for the next task." % str(self.client_id))
                     self.executor_future = None
                     self.drive()
             else:
                 if current_samples and len(current_samples) > 0:
                     most_recent_sample = current_samples[-1]
                     if most_recent_sample.percent_completed is not None:
-                        logger.info("LoadGenerator[%s] is executing [%s] (%.2f%% complete)." %
+                        self.logger.info("LoadGenerator[%s] is executing [%s] (%.2f%% complete)." %
                                     (str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0))
                     else:
-                        logger.info("LoadGenerator[%s] is executing [%s] (dependent eternal task)." %
+                        self.logger.info("LoadGenerator[%s] is executing [%s] (dependent eternal task)." %
                                     (str(self.client_id), most_recent_sample.task))
                 else:
-                    logger.info("LoadGenerator[%s] is executing (no samples)." % (str(self.client_id)))
+                    self.logger.info("LoadGenerator[%s] is executing (no samples)." % (str(self.client_id)))
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest." % str(self.client_id))
+        self.logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest." % str(self.client_id))
         if self.executor_future is not None and self.executor_future.running():
             self.cancel.set()
             self.pool.shutdown()
@@ -675,7 +671,7 @@ class LoadGenerator(actor.RallyActor):
         self.send(self.master, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
+        self.logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring)." % (self.client_id, str(msg)))
 
     def drive(self):
         profiling_enabled = self.config.opts("driver", "profiling")
@@ -686,7 +682,7 @@ class LoadGenerator(actor.RallyActor):
         self.current_task = task_allocation
 
         if isinstance(task_allocation, JoinPoint):
-            logger.info("LoadGenerator[%d] reached join point [%s]." % (self.client_id, task_allocation))
+            self.logger.info("LoadGenerator[%d] reached join point [%s]." % (self.client_id, task_allocation))
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
                 self.executor_future.result()
@@ -701,10 +697,10 @@ class LoadGenerator(actor.RallyActor):
             # There may be a situation where there are more (parallel) tasks than clients. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
             if self.complete.is_set():
-                logger.info("LoadGenerator[%d] is skipping [%s] because it has been asked to complete all tasks until next join point." %
-                            (self.client_id, task))
+                self.logger.info("LoadGenerator[%d] is skipping [%s] because it has been asked to complete all tasks until next join "
+                                 "point." % (self.client_id, task))
             else:
-                logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
+                self.logger.info("LoadGenerator[%d] is executing [%s]." % (self.client_id, task))
                 self.sampler = Sampler(self.client_id, task, start_timestamp=time.perf_counter())
                 # We cannot use the global client index here because we need to support parallel execution of tasks with multiple clients.
                 #
@@ -752,6 +748,7 @@ class Sampler:
         self.task = task
         self.start_timestamp = start_timestamp
         self.q = queue.Queue(maxsize=16384)
+        self.logger = logging.getLogger(__name__)
 
     def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
         try:
@@ -759,7 +756,7 @@ class Sampler:
                                      sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
                                      percent_completed))
         except queue.Full:
-            logger.warning("Dropping sample for [%s] due to a full sampling queue." % self.task.operation.name)
+            self.logger.warning("Dropping sample for [%s] due to a full sampling queue." % self.task.operation.name)
 
     @property
     def samples(self):
@@ -935,9 +932,9 @@ class Profiler:
         self.target = target
         self.client_id = client_id
         self.task = task
+        self.profile_logger = logging.getLogger("rally.profile")
 
     def __call__(self, *args, **kwargs):
-        logger.debug("Enabling Python profiler for [%s]" % str(self.task))
         import cProfile
         import pstats
         import io as python_io
@@ -955,7 +952,7 @@ class Profiler:
             profile = "\n=== Profile START for client [%s] and task [%s] ===\n" % (str(self.client_id), str(self.task))
             profile += s.getvalue()
             profile += "=== Profile END for client [%s] and task [%s] ===" % (str(self.client_id), str(self.task))
-            profile_logger.info(profile)
+            self.profile_logger.info(profile)
 
 
 class Executor:
@@ -978,6 +975,7 @@ class Executor:
         self.cancel = cancel
         self.complete = complete
         self.abort_on_error = abort_on_error
+        self.logger = logging.getLogger(__name__)
 
     def __call__(self, *args, **kwargs):
         total_start = time.perf_counter()
@@ -985,7 +983,7 @@ class Executor:
         try:
             for expected_scheduled_time, sample_type, percent_completed, runner, params in self.schedule:
                 if self.cancel.is_set():
-                    logger.info("User cancelled execution.")
+                    self.logger.info("User cancelled execution.")
                     break
                 absolute_expected_schedule_time = total_start + expected_scheduled_time
                 throughput_throttled = expected_scheduled_time > 0
@@ -1006,10 +1004,10 @@ class Executor:
                                  total_ops, total_ops_unit, (stop - total_start), completed)
 
                 if self.complete.is_set():
-                    logger.info("Task is considered completed due to external event.")
+                    self.logger.info("Task is considered completed due to external event.")
                     break
         except BaseException:
-            logger.exception("Could not execute schedule")
+            self.logger.exception("Could not execute schedule")
             raise
         finally:
             # Actively set it if this task completes its parent
@@ -1055,7 +1053,7 @@ def execute_single(runner, es, params, abort_on_error=False):
         else:
             request_meta_data["error-description"] = e.error
     except KeyError as e:
-        logger.exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
+        logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters." % str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
         raise exceptions.SystemSetupError(msg)
 
@@ -1239,6 +1237,7 @@ def schedule_for(current_track, task, client_index):
     :param client_index: The current client index.  Must be in the range [0, `task.clients').
     :return: A generator for the operations the given client needs to perform for this task.
     """
+    logger = logging.getLogger(__name__)
     op = task.operation
     num_clients = task.clients
     sched = scheduler.scheduler_for(task.schedule, task.params)

@@ -6,8 +6,6 @@ import importlib.machinery
 from esrally import exceptions
 from esrally.utils import io
 
-logger = logging.getLogger("rally.modules")
-
 
 class ComponentLoader:
     """
@@ -30,6 +28,7 @@ class ComponentLoader:
         self.root_path = root_path
         self.component_entry_point = component_entry_point
         self.recurse = recurse
+        self.logger = logging.getLogger(__name__)
 
     def _modules(self, module_paths, component_name):
         for path in module_paths:
@@ -45,7 +44,7 @@ class ComponentLoader:
         root_module_name = "%s.%s" % (component_name, self.component_entry_point)
 
         for p in self._modules(module_dirs, component_name):
-            logger.debug("Loading module [%s]" % p)
+            self.logger.debug("Loading module [%s]", p)
             m = importlib.import_module(p)
             importlib.reload(m)
             if p == root_module_name:
@@ -67,7 +66,7 @@ class ComponentLoader:
         :return: The root module.
         """
         component_name = io.basename(self.root_path)
-        logger.info("Loading component [%s] from [%s]" % (component_name, self.root_path))
+        self.logger.info("Loading component [%s] from [%s]", component_name, self.root_path)
         module_dirs = []
         # search all paths within this directory for modules but exclude all directories starting with "_"
         if self.recurse:
@@ -76,7 +75,7 @@ class ComponentLoader:
                 ignore = []
                 for d in dirs:
                     if d.startswith("_"):
-                        logger.debug("Removing [%s] from load path." % d)
+                        self.logger.debug("Removing [%s] from load path.", d)
                         ignore.append(d)
                 for d in ignore:
                     dirs.remove(d)
@@ -84,13 +83,13 @@ class ComponentLoader:
             module_dirs.append(self.root_path)
         # load path is only the root of the package hierarchy
         component_root_path = os.path.abspath(os.path.join(self.root_path, os.pardir))
-        logger.debug("Adding [%s] to Python load path." % component_root_path)
+        self.logger.debug("Adding [%s] to Python load path.", component_root_path)
         # needs to be at the beginning of the system path, otherwise import machinery tries to load application-internal modules
         sys.path.insert(0, component_root_path)
         try:
             root_module = self._load_component(component_name, module_dirs)
             return root_module
         except BaseException:
-            msg = "Could not load component [%s]" % component_name
-            logger.exception(msg)
+            msg = "Could not load component [{}]".format(component_name)
+            self.logger.exception(msg)
             raise exceptions.SystemSetupError(msg)

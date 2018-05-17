@@ -3,8 +3,6 @@ import types
 import random
 from esrally import exceptions
 
-logger = logging.getLogger("rally.driver")
-
 # Mapping from task to scheduler
 __SCHEDULERS = {}
 
@@ -32,6 +30,7 @@ def register_scheduler(name, scheduler):
     :param scheduler: Either a unary function ``float`` -> ``float`` or a class with the same interface as ``Scheduler``.
     
     """
+    logger = logging.getLogger(__name__)
     if name in __SCHEDULERS:
         raise exceptions.SystemSetupError("A scheduler with the name [%s] is already registered." % name)
     # we'd rather use callable() but this will erroneously also classify a class as callable...

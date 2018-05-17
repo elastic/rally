@@ -8,14 +8,13 @@ from esrally import exceptions
 
 __HTTP = None
 
-logger = logging.getLogger("rally.net")
-
 
 def init():
+    logger = logging.getLogger(__name__)
     global __HTTP
     proxy_url = os.getenv("http_proxy")
     if proxy_url and len(proxy_url) > 0:
-        logger.info("Rally connects via proxy URL [%s] to the Internet (picked up from the environment variable [http_proxy])." % proxy_url)
+        logger.info("Rally connects via proxy URL [%s] to the Internet (picked up from the environment variable [http_proxy]).",  proxy_url)
         __HTTP = urllib3.ProxyManager(proxy_url, cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
     else:
         logger.info("Rally connects directly to the Internet (no proxy support).")
@@ -96,15 +95,16 @@ def retrieve_content_as_string(url):
 
 
 def has_internet_connection():
+    logger = logging.getLogger(__name__)
     try:
         # We connect to Github anyway later on so we use that to avoid touching too much different remote endpoints.
         probing_url = "https://github.com/"
-        logger.debug("Checking for internet connection against [%s]" % probing_url)
+        logger.debug("Checking for internet connection against [%s]", probing_url)
         # We do a HTTP request here to respect the HTTP proxy setting. If we'd open a plain socket connection we circumvent the
         # proxy and erroneously conclude we don't have an Internet connection.
         response = __http().request("GET", probing_url, timeout=2.0)
         status = response.status
-        logger.debug("Probing result is HTTP status [%s]" % str(status))
+        logger.debug("Probing result is HTTP status [%s]", str(status))
         return status == 200
     except BaseException:
         return False

@@ -6,10 +6,26 @@ from collections import Counter, OrderedDict
 
 from esrally import exceptions, track
 
-logger = logging.getLogger("rally.driver")
-
 # Mapping from operation type to specific runner
 __RUNNERS = {}
+
+
+def register_default_runners():
+    register_runner(track.OperationType.Bulk.name, BulkIndex())
+    register_runner(track.OperationType.ForceMerge.name, ForceMerge())
+    register_runner(track.OperationType.IndicesStats.name, IndicesStats())
+    register_runner(track.OperationType.NodesStats.name, NodeStats())
+    register_runner(track.OperationType.Search.name, Query())
+    register_runner(track.OperationType.RawRequest.name, RawRequest())
+
+    # We treat the following as administrative commands and thus already start to wrap them in a retry.
+    register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
+    register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()))
+    register_runner(track.OperationType.Refresh.name, Retry(Refresh()))
+    register_runner(track.OperationType.CreateIndex.name, Retry(CreateIndex()))
+    register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()))
+    register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()))
+    register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()))
 
 
 def runner_for(operation_type):
@@ -20,6 +36,7 @@ def runner_for(operation_type):
 
 
 def register_runner(operation_type, runner):
+    logger = logging.getLogger(__name__)
     if getattr(runner, "multi_cluster", False) == True:
         if "__enter__" in dir(runner) and "__exit__" in dir(runner):
             logger.info("Registering runner object [%s] for [%s]." % (str(runner), str(operation_type)))
@@ -48,6 +65,8 @@ class Runner:
     """
     Base class for all operations against Elasticsearch.
     """
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
 
     def __enter__(self):
         return self
@@ -70,6 +89,7 @@ class Runner:
 
 class SingleClusterDelegatingRunner(Runner):
     def __init__(self, runnable, name, context_manager_enabled=False):
+        super().__init__()
         self.runnable = runnable
         self.name = name
         self.context_manager_enabled = context_manager_enabled
@@ -101,6 +121,7 @@ class SingleClusterDelegatingRunner(Runner):
 
 class MultiClusterDelegatingRunner(Runner):
     def __init__(self, runnable, name, context_manager_enabled=False):
+        super().__init__()
         self.runnable = runnable
         self.name = name
         self.context_manager_enabled = context_manager_enabled
@@ -318,7 +339,7 @@ class BulkIndex(Runner):
             action_meta_data_key = "action-metadata-present"
         else:
             if "action_metadata_present" in params:
-                logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
+                self.logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
                                "[action-metadata-present].")
             action_meta_data_key = "action_metadata_present"
 
@@ -361,7 +382,7 @@ class BulkIndex(Runner):
                 action_meta_data_key = "action-metadata-present"
             else:
                 if "action_metadata_present" in params:
-                    logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
+                    self.logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
                                    "[action-metadata-present].")
                 action_meta_data_key = "action_metadata_present"
 
@@ -454,13 +475,14 @@ class ForceMerge(Runner):
     """
 
     def __call__(self, es, params):
-        logger.info("Force merging all indices.")
+        self.logger.info("Force merging all indices.")
         import elasticsearch
         try:
             if "max-num-segments" in params:
                 max_num_segments = params["max-num-segments"]
             elif "max_num_segments" in params:
-                logger.warning("Your parameter source uses the deprecated name [max_num_segments]. Please change it to [max-num-segments].")
+                self.logger.warning("Your parameter source uses the deprecated name [max_num_segments]. "
+                                    "Please change it to [max-num-segments].")
                 max_num_segments = params["max_num_segments"]
             else:
                 max_num_segments = None
@@ -556,7 +578,7 @@ class Query(Runner):
             request_params = params["request-params"]
         elif "request_params" in params:
             # TODO: Remove with Rally 1.0.
-            logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
+            self.logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
             request_params = params["request_params"]
         else:
             request_params = {}
@@ -564,7 +586,7 @@ class Query(Runner):
             request_params["request_cache"] = params["cache"]
         elif "use_request_cache" in params:
             # TODO: Remove with Rally 1.0.
-            logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
+            self.logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
             request_params["request_cache"] = params["use_request_cache"]
         r = es.search(
             index=params.get("index", "_all"),
@@ -585,7 +607,7 @@ class Query(Runner):
             request_params = params["request-params"]
         elif "request_params" in params:
             # TODO: Remove with Rally 1.0.
-            logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
+            self.logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
             request_params = params["request_params"]
         else:
             request_params = {}
@@ -600,7 +622,7 @@ class Query(Runner):
             cache = params["cache"]
         elif "use_request_cache" in params:
             # TODO: Remove with Rally 1.0.
-            logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
+            self.logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
             cache = params["use_request_cache"]
         else:
             cache = None
@@ -608,7 +630,7 @@ class Query(Runner):
             size = params["results-per-page"]
         elif "items_per_page" in params:
             # TODO: Remove with Rally 1.0.
-            logger.warning("Your parameter source uses the deprecated name [items_per_page]. Please change it to [results-per-page].")
+            self.logger.warning("Your parameter source uses the deprecated name [items_per_page]. Please change it to [results-per-page].")
             size = params["items_per_page"]
         else:
             size = None
@@ -661,7 +683,7 @@ class Query(Runner):
                 # (1.x does not support a proper JSON body in clear scroll requests).
                 self.es.transport.perform_request("DELETE", "/_search/scroll/%s" % self.scroll_id)
             except BaseException:
-                logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in Elasticsearch and "
+                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in Elasticsearch and "
                                  "will skew your benchmark results." % self.scroll_id)
         self.scroll_id = None
         self.es = None
@@ -791,7 +813,7 @@ class DeleteIndex(Runner):
                 es.indices.delete(index=index_name, **request_params)
                 ops += 1
             elif only_if_exists and es.indices.exists(index=index_name):
-                logger.info("Index [%s] already exists. Deleting it." % index_name)
+                self.logger.info("Index [%s] already exists. Deleting it." % index_name)
                 es.indices.delete(index=index_name, **request_params)
                 ops += 1
 
@@ -835,7 +857,7 @@ class DeleteIndexTemplate(Runner):
                 es.indices.delete_template(name=template_name, **request_params)
                 ops_count += 1
             elif only_if_exists and es.indices.exists_template(template_name):
-                logger.info("Index template [%s] already exists. Deleting it." % template_name)
+                self.logger.info("Index template [%s] already exists. Deleting it." % template_name)
                 es.indices.delete_template(name=template_name, **request_params)
                 ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
@@ -881,6 +903,7 @@ class Retry(Runner):
     """
 
     def __init__(self, delegate):
+        super().__init__()
         self.delegate = delegate
 
     def __enter__(self):
@@ -919,7 +942,7 @@ class Retry(Runner):
                 if last_attempt or not retry_on_timeout:
                     raise e
                 elif e.status_code == 408:
-                    logger.debug("%s has timed out." % repr(self.delegate))
+                    self.logger.debug("%s has timed out." % repr(self.delegate))
                     time.sleep(sleep_time)
                 else:
                     raise e
@@ -929,20 +952,3 @@ class Retry(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "retryable %s" % repr(self.delegate)
-
-
-register_runner(track.OperationType.Bulk.name, BulkIndex())
-register_runner(track.OperationType.ForceMerge.name, ForceMerge())
-register_runner(track.OperationType.IndicesStats.name, IndicesStats())
-register_runner(track.OperationType.NodesStats.name, NodeStats())
-register_runner(track.OperationType.Search.name, Query())
-register_runner(track.OperationType.RawRequest.name, RawRequest())
-
-# We treat the following as administrative commands and thus already start to wrap them in a retry.
-register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
-register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()))
-register_runner(track.OperationType.Refresh.name, Retry(Refresh()))
-register_runner(track.OperationType.CreateIndex.name, Retry(CreateIndex()))
-register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()))
-register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()))
-register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()))
