@@ -607,7 +607,7 @@ class ExecutorTests(TestCase):
 
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
             "body": ["action_metadata_line", "index_line"],
-            "action_metadata_present": True,
+            "action-metadata-present": True,
             "bulk-size": 1,
             # we need this because DriverTestParamSource does not know that we only have one bulk and hence size() returns incorrect results
             "size": 1
@@ -659,7 +659,7 @@ class ExecutorTests(TestCase):
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
             task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
                 "body": ["action_metadata_line", "index_line"],
-                "action_metadata_present": True,
+                "action-metadata-present": True,
                 "bulk-size": 1
             },
                                                             param_source="driver-test-param-source"),
@@ -699,7 +699,7 @@ class ExecutorTests(TestCase):
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
             task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
                 "body": ["action_metadata_line", "index_line"],
-                "action_metadata_present": True,
+                "action-metadata-present": True,
                 "bulk-size": 1
             },
                                                             param_source="driver-test-param-source"),
