@@ -141,6 +141,21 @@ class ClusterLauncherTests(TestCase):
         self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], cluster.hosts)
         self.assertIsNotNone(cluster.telemetry)
 
+    def test_launches_cluster_with_telemetry_client_timeout_enabled(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
+        cfg.add(config.Scope.application, "client", "options", self.client_options)
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+
+        cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
+        cluster = cluster_launcher.start()
+
+        retry_timeout_setting = {"retry-on-timeout": True}
+
+        for telemetry_device in cluster.telemetry.devices:
+            self.assertLessEqual(retry_timeout_setting.items(),telemetry_device.client.client_options.items())
+
     @mock.patch("time.sleep")
     def test_error_on_cluster_launch(self, sleep):
         on_post_launch = mock.Mock()

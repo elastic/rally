@@ -69,6 +69,8 @@ class ClusterLauncher:
         for cluster_name, cluster_hosts in all_hosts.items():
             all_client_options = self.cfg.opts("client", "options").all_client_options
             cluster_client_options = all_client_options[cluster_name]
+            # Use retries for telemetry connections: http://elasticsearch-py.readthedocs.io/en/latest/index.html#automatic-retries
+            cluster_client_options.update({"retry-on-timeout": True})
             es[cluster_name] = self.client_factory(cluster_hosts, cluster_client_options).create()
 
         es_default = es["default"]
