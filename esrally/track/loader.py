@@ -12,6 +12,10 @@ from esrally import exceptions, time, PROGRAM_NAME
 from esrally.track import params, track
 from esrally.utils import io, convert, net, console, modules, repo
 
+logger = logging.getLogger("rally.track")
+
+DEFAULT_TRACKS = ["geonames", "geopoint", "noaa", "http_logs", "nyc_taxis", "pmc", "percolator", "nested"]
+
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
     """
@@ -74,7 +78,7 @@ def load_track(cfg):
         else:
             return current_track
     except FileNotFoundError:
-        logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
+        logger.exception("Cannot load track [%s]" % track_name)
         raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
                                           (track_name, PROGRAM_NAME))
 
@@ -88,6 +92,8 @@ def load_track_plugins(cfg, register_runner, register_scheduler):
 
     if plugin_reader.can_load():
         plugin_reader.load()
+    else:
+        logger.debug("Track [%s] in path [%s] does not define any track plugins." % (track_name, track_plugin_path))
 
 
 def set_absolute_data_path(cfg, t):
@@ -212,8 +218,10 @@ class SimpleTrackRepository:
 
 def operation_parameters(t, op):
     if op.param_source:
+        logger.debug("Creating parameter source with name [%s]" % op.param_source)
         return params.param_source_for_name(op.param_source, t, op.params)
     else:
+        logger.debug("Creating parameter source for operation type [%s]" % op.type)
         return params.param_source_for_operation(op.type, t, op.params)
 
 
@@ -224,12 +232,11 @@ def prepare_track(t, cfg):
     :param t: A track that is about to be run.
     :param cfg: The config object.
     """
-    logger = logging.getLogger(__name__)
     offline = cfg.opts("system", "offline.mode")
     test_mode = cfg.opts("track", "test.mode.enabled")
     for corpus in t.corpora:
         data_root = data_dir(cfg, t.name, corpus.name)
-        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s.", corpus.name, t.name, data_root)
+        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s." % (corpus.name, t.name, data_root))
         prep = DocumentSetPreparator(t.name, offline, test_mode)
 
         for document_set in corpus.documents:
@@ -246,7 +253,6 @@ class DocumentSetPreparator:
         self.track_name = track_name
         self.offline = offline
         self.test_mode = test_mode
-        self.logger = logging.getLogger(__name__)
 
     def is_locally_available(self, file_name):
         return os.path.isfile(file_name)
@@ -258,10 +264,10 @@ class DocumentSetPreparator:
         if uncompressed_size:
             console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
                          (archive_path, documents_path, convert.bytes_to_gb(uncompressed_size)),
-                         end='', flush=True, logger=self.logger)
+                         end='', flush=True, logger=logger)
         else:
             console.info("Decompressing track data from [%s] to [%s] ... " % (archive_path, documents_path), end='',
-                         flush=True, logger=self.logger)
+                         flush=True, logger=logger)
 
         io.decompress(archive_path, io.dirname(archive_path))
         console.println("[OK]")
@@ -288,15 +294,15 @@ class DocumentSetPreparator:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
                 size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
-                self.logger.info("Downloading data from [%s] (%s MB) to [%s].", data_url, size_in_mb, target_path)
+                logger.info("Downloading data from [%s] (%s MB) to [%s]." % (data_url, size_in_mb, target_path))
             else:
-                self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
+                logger.info("Downloading data from [%s] to [%s]." % (data_url, target_path))
 
             # we want to have a bit more accurate download progress as these files are typically very large
             progress = net.Progress("[INFO] Downloading data for track %s" % self.track_name, accuracy=1)
             net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
             progress.finish()
-            self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
+            logger.info("Downloaded data from [%s] to [%s]." % (data_url, target_path))
         except urllib.error.HTTPError as e:
             if e.code == 404 and self.test_mode:
                 raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
@@ -309,7 +315,7 @@ class DocumentSetPreparator:
                     msg += " (HTTP status: %s)" % str(e.code)
                 raise exceptions.DataError(msg)
         except urllib.error.URLError:
-            self.logger.exception("Could not download [%s] to [%s].", data_url, target_path)
+            logger.exception("Could not download [%s] to [%s]." % (data_url, target_path))
             raise exceptions.DataError("Could not download [%s] to [%s]." % (data_url, target_path))
 
         if not os.path.isfile(target_path):
@@ -463,8 +469,6 @@ def render_template_from_file(template_file_name, template_vars):
 
 
 def filter_included_tasks(t, filters):
-    logger = logging.getLogger(__name__)
-
     def match(task, filters):
         for f in filters:
             if task.matches(f):
@@ -489,10 +493,10 @@ def filter_included_tasks(t, filters):
                         if not match(leaf_task, complete_filters):
                             leafs_to_remove.append(leaf_task)
                     for leaf_task in leafs_to_remove:
-                        logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
+                        logger.info("Removing sub-task [%s] from challenge [%s] due to task filter." % (leaf_task, challenge))
                         task.remove_task(leaf_task)
             for task in tasks_to_remove:
-                logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
+                logger.info("Removing task [%s] from challenge [%s] due to task filter." % (task, challenge))
                 challenge.remove_task(task)
 
     return t
@@ -517,10 +521,9 @@ def filters_from_included_tasks(included_tasks):
 
 
 def post_process_for_test_mode(t):
-    logger = logging.getLogger(__name__)
-    logger.info("Preparing track [%s] for test mode.", str(t))
+    logger.info("Preparing track [%s] for test mode." % str(t))
     for corpus in t.corpora:
-        logger.info("Reducing corpus size to 1000 documents for [%s]", corpus.name)
+        logger.info("Reducing corpus size to 1000 documents for [%s]" % corpus.name)
         for document_set in corpus.documents:
             # TODO #341: Should we allow this for snapshots too?
             if document_set.is_bulk:
@@ -550,18 +553,18 @@ def post_process_for_test_mode(t):
                 # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
                 if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                     count = leaf_task.clients
-                    logger.info("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
+                    logger.info("Resetting warmup iterations to %d for [%s]" % (count, str(leaf_task)))
                     leaf_task.warmup_iterations = count
                 if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                     count = leaf_task.clients
-                    logger.info("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
+                    logger.info("Resetting measurement iterations to %d for [%s]" % (count, str(leaf_task)))
                     leaf_task.iterations = count
                 if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                     leaf_task.warmup_time_period = 0
-                    logger.info("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period)
+                    logger.info("Resetting warmup time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.warmup_time_period))
                 if leaf_task.time_period is not None and leaf_task.time_period > 10:
                     leaf_task.time_period = 10
-                    logger.info("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
+                    logger.info("Resetting measurement time period for [%s] to [%d] seconds." % (str(leaf_task), leaf_task.time_period))
     return t
 
 
@@ -578,7 +581,6 @@ class TrackFileReader:
             self.track_schema = json.loads(f.read())
         self.track_params = cfg.opts("track", "params")
         self.read_track = TrackSpecificationReader(self.track_params)
-        self.logger = logging.getLogger(__name__)
 
     def read(self, track_name, track_spec_file, mapping_dir):
         """
@@ -590,16 +592,16 @@ class TrackFileReader:
         :return: A corresponding track instance if the track file is valid.
         """
 
-        self.logger.info("Reading track specification file [%s].", track_spec_file)
+        logger.info("Reading track specification file [{}].".format(track_spec_file))
         try:
             rendered = render_template_from_file(track_spec_file, self.track_params)
-            self.logger.info("Final rendered track for '%s': %s", track_spec_file, rendered)
+            logger.info("Final rendered track for '{}': {}".format(track_spec_file, rendered))
             track_spec = json.loads(rendered)
         except jinja2.exceptions.TemplateNotFound:
-            self.logger.exception("Could not load [%s]", track_spec_file)
+            logger.exception("Could not load [{}]".format(track_spec_file))
             raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
-            self.logger.exception("Could not load [%s].", track_spec_file)
+            logger.exception("Could not load [{}].".format(track_spec_file))
             # Convert to string early on to avoid serialization errors with Jinja exceptions.
             raise TrackSyntaxError("Could not load '{}'".format(track_spec_file), str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
@@ -645,7 +647,7 @@ class TrackPluginReader:
             root_module.register(self)
         except BaseException:
             msg = "Could not register track plugin at [%s]" % self.loader.root_path
-            logging.getLogger(__name__).exception(msg)
+            logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
     def register_param_source(self, name, param_source):
@@ -675,7 +677,6 @@ class TrackSpecificationReader:
         self.name = None
         self.track_params = track_params if track_params else {}
         self.source = source
-        self.logger = logging.getLogger(__name__)
 
     def __call__(self, track_name, track_specification, mapping_dir):
         self.name = track_name
@@ -734,14 +735,14 @@ class TrackSpecificationReader:
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
-        self.logger.info("Loading template [%s].", description)
+        logger.info("Loading template [%s]." % description)
         try:
             rendered = render_template(loader=jinja2.DictLoader({"default": contents}),
                                        template_name="default",
                                        template_vars=self.track_params)
             return json.loads(rendered)
         except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
-            self.logger.exception("Could not load file template for %s.", description)
+            logger.exception("Could not load file template for %s." % description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
     def _create_corpora(self, corpora_specs, indices):
@@ -984,9 +985,9 @@ class TrackSpecificationReader:
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
             op_type = op.name
-            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type, op_name)
+            logger.debug("Using built-in operation type [%s] for operation [%s]." % (op_type, op_name))
         except KeyError:
-            self.logger.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
+            logger.info("Using user-provided operation type [%s] for operation [%s]." % (op_type_name, op_name))
             op_type = op_type_name
 
         try:

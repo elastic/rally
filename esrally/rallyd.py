@@ -3,13 +3,20 @@ import time
 import logging
 import argparse
 
-from esrally import actor, version, exceptions, DOC_LINK, BANNER, PROGRAM_NAME, check_python_version, log
+from esrally import actor, version, exceptions, DOC_LINK, BANNER, PROGRAM_NAME, check_python_version
 from esrally.utils import console
 
 
 def start(args):
     if actor.actor_system_already_running():
         raise exceptions.RallyError("An actor system appears to be already running.")
+    # TheSpian writes the following warning upon start (at least) on Mac OS X:
+    #
+    # WARNING:root:Unable to get address info for address 103.1.168.192.in-addr.arpa (AddressFamily.AF_INET,\
+    # SocketKind.SOCK_DGRAM, 17, 0): <class 'socket.gaierror'> [Errno 8] nodename nor servname provided, or not known
+    #
+    # Therefore, we will not show warnings but only errors.
+    logging.basicConfig(level=logging.ERROR)
     actor.bootstrap_actor_system(local_ip=args.node_ip, coordinator_ip=args.coordinator_ip)
     console.info("Successfully started actor system on node [%s] with coordinator node IP [%s]." % (args.node_ip, args.coordinator_ip))
 
@@ -52,8 +59,6 @@ def status():
 
 def main():
     check_python_version()
-    log.install_default_log_config()
-    log.configure_logging()
     console.init()
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,

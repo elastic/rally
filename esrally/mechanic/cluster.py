@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger("rally.cluster")
+
+
 class Node:
     """
     Represents an Elasticsearch cluster node.

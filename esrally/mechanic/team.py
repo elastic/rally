@@ -8,6 +8,8 @@ import tabulate
 from esrally import exceptions, PROGRAM_NAME
 from esrally.utils import console, repo, io, modules
 
+logger = logging.getLogger("rally.team")
+
 TEAM_FORMAT_VERSION = 1
 
 
@@ -88,6 +90,10 @@ def list_plugins(cfg):
 
 
 def load_plugin(repo, name, config, plugin_params=None):
+    if config is not None:
+        logger.info("Loading plugin [%s] with configuration(s) [%s]." % (name, config))
+    else:
+        logger.info("Loading plugin [%s] with default configuration." % name)
     return PluginLoader(repo).load_plugin(name, config, plugin_params)
 
 
@@ -129,7 +135,6 @@ def team_path(cfg):
 class CarLoader:
     def __init__(self, team_root_path):
         self.cars_dir = _path_for(team_root_path, "cars")
-        self.logger = logging.getLogger(__name__)
 
     def car_names(self):
         def __car_name(path):
@@ -167,7 +172,7 @@ class CarLoader:
 
         # it's possible that some cars don't have a config base, e.g. mixins which only override variables
         if len(config_paths) == 0:
-            self.logger.info("Car [%s] does not define any config paths. Assuming that it is used as a mixin.", name)
+            logger.info("Car [%s] does not define any config paths. Assuming that it is used as a mixin.", name)
         variables = self._copy_section(config, "variables", {})
         # add all car params here to override any defaults
         if car_params:
@@ -265,7 +270,6 @@ class Car:
 class PluginLoader:
     def __init__(self, team_root_path):
         self.plugins_root_path = _path_for(team_root_path, "plugins")
-        self.logger = logging.getLogger(__name__)
 
     def plugins(self):
         known_plugins = self._core_plugins() + self._configured_plugins()
@@ -319,11 +323,6 @@ class PluginLoader:
         return next((p for p in self._core_plugins() if p.name == name and p.config is None), None)
 
     def load_plugin(self, name, config_names, plugin_params=None):
-        if config_names is not None:
-            self.logger.info("Loading plugin [%s] with configuration(s) [%s].", name, config_names)
-        else:
-            self.logger.info("Loading plugin [%s] with default configuration.", name)
-
         root_path = self._plugin_root_path(name)
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
@@ -335,8 +334,8 @@ class PluginLoader:
                     return core_plugin
                 # If we just have a plugin name then we assume that this is a community plugin and the user has specified a download URL
                 else:
-                    self.logger.info("The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
-                                     "plugin not requiring any configuration and you have set a proper download URL.", name)
+                    logger.info("The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
+                                "plugin not requiring any configuration and you have set a proper download URL." % name)
                     return PluginDescriptor(name)
         else:
             variables = {}
@@ -447,7 +446,6 @@ class BootstrapHookHandler:
         # Rally's Python load path. We may need to define a more advanced strategy in the future.
         self.loader = loader_class(root_path=self.component.root_path, component_entry_point=self.component.entry_point, recurse=False)
         self.hooks = {}
-        self.logger = logging.getLogger(__name__)
 
     def can_load(self):
         return self.loader.can_load()
@@ -462,11 +460,11 @@ class BootstrapHookHandler:
             raise
         except BaseException:
             msg = "Could not load bootstrap hooks in [{}]".format(self.loader.root_path)
-            self.logger.exception(msg)
+            logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
     def register(self, phase, hook):
-        self.logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)
+        logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)
         if not BootstrapPhase.valid(phase):
             raise exceptions.SystemSetupError("Unknown bootstrap phase [{}]. Valid phases are: {}.".format(phase, BootstrapPhase.names()))
         if phase not in self.hooks:
@@ -475,11 +473,11 @@ class BootstrapHookHandler:
 
     def invoke(self, phase, **kwargs):
         if phase in self.hooks:
-            self.logger.info("Invoking phase [%s] for component [%s] in config [%s]", phase, self.component.name, self.component.config)
+            logger.info("Invoking phase [%s] for component [%s] in config [%s]", phase, self.component.name, self.component.config)
             for hook in self.hooks[phase]:
-                self.logger.info("Invoking bootstrap hook [%s].", hook.__name__)
+                logger.info("Invoking bootstrap hook [%s].", hook.__name__)
                 # hooks should only take keyword arguments to be forwards compatible with Rally!
                 hook(config_names=self.component.config, **kwargs)
         else:
-            self.logger.debug("Component [%s] in config [%s] has no hook registered for phase [%s].",
+            logger.debug("Component [%s] in config [%s] has no hook registered for phase [%s].",
                          self.component.name, self.component.config, phase)

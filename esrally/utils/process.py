@@ -5,12 +5,16 @@ import os
 import psutil
 import time
 
+logger = logging.getLogger("rally.process")
+
 
 def run_subprocess(command_line):
+    logger.debug("Running subprocess [%s]" % command_line)
     return os.system(command_line)
 
 
 def run_subprocess_with_output(command_line):
+    logger.debug("Running subprocess [%s] with output." % command_line)
     command_line_args = shlex.split(command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
         has_output = True
@@ -36,7 +40,7 @@ def exit_status_as_bool(runnable, quiet=False):
         return return_code == 0 or return_code is None
     except OSError:
         if not quiet:
-            logging.getLogger(__name__).exception("Could not execute command.")
+            logger.exception("Could not execute command.")
         return False
 
 
@@ -50,12 +54,11 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     :param env: Use specific environment variables (default: None).
     :return: The process exit code as an int.
     """
-    logger = logging.getLogger(__name__)
-    logger.debug("Running subprocess [%s] with logging.", command_line)
+    logger.debug("Running subprocess [%s] with logging." % command_line)
     command_line_args = shlex.split(command_line)
     if header is not None:
         logger.info(header)
-    logger.debug("Invoking subprocess '%s'", command_line)
+    logger.debug("Invoking subprocess '%s'" % command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
         has_output = True
         while has_output:
@@ -64,7 +67,7 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
                 logger.log(level=level, msg=line)
             else:
                 has_output = False
-    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
+    logger.debug("Subprocess [%s] finished with return code [%s]." % (command_line, str(command_line_process.returncode)))
     return command_line_process.returncode
 
 
@@ -78,7 +81,7 @@ def kill_running_es_instances(trait):
     def elasticsearch_process(p):
         return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any(trait in e for e in p.cmdline())
 
-    logging.getLogger(__name__).info("Killing all processes which match [java], [elasticsearch] and [%s]", trait)
+    logger.info("Killing all processes which match [java], [elasticsearch] and [%s]" % trait)
     kill_all(elasticsearch_process)
 
 
@@ -98,7 +101,7 @@ def find_all_other_rally_processes():
 
 def kill_all(predicate):
     def kill(p):
-        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, p.cmdline())
+        logger.info("Killing lingering process with PID [%s] and command line [%s]." % (p.pid, p.cmdline()))
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
         # sockets that are still open.
@@ -117,7 +120,11 @@ def for_all_other_processes(predicate, action):
     my_pid = os.getpid()
     for p in psutil.process_iter():
         try:
-            if p.pid != my_pid and predicate(p):
+            if p.pid == my_pid:
+                logger.info("Skipping myself (PID [%s])." % p.pid)
+            elif predicate(p):
                 action(p)
-        except (psutil.ZombieProcess, psutil.AccessDenied, psutil.NoSuchProcess):
-            pass
+            else:
+                logger.debug("Skipping [%s]" % p.cmdline())
+        except (psutil.ZombieProcess, psutil.AccessDenied) as e:
+            logger.debug("Skipping process: [%s]" % str(e))

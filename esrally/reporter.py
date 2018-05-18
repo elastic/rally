@@ -8,6 +8,8 @@ import tabulate
 from esrally import metrics, exceptions
 from esrally.utils import convert, io as rio, console
 
+logger = logging.getLogger("rally.reporting")
+
 
 def calculate_results(metrics_store, race, lap=None):
     calc = StatsCalculator(metrics_store, race.challenge, lap)
@@ -15,6 +17,7 @@ def calculate_results(metrics_store, race, lap=None):
 
 
 def summarize(race, cfg, lap=None):
+    logger.info("Summarizing results.")
     results = race.results_of_lap_number(lap) if lap else race.results
     SummaryReporter(results, cfg, race.revision, lap, race.total_laps).report()
 
@@ -32,7 +35,7 @@ def compare(cfg):
 
 
 def print_internal(message):
-    console.println(message, logger=logging.getLogger(__name__).info)
+    console.println(message, logger=logger.info)
 
 
 def print_header(message):
@@ -50,6 +53,8 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
     print_internal(formatter(headers, data_rich))
     if len(report_file) > 0:
         normalized_report_file = rio.normalize_path(report_file, cwd)
+        logger.info("Writing report to [%s] (user specified: [%s]) in format [%s]" %
+                    (normalized_report_file, report_file, report_format))
         # ensure that the parent folder already exists when we try to write the file...
         rio.ensure_dir(rio.dirname(normalized_report_file))
         with open(normalized_report_file, mode="a+", encoding="utf-8") as f:
@@ -104,7 +109,6 @@ class StatsCalculator:
         self.store = store
         self.challenge = challenge
         self.lap = lap
-        self.logger = logging.getLogger(__name__)
 
     def __call__(self):
         result = Stats()
@@ -113,7 +117,7 @@ class StatsCalculator:
             for task in tasks:
                 if task.operation.include_in_reporting:
                     t = task.name
-                    self.logger.debug("Gathering request metrics for [%s].", t)
+                    logger.debug("Gathering request metrics for [%s]." % t)
                     result.add_op_metrics(
                         t,
                         task.operation.name,
@@ -122,15 +126,15 @@ class StatsCalculator:
                         self.single_latency(t, metric_name="service_time"),
                         self.error_rate(t)
                     )
-        self.logger.debug("Gathering node startup time metrics.")
+        logger.debug("Gathering node startup time metrics.")
         startup_times = self.store.get_raw("node_startup_time")
         for startup_time in startup_times:
             if "meta" in startup_time and "node_name" in startup_time["meta"]:
                 result.add_node_metrics(startup_time["meta"]["node_name"], startup_time["value"])
             else:
-                self.logger.debug("Skipping incomplete startup time record [%s].", str(startup_time))
+                logger.debug("Skipping incomplete startup time record [%s]." % str(startup_time))
 
-        self.logger.debug("Gathering indexing metrics.")
+        logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
         result.indexing_throttle_time = self.sum("indexing_throttle_time")
         result.merge_time = self.sum("merges_total_time")
@@ -138,7 +142,7 @@ class StatsCalculator:
         result.flush_time = self.sum("flush_total_time")
         result.merge_throttle_time = self.sum("merges_total_throttled_time")
 
-        self.logger.debug("Gathering merge part metrics.")
+        logger.debug("Gathering merge part metrics.")
         result.merge_part_time_postings = self.sum("merge_parts_total_time_postings")
         result.merge_part_time_stored_fields = self.sum("merge_parts_total_time_stored_fields")
         result.merge_part_time_doc_values = self.sum("merge_parts_total_time_doc_values")
@@ -146,17 +150,17 @@ class StatsCalculator:
         result.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
         result.merge_part_time_points = self.sum("merge_parts_total_time_points")
 
-        self.logger.debug("Gathering ML max processing time.")
+        logger.debug("Gathering ML max processing time.")
         result.ml_max_processing_time = self.one("ml_max_processing_time_millis")
 
-        self.logger.debug("Gathering CPU usage metrics.")
+        logger.debug("Gathering CPU usage metrics.")
         result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
 
-        self.logger.debug("Gathering garbage collection metrics.")
+        logger.debug("Gathering garbage collection metrics.")
         result.young_gc_time = self.sum("node_total_young_gen_gc_time")
         result.old_gc_time = self.sum("node_total_old_gen_gc_time")
 
-        self.logger.debug("Gathering segment memory metrics.")
+        logger.debug("Gathering segment memory metrics.")
         result.memory_segments = self.median("segments_memory_in_bytes")
         result.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
         result.memory_terms = self.median("segments_terms_memory_in_bytes")
@@ -164,7 +168,7 @@ class StatsCalculator:
         result.memory_points = self.median("segments_points_memory_in_bytes")
         result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
 
-        self.logger.debug("Gathering disk metrics.")
+        logger.debug("Gathering disk metrics.")
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         result.index_size = self.sum("final_index_size_bytes")
         # we need to use the median here because these two are captured with the indices stats API and thus once per lap. If we'd
@@ -411,7 +415,7 @@ class SummaryReporter:
 
         if warnings:
             for warning in warnings:
-                console.warn(warning)
+                console.warn(warning, logger=logger)
 
     def add_warnings(self, warnings, values, op):
         if values["throughput"]["median"] is None:
@@ -547,6 +551,10 @@ class ComparisonReporter:
         self.plain = False
 
     def report(self, r1, r2):
+        logger.info("Generating comparison report for baseline (trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]) and "
+                    "contender (trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s])" %
+                    (r1.trial_timestamp, r1.track, r1.challenge, r1.car,
+                     r2.trial_timestamp, r2.track, r2.challenge, r2.car))
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
         baseline_stats = Stats(r1.results)
         contender_stats = Stats(r2.results)

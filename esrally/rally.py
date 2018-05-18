@@ -1,15 +1,97 @@
 import argparse
 import datetime
 import logging
+import logging.handlers
 import os
 import sys
 import time
 import uuid
 
-from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, log
+from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, time as rtime
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
 from esrally.mechanic import team, telemetry
 from esrally.utils import io, convert, process, console, net, opts
+
+logger = logging.getLogger("rally.main")
+
+
+# we want to use some basic logging even before the output to log file is configured
+def pre_configure_logging():
+    logging.basicConfig(level=logging.INFO)
+
+
+def application_log_dir_path():
+    return "%s/.rally/logs" % os.path.expanduser("~")
+
+
+def application_log_file_path(start_time):
+    return "%s/rally_out_%s.log" % (application_log_dir_path(), start_time)
+
+
+def configure_logging(cfg):
+    start_time = rtime.to_iso8601(cfg.opts("system", "time.start"))
+    logging_output = cfg.opts("system", "logging.output")
+    profiling_enabled = cfg.opts("driver", "profiling")
+
+    if logging_output == "file":
+        log_file = application_log_file_path(start_time)
+        log_dir = os.path.dirname(log_file)
+        io.ensure_dir(log_dir)
+        console.info("Writing logs to %s" % log_file)
+        # there is an old log file lying around -> backup
+        if os.path.exists(log_file):
+            os.rename(log_file, "%s-bak-%d.log" % (log_file, int(os.path.getctime(log_file))))
+        ch = logging.FileHandler(filename=log_file, mode="a")
+    else:
+        ch = logging.StreamHandler(stream=sys.stdout)
+
+    log_level = logging.INFO
+    ch.setLevel(log_level)
+    formatter = logging.Formatter("%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter.converter = time.gmtime
+    ch.setFormatter(formatter)
+
+    # Remove all handlers associated with the root logger object so we can start over with an entirely fresh log configuration
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    logging.root.addHandler(ch)
+    logging.getLogger("elasticsearch").setLevel(logging.WARNING)
+
+    # Avoid failures such as the following (shortened a bit):
+    #
+    # ---------------------------------------------------------------------------------------------
+    # "esrally/driver/driver.py", line 220, in create_client
+    # "thespian-3.8.0-py3.5.egg/thespian/actors.py", line 187, in createActor
+    # [...]
+    # "thespian-3.8.0-py3.5.egg/thespian/system/multiprocCommon.py", line 348, in _startChildActor
+    # "python3.5/multiprocessing/process.py", line 105, in start
+    # "python3.5/multiprocessing/context.py", line 267, in _Popen
+    # "python3.5/multiprocessing/popen_fork.py", line 18, in __init__
+    # sys.stderr.flush()
+    #
+    # OSError: [Errno 5] Input/output error
+    # ---------------------------------------------------------------------------------------------
+    #
+    # This is caused by urllib3 wanting to send warnings about insecure SSL connections to stderr when we disable them (in client.py) with:
+    #
+    #   urllib3.disable_warnings()
+    #
+    # The filtering functionality of the warnings module causes the error above on some systems. If we instead redirect the warning output
+    # to our logs instead of stderr (which is the warnings module's default), we can disable warnings safely.
+    logging.captureWarnings(True)
+
+    if profiling_enabled:
+        profile_file = "%s/profile.log" % application_log_dir_path()
+        log_dir = os.path.dirname(profile_file)
+        io.ensure_dir(log_dir)
+        console.info("Writing driver profiling data to %s" % profile_file)
+        handler = logging.FileHandler(filename=profile_file, encoding="UTF-8")
+        handler.setFormatter(formatter)
+
+        profile_logger = logging.getLogger("rally.profile")
+        profile_logger.setLevel(logging.INFO)
+        profile_logger.addHandler(handler)
 
 
 def create_arg_parser():
@@ -311,6 +393,12 @@ def create_arg_parser():
             "--configuration-name",
             help=argparse.SUPPRESS,
             default=None)
+        p.add_argument(
+            "--logging",
+            choices=["file", "console"],
+            help=argparse.SUPPRESS,
+            default="file"
+        )
 
     return parser
 
@@ -365,11 +453,11 @@ def print_help_on_errors():
     heading = "Getting further help:"
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
-    console.println("* Check the log files in {} for errors.".format(log.default_log_path()))
-    console.println("* Read the documentation at {}".format(console.format.link(DOC_LINK)))
-    console.println("* Ask a question on the forum at {}".format(console.format.link("https://discuss.elastic.co/c/elasticsearch/rally")))
-    console.println("* Raise an issue at {} and include the log files in {}."
-                    .format(console.format.link("https://github.com/elastic/rally/issues"), log.default_log_path()))
+    console.println("* Check the log files in %s for errors." % application_log_dir_path())
+    console.println("* Read the documentation at %s" % console.format.link(DOC_LINK))
+    console.println("* Ask a question on the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
+    console.println("* Raise an issue at %s and include the log files in %s." %
+                    (console.format.link("https://github.com/elastic/rally/issues"), application_log_dir_path()))
 
 
 def race(cfg):
@@ -384,9 +472,8 @@ def race(cfg):
 
 
 def with_actor_system(runnable, cfg):
-    logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
-    logger.info("Actor system already running locally? [%s]", str(already_running))
+    logger.info("Actor system already running locally? [%s]" % str(already_running))
     try:
         actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
@@ -428,7 +515,7 @@ def with_actor_system(runnable, cfg):
                     logger.warning("User interrupted shutdown of internal actor system.")
                     console.info("Please wait a moment for Rally's internal components to shutdown.")
             if not shutdown_complete and times_interrupted > 0:
-                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
+                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times." % times_interrupted)
                 console.println("")
                 console.warn("Terminating now at the risk of leaving child processes behind.")
                 console.println("")
@@ -458,7 +545,7 @@ def dispatch_sub_command(cfg, sub_command):
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
         return True
     except exceptions.RallyError as e:
-        logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
+        logging.exception("Cannot run subcommand [%s]." % sub_command)
         msg = str(e.message)
         nesting = 0
         while hasattr(e, "cause") and e.cause:
@@ -474,7 +561,7 @@ def dispatch_sub_command(cfg, sub_command):
         print_help_on_errors()
         return False
     except BaseException as e:
-        logging.getLogger(__name__).exception("A fatal error occurred while running subcommand [%s].", sub_command)
+        logging.exception("A fatal error occurred while running subcommand [%s]." % sub_command)
         console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors()
@@ -483,14 +570,13 @@ def dispatch_sub_command(cfg, sub_command):
 
 def main():
     check_python_version()
-    log.install_default_log_config()
-    log.configure_logging()
-    logger = logging.getLogger(__name__)
+
     start = time.time()
 
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
 
+    pre_configure_logging()
     arg_parser = create_arg_parser()
     args = arg_parser.parse_args()
 
@@ -508,9 +594,12 @@ def main():
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
         cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
 
-    cfg.add(config.Scope.applicationOverride, "system", "trial.id", str(uuid.uuid4()))
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
+    cfg.add(config.Scope.applicationOverride, "system", "trial.id", str(uuid.uuid4()))
+
+    # per node?
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
+    cfg.add(config.Scope.applicationOverride, "system", "logging.output", args.logging)
 
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
@@ -603,10 +692,11 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
 
-    logger.info("OS [%s]", str(os.uname()))
-    logger.info("Python [%s]", str(sys.implementation))
-    logger.info("Rally version [%s]", version.version())
-    logger.info("Command line arguments: %s", args)
+    configure_logging(cfg)
+    logger.info("OS [%s]" % str(os.uname()))
+    logger.info("Python [%s]" % str(sys.implementation))
+    logger.info("Rally version [%s]" % version.version())
+    logger.info("Command line arguments: %s" % args)
     # Configure networking
     net.init()
     if not args.offline:

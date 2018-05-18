@@ -10,6 +10,8 @@ from esrally import exceptions
 from esrally.track import track
 from esrally.utils import io, console
 
+logger = logging.getLogger("rally.track")
+
 __PARAM_SOURCES_BY_OP = {}
 __PARAM_SOURCES_BY_NAME = {}
 
@@ -19,6 +21,7 @@ def param_source_for_operation(op_type, track, params):
         # we know that this can only be a Rally core parameter source
         return __PARAM_SOURCES_BY_OP[op_type](track, params)
     except KeyError:
+        logger.debug("No specific parameter source registered for operation type [%s]. Creating default parameter source." % op_type)
         return ParamSource(track, params)
 
 
@@ -35,7 +38,7 @@ def param_source_for_name(name, track, params):
             s = inspect.signature(param_source)
         if len(s.parameters) == 2 and s.parameters.get("indices"):
             console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
-                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name)
+                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name, logger=logger)
             return LegacyDelegatingParamSource(track, params, param_source)
         else:
             return DelegatingParamSource(track, params, param_source)
@@ -48,7 +51,7 @@ def param_source_for_name(name, track, params):
         # self, indices, params
         if len(s.parameters) == 3 and s.parameters.get("indices"):
             console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
-                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name)
+                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name, logger=logger)
             return param_source(track.indices, params)
         else:
             return param_source(track, params)
@@ -581,6 +584,7 @@ def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
 def build_conflicting_ids(conflicts, docs_to_index, offset, shuffle=random.shuffle):
     if conflicts is None or conflicts == IndexIdConflict.NoConflicts:
         return None
+    logger.info("building ids with id conflicts of type [%s]" % conflicts)
     all_ids = [0] * docs_to_index
     for i in range(docs_to_index):
         # always consider the offset as each client will index its own range and we don't want uncontrolled conflicts across clients
@@ -618,7 +622,6 @@ def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_si
 
 def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
                    create_reader):
-    logger = logging.getLogger(__name__)
     readers = []
     for corpus in corpora:
         for docs in corpus.documents:
@@ -630,7 +633,7 @@ def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id
                 readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                                              on_conflict))
             else:
-                logger.info("Task-relative client at index [%d] skips [%s] (no documents to read).", client_index, corpus.name)
+                logger.info("Task-relative client at index [%d] skips [%s] (no documents to read)." % (client_index, corpus.name))
     return readers
 
 
@@ -769,14 +772,13 @@ class Slice:
         self.current_line = 0
 
     def open(self, file_name, mode):
-        logger = logging.getLogger(__name__)
         self.source = self.source_class(file_name, mode).open()
         # skip offset number of lines
-        logger.info("Skipping %d lines in [%s].", self.offset, file_name)
+        logger.info("Skipping %d lines in [%s]." % (self.offset, file_name))
         start = time.perf_counter()
         io.skip_lines(file_name, self.source, self.offset)
         end = time.perf_counter()
-        logger.info("Skipping %d lines took %f s.", self.offset, end - start)
+        logger.info("Skipping %d lines took %f s." % (self.offset, end - start))
         return self
 
     def close(self):
@@ -839,9 +841,10 @@ class IndexDataReader:
                 batch.append((docs_in_bulk, bulk))
             if docs_in_batch == 0:
                 raise StopIteration()
+            logger.debug("Returning a batch with %d bulks." % len(batch))
             return self.index_name, self.type_name, batch
         except IOError:
-            logging.getLogger(__name__).exception("Could not read [%s]", self.data_file)
+            logger.exception("Could not read [%s]" % self.data_file)
 
     def read_bulk(self):
         docs_in_bulk = 0

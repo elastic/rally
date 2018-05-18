@@ -5,6 +5,8 @@ import logging
 from esrally import exceptions
 from esrally.utils import git, console, versions
 
+logger = logging.getLogger("rally.repo")
+
 
 class RallyRepository:
     """
@@ -18,7 +20,6 @@ class RallyRepository:
         self.repo_dir = os.path.join(root_dir, repo_name)
         self.resource_name = resource_name
         self.offline = offline
-        self.logger = logging.getLogger(__name__)
         if self.remote and not self.offline and fetch:
             # a normal git repo with a remote
             if not git.is_working_copy(self.repo_dir):
@@ -27,7 +28,7 @@ class RallyRepository:
                 try:
                     git.fetch(src=self.repo_dir)
                 except exceptions.SupplyError:
-                    console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name)
+                    console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name, logger=logger)
         else:
             if not git.is_working_copy(self.repo_dir):
                 raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
@@ -39,14 +40,14 @@ class RallyRepository:
                 branch = versions.best_match(git.branches(self.repo_dir, remote=self.remote), distribution_version)
                 if branch:
                     # Allow uncommitted changes iff we do not have to change the branch
-                    self.logger.info(
-                        "Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
+                    logger.info(
+                        "Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.repo_dir, distribution_version))
                     git.checkout(self.repo_dir, branch=branch)
-                    self.logger.info("Rebasing on [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
+                    logger.info("Rebasing on [%s] in [%s] for distribution version [%s]." % (branch, self.repo_dir, distribution_version))
                     try:
                         git.rebase(self.repo_dir, branch=branch)
                     except exceptions.SupplyError:
-                        self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
+                        logger.exception("Cannot rebase due to local changes in [%s]" % self.repo_dir)
                         console.warn(
                             "Local changes in [%s] prevent %s update from remote. Please commit your changes." %
                             (self.repo_dir, self.resource_name))
@@ -54,10 +55,10 @@ class RallyRepository:
                 else:
                     msg = "Could not find %s remotely for distribution version [%s]. Trying to find %s locally." % \
                           (self.resource_name, distribution_version, self.resource_name)
-                    self.logger.warning(msg)
+                    logger.warning(msg)
             branch = versions.best_match(git.branches(self.repo_dir, remote=False), distribution_version)
             if branch:
-                self.logger.info("Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
+                logger.info("Checking out [%s] in [%s] for distribution version [%s]." % (branch, self.repo_dir, distribution_version))
                 git.checkout(self.repo_dir, branch=branch)
             else:
                 raise exceptions.SystemSetupError("Cannot find %s for distribution version %s" % (self.resource_name, distribution_version))
