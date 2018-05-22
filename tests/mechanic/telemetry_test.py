@@ -149,11 +149,16 @@ class SubClient:
 
 
 class TransportClient:
-    def __init__(self, stats=None):
-        self._stats = stats
+    def __init__(self, response=None, force_error=False):
+        self._response = response
+        self._force_error = force_error
 
     def perform_request(self, *args, **kwargs):
-        return self._stats
+        if self._force_error:
+            import elasticsearch
+            raise elasticsearch.TransportError
+        else:
+            return self._response
 
 
 class JfrTests(TestCase):
@@ -210,7 +215,7 @@ class GcTests(TestCase):
             env["ES_JAVA_OPTS"])
 
 
-class CCRStatsTests(TestCase):
+class CcrStatsTests(TestCase):
     def test_negative_sample_interval_forbidden(self):
         clients = { "default": Client(), "cluster_b": Client() }
         cfg = create_config()
@@ -220,7 +225,7 @@ class CCRStatsTests(TestCase):
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
                                     "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was .*\."):
-            telemetry.CCRStats(telemetry_params, clients, metrics_store)
+            telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
     def test_wrong_cluster_name_in_ccr_stats_indices_forbidden(self):
         clients = { "default": Client(), "cluster_b": Client() }
@@ -234,11 +239,23 @@ class CCRStatsTests(TestCase):
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
                                     "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching the cluster names "
+                                    "\[default,cluster_b\] "
                                     "specified in --target-hosts but it had \[wrong_cluster_name\]."):
-            telemetry.CCRStats(telemetry_params, clients, metrics_store)
+            telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
 
-class CCRStatsRecorderTests(TestCase):
+class CcrStatsRecorderTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    def test_raises_exception_on_transport_error(self, metrics_store_put_count):
+        client = Client(transport_client=TransportClient(response={}, force_error=True))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        with self.assertRaisesRegexp(exceptions.RallyError,
+                                     "A transport error occurred while collecting CCR stats from the endpoint \[/_xpack/ccr/_stats\] on "
+                                     "cluster \[remote\]"):
+            telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
+
+
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
     def test_stores_default_ccr_stats(self, metrics_store_put_count):
         total_fetch_time_millis = random.randint(0,9999999)
@@ -267,10 +284,10 @@ class CCRStatsRecorderTests(TestCase):
             }
         }
 
-        client = Client(transport_client=TransportClient(stats=ccr_stats_follower_response))
+        client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.CCRStatsRecorder("remote", client, metrics_store, 1)
+        recorder = telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1)
         recorder.record()
 
         shard_metadata = {
@@ -280,12 +297,12 @@ class CCRStatsRecorderTests(TestCase):
         }
 
         metrics_store_put_count.assert_has_calls([
-            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="millis", meta_data=shard_metadata),
-            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="millis", meta_data=shard_metadata),
+            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="ms", meta_data=shard_metadata),
             mock.call(name="operations_received_field", count=operations_received_field, meta_data=shard_metadata),
             mock.call(name="number_of_batches_field", count=number_of_batches_field, meta_data=shard_metadata),
             mock.call(name="total_transferred_bytes", count=total_transferred_bytes, unit="byte", meta_data=shard_metadata),
-            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="millis", meta_data=shard_metadata),
+            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="ms", meta_data=shard_metadata),
             mock.call(name="leader_max_seq_no", count=leader_max_seq_no, meta_data=shard_metadata),
             mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no, meta_data=shard_metadata),
             mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint, meta_data=shard_metadata),
@@ -320,10 +337,10 @@ class CCRStatsRecorderTests(TestCase):
             }
         }
 
-        client = Client(transport_client=TransportClient(stats=ccr_stats_follower_response))
+        client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.CCRStatsRecorder("remote", client, metrics_store, 1)
+        recorder = telemetry.CcrStatsRecorder("remote", client, metrics_store, 1)
         recorder.record()
 
         shard_metadata = [
@@ -341,12 +358,12 @@ class CCRStatsRecorderTests(TestCase):
 
         for shard_num in shard_range:
             metrics_store_put_count.assert_has_calls([
-                mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis[shard_num], unit="millis", meta_data=shard_metadata[shard_num]),
-                mock.call(name="total_index_time_millis", count=total_index_time_millis[shard_num], unit="millis", meta_data=shard_metadata[shard_num]),
+                mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
+                mock.call(name="total_index_time_millis", count=total_index_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
                 mock.call(name="operations_received_field", count=operations_received_field[shard_num], meta_data=shard_metadata[shard_num]),
                 mock.call(name="number_of_batches_field", count=number_of_batches_field[shard_num], meta_data=shard_metadata[shard_num]),
                 mock.call(name="total_transferred_bytes", count=total_transferred_bytes[shard_num], unit="byte", meta_data=shard_metadata[shard_num]),
-                mock.call(name="current_idle_time_millis", count=current_idle_time_millis[shard_num], unit="millis", meta_data=shard_metadata[shard_num]),
+                mock.call(name="current_idle_time_millis", count=current_idle_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
                 mock.call(name="leader_max_seq_no", count=leader_max_seq_no[shard_num], meta_data=shard_metadata[shard_num]),
                 mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no[shard_num], meta_data=shard_metadata[shard_num]),
                 mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint[shard_num], meta_data=shard_metadata[shard_num]),
@@ -393,10 +410,10 @@ class CCRStatsRecorderTests(TestCase):
             }
         }
 
-        client = Client(transport_client=TransportClient(stats=ccr_stats_follower_response))
+        client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.CCRStatsRecorder("remote", client, metrics_store, 1, indices=["follower1"])
+        recorder = telemetry.CcrStatsRecorder("remote", client, metrics_store, 1, indices=["follower1"])
         recorder.record()
 
         shard_metadata = {
@@ -406,12 +423,12 @@ class CCRStatsRecorderTests(TestCase):
         }
 
         metrics_store_put_count.assert_has_calls([
-            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="millis", meta_data=shard_metadata),
-            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="millis", meta_data=shard_metadata),
+            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="ms", meta_data=shard_metadata),
             mock.call(name="operations_received_field", count=operations_received_field, meta_data=shard_metadata),
             mock.call(name="number_of_batches_field", count=number_of_batches_field, meta_data=shard_metadata),
             mock.call(name="total_transferred_bytes", count=total_transferred_bytes, unit="byte", meta_data=shard_metadata),
-            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="millis", meta_data=shard_metadata),
+            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="ms", meta_data=shard_metadata),
             mock.call(name="leader_max_seq_no", count=leader_max_seq_no, meta_data=shard_metadata),
             mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no, meta_data=shard_metadata),
             mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint, meta_data=shard_metadata),

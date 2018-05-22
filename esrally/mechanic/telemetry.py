@@ -276,11 +276,11 @@ class PerfStat(TelemetryDevice):
             self.attached = False
 
 
-class CCRStats(TelemetryDevice):
+class CcrStats(TelemetryDevice):
     internal = False
     command = "ccr-stats"
     human_name = "CCR Stats"
-    help = "Regularly samples CCR related stats"
+    help = "Regularly samples Cross Cluster Replication (CCR) related stats"
 
     """
     Gathers CCR stats on a cluster level
@@ -290,12 +290,12 @@ class CCRStats(TelemetryDevice):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             May optionally specify:
-            ``ccr-stats-indices``: JSON object specifying the indices per cluster to pushish statistics from.
+            ``ccr-stats-indices``: JSON string specifying the indices per cluster to publish statistics from.
             Not all clusters need to be specified, but any name used must be be present in target.hosts.
             Example:
             {"ccr-stats-indices": {"cluster_a": ["follower"],"default": ["leader"]}
-            ``ccr-stats-sample-interval``: integer controlling the interval, in seconds, between collecting samples.
-        :param clients: A dict of client connections to all clusters.
+            ``ccr-stats-sample-interval``: positive integer controlling the sampling interval. Default: 1 second.
+        :param clients: A dict of clients to all clusters.
         :param metrics_store: The configured metrics store we write to.
         """
         super().__init__()
@@ -312,8 +312,8 @@ class CCRStats(TelemetryDevice):
             for cluster_name in self.indices_per_cluster.keys():
                 if cluster_name not in clients.keys():
                     raise exceptions.SystemSetupError(
-                        "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching the cluster names "
-                        "specified in --target-hosts but it had [{}].".format(cluster_name))
+                        "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
+                        "the cluster names [{}] specified in --target-hosts but it had [{}].".format(",".join(clients.keys()), cluster_name))
             self.specified_cluster_names = self.indices_per_cluster.keys()
 
         self.metrics_store = metrics_store
@@ -326,7 +326,7 @@ class CCRStats(TelemetryDevice):
     def on_benchmark_start(self):
         recorder = []
         for cluster_name in self.specified_cluster_names:
-            recorder = CCRStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
+            recorder = CcrStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
                                         self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None)
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
@@ -340,7 +340,7 @@ class CCRStats(TelemetryDevice):
                 sampler.finish()
 
 
-class CCRStatsRecorder:
+class CcrStatsRecorder:
     """
     Collects and pushes CCR stats for the specified cluster to the metric store.
     """
@@ -348,7 +348,7 @@ class CCRStatsRecorder:
     def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
         """
         :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
-        :param client: The Elasticsearch client connection to the cluster.
+        :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
         :param indices: optional list of indices to filter results from.
@@ -369,14 +369,24 @@ class CCRStatsRecorder:
         """
 
         # ES returns all stats values in bytes or ms via "human: false"
-        stats = self.client.transport.perform_request('GET', '/_xpack/ccr/_stats', params={"human": "false"})
+
+        import elasticsearch
+
+        try:
+            ccr_stats_api_endpoint = "/_xpack/ccr/_stats"
+            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false"})
+        except elasticsearch.TransportError as e:
+            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}] on " \
+                  "cluster [{}]".format(ccr_stats_api_endpoint, self.cluster_name)
+            logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
         if self.indices:
             # Record metrics only for indices specified with telemetry-params.
             for index in self.indices:
                 try:
-                    if stats[index] == {}:
-                        continue
-                    self.record_all_index_stats(index, stats[index])
+                    if stats[index]:
+                        self.record_stats_per_index(index, stats[index])
                 except KeyError:
                     logger.warning("The telemetry parameter 'ccr-stats-indices' specified the index [%s] for cluster [%s] but there are "
                                    "no stats available. Maybe the index hasn't been created yet, ignoring.",
@@ -384,21 +394,17 @@ class CCRStatsRecorder:
                                    self.cluster_name)
         else:
             # Record metrics for every index returned by the CCR stats API.
-            if stats != {}:
-                for index, stats in stats.items():
-                    self.record_all_index_stats(index, stats)
+            if stats:
+                for index_name, stats in stats.items():
+                    self.record_stats_per_index(index_name, stats)
             pass
         time.sleep(self.sample_interval)
 
-    def record_all_index_stats(self, name, stats):
+    def record_stats_per_index(self, name, stats):
         """
-        Push metric fields per shard to separate docs in metrics store.
-
         :param name: The index name.
         :param stats: A dict with returned CCR stats for the index.
         """
-
-        shard_metadata = {}
 
         for shard_num, shard_stats in stats.items():
             shard_metadata = {
@@ -421,7 +427,7 @@ class CCRStatsRecorder:
             elif "_millis" in metric_name:
                 self.metrics_store.put_count_cluster_level(name=metric_name,
                                                            count=metric_value,
-                                                           unit="millis",
+                                                           unit="ms",
                                                            meta_data=shard_metadata)
             else:
                 self.metrics_store.put_count_cluster_level(name=metric_name,
