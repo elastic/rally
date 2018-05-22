@@ -3,9 +3,9 @@ import os
 import re
 import signal
 import subprocess
+import tabulate
 import threading
 
-import tabulate
 from esrally import metrics, time, exceptions
 from esrally.utils import io, sysstats, process, console, versions
 
@@ -274,6 +274,165 @@ class PerfStat(TelemetryDevice):
                 logger.warning("perf stat did not terminate")
             self.log.close()
             self.attached = False
+
+
+class CcrStats(TelemetryDevice):
+    internal = False
+    command = "ccr-stats"
+    human_name = "CCR Stats"
+    help = "Regularly samples Cross Cluster Replication (CCR) related stats"
+
+    """
+    Gathers CCR stats on a cluster level
+    """
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``ccr-stats-indices``: JSON string specifying the indices per cluster to publish statistics from.
+            Not all clusters need to be specified, but any name used must be be present in target.hosts.
+            Example:
+            {"ccr-stats-indices": {"cluster_a": ["follower"],"default": ["leader"]}
+            ``ccr-stats-sample-interval``: positive integer controlling the sampling interval. Default: 1 second.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("ccr-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval))
+        self.specified_cluster_names = self.clients.keys()
+        self.indices_per_cluster = self.telemetry_params.get("ccr-stats-indices", False)
+        if self.indices_per_cluster:
+            for cluster_name in self.indices_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
+                        "the cluster names [{}] specified in --target-hosts but it had [{}].".format(",".join(clients.keys()), cluster_name))
+            self.specified_cluster_names = self.indices_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def attach_to_cluster(self, cluster):
+        # This cluster parameter does not correspond to the cluster names passed in target.hosts, see on_benchmark_start()
+        super().attach_to_cluster(cluster)
+
+    def on_benchmark_start(self):
+        recorder = []
+        for cluster_name in self.specified_cluster_names:
+            recorder = CcrStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
+                                        self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None)
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class CcrStatsRecorder:
+    """
+    Collects and pushes CCR stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param indices: optional list of indices to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval= sample_interval
+        self.indices = indices
+
+    def __str__(self):
+        return "ccr stats"
+
+    def record(self):
+        """
+        Collect CCR stats for indexes (optionally) specified in telemetry parameters and push to metrics store.
+        """
+
+        # ES returns all stats values in bytes or ms via "human: false"
+
+        import elasticsearch
+
+        try:
+            ccr_stats_api_endpoint = "/_xpack/ccr/_stats"
+            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false"})
+        except elasticsearch.TransportError as e:
+            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}] on " \
+                  "cluster [{}]".format(ccr_stats_api_endpoint, self.cluster_name)
+            logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        if self.indices:
+            # Record metrics only for indices specified with telemetry-params.
+            for index in self.indices:
+                try:
+                    if stats[index]:
+                        self.record_stats_per_index(index, stats[index])
+                except KeyError:
+                    logger.warning("The telemetry parameter 'ccr-stats-indices' specified the index [%s] for cluster [%s] but there are "
+                                   "no stats available. Maybe the index hasn't been created yet, ignoring.",
+                                   index,
+                                   self.cluster_name)
+        else:
+            # Record metrics for every index returned by the CCR stats API.
+            if stats:
+                for index_name, stats in stats.items():
+                    self.record_stats_per_index(index_name, stats)
+            pass
+        time.sleep(self.sample_interval)
+
+    def record_stats_per_index(self, name, stats):
+        """
+        :param name: The index name.
+        :param stats: A dict with returned CCR stats for the index.
+        """
+
+        for shard_num, shard_stats in stats.items():
+            shard_metadata = {
+                "cluster": self.cluster_name,
+                "index": name,
+                "shard": shard_num
+            }
+
+            for metric_name, metric_value in shard_stats.items():
+                self.put_value(metric_name, metric_value, shard_metadata)
+
+    def put_value(self, metric_name, metric_value, shard_metadata):
+        if isinstance(metric_value, (int, float)) and not isinstance(metric_value, bool):
+            # auto-recognize metric keys containing well-known keywords
+            if "_bytes" in metric_name:
+                self.metrics_store.put_count_cluster_level(name=metric_name,
+                                                           count=metric_value,
+                                                           unit="byte",
+                                                           meta_data=shard_metadata)
+            elif "_millis" in metric_name:
+                self.metrics_store.put_count_cluster_level(name=metric_name,
+                                                           count=metric_value,
+                                                           unit="ms",
+                                                           meta_data=shard_metadata)
+            else:
+                self.metrics_store.put_count_cluster_level(name=metric_name,
+                                                           count=metric_value,
+                                                           meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):

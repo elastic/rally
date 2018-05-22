@@ -125,10 +125,12 @@ class MergePartsDeviceTests(TestCase):
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None):
+    def __init__(self, nodes=None, info=None, indices=None, transport_client=None):
         self.nodes = nodes
         self._info = info
         self.indices = indices
+        if transport_client:
+            self.transport = transport_client
 
     def info(self):
         return self._info
@@ -144,6 +146,19 @@ class SubClient:
 
     def info(self, *args, **kwargs):
         return self._info
+
+
+class TransportClient:
+    def __init__(self, response=None, force_error=False):
+        self._response = response
+        self._force_error = force_error
+
+    def perform_request(self, *args, **kwargs):
+        if self._force_error:
+            import elasticsearch
+            raise elasticsearch.TransportError
+        else:
+            return self._response
 
 
 class JfrTests(TestCase):
@@ -198,6 +213,225 @@ class GcTests(TestCase):
         self.assertEqual(
             "-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0",
             env["ES_JAVA_OPTS"])
+
+
+class CcrStatsTests(TestCase):
+    def test_negative_sample_interval_forbidden(self):
+        clients = { "default": Client(), "cluster_b": Client() }
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "ccr-stats-sample-interval": -1 * random.random()
+        }
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was .*\."):
+            telemetry.CcrStats(telemetry_params, clients, metrics_store)
+
+    def test_wrong_cluster_name_in_ccr_stats_indices_forbidden(self):
+        clients = { "default": Client(), "cluster_b": Client() }
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "ccr-stats-indices":{
+                "default": ["leader"],
+                "wrong_cluster_name": ["follower"]
+            }
+        }
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching the cluster names "
+                                    "\[default,cluster_b\] "
+                                    "specified in --target-hosts but it had \[wrong_cluster_name\]."):
+            telemetry.CcrStats(telemetry_params, clients, metrics_store)
+
+
+class CcrStatsRecorderTests(TestCase):
+    def test_raises_exception_on_transport_error(self):
+        client = Client(transport_client=TransportClient(response={}, force_error=True))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        with self.assertRaisesRegexp(exceptions.RallyError,
+                                     "A transport error occurred while collecting CCR stats from the endpoint \[/_xpack/ccr/_stats\] on "
+                                     "cluster \[remote\]"):
+            telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
+
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    def test_stores_default_ccr_stats(self, metrics_store_put_count):
+        total_fetch_time_millis = random.randint(0,9999999)
+        total_index_time_millis = random.randint(0,9999999)
+        operations_received_field = random.randint(0,9999999)
+        number_of_batches_field = random.randint(0,9999999)
+        total_transferred_bytes = random.randint(0,999999999)
+        current_idle_time_millis = random.randint(0,9999999)
+        leader_max_seq_no = random.randint(0,9999999)
+        follower_primary_max_seq_no = random.randint(0,9999999)
+        processed_global_checkpoint = random.randint(0,9999999)
+
+        ccr_stats_follower_response = {
+            "follower": {
+                "0": {
+                    "total_fetch_time_millis": total_fetch_time_millis,
+                    "total_index_time_millis": total_index_time_millis,
+                    "operations_received_field": operations_received_field,
+                    "number_of_batches_field": number_of_batches_field,
+                    "total_transferred_bytes": total_transferred_bytes,
+                    "current_idle_time_millis": current_idle_time_millis,
+                    "leader_max_seq_no": leader_max_seq_no,
+                    "follower_primary_max_seq_no": follower_primary_max_seq_no,
+                    "processed_global_checkpoint": processed_global_checkpoint
+                }
+            }
+        }
+
+        client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+
+        shard_metadata = {
+            "cluster": "remote",
+            "index": "follower",
+            "shard": '0'
+        }
+
+        metrics_store_put_count.assert_has_calls([
+            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="operations_received_field", count=operations_received_field, meta_data=shard_metadata),
+            mock.call(name="number_of_batches_field", count=number_of_batches_field, meta_data=shard_metadata),
+            mock.call(name="total_transferred_bytes", count=total_transferred_bytes, unit="byte", meta_data=shard_metadata),
+            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="leader_max_seq_no", count=leader_max_seq_no, meta_data=shard_metadata),
+            mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no, meta_data=shard_metadata),
+            mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint, meta_data=shard_metadata),
+        ], any_order=True)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    def test_stores_default_ccr_stats_many_shards(self, metrics_store_put_count):
+        shard_range = range(2)
+        total_fetch_time_millis = [random.randint(0,9999999) for i in shard_range]
+        total_index_time_millis = [random.randint(0,9999999) for i in shard_range]
+        operations_received_field = [random.randint(0,9999999) for i in shard_range]
+        number_of_batches_field = [random.randint(0,9999999) for i in shard_range]
+        total_transferred_bytes = [random.randint(0,999999999) for i in shard_range]
+        current_idle_time_millis = [random.randint(0,9999999) for i in shard_range]
+        leader_max_seq_no = [random.randint(0,9999999) for i in shard_range]
+        follower_primary_max_seq_no = [random.randint(0,9999999) for i in shard_range]
+        processed_global_checkpoint = [random.randint(0,9999999) for i in shard_range]
+
+        ccr_stats_follower_response = {
+            "follower": {
+                str(shard_num): {
+                    "total_fetch_time_millis": total_fetch_time_millis[shard_num],
+                    "total_index_time_millis": total_index_time_millis[shard_num],
+                    "operations_received_field": operations_received_field[shard_num],
+                    "number_of_batches_field": number_of_batches_field[shard_num],
+                    "total_transferred_bytes": total_transferred_bytes[shard_num],
+                    "current_idle_time_millis": current_idle_time_millis[shard_num],
+                    "leader_max_seq_no": leader_max_seq_no[shard_num],
+                    "follower_primary_max_seq_no": follower_primary_max_seq_no[shard_num],
+                    "processed_global_checkpoint": processed_global_checkpoint[shard_num]
+                } for shard_num in shard_range
+            }
+        }
+
+        client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.CcrStatsRecorder("remote", client, metrics_store, 1)
+        recorder.record()
+
+        shard_metadata = [
+            {
+                "cluster": "remote",
+                "index": "follower",
+                "shard": '0'
+            },
+            {
+                "cluster": "remote",
+                "index": "follower",
+                "shard": '1'
+            }
+        ]
+
+        for shard_num in shard_range:
+            metrics_store_put_count.assert_has_calls([
+                mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
+                mock.call(name="total_index_time_millis", count=total_index_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
+                mock.call(name="operations_received_field", count=operations_received_field[shard_num], meta_data=shard_metadata[shard_num]),
+                mock.call(name="number_of_batches_field", count=number_of_batches_field[shard_num], meta_data=shard_metadata[shard_num]),
+                mock.call(name="total_transferred_bytes", count=total_transferred_bytes[shard_num], unit="byte", meta_data=shard_metadata[shard_num]),
+                mock.call(name="current_idle_time_millis", count=current_idle_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
+                mock.call(name="leader_max_seq_no", count=leader_max_seq_no[shard_num], meta_data=shard_metadata[shard_num]),
+                mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no[shard_num], meta_data=shard_metadata[shard_num]),
+                mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint[shard_num], meta_data=shard_metadata[shard_num]),
+            ], any_order=True)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    def test_stores_filtered_ccr_stats(self, metrics_store_put_count):
+        total_fetch_time_millis = random.randint(0,9999999)
+        total_index_time_millis = random.randint(0,9999999)
+        operations_received_field = random.randint(0,9999999)
+        number_of_batches_field = random.randint(0,9999999)
+        total_transferred_bytes = random.randint(0,999999999)
+        current_idle_time_millis = random.randint(0,9999999)
+        leader_max_seq_no = random.randint(0,9999999)
+        follower_primary_max_seq_no = random.randint(0,9999999)
+        processed_global_checkpoint = random.randint(0,9999999)
+
+        ccr_stats_follower_response = {
+            "follower1": {
+                "0": {
+                    "total_fetch_time_millis": total_fetch_time_millis,
+                    "total_index_time_millis": total_index_time_millis,
+                    "operations_received_field": operations_received_field,
+                    "number_of_batches_field": number_of_batches_field,
+                    "total_transferred_bytes": total_transferred_bytes,
+                    "current_idle_time_millis": current_idle_time_millis,
+                    "leader_max_seq_no": leader_max_seq_no,
+                    "follower_primary_max_seq_no": follower_primary_max_seq_no,
+                    "processed_global_checkpoint": processed_global_checkpoint
+                }
+            },
+            "follower2": {
+                "0": {
+                    "total_fetch_time_millis": random.randint(0,9999999),
+                    "total_index_time_millis": random.randint(0,9999999),
+                    "operations_received_field": random.randint(0,9999999),
+                    "number_of_batches_field": random.randint(0,9999999),
+                    "total_transferred_bytes": random.randint(0,999999999),
+                    "current_idle_time_millis": random.randint(0,9999999),
+                    "leader_max_seq_no": random.randint(0,9999999),
+                    "follower_primary_max_seq_no": random.randint(0,9999999),
+                    "processed_global_checkpoint": random.randint(0,9999999)
+                }
+            }
+        }
+
+        client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.CcrStatsRecorder("remote", client, metrics_store, 1, indices=["follower1"])
+        recorder.record()
+
+        shard_metadata = {
+            "cluster": "remote",
+            "index": "follower1",
+            "shard": '0'
+        }
+
+        metrics_store_put_count.assert_has_calls([
+            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="operations_received_field", count=operations_received_field, meta_data=shard_metadata),
+            mock.call(name="number_of_batches_field", count=number_of_batches_field, meta_data=shard_metadata),
+            mock.call(name="total_transferred_bytes", count=total_transferred_bytes, unit="byte", meta_data=shard_metadata),
+            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="ms", meta_data=shard_metadata),
+            mock.call(name="leader_max_seq_no", count=leader_max_seq_no, meta_data=shard_metadata),
+            mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no, meta_data=shard_metadata),
+            mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint, meta_data=shard_metadata),
+        ], any_order=True)
 
 
 class NodeStatsRecorderTests(TestCase):
