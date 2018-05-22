@@ -239,8 +239,8 @@ class CcrStatsTests(TestCase):
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
                                     "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching the cluster names "
-                                    "\[default,cluster_b\] "
-                                    "specified in --target-hosts but it had \[wrong_cluster_name\]."):
+                                    "\[{}] "
+                                    "specified in --target-hosts but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))):
             telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
 

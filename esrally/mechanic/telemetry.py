@@ -313,7 +313,8 @@ class CcrStats(TelemetryDevice):
                 if cluster_name not in clients:
                     raise exceptions.SystemSetupError(
                         "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
-                        "the cluster names [{}] specified in --target-hosts but it had [{}].".format(",".join(clients.keys()), cluster_name))
+                        "the cluster names [{}] specified in --target-hosts "
+                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
             self.specified_cluster_names = self.indices_per_cluster.keys()
 
         self.metrics_store = metrics_store
