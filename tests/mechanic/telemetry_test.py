@@ -245,8 +245,7 @@ class CcrStatsTests(TestCase):
 
 
 class CcrStatsRecorderTests(TestCase):
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_raises_exception_on_transport_error(self, metrics_store_put_count):
+    def test_raises_exception_on_transport_error(self):
         client = Client(transport_client=TransportClient(response={}, force_error=True))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
