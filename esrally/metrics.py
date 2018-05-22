@@ -11,8 +11,6 @@ import tabulate
 from esrally import time, exceptions, config, version, paths
 from esrally.utils import console, io, versions
 
-logger = logging.getLogger("rally.metrics")
-
 
 class EsClient:
     """
@@ -21,6 +19,7 @@ class EsClient:
 
     def __init__(self, client):
         self._client = client
+        self.logger = logging.getLogger(__name__)
 
     def put_template(self, name, template):
         return self.guarded(self._client.indices.put_template, name, template)
@@ -66,7 +65,7 @@ class EsClient:
                 msg = "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at " \
                       "port [%s] (wrong password?). Please fix the configuration in [%s]." % \
                       (node["host"], node["port"], config.ConfigFile().location)
-                logger.exception(msg)
+                self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.exceptions.AuthorizationException:
                 node = self._client.transport.hosts[0]
@@ -74,16 +73,15 @@ class EsClient:
                       "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough " \
                       "privileges in the configuration in [%s]." % \
                       (target.__name__, node["host"], node["port"], config.ConfigFile().location)
-                logger.exception(msg)
+                self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.exceptions.ConnectionTimeout:
                 if execution_count < max_execution_count:
-                    logger.info("Received a connection timeout from the metrics store in attempt [%d/%d]." %
-                                (execution_count, max_execution_count))
+                    self.logger.debug("Connection timeout in attempt [%d/%d].", execution_count, max_execution_count)
                     time.sleep(1)
                 else:
                     operation = target.__name__
-                    logger.exception("Got a connection timeout while running [%s] (retried %d times)." % (operation, max_execution_count))
+                    self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
                     node = self._client.transport.hosts[0]
                     msg = "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on " \
                           "host [%s] at port [%s]." % (operation, node["host"], node["port"])
@@ -92,26 +90,25 @@ class EsClient:
                 node = self._client.transport.hosts[0]
                 msg = "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]" \
                       " or fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
-                logger.exception(msg)
+                self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
                 # gateway timeout - let's wait a bit and retry
                 if e.status_code == 504 and execution_count < max_execution_count:
-                    logger.info("Received a gateway timeout from the metrics store in attempt [%d/%d]." %
-                                (execution_count, max_execution_count))
+                    self.logger.debug("Gateway timeout in attempt [%d/%d].", execution_count, max_execution_count)
                     time.sleep(1)
                 else:
                     node = self._client.transport.hosts[0]
                     msg = "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on " \
                           "host [%s] at port [%s]." % (target.__name__, node["host"], node["port"])
-                    logger.exception(msg)
+                    self.logger.exception(msg)
                     raise exceptions.RallyError(msg)
 
             except elasticsearch.exceptions.ElasticsearchException:
                 node = self._client.transport.hosts[0]
                 msg = "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] " \
                       "at port [%s]." % (target.__name__, node["host"], node["port"])
-                logger.exception(msg)
+                self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...
                 raise exceptions.RallyError(msg)
 
@@ -146,7 +143,6 @@ class EsClientFactory:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
 
-        logger.info("Creating connection to metrics store at %s:%s", host, port)
         factory = client.EsClientFactory(hosts=[{"host": host, "port": port}], client_options=client_options)
         self._client = factory.create()
 
@@ -205,7 +201,7 @@ def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, met
     """
     cls = metrics_store_class(cfg)
     store = cls(cfg=cfg, meta_info=meta_info, lap=lap)
-    logger.info("Creating %s" % str(store))
+    logging.getLogger(__name__).info("Creating %s", str(store))
 
     trial_id = cfg.opts("system", "trial.id")
     trial_timestamp = cfg.opts("system", "time.start")
@@ -248,7 +244,7 @@ def extract_user_tags_from_string(user_tags):
                 user_tags_dict[user_tag_key] = user_tag_value
         except ValueError:
             msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-            logger.exception(msg)
+            logging.getLogger(__name__).exception(msg)
             raise exceptions.SystemSetupError(msg)
     return user_tags_dict
 
@@ -292,6 +288,7 @@ class MetricsStore:
             self._meta_info = meta_info
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
+        self.logger = logging.getLogger(__name__)
 
     def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
@@ -326,8 +323,8 @@ class MetricsStore:
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
-        logger.info("Opening metrics store for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]" %
-                    (self._trial_timestamp, self._track, self._challenge, self._car))
+        self.logger.info("Opening metrics store for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]",
+                         self._trial_timestamp, self._track, self._challenge, self._car)
 
         user_tags = extract_user_tags_from_config(self._config)
         for k, v in user_tags.items():
@@ -359,7 +356,7 @@ class MetricsStore:
         raise NotImplementedError("abstract method")
 
     def close(self):
-        logger.info("Closing metrics store.")
+        self.logger.info("Closing metrics store.")
         """
         Closes the metric store. Note that it is mandatory to close the metrics store when it is no longer needed as it only persists
         metrics on close (in order to avoid additional latency during the benchmark).
@@ -570,7 +567,7 @@ class MetricsStore:
         :param memento: The external representation as returned by #to_externalizable().
         """
         if memento:
-            logger.info("Restoring in-memory representation of metrics store.")
+            self.logger.info("Restoring in-memory representation of metrics store.")
             for doc in pickle.loads(zlib.decompress(memento)):
                 self._add(doc)
 
@@ -764,8 +761,8 @@ class EsMetricsStore(MetricsStore):
     def flush(self, refresh=True):
         if self._docs:
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            logger.info("Successfully added %d metrics documents for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]." %
-                        (len(self._docs), self._trial_timestamp, self._track, self._challenge, self._car))
+            self.logger.info("Successfully added %d metrics documents for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s].",
+                             len(self._docs), self._trial_timestamp, self._track, self._challenge, self._car)
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
@@ -778,9 +775,10 @@ class EsMetricsStore(MetricsStore):
         query = {
             "query": self._query_by_name(name, task, operation_type, sample_type, lap)
         }
-        logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s]" % (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        self.logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s]",
+                          (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
-        logger.debug("Metrics query produced [%s] results." % result["hits"]["total"])
+        self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
     def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
@@ -795,23 +793,23 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        logger.debug("Issuing get_error_rate against index=[%s], doc_type=[%s], query=[%s]" %
-                     (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        self.logger.debug("Issuing get_error_rate against index=[%s], doc_type=[%s], query=[%s]",
+                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         buckets = result["aggregations"]["error_rate"]["buckets"]
-        logger.debug("Query returned [%d] buckets." % len(buckets))
+        self.logger.debug("Query returned [%d] buckets.", len(buckets))
         count_success = 0
         count_errors = 0
         for bucket in buckets:
             k = bucket["key_as_string"]
             doc_count = int(bucket["doc_count"])
-            logger.debug("Processing key [%s] with [%d] docs." % (k, doc_count))
+            self.logger.debug("Processing key [%s] with [%d] docs.", k, doc_count)
             if k == "true":
                 count_success = doc_count
             elif k == "false":
                 count_errors = doc_count
             else:
-                logger.warning("Unrecognized bucket key [%s] with [%d] docs." % (k, doc_count))
+                self.logger.warning("Unrecognized bucket key [%s] with [%d] docs.", k, doc_count)
 
         if count_errors == 0:
             return 0.0
@@ -838,8 +836,8 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        logger.debug("Issuing get_stats against index=[%s], doc_type=[%s], query=[%s]" %
-                     (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        self.logger.debug("Issuing get_stats against index=[%s], doc_type=[%s], query=[%s]",
+                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         return result["aggregations"]["metric_stats"]
 
@@ -858,11 +856,11 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        logger.debug("Issuing get_percentiles against index=[%s], doc_type=[%s], query=[%s]" %
-                     (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        self.logger.debug("Issuing get_percentiles against index=[%s], doc_type=[%s], query=[%s]",
+                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         hits = result["hits"]["total"]
-        logger.debug("get_percentiles produced %d hits" % hits)
+        self.logger.debug("get_percentiles produced %d hits", hits)
         if hits > 0:
             raw = result["aggregations"]["percentile_stats"]["values"]
             return collections.OrderedDict(sorted(raw.items(), key=lambda t: float(t[0])))
@@ -951,8 +949,8 @@ class InMemoryMetricsStore(MetricsStore):
         if clear:
             self.docs = []
         compressed = zlib.compress(pickle.dumps(docs))
-        logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes" %
-                    (sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1)))
+        self.logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes",
+                         sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1))
         return compressed
 
     def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
@@ -1040,10 +1038,10 @@ def race_store(cfg):
     :return: A race store implementation.
     """
     if cfg.opts("reporting", "datastore.type") == "elasticsearch":
-        logger.info("Creating ES race store")
+        logging.getLogger(__name__).info("Creating ES race store")
         return CompositeRaceStore(EsRaceStore(cfg), EsResultsStore(cfg), FileRaceStore(cfg))
     else:
-        logger.info("Creating file race store")
+        logging.getLogger(__name__).info("Creating file race store")
         return FileRaceStore(cfg)
 
 
@@ -1298,7 +1296,7 @@ class FileRaceStore(RaceStore):
                 with open(result, mode="rt", encoding="utf-8") as f:
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
-                logger.exception("Could not load race file [%s] (incompatible format?) Skipping..." % result)
+                logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
         return sorted(races, key=lambda r: r.trial_timestamp, reverse=True)
 
 

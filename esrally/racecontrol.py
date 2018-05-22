@@ -8,8 +8,6 @@ import thespian.actors
 from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, PROGRAM_NAME
 from esrally.utils import console, convert, opts
 
-logger = logging.getLogger("rally.racecontrol")
-
 # benchmarks with external candidates are really scary and we should warn users.
 BOGUS_RESULTS_WARNING = """
 ************************************************************************
@@ -80,7 +78,6 @@ class Success:
 class BenchmarkActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
-        actor.RallyActor.configure_logging(logger)
         self.cfg = None
         self.race = None
         self.metrics_store = None
@@ -93,18 +90,18 @@ class BenchmarkActor(actor.RallyActor):
         self.main_driver = None
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        logger.info("BenchmarkActor got notified of poison message [%s] (forwarding)." % (str(msg)))
+        self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
         self.error = True
         self.send(self.start_sender, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        logger.info("BenchmarkActor received unknown message [%s] (ignoring)." % (str(msg)))
+        self.logger.info("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
 
     def receiveMsg_Setup(self, msg, sender):
         self.setup(msg, sender)
 
     def receiveMsg_EngineStarted(self, msg, sender):
-        logger.info("Mechanic has started engine successfully.")
+        self.logger.info("Mechanic has started engine successfully.")
         self.metrics_store.meta_info = msg.system_meta_info
         cluster = msg.cluster_meta_info
         self.race.cluster = cluster
@@ -114,8 +111,8 @@ class BenchmarkActor(actor.RallyActor):
         self.run()
 
     def receiveMsg_TaskFinished(self, msg, sender):
-        logger.info("Task has finished.")
-        logger.info("Bulk adding request metrics to metrics store.")
+        self.logger.info("Task has finished.")
+        self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(msg.metrics)
         # We choose *NOT* to reset our own metrics store's timer as this one is only used to collect complete metrics records from
         # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
@@ -128,24 +125,24 @@ class BenchmarkActor(actor.RallyActor):
         self.send(self.start_sender, msg)
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
-        logger.info("Received a benchmark failure from [%s] and will forward it now." % sender)
+        self.logger.info("Received a benchmark failure from [%s] and will forward it now.", sender)
         self.error = True
         self.send(self.start_sender, msg)
 
     def receiveMsg_BenchmarkComplete(self, msg, sender):
-        logger.info("Benchmark is complete.")
-        logger.info("Bulk adding request metrics to metrics store.")
+        self.logger.info("Benchmark is complete.")
+        self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(msg.metrics)
         self.send(self.main_driver, thespian.actors.ActorExitRequest())
         self.main_driver = None
         self.send(self.mechanic, mechanic.OnBenchmarkStop())
 
     def receiveMsg_BenchmarkStopped(self, msg, sender):
-        logger.info("Bulk adding system metrics to metrics store.")
+        self.logger.info("Bulk adding system metrics to metrics store.")
         self.metrics_store.bulk_add(msg.system_metrics)
-        logger.info("Flushing metrics data...")
+        self.logger.info("Flushing metrics data...")
         self.metrics_store.flush()
-        logger.info("Flushing done")
+        self.logger.info("Flushing done")
         self.lap_counter.after_lap()
         if self.lap_counter.has_more_laps():
             self.run()
@@ -153,8 +150,8 @@ class BenchmarkActor(actor.RallyActor):
             self.teardown()
 
     def receiveMsg_EngineStopped(self, msg, sender):
-        logger.info("Mechanic has stopped engine successfully.")
-        logger.info("Bulk adding system metrics to metrics store.")
+        self.logger.info("Mechanic has stopped engine successfully.")
+        self.logger.info("Bulk adding system metrics to metrics store.")
         self.metrics_store.bulk_add(msg.system_metrics)
         self.metrics_store.flush()
         if not self.cancelled and not self.error:
@@ -163,7 +160,7 @@ class BenchmarkActor(actor.RallyActor):
             reporter.summarize(self.race, self.cfg)
             self.race_store.store_race(self.race)
         else:
-            logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r]." % (self.cancelled, self.error))
+            self.logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r].", self.cancelled, self.error)
         self.metrics_store.close()
         self.send(self.start_sender, Success())
 
@@ -179,7 +176,7 @@ class BenchmarkActor(actor.RallyActor):
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
             if not distribution_version:
                 raise exceptions.SystemSetupError("A distribution version is required. Please specify it with --distribution-version.")
-            logger.info("Automatically derived distribution version [%s]" % distribution_version)
+            self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
 
         t = track.load_track(self.cfg)
@@ -189,7 +186,7 @@ class BenchmarkActor(actor.RallyActor):
             raise exceptions.SystemSetupError("Track [%s] does not provide challenge [%s]. List the available tracks with %s list tracks."
                                               % (t.name, challenge_name, PROGRAM_NAME))
         if challenge.user_info:
-            console.info(challenge.user_info, logger=logger)
+            console.info(challenge.user_info)
         self.race = metrics.create_race(self.cfg, t, challenge)
 
         self.metrics_store = metrics.metrics_store(
@@ -200,7 +197,7 @@ class BenchmarkActor(actor.RallyActor):
         )
         self.lap_counter = LapCounter(self.race, self.metrics_store, self.cfg)
         self.race_store = metrics.race_store(self.cfg)
-        logger.info("Asking mechanic to start the engine.")
+        self.logger.info("Asking mechanic to start the engine.")
         cluster_settings = self.race.challenge.cluster_settings
         self.send(self.mechanic, mechanic.StartEngine(self.cfg, self.metrics_store.open_context, cluster_settings, msg.sources, msg.build,
                                                       msg.distribution, msg.external, msg.docker))
@@ -209,14 +206,14 @@ class BenchmarkActor(actor.RallyActor):
         self.lap_counter.before_lap()
         lap = self.lap_counter.current_lap
         self.metrics_store.lap = lap
-        logger.info("Telling mechanic of benchmark start.")
+        self.logger.info("Telling mechanic of benchmark start.")
         self.send(self.mechanic, mechanic.OnBenchmarkStart(lap))
         self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
-        logger.info("Telling driver to start benchmark.")
+        self.logger.info("Telling driver to start benchmark.")
         self.send(self.main_driver, driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info, lap))
 
     def teardown(self):
-        logger.info("Asking mechanic to stop the engine.")
+        self.logger.info("Asking mechanic to stop the engine.")
         self.send(self.mechanic, mechanic.StopEngine())
 
 
@@ -229,20 +226,21 @@ class LapCounter:
         self.lap_timer.start()
         self.lap_times = 0
         self.current_lap = 0
+        self.logger = logging.getLogger(__name__)
 
     def has_more_laps(self):
         return self.current_lap < self.race.total_laps
 
     def before_lap(self):
         self.current_lap += 1
-        logger.info("Starting lap [%d/%d]" % (self.current_lap, self.race.total_laps))
+        self.logger.info("Starting lap [%d/%d]", self.current_lap, self.race.total_laps)
         if self.race.total_laps > 1:
             msg = "Lap [%d/%d]" % (self.current_lap, self.race.total_laps)
             console.println(console.format.bold(msg))
             console.println(console.format.underline_for(msg))
 
     def after_lap(self):
-        logger.info("Finished lap [%d/%d]" % (self.current_lap, self.race.total_laps))
+        self.logger.info("Finished lap [%d/%d]", self.current_lap, self.race.total_laps)
         if self.race.total_laps > 1:
             lap_time = self.lap_timer.split_time() - self.lap_times
             self.lap_times += lap_time
@@ -254,13 +252,14 @@ class LapCounter:
             if self.current_lap < self.race.total_laps:
                 remaining = (self.race.total_laps - self.current_lap) * self.lap_times / self.current_lap
                 hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
-                console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=logger)
+                console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=self.logger)
             else:
-                console.info("Lap time %02d:%02d:%02d" % (hl, ml, sl), logger=logger)
+                console.info("Lap time %02d:%02d:%02d" % (hl, ml, sl), logger=self.logger)
             console.println("")
 
 
 def race(cfg, sources=False, build=False, distribution=False, external=False, docker=False):
+    logger = logging.getLogger(__name__)
     # at this point an actor system has to run and we should only join
     actor_system = actor.bootstrap_actor_system(try_join=True)
     benchmark_actor = actor_system.createActor(BenchmarkActor, targetActorRequirements={"coordinator": True})
@@ -287,6 +286,7 @@ def race(cfg, sources=False, build=False, distribution=False, external=False, do
 
 
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
+    logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
     if len(configured_hosts.default) !=0 :
         logger.info("Using configured hosts %s", configured_hosts.default)
@@ -354,16 +354,17 @@ def list_pipelines():
 
 
 def run(cfg):
+    logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
     if len(name) == 0:
         if cfg.exists("mechanic", "distribution.version"):
             name = "from-distribution"
         else:
             name = "from-sources-complete"
-        logger.info("User specified no pipeline. Automatically derived pipeline [%s]." % name)
+        logger.info("User specified no pipeline. Automatically derived pipeline [%s].", name)
         cfg.add(config.Scope.applicationOverride, "race", "pipeline", name)
     else:
-        logger.info("User specified pipeline [%s]." % name)
+        logger.info("User specified pipeline [%s].", name)
 
     try:
         pipeline = pipelines[name]

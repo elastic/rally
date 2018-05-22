@@ -9,8 +9,6 @@ import tabulate
 from esrally import metrics, time, exceptions
 from esrally.utils import io, sysstats, process, console, versions
 
-logger = logging.getLogger("rally.telemetry")
-
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
@@ -87,6 +85,9 @@ class Telemetry:
 ########################################################################################
 
 class TelemetryDevice:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
     def instrument_env(self, car, candidate_id):
         return {}
 
@@ -132,8 +133,8 @@ class SamplerThread(threading.Thread):
             while not self.stop:
                 self.recorder.record()
                 time.sleep(self.recorder.sample_interval)
-        except BaseException as e:
-            logger.exception("Could not determine {}".format(self.recorder))
+        except BaseException:
+            logging.getLogger(__name__).exception("Could not determine {}".format(self.recorder))
 
 
 class FlightRecorder(TelemetryDevice):
@@ -162,11 +163,11 @@ class FlightRecorder(TelemetryDevice):
 
         time.sleep(3)
 
-        console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=logger)
+        console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=self.logger)
 
         java_opts = self.java_opts(log_file)
 
-        logger.info("jfr: Adding JVM arguments: [%s].", java_opts)
+        self.logger.info("jfr: Adding JVM arguments: [%s].", java_opts)
         return {"ES_JAVA_OPTS": java_opts}
 
     def java_opts(self, log_file):
@@ -178,17 +179,17 @@ class FlightRecorder(TelemetryDevice):
             java_opts += "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={} ".format(log_file)
             java_opts += "-XX:StartFlightRecording=defaultrecording=true"
             if recording_template:
-                logger.info("jfr: Using recording template [%s].", recording_template)
+                self.logger.info("jfr: Using recording template [%s].", recording_template)
                 java_opts += ",settings={}".format(recording_template)
             else:
-                logger.info("jfr: Using default recording template.")
+                self.logger.info("jfr: Using default recording template.")
         else:
             java_opts += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
             if recording_template:
-                logger.info("jfr: Using recording template [%s].", recording_template)
+                self.logger.info("jfr: Using recording template [%s].", recording_template)
                 java_opts += ",settings={}".format(recording_template)
             else:
-                logger.info("jfr: Using default recording template.")
+                self.logger.info("jfr: Using default recording template.")
         return java_opts
 
 
@@ -205,7 +206,7 @@ class JitCompiler(TelemetryDevice):
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
-        console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=logger)
+        console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
         return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
                                 "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
 
@@ -224,7 +225,7 @@ class Gc(TelemetryDevice):
     def instrument_env(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.gc.log" % (self.log_root, car.safe_name, candidate_id)
-        console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=logger)
+        console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=self.logger)
         return self.java_opts(log_file)
 
     def java_opts(self, log_file):
@@ -255,7 +256,7 @@ class PerfStat(TelemetryDevice):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s.perf.log" % (self.log_root, node.node_name)
 
-        console.info("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=logger)
+        console.info("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=self.logger)
 
         self.log = open(log_file, "wb")
 
@@ -266,12 +267,12 @@ class PerfStat(TelemetryDevice):
 
     def detach_from_node(self, node, running):
         if self.attached and running:
-            logger.info("Dumping PMU counters for node [%s]" % node.node_name)
+            self.logger.info("Dumping PMU counters for node [%s]", node.node_name)
             os.kill(self.process.pid, signal.SIGINT)
             try:
                 self.process.wait(10.0)
             except subprocess.TimeoutExpired:
-                logger.warning("perf stat did not terminate")
+                self.logger.warning("perf stat did not terminate")
             self.log.close()
             self.attached = False
 
@@ -422,13 +423,14 @@ class NodeStatsRecorder:
         try:
             stats = self.client.nodes.stats(metric="_all")
         except elasticsearch.TransportError:
-            logger.exception("Could not retrieve node stats.")
+            logging.getLogger(__name__).exception("Could not retrieve node stats.")
             return {}
         return stats["nodes"].values()
 
 
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, metrics_store, stopwatch=time.StopWatch):
+        super().__init__()
         self.metrics_store = metrics_store
         self.timer = stopwatch()
 
@@ -457,12 +459,12 @@ class MergeParts(InternalTelemetryDevice):
         self.node = node
 
     def on_benchmark_stop(self):
-        logger.info("Analyzing merge times.")
+        self.logger.info("Analyzing merge times.")
         # first decompress all logs. They have unique names so it's safe to do that. It's easier to first decompress everything
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if io.is_archive(log_path):
-                logger.info("Decompressing [%s] to analyze merge times..." % log_path)
+                self.logger.info("Decompressing [%s] to analyze merge times...", log_path)
                 io.decompress(log_path, self.node_log_dir)
 
         # we need to add up times from all files
@@ -470,14 +472,14 @@ class MergeParts(InternalTelemetryDevice):
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
             if not io.is_archive(log_file):
-                logger.debug("Analyzing merge times in [%s]" % log_path)
+                self.logger.debug("Analyzing merge times in [%s]", log_path)
                 with open(log_path, mode="rt", encoding="utf-8") as f:
                     self._extract_merge_times(f, merge_times)
             else:
-                logger.debug("Skipping archived logs in [%s]." % log_path)
+                self.logger.debug("Skipping archived logs in [%s].", log_path)
         if merge_times:
             self._store_merge_times(merge_times)
-        logger.info("Finished analyzing merge times. Extracted [%s] different merge time components." % len(merge_times))
+        self.logger.info("Finished analyzing merge times. Extracted [%s] different merge time components.", len(merge_times))
 
     def _extract_merge_times(self, file, merge_times):
         for line in file.readlines():
@@ -518,13 +520,13 @@ class DiskIo(InternalTelemetryDevice):
         if self.process is not None:
             self.process_start = sysstats.process_io_counters(self.process)
             if self.process_start:
-                logger.info("Using more accurate process-based I/O counters.")
+                self.logger.info("Using more accurate process-based I/O counters.")
             else:
                 try:
                     self.disk_start = sysstats.disk_io_counters()
-                    logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+                    self.logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
                 except RuntimeError:
-                    logger.exception("Could not determine I/O stats at benchmark start.")
+                    self.logger.exception("Could not determine I/O stats at benchmark start.")
 
     def on_benchmark_stop(self):
         if self.process is not None:
@@ -539,7 +541,7 @@ class DiskIo(InternalTelemetryDevice):
                     write_bytes = process_end.write_bytes - self.process_start.write_bytes
                 elif self.disk_start:
                     if self.node_count_on_host > 1:
-                        logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
+                        self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
                                     "Attributing [1/%d] of total I/O to [%s]." %
                                     (self.node_count_on_host, self.node_count_on_host, self.node.node_name))
 
@@ -553,7 +555,7 @@ class DiskIo(InternalTelemetryDevice):
                 self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes", read_bytes, "byte")
             # Catching RuntimeException is not sufficient as psutil might raise AccessDenied et.al. which is derived from Exception
             except BaseException:
-                logger.exception("Could not determine I/O stats at benchmark end.")
+                self.logger.exception("Could not determine I/O stats at benchmark end.")
 
 
 class CpuUsage(InternalTelemetryDevice):
@@ -646,7 +648,6 @@ def extract_value(node, path, fallback="unknown"):
         for k in path:
             value = value[k]
     except KeyError:
-        logger.warning("Could not determine meta-data at path [%s]." % ",".join(path))
         value = fallback
     return value
 
@@ -834,7 +835,7 @@ class GcTimesSummary(InternalTelemetryDevice):
                 self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
             else:
-                logger.warning("Cannot determine GC times for node [%s]. It was not part of the cluster at the start of the benchmark.")
+                self.logger.warning("Cannot determine GC times for [%s] (not in the cluster at the start of the benchmark).", node_name)
 
         self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
         self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
@@ -842,13 +843,13 @@ class GcTimesSummary(InternalTelemetryDevice):
         self.gc_times_per_node = None
 
     def gc_times(self):
-        logger.debug("Gathering GC times")
+        self.logger.debug("Gathering GC times")
         gc_times = {}
         import elasticsearch
         try:
             stats = self.client.nodes.stats(metric="_all")
         except elasticsearch.TransportError:
-            logger.exception("Could not retrieve GC times.")
+            self.logger.exception("Could not retrieve GC times.")
             return gc_times
         nodes = stats["nodes"]
         for node in nodes.values():
@@ -879,14 +880,14 @@ class IndexStats(InternalTelemetryDevice):
             for k, v in index_times.items():
                 if v > 0:
                     console.warn("%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
-                                 "metrics may be misleading." % (k, v), logger=logger)
+                                 "metrics may be misleading." % (k, v), logger=self.logger)
             self.first_time = False
 
     def on_benchmark_stop(self):
         import json
-        logger.info("Gathering indices stats for all primaries on benchmark stop.")
+        self.logger.info("Gathering indices stats for all primaries on benchmark stop.")
         index_stats = self.index_stats()
-        logger.info("Returned indices stats:\n%s" % json.dumps(index_stats, indent=2))
+        self.logger.info("Returned indices stats:\n%s", json.dumps(index_stats, indent=2))
         if "primaries" not in index_stats:
             return
         p = index_stats["primaries"]
@@ -895,7 +896,7 @@ class IndexStats(InternalTelemetryDevice):
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
         for metric_key, value in self.index_times(p).items():
-            logger.info("Adding [%s] = [%s] to metrics store." % (str(metric_key), str(value)))
+            self.logger.info("Adding [%s] = [%s] to metrics store.", str(metric_key), str(value))
             self.add_metrics(value, metric_key, "ms")
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
@@ -912,7 +913,7 @@ class IndexStats(InternalTelemetryDevice):
             stats = self.client.indices.stats(metric="_all", level="shards")
             return stats["_all"]
         except BaseException:
-            logger.exception("Could not retrieve index stats.")
+            self.logger.exception("Could not retrieve index stats.")
             return {}
 
     def index_times(self, p):
@@ -939,7 +940,7 @@ class IndexStats(InternalTelemetryDevice):
                 value = value[k]
             return value
         except KeyError:
-            logger.warning("Could not determine value at path [%s]. Returning default value [%s]" % (",".join(path), str(default_value)))
+            self.logger.warning("Could not determine value at path [%s]. Returning default value [%s]", ",".join(path), str(default_value))
             return default_value
 
 
@@ -970,7 +971,7 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
                 }
             })
         except elasticsearch.TransportError:
-            logger.exception("Could not retrieve ML bucket processing time.")
+            self.logger.exception("Could not retrieve ML bucket processing time.")
             return
         try:
             value = results["aggregations"]["max_bucket_processing_time"]["value"]
