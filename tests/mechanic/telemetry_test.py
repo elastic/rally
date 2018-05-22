@@ -304,6 +304,34 @@ class NodeStatsRecorderTests(TestCase):
                             "current_loaded_count" : 9992,
                             "total_loaded_count" : 9992,
                             "total_unloaded_count" : 0
+                        },
+                        "mem": {
+                            "heap_used_in_bytes": 119073552,
+                            "heap_used_percent": 19,
+                            "heap_committed_in_bytes": 626393088,
+                            "heap_max_in_bytes": 626393088,
+                            "non_heap_used_in_bytes": 110250424,
+                            "non_heap_committed_in_bytes": 118108160,
+                            "pools": {
+                                "young": {
+                                    "used_in_bytes": 66378576,
+                                    "max_in_bytes": 139591680,
+                                    "peak_used_in_bytes": 139591680,
+                                    "peak_max_in_bytes": 139591680
+                                },
+                                "survivor": {
+                                    "used_in_bytes": 358496,
+                                    "max_in_bytes": 17432576,
+                                    "peak_used_in_bytes": 17432576,
+                                    "peak_max_in_bytes": 17432576
+                                },
+                                "old": {
+                                    "used_in_bytes": 52336480,
+                                    "max_in_bytes": 469368832,
+                                    "peak_used_in_bytes": 52336480,
+                                    "peak_max_in_bytes": 469368832
+                                }
+                            }
                         }
                     },
                     "process": {
@@ -467,6 +495,34 @@ class NodeStatsRecorderTests(TestCase):
                             "current_loaded_count" : 9992,
                             "total_loaded_count" : 9992,
                             "total_unloaded_count" : 0
+                        },
+                        "mem": {
+                            "heap_used_in_bytes": 119073552,
+                            "heap_used_percent": 19,
+                            "heap_committed_in_bytes": 626393088,
+                            "heap_max_in_bytes": 626393088,
+                            "non_heap_used_in_bytes": 110250424,
+                            "non_heap_committed_in_bytes": 118108160,
+                            "pools": {
+                                "young": {
+                                    "used_in_bytes": 66378576,
+                                    "max_in_bytes": 139591680,
+                                    "peak_used_in_bytes": 139591680,
+                                    "peak_max_in_bytes": 139591680
+                                },
+                                "survivor": {
+                                    "used_in_bytes": 358496,
+                                    "max_in_bytes": 17432576,
+                                    "peak_used_in_bytes": 17432576,
+                                    "peak_max_in_bytes": 17432576
+                                },
+                                "old": {
+                                    "used_in_bytes": 52336480,
+                                    "max_in_bytes": 469368832,
+                                    "peak_used_in_bytes": 52336480,
+                                    "peak_max_in_bytes": 469368832
+                                }
+                            }
                         }
                     },
                     "process": {
@@ -556,6 +612,7 @@ class NodeStatsRecorderTests(TestCase):
             mock.call(node_name="rally0", name="breaker_parent_tripped", count=0),
             mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_count", count=7),
             mock.call(node_name="rally0", name="jvm_buffer_pool_direct_count", count=6),
+            mock.call(node_name="rally0", name="jvm_mem_heap_used_percent", count=19),
         ], any_order=True)
 
         metrics_store_put_value.assert_has_calls([
@@ -578,6 +635,11 @@ class NodeStatsRecorderTests(TestCase):
             mock.call(node_name="rally0", name="jvm_buffer_pool_mapped_total_capacity_in_bytes", value=9999, unit="byte"),
             mock.call(node_name="rally0", name="jvm_buffer_pool_direct_used_in_bytes", value=73868, unit="byte"),
             mock.call(node_name="rally0", name="jvm_buffer_pool_direct_total_capacity_in_bytes", value=73867, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_mem_heap_used_in_bytes", value=119073552, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_mem_heap_committed_in_bytes", value=626393088, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_mem_heap_max_in_bytes", value=626393088, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_mem_non_heap_used_in_bytes", value=110250424, unit="byte"),
+            mock.call(node_name="rally0", name="jvm_mem_non_heap_committed_in_bytes", value=118108160, unit="byte"),
         ], any_order=True)
 
 

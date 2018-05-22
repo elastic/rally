@@ -319,6 +319,7 @@ class NodeStatsRecorder:
         self.include_breakers = telemetry_params.get("node-stats-include-breakers", True)
         self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.include_process = telemetry_params.get("node-stats-include-process", True)
+        self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
         self.client = client
         self.metrics_store = metrics_store
 
@@ -339,6 +340,8 @@ class NodeStatsRecorder:
                 self.record_circuit_breaker_stats(node_name, node_stats)
             if self.include_buffer_pools:
                 self.record_jvm_buffer_pool_stats(node_name, node_stats)
+            if self.include_mem_stats:
+                self.record_jvm_mem_stats(node_name, node_stats)
             if self.include_network:
                 self.record_network_stats(node_name, node_stats)
             if self.include_process:
@@ -380,6 +383,15 @@ class NodeStatsRecorder:
             for metric_name, metric_value in pool_metrics.items():
                 self.put_value(node_name,
                                metric_name="jvm_buffer_pool_{}_{}".format(pool_name, metric_name),
+                               node_stats_metric_name=metric_name,
+                               metric_value=metric_value)
+
+    def record_jvm_mem_stats(self, node_name, node_stats):
+        mem_stats = node_stats["jvm"]["mem"]
+        if mem_stats:
+            for metric_name, metric_value in mem_stats.items():
+                self.put_value(node_name,
+                               metric_name="jvm_mem_{}".format(metric_name),
                                node_stats_metric_name=metric_name,
                                metric_value=metric_value)
 
