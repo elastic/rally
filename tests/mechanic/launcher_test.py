@@ -152,7 +152,12 @@ class ClusterLauncherTests(TestCase):
         cluster = cluster_launcher.start()
 
         for telemetry_device in cluster.telemetry.devices:
-            self.assertDictEqual({"retry-on-timeout": True, "timeout": 60}, telemetry_device.client.client_options)
+            if hasattr(telemetry_device, "clients"):
+                # Process all clients options for multi cluster aware telemetry devices, like CcrStats
+                for _, client in telemetry_device.clients.items():
+                    self.assertDictEqual({"retry-on-timeout": True, "timeout": 60}, client.client_options)
+            else:
+                self.assertDictEqual({"retry-on-timeout": True, "timeout": 60}, telemetry_device.client.client_options)
 
     @mock.patch("time.sleep")
     def test_error_on_cluster_launch(self, sleep):
