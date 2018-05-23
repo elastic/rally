@@ -61,7 +61,7 @@ def load_configuration():
         return json.load(f)
 
 
-def post_configure_actor_logging():
+def post_configure_actor_logging(actor_logger):
     """
     Reconfigures all loggers in actor processes.
 
@@ -74,7 +74,9 @@ def post_configure_actor_logging():
     logger_configuration = load_configuration()
     if "root" in logger_configuration and "level" in logger_configuration["root"]:
         root_logger = logging.getLogger()
-        root_logger.setLevel(logger_configuration["root"]["level"])
+        root_log_level = logger_configuration["root"]["level"]
+        root_logger.setLevel(root_log_level)
+        actor_logger.parent.setLevel(root_log_level)
 
     if "loggers" in logger_configuration:
         for lgr, cfg in load_configuration()["loggers"].items():

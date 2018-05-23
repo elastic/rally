@@ -79,8 +79,8 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         self.children = []
         self.received_responses = []
         self.status = None
-        log.post_configure_actor_logging()
         self.logger = logging.getLogger(__name__)
+        log.post_configure_actor_logging(self.logger)
 
     # The method name is required by the actor framework
     # noinspection PyPep8Naming
