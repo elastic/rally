@@ -172,7 +172,7 @@ class DriverActor(actor.RallyActor):
                 self.logger.info("Load generator [%d] has exited.", driver_index)
             else:
                 self.logger.error("Load generator [%d] has exited prematurely. Aborting benchmark.", driver_index)
-                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely.", driver_index))
+                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely.".format(driver_index)))
         else:
             self.logger.info("A track preparator has exited.")
 
@@ -421,8 +421,8 @@ class Driver:
             current_join_point = task
             # we need to actively send CompleteCurrentTask messages to all remaining clients.
             if current_join_point.preceding_task_completes_parent and not self.complete_current_task_sent:
-                self.logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet."
-                            % (current_join_point, current_join_point.clients_executing_completing_task))
+                self.logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet.",
+                                 current_join_point, current_join_point.clients_executing_completing_task)
                 # are all clients executing said task already done? if so we need to notify the remaining clients
                 all_clients_finished = True
                 for client_id in current_join_point.clients_executing_completing_task:
@@ -696,8 +696,8 @@ class LoadGenerator(actor.RallyActor):
             # There may be a situation where there are more (parallel) tasks than clients. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
             if self.complete.is_set():
-                self.logger.info("LoadGenerator[%d] is skipping [%s] because it has been asked to complete all tasks until next join "
-                                 "point." % (self.client_id, task))
+                self.logger.info("LoadGenerator[%d] skips [%s] because it has been asked to complete all tasks until next join point.",
+                                 self.client_id, task)
             else:
                 self.logger.info("LoadGenerator[%d] is executing [%s].", self.client_id, task)
                 self.sampler = Sampler(self.client_id, task, start_timestamp=time.perf_counter())

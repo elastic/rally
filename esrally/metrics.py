@@ -775,8 +775,7 @@ class EsMetricsStore(MetricsStore):
         query = {
             "query": self._query_by_name(name, task, operation_type, sample_type, lap)
         }
-        self.logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s]",
-                          (self._index, EsMetricsStore.METRICS_DOC_TYPE, query))
+        self.logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s].", self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
         result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]

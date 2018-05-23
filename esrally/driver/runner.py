@@ -683,8 +683,8 @@ class Query(Runner):
                 # (1.x does not support a proper JSON body in clear scroll requests).
                 self.es.transport.perform_request("DELETE", "/_search/scroll/%s" % self.scroll_id)
             except BaseException:
-                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in Elasticsearch and "
-                                 "will skew your benchmark results." % self.scroll_id)
+                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in Elasticsearch and will "
+                                      "skew your benchmark results.", self.scroll_id)
         self.scroll_id = None
         self.es = None
         return False

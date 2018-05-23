@@ -134,7 +134,7 @@ class SamplerThread(threading.Thread):
                 self.recorder.record()
                 time.sleep(self.recorder.sample_interval)
         except BaseException:
-            logging.getLogger(__name__).exception("Could not determine {}".format(self.recorder))
+            logging.getLogger(__name__).exception("Could not determine %s", self.recorder)
 
 
 class FlightRecorder(TelemetryDevice):
@@ -713,9 +713,8 @@ class DiskIo(InternalTelemetryDevice):
                     write_bytes = process_end.write_bytes - self.process_start.write_bytes
                 elif self.disk_start:
                     if self.node_count_on_host > 1:
-                        self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
-                                    "Attributing [1/%d] of total I/O to [%s]." %
-                                    (self.node_count_on_host, self.node_count_on_host, self.node.node_name))
+                        self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
+                                         "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node.node_name)
 
                     disk_end = sysstats.disk_io_counters()
                     read_bytes = (disk_end.read_bytes - self.disk_start.read_bytes) // self.node_count_on_host
