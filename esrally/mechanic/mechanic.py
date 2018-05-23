@@ -8,7 +8,6 @@ from esrally import actor, client, paths, config, metrics, exceptions
 from esrally.utils import net
 from esrally.mechanic import supplier, provisioner, launcher, team
 
-logger = logging.getLogger("rally.mechanic")
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
@@ -226,7 +225,6 @@ class MechanicActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        actor.RallyActor.configure_logging(logger)
         self.cfg = None
         self.metrics_store = None
         self.race_control = None
@@ -235,29 +233,29 @@ class MechanicActor(actor.RallyActor):
         self.car = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+        self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
 
     def receiveMsg_ChildActorExited(self, msg, sender):
         if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
-            logger.info("Child actor exited while engine is stopping or stopped: [%s]" % msg)
+            self.logger.info("Child actor exited while engine is stopping or stopped: [%s]", msg)
             return
         failmsg = "Child actor exited with [%s] while in status [%s]." % (msg, self.status)
-        logger.error(failmsg)
+        self.logger.error(failmsg)
         self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        logger.info("MechanicActor#receiveMessage poison(msg = [%s] sender = [%s])" % (str(msg.poisonMessage), str(sender)))
+        self.logger.info("MechanicActor#receiveMessage poison(msg = [%s] sender = [%s])", str(msg.poisonMessage), str(sender))
         # something went wrong with a child actor (or another actor with which we have communicated)
         if isinstance(msg.poisonMessage, StartEngine):
             failmsg = "Could not start benchmark candidate. Are Rally daemons on all targeted machines running?"
         else:
             failmsg = msg.details
-        logger.error(failmsg)
+        self.logger.error(failmsg)
         self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
     @actor.no_retry("mechanic")
     def receiveMsg_StartEngine(self, msg, sender):
-        logger.info("Received signal from race control to start engine.")
+        self.logger.info("Received signal from race control to start engine.")
         self.race_control = sender
         self.cfg = msg.cfg
         cls = metrics.metrics_store_class(self.cfg)
@@ -271,14 +269,14 @@ class MechanicActor(actor.RallyActor):
             raise exceptions.LaunchError("No target hosts are configured.")
 
         if msg.external:
-            logger.info("Cluster will not be provisioned by Rally.")
+            self.logger.info("Cluster will not be provisioned by Rally.")
             # just create one actor for this special case and run it on the coordinator node (i.e. here)
             m = self.createActor(NodeMechanicActor,
                                  targetActorRequirements={"coordinator": True})
             self.children.append(m)
             self.send(m, msg.for_nodes(ip=hosts))
         else:
-            logger.info("Cluster consisting of %s will be provisioned by Rally." % hosts)
+            self.logger.info("Cluster consisting of %s will be provisioned by Rally.", hosts)
             msg.hosts = hosts
             # Initialize the children array to have the right size to
             # ensure waiting for all responses
@@ -327,7 +325,7 @@ class MechanicActor(actor.RallyActor):
         if msg.payload == MechanicActor.WAKEUP_RESET_RELATIVE_TIME:
             self.reset_relative_time()
         elif msg.payload == MechanicActor.WAKEUP_FLUSH_METRICS:
-            logger.info("Flushing cluster-wide system metrics store.")
+            self.logger.info("Flushing cluster-wide system metrics store.")
             self.metrics_store.flush(refresh=False)
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
         else:
@@ -388,7 +386,7 @@ class MechanicActor(actor.RallyActor):
         self.send(self.race_control, BenchmarkStarted())
 
     def reset_relative_time(self):
-        logger.info("Resetting relative time of cluster system metrics store.")
+        self.logger.info("Resetting relative time of cluster system metrics store.")
         self.metrics_store.reset_relative_time()
         for m in self.children:
             self.send(m, ResetRelativeTime(0))
@@ -409,7 +407,7 @@ class MechanicActor(actor.RallyActor):
 
 
 @thespian.actors.requireCapability('coordinator')
-class Dispatcher(thespian.actors.ActorTypeDispatcher):
+class Dispatcher(actor.RallyActor):
     def __init__(self):
         super().__init__()
         self.start_sender = None
@@ -457,11 +455,11 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
 
     def receiveMsg_ActorSystemConventionUpdate(self, convmsg, sender):
         if not convmsg.remoteAdded:
-            logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.", convmsg.remoteAdminAddress)
+            self.logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.", convmsg.remoteAdminAddress)
             self.start_sender(actor.BenchmarkFailure("Remote Rally node [%s] has been shutdown prematurely." % convmsg.remoteAdminAddress))
         else:
             remote_ip = convmsg.remoteCapabilities.get('ip', None)
-            logger.info("Remote Rally node [%s] has started." % remote_ip)
+            self.logger.info("Remote Rally node [%s] has started.", remote_ip)
 
             for eachmsg in self.remotes[remote_ip]:
                 self.pending.append((self.createActor(NodeMechanicActor,
@@ -488,7 +486,7 @@ class Dispatcher(thespian.actors.ActorTypeDispatcher):
         self.send(self.start_sender, actor.BenchmarkFailure(msg.details))
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+        self.logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
 
 
 class NodeMechanicActor(actor.RallyActor):
@@ -499,7 +497,6 @@ class NodeMechanicActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        actor.RallyActor.configure_logging(logger)
         self.config = None
         self.metrics_store = None
         self.mechanic = None
@@ -510,9 +507,9 @@ class NodeMechanicActor(actor.RallyActor):
         try:
             self.host = msg.ip
             if msg.external:
-                logger.info("Connecting to externally provisioned nodes on [%s]." % msg.ip)
+                self.logger.info("Connecting to externally provisioned nodes on [%s].", msg.ip)
             else:
-                logger.info("Starting node(s) %s on [%s]." % (msg.node_ids, msg.ip))
+                self.logger.info("Starting node(s) %s on [%s].", msg.node_ids, msg.ip)
 
             # Load node-specific configuration
             self.config = config.auto_load_local_config(msg.cfg, additional_sections=[
@@ -542,7 +539,7 @@ class NodeMechanicActor(actor.RallyActor):
             self.running = True
             self.send(getattr(msg, "reply_to", sender), NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
         except Exception:
-            logger.exception("Cannot process message [%s]" % msg)
+            self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
             import traceback
             ex_type, ex_value, ex_traceback = sys.exc_info()
@@ -564,9 +561,9 @@ class NodeMechanicActor(actor.RallyActor):
         # needs to block anyway. The only reason we implement mechanic as an actor is to distribute them.
         # noinspection PyBroadException
         try:
-            logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])" % (str(type(msg)), str(sender)))
+            self.logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
             if isinstance(msg, ResetRelativeTime):
-                logger.info("Resetting relative time of system metrics store on host [%s]." % self.host)
+                self.logger.info("Resetting relative time of system metrics store on host [%s].", self.host)
                 self.metrics_store.reset_relative_time()
             elif isinstance(msg, OnBenchmarkStart):
                 self.metrics_store.lap = msg.lap
@@ -575,7 +572,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.send(sender, BenchmarkStarted())
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 if self.running:
-                    logger.info("Flushing system metrics store on host [%s]." % self.host)
+                    self.logger.info("Flushing system metrics store on host [%s].", self.host)
                     self.metrics_store.flush(refresh=False)
                     self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             elif isinstance(msg, OnBenchmarkStop):
@@ -584,7 +581,7 @@ class NodeMechanicActor(actor.RallyActor):
                 # clear metrics store data to not send duplicate system metrics data
                 self.send(sender, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
             elif isinstance(msg, StopNodes):
-                logger.info("Stopping nodes %s." % self.mechanic.nodes)
+                self.logger.info("Stopping nodes %s.", self.mechanic.nodes)
                 self.mechanic.stop_engine()
                 self.send(sender, NodesStopped(self.metrics_store.to_externalizable()))
                 # clear all state as the mechanic might get reused later
@@ -595,12 +592,12 @@ class NodeMechanicActor(actor.RallyActor):
                 self.metrics_store = None
             elif isinstance(msg, thespian.actors.ActorExitRequest):
                 if self.running:
-                    logger.info("Stopping nodes %s (due to ActorExitRequest)" % self.mechanic.nodes)
+                    self.logger.info("Stopping nodes %s (due to ActorExitRequest)", self.mechanic.nodes)
                     self.mechanic.stop_engine()
                     self.running = False
         except BaseException as e:
             self.running = False
-            logger.exception("Cannot process message [%s]" % msg)
+            self.logger.exception("Cannot process message [%s]", msg)
             self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure("Error on host %s" % str(self.host), e))
 
 
@@ -635,8 +632,9 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         l = launcher.InProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         if cluster_settings:
-            logger.warning("Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure "
-                           "that the cluster settings are present or the benchmark may fail or behave unexpectedly." % cluster_settings)
+            logging.getLogger(__name__).warning(
+                "Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure that the cluster "
+                "settings are present or the benchmark may fail or behave unexpectedly." % cluster_settings)
         if len(plugins) > 0:
             raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "
                                               "\"--elasticsearch-plugins\" and try again.")

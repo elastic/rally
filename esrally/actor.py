@@ -1,16 +1,9 @@
 import logging
-import time
-import os
 
 import thespian.actors
 import thespian.system.messages.status
-from esrally import exceptions
-from esrally.utils import console, io, net
-
-logger = logging.getLogger("rally.actor")
-
-root_log_level = logging.INFO
-es_log_level = logging.WARNING
+from esrally import exceptions, log
+from esrally.utils import console, net
 
 
 class BenchmarkFailure:
@@ -75,7 +68,7 @@ def no_retry(f, actor_name):
         except BaseException as e:
             msg = "Error in {}".format(actor_name)
             # log here as the full trace might get lost.
-            logger.exception(msg)
+            logging.getLogger(__name__).exception(msg)
             self.send(sender, BenchmarkFailure(msg, e))
     return guard
 
@@ -86,27 +79,21 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         self.children = []
         self.received_responses = []
         self.status = None
-
-    @staticmethod
-    def configure_logging(actor_logger):
-        # see rally#configure_logging() for more details.
-        logging.captureWarnings(True)
-        # configure each actor's root logger
-        actor_logger.parent.setLevel(root_log_level)
-        # Also ensure that the elasticsearch logger is properly configured
-        logging.getLogger("elasticsearch").setLevel(es_log_level)
+        log.post_configure_actor_logging()
+        self.logger = logging.getLogger(__name__)
 
     # The method name is required by the actor framework
     # noinspection PyPep8Naming
     @staticmethod
     def actorSystemCapabilityCheck(capabilities, requirements):
+        logger = logging.getLogger(__name__)
         for name, value in requirements.items():
             current = capabilities.get(name, None)
             if current != value:
                 # A mismatch by is not a problem by itself as long as at least one actor system instance matches the requirements.
-                logger.info("Checking capabilities [%s] against requirements [%s] failed." % (capabilities, requirements))
+                logger.info("Checking capabilities [%s] against requirements [%s] failed.", capabilities, requirements)
                 return False
-        logger.info("Capabilities [%s] match requirements [%s]." % (capabilities, requirements))
+        logger.info("Capabilities [%s] match requirements [%s].", capabilities, requirements)
         return True
 
     def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
@@ -125,11 +112,10 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             response_count = len(self.received_responses)
             expected_count = len(self.children)
 
-            logger.info("[%d] of [%d] child actors have responded for transition from [%s] to [%s]." %
-                        (response_count, expected_count, self.status, new_status))
+            self.logger.info("[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
+                             response_count, expected_count, self.status, new_status)
             if response_count == expected_count:
-                logger.info("All [%d] child actors have responded. Transitioning now from [%s] to [%s]." %
-                            (expected_count, self.status, new_status))
+                self.logger.info("All [%d] child actors have responded. Transitioning now from [%s] to [%s].", expected_count, self.status, new_status)
                 # all nodes have responded, change status
                 self.status = new_status
                 self.received_responses = []
@@ -153,7 +139,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         :param new_status: The new status.
         """
         if self.is_current_status_expected(expected_status):
-            logger.info("Transitioning from [%s] to [%s]." % (self.status, new_status))
+            self.logger.info("Transitioning from [%s] to [%s].", self.status, new_status)
             self.status = new_status
             for m in filter(None, self.children):
                 self.send(m, msg)
@@ -170,61 +156,6 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             return self.status in expected_status
         else:
             return self.status == expected_status
-
-
-# Defined on top-level to allow pickling
-def configure_utc_formatter(*args, **kwargs):
-    formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
-    formatter.converter = time.gmtime
-    return formatter
-
-
-def configure_actor_logging():
-    log_dir = "%s/.rally/logs" % os.path.expanduser("~")
-    io.ensure_dir(log_dir)
-
-    return {
-        "version": 1,
-        "formatters": {
-            "normal": {
-                "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-                # paraphrasing from 70a4bc8: If we use thespian directory functionality, we need to remove the callable formatter.
-                # A potential other solution would then be to enforce UTC timezones by setting the TZ env variable before we start
-                # the actor system.
-                "()": "esrally.actor.configure_utc_formatter"
-            },
-        },
-        "filters": {
-            "isActorLog": {
-                "()": 'thespian.director.ActorAddressLogFilter'
-            },
-        },
-        "handlers": {
-            "rally_log_handler": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
-                "filename": "%s/rally-actor-messages.log" % log_dir,
-                "when": "midnight",
-                "backupCount": 14,
-                "encoding": "UTF-8",
-                "formatter": "normal",
-                "filters": ["isActorLog"],
-                "level": root_log_level
-            },
-        },
-        "root": {
-            "handlers": ["rally_log_handler"],
-            "level": root_log_level
-        },
-        "loggers": {
-            "elasticsearch": {
-                "handlers": ["rally_log_handler"],
-                "level": es_log_level,
-                # don't let the root logger handle it again
-                "propagate": 0
-            }
-        }
-    }
 
 
 def actor_system_already_running(ip="127.0.0.1"):
@@ -252,16 +183,17 @@ def use_offline_actor_system():
 
 
 def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None):
+    logger = logging.getLogger(__name__)
     system_base = __SYSTEM_BASE
     try:
         if try_join:
             if actor_system_already_running():
-                logger.info("Joining already running actor system with system base [%s]." % system_base)
+                logger.info("Joining already running actor system with system base [%s].", system_base)
                 return thespian.actors.ActorSystem(system_base)
             else:
-                logger.info("Creating new actor system with system base [%s] on coordinator node." % system_base)
+                logger.info("Creating new actor system with system base [%s] on coordinator node.", system_base)
                 # if we try to join we can only run on the coordinator...
-                return thespian.actors.ActorSystem(system_base, logDefs=configure_actor_logging(), capabilities={"coordinator": True})
+                return thespian.actors.ActorSystem(system_base, logDefs=log.load_configuration(), capabilities={"coordinator": True})
         elif prefer_local_only:
             coordinator = True
             if system_base != "multiprocQueueBase":
@@ -290,9 +222,9 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
         if coordinator_ip:
             # Make the coordinator node the convention leader
             capabilities["Convention Address.IPv4"] = "%s:1900" % coordinator_ip
-        logger.info("Starting actor system with system base [%s] and capabilities [%s]." % (system_base, capabilities))
+        logger.info("Starting actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
         return thespian.actors.ActorSystem(system_base,
-                                           logDefs=configure_actor_logging(),
+                                           logDefs=log.load_configuration(),
                                            capabilities=capabilities)
     except thespian.actors.ActorSystemException:
         logger.exception("Could not initialize internal actor system. Terminating.")

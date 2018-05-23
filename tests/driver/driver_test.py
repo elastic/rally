@@ -5,7 +5,7 @@ from unittest import TestCase
 from datetime import datetime
 
 from esrally import metrics, track, exceptions, config
-from esrally.driver import driver
+from esrally.driver import driver, runner
 from esrally.track import params
 
 
@@ -418,6 +418,7 @@ class SchedulerTests(ScheduleTestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         params.register_param_source_for_name("driver-test-param-source-with-progress", DriverTestParamSourceWithProgress)
+        runner.register_default_runners()
         self.test_track = track.Track(name="unittest")
 
     def test_search_task_one_client(self):
@@ -589,6 +590,9 @@ class ExecutorTests(TestCase):
 
     def context_managed(self, mock):
         return ExecutorTests.NoopContextManager(mock)
+
+    def setUp(self):
+        runner.register_default_runners()
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_execute_schedule_in_throughput_mode(self, es):

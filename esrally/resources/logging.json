@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "formatters": {
+    "normal": {
+      "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S",
+      "()": "esrally.log.configure_utc_formatter"
+    },
+    "profile": {
+      "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S",
+      "()": "esrally.log.configure_utc_formatter"
+    }
+  },
+  "filters": {
+    "isActorLog": {
+      "()": "thespian.director.ActorAddressLogFilter"
+    }
+  },
+  "handlers": {
+    "rally_log_handler": {
+      "class": "logging.handlers.TimedRotatingFileHandler",
+      "filename": "${LOG_PATH}/rally.log",
+      "utc": true,
+      "when": "midnight",
+      "backupCount": 14,
+      "encoding": "UTF-8",
+      "formatter": "normal",
+      "filters": ["isActorLog"]
+    },
+    "rally_profile_handler": {
+      "class": "logging.FileHandler",
+      "filename": "${LOG_PATH}/profile.log",
+      "delay": true,
+      "encoding": "UTF-8",
+      "formatter": "profile"
+    }
+  },
+  "root": {
+    "handlers": ["rally_log_handler"],
+    "level": "INFO"
+  },
+  "loggers": {
+    "elasticsearch": {
+      "handlers": ["rally_log_handler"],
+      "level": "WARNING",
+      "propagate": false
+    },
+    "rally.profile": {
+      "handlers": ["rally_profile_handler"],
+      "level": "INFO",
+      "propagate": false
+    }
+  }
+}

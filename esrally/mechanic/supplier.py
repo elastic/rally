@@ -8,13 +8,12 @@ from esrally import exceptions, PROGRAM_NAME
 from esrally.utils import git, console, io, process, net, versions, convert
 from esrally.exceptions import BuildError, SystemSetupError
 
-logger = logging.getLogger("rally.supplier")
-
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
 
 
 def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=None):
+    logger = logging.getLogger(__name__)
     if plugins is None:
         plugins = []
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
@@ -59,17 +58,17 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
 
         if supplier_type == "source":
             if CorePluginSourceSupplier.can_handle(plugin):
-                logger.info("Adding core plugin source supplier for [%s]." % plugin.name)
+                logger.info("Adding core plugin source supplier for [%s].", plugin.name)
                 assert es_src_dir is not None, "Cannot build core plugin %s when Elasticsearch is not built from source." % plugin.name
                 suppliers.append(CorePluginSourceSupplier(plugin, es_src_dir, builder))
             elif ExternalPluginSourceSupplier.can_handle(plugin):
-                logger.info("Adding external plugin source supplier for [%s]." % plugin.name)
+                logger.info("Adding external plugin source supplier for [%s].", plugin.name)
                 suppliers.append(ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder))
             else:
                 raise exceptions.RallyError("Plugin %s can neither be treated as core nor as external plugin. Requirements: %s" %
                                             (plugin.name, supply_requirements[plugin.name]))
         else:
-            logger.info("Adding plugin distribution supplier for [%s]." % plugin.name)
+            logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
             assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
             suppliers.append(PluginDistributionSupplier(repo, plugin))
 
@@ -81,7 +80,6 @@ def _java10_home(cfg):
     try:
         return cfg.opts("runtime", "java10.home")
     except config.ConfigError:
-        logger.exception("Cannot determine Java 10 home.")
         raise exceptions.SystemSetupError("No JDK 10 is configured. You cannot benchmark source builds of Elasticsearch on this machine. "
                                           "Please install a JDK 10 and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
@@ -140,7 +138,7 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
                     if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
                         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
                     else:
-                        logger.info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
+                        logging.getLogger(__name__).info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
                                     % (plugin.name, plugin_revision))
                 supply_requirements[plugin.name] = ("source", plugin_revision, plugin_needs_build)
             else:
@@ -154,7 +152,6 @@ def _src_dir(cfg, mandatory=True):
     try:
         return cfg.opts("node", "src.root.dir", mandatory=mandatory)
     except config.ConfigError:
-        logger.exception("Cannot determine source directory")
         raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
                                           " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
@@ -298,26 +295,27 @@ class ElasticsearchDistributionSupplier:
         self.distributions_root = distributions_root
         # will be defined in the prepare phase
         self.distribution_path = None
+        self.logger = logging.getLogger(__name__)
 
     def fetch(self):
         io.ensure_dir(self.distributions_root)
         distribution_path = "%s/elasticsearch-%s.tar.gz" % (self.distributions_root, self.version)
         download_url = self.repo.download_url
-        logger.info("Resolved download URL [%s] for version [%s]" % (download_url, self.version))
+        self.logger.info("Resolved download URL [%s] for version [%s]", download_url, self.version)
         if not os.path.isfile(distribution_path) or not self.repo.cache:
             try:
-                logger.info("Starting download of Elasticsearch [%s]" % self.version)
+                self.logger.info("Starting download of Elasticsearch [%s]", self.version)
                 progress = net.Progress("[INFO] Downloading Elasticsearch %s" % self.version)
                 net.download(download_url, distribution_path, progress_indicator=progress)
                 progress.finish()
-                logger.info("Successfully downloaded Elasticsearch [%s]." % self.version)
+                self.logger.info("Successfully downloaded Elasticsearch [%s].", self.version)
             except urllib.error.HTTPError:
                 console.println("[FAILED]")
-                logging.exception("Cannot download Elasticsearch distribution for version [%s] from [%s]." % (self.version, download_url))
+                self.logger.exception("Cannot download Elasticsearch distribution for version [%s] from [%s].", self.version, download_url)
                 raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
                                                   "version [%s] is correct." % (download_url, self.version))
         else:
-            logger.info("Skipping download for version [%s]. Found an existing binary locally at [%s]." % (self.version, distribution_path))
+            self.logger.info("Skipping download for version [%s]. Found an existing binary at [%s].", self.version, distribution_path)
 
         self.distribution_path = distribution_path
 
@@ -393,6 +391,7 @@ class SourceRepository:
         self.name = name
         self.remote_url = remote_url
         self.src_dir = src_dir
+        self.logger = logging.getLogger(__name__)
 
     def fetch(self, revision):
         # if and only if we want to benchmark the current revision, Rally may skip repo initialization (if it is already present)
@@ -408,32 +407,32 @@ class SourceRepository:
                 console.println("Downloading sources for %s from %s to %s." % (self.name, self.remote_url, self.src_dir))
                 git.clone(self.src_dir, self.remote_url)
             elif os.path.isdir(self.src_dir) and may_skip_init:
-                logger.info("Skipping repository initialization for %s." % self.name)
+                self.logger.info("Skipping repository initialization for %s.", self.name)
             else:
                 exceptions.SystemSetupError("A remote repository URL is mandatory for %s" % self.name)
 
     def _update(self, revision):
         if self.has_remote() and revision == "latest":
-            logger.info("Fetching latest sources for %s from origin." % self.name)
+            self.logger.info("Fetching latest sources for %s from origin.", self.name)
             git.pull(self.src_dir)
         elif revision == "current":
-            logger.info("Skip fetching sources for %s." % self.name)
+            self.logger.info("Skip fetching sources for %s.", self.name)
         elif self.has_remote() and revision.startswith("@"):
             # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             git_ts_revision = revision[1:]
-            logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s." % (git_ts_revision, self.name))
+            self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
             git.pull_ts(self.src_dir, git_ts_revision)
         elif self.has_remote():  # assume a git commit hash
-            logger.info("Fetching from remote and checking out revision [%s] for %s." % (revision, self.name))
+            self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
             git.pull_revision(self.src_dir, revision)
         else:
-            logger.info("Checking out local revision [%s] for %s." % (revision, self.name))
+            self.logger.info("Checking out local revision [%s] for %s.", revision, self.name)
             git.checkout(self.src_dir, revision)
         if git.is_working_copy(self.src_dir):
             git_revision = git.head_revision(self.src_dir)
-            logger.info("User-specified revision [%s] for [%s] results in git revision [%s]" % (revision, self.name, git_revision))
+            self.logger.info("User-specified revision [%s] for [%s] results in git revision [%s]", revision, self.name, git_revision)
         else:
-            logger.info("Skipping git revision resolution for %s (%s is not a git repository)." % (self.name, self.src_dir))
+            self.logger.info("Skipping git revision resolution for %s (%s is not a git repository).", self.name, self.src_dir)
 
     @classmethod
     def is_commit_hash(cls, revision):
@@ -451,6 +450,7 @@ class Builder:
         self.src_dir = src_dir
         self.java_home = java_home
         self.log_dir = log_dir
+        self.logger = logging.getLogger(__name__)
 
     def build(self, commands, override_src_dir=None):
         for command in commands:
@@ -459,15 +459,13 @@ class Builder:
     def run(self, command, override_src_dir=None):
         src_dir = self.src_dir if override_src_dir is None else override_src_dir
 
-        logger.info("Building from sources in [%s].", src_dir)
-        logger.info("Executing %s...", command)
         io.ensure_dir(self.log_dir)
         log_file = os.path.join(self.log_dir, "build.log")
 
         # we capture all output to a dedicated build log file
 
         build_cmd = "export JAVA_HOME={}; cd {}; {} >> {} 2>&1".format(self.java_home, src_dir, command, log_file)
-        logger.info("Running build command [%s]", build_cmd)
+        self.logger.info("Running build command [%s]", build_cmd)
 
         if process.run_subprocess(build_cmd):
             msg = "Executing '{}' failed. The last 20 lines in the build log file are:\n".format(command)
