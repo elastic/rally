@@ -35,20 +35,17 @@ class ClusterLauncher:
     The cluster launcher performs cluster-wide tasks that need to be done in the startup / shutdown phase.
 
     """
-    def __init__(self, cfg, metrics_store, on_post_launch=None, client_factory_class=client.EsClientFactory):
+    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
         """
 
         Creates a new ClusterLauncher.
 
         :param cfg: The config object.
         :param metrics_store: A metrics store that is configured to receive system metrics.
-        :param on_post_launch: An optional function that takes the Elasticsearch client as a parameter. It is invoked after the
-                               REST API is available.
         :param client_factory_class: A factory class that can create an Elasticsearch client.
         """
         self.cfg = cfg
         self.metrics_store = metrics_store
-        self.on_post_launch = on_post_launch
         self.client_factory = client_factory_class
 
     def start(self):
@@ -98,8 +95,6 @@ class ClusterLauncher:
             logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
             self.stop(c)
             raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
-        if self.on_post_launch:
-            self.on_post_launch(es_default)
         return c
 
     def stop(self, c):
