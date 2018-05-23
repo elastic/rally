@@ -76,6 +76,8 @@ def post_configure_actor_logging(actor_logger):
         root_logger = logging.getLogger()
         root_log_level = logger_configuration["root"]["level"]
         root_logger.setLevel(root_log_level)
+        # see logdirector.py
+        logging.Logger.root.setLevel(root_log_level)
         actor_logger.parent.setLevel(root_log_level)
 
     if "loggers" in logger_configuration:
