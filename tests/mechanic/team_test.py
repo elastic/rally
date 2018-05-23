@@ -223,5 +223,5 @@ class BootstrapHookHandlerTests(TestCase):
         handler.loader.registration_function = hook
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             handler.load()
-        self.assertEqual("Unknown bootstrap phase [this_is_an_unknown_install_phase]. Valid phases are: ['post_install', 'post_launch'].",
+        self.assertEqual("Unknown bootstrap phase [this_is_an_unknown_install_phase]. Valid phases are: ['post_install'].",
                          ctx.exception.args[0])

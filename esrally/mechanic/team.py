@@ -416,7 +416,6 @@ class PluginDescriptor:
 
 class BootstrapPhase(Enum):
     post_install = 10
-    post_launch = 20
 
     @classmethod
     def valid(cls, name):
