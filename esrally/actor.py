@@ -183,13 +183,6 @@ def use_offline_actor_system():
 
 
 def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None):
-    actors = bootstrap_actor_system_internal(try_join, prefer_local_only, local_ip, coordinator_ip)
-    # avoid "Entering tx-only mode to drain excessive queue"
-    actors.systemBase.transport.enableRXPauseFlowControl(False)
-    return actors
-
-
-def bootstrap_actor_system_internal(try_join=False, prefer_local_only=False, local_ip=None, coordinator_ip=None):
     logger = logging.getLogger(__name__)
     system_base = __SYSTEM_BASE
     try:
