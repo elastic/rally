@@ -1174,5 +1174,4 @@ class IndexSize(InternalTelemetryDevice):
             index_size_bytes = 0
             for data_path in self.data_paths:
                 index_size_bytes += io.get_size(data_path)
-                process.run_subprocess_with_logging("find %s -ls" % data_path, header="index files:")
             self.metrics_store.put_count_node_level(node.node_name, "final_index_size_bytes", index_size_bytes, "byte")

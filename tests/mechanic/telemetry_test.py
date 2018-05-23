@@ -1598,8 +1598,7 @@ class IndexStatsTests(TestCase):
 class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_stores_index_size_for_data_paths(self, run_subprocess, metrics_store_node_count, get_size):
+    def test_stores_index_size_for_data_paths(self, metrics_store_node_count, get_size):
         get_size.side_effect = [2048, 16384]
 
         cfg = create_config()
@@ -1615,11 +1614,6 @@ class IndexSizeTests(TestCase):
 
         metrics_store_node_count.assert_has_calls([
             mock.call("rally-node-0", "final_index_size_bytes", 18432, "byte")
-        ])
-
-        run_subprocess.assert_has_calls([
-            mock.call("find /var/elasticsearch/data/1 -ls", header="index files:"),
-            mock.call("find /var/elasticsearch/data/2 -ls", header="index files:")
         ])
 
     @mock.patch("esrally.utils.io.get_size")
