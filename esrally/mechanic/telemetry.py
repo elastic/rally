@@ -361,6 +361,7 @@ class CcrStatsRecorder:
         self.metrics_store = metrics_store
         self.sample_interval= sample_interval
         self.indices = indices
+        self.logger = logging.getLogger(__name__)
 
     def __str__(self):
         return "ccr stats"
@@ -380,7 +381,7 @@ class CcrStatsRecorder:
         except elasticsearch.TransportError as e:
             msg = "A transport error occurred while collecting CCR stats from the endpoint [{}] on " \
                   "cluster [{}]".format(ccr_stats_api_endpoint, self.cluster_name)
-            logger.exception(msg)
+            self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
         if self.indices:
@@ -390,10 +391,9 @@ class CcrStatsRecorder:
                     if stats[index]:
                         self.record_stats_per_index(index, stats[index])
                 except KeyError:
-                    logger.warning("The telemetry parameter 'ccr-stats-indices' specified the index [%s] for cluster [%s] but there are "
-                                   "no stats available. Maybe the index hasn't been created yet, ignoring.",
-                                   index,
-                                   self.cluster_name)
+                    self.logger.warning("The telemetry parameter 'ccr-stats-indices' specified the index [%s] for cluster [%s] but there "
+                                        "are no stats available. Maybe the index hasn't been created yet, ignoring.",
+                                        index, self.cluster_name)
         else:
             # Record metrics for every index returned by the CCR stats API.
             if stats:
