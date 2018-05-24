@@ -155,14 +155,13 @@ class ActionMetaDataTests(TestCase):
         def idx(id):
             return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
 
+        test_ids = [100, 200, 300, 400]
+
         generator = params.GenerateActionMetaData("test_index", "test_type",
-                                                  conflicting_ids=[100, 200, 300, 400],
+                                                  conflicting_ids=test_ids,
                                                   conflict_probability=0)
 
-        self.assertEqual(idx("100"), next(generator))
-        self.assertEqual(idx("200"), next(generator))
-        self.assertEqual(idx("300"), next(generator))
-        self.assertEqual(idx("400"), next(generator))
+        self.assertListEqual([idx(id) for id in test_ids], list(generator))
 
     def test_source_file_action_meta_data(self):
         source = params.Slice(io.StringAsFileSource, 0, 5)
