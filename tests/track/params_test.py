@@ -151,6 +151,19 @@ class ActionMetaDataTests(TestCase):
         # and we're back to random
         self.assertEqual(conflict(conflict_action, "100"), next(generator))
 
+    def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
+        def idx(id):
+            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
+
+        generator = params.GenerateActionMetaData("test_index", "test_type",
+                                                  conflicting_ids=[100, 200, 300, 400],
+                                                  conflict_probability=0)
+
+        self.assertEqual(idx("100"), next(generator))
+        self.assertEqual(idx("200"), next(generator))
+        self.assertEqual(idx("300"), next(generator))
+        self.assertEqual(idx("400"), next(generator))
+
     def test_source_file_action_meta_data(self):
         source = params.Slice(io.StringAsFileSource, 0, 5)
         generator = params.SourceActionMetaData(source)
@@ -349,6 +362,45 @@ class IndexDataReaderTests(TestCase):
                 '{"key": "value5"}'
             ]
 
+        ], bulks)
+
+    def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
+        data = [
+            '{"key": "value1"}',
+            '{"key": "value2"}',
+            '{"key": "value3"}',
+            '{"key": "value4"}'
+        ]
+        bulk_size = 2
+
+        source = params.Slice(io.StringAsFileSource, 0, len(data))
+        am_handler = params.GenerateActionMetaData("test_index", "test_type",
+                                                   conflicting_ids=[100, 200, 300, 400],
+                                                   conflict_probability=0)
+
+        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
+                                        index_name="test_index", type_name="test_type")
+
+        # consume all bulks
+        bulks = []
+        with reader:
+            for index, type, batch in reader:
+                for bulk_size, bulk in batch:
+                    bulks.append(bulk)
+
+        self.assertEqual([
+            [
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}',
+                '{"key": "value1"}',
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}',
+                '{"key": "value2"}'
+            ],
+            [
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}',
+                '{"key": "value3"}',
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}',
+                '{"key": "value4"}'
+            ]
         ], bulks)
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):

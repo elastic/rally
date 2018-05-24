@@ -723,7 +723,7 @@ class GenerateActionMetaData:
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
         # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100.
-        self.conflict_probability = conflict_probability / 100.0 if conflict_probability else None
+        self.conflict_probability = conflict_probability / 100.0 if conflict_probability is not None else 0
 
         self.rand = rand
         self.randint = randint
@@ -734,10 +734,12 @@ class GenerateActionMetaData:
 
     def __next__(self):
         if self.conflicting_ids is not None:
-            if self.id_up_to > 0 and self.rand() <= self.conflict_probability:
+            if self.conflict_probability and self.id_up_to > 0 and self.rand() <= self.conflict_probability:
                 doc_id = self.conflicting_ids[self.randint(0, self.id_up_to - 1)]
                 action = self.on_conflict
             else:
+                if self.id_up_to >= len(self.conflicting_ids):
+                    raise StopIteration()
                 doc_id = self.conflicting_ids[self.id_up_to]
                 self.id_up_to += 1
                 action = "index"
