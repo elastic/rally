@@ -4,6 +4,7 @@ import time
 import math
 import types
 import inspect
+import operator
 from enum import Enum
 
 from esrally import exceptions
@@ -440,7 +441,7 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
 
         if self.id_conflicts != IndexIdConflict.NoConflicts:
-            self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100)
+            self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100, min_operator=operator.lt)
             self.on_conflict = params.get("on-conflict", "index")
             if self.on_conflict not in ["index", "update"]:
                 raise exceptions.InvalidSyntax("Unknown 'on-conflict' setting [{}]".format(self.on_conflict))
@@ -481,12 +482,13 @@ class BulkIndexParamSource(ParamSource):
 
         self.ingest_percentage = self.float_param(params, name="ingest-percentage", default_value=100, min_value=0, max_value=100)
 
-    def float_param(self, params, name, default_value, min_value, max_value):
+    def float_param(self, params, name, default_value, min_value, max_value, min_operator=operator.le):
         try:
             value = float(params.get(name, default_value))
-            if value <= min_value or value > max_value:
+            if min_operator(value, min_value) or value > max_value:
+                interval_min = "(" if min_operator is operator.le else "["
                 raise exceptions.InvalidSyntax(
-                    "'{}' must be in the range ({:.1f}, {:.1f}] but was {:.1f}".format(name, min_value, max_value, value))
+                    "'{}' must be in the range {}{:.1f}, {:.1f}] but was {:.1f}".format(name, interval_min, min_value, max_value, value))
             return value
         except ValueError:
             raise exceptions.InvalidSyntax("'{}' must be numeric".format(name))
