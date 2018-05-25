@@ -38,14 +38,25 @@ def tracks(cfg):
 
 
 def list_tracks(cfg):
+    available_tracks = tracks(cfg)
+    only_auto_generated_challenges = all(t.default_challenge.auto_generated for t in available_tracks)
+
+    data = []
+    for t in available_tracks:
+        line = [t.name, t.description, t.number_of_documents, convert.bytes_to_human_string(t.compressed_size_in_bytes),
+                convert.bytes_to_human_string(t.uncompressed_size_in_bytes)]
+        if not only_auto_generated_challenges:
+            line.append(t.default_challenge)
+            line.append(",".join(map(str, t.challenges)))
+        data.append(line)
+
+    headers = ["Name", "Description", "Documents", "Compressed Size", "Uncompressed Size"]
+    if not only_auto_generated_challenges:
+        headers.append("Default Challenge")
+        headers.append("All Challenges")
+
     console.println("Available tracks:\n")
-    console.println(tabulate.tabulate(
-        tabular_data=[
-            [t.name, t.description, t.number_of_documents, convert.bytes_to_human_string(t.compressed_size_in_bytes),
-             convert.bytes_to_human_string(t.uncompressed_size_in_bytes), t.default_challenge,
-             ",".join(map(str, t.challenges))] for t in tracks(cfg)
-        ],
-        headers=["Name", "Description", "Documents", "Compressed Size", "Uncompressed Size", "Default Challenge", "All Challenges"]))
+    console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
 
 def load_track(cfg):
@@ -819,7 +830,7 @@ class TrackSpecificationReader:
         challenges = []
         known_challenge_names = set()
         default_challenge = None
-        challenge_specs = self._get_challenge_specs(track_spec)
+        challenge_specs, auto_generated = self._get_challenge_specs(track_spec)
         number_of_challenges = len(challenge_specs)
         for challenge_spec in challenge_specs:
             name = self._r(challenge_spec, "name", error_ctx="challenges")
@@ -862,6 +873,7 @@ class TrackSpecificationReader:
                                         user_info=user_info,
                                         cluster_settings=cluster_settings,
                                         default=default,
+                                        auto_generated=auto_generated,
                                         schedule=schedule)
             if default:
                 default_challenge = challenge
@@ -874,17 +886,27 @@ class TrackSpecificationReader:
         return challenges
 
     def _get_challenge_specs(self, track_spec):
+        schedule = self._r(track_spec, "schedule", mandatory=False)
         challenge = self._r(track_spec, "challenge", mandatory=False)
         challenges = self._r(track_spec, "challenges", mandatory=False)
 
-        if challenge is not None and challenges is not None:
-            self._error("'challenge' and 'challenges' are defined but only one of them is allowed.")
+        count_defined = len(list(filter(lambda e: e is not None, [schedule, challenge, challenges])))
+
+        if count_defined == 0:
+            self._error("You must define 'challenge', 'challenges' or 'schedule' but none is specified.")
+        elif count_defined > 1:
+            self._error("Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only one of them is allowed.")
         elif challenge is not None:
-            return [challenge]
+            return [challenge], False
         elif challenges is not None:
-            return challenges
+            return challenges, False
+        elif schedule is not None:
+            return [{
+                "name": "default",
+                "schedule": schedule
+            }], True
         else:
-            self._error("You must define either 'challenge' or 'challenges' but none is specified.")
+            raise AssertionError("Unexpected: schedule=[{}], challenge=[{}], challenges=[{}]".format(schedule, challenge, challenges))
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
         # use same default values as #parseTask() in case the 'parallel' element did not specify anything

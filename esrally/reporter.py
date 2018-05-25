@@ -554,12 +554,14 @@ class ComparisonReporter:
         print_internal("")
         print_internal("Comparing baseline")
         print_internal("  Race timestamp: %s" % r1.trial_timestamp)
-        print_internal("  Challenge: %s" % r1.challenge_name)
+        if r1.challenge_name:
+            print_internal("  Challenge: %s" % r1.challenge_name)
         print_internal("  Car: %s" % r1.car_name)
         print_internal("")
         print_internal("with contender")
         print_internal("  Race timestamp: %s" % r2.trial_timestamp)
-        print_internal("  Challenge: %s" % r2.challenge_name)
+        if r2.challenge_name:
+            print_internal("  Challenge: %s" % r2.challenge_name)
         print_internal("  Car: %s" % r2.car_name)
         print_internal("")
         print_header("------------------------------------------------------")

@@ -4,6 +4,160 @@
   "description": "Specification of tracks for Rally",
   "type": "object",
   "definitions": {
+    "schedule": {
+      "title": "Schedule",
+      "type": "array",
+      "minItems": 1,
+      "description": "Defines the concrete execution order of operations.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "parallel": {
+            "type": "object",
+            "description": "This element allows to define tasks that should be run in parallel. We do not support nested parallel tasks.",
+            "properties": {
+              "clients": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "warmup-iterations": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "iterations": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "warmup-time-period": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+              },
+              "time-period": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
+              },
+              "completed-by": {
+                "type": "string",
+                "description": "The name of an operation in the 'tasks' block. When this operation is completed, the whole parallel element is considered to be completed."
+              },
+              "tasks": {
+                "type": "array",
+                "minItems": 1,
+                "description": "Defines the operations that will be run in parallel",
+                "items": {
+                  "type": "object",
+                  "description": "Defines an individual operation that is executed",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Explicit name of the task. By default the operation's name is implicitly used as the task's name but if the same operation is run multiple times, a unique task name must be specified."
+                    },
+                    "operation": {
+                      "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Meta-information which will be added to each metrics-record of this task."
+                    },
+                    "clients": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "warmup-iterations": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
+                    },
+                    "iterations": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Defines the number of times to run the operation."
+                    },
+                    "warmup-time-period": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+                    },
+                    "time-period": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
+                    },
+                    "schedule": {
+                      "type": "string",
+                      "description": "Defines the scheduling strategy that is used for throughput throttled operations. Out of the box, Rally supports 'deterministic' (default) and 'poisson' but you can implement your own schedules."
+                    },
+                    "target-throughput": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Defines the number of operations per second that Rally should attempt to run."
+                    },
+                    "target-interval": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
+                    }
+                  },
+                  "required": [
+                    "operation"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "tasks"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Explicit name of the task. By default the operation's name is implicitly used as the task's name but if the same operation is run multiple times, a unique task name must be specified."
+          },
+          "operation": {
+            "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
+          },
+          "meta": {
+            "type": "object",
+            "description": "Meta-information which will be added to each metrics-record of this task."
+          },
+          "clients": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "warmup-iterations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Defines the number of times to run the operation."
+          },
+          "warmup-time-period": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
+          },
+          "time-period": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
+          },
+          "target-throughput": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Defines the number of operations per second that Rally should attempt to run."
+          },
+          "target-interval": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
+          }
+        }
+      }
+    },
     "challenge": {
       "title": "Challenge",
       "type": "object",
@@ -30,157 +184,7 @@
           "description": "Defines the cluster settings of the benchmark candidate."
         },
         "schedule": {
-          "type": "array",
-          "minItems": 1,
-          "description": "Defines the concrete execution order of operations.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "parallel": {
-                "type": "object",
-                "description": "This element allows to define tasks that should be run in parallel. We do not support nested parallel tasks.",
-                "properties": {
-                  "clients": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "warmup-iterations": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "iterations": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "warmup-time-period": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
-                  },
-                  "time-period": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
-                  },
-                  "completed-by": {
-                    "type": "string",
-                    "description": "The name of an operation in the 'tasks' block. When this operation is completed, the whole parallel element is considered to be completed."
-                  },
-                  "tasks": {
-                    "type": "array",
-                    "minItems": 1,
-                    "description": "Defines the operations that will be run in parallel",
-                    "items": {
-                      "type": "object",
-                      "description": "Defines an individual operation that is executed",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "description": "Explicit name of the task. By default the operation's name is implicitly used as the task's name but if the same operation is run multiple times, a unique task name must be specified."
-                        },
-                        "operation": {
-                          "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
-                        },
-                        "meta": {
-                          "type": "object",
-                          "description": "Meta-information which will be added to each metrics-record of this task."
-                        },
-                        "clients": {
-                          "type": "integer",
-                          "minimum": 1
-                        },
-                        "warmup-iterations": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "description": "Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
-                        },
-                        "iterations": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "description": "Defines the number of times to run the operation."
-                        },
-                        "warmup-time-period": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
-                        },
-                        "time-period": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
-                        },
-                        "schedule": {
-                          "type": "string",
-                          "description": "Defines the scheduling strategy that is used for throughput throttled operations. Out of the box, Rally supports 'deterministic' (default) and 'poisson' but you can implement your own schedules."
-                        },
-                        "target-throughput": {
-                          "type": "number",
-                          "minimum": 0,
-                          "description": "Defines the number of operations per second that Rally should attempt to run."
-                        },
-                        "target-interval": {
-                          "type": "number",
-                          "minimum": 0,
-                          "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
-                        }
-                      },
-                      "required": [
-                        "operation"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "tasks"
-                ]
-              },
-              "name": {
-                "type": "string",
-                "description": "Explicit name of the task. By default the operation's name is implicitly used as the task's name but if the same operation is run multiple times, a unique task name must be specified."
-              },
-              "operation": {
-                "description": "The name of an operation that should be executed. This name must match the operation name in the 'operations' block."
-              },
-              "meta": {
-                "type": "object",
-                "description": "Meta-information which will be added to each metrics-record of this task."
-              },
-              "clients": {
-                "type": "integer",
-                "minimum": 1
-              },
-              "warmup-iterations": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Defines the number of times to run the operation in order to warmup the benchmark candidate. Warmup iterations will not be considered in the benchmark result."
-              },
-              "iterations": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Defines the number of times to run the operation."
-              },
-              "warmup-time-period": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Defines the time period in seconds to run the operation in order to warmup the benchmark candidate. The warmup time period will not be considered in the benchmark result."
-              },
-              "time-period": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
-              },
-              "target-throughput": {
-                "type": "number",
-                "minimum": 0,
-                "description": "Defines the number of operations per second that Rally should attempt to run."
-              },
-              "target-interval": {
-                "type": "number",
-                "minimum": 0,
-                "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
-              }
-            }
-          }
+          "$ref": "#/definitions/schedule"
         }
       },
       "required": [
@@ -450,6 +454,9 @@
     },
     "challenge": {
       "$ref": "#/definitions/challenge"
+    },
+    "schedule": {
+      "$ref": "#/definitions/schedule"
     }
   }
 }

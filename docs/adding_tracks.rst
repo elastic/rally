@@ -118,6 +118,124 @@ Finally, store the track as ``track.json`` in the tutorial directory::
           ]
         }
       ],
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "delete-index"
+          }
+        },
+        {
+          "operation": {
+            "operation-type": "create-index"
+          }
+        },
+        {
+          "operation": {
+            "operation-type": "cluster-health",
+            "request-params": {
+              "wait_for_status": "green"
+            }
+          }
+        },
+        {
+          "operation": {
+            "operation-type": "bulk",
+            "bulk-size": 5000
+          },
+          "warmup-time-period": 120,
+          "clients": 8
+        },
+        {
+          "operation": {
+            "operation-type": "force-merge"
+          }
+        },
+        {
+          "operation": {
+            "name": "query-match-all",
+            "operation-type": "search",
+            "body": {
+              "query": {
+                "match_all": {}
+              }
+            }
+          },
+          "clients": 8,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
+
+
+The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
+
+.. note::
+
+    You can store any supporting scripts along with your track. However, you need to place them in a directory starting with "_", e.g. "_support". Rally loads track plugins (see below) from any directory but will ignore directories starting with "_".
+
+.. note::
+
+    We have defined a `JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_ which you can use to check how to define your track. You should also check the tracks provided by Rally for inspiration.
+
+The new track appears when you run ``esrally list tracks --track-path=~/rally-tracks/tutorial``::
+
+    dm@io:~ $ esrally list tracks --track-path=~/rally-tracks/tutorial
+
+        ____        ____
+       / __ \____ _/ / /_  __
+      / /_/ / __ `/ / / / / /
+     / _, _/ /_/ / / / /_/ /
+    /_/ |_|\__,_/_/_/\__, /
+                    /____/
+    Available tracks:
+
+    Name        Description                   Documents    Compressed Size  Uncompressed Size
+    ----------  ----------------------------- -----------  ---------------  -----------------
+    tutorial    Tutorial benchmark for Rally      11658903  N/A              1.4 GB
+
+Congratulations, you have created your first track! You can test it with ``esrally --distribution-version=6.0.0 --track-path=~/rally-tracks/tutorial``.
+
+.. _add_track_test_mode:
+
+Adding support for test mode
+----------------------------
+
+You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation as follows:
+
+* Iteration-based tasks run at most one warmup iteration and one measurement iteration.
+* Time-period-based tasks run at most for 10 seconds without warmup.
+
+Rally also postprocesses all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
+
+Challenges
+----------
+
+To specify different workloads in the same track you can use so-called challenges. Instead of specifying the ``schedule`` property on top-level you specify a ``challenges`` array::
+
+    {
+      "version": 2,
+      "description": "Tutorial benchmark for Rally",
+      "indices": [
+        {
+          "name": "geonames",
+          "body": "index.json",
+          "types": [ "docs" ]
+        }
+      ],
+      "corpora": [
+        {
+          "name": "rally-tutorial",
+          "documents": [
+            {
+              "source-file": "documents.json",
+              "document-count": 11658903,
+              "uncompressed-bytes": 1544799789
+            }
+          ]
+        }
+      ],
       "challenges": [
         {
           "name": "index-and-query",
@@ -174,46 +292,14 @@ Finally, store the track as ``track.json`` in the tutorial directory::
       ]
     }
 
-
-The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
-
 .. note::
 
-    You can store any supporting scripts along with your track. However, you need to place them in a directory starting with "_", e.g. "_support". Rally loads track plugins (see below) from any directory but will ignore directories starting with "_".
+    If you define multiple challenges, Rally runs the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 
-.. note::
+When should you use challenges? Challenges are useful when you want to run completely different workloads based on the same track but for the majority of cases you should get away without using challenges:
 
-    We have defined a `JSON schema for tracks <https://github.com/elastic/rally/blob/master/esrally/resources/track-schema.json>`_ which you can use to check how to define your track. You should also check the tracks provided by Rally for inspiration.
-
-The new track appears when you run ``esrally list tracks --track-path=~/rally-tracks/tutorial``::
-
-    dm@io:~ $ esrally list tracks --track-path=~/rally-tracks/tutorial
-
-        ____        ____
-       / __ \____ _/ / /_  __
-      / /_/ / __ `/ / / / / /
-     / _, _/ /_/ / / / /_/ /
-    /_/ |_|\__,_/_/_/\__, /
-                    /____/
-    Available tracks:
-
-    Name        Description                   Documents    Compressed Size  Uncompressed Size  Default Challenge  All Challenges
-    ----------  ----------------------------- -----------  ---------------  -----------------  -----------------  ---------------
-    tutorial    Tutorial benchmark for Rally      11658903  N/A              1.4 GB            index-and-query    index-and-query
-
-Congratulations, you have created your first track! You can test it with ``esrally --distribution-version=6.0.0 --track-path=~/rally-tracks/tutorial``.
-
-.. _add_track_test_mode:
-
-Adding support for test mode
-----------------------------
-
-You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation as follows:
-
-* Iteration-based tasks run at most one warmup iteration and one measurement iteration.
-* Time-period-based tasks run at most for 10 seconds without warmup.
-
-Rally also postprocesses all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
+* To run only a subset of the tasks, you can use :ref:`task filtering <clr_include_tasks>`, e.g. ``--include-tasks="create-index,bulk"` will only run these two tasks in the track above.
+* To vary parameters, e.g. the number of clients, you can use :ref:`track parameters <clr_track_params>`
 
 Structuring your track
 ----------------------
@@ -476,10 +562,6 @@ The changes are:
 .. note::
 
     Rally's log file contains the fully rendered track after it has loaded it successfully.
-
-.. note::
-
-    If you define multiple challenges, Rally runs the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 
 You can even use `Jinja2 variables <http://jinja.pocoo.org/docs/2.9/templates/#assignments>`_ but then you need to import the Rally helpers a bit differently. You also need to declare all variables before the ``import`` statement::
 

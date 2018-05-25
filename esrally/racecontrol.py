@@ -105,8 +105,12 @@ class BenchmarkActor(actor.RallyActor):
         self.metrics_store.meta_info = msg.system_meta_info
         cluster = msg.cluster_meta_info
         self.race.cluster = cluster
-        console.info("Racing on track [%s], challenge [%s] and car %s with version [%s].\n"
-                     % (self.race.track_name, self.race.challenge_name, self.race.car, self.race.cluster.distribution_version))
+        if self.race.challenge.auto_generated:
+            console.info("Racing on track [{}] and car {} with version [{}].\n"
+                         .format(self.race.track_name, self.race.car, self.race.cluster.distribution_version))
+        else:
+            console.info("Racing on track [{}], challenge [{}] and car {} with version [{}].\n"
+                         .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.cluster.distribution_version))
         # start running we assume that each race has at least one lap
         self.run()
 
@@ -198,7 +202,7 @@ class BenchmarkActor(actor.RallyActor):
         self.lap_counter = LapCounter(self.race, self.metrics_store, self.cfg)
         self.race_store = metrics.race_store(self.cfg)
         self.logger.info("Asking mechanic to start the engine.")
-        cluster_settings = self.race.challenge.cluster_settings
+        cluster_settings = challenge.cluster_settings
         self.send(self.mechanic, mechanic.StartEngine(self.cfg, self.metrics_store.open_context, cluster_settings, msg.sources, msg.build,
                                                       msg.distribution, msg.external, msg.docker))
 
