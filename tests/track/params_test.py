@@ -798,6 +798,43 @@ class BulkIndexParamSourceTests(TestCase):
         # should issue three bulks of size 10.000
         self.assertEqual(3, partition.size())
 
+    def test_create_with_conflict_probability_zero(self):
+        params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            "bulk-size": 5000,
+            "conflicts": "sequential",
+            "conflict-probability": 0
+        })
+
+    def test_create_with_conflict_probability_too_low(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "bulk-size": 5000,
+                "conflicts": "sequential",
+                "conflict-probability": -0.1
+            })
+
+        self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was -0.1", ctx.exception.args[0])
+
+    def test_create_with_conflict_probability_too_high(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "bulk-size": 5000,
+                "conflicts": "sequential",
+                "conflict-probability": 100.1
+            })
+
+        self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was 100.1", ctx.exception.args[0])
+
+    def test_create_with_conflict_probability_not_numeric(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "bulk-size": 5000,
+                "conflicts": "sequential",
+                "conflict-probability": "100 percent"
+            })
+
+        self.assertEqual("'conflict-probability' must be numeric", ctx.exception.args[0])
+
 
 class BulkDataGeneratorTests(TestCase):
     class TestBulkReader:
