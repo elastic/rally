@@ -112,7 +112,7 @@ A track JSON file consists of the following sections:
 * templates
 * corpora
 * operations
-* challenges
+* schedule
 
 In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally.
 
@@ -120,7 +120,7 @@ In the ``corpora`` section you define all document corpora (i.e. data files) tha
 
 In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
 
-In the ``challenge`` or ``challenges`` section you describe one or more execution schedules respectively. Each schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline. Think of a challenge as a scenario that you want to test for your data. An example challenge is to index with two clients at maximum throughput while searching with another two clients with ten operations per second.
+In the ``schedule`` section you describe the workload for the benchmark, for example index with two clients at maximum throughput while searching with another two clients with ten operations per second. The schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline.
 
 Track elements
 ==============
@@ -293,7 +293,7 @@ We can also define default values on document corpus level but override some of 
 operations
 ..........
 
-The ``operations`` section contains a list of all operations that are available later when specifying challenges. Operations define the static properties of a request against Elasticsearch whereas the ``schedule`` element defines the dynamic properties (such as the target throughput).
+The ``operations`` section contains a list of all operations that are available later when specifying a schedule. Operations define the static properties of a request against Elasticsearch whereas the ``schedule`` element defines the dynamic properties (such as the target throughput).
 
 Each operation consists of the following properties:
 
@@ -658,27 +658,10 @@ With the operation ``raw-request`` you can execute arbitrary HTTP requests again
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 * ``ignore`` (optional): An array of HTTP response status codes to ignore (i.e. consider as successful).
 
-challenge
-.........
-
-If you track has only one challenge, you can use the ``challenge`` element. If you have multiple challenges, you can define an array of ``challenges``.
-
-This section contains one or more challenges which describe the benchmark scenarios for this data set. A challenge can reference all operations that are defined in the ``operations`` section.
-
-Each challenge consists of the following properties:
-
-* ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
-* ``description`` (optional): A human readable description of the challenge.
-* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need define ``"default": true`` on exactly one challenge.
-* ``schedule`` (mandatory): Defines the concrete execution order of operations. It is described in more detail below.
-
-.. note::
-   You should strive to minimize the number of challenges. If you just want to run a subset of the tasks in a challenge, use :ref:`task filtering <clr_include_tasks>`.
-
 schedule
 ~~~~~~~~
 
-The ``schedule`` element contains a list of tasks that are executed by Rally. Each task consists of the following properties:
+The ``schedule`` element contains a list of tasks that are executed by Rally, i.e. it describes the workload. Each task consists of the following properties:
 
 * ``name`` (optional): This property defines an explicit name for the given task. By default the operation's name is implicitly used as the task name but if the same operation is run multiple times, a unique task name must be specified using this property.
 * ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
@@ -696,100 +679,91 @@ Defining operations
 
 In the following snippet we define two operations ``force-merge`` and a ``match-all`` query separately in an operations block::
 
-   {
-     "operations": [
-       {
-         "name": "force-merge",
-         "operation-type": "force-merge"
-       },
-       {
-         "name": "match-all-query",
-         "operation-type": "search",
-         "body": {
-           "query": {
-             "match_all": {}
-           }
-         }
-       }
-     ],
-     "challenge": {
-       "name": "just-query",
-       "schedule": [
-         {
-           "operation": "force-merge",
-           "clients": 1
-         },
-         {
-           "operation": "match-all-query",
-           "clients": 4,
-           "warmup-iterations": 1000,
-           "iterations": 1000,
-           "target-throughput": 100
-         }
-       ]
-     }
-   }
+    {
+      "operations": [
+        {
+          "name": "force-merge",
+          "operation-type": "force-merge"
+        },
+        {
+          "name": "match-all-query",
+          "operation-type": "search",
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        }
+      ],
+      "schedule": [
+        {
+          "operation": "force-merge",
+          "clients": 1
+        },
+        {
+          "operation": "match-all-query",
+          "clients": 4,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
 
 If we do not want to reuse these operations, we can also define them inline. Note that the ``operations`` section is gone::
 
-   {
-     "challenge": {
-       "name": "just-query",
-       "schedule": [
-         {
-           "operation": {
-             "name": "force-merge",
-             "operation-type": "force-merge"
-           },
-           "clients": 1
-         },
-         {
-           "operation": {
-             "name": "match-all-query",
-             "operation-type": "search",
-             "body": {
-               "query": {
-                 "match_all": {}
-               }
-             }
-           },
-           "clients": 4,
-           "warmup-iterations": 1000,
-           "iterations": 1000,
-           "target-throughput": 100
-         }
-       ]
-     }
-   }
+    {
+      "schedule": [
+        {
+          "operation": {
+            "name": "force-merge",
+            "operation-type": "force-merge"
+          },
+          "clients": 1
+        },
+        {
+          "operation": {
+            "name": "match-all-query",
+            "operation-type": "search",
+            "body": {
+              "query": {
+                "match_all": {}
+              }
+            }
+          },
+          "clients": 4,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
 
 Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
 
-   {
-     "challenge": {
-       "name": "just-query",
-       "schedule": [
-         {
-           "operation": "force-merge",
-           "clients": 1
-         },
-         {
-           "operation": {
-             "name": "match-all-query",
-             "operation-type": "search",
-             "body": {
-               "query": {
-                 "match_all": {}
-               }
-             }
-           },
-           "clients": 4,
-           "warmup-iterations": 1000,
-           "iterations": 1000,
-           "target-throughput": 100
-         }
-       ]
-     }
-   }
+    {
+      "schedule": [
+        {
+          "operation": "force-merge",
+          "clients": 1
+        },
+        {
+          "operation": {
+            "name": "match-all-query",
+            "operation-type": "search",
+            "body": {
+              "query": {
+                "match_all": {}
+              }
+            }
+          },
+          "clients": 4,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
 
 Choosing a schedule
 ...................
@@ -831,6 +805,23 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 
     Specify the number of clients on each task separately. If you specify this number on the ``parallel`` element instead, Rally will only use that many clients in total and you will only want to use this behavior in very rare cases (see examples)!
 
+challenge
+.........
+
+If your track defines only one benchmarking scenario specify the ``schedule`` on top-level. Use the ``challenge`` element if you want to specify additional properties like a name or a description. You can think of a challenge as a benchmarking scenario. If you have multiple challenges, you can define an array of ``challenges``.
+
+This section contains one or more challenges which describe the benchmark scenarios for this data set. A challenge can reference all operations that are defined in the ``operations`` section.
+
+Each challenge consists of the following properties:
+
+* ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
+* ``description`` (optional): A human readable description of the challenge.
+* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need to define ``"default": true`` on exactly one challenge.
+* ``schedule`` (mandatory): Defines the workload. It is described in more detail above.
+
+.. note::
+
+    You should strive to minimize the number of challenges. If you just want to run a subset of the tasks in a challenge, use :ref:`task filtering <clr_include_tasks>`.
 
 Examples
 ========
@@ -841,29 +832,26 @@ A track with a single task
 To get started with custom tracks, you can benchmark a single task, e.g. a match_all query::
 
     {
-      "challenge": {
-        "name": "just-search",
-        "schedule": [
-          {
-            "operation": {
-              "operation-type": "search",
-              "index": "_all",
-              "body": {
-                "query": {
-                  "match_all": {}
-                }
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "search",
+            "index": "_all",
+            "body": {
+              "query": {
+                "match_all": {}
               }
-            },
-            "warmup-iterations": 100,
-            "iterations": 100,
-            "target-throughput": 10
-          }
-        ]
-      }
+            }
+          },
+          "warmup-iterations": 100,
+          "iterations": 100,
+          "target-throughput": 10
+        }
+      ]
     }
 
 
-This track assumes that you have an existing cluster with pre-populated data. It will run the provided match_all query at 10 operations per second with one client and use 100 iterations as warmup and the next 100 iterations to measure.
+This track assumes that you have an existing cluster with pre-populated data. It will run the provided ``match_all`` query at 10 operations per second with one client and use 100 iterations as warmup and the next 100 iterations to measure.
 
 For the examples below, note that we do not show the operation definition but you should be able to infer from the operation name what it is doing.
 

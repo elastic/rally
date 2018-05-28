@@ -1074,7 +1074,7 @@ class TrackSpecificationReaderTests(TestCase):
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. You must define either 'challenge' or 'challenges' but none is specified.",
+        self.assertEqual("Track 'unittest' is invalid. You must define 'challenge', 'challenges' or 'schedule' but none is specified.",
                          ctx.exception.args[0])
 
     def test_parse_challenge_and_challenges_are_defined(self):
@@ -1109,8 +1109,8 @@ class TrackSpecificationReaderTests(TestCase):
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. 'challenge' and 'challenges' are defined but only one of them is allowed.",
-                         ctx.exception.args[0])
+        self.assertEqual("Track 'unittest' is invalid. Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only "
+                         "one of them is allowed.", ctx.exception.args[0])
 
     def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
@@ -1627,6 +1627,28 @@ class TrackSpecificationReaderTests(TestCase):
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
+        self.assertTrue(resulting_track.challenges[0].default)
+
+    def test_auto_generates_challenge_from_schedule(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk"
+                }
+            ],
+            "schedule": [
+                {
+                    "operation": "index-append"
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(1, len(resulting_track.challenges))
+        self.assertTrue(resulting_track.challenges[0].auto_generated)
         self.assertTrue(resulting_track.challenges[0].default)
 
     def test_inline_operations(self):

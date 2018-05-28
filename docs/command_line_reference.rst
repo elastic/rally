@@ -69,6 +69,8 @@ Selects the track repository that Rally should use to resolve tracks. By default
 
 Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>` or the :doc:`track reference </track>`. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
+.. _clr_track_params:
+
 ``track-params``
 ~~~~~~~~~~~~~~~~
 

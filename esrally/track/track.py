@@ -348,6 +348,7 @@ class Challenge:
                  user_info=None,
                  cluster_settings=None,
                  default=False,
+                 auto_generated=False,
                  meta_data=None,
                  schedule=None):
         self.name = name
@@ -356,6 +357,7 @@ class Challenge:
         self.user_info = user_info
         self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
+        self.auto_generated = auto_generated
         self.schedule = schedule if schedule else []
 
     def prepend_tasks(self, tasks):
@@ -375,12 +377,12 @@ class Challenge:
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.description) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
-               hash(self.meta_data) ^ hash(self.schedule)
+               hash(self.auto_generated) ^ hash(self.meta_data) ^ hash(self.schedule)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.description, self.cluster_settings, self.default, self.meta_data, self.schedule) ==
-                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.meta_data, othr.schedule))
+                (self.name, self.description, self.cluster_settings, self.default, self.auto_generated, self.meta_data, self.schedule) ==
+                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.auto_generated, othr.meta_data, othr.schedule))
 
 
 @unique

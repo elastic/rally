@@ -294,7 +294,7 @@ class MetricsStore:
         """
         Opens a metrics store for a specific trial, track, challenge and car.
 
-        :param trial_id: The trial id. This attribute is sufficient to uniquely identify a challenge.
+        :param trial_id: The trial id. This attribute is sufficient to uniquely identify a race.
         :param trial_timestamp: The trial timestamp as a datetime.
         :param track_name: Track name.
         :param challenge_name: Challenge name.
@@ -1053,7 +1053,7 @@ def list_races(cfg):
 
     races = []
     for race in race_store(cfg).list():
-        races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge, race.car_name,
+        races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
                       format_dict(race.user_tags)])
 
     if len(races) > 0:
@@ -1107,7 +1107,7 @@ class Race:
 
     @property
     def challenge_name(self):
-        return str(self.challenge)
+        return str(self.challenge) if self.challenge else None
 
     @property
     def car_name(self):
@@ -1140,12 +1140,13 @@ class Race:
             "pipeline": self.pipeline,
             "user-tags": self.user_tags,
             "track": self.track_name,
-            "challenge": self.challenge_name,
             "car": self.car,
             "total-laps": self.total_laps,
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
+        if not self.challenge.auto_generated:
+            d["challenge"] = self.challenge_name
         if self.track_params:
             d["track-params"] = self.track_params
         return d
@@ -1163,7 +1164,6 @@ class Race:
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
-            "challenge": self.challenge_name,
             "car": self.car_name,
             "node-count": len(self.cluster.nodes),
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
@@ -1176,6 +1176,8 @@ class Race:
         if plugins:
             result_template["plugins"] = list(plugins)
 
+        if not self.challenge.auto_generated:
+            result_template["challenge"] = self.challenge_name
         if self.track_params:
             result_template["track-params"] = self.track_params
 
@@ -1201,7 +1203,7 @@ class Race:
         # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
         return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
-                    d["track"], d.get("track-params"), d["challenge"], d["car"], d["total-laps"], results=d["results"])
+                    d["track"], d.get("track-params"), d.get("challenge"), d["car"], d["total-laps"], results=d["results"])
 
 
 class RaceStore:
