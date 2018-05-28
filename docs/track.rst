@@ -816,7 +816,7 @@ Each challenge consists of the following properties:
 
 * ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
 * ``description`` (optional): A human readable description of the challenge.
-* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need define ``"default": true`` on exactly one challenge.
+* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need to define ``"default": true`` on exactly one challenge.
 * ``schedule`` (mandatory): Defines the workload. It is described in more detail above.
 
 .. note::
