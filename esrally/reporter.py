@@ -461,12 +461,12 @@ class SummaryReporter:
     def report_total_times(self, stats):
         unit = "min"
         return self.join(
-            self.line("Indexing time", "", stats.total_time, unit, convert.ms_to_minutes),
-            self.line("Indexing throttle time", "", stats.indexing_throttle_time, unit, convert.ms_to_minutes),
-            self.line("Merge time", "", stats.merge_time, unit, convert.ms_to_minutes),
-            self.line("Refresh time", "", stats.refresh_time, unit, convert.ms_to_minutes),
-            self.line("Flush time", "", stats.flush_time, unit, convert.ms_to_minutes),
-            self.line("Merge throttle time", "", stats.merge_throttle_time, unit, convert.ms_to_minutes)
+            self.line("Total indexing time", "", stats.total_time, unit, convert.ms_to_minutes),
+            self.line("Total indexing throttle time", "", stats.indexing_throttle_time, unit, convert.ms_to_minutes),
+            self.line("Total merge time", "", stats.merge_time, unit, convert.ms_to_minutes),
+            self.line("Total refresh time", "", stats.refresh_time, unit, convert.ms_to_minutes),
+            self.line("Total flush time", "", stats.flush_time, unit, convert.ms_to_minutes),
+            self.line("Total merge throttle time", "", stats.merge_throttle_time, unit, convert.ms_to_minutes)
         )
 
     def report_merge_part_times(self, stats):
@@ -666,17 +666,17 @@ class ComparisonReporter:
 
     def report_total_times(self, baseline_stats, contender_stats):
         return self.join(
-            self.line("Indexing time", baseline_stats.total_time, contender_stats.total_time, "", "min",
+            self.line("Total indexing time", baseline_stats.total_time, contender_stats.total_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Indexing throttle time", baseline_stats.indexing_throttle_time, contender_stats.indexing_throttle_time, "", "min",
+            self.line("Total indexing throttle time", baseline_stats.indexing_throttle_time, contender_stats.indexing_throttle_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time", baseline_stats.merge_time, contender_stats.merge_time, "", "min",
+            self.line("Total merge time", baseline_stats.merge_time, contender_stats.merge_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Refresh time", baseline_stats.refresh_time, contender_stats.refresh_time, "", "min",
+            self.line("Total refresh time", baseline_stats.refresh_time, contender_stats.refresh_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Flush time", baseline_stats.flush_time, contender_stats.flush_time, "", "min",
+            self.line("Total flush time", baseline_stats.flush_time, contender_stats.flush_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge throttle time", baseline_stats.merge_throttle_time, contender_stats.merge_throttle_time, "", "min",
+            self.line("Total merge throttle time", baseline_stats.merge_throttle_time, contender_stats.merge_throttle_time, "", "min",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
         )
 

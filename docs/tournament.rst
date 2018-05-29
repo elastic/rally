@@ -65,11 +65,11 @@ We can see that the user tag helps us to recognize races. We want to compare the
                             Min Indexing Throughput [docs/s]       19501        19118  -383.00000
                          Median Indexing Throughput [docs/s]       20232      19927.5  -304.45833
                             Max Indexing Throughput [docs/s]       21172        20849  -323.00000
-                                         Indexing time [min]     55.7989       56.335    +0.53603
-                                            Merge time [min]     12.9766      13.3115    +0.33495
-                                          Refresh time [min]     5.20067      5.20097    +0.00030
-                                            Flush time [min]   0.0648667    0.0681833    +0.00332
-                                   Merge throttle time [min]    0.796417     0.879267    +0.08285
+                                   Total indexing time [min]     55.7989       56.335    +0.53603
+                                      Total merge time [min]     12.9766      13.3115    +0.33495
+                                    Total refresh time [min]     5.20067      5.20097    +0.00030
+                                      Total flush time [min]   0.0648667    0.0681833    +0.00332
+                             Total merge throttle time [min]    0.796417     0.879267    +0.08285
                    Query latency term (50.0 percentile) [ms]     2.10049      2.15421    +0.05372
                    Query latency term (90.0 percentile) [ms]     2.77537      2.84168    +0.06630
                   Query latency term (100.0 percentile) [ms]     4.52081      5.15368    +0.63287

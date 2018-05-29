@@ -64,10 +64,10 @@ When the race has finished, Rally will show a summary on the command line::
 
     |                          Metric |         Task |     Value |   Unit |
     |--------------------------------:|-------------:|----------:|-------:|
-    |                   Indexing time |              |   124.712 |    min |
-    |                      Merge time |              |   21.8604 |    min |
-    |                    Refresh time |              |   4.49527 |    min |
-    |             Merge throttle time |              |  0.120433 |    min |
+    |             Total indexing time |              |   124.712 |    min |
+    |                Total merge time |              |   21.8604 |    min |
+    |              Total refresh time |              |   4.49527 |    min |
+    |       Total merge throttle time |              |  0.120433 |    min |
     |                Median CPU usage |              |     546.5 |      % |
     |              Total Young Gen GC |              |    72.078 |      s |
     |                Total Old Gen GC |              |     3.426 |      s |

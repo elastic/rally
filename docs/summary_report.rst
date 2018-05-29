@@ -3,38 +3,38 @@ Summary Report
 
 At the end of each :doc:`race </race>`, Rally shows a summary report. Below we'll explain the meaning of each line including a reference to its corresponding :doc:`metrics key </metrics>` which can be helpful if you want to build your own reports in Kibana. Note that not every summary report will show all lines.
 
-Indexing time
--------------
+Total indexing time
+-------------------
 
 * **Definition**: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_total_time``
 
-Indexing throttle time
-----------------------
+Total indexing throttle time
+----------------------------
 
 * **Definition**: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_throttle_time``
 
-Merge time
-----------
+Total merge time
+----------------
 
 * **Definition**: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_time``
 
-Refresh time
-------------
+Total refresh time
+------------------
 
 * **Definition**: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``refresh_total_time``
 
-Flush time
-----------
+Total flush time
+----------------
 
 * **Definition**: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``flush_total_time``
 
-Merge throttle time
--------------------
+Total merge throttle time
+-------------------------
 
 * **Definition**: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_throttled_time``

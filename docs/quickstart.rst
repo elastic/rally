@@ -37,11 +37,11 @@ This will download Elasticsearch 6.0.0 and run Rally's default :doc:`track </glo
 
     |                         Metric |                 Task |     Value |   Unit |
     |-------------------------------:|---------------------:|----------:|-------:|
-    |                  Indexing time |                      |   28.0997 |    min |
-    |                     Merge time |                      |   6.84378 |    min |
-    |                   Refresh time |                      |   3.06045 |    min |
-    |                     Flush time |                      |  0.106517 |    min |
-    |            Merge throttle time |                      |   1.28193 |    min |
+    |            Total indexing time |                      |   28.0997 |    min |
+    |               Total merge time |                      |   6.84378 |    min |
+    |             Total refresh time |                      |   3.06045 |    min |
+    |               Total flush time |                      |  0.106517 |    min |
+    |      Total merge throttle time |                      |   1.28193 |    min |
     |               Median CPU usage |                      |     471.6 |      % |
     |             Total Young Gen GC |                      |    16.237 |      s |
     |               Total Old Gen GC |                      |     1.796 |      s |
