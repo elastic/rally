@@ -288,6 +288,94 @@ class EsMetricsTests(TestCase):
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
 
+    def test_put_doc_no_meta_data(self):
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.lap = 1
+
+        self.metrics_store.put_doc(doc={
+            "name": "custom_metric",
+            "total": 1234567,
+            "per-shard": [17, 18, 1289, 273, 222],
+            "unit": "byte"
+        })
+        expected_doc = {
+            "@timestamp": StaticClock.NOW * 1000,
+            "trial-id": EsMetricsTests.TRIAL_ID,
+            "trial-timestamp": "20160131T000000Z",
+            "relative-time": 0,
+            "environment": "unittest",
+            "track": "test",
+            "track-params": {
+                "shard-count": 3
+            },
+            "lap": 1,
+            "challenge": "append",
+            "car": "defaults",
+            "name": "custom_metric",
+            "total": 1234567,
+            "per-shard": [17, 18, 1289, 273, 222],
+            "unit": "byte"
+        }
+        self.metrics_store.close()
+        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+
+    def test_put_doc_with_metadata(self):
+        # add a user-defined tag
+        self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.lap = 1
+
+        # Ensure we also merge in cluster level meta info
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_name", "Darwin")
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_version", "15.4.0")
+        # Ensure we separate node level info by node
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_name", "Linux")
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_version", "4.2.0-18-generic")
+
+        self.metrics_store.put_doc(doc={
+            "name": "custom_metric",
+            "total": 1234567,
+            "per-shard": [17, 18, 1289, 273, 222],
+            "unit": "byte"
+        }, level=metrics.MetaInfoScope.node,
+            node_name="node0",
+            meta_data={
+                "node_type": "hot"
+            })
+        expected_doc = {
+            "@timestamp": StaticClock.NOW * 1000,
+            "trial-id": EsMetricsTests.TRIAL_ID,
+            "trial-timestamp": "20160131T000000Z",
+            "relative-time": 0,
+            "environment": "unittest",
+            "track": "test",
+            "track-params": {
+                "shard-count": 3
+            },
+            "lap": 1,
+            "challenge": "append",
+            "car": "defaults",
+            "name": "custom_metric",
+            "total": 1234567,
+            "per-shard": [17, 18, 1289, 273, 222],
+            "unit": "byte",
+            "meta": {
+                "tag_intention": "testing",
+                "tag_disk_type": "hdd",
+                "source_revision": "abc123",
+                "os_name": "Darwin",
+                "os_version": "15.4.0",
+                "node_type": "hot"
+            }
+        }
+        self.metrics_store.close()
+        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+
     def test_get_value(self):
         throughput = 5000
         search_result = {

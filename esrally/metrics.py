@@ -445,8 +445,8 @@ class MetricsStore:
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.cluster, None, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
-                  relative_time, meta_data)
+        self._put_metric(MetaInfoScope.cluster, None, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
+                         relative_time, meta_data)
 
     def put_count_node_level(self, node_name, name, count, unit=None, task=None, operation=None, operation_type=None,
                              sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
@@ -467,8 +467,8 @@ class MetricsStore:
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.node, node_name, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
-                  relative_time, meta_data)
+        self._put_metric(MetaInfoScope.node, node_name, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
+                         relative_time, meta_data)
 
     # should be a float
     def put_value_cluster_level(self, name, value, unit, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
@@ -489,8 +489,8 @@ class MetricsStore:
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
-                  relative_time, meta_data)
+        self._put_metric(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
+                         relative_time, meta_data)
 
     def put_value_node_level(self, node_name, name, value, unit, task=None, operation=None, operation_type=None,
                              sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
@@ -511,11 +511,11 @@ class MetricsStore:
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put(MetaInfoScope.node, node_name, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
-                  relative_time, meta_data)
+        self._put_metric(MetaInfoScope.node, node_name, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
+                         relative_time, meta_data)
 
-    def _put(self, level, level_key, name, value, unit, task, operation, operation_type, sample_type, absolute_time=None,
-             relative_time=None, meta_data=None):
+    def _put_metric(self, level, level_key, name, value, unit, task, operation, operation_type, sample_type, absolute_time=None,
+                    relative_time=None, meta_data=None):
         if level == MetaInfoScope.cluster:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
         elif level == MetaInfoScope.node:
@@ -554,6 +554,58 @@ class MetricsStore:
             doc["operation"] = operation
         if operation_type:
             doc["operation-type"] = operation_type
+        if self._track_params:
+            doc["track-params"] = self._track_params
+
+        assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
+        self._add(doc)
+
+    def put_doc(self, doc, level=None, node_name=None, meta_data=None, absolute_time=None, relative_time=None):
+        """
+        Adds a new document to the metrics store. It will merge additional properties into the doc such as timestamps or track info.
+
+        :param doc: The raw document as a ``dict``. Ownership is transferred to the metrics store (i.e. don't reuse that object).
+        :param level: Whether these are cluster or node-level metrics. May be ``None`` if not applicable.
+        :param node_name: The name of the node in case metrics are on node level.
+        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
+        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
+               store will derive the timestamp automatically.
+        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
+               Defaults to None. The metrics store will derive the timestamp automatically.
+        """
+        if level == MetaInfoScope.cluster:
+            meta = self._meta_info[MetaInfoScope.cluster].copy()
+        elif level == MetaInfoScope.node:
+            meta = self._meta_info[MetaInfoScope.cluster].copy()
+            if node_name in self._meta_info[MetaInfoScope.node]:
+                meta.update(self._meta_info[MetaInfoScope.node][node_name])
+        elif level is None:
+            meta = None
+        else:
+            raise exceptions.SystemSetupError("Unknown meta info level [{}]".format(level))
+
+        if meta and meta_data:
+            meta.update(meta_data)
+
+        if absolute_time is None:
+            absolute_time = self._clock.now()
+        if relative_time is None:
+            relative_time = self._stop_watch.split_time()
+
+        doc.update({
+            "@timestamp": time.to_epoch_millis(absolute_time),
+            "relative-time": int(relative_time * 1000 * 1000),
+            "trial-id": self._trial_id,
+            "trial-timestamp": self._trial_timestamp,
+            "environment": self._environment_name,
+            "track": self._track,
+            "lap": self._lap,
+            "challenge": self._challenge,
+            "car": self._car_name,
+
+        })
+        if meta:
+            doc["meta"] = meta
         if self._track_params:
             doc["track-params"] = self._track_params
 
