@@ -420,23 +420,23 @@ class SummaryReporter:
 
         warnings = []
         metrics_table = []
-        metrics_table += self.report_total_times(stats)
-        metrics_table += self.report_merge_part_times(stats)
-        metrics_table += self.report_ml_max_processing_time(stats)
+        metrics_table.extend(self.report_total_times(stats))
+        metrics_table.extend(self.report_merge_part_times(stats))
+        metrics_table.extend(self.report_ml_max_processing_time(stats))
 
-        metrics_table += self.report_cpu_usage(stats)
-        metrics_table += self.report_gc_times(stats)
+        metrics_table.extend(self.report_cpu_usage(stats))
+        metrics_table.extend(self.report_gc_times(stats))
 
-        metrics_table += self.report_disk_usage(stats)
-        metrics_table += self.report_segment_memory(stats)
-        metrics_table += self.report_segment_counts(stats)
+        metrics_table.extend(self.report_disk_usage(stats))
+        metrics_table.extend(self.report_segment_memory(stats))
+        metrics_table.extend(self.report_segment_counts(stats))
 
         for record in stats.op_metrics:
             task = record["task"]
-            metrics_table += self.report_throughput(record, task)
-            metrics_table += self.report_latency(record, task)
-            metrics_table += self.report_service_time(record, task)
-            metrics_table += self.report_error_rate(record, task)
+            metrics_table.extend(self.report_throughput(record, task))
+            metrics_table.extend(self.report_latency(record, task))
+            metrics_table.extend(self.report_service_time(record, task))
+            metrics_table.extend(self.report_error_rate(record, task))
             self.add_warnings(warnings, record, task)
 
         self.write_report(metrics_table)
@@ -491,14 +491,14 @@ class SummaryReporter:
         )
 
     def report_total_times(self, stats):
-        totals = []
-        totals += self.report_total_time("indexing time", stats.total_time, stats.total_time_per_shard)
-        totals += self.report_total_time("indexing throttle time", stats.indexing_throttle_time, stats.indexing_throttle_time_per_shard)
-        totals += self.report_total_time("merge time", stats.merge_time, stats.merge_time_per_shard)
-        totals += self.report_total_time("merge throttle time", stats.merge_throttle_time, stats.merge_throttle_time_per_shard)
-        totals += self.report_total_time("refresh time", stats.refresh_time, stats.refresh_time_per_shard)
-        totals += self.report_total_time("flush time", stats.flush_time, stats.flush_time_per_shard)
-        return totals
+        lines = []
+        lines.extend(self.report_total_time("indexing time", stats.total_time, stats.total_time_per_shard))
+        lines.extend(self.report_total_time("indexing throttle time", stats.indexing_throttle_time, stats.indexing_throttle_time_per_shard))
+        lines.extend(self.report_total_time("merge time", stats.merge_time, stats.merge_time_per_shard))
+        lines.extend(self.report_total_time("merge throttle time", stats.merge_throttle_time, stats.merge_throttle_time_per_shard))
+        lines.extend(self.report_total_time("refresh time", stats.refresh_time, stats.refresh_time_per_shard))
+        lines.extend(self.report_total_time("flush time", stats.flush_time, stats.flush_time_per_shard))
+        return lines
 
     def report_total_time(self, name, total_time, total_time_per_shard):
         unit = "min"
@@ -621,20 +621,19 @@ class ComparisonReporter:
     def metrics_table(self, baseline_stats, contender_stats, plain):
         self.plain = plain
         metrics_table = []
-        metrics_table += self.report_total_times(baseline_stats, contender_stats)
-        metrics_table += self.report_merge_part_times(baseline_stats, contender_stats)
-        # metrics_table += self.report_cpu_usage(baseline_stats, contender_stats)
-        metrics_table += self.report_gc_times(baseline_stats, contender_stats)
-        metrics_table += self.report_disk_usage(baseline_stats, contender_stats)
-        metrics_table += self.report_segment_memory(baseline_stats, contender_stats)
-        metrics_table += self.report_segment_counts(baseline_stats, contender_stats)
+        metrics_table.extend(self.report_total_times(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_merge_part_times(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_gc_times(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_disk_usage(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_segment_memory(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_segment_counts(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
-                metrics_table += self.report_throughput(baseline_stats, contender_stats, t)
-                metrics_table += self.report_latency(baseline_stats, contender_stats, t)
-                metrics_table += self.report_service_time(baseline_stats, contender_stats, t)
-                metrics_table += self.report_error_rate(baseline_stats, contender_stats, t)
+                metrics_table.extend(self.report_throughput(baseline_stats, contender_stats, t))
+                metrics_table.extend(self.report_latency(baseline_stats, contender_stats, t))
+                metrics_table.extend(self.report_service_time(baseline_stats, contender_stats, t))
+                metrics_table.extend(self.report_error_rate(baseline_stats, contender_stats, t))
         return metrics_table
 
     def write_report(self, metrics_table, metrics_table_console):
@@ -705,26 +704,26 @@ class ComparisonReporter:
         )
 
     def report_total_times(self, baseline_stats, contender_stats):
-        totals = []
-        totals += self.report_total_time("indexing time",
-                                         baseline_stats.total_time, baseline_stats.total_time_per_shard,
-                                         contender_stats.total_time, contender_stats.total_time_per_shard)
-        totals += self.report_total_time("indexing throttle time",
-                                         baseline_stats.indexing_throttle_time, baseline_stats.indexing_throttle_time_per_shard,
-                                         contender_stats.indexing_throttle_time, contender_stats.indexing_throttle_time_per_shard)
-        totals += self.report_total_time("merge time",
-                                         baseline_stats.merge_time, baseline_stats.merge_time_per_shard,
-                                         contender_stats.merge_time, contender_stats.merge_time_per_shard)
-        totals += self.report_total_time("merge throttle time",
-                                         baseline_stats.merge_throttle_time, baseline_stats.merge_throttle_time_per_shard,
-                                         contender_stats.merge_throttle_time, contender_stats.merge_throttle_time_per_shard)
-        totals += self.report_total_time("refresh time",
-                                         baseline_stats.refresh_time, baseline_stats.refresh_time_per_shard,
-                                         contender_stats.refresh_time, contender_stats.refresh_time_per_shard)
-        totals += self.report_total_time("flush time",
-                                         baseline_stats.flush_time, baseline_stats.flush_time_per_shard,
-                                         contender_stats.flush_time, contender_stats.flush_time_per_shard)
-        return totals
+        lines = []
+        lines.extend(self.report_total_time("indexing time",
+                                            baseline_stats.total_time, baseline_stats.total_time_per_shard,
+                                            contender_stats.total_time, contender_stats.total_time_per_shard))
+        lines.extend(self.report_total_time("indexing throttle time",
+                                            baseline_stats.indexing_throttle_time, baseline_stats.indexing_throttle_time_per_shard,
+                                            contender_stats.indexing_throttle_time, contender_stats.indexing_throttle_time_per_shard))
+        lines.extend(self.report_total_time("merge time",
+                                            baseline_stats.merge_time, baseline_stats.merge_time_per_shard,
+                                            contender_stats.merge_time, contender_stats.merge_time_per_shard))
+        lines.extend(self.report_total_time("merge throttle time",
+                                            baseline_stats.merge_throttle_time, baseline_stats.merge_throttle_time_per_shard,
+                                            contender_stats.merge_throttle_time, contender_stats.merge_throttle_time_per_shard))
+        lines.extend(self.report_total_time("refresh time",
+                                            baseline_stats.refresh_time, baseline_stats.refresh_time_per_shard,
+                                            contender_stats.refresh_time, contender_stats.refresh_time_per_shard))
+        lines.extend(self.report_total_time("flush time",
+                                            baseline_stats.flush_time, baseline_stats.flush_time_per_shard,
+                                            contender_stats.flush_time, contender_stats.flush_time_per_shard))
+        return lines
 
     def report_total_time(self, name, baseline_total, baseline_per_shard, contender_total, contender_per_shard):
         unit = "min"
