@@ -143,12 +143,12 @@ Rally stores the following metrics:
 * ``segments_terms_memory_in_bytes``: Number of bytes used for terms as reported by the indices stats API.
 * ``segments_norms_memory_in_bytes``: Number of bytes used for norms as reported by the indices stats API.
 * ``segments_points_memory_in_bytes``: Number of bytes used for points as reported by the indices stats API.
-* ``merges_total_time``: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes).
-* ``merges_total_throttled_time``: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
-* ``indexing_total_time``: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time.
-* ``indexing_throttle_time``: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time.
-* ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
-* ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
+* ``merges_total_time``: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes). These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
+* ``merges_total_throttled_time``: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
+* ``indexing_total_time``: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
+* ``indexing_throttle_time``: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
+* ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
+* ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
 * ``final_index_size_bytes``: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
 * ``store_size_in_bytes``: The size in bytes of the index (excluding the translog) as reported by the indices stats API.
 * ``translog_size_in_bytes``: The size in bytes of the translog as reported by the indices stats API.

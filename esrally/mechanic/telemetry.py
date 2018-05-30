@@ -7,7 +7,7 @@ import tabulate
 import threading
 
 from esrally import metrics, time, exceptions
-from esrally.utils import io, sysstats, process, console, versions
+from esrally.utils import io, sysstats, console, versions
 
 
 def list_telemetry():
@@ -1047,11 +1047,12 @@ class IndexStats(InternalTelemetryDevice):
         # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
         # the cluster so we can at least tell them.
         if self.first_time:
-            index_times = self.index_times(self.index_stats()["primaries"])
-            for k, v in index_times.items():
-                if v > 0:
+            for t in self.index_times(self.index_stats(), per_shard_stats=False):
+                n = t["name"]
+                v = t["value"]
+                if t["value"] > 0:
                     console.warn("%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
-                                 "metrics may be misleading." % (k, v), logger=self.logger)
+                                 "metrics may be misleading." % (n, v), logger=self.logger)
             self.first_time = False
 
     def on_benchmark_stop(self):
@@ -1059,43 +1060,66 @@ class IndexStats(InternalTelemetryDevice):
         self.logger.info("Gathering indices stats for all primaries on benchmark stop.")
         index_stats = self.index_stats()
         self.logger.info("Returned indices stats:\n%s", json.dumps(index_stats, indent=2))
-        if "primaries" not in index_stats:
+        if "_all" not in index_stats or "primaries" not in index_stats["_all"]:
             return
-        p = index_stats["primaries"]
+        p = index_stats["_all"]["primaries"]
         # actually this is add_count
         self.add_metrics(self.extract_value(p, ["segments", "count"]), "segments_count")
         self.add_metrics(self.extract_value(p, ["segments", "memory_in_bytes"]), "segments_memory_in_bytes", "byte")
 
-        for metric_key, value in self.index_times(p).items():
-            self.logger.info("Adding [%s] = [%s] to metrics store.", str(metric_key), str(value))
-            self.add_metrics(value, metric_key, "ms")
+        for t in self.index_times(index_stats):
+            self.metrics_store.put_doc(doc=t, level=metrics.MetaInfoScope.cluster)
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "norms_memory_in_bytes"]), "segments_norms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
-        self.add_metrics(self.extract_value(index_stats, ["total", "store", "size_in_bytes"]), "store_size_in_bytes", "byte")
-        self.add_metrics(self.extract_value(index_stats, ["total", "translog", "size_in_bytes"]), "translog_size_in_bytes", "byte")
+        self.add_metrics(self.extract_value(index_stats, ["_all", "total", "store", "size_in_bytes"]), "store_size_in_bytes", "byte")
+        self.add_metrics(self.extract_value(index_stats, ["_all", "total", "translog", "size_in_bytes"]), "translog_size_in_bytes", "byte")
 
     def index_stats(self):
         # noinspection PyBroadException
         try:
-            stats = self.client.indices.stats(metric="_all", level="shards")
-            return stats["_all"]
+            return self.client.indices.stats(metric="_all", level="shards")
         except BaseException:
             self.logger.exception("Could not retrieve index stats.")
             return {}
 
-    def index_times(self, p):
-        return {
-            "merges_total_time": self.extract_value(p, ["merges", "total_time_in_millis"], default_value=0),
-            "merges_total_throttled_time": self.extract_value(p, ["merges", "total_throttled_time_in_millis"], default_value=0),
-            "indexing_total_time": self.extract_value(p, ["indexing", "index_time_in_millis"], default_value=0),
-            "indexing_throttle_time": self.extract_value(p, ["indexing", "throttle_time_in_millis"], default_value=0),
-            "refresh_total_time": self.extract_value(p, ["refresh", "total_time_in_millis"], default_value=0),
-            "flush_total_time": self.extract_value(p, ["flush", "total_time_in_millis"], default_value=0)
-        }
+    def index_times(self, stats, per_shard_stats=True):
+        times = []
+        self.index_time(times, stats, "merges_total_time", ["merges", "total_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "merges_total_throttled_time", ["merges", "total_throttled_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "indexing_total_time", ["indexing", "index_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "indexing_throttle_time", ["indexing", "throttle_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "refresh_total_time", ["refresh", "total_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "flush_total_time", ["flush", "total_time_in_millis"], per_shard_stats),
+        return times
+
+    def index_time(self, values, stats, name, path, per_shard_stats):
+        primary_total_stats = self.extract_value(stats, ["_all", "primaries"], default_value={})
+        value = self.extract_value(primary_total_stats, path)
+        if value:
+            doc = {
+                "name": name,
+                "value": value,
+                "unit": "ms",
+            }
+            if per_shard_stats:
+                doc["per-shard"] = self.primary_shard_stats(stats, path)
+            values.append(doc)
+
+    def primary_shard_stats(self, stats, path):
+        shard_stats = []
+        try:
+            for idx, shards in stats["indices"].items():
+                for shard_number, shard in shards["shards"].items():
+                    for shard_metrics in shard:
+                        if shard_metrics["routing"]["primary"]:
+                            shard_stats.append(self.extract_value(shard_metrics, path, default_value=0))
+        except KeyError:
+            self.logger.warning("Could not determine primary shard stats at path [%s].", ",".join(path))
+        return shard_stats
 
     def add_metrics(self, value, metric_key, unit=None):
         if value is not None:

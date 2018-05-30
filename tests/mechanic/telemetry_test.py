@@ -1385,9 +1385,10 @@ class GcTimesSummaryTests(TestCase):
 
 
 class IndexStatsTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_stores_available_index_stats(self, metrics_store_cluster_count, metrics_store_cluster_value):
+    def test_stores_available_index_stats(self, metrics_store_cluster_count, metrics_store_cluster_value, metrics_store_put_doc):
         client = Client(indices=SubClient({
             "_all": {
                 "primaries": {
@@ -1429,17 +1430,17 @@ class IndexStatsTests(TestCase):
                         "points_memory_in_bytes": 512
                     },
                     "merges": {
-                        "total_time_in_millis": 300,
-                        "total_throttled_time_in_millis": 120
+                        "total_time_in_millis": 509341,
+                        "total_throttled_time_in_millis": 98925
                     },
                     "indexing": {
-                        "index_time_in_millis": 2000
+                        "index_time_in_millis": 1065688
                     },
                     "refresh": {
-                        "total_time_in_millis": 200
+                        "total_time_in_millis": 158465
                     },
                     "flush": {
-                        "total_time_in_millis": 100
+                        "total_time_in_millis": 19082
                     }
                 },
                 "total": {
@@ -1453,21 +1454,144 @@ class IndexStatsTests(TestCase):
                         "uncommitted_size_in_bytes": 430
                     }
                 }
+            },
+            "indices": {
+                "idx-001": {
+                    "shards": {
+                        "0": [
+                            {
+                                "routing": {
+                                    "primary": False
+                                },
+                                "indexing": {
+                                    "index_total": 2280171,
+                                    "index_time_in_millis": 533662,
+                                    "throttle_time_in_millis": 0
+                                },
+                                "merges": {
+                                    "total_time_in_millis": 280689,
+                                    "total_stopped_time_in_millis": 0,
+                                    "total_throttled_time_in_millis": 58846,
+                                    "total_auto_throttle_in_bytes": 8085428
+                                },
+                                "refresh": {
+                                    "total_time_in_millis": 81004
+                                },
+                                "flush": {
+                                    "total_time_in_millis": 9879
+                                }
+                            }
+                        ],
+                        "1": [
+                            {
+                                "routing": {
+                                    "primary": True,
+                                },
+                                "indexing": {
+                                    "index_time_in_millis": 532026,
+                                },
+                                "merges": {
+                                    "total_time_in_millis": 228652,
+                                    "total_throttled_time_in_millis": 40079,
+                                },
+                                "refresh": {
+                                    "total_time_in_millis": 77461,
+                                },
+                                "flush": {
+                                    "total_time_in_millis": 9203
+                                }
+                            }
+                        ]
+                    }
+                },
+                "idx-002": {
+                    "shards": {
+                        "0": [
+                            {
+                                "routing": {
+                                    "primary": True,
+                                },
+                                "indexing": {
+                                    "index_time_in_millis": 533662,
+                                },
+                                "merges": {
+                                    "total_time_in_millis": 280689,
+                                    "total_throttled_time_in_millis": 58846,
+                                },
+                                "refresh": {
+                                    "total_time_in_millis": 81004,
+                                },
+                                "flush": {
+                                    "total_time_in_millis": 9879
+                                }
+                            }
+                        ],
+                        "1": [
+                            {
+                                "routing": {
+                                    "primary": False,
+                                },
+                                "indexing": {
+                                    "index_time_in_millis": 532026,
+                                    "throttle_time_in_millis": 296
+                                },
+                                "merges": {
+                                    "total_time_in_millis": 228652,
+                                    "total_throttled_time_in_millis": 40079,
+                                },
+                                "refresh": {
+                                    "total_time_in_millis": 77461,
+                                },
+                                "flush": {
+                                    "total_time_in_millis": 9203
+                                }
+                            }
+                        ]
+                    }
+                }
             }
         })
 
         t.on_benchmark_stop()
+
+        metrics_store_put_doc.assert_has_calls([
+            mock.call(doc={
+                "name": "merges_total_time",
+                "value": 509341,
+                "unit": "ms",
+                "per-shard": [228652, 280689]
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "merges_total_throttled_time",
+                "value": 98925,
+                "unit": "ms",
+                "per-shard": [40079, 58846]
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "indexing_total_time",
+                "value": 1065688,
+                "unit": "ms",
+                "per-shard": [532026, 533662]
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "refresh_total_time",
+                "value": 158465,
+                "unit": "ms",
+                "per-shard": [77461, 81004]
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "flush_total_time",
+                "value": 19082,
+                "unit": "ms",
+                "per-shard": [9203, 9879]
+            }, level=metrics.MetaInfoScope.cluster),
+        ])
 
         metrics_store_cluster_count.assert_has_calls([
             mock.call("segments_count", 5)
         ])
         metrics_store_cluster_value.assert_has_calls([
             mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("merges_total_time", 300, "ms"),
-            mock.call("merges_total_throttled_time", 120, "ms"),
-            mock.call("indexing_total_time", 2000, "ms"),
-            mock.call("refresh_total_time", 200, "ms"),
-            mock.call("flush_total_time", 100, "ms"),
             mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
@@ -1476,9 +1600,10 @@ class IndexStatsTests(TestCase):
             mock.call("translog_size_in_bytes", 2647984713, "byte"),
         ], any_order=True)
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_index_stats_are_per_lap(self, metrics_store_cluster_count, metrics_store_cluster_value):
+    def test_index_stats_are_per_lap(self, metrics_store_cluster_count, metrics_store_cluster_value, metrics_store_put_doc):
         client = Client(indices=SubClient({
             "_all": {
                 "primaries": {
@@ -1569,14 +1694,74 @@ class IndexStatsTests(TestCase):
 
         t.on_benchmark_stop()
 
+        metrics_store_put_doc.assert_has_calls([
+            # 1st lap
+            mock.call(doc={
+                "name": "merges_total_time",
+                "value": 300,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "merges_total_throttled_time",
+                "value": 120,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "indexing_total_time",
+                "value": 2000,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "refresh_total_time",
+                "value": 200,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "flush_total_time",
+                "value": 100,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            # 2nd lap
+            mock.call(doc={
+                "name": "merges_total_time",
+                "value": 900,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "merges_total_throttled_time",
+                "value": 120,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "indexing_total_time",
+                "value": 8000,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "refresh_total_time",
+                "value": 500,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "flush_total_time",
+                "value": 300,
+                "unit": "ms",
+                "per-shard": []
+            }, level=metrics.MetaInfoScope.cluster),
+        ])
+
         metrics_store_cluster_value.assert_has_calls([
             # 1st lap
             mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("merges_total_time", 300, "ms"),
-            mock.call("merges_total_throttled_time", 120, "ms"),
-            mock.call("indexing_total_time", 2000, "ms"),
-            mock.call("refresh_total_time", 200, "ms"),
-            mock.call("flush_total_time", 100, "ms"),
             mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
@@ -1584,11 +1769,6 @@ class IndexStatsTests(TestCase):
 
             # 2nd lap
             mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("merges_total_time", 900, "ms"),
-            mock.call("merges_total_throttled_time", 120, "ms"),
-            mock.call("indexing_total_time", 8000, "ms"),
-            mock.call("refresh_total_time", 500, "ms"),
-            mock.call("flush_total_time", 300, "ms"),
             mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
