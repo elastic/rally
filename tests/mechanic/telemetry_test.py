@@ -1418,7 +1418,7 @@ class IndexStatsTests(TestCase):
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_start()
 
-        client.indices = SubClient({
+        response = {
             "_all": {
                 "primaries": {
                     "segments": {
@@ -1550,40 +1550,55 @@ class IndexStatsTests(TestCase):
                     }
                 }
             }
-        })
+        }
+
+        client.indices = SubClient(response)
 
         t.on_benchmark_stop()
+
+        # we cannot rely on stable iteration order so we need to extract the values at runtime from the dict
+        primary_shards = []
+        for idx, shards in response["indices"].items():
+            for shard_number, shard in shards["shards"].items():
+                for shard_metrics in shard:
+                    if shard_metrics["routing"]["primary"]:
+                        primary_shards.append(shard_metrics)
 
         metrics_store_put_doc.assert_has_calls([
             mock.call(doc={
                 "name": "merges_total_time",
                 "value": 509341,
                 "unit": "ms",
-                "per-shard": [228652, 280689]
+                # [228652, 280689]
+                "per-shard": [s["merges"]["total_time_in_millis"] for s in primary_shards]
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "merges_total_throttled_time",
                 "value": 98925,
                 "unit": "ms",
-                "per-shard": [40079, 58846]
+                # [40079, 58846]
+                "per-shard": [s["merges"]["total_throttled_time_in_millis"] for s in primary_shards]
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "indexing_total_time",
                 "value": 1065688,
                 "unit": "ms",
-                "per-shard": [532026, 533662]
+                # [532026, 533662]
+                "per-shard": [s["indexing"]["index_time_in_millis"] for s in primary_shards]
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "refresh_total_time",
                 "value": 158465,
                 "unit": "ms",
-                "per-shard": [77461, 81004]
+                # [77461, 81004]
+                "per-shard": [s["refresh"]["total_time_in_millis"] for s in primary_shards]
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "flush_total_time",
                 "value": 19082,
                 "unit": "ms",
-                "per-shard": [9203, 9879]
+                # [9203, 9879]
+                "per-shard": [s["flush"]["total_time_in_millis"] for s in primary_shards]
             }, level=metrics.MetaInfoScope.cluster),
         ])
 
