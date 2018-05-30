@@ -9,11 +9,23 @@ Total indexing time
 * **Definition**: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_total_time``
 
+Indexing time per shard
+-----------------------
+
+* **Definition**: Minimum, median and maximum time used for indexing per primary shard as reported by the indices stats API.
+* **Corresponding metrics key**: ``indexing_total_time`` (property: ``per-shard``)
+
 Total indexing throttle time
 ----------------------------
 
 * **Definition**: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_throttle_time``
+
+Indexing throttle time per shard
+--------------------------------
+
+* **Definition**: Minimum, median and maximum time used that indexing has been throttled per primary shard as reported by the indices stats API.
+* **Corresponding metrics key**: ``indexing_throttle_time`` (property: ``per-shard``)
 
 Total merge time
 ----------------
@@ -21,11 +33,23 @@ Total merge time
 * **Definition**: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_time``
 
+Merge time per shard
+--------------------
+
+* **Definition**: Minimum, median and maximum time of merges per primary shard as reported by the indices stats API.
+* **Corresponding metrics key**: ``merges_total_time`` (property: ``per-shard``)
+
 Total refresh time
 ------------------
 
 * **Definition**: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``refresh_total_time``
+
+Refresh time per shard
+----------------------
+
+* **Definition**: Minimum, median and maximum time for index refresh per primary shard as reported by the indices stats API.
+* **Corresponding metrics key**: ``refresh_total_time`` (property: ``per-shard``)
 
 Total flush time
 ----------------
@@ -33,12 +57,23 @@ Total flush time
 * **Definition**: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``flush_total_time``
 
+Flush time per shard
+--------------------
+
+* **Definition**: Minimum, median and maximum time for index flush per primary shard as reported by the indices stats API.
+* **Corresponding metrics key**: ``flush_total_time`` (property: ``per-shard``)
+
 Total merge throttle time
 -------------------------
 
 * **Definition**: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_throttled_time``
 
+Merge throttle time per shard
+-----------------------------
+
+* **Definition**: Minimum, median and maximum time that merges have been throttled per primary shard as reported by the indices stats API.
+* **Corresponding metrics key**: ``merges_total_throttled_time`` (property: ``per-shard``)
 
 Merge time (``X``)
 ------------------
@@ -54,7 +89,7 @@ Where ``X`` is one of:
 
 ..
 
-* **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use `--car-params="verbose_iw_logging_enabled:true"` for that).
+* **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use ``--car-params="verbose_iw_logging_enabled:true"`` for that).
 * **Corresponding metrics keys**: ``merge_parts_total_time_*``
 
 
