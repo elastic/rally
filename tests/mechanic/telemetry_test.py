@@ -1,10 +1,11 @@
 import random
 import collections
 import unittest.mock as mock
-from unittest import TestCase
 
+from unittest import TestCase
 from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
+from esrally.metrics import MetaInfoScope
 
 
 def create_config():
@@ -254,9 +255,8 @@ class CcrStatsRecorderTests(TestCase):
                                      "cluster \[remote\]"):
             telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
 
-
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_stores_default_ccr_stats(self, metrics_store_put_count):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_default_ccr_stats(self, metrics_store_put_doc):
         total_fetch_time_millis = random.randint(0,9999999)
         total_index_time_millis = random.randint(0,9999999)
         operations_received_field = random.randint(0,9999999)
@@ -295,20 +295,14 @@ class CcrStatsRecorderTests(TestCase):
             "shard": '0'
         }
 
-        metrics_store_put_count.assert_has_calls([
-            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="ms", meta_data=shard_metadata),
-            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="ms", meta_data=shard_metadata),
-            mock.call(name="operations_received_field", count=operations_received_field, meta_data=shard_metadata),
-            mock.call(name="number_of_batches_field", count=number_of_batches_field, meta_data=shard_metadata),
-            mock.call(name="total_transferred_bytes", count=total_transferred_bytes, unit="byte", meta_data=shard_metadata),
-            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="ms", meta_data=shard_metadata),
-            mock.call(name="leader_max_seq_no", count=leader_max_seq_no, meta_data=shard_metadata),
-            mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no, meta_data=shard_metadata),
-            mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint, meta_data=shard_metadata),
-        ], any_order=True)
+        metrics_store_put_doc.assert_called_with(
+            ccr_stats_follower_response["follower"]["0"],
+            level=MetaInfoScope.cluster,
+            meta_data=shard_metadata
+        )
 
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_stores_default_ccr_stats_many_shards(self, metrics_store_put_count):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_default_ccr_stats_many_shards(self, metrics_store_put_doc):
         shard_range = range(2)
         total_fetch_time_millis = [random.randint(0,9999999) for i in shard_range]
         total_index_time_millis = [random.randint(0,9999999) for i in shard_range]
@@ -355,21 +349,15 @@ class CcrStatsRecorderTests(TestCase):
             }
         ]
 
-        for shard_num in shard_range:
-            metrics_store_put_count.assert_has_calls([
-                mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
-                mock.call(name="total_index_time_millis", count=total_index_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
-                mock.call(name="operations_received_field", count=operations_received_field[shard_num], meta_data=shard_metadata[shard_num]),
-                mock.call(name="number_of_batches_field", count=number_of_batches_field[shard_num], meta_data=shard_metadata[shard_num]),
-                mock.call(name="total_transferred_bytes", count=total_transferred_bytes[shard_num], unit="byte", meta_data=shard_metadata[shard_num]),
-                mock.call(name="current_idle_time_millis", count=current_idle_time_millis[shard_num], unit="ms", meta_data=shard_metadata[shard_num]),
-                mock.call(name="leader_max_seq_no", count=leader_max_seq_no[shard_num], meta_data=shard_metadata[shard_num]),
-                mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no[shard_num], meta_data=shard_metadata[shard_num]),
-                mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint[shard_num], meta_data=shard_metadata[shard_num]),
-            ], any_order=True)
+        metrics_store_put_doc.assert_has_calls([
+            mock.call(ccr_stats_follower_response["follower"][str(0)], level=MetaInfoScope.cluster, meta_data=shard_metadata[0]),
+            mock.call(ccr_stats_follower_response["follower"][str(1)], level=MetaInfoScope.cluster, meta_data=shard_metadata[1])
+            ],
+            any_order=True
+        )
 
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_stores_filtered_ccr_stats(self, metrics_store_put_count):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_filtered_ccr_stats(self, metrics_store_put_doc):
         total_fetch_time_millis = random.randint(0,9999999)
         total_index_time_millis = random.randint(0,9999999)
         operations_received_field = random.randint(0,9999999)
@@ -421,17 +409,11 @@ class CcrStatsRecorderTests(TestCase):
             "shard": '0'
         }
 
-        metrics_store_put_count.assert_has_calls([
-            mock.call(name="total_fetch_time_millis", count=total_fetch_time_millis, unit="ms", meta_data=shard_metadata),
-            mock.call(name="total_index_time_millis", count=total_index_time_millis, unit="ms", meta_data=shard_metadata),
-            mock.call(name="operations_received_field", count=operations_received_field, meta_data=shard_metadata),
-            mock.call(name="number_of_batches_field", count=number_of_batches_field, meta_data=shard_metadata),
-            mock.call(name="total_transferred_bytes", count=total_transferred_bytes, unit="byte", meta_data=shard_metadata),
-            mock.call(name="current_idle_time_millis", count=current_idle_time_millis, unit="ms", meta_data=shard_metadata),
-            mock.call(name="leader_max_seq_no", count=leader_max_seq_no, meta_data=shard_metadata),
-            mock.call(name="follower_primary_max_seq_no", count=follower_primary_max_seq_no, meta_data=shard_metadata),
-            mock.call(name="processed_global_checkpoint", count=processed_global_checkpoint, meta_data=shard_metadata),
-        ], any_order=True)
+        metrics_store_put_doc.assert_has_calls([
+            mock.call(ccr_stats_follower_response["follower1"][str(0)], level=MetaInfoScope.cluster, meta_data=shard_metadata)
+            ],
+            any_order=True
+        )
 
 
 class NodeStatsRecorderTests(TestCase):

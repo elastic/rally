@@ -8,6 +8,7 @@ import threading
 
 from esrally import metrics, time, exceptions
 from esrally.utils import io, sysstats, console, versions
+from esrally.metrics import MetaInfoScope
 
 
 def list_telemetry():
@@ -415,26 +416,7 @@ class CcrStatsRecorder:
                 "shard": shard_num
             }
 
-            for metric_name, metric_value in shard_stats.items():
-                self.put_value(metric_name, metric_value, shard_metadata)
-
-    def put_value(self, metric_name, metric_value, shard_metadata):
-        if isinstance(metric_value, (int, float)) and not isinstance(metric_value, bool):
-            # auto-recognize metric keys containing well-known keywords
-            if "_bytes" in metric_name:
-                self.metrics_store.put_count_cluster_level(name=metric_name,
-                                                           count=metric_value,
-                                                           unit="byte",
-                                                           meta_data=shard_metadata)
-            elif "_millis" in metric_name:
-                self.metrics_store.put_count_cluster_level(name=metric_name,
-                                                           count=metric_value,
-                                                           unit="ms",
-                                                           meta_data=shard_metadata)
-            else:
-                self.metrics_store.put_count_cluster_level(name=metric_name,
-                                                           count=metric_value,
-                                                           meta_data=shard_metadata)
+            self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):
