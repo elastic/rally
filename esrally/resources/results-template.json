@@ -80,7 +80,16 @@
           "type": "object",
           "properties": {
             "single": {
-              "type": "float"
+              "type": "double"
+            },
+            "min": {
+              "type": "double"
+            },
+            "median": {
+              "type": "double"
+            },
+            "max": {
+              "type": "double"
             }
           }
         }
