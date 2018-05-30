@@ -226,12 +226,7 @@ class StatsCalculator:
                 "unit": unit
             }
         else:
-            return {
-                "min": None,
-                "median": None,
-                "max": None,
-                "unit": unit
-            }
+            return {}
 
     def error_rate(self, task_name):
         return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
@@ -263,17 +258,17 @@ class Stats:
         self.op_metrics = self.v(d, "op_metrics", default=[])
         self.node_metrics = self.v(d, "node_metrics", default=[])
         self.total_time = self.v(d, "total_time")
-        self.total_time_per_shard = self.v(d, "total_time_per_shard")
+        self.total_time_per_shard = self.v(d, "total_time_per_shard", default={})
         self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
-        self.indexing_throttle_time_per_shard = self.v(d, "indexing_throttle_time_per_shard")
+        self.indexing_throttle_time_per_shard = self.v(d, "indexing_throttle_time_per_shard", default={})
         self.merge_time = self.v(d, "merge_time")
-        self.merge_time_per_shard = self.v(d, "merge_time_per_shard")
+        self.merge_time_per_shard = self.v(d, "merge_time_per_shard", default={})
         self.refresh_time = self.v(d, "refresh_time")
-        self.refresh_time_per_shard = self.v(d, "refresh_time_per_shard")
+        self.refresh_time_per_shard = self.v(d, "refresh_time_per_shard", default={})
         self.flush_time = self.v(d, "flush_time")
-        self.flush_time_per_shard = self.v(d, "flush_time_per_shard")
+        self.flush_time_per_shard = self.v(d, "flush_time_per_shard", default={})
         self.merge_throttle_time = self.v(d, "merge_throttle_time")
-        self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard")
+        self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
         self.ml_max_processing_time = self.v(d, "ml_max_processing_time")
 
         self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
@@ -327,6 +322,9 @@ class Stats:
                 for item in value:
                     if "startup_time" in item:
                         all_results.append({"node": item["node"], "name": "startup_time", "value": {"single": item["startup_time"]}})
+            elif metric.endswith("_time_per_shard"):
+                if value:
+                    all_results.append({"name": metric, "value": value})
             elif value is not None:
                 result = {
                     "name": metric,
@@ -504,9 +502,9 @@ class SummaryReporter:
         unit = "min"
         return self.join(
             self.line("Total {}".format(name), "", total_time, unit, convert.ms_to_minutes),
-            self.line("Min {} per shard".format(name), "", total_time_per_shard["min"], unit, convert.ms_to_minutes),
-            self.line("Median {} per shard".format(name), "", total_time_per_shard["median"], unit, convert.ms_to_minutes),
-            self.line("Max {} per shard".format(name), "", total_time_per_shard["max"], unit, convert.ms_to_minutes),
+            self.line("Min {} per shard".format(name), "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes),
+            self.line("Median {} per shard".format(name), "", total_time_per_shard.get("median"), unit, convert.ms_to_minutes),
+            self.line("Max {} per shard".format(name), "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes),
         )
 
     def report_merge_part_times(self, stats):
@@ -730,11 +728,11 @@ class ComparisonReporter:
         return self.join(
             self.line("Total {}".format(name), baseline_total, contender_total, "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Min {} per shard".format(name), baseline_per_shard["min"], contender_per_shard["min"], "", unit,
+            self.line("Min {} per shard".format(name), baseline_per_shard.get("min"), contender_per_shard.get("min"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Median {} per shard".format(name), baseline_per_shard["median"], contender_per_shard["median"], "", unit,
+            self.line("Median {} per shard".format(name), baseline_per_shard.get("median"), contender_per_shard.get("median"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Max {} per shard".format(name), baseline_per_shard["max"], contender_per_shard["max"], "", unit,
+            self.line("Max {} per shard".format(name), baseline_per_shard.get("max"), contender_per_shard.get("max"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
         )
 

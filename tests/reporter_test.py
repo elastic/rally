@@ -101,7 +101,16 @@ class StatsTests(TestCase):
                 }
             ],
             "young_gc_time": 68,
-            "old_gc_time": 0
+            "old_gc_time": 0,
+            "refresh_time": 596,
+            "refresh_time_per_shard": {
+                "min": 48,
+                "median": 89,
+                "max": 204,
+                "unit": "ms"
+            },
+            "flush_time": None,
+            "flush_time_per_shard": {}
         }
 
         s = reporter.Stats(d)
@@ -176,6 +185,26 @@ class StatsTests(TestCase):
                 "single": 0
             }
         }, select(metric_list, "old_gc_time"))
+
+        self.assertEqual({
+            "name": "refresh_time",
+            "value": {
+                "single": 596
+            }
+        }, select(metric_list, "refresh_time"))
+
+        self.assertEqual({
+            "name": "refresh_time_per_shard",
+            "value": {
+                "min": 48,
+                "median": 89,
+                "max": 204,
+                "unit": "ms"
+            }
+        }, select(metric_list, "refresh_time_per_shard"))
+
+        self.assertIsNone(select(metric_list, "flush_time"))
+        self.assertIsNone(select(metric_list, "flush_time_per_shard"))
 
 
 class FormatterTests(TestCase):
