@@ -118,9 +118,17 @@ def plot_throughput(raw_data, label_key):
 
         for candidate in results:
             x_tick_labels.append(candidate["data_series"])
-            min_throughput.append(candidate["median"] - candidate["min"])
-            throughput.append(candidate["median"])
-            max_throughput.append(candidate["max"] - candidate["median"])
+            cmin = candidate["min"]
+            cmedian = candidate["median"]
+            cmax = candidate["max"]
+            if cmin and cmedian and cmax:
+                min_throughput.append(cmedian - cmin)
+                throughput.append(cmedian)
+                max_throughput.append(cmax - cmedian)
+            else:
+                min_throughput.append(0)
+                throughput.append(0)
+                max_throughput.append(0)
 
         indices = range(len(throughput))
 
