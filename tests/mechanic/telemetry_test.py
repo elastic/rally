@@ -239,9 +239,10 @@ class CcrStatsTests(TestCase):
             }
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching the cluster names "
-                                    "\[{}] "
-                                    "specified in --target-hosts but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))):
+                                    "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
+                                    "the cluster names \[{}] specified in --target-hosts "
+                                    "but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))
+                                    ):
             telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
 
@@ -257,15 +258,15 @@ class CcrStatsRecorderTests(TestCase):
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_default_ccr_stats(self, metrics_store_put_doc):
-        total_fetch_time_millis = random.randint(0,9999999)
-        total_index_time_millis = random.randint(0,9999999)
-        operations_received_field = random.randint(0,9999999)
-        number_of_batches_field = random.randint(0,9999999)
-        total_transferred_bytes = random.randint(0,999999999)
-        current_idle_time_millis = random.randint(0,9999999)
-        leader_max_seq_no = random.randint(0,9999999)
-        follower_primary_max_seq_no = random.randint(0,9999999)
-        processed_global_checkpoint = random.randint(0,9999999)
+        total_fetch_time_millis = random.randint(0, 9999999)
+        total_index_time_millis = random.randint(0, 9999999)
+        operations_received_field = random.randint(0, 9999999)
+        number_of_batches_field = random.randint(0, 9999999)
+        total_transferred_bytes = random.randint(0, 999999999)
+        current_idle_time_millis = random.randint(0, 9999999)
+        leader_max_seq_no = random.randint(0, 9999999)
+        follower_primary_max_seq_no = random.randint(0, 9999999)
+        processed_global_checkpoint = random.randint(0, 9999999)
 
         ccr_stats_follower_response = {
             "follower": {
@@ -304,15 +305,15 @@ class CcrStatsRecorderTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_default_ccr_stats_many_shards(self, metrics_store_put_doc):
         shard_range = range(2)
-        total_fetch_time_millis = [random.randint(0,9999999) for i in shard_range]
-        total_index_time_millis = [random.randint(0,9999999) for i in shard_range]
-        operations_received_field = [random.randint(0,9999999) for i in shard_range]
-        number_of_batches_field = [random.randint(0,9999999) for i in shard_range]
-        total_transferred_bytes = [random.randint(0,999999999) for i in shard_range]
-        current_idle_time_millis = [random.randint(0,9999999) for i in shard_range]
-        leader_max_seq_no = [random.randint(0,9999999) for i in shard_range]
-        follower_primary_max_seq_no = [random.randint(0,9999999) for i in shard_range]
-        processed_global_checkpoint = [random.randint(0,9999999) for i in shard_range]
+        total_fetch_time_millis = [random.randint(0, 9999999) for _ in shard_range]
+        total_index_time_millis = [random.randint(0, 9999999) for _ in shard_range]
+        operations_received_field = [random.randint(0, 9999999) for _ in shard_range]
+        number_of_batches_field = [random.randint(0, 9999999) for _ in shard_range]
+        total_transferred_bytes = [random.randint(0, 999999999) for _ in shard_range]
+        current_idle_time_millis = [random.randint(0, 9999999) for _ in shard_range]
+        leader_max_seq_no = [random.randint(0, 9999999) for _ in shard_range]
+        follower_primary_max_seq_no = [random.randint(0, 9999999) for _ in shard_range]
+        processed_global_checkpoint = [random.randint(0, 9999999) for _ in shard_range]
 
         ccr_stats_follower_response = {
             "follower": {
@@ -350,23 +351,23 @@ class CcrStatsRecorderTests(TestCase):
         ]
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(ccr_stats_follower_response["follower"][str(0)], level=MetaInfoScope.cluster, meta_data=shard_metadata[0]),
-            mock.call(ccr_stats_follower_response["follower"][str(1)], level=MetaInfoScope.cluster, meta_data=shard_metadata[1])
+            mock.call(ccr_stats_follower_response["follower"]["0"], level=MetaInfoScope.cluster, meta_data=shard_metadata[0]),
+            mock.call(ccr_stats_follower_response["follower"]["1"], level=MetaInfoScope.cluster, meta_data=shard_metadata[1])
             ],
             any_order=True
         )
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_filtered_ccr_stats(self, metrics_store_put_doc):
-        total_fetch_time_millis = random.randint(0,9999999)
-        total_index_time_millis = random.randint(0,9999999)
-        operations_received_field = random.randint(0,9999999)
-        number_of_batches_field = random.randint(0,9999999)
-        total_transferred_bytes = random.randint(0,999999999)
-        current_idle_time_millis = random.randint(0,9999999)
-        leader_max_seq_no = random.randint(0,9999999)
-        follower_primary_max_seq_no = random.randint(0,9999999)
-        processed_global_checkpoint = random.randint(0,9999999)
+        total_fetch_time_millis = random.randint(0, 9999999)
+        total_index_time_millis = random.randint(0, 9999999)
+        operations_received_field = random.randint(0, 9999999)
+        number_of_batches_field = random.randint(0, 9999999)
+        total_transferred_bytes = random.randint(0, 999999999)
+        current_idle_time_millis = random.randint(0, 9999999)
+        leader_max_seq_no = random.randint(0, 9999999)
+        follower_primary_max_seq_no = random.randint(0, 9999999)
+        processed_global_checkpoint = random.randint(0, 9999999)
 
         ccr_stats_follower_response = {
             "follower1": {
@@ -384,15 +385,15 @@ class CcrStatsRecorderTests(TestCase):
             },
             "follower2": {
                 "0": {
-                    "total_fetch_time_millis": random.randint(0,9999999),
-                    "total_index_time_millis": random.randint(0,9999999),
-                    "operations_received_field": random.randint(0,9999999),
-                    "number_of_batches_field": random.randint(0,9999999),
-                    "total_transferred_bytes": random.randint(0,999999999),
-                    "current_idle_time_millis": random.randint(0,9999999),
-                    "leader_max_seq_no": random.randint(0,9999999),
-                    "follower_primary_max_seq_no": random.randint(0,9999999),
-                    "processed_global_checkpoint": random.randint(0,9999999)
+                    "total_fetch_time_millis": random.randint(0, 9999999),
+                    "total_index_time_millis": random.randint(0, 9999999),
+                    "operations_received_field": random.randint(0, 9999999),
+                    "number_of_batches_field": random.randint(0, 9999999),
+                    "total_transferred_bytes": random.randint(0, 999999999),
+                    "current_idle_time_millis": random.randint(0, 9999999),
+                    "leader_max_seq_no": random.randint(0, 9999999),
+                    "follower_primary_max_seq_no": random.randint(0, 9999999),
+                    "processed_global_checkpoint": random.randint(0, 9999999)
                 }
             }
         }
@@ -410,7 +411,7 @@ class CcrStatsRecorderTests(TestCase):
         }
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(ccr_stats_follower_response["follower1"][str(0)], level=MetaInfoScope.cluster, meta_data=shard_metadata)
+            mock.call(ccr_stats_follower_response["follower1"]["0"], level=MetaInfoScope.cluster, meta_data=shard_metadata)
             ],
             any_order=True
         )
