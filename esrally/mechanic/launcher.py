@@ -70,7 +70,7 @@ class ClusterLauncher:
         es_default = es["default"]
 
         t = telemetry.Telemetry(enabled_devices, devices=[
-            telemetry.NodeStats(telemetry_params, es_default, self.metrics_store),
+            telemetry.NodeStats(telemetry_params, es, self.metrics_store),
             telemetry.ClusterMetaDataInfo(es_default),
             telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
             telemetry.GcTimesSummary(es_default, self.metrics_store),
