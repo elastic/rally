@@ -428,29 +428,36 @@ class NodeStats(TelemetryDevice):
     """
     Gathers different node stats.
     """
-    def __init__(self, telemetry_params, client, metrics_store):
+    def __init__(self, telemetry_params, clients, metrics_store):
         super().__init__()
         self.telemetry_params = telemetry_params
-        self.client = client
+        self.clients = clients
+        self.specified_cluster_names = self.clients.keys()
         self.metrics_store = metrics_store
-        self.sampler = None
+        self.samplers = []
 
     def attach_to_cluster(self, cluster):
+        # This cluster parameter does not correspond to the cluster names passed in target.hosts, see on_benchmark_start()
         super().attach_to_cluster(cluster)
 
     def on_benchmark_start(self):
-        recorder = NodeStatsRecorder(self.telemetry_params, self.client, self.metrics_store)
-        self.sampler = SamplerThread(recorder)
-        self.sampler.setDaemon(True)
-        self.sampler.start()
+        recorder = []
+        for cluster_name in self.specified_cluster_names:
+            recorder = NodeStatsRecorder(self.telemetry_params, cluster_name, self.clients[cluster_name], self.metrics_store)
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
 
     def on_benchmark_stop(self):
-        if self.sampler:
-            self.sampler.finish()
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
 
 
 class NodeStatsRecorder:
-    def __init__(self, telemetry_params, client, metrics_store):
+    def __init__(self, telemetry_params, cluster_name, client, metrics_store):
         self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
@@ -465,6 +472,7 @@ class NodeStatsRecorder:
         self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
         self.client = client
         self.metrics_store = metrics_store
+        self.metrics_store_meta_data = {"cluster": cluster_name}
 
     def __str__(self):
         return "node stats"
@@ -562,15 +570,18 @@ class NodeStatsRecorder:
             if node_stats_metric_name.endswith("in_bytes"):
                 self.metrics_store.put_value_node_level(node_name=node_name,
                                                         name=metric_name,
-                                                        value=metric_value, unit="byte")
+                                                        value=metric_value, unit="byte",
+                                                        meta_data=self.metrics_store_meta_data)
             elif node_stats_metric_name.endswith("in_millis"):
                 self.metrics_store.put_value_node_level(node_name=node_name,
                                                         name=metric_name,
-                                                        value=metric_value, unit="ms")
+                                                        value=metric_value, unit="ms",
+                                                        meta_data=self.metrics_store_meta_data)
             else:
                 self.metrics_store.put_count_node_level(node_name=node_name,
                                                         name=metric_name,
-                                                        count=metric_value)
+                                                        count=metric_value,
+                                                        meta_data=self.metrics_store_meta_data)
 
     def sample(self):
         import elasticsearch
