@@ -481,107 +481,92 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
+            collected_node_stats = {}
+
             if self.include_indices:
-                self.record_indices_stats(node_name, node_stats,
-                                          include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
-                                                   "segments", "translog", "request_cache"])
+                collected_node_stats.update(
+                    self.collect_indices_stats(node_name, node_stats,
+                                               include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
+                                                        "segments", "translog", "request_cache"]))
             if self.include_thread_pools:
-                self.record_thread_pool_stats(node_name, node_stats)
+                collected_node_stats.update(self.collect_thread_pool_stats(node_name, node_stats))
             if self.include_breakers:
-                self.record_circuit_breaker_stats(node_name, node_stats)
+                collected_node_stats.update(self.collect_circuit_breaker_stats(node_name, node_stats))
             if self.include_buffer_pools:
-                self.record_jvm_buffer_pool_stats(node_name, node_stats)
+                collected_node_stats.update(self.collect_jvm_buffer_pool_stats(node_name, node_stats))
             if self.include_mem_stats:
-                self.record_jvm_mem_stats(node_name, node_stats)
+                collected_node_stats.update(self.collect_jvm_mem_stats(node_name, node_stats))
             if self.include_network:
-                self.record_network_stats(node_name, node_stats)
+                collected_node_stats.update(self.collect_network_stats(node_name, node_stats))
             if self.include_process:
-                self.record_process_stats(node_name, node_stats)
+                collected_node_stats.update(self.collect_process_stats(node_name, node_stats))
+
+            self.metrics_store.put_doc(collected_node_stats,
+                                       level=MetaInfoScope.node,
+                                       node_name=node_name,
+                                       meta_data=self.metrics_store_meta_data)
 
         time.sleep(self.sample_interval)
 
-    def record_indices_stats(self, node_name, node_stats, include):
+    def flatten_stats_fields(self, prefix=None, stats=None, include=None, level=0):
+        """
+        Flatten provided dict using an optional prefix and top level key filters.
+
+        :param prefix: The prefix for all flattened values. _ will be used as a separator. Defaults to None.
+        :param stats: Dict with values to be flattened, using _ as a separator. Defaults to {}.
+        :param include: List of keys to process in stats. Filtering will be done only for top level keys.
+        :param level: Int used to control filtering at the top level; only used internally. Defaults to 0.
+        :return:
+        """
+
+        def iterate():
+            for section_name, section_value in stats.items():
+                # Process only top level matching keys
+                if include is None or level==0 and section_name in include:
+                    if isinstance(section_value, dict):
+                        for subsection_name, subsection_value in self.flatten_stats_fields(stats=section_value, level=level+1).items():
+                            if prefix:
+                                yield "{}_{}_{}".format(prefix, section_name, subsection_name), subsection_value
+                            else:
+                                yield "{}_{}".format(section_name, subsection_name), subsection_value
+                    else:
+                        if prefix:
+                            yield "{}_{}".format(prefix, section_name), section_value
+                        else:
+                            yield section_name, section_value
+
+        if stats:
+            return dict(iterate())
+        else:
+            return dict()
+
+    def collect_indices_stats(self, node_name, node_stats, include):
         indices_stats = node_stats["indices"]
-        for section in include:
-            if section in indices_stats:
-                for metric_name, metric_value in indices_stats[section].items():
-                    self.put_value(node_name,
-                                   metric_name="indices_{}_{}".format(section, metric_name),
-                                   node_stats_metric_name=metric_name,
-                                   metric_value=metric_value)
+        return self.flatten_stats_fields(prefix="indices", stats=indices_stats, include=include)
 
-    def record_thread_pool_stats(self, node_name, node_stats):
+    def collect_thread_pool_stats(self, node_name, node_stats):
         thread_pool_stats = node_stats["thread_pool"]
-        for pool_name, pool_metrics in thread_pool_stats.items():
-            for metric_name, metric_value in pool_metrics.items():
-                self.put_value(node_name,
-                               metric_name="thread_pool_{}_{}".format(pool_name, metric_name),
-                               node_stats_metric_name=metric_name,
-                               metric_value=metric_value)
+        return self.flatten_stats_fields(prefix="thread_pool", stats=thread_pool_stats)
 
-    def record_circuit_breaker_stats(self, node_name, node_stats):
+    def collect_circuit_breaker_stats(self, node_name, node_stats):
         breaker_stats = node_stats["breakers"]
-        for breaker_name, breaker_metrics in breaker_stats.items():
-            for metric_name, metric_value in breaker_metrics.items():
-                self.put_value(node_name,
-                               metric_name="breaker_{}_{}".format(breaker_name, metric_name),
-                               node_stats_metric_name=metric_name,
-                               metric_value=metric_value)
+        return self.flatten_stats_fields(prefix="breakers", stats=breaker_stats)
 
-    def record_jvm_buffer_pool_stats(self, node_name, node_stats):
+    def collect_jvm_buffer_pool_stats(self, node_name, node_stats):
         buffer_pool_stats = node_stats["jvm"]["buffer_pools"]
-        for pool_name, pool_metrics in buffer_pool_stats.items():
-            for metric_name, metric_value in pool_metrics.items():
-                self.put_value(node_name,
-                               metric_name="jvm_buffer_pool_{}_{}".format(pool_name, metric_name),
-                               node_stats_metric_name=metric_name,
-                               metric_value=metric_value)
+        return self.flatten_stats_fields(prefix="jvm_buffer_pools", stats=buffer_pool_stats)
 
-    def record_jvm_mem_stats(self, node_name, node_stats):
+    def collect_jvm_mem_stats(self, node_name, node_stats):
         mem_stats = node_stats["jvm"]["mem"]
-        if mem_stats:
-            for metric_name, metric_value in mem_stats.items():
-                self.put_value(node_name,
-                               metric_name="jvm_mem_{}".format(metric_name),
-                               node_stats_metric_name=metric_name,
-                               metric_value=metric_value)
+        return self.flatten_stats_fields(prefix="jvm_mem", stats=mem_stats)
 
-    def record_network_stats(self, node_name, node_stats):
+    def collect_network_stats(self, node_name, node_stats):
         transport_stats = node_stats.get("transport")
-        if transport_stats:
-            for metric_name, metric_value in transport_stats.items():
-                self.put_value(node_name,
-                               metric_name="transport_{}".format(metric_name),
-                               node_stats_metric_name=metric_name,
-                               metric_value=metric_value)
+        return self.flatten_stats_fields(prefix="transport", stats=transport_stats)
 
-    def record_process_stats(self, node_name, node_stats):
+    def collect_process_stats(self, node_name, node_stats):
         process_stats = node_stats["process"]["cpu"]
-        if process_stats:
-            for metric_name, metric_value in process_stats.items():
-                self.put_value(node_name,
-                               metric_name="process_cpu_{}".format(metric_name),
-                               node_stats_metric_name=metric_name,
-                               metric_value=metric_value)
-
-    def put_value(self, node_name, metric_name, node_stats_metric_name, metric_value):
-        if isinstance(metric_value, (int, float)) and not isinstance(metric_value, bool):
-            # auto-recognize metric keys ending with well-known suffixes
-            if node_stats_metric_name.endswith("in_bytes"):
-                self.metrics_store.put_value_node_level(node_name=node_name,
-                                                        name=metric_name,
-                                                        value=metric_value, unit="byte",
-                                                        meta_data=self.metrics_store_meta_data)
-            elif node_stats_metric_name.endswith("in_millis"):
-                self.metrics_store.put_value_node_level(node_name=node_name,
-                                                        name=metric_name,
-                                                        value=metric_value, unit="ms",
-                                                        meta_data=self.metrics_store_meta_data)
-            else:
-                self.metrics_store.put_count_node_level(node_name=node_name,
-                                                        name=metric_name,
-                                                        count=metric_value,
-                                                        meta_data=self.metrics_store_meta_data)
+        return self.flatten_stats_fields(prefix="process_cpu", stats=process_stats)
 
     def sample(self):
         import elasticsearch
