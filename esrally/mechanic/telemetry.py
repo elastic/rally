@@ -1,3 +1,4 @@
+import collections
 import logging
 import os
 import re
@@ -481,90 +482,90 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
-            collected_node_stats = {}
+            collected_node_stats = collections.OrderedDict()
 
             if self.include_indices:
                 collected_node_stats.update(
-                    self.collect_indices_stats(node_name, node_stats,
-                                               include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
+                    self.indices_stats(node_name, node_stats,
+                                       include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
                                                         "segments", "translog", "request_cache"]))
             if self.include_thread_pools:
-                collected_node_stats.update(self.collect_thread_pool_stats(node_name, node_stats))
+                collected_node_stats.update(self.thread_pool_stats(node_name, node_stats))
             if self.include_breakers:
-                collected_node_stats.update(self.collect_circuit_breaker_stats(node_name, node_stats))
+                collected_node_stats.update(self.circuit_breaker_stats(node_name, node_stats))
             if self.include_buffer_pools:
-                collected_node_stats.update(self.collect_jvm_buffer_pool_stats(node_name, node_stats))
+                collected_node_stats.update(self.jvm_buffer_pool_stats(node_name, node_stats))
             if self.include_mem_stats:
-                collected_node_stats.update(self.collect_jvm_mem_stats(node_name, node_stats))
+                collected_node_stats.update(self.jvm_mem_stats(node_name, node_stats))
             if self.include_network:
-                collected_node_stats.update(self.collect_network_stats(node_name, node_stats))
+                collected_node_stats.update(self.network_stats(node_name, node_stats))
             if self.include_process:
-                collected_node_stats.update(self.collect_process_stats(node_name, node_stats))
+                collected_node_stats.update(self.process_stats(node_name, node_stats))
 
-            self.metrics_store.put_doc(collected_node_stats,
+            self.metrics_store.put_doc(dict(collected_node_stats),
                                        level=MetaInfoScope.node,
                                        node_name=node_name,
                                        meta_data=self.metrics_store_meta_data)
 
         time.sleep(self.sample_interval)
 
-    def flatten_stats_fields(self, prefix=None, stats=None, include=None, level=0):
+    def flatten_stats_fields(self, prefix=None, stats=None):
         """
         Flatten provided dict using an optional prefix and top level key filters.
 
-        :param prefix: The prefix for all flattened values. _ will be used as a separator. Defaults to None.
+        :param prefix: The prefix for all flattened values. Defaults to None.
         :param stats: Dict with values to be flattened, using _ as a separator. Defaults to {}.
-        :param include: List of keys to process in stats. Filtering will be done only for top level keys.
-        :param level: Int used to control filtering at the top level; only used internally. Defaults to 0.
-        :return:
+        :return: Return flattened dictionary, separated by _ and prefixed with prefix.
         """
 
         def iterate():
             for section_name, section_value in stats.items():
-                # Process only top level matching keys
-                if include is None or level==0 and section_name in include:
-                    if isinstance(section_value, dict):
-                        for subsection_name, subsection_value in self.flatten_stats_fields(stats=section_value, level=level+1).items():
-                            # Avoid duplication for metric fields that have unit embedded in value as they are also recorded elsewhere
-                            # example: `breakers_parent_limit_size_in_bytes` vs `breakers_parent_limit_size`
-                            if isinstance(subsection_value, (int, float)) and not isinstance(subsection_value, bool):
-                                yield "{}{}_{}".format(prefix + "_" if prefix else "", section_name, subsection_name), subsection_value
-                    else:
-                        if isinstance(section_value, (int, float)) and not isinstance(section_value, bool):
-                            yield "{}{}".format(prefix + "_" if prefix else "", section_name), section_value
+                if isinstance(section_value, dict):
+                    new_prefix = "{}_{}".format(prefix, section_name)
+                    # https://www.python.org/dev/peps/pep-0380/
+                    yield from self.flatten_stats_fields(prefix=new_prefix, stats=section_value).items()
+                # Avoid duplication for metric fields that have unit embedded in value as they are also recorded elsewhere
+                # example: `breakers_parent_limit_size_in_bytes` vs `breakers_parent_limit_size`
+                elif isinstance(section_value, (int, float)) and not isinstance(section_value, bool):
+                    yield "{}{}".format(prefix + "_" if prefix else "", section_name), section_value
 
         if stats:
             return dict(iterate())
         else:
             return dict()
 
-    def collect_indices_stats(self, node_name, node_stats, include):
-        indices_stats = node_stats["indices"]
-        return self.flatten_stats_fields(prefix="indices", stats=indices_stats, include=include)
+    def indices_stats(self, node_name, node_stats, include):
+        idx_stats = node_stats["indices"]
+        ordered_results = collections.OrderedDict()
+        for section in include:
+            if section in idx_stats:
+                ordered_results.update(self.flatten_stats_fields(prefix="indices_" + section, stats=idx_stats[section]))
 
-    def collect_thread_pool_stats(self, node_name, node_stats):
-        thread_pool_stats = node_stats["thread_pool"]
-        return self.flatten_stats_fields(prefix="thread_pool", stats=thread_pool_stats)
+        return ordered_results
 
-    def collect_circuit_breaker_stats(self, node_name, node_stats):
+    def thread_pool_stats(self, node_name, node_stats):
+        thr_pool_stats = node_stats["thread_pool"]
+        return self.flatten_stats_fields(prefix="thread_pool", stats=thr_pool_stats)
+
+    def circuit_breaker_stats(self, node_name, node_stats):
         breaker_stats = node_stats["breakers"]
         return self.flatten_stats_fields(prefix="breakers", stats=breaker_stats)
 
-    def collect_jvm_buffer_pool_stats(self, node_name, node_stats):
+    def jvm_buffer_pool_stats(self, node_name, node_stats):
         buffer_pool_stats = node_stats["jvm"]["buffer_pools"]
         return self.flatten_stats_fields(prefix="jvm_buffer_pools", stats=buffer_pool_stats)
 
-    def collect_jvm_mem_stats(self, node_name, node_stats):
+    def jvm_mem_stats(self, node_name, node_stats):
         mem_stats = node_stats["jvm"]["mem"]
         return self.flatten_stats_fields(prefix="jvm_mem", stats=mem_stats)
 
-    def collect_network_stats(self, node_name, node_stats):
+    def network_stats(self, node_name, node_stats):
         transport_stats = node_stats.get("transport")
         return self.flatten_stats_fields(prefix="transport", stats=transport_stats)
 
-    def collect_process_stats(self, node_name, node_stats):
-        process_stats = node_stats["process"]["cpu"]
-        return self.flatten_stats_fields(prefix="process_cpu", stats=process_stats)
+    def process_stats(self, node_name, node_stats):
+        proc_stats = node_stats["process"]["cpu"]
+        return self.flatten_stats_fields(prefix="process_cpu", stats=proc_stats)
 
     def sample(self):
         import elasticsearch

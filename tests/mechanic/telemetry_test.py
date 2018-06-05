@@ -573,7 +573,7 @@ class NodeStatsRecorderTests(TestCase):
         }
     }
 
-    indices_stats_response_flattened = {
+    indices_stats_response_flattened = collections.OrderedDict({
         "indices_docs_count": 0,
         "indices_docs_deleted": 0,
         "indices_store_size_in_bytes": 0,
@@ -606,9 +606,9 @@ class NodeStatsRecorderTests(TestCase):
         "indices_recovery_current_as_source": 0,
         "indices_recovery_current_as_target": 0,
         "indices_recovery_throttle_time_in_millis": 0
-    }
+    })
 
-    default_stats_response_flattened = {
+    default_stats_response_flattened = collections.OrderedDict({
         "jvm_buffer_pools_mapped_count": 7,
         "jvm_buffer_pools_mapped_used_in_bytes": 3120,
         "jvm_buffer_pools_mapped_total_capacity_in_bytes": 9999,
@@ -645,7 +645,7 @@ class NodeStatsRecorderTests(TestCase):
         "thread_pool_generic_rejected": 0,
         "thread_pool_generic_largest": 4,
         "thread_pool_generic_completed": 8
-    }
+    })
 
     def test_negative_sample_interval_forbidden(self):
         client = Client()
@@ -664,52 +664,11 @@ class NodeStatsRecorderTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         telemetry_params = {}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
-        flattened_fields = recorder.flatten_stats_fields(prefix="indices", stats=NodeStatsRecorderTests.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"])
+        flattened_fields = recorder.flatten_stats_fields(
+            prefix="indices",
+            stats=NodeStatsRecorderTests.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"]
+        )
         self.assertDictEqual(NodeStatsRecorderTests.indices_stats_response_flattened, flattened_fields)
-
-    def test_flatten_filtered_indices_fields(self):
-        client = Client(nodes=SubClient(stats=NodeStatsRecorderTests.node_stats_response))
-        cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {}
-        recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
-
-        flattened_fields = recorder.flatten_stats_fields(prefix="indices", stats=NodeStatsRecorderTests.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"], include=["translog"])
-        self.assertDictEqual({
-            "indices_translog_operations": 0,
-            "indices_translog_size_in_bytes": 0,
-            "indices_translog_uncommitted_operations": 0,
-            "indices_translog_uncommitted_size_in_bytes": 0
-        }, flattened_fields)
-
-    def test_flatten_jvm_mem_fields(self):
-        client = Client(nodes=SubClient(stats=NodeStatsRecorderTests.node_stats_response))
-        cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {}
-        recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
-
-        flattened_fields = recorder.flatten_stats_fields(prefix="jvm_mem", stats=NodeStatsRecorderTests.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["jvm"]["mem"])
-        self.assertDictEqual({
-            "jvm_mem_heap_used_in_bytes": 119073552,
-            "jvm_mem_heap_used_percent": 19,
-            "jvm_mem_heap_committed_in_bytes": 626393088,
-            "jvm_mem_heap_max_in_bytes": 626393088,
-            "jvm_mem_non_heap_used_in_bytes": 110250424,
-            "jvm_mem_non_heap_committed_in_bytes": 118108160,
-            "jvm_mem_pools_young_used_in_bytes": 66378576,
-            "jvm_mem_pools_young_max_in_bytes": 139591680,
-            "jvm_mem_pools_young_peak_used_in_bytes": 139591680,
-            "jvm_mem_pools_young_peak_max_in_bytes": 139591680,
-            "jvm_mem_pools_survivor_used_in_bytes": 358496,
-            "jvm_mem_pools_survivor_max_in_bytes": 17432576,
-            "jvm_mem_pools_survivor_peak_used_in_bytes": 17432576,
-            "jvm_mem_pools_survivor_peak_max_in_bytes": 17432576,
-            "jvm_mem_pools_old_used_in_bytes": 52336480,
-            "jvm_mem_pools_old_max_in_bytes": 469368832,
-            "jvm_mem_pools_old_peak_used_in_bytes": 52336480,
-            "jvm_mem_pools_old_peak_max_in_bytes": 469368832
-        }, flattened_fields)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_default_nodes_stats(self, metrics_store_put_doc):
@@ -721,15 +680,7 @@ class NodeStatsRecorderTests(TestCase):
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
 
-        # Extract mock call args, needed to perform dict comparison of first param of mocked method
-        # https://stackoverflow.com/a/28418085/108668
-        call = metrics_store_put_doc.call_args
-        call_args, _ = call
-        self.maxDiff = None
-        self.assertDictEqual(call_args[0], NodeStatsRecorderTests.default_stats_response_flattened)
-
-        # Now that we've ensured first param is correct, also ensure method gets called with correct remaining params
-        metrics_store_put_doc.assert_called_once_with(mock.ANY,
+        metrics_store_put_doc.assert_called_once_with(NodeStatsRecorderTests.default_stats_response_flattened,
                                                       level=MetaInfoScope.node,
                                                       node_name="rally0",
                                                       meta_data=metrics_store_meta_data)
@@ -737,15 +688,15 @@ class NodeStatsRecorderTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_all_nodes_stats(self, metrics_store_put_doc):
         node_stats_response = {
-            "cluster_name" : "elasticsearch",
-            "nodes" : {
-                "Zbl_e8EyRXmiR47gbHgPfg" : {
-                    "timestamp" : 1524379617017,
-                    "name" : "rally0",
-                    "transport_address" : "127.0.0.1:9300",
-                    "host" : "127.0.0.1",
-                    "ip" : "127.0.0.1:9300",
-                    "roles" : [
+            "cluster_name": "elasticsearch",
+            "nodes": {
+                "Zbl_e8EyRXmiR47gbHgPfg": {
+                    "timestamp": 1524379617017,
+                    "name": "rally0",
+                    "transport_address": "127.0.0.1:9300",
+                    "host": "127.0.0.1",
+                    "ip": "127.0.0.1:9300",
+                    "roles": [
                         "master",
                         "data",
                         "ingest"
@@ -755,80 +706,80 @@ class NodeStatsRecorderTests(TestCase):
                             "count": 76892364,
                             "deleted": 324530
                         },
-                        "store" : {
+                        "store": {
                             "size_in_bytes": 983409834
                         },
-                        "indexing" : {
-                            "is_throttled" : False,
-                            "throttle_time_in_millis" : 0
+                        "indexing": {
+                            "is_throttled": False,
+                            "throttle_time_in_millis": 0
                         },
-                        "search" : {
-                            "open_contexts" : 0,
-                            "query_total" : 0,
-                            "query_time_in_millis" : 0
+                        "search": {
+                            "open_contexts": 0,
+                            "query_total": 0,
+                            "query_time_in_millis": 0
                         },
-                        "merges" : {
-                            "current" : 0,
-                            "current_docs" : 0,
-                            "current_size_in_bytes" : 0
+                        "merges": {
+                            "current": 0,
+                            "current_docs": 0,
+                            "current_size_in_bytes": 0
                         },
-                        "query_cache" : {
-                            "memory_size_in_bytes" : 0,
-                            "total_count" : 0,
-                            "hit_count" : 0,
-                            "miss_count" : 0,
-                            "cache_size" : 0,
-                            "cache_count" : 0,
-                            "evictions" : 0
+                        "query_cache": {
+                            "memory_size_in_bytes": 0,
+                            "total_count": 0,
+                            "hit_count": 0,
+                            "miss_count": 0,
+                            "cache_size": 0,
+                            "cache_count": 0,
+                            "evictions": 0
                         },
                         "fielddata": {
                             "memory_size_in_bytes": 6936,
                             "evictions": 17
                         },
-                        "completion" : {
-                            "size_in_bytes" : 0
+                        "completion": {
+                            "size_in_bytes": 0
                         },
-                        "segments" : {
-                            "count" : 0,
-                            "memory_in_bytes" : 0,
-                            "max_unsafe_auto_id_timestamp" : -9223372036854775808,
-                            "file_sizes" : { }
+                        "segments": {
+                            "count": 0,
+                            "memory_in_bytes": 0,
+                            "max_unsafe_auto_id_timestamp": -9223372036854775808,
+                            "file_sizes": {}
                         },
-                        "translog" : {
-                            "operations" : 0,
-                            "size_in_bytes" : 0,
-                            "uncommitted_operations" : 0,
-                            "uncommitted_size_in_bytes" : 0
+                        "translog": {
+                            "operations": 0,
+                            "size_in_bytes": 0,
+                            "uncommitted_operations": 0,
+                            "uncommitted_size_in_bytes": 0
                         },
-                        "request_cache" : {
-                            "memory_size_in_bytes" : 0,
-                            "evictions" : 0,
-                            "hit_count" : 0,
-                            "miss_count" : 0
+                        "request_cache": {
+                            "memory_size_in_bytes": 0,
+                            "evictions": 0,
+                            "hit_count": 0,
+                            "miss_count": 0
                         },
-                        "recovery" : {
-                            "current_as_source" : 0,
-                            "current_as_target" : 0,
-                            "throttle_time_in_millis" : 0
+                        "recovery": {
+                            "current_as_source": 0,
+                            "current_as_target": 0,
+                            "throttle_time_in_millis": 0
                         }
                     },
-                    "jvm" : {
-                        "buffer_pools" : {
-                            "mapped" : {
-                                "count" : 7,
-                                "used_in_bytes" : 3120,
-                                "total_capacity_in_bytes" : 9999
+                    "jvm": {
+                        "buffer_pools": {
+                            "mapped": {
+                                "count": 7,
+                                "used_in_bytes": 3120,
+                                "total_capacity_in_bytes": 9999
                             },
-                            "direct" : {
-                                "count" : 6,
-                                "used_in_bytes" : 73868,
-                                "total_capacity_in_bytes" : 73867
+                            "direct": {
+                                "count": 6,
+                                "used_in_bytes": 73868,
+                                "total_capacity_in_bytes": 73867
                             }
                         },
-                        "classes" : {
-                            "current_loaded_count" : 9992,
-                            "total_loaded_count" : 9992,
-                            "total_unloaded_count" : 0
+                        "classes": {
+                            "current_loaded_count": 9992,
+                            "total_loaded_count": 9992,
+                            "total_unloaded_count": 0
                         },
                         "mem": {
                             "heap_used_in_bytes": 119073552,
@@ -871,14 +822,14 @@ class NodeStatsRecorderTests(TestCase):
                             "total_virtual_in_bytes": 2472173568
                         }
                     },
-                    "thread_pool" : {
-                        "generic" : {
-                            "threads" : 4,
-                            "queue" : 0,
-                            "active" : 0,
-                            "rejected" : 0,
-                            "largest" : 4,
-                            "completed" : 8
+                    "thread_pool": {
+                        "generic": {
+                            "threads": 4,
+                            "queue": 0,
+                            "active": 0,
+                            "rejected": 0,
+                            "largest": 4,
+                            "completed": 8
                         }
                     },
                     "transport": {
@@ -888,14 +839,14 @@ class NodeStatsRecorderTests(TestCase):
                         "tx_count": 88,
                         "tx_size_in_bytes": 23879803
                     },
-                    "breakers" : {
-                        "parent" : {
-                            "limit_size_in_bytes" : 726571417,
-                            "limit_size" : "692.9mb",
-                            "estimated_size_in_bytes" : 0,
-                            "estimated_size" : "0b",
-                            "overhead" : 1.0,
-                            "tripped" : 0
+                    "breakers": {
+                        "parent": {
+                            "limit_size_in_bytes": 726571417,
+                            "limit_size": "692.9mb",
+                            "estimated_size_in_bytes": 0,
+                            "estimated_size": "0b",
+                            "overhead": 1.0,
+                            "tripped": 0
                         }
                     }
                 }
@@ -912,12 +863,7 @@ class NodeStatsRecorderTests(TestCase):
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
 
-        call = metrics_store_put_doc.call_args
-        call_args, _ = call
-
-        self.maxDiff = None
-        self.assertDictEqual(
-            call_args[0],
+        metrics_store_put_doc.assert_called_once_with(
             {"indices_docs_count": 76892364,
              "indices_docs_deleted": 324530,
              "indices_fielddata_evictions": 17,
@@ -988,13 +934,10 @@ class NodeStatsRecorderTests(TestCase):
              "transport_tx_count": 88,
              "transport_tx_size_in_bytes": 23879803,
              "process_cpu_percent": 10,
-             "process_cpu_total_in_millis": 56520}
-        )
-
-        metrics_store_put_doc.assert_called_once_with(mock.ANY,
-                                                      level=MetaInfoScope.node,
-                                                      node_name="rally0",
-                                                      meta_data=metrics_store_meta_data)
+             "process_cpu_total_in_millis": 56520},
+            level=MetaInfoScope.node,
+            node_name="rally0",
+            meta_data=metrics_store_meta_data)
 
 
 class ClusterEnvironmentInfoTests(TestCase):
