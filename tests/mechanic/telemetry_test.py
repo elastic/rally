@@ -577,7 +577,6 @@ class NodeStatsRecorderTests(TestCase):
         "indices_docs_count": 0,
         "indices_docs_deleted": 0,
         "indices_store_size_in_bytes": 0,
-        "indices_indexing_is_throttled": False,
         "indices_indexing_throttle_time_in_millis": 0,
         "indices_search_open_contexts": 0,
         "indices_search_query_total": 0,
@@ -637,9 +636,7 @@ class NodeStatsRecorderTests(TestCase):
         "process_cpu_percent": 10,
         "process_cpu_total_in_millis": 56520,
         "breakers_parent_limit_size_in_bytes": 726571417,
-        "breakers_parent_limit_size": "692.9mb",
         "breakers_parent_estimated_size_in_bytes": 0,
-        "breakers_parent_estimated_size": "0b",
         "breakers_parent_overhead": 1.0,
         "breakers_parent_tripped": 0,
         "thread_pool_generic_threads": 4,
@@ -668,7 +665,6 @@ class NodeStatsRecorderTests(TestCase):
         telemetry_params = {}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         flattened_fields = recorder.flatten_stats_fields(prefix="indices", stats=NodeStatsRecorderTests.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"])
-
         self.assertDictEqual(NodeStatsRecorderTests.indices_stats_response_flattened, flattened_fields)
 
     def test_flatten_filtered_indices_fields(self):
@@ -926,7 +922,6 @@ class NodeStatsRecorderTests(TestCase):
              "indices_docs_deleted": 324530,
              "indices_fielddata_evictions": 17,
              "indices_fielddata_memory_size_in_bytes": 6936,
-             "indices_indexing_is_throttled": False,
              "indices_indexing_throttle_time_in_millis": 0,
              "indices_merges_current": 0,
              "indices_merges_current_docs": 0,
@@ -959,9 +954,7 @@ class NodeStatsRecorderTests(TestCase):
              "thread_pool_generic_queue": 0,
              "thread_pool_generic_rejected": 0,
              "thread_pool_generic_threads": 4,
-             "breakers_parent_estimated_size": "0b",
              "breakers_parent_estimated_size_in_bytes": 0,
-             "breakers_parent_limit_size": "692.9mb",
              "breakers_parent_limit_size_in_bytes": 726571417,
              "breakers_parent_overhead": 1.0,
              "breakers_parent_tripped": 0,

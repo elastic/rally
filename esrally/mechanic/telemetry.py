@@ -525,15 +525,13 @@ class NodeStatsRecorder:
                 if include is None or level==0 and section_name in include:
                     if isinstance(section_value, dict):
                         for subsection_name, subsection_value in self.flatten_stats_fields(stats=section_value, level=level+1).items():
-                            if prefix:
-                                yield "{}_{}_{}".format(prefix, section_name, subsection_name), subsection_value
-                            else:
-                                yield "{}_{}".format(section_name, subsection_name), subsection_value
+                            # Avoid duplication for metric fields that have unit embedded in value as they are also recorded elsewhere
+                            # example: `breakers_parent_limit_size_in_bytes` vs `breakers_parent_limit_size`
+                            if isinstance(subsection_value, (int, float)) and not isinstance(subsection_value, bool):
+                                yield "{}{}_{}".format(prefix + "_" if prefix else "", section_name, subsection_name), subsection_value
                     else:
-                        if prefix:
-                            yield "{}_{}".format(prefix, section_name), section_value
-                        else:
-                            yield section_name, section_value
+                        if isinstance(section_value, (int, float)) and not isinstance(section_value, bool):
+                            yield "{}{}".format(prefix + "_" if prefix else "", section_name), section_value
 
         if stats:
             return dict(iterate())
