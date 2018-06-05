@@ -284,6 +284,20 @@ Example::
 
 This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
 
+``runtime-jdk``
+~~~~~~~~~~~~~~~
+
+By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 8 or 7 for Elasticsearch 2.x but only JDK 8 for Elasticsearch 5.0.0. It will choose the highest available version.
+
+This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA8_HOME`` for a JDK 8) points to the appropriate JDK.
+
+Example::
+
+   # Run a benchmark with defaults (i.e. JDK 8)
+   esrally --distribution-version=2.4.0
+   # Force to run with JDK 7
+   esrally --distribution-version=2.4.0 --runtime-jdk=7
+
 .. _clr_revision:
 
 ``revision``

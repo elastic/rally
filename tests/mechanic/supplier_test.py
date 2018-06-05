@@ -180,7 +180,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
         builder = mock.create_autospec(supplier.Builder)
         es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder)
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Car 'default' is missing config variable 'build_command' to build Elasticsearch."):
+                                    "Car \"default\" misses mandatory config key \"build_command\"."):
             es.prepare()
 
         self.assertEqual(0, builder.build.call_count)
@@ -371,7 +371,6 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
         car = team.Car("default", root_path=None, config_paths=[])
@@ -390,7 +389,6 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
@@ -422,7 +420,6 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
@@ -438,6 +435,7 @@ class CreateSupplierTests(TestCase):
             ])
         self.assertRegex(ctx.exception.args[0], r"Could not determine version..*")
 
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
     def test_create_suppliers_for_es_distribution_plugin_source_build(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "distribution.version", "6.0.0")
@@ -447,13 +445,12 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
         cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
 
-        car = team.Car("default", root_path=None, config_paths=[])
+        car = team.Car("default", root_path=None, config_paths=[], variables={"build.jdk": "10"})
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
@@ -471,6 +468,7 @@ class CreateSupplierTests(TestCase):
         self.assertEqual(external_plugin, composite_supplier.suppliers[2].plugin)
         self.assertIsNotNone(composite_supplier.suppliers[2].builder)
 
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
     def test_create_suppliers_for_es_and_plugin_source_build(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "source.revision", "elasticsearch:abc,community-plugin:current")
@@ -478,7 +476,6 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "distributions", "release.url",
                 "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "runtime", "java10.home", "/usr/local/bin/java10/")
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
         cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
@@ -487,7 +484,8 @@ class CreateSupplierTests(TestCase):
 
         car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
-            "build_command": "./gradlew assemble"
+            "build_command": "./gradlew assemble",
+            "build.jdk": "11"
         })
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)

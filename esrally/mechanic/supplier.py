@@ -5,7 +5,7 @@ import logging
 import urllib.error
 
 from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import git, console, io, process, net, versions, convert
+from esrally.utils import git, console, io, process, net, jvm, convert
 from esrally.exceptions import BuildError, SystemSetupError
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
@@ -24,9 +24,9 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
     suppliers = []
 
     if build_needed:
-        java10_home = _java10_home(cfg)
+        java_home = _java_home(car)
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, java10_home, challenge_root_path)
+        builder = Builder(es_src_dir, java_home, challenge_root_path)
     else:
         builder = None
 
@@ -75,13 +75,13 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
     return CompositeSupplier(suppliers)
 
 
-def _java10_home(cfg):
-    from esrally import config
+def _java_home(car):
+    build_jdk = car.mandatory_var("build.jdk")
     try:
-        return cfg.opts("runtime", "java10.home")
-    except config.ConfigError:
-        raise exceptions.SystemSetupError("No JDK 10 is configured. You cannot benchmark source builds of Elasticsearch on this machine. "
-                                          "Please install a JDK 10 and reconfigure Rally with %s configure" % PROGRAM_NAME)
+        _, path = jvm.resolve_path(int(build_jdk))
+        return path
+    except ValueError:
+        raise exceptions.SystemSetupError("Car config key \"build.jdk\" is invalid: \"{}\" (must be int)".format(build_jdk))
 
 
 def _required_version(version):
@@ -190,22 +190,16 @@ class ElasticsearchSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            self.builder.build([self.value_of("clean_command"), self.value_of("build_command")])
+            self.builder.build([self.car.mandatory_var("clean_command"), self.car.mandatory_var("build_command")])
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
 
     def resolve_binary(self):
         try:
-            return glob.glob("{}/{}".format(self.src_dir, self.value_of("artifact_path_pattern")))[0]
+            return glob.glob("{}/{}".format(self.src_dir, self.car.mandatory_var("artifact_path_pattern")))[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
-
-    def value_of(self, k):
-        try:
-            return self.car.variables[k]
-        except KeyError:
-            raise exceptions.SystemSetupError("Car '{}' is missing config variable '{}' to build Elasticsearch.".format(self.car, k))
 
 
 class ExternalPluginSourceSupplier:

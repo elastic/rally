@@ -245,6 +245,12 @@ class Car:
         self.variables = variables
         self.env = env
 
+    def mandatory_var(self, name):
+        try:
+            return self.variables[name]
+        except KeyError:
+            raise exceptions.SystemSetupError("Car \"{}\" misses mandatory config key \"{}\"".format(self.name, name))
+
     @property
     def name(self):
         return "+".join(self.names)
