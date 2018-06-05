@@ -544,28 +544,22 @@ class NodeStatsRecorder:
         return ordered_results
 
     def thread_pool_stats(self, node_name, node_stats):
-        thr_pool_stats = node_stats["thread_pool"]
-        return self.flatten_stats_fields(prefix="thread_pool", stats=thr_pool_stats)
+        return self.flatten_stats_fields(prefix="thread_pool", stats=node_stats["thread_pool"])
 
     def circuit_breaker_stats(self, node_name, node_stats):
-        breaker_stats = node_stats["breakers"]
-        return self.flatten_stats_fields(prefix="breakers", stats=breaker_stats)
+        return self.flatten_stats_fields(prefix="breakers", stats=node_stats["breakers"])
 
     def jvm_buffer_pool_stats(self, node_name, node_stats):
-        buffer_pool_stats = node_stats["jvm"]["buffer_pools"]
-        return self.flatten_stats_fields(prefix="jvm_buffer_pools", stats=buffer_pool_stats)
+        return self.flatten_stats_fields(prefix="jvm_buffer_pools", stats=node_stats["jvm"]["buffer_pools"])
 
     def jvm_mem_stats(self, node_name, node_stats):
-        mem_stats = node_stats["jvm"]["mem"]
-        return self.flatten_stats_fields(prefix="jvm_mem", stats=mem_stats)
+        return self.flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
 
     def network_stats(self, node_name, node_stats):
-        transport_stats = node_stats.get("transport")
-        return self.flatten_stats_fields(prefix="transport", stats=transport_stats)
+        return self.flatten_stats_fields(prefix="transport", stats=node_stats.get("transport"))
 
     def process_stats(self, node_name, node_stats):
-        proc_stats = node_stats["process"]["cpu"]
-        return self.flatten_stats_fields(prefix="process_cpu", stats=proc_stats)
+        return self.flatten_stats_fields(prefix="process_cpu", stats=node_stats["process"]["cpu"])
 
     def sample(self):
         import elasticsearch
