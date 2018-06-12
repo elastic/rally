@@ -80,9 +80,9 @@ def is_early_access_release(java_home, sysprop_reader=system_property):
 
 def resolve_path(majors, sysprop_reader=system_property):
     """
-    Resolves the path to the JDK with the provided major version(s). It checks the provided versions in order and will return the first
-    match. For that it checks first the environment variable ``JAVAx_HOME`` where ``x`` is the checked major version and will fall back
-    to ``JAVA_HOME``. It also ensures that the environment variable points to the right JDK version.
+    Resolves the path to the JDK with the provided major version(s). It checks the versions in the same order specified in ``majors``
+    and will return the first match. To achieve this, it first checks the major version x in the environment variable ``JAVAx_HOME``
+    and falls back to ``JAVA_HOME``. It also ensures that the environment variable points to the right JDK version.
 
     If no appropriate version is found, a ``SystemSetupError`` is raised.
 

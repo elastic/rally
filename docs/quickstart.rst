@@ -4,7 +4,7 @@ Quickstart
 Install
 -------
 
-Install Python 3.4+ including ``pip3``, git 1.9+ and an appropriate JDK to run Elasticsearch Be sure that ``JAVA_HOME`` points to that JDK. Then run the following command, optionally prefixed by ``sudo`` if necessary::
+Install Python 3.4+ including ``pip3``, git 1.9+ and an `appropriate JDK to run Elasticsearch <https://www.elastic.co/support/matrix#matrix_jvm>`_ Be sure that ``JAVA_HOME`` points to that JDK. Then run the following command, optionally prefixed by ``sudo`` if necessary::
 
     pip3 install esrally
 

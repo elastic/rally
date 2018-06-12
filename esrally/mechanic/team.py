@@ -249,7 +249,7 @@ class Car:
         try:
             return self.variables[name]
         except KeyError:
-            raise exceptions.SystemSetupError("Car \"{}\" misses mandatory config key \"{}\"".format(self.name, name))
+            raise exceptions.SystemSetupError("Car \"{}\" requires config key \"{}\"".format(self.name, name))
 
     @property
     def name(self):

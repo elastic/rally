@@ -302,8 +302,7 @@ class InProcessLauncher:
         env = {}
         env.update(os.environ)
         env.update(car.env)
-        # Unix specific!:
-        self._set_env(env, "PATH", "%s/bin" % java_home, separator=":")
+        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep)
         # Don't merge here!
         env["JAVA_HOME"] = java_home
 
