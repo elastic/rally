@@ -47,7 +47,12 @@ function info {
 function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
-    killall -9 esrally
+    RUNNING_RALLY_PROCESSES=$(ps -ef | egrep "[e]srally" | awk '{print $2}')
+    for p in "${RUNNING_RALLY_PROCESSES}"
+    do
+        echo "kill -9 ${p}"
+        kill -9 ${p}
+    done
     set -e
 }
 
