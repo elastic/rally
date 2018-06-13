@@ -3,13 +3,12 @@ import random
 import time
 import math
 import types
-import inspect
 import operator
 from enum import Enum
 
 from esrally import exceptions
 from esrally.track import track
-from esrally.utils import io, console
+from esrally.utils import io
 
 __PARAM_SOURCES_BY_OP = {}
 __PARAM_SOURCES_BY_NAME = {}
@@ -28,31 +27,9 @@ def param_source_for_name(name, track, params):
 
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     if isinstance(param_source, types.FunctionType):
-        # TODO: Remove me after some grace period
-        try:
-            s = inspect.signature(param_source, follow_wrapped=False)
-        except TypeError:
-            # follow_wrapped has been introduced in Python 3.5
-            s = inspect.signature(param_source)
-        if len(s.parameters) == 2 and s.parameters.get("indices"):
-            console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
-                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name)
-            return LegacyDelegatingParamSource(track, params, param_source)
-        else:
-            return DelegatingParamSource(track, params, param_source)
+        return DelegatingParamSource(track, params, param_source)
     else:
-        try:
-            s = inspect.signature(param_source.__init__, follow_wrapped=False)
-        except TypeError:
-            # follow_wrapped has been introduced in Python 3.5
-            s = inspect.signature(param_source)
-        # self, indices, params
-        if len(s.parameters) == 3 and s.parameters.get("indices"):
-            console.warn("Parameter source '%s' is using deprecated method signature (indices, params). Please change it "
-                         "to (track, params, **kwargs). For details please see the migration guide in the docs." % name)
-            return param_source(track.indices, params)
-        else:
-            return param_source(track, params)
+        return param_source(track, params)
 
 
 def register_param_source_for_operation(op_type, param_source_class):
@@ -134,15 +111,6 @@ class DelegatingParamSource(ParamSource):
 
     def params(self):
         return self.delegate(self.track, self._params, **self.kwargs)
-
-
-class LegacyDelegatingParamSource(ParamSource):
-    def __init__(self, track, params, delegate, **kwargs):
-        super().__init__(track, params, **kwargs)
-        self.delegate = delegate
-
-    def params(self):
-        return self.delegate(self.track.indices, self._params)
 
 
 class CreateIndexParamSource(ParamSource):
@@ -244,7 +212,6 @@ class CreateIndexTemplateParamSource(ParamSource):
 
                     self.template_definitions.append((template.name, body))
         else:
-            # TODO: Should we allow to create multiple index templates at once?
             try:
                 self.template_definitions.append((params["template"], params["body"]))
             except KeyError:
@@ -273,7 +240,6 @@ class DeleteIndexTemplateParamSource(ParamSource):
                 if not filter_template or template.name == filter_template:
                     self.template_definitions.append((template.name, template.delete_matching_indices, template.pattern))
         else:
-            # TODO: Should we allow to delete multiple templates at once?
             try:
                 template = params["template"]
             except KeyError:
@@ -353,11 +319,7 @@ class SearchParamSource(ParamSource):
             "index": index_name,
             "type": type_name,
             "cache": request_cache,
-            # TODO: This is the old name, remove with Rally 1.0
-            "use_request_cache": request_cache,
             "request-params": request_params,
-            # TODO: This is the old name, remove with Rally 1.0
-            "request_params": request_params,
             "body": query_body
         }
 
@@ -368,8 +330,6 @@ class SearchParamSource(ParamSource):
             self.query_params["pages"] = pages
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
-            # TODO: This is the old name, remove with Rally 1.0
-            self.query_params["items_per_page"] = results_per_page
 
         self.query_body_params = []
         if query_body_params:
@@ -674,8 +634,6 @@ def bulk_generator(readers, client_index, pipeline, original_params):
                 # For our implementation it's always present. Either the original source file already contains this line or the generator
                 # has added it.
                 "action-metadata-present": True,
-                # TODO: This is the old name, remove with Rally 1.0
-                "action_metadata_present": True,
                 "body": bulk,
                 # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.
                 "bulk-size": docs_in_bulk,

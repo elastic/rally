@@ -887,7 +887,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual(2, len(all_bulks))
         self.assertEqual({
             "action-metadata-present": True,
-            "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-1",
             "bulk-size": 5,
@@ -899,7 +898,6 @@ class BulkDataGeneratorTests(TestCase):
 
         self.assertEqual({
             "action-metadata-present": True,
-            "action_metadata_present": True,
             "body": ["6", "7", "8"],
             "bulk-id": "0-2",
             "bulk-size": 3,
@@ -947,7 +945,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual(3, len(all_bulks))
         self.assertEqual({
             "action-metadata-present": True,
-            "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-1",
             "bulk-size": 5,
@@ -959,7 +956,6 @@ class BulkDataGeneratorTests(TestCase):
 
         self.assertEqual({
             "action-metadata-present": True,
-            "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-2",
             "bulk-size": 5,
@@ -971,7 +967,6 @@ class BulkDataGeneratorTests(TestCase):
 
         self.assertEqual({
             "action-metadata-present": True,
-            "action_metadata_present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-id": "0-3",
             "bulk-size": 5,
@@ -1003,7 +998,6 @@ class BulkDataGeneratorTests(TestCase):
         # body must not contain 'foo'!
         self.assertEqual({
             "action-metadata-present": True,
-            "action_metadata_present": True,
             "body": ["1", "2", "3"],
             "bulk-id": "0-1",
             "bulk-size": 3,
@@ -1461,7 +1455,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(7, len(p))
+        self.assertEqual(5, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual({
@@ -1473,11 +1467,6 @@ class SearchParamSourceTests(TestCase):
                 "match_all": {}
             }
         }, p["body"])
-        # backwards-compatibility options
-        self.assertFalse(p["use_request_cache"])
-        self.assertEqual({
-            "_source_include": "some_field"
-        }, p["request_params"])
 
     def test_user_specified_overrides_defaults(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -1493,7 +1482,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(7, len(p))
+        self.assertEqual(5, len(p))
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
@@ -1503,9 +1492,6 @@ class SearchParamSourceTests(TestCase):
                 "match_all": {}
             }
         }, p["body"])
-        # backwards-compatibility options
-        self.assertFalse(p["use_request_cache"])
-        self.assertDictEqual({}, p["request_params"])
 
     def test_replaces_body_params(self):
         import copy

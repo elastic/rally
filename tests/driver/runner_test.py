@@ -122,7 +122,7 @@ class BulkIndexRunnerTests(TestCase):
 
         with self.assertRaises(exceptions.DataError) as ctx:
             bulk(es, bulk_params)
-        self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action_metadata_present'. "
+        self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action-metadata-present'. "
                          "Please add it to your parameter source.", ctx.exception.args[0])
 
     @mock.patch("elasticsearch.Elasticsearch")
