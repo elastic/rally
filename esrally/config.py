@@ -694,7 +694,6 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                         "  {}.\n".format(plugin_match.group(1), config_file.location, k, v, new_key,
                                          console.format.link("%selasticsearch_plugins.html#running-a-benchmark-with-plugins" % DOC_LINK)))
 
-        logger.info("Migrating configuration version from 14 to 15.")
         if "build" in config:
             logger.info("Removing Gradle configuration as Rally now uses the Gradle Wrapper to build Elasticsearch.")
             config.pop("build", None)

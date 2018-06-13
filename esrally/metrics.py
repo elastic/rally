@@ -619,7 +619,7 @@ class MetricsStore:
         :param memento: The external representation as returned by #to_externalizable().
         """
         if memento:
-            self.logger.info("Restoring in-memory representation of metrics store.")
+            self.logger.debug("Restoring in-memory representation of metrics store.")
             for doc in pickle.loads(zlib.decompress(memento)):
                 self._add(doc)
 
@@ -1000,7 +1000,7 @@ class InMemoryMetricsStore(MetricsStore):
         if clear:
             self.docs = []
         compressed = zlib.compress(pickle.dumps(docs))
-        self.logger.info("Compression changed size of metric store from [%d] bytes to [%d] bytes",
+        self.logger.debug("Compression changed size of metric store from [%d] bytes to [%d] bytes",
                          sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1))
         return compressed
 

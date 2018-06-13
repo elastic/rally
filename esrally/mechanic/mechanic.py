@@ -325,7 +325,7 @@ class MechanicActor(actor.RallyActor):
         if msg.payload == MechanicActor.WAKEUP_RESET_RELATIVE_TIME:
             self.reset_relative_time()
         elif msg.payload == MechanicActor.WAKEUP_FLUSH_METRICS:
-            self.logger.info("Flushing cluster-wide system metrics store.")
+            self.logger.debug("Flushing cluster-wide system metrics store.")
             self.metrics_store.flush(refresh=False)
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
         else:
@@ -572,7 +572,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.send(sender, BenchmarkStarted())
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 if self.running:
-                    self.logger.info("Flushing system metrics store on host [%s].", self.host)
+                    self.logger.debug("Flushing system metrics store on host [%s].", self.host)
                     self.metrics_store.flush(refresh=False)
                     self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             elif isinstance(msg, OnBenchmarkStop):

@@ -385,17 +385,17 @@ class Driver:
             self.most_recent_sample_per_client = {}
             self.current_step += 1
 
-            self.logger.info("Postprocessing samples...")
+            self.logger.debug("Postprocessing samples...")
             self.post_process_samples()
             m = self.metrics_store.to_externalizable(clear=True)
 
             if self.finished():
                 self.logger.info("All steps completed.")
-                self.logger.info("Closing metrics store...")
+                self.logger.debug("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
                 del self.metrics_store
-                self.logger.info("Sending benchmark results...")
+                self.logger.debug("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)
             else:
                 if self.config.opts("track", "test.mode.enabled"):
@@ -439,7 +439,7 @@ class Driver:
                         self.target.complete_current_task(driver)
 
     def reset_relative_time(self):
-        self.logger.info("Resetting relative time of request metrics store.")
+        self.logger.debug("Resetting relative time of request metrics store.")
         self.metrics_store.reset_relative_time()
 
     def finished(self):
@@ -503,11 +503,11 @@ class Driver:
                                                        relative_time=sample.relative_time, meta_data=meta_data)
 
         end = time.perf_counter()
-        self.logger.info("Storing latency and service time took [%f] seconds.", (end - start))
+        self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
         start = end
         aggregates = self.throughput_calculator.calculate(raw_samples)
         end = time.perf_counter()
-        self.logger.info("Calculating throughput took [%f] seconds.", (end - start))
+        self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
         for task, samples in aggregates.items():
             meta_data = self.merge(
@@ -522,7 +522,7 @@ class Driver:
                                                            sample_type=sample_type, absolute_time=absolute_time,
                                                            relative_time=relative_time, meta_data=meta_data)
         end = time.perf_counter()
-        self.logger.info("Storing throughput took [%f] seconds.", (end - start))
+        self.logger.debug("Storing throughput took [%f] seconds.", (end - start))
         start = end
         # this will be a noop for the in-memory metrics store. If we use an ES metrics store however, this will ensure that we already send
         # the data and also clear the in-memory buffer. This allows users to see data already while running the benchmark. In cases where
@@ -532,8 +532,8 @@ class Driver:
         # no need for frequent refreshes.
         self.metrics_store.flush(refresh=False)
         end = time.perf_counter()
-        self.logger.info("Flushing the metrics store took [%f] seconds.", (end - start))
-        self.logger.info("Postprocessing [%d] raw samples took [%f] seconds in total.", len(raw_samples), (end - total_start))
+        self.logger.debug("Flushing the metrics store took [%f] seconds.", (end - start))
+        self.logger.debug("Postprocessing [%d] raw samples took [%f] seconds in total.", len(raw_samples), (end - total_start))
 
     def merge(self, *args):
         result = {}
@@ -650,13 +650,13 @@ class LoadGenerator(actor.RallyActor):
                 if current_samples and len(current_samples) > 0:
                     most_recent_sample = current_samples[-1]
                     if most_recent_sample.percent_completed is not None:
-                        self.logger.info("LoadGenerator[%s] is executing [%s] (%.2f%% complete).",
-                                         str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0)
+                        self.logger.debug("LoadGenerator[%s] is executing [%s] (%.2f%% complete).",
+                                          str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0)
                     else:
-                        self.logger.info("LoadGenerator[%s] is executing [%s] (dependent eternal task).",
-                                         str(self.client_id), most_recent_sample.task)
+                        self.logger.debug("LoadGenerator[%s] is executing [%s] (dependent eternal task).",
+                                          str(self.client_id), most_recent_sample.task)
                 else:
-                    self.logger.info("LoadGenerator[%s] is executing (no samples).", str(self.client_id))
+                    self.logger.debug("LoadGenerator[%s] is executing (no samples).", str(self.client_id))
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_ActorExitRequest(self, msg, sender):

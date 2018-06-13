@@ -277,9 +277,8 @@ class InProcessLauncher:
         t.on_pre_node_start(node_name)
         node_process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(node_process, host_name, node_name, t)
-        self.logger.info("Node [%s] has successfully started. Attaching telemetry devices.", node_name)
+        self.logger.info("Attaching telemetry devices to node [%s].", node_name)
         t.attach_to_node(node)
-        self.logger.info("Telemetry devices are now attached to node [%s].", node_name)
 
         return node
 
@@ -303,7 +302,7 @@ class InProcessLauncher:
         else:
             self.logger.info("JVM does not support [%s]. A JDK upgrade is recommended.", exit_on_oome_flag)
 
-        self.logger.info("env for [%s]: %s", node_name, str(env))
+        self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
     def _set_env(self, env, k, v, separator=' '):
@@ -331,7 +330,7 @@ class InProcessLauncher:
                 self.logger.error(msg)
                 raise exceptions.LaunchError(msg)
             else:
-                self.logger.info("Started node [%s] with PID [%s]", node_name, process.pid)
+                self.logger.info("Started node [%s] with PID [%s].", node_name, process.pid)
                 return process
         else:
             msg = "Could not start node [%s] within timeout period of [%s] seconds." % (

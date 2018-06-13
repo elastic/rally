@@ -475,7 +475,6 @@ class ForceMerge(Runner):
     """
 
     def __call__(self, es, params):
-        self.logger.info("Force merging all indices.")
         import elasticsearch
         try:
             if "max-num-segments" in params:

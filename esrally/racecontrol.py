@@ -144,9 +144,9 @@ class BenchmarkActor(actor.RallyActor):
     def receiveMsg_BenchmarkStopped(self, msg, sender):
         self.logger.info("Bulk adding system metrics to metrics store.")
         self.metrics_store.bulk_add(msg.system_metrics)
-        self.logger.info("Flushing metrics data...")
+        self.logger.debug("Flushing metrics data...")
         self.metrics_store.flush()
-        self.logger.info("Flushing done")
+        self.logger.debug("Flushing done")
         self.lap_counter.after_lap()
         if self.lap_counter.has_more_laps():
             self.run()
@@ -292,12 +292,13 @@ def race(cfg, sources=False, build=False, distribution=False, external=False, do
 def set_default_hosts(cfg, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
-    if len(configured_hosts.default) !=0 :
+    if len(configured_hosts.default) != 0:
         logger.info("Using configured hosts %s", configured_hosts.default)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
         default_host_object = opts.TargetHosts("{}:{}".format(host,port))
         cfg.add(config.Scope.benchmark, "client", "hosts", default_host_object)
+
 
 # Poor man's curry
 def from_sources_complete(cfg):

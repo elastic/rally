@@ -112,10 +112,11 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             response_count = len(self.received_responses)
             expected_count = len(self.children)
 
-            self.logger.info("[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
-                             response_count, expected_count, self.status, new_status)
+            self.logger.debug("[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
+                              response_count, expected_count, self.status, new_status)
             if response_count == expected_count:
-                self.logger.info("All [%d] child actors have responded. Transitioning now from [%s] to [%s].", expected_count, self.status, new_status)
+                self.logger.debug("All [%d] child actors have responded. Transitioning now from [%s] to [%s].",
+                                  expected_count, self.status, new_status)
                 # all nodes have responded, change status
                 self.status = new_status
                 self.received_responses = []
