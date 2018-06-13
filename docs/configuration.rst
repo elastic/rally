@@ -26,10 +26,10 @@ Let's go through an example step by step: First run ``esrally``::
 
       esrally configure --advanced-config
 
-    * Setting up benchmark data directory in /Users/daniel/.rally/benchmarks
-    * Setting up benchmark source directory in /Users/daniel/.rally/benchmarks/src/elasticsearch
+    * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
+    * Setting up benchmark source directory in /Users/dm/.rally/benchmarks/src/elasticsearch
 
-    Configuration successfully written to /Users/daniel/.rally/rally.ini. Happy benchmarking!
+    Configuration successfully written to /Users/dm/.rally/rally.ini. Happy benchmarking!
 
     More info about Rally:
 
