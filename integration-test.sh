@@ -42,11 +42,12 @@ function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
     RUNNING_RALLY_PROCESSES=$(ps -ef | egrep "[e]srally" | awk '{print $2}')
-    for p in "${RUNNING_RALLY_PROCESSES}"
-    do
-        echo "kill -9 ${p}"
-        kill -9 ${p}
-    done
+    if [ -n "${RUNNING_RALLY_PROCESSES}" ]; then
+        for p in "${RUNNING_RALLY_PROCESSES}"
+        do
+            kill -9 ${p}
+        done
+    fi
     set -e
 }
 
@@ -55,10 +56,12 @@ function kill_related_es_processes {
     set +e
     # killall matching ES instances - we cannot use killall as we also want to ensure "rally" is "somewhere" in the command line.
     RUNNING_RALLY_ES_PROCESSES=$(jps -v | egrep ".*java.*rally" | awk '{print $1}')
-    for p in "${RUNNING_RALLY_ES_PROCESSES}"
-    do
-        kill -9 ${p}
-    done
+    if [ -n "${RUNNING_RALLY_ES_PROCESSES}" ]; then
+        for p in "${RUNNING_RALLY_ES_PROCESSES}"
+        do
+            kill -9 ${p}
+        done
+    fi
     set -e
 }
 
