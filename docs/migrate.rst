@@ -17,6 +17,43 @@ You can also set version-specific environment variables, e.g. ``JAVA7_HOME``, ``
 
     Rally will choose the highest appropriate JDK per Elasticsearch version. You can use ``--runtime-jdk`` to force a specific JDK version but the path will still be resolved according to the logic above.
 
+Custom Parameter Sources
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+In Rally 0.10.0 we have deprecated some parameter names in custom parameter sources. In Rally 1.0.0, these deprecated names have been removed. Therefore you need to replace the following parameter names if you use them in custom parameter sources:
+
+============== ======================= =======================
+Operation type Old name                New name
+============== ======================= =======================
+search         use_request_cache       cache
+search         request_params          request-params
+search         items_per_page          results-per-page
+bulk           action_metadata_present action-metadata-present
+force-merge    max_num_segments        max-num-segments
+============== ======================= =======================
+
+In Rally 0.9.0 the signature of custom parameter sources has also changed. In Rally 1.0.0 we have removed the backwards compatibility layer so you need to change the signatures.
+
+Old::
+
+    # for parameter sources implemented as functions
+    def custom_param_source(indices, params):
+
+    # for parameter sources implemented as classes
+    class CustomParamSource:
+        def __init__(self, indices, params):
+
+
+New::
+
+    # for parameter sources implemented as functions
+    def custom_param_source(track, params, **kwargs):
+
+    # for parameter sources implemented as classes
+    class CustomParamSource:
+        def __init__(self, track, params, **kwargs):
+
+You can use the property ``track.indices`` to access indices.
 
 Migrating to Rally 0.11.0
 -------------------------

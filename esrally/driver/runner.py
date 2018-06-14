@@ -334,16 +334,7 @@ class BulkIndex(Runner):
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
 
-        # TODO: Remove this fallback logic with Rally 1.0
-        if "action-metadata-present" in params:
-            action_meta_data_key = "action-metadata-present"
-        else:
-            if "action_metadata_present" in params:
-                self.logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
-                               "[action-metadata-present].")
-            action_meta_data_key = "action_metadata_present"
-
-        with_action_metadata = mandatory(params, action_meta_data_key, self)
+        with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
 
         if with_action_metadata:
@@ -372,21 +363,11 @@ class BulkIndex(Runner):
         error_details = set()
         bulk_request_size_bytes = 0
         total_document_size_bytes = 0
+        with_action_metadata = mandatory(params, "action-metadata-present", self)
 
         for line_number, data in enumerate(params["body"]):
-
             line_size = len(data.encode('utf-8'))
-
-            # TODO: Remove this fallback logic with Rally 1.0
-            if "action-metadata-present" in params:
-                action_meta_data_key = "action-metadata-present"
-            else:
-                if "action_metadata_present" in params:
-                    self.logger.warning("Your parameter source uses the deprecated name [action_metadata_present]. Please change it to "
-                                   "[action-metadata-present].")
-                action_meta_data_key = "action_metadata_present"
-
-            if params[action_meta_data_key]:
+            if with_action_metadata:
                 if line_number % 2 == 1:
                     total_document_size_bytes += line_size
             else:
@@ -566,27 +547,15 @@ class Query(Runner):
         self.es = None
 
     def __call__(self, es, params):
-        # TODO: Remove items_per_page with Rally 1.0.
-        if "pages" in params and ("results-per-page" in params or "items_per_page" in params):
+        if "pages" in params and "results-per-page" in params:
             return self.scroll_query(es, params)
         else:
             return self.request_body_query(es, params)
 
     def request_body_query(self, es, params):
-        if "request-params" in params:
-            request_params = params["request-params"]
-        elif "request_params" in params:
-            # TODO: Remove with Rally 1.0.
-            self.logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
-            request_params = params["request_params"]
-        else:
-            request_params = {}
+        request_params = params.get("request-params", {})
         if "cache" in params:
             request_params["request_cache"] = params["cache"]
-        elif "use_request_cache" in params:
-            # TODO: Remove with Rally 1.0.
-            self.logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
-            request_params["request_cache"] = params["use_request_cache"]
         r = es.search(
             index=params.get("index", "_all"),
             doc_type=params.get("type"),
@@ -602,14 +571,8 @@ class Query(Runner):
         }
 
     def scroll_query(self, es, params):
-        if "request-params" in params:
-            request_params = params["request-params"]
-        elif "request_params" in params:
-            # TODO: Remove with Rally 1.0.
-            self.logger.warning("Your parameter source uses the deprecated name [request_params]. Please change it to [request-params].")
-            request_params = params["request_params"]
-        else:
-            request_params = {}
+        request_params = params.get("request-params", {})
+        cache = params.get("cache")
         hits = 0
         retrieved_pages = 0
         timed_out = False
@@ -617,22 +580,7 @@ class Query(Runner):
         self.es = es
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
-        if "cache" in params:
-            cache = params["cache"]
-        elif "use_request_cache" in params:
-            # TODO: Remove with Rally 1.0.
-            self.logger.warning("Your parameter source uses the deprecated name [use_request_cache]. Please change it to [cache].")
-            cache = params["use_request_cache"]
-        else:
-            cache = None
-        if "results-per-page" in params:
-            size = params["results-per-page"]
-        elif "items_per_page" in params:
-            # TODO: Remove with Rally 1.0.
-            self.logger.warning("Your parameter source uses the deprecated name [items_per_page]. Please change it to [results-per-page].")
-            size = params["items_per_page"]
-        else:
-            size = None
+        size = params.get("results-per-page")
 
         for page in range(total_pages):
             if page == 0:
