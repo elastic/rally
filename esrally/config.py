@@ -106,7 +106,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 class Config:
     EARLIEST_SUPPORTED_VERSION = 12
 
-    CURRENT_CONFIG_VERSION = 16
+    CURRENT_CONFIG_VERSION = 17
 
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -270,7 +270,7 @@ class ConfigFactory:
         self.prompter = None
         self.logger = logging.getLogger(__name__)
 
-    def create_config(self, config_file, advanced_config=False, assume_defaults=False, java_home=None, runtime_java_home=None):
+    def create_config(self, config_file, advanced_config=False, assume_defaults=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
         and writes them to the configuration file in ~/.rally/rally.ini.
@@ -280,7 +280,6 @@ class ConfigFactory:
         :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
         configuration in CI run. Default: False.
         """
-        benchmark_from_sources = True
         self.prompter = Prompter(self.i, self.sec_i, self.o, assume_defaults)
 
         if advanced_config:
@@ -300,47 +299,11 @@ class ConfigFactory:
         else:
             self.logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine.", config_file.location)
 
-        # Autodetect settings
-        self.o("* Autodetecting available third-party software")
-        git_path = io.guess_install_location("git")
-
-        java_8_home = runtime_java_home if runtime_java_home else io.guess_java_home(major_version=8)
-        java_10_home = java_home if java_home else io.guess_java_home(major_version=10)
-        from esrally.utils import jvm
-        if java_8_home:
-            auto_detected_java_home = java_8_home
-        # Don't auto-detect an EA release and bring trouble to the user later on. They can still configure it manually if they want to.
-        elif java_10_home and not jvm.is_early_access_release(java_10_home):
-            auto_detected_java_home = java_10_home
-        else:
-            auto_detected_java_home = None
-
-        self.print_detection_result("git    ", git_path)
-        self.print_detection_result("JDK    ", auto_detected_java_home,
-                                    warn_if_missing=True,
-                                    additional_message="You cannot benchmark Elasticsearch on this machine without a JDK.")
-        self.o("")
-
         root_dir = io.normalize_path(os.path.abspath(os.path.join(config_file.config_dir, "benchmarks")))
         if advanced_config:
             root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory", default_value=root_dir))
         else:
             self.o("* Setting up benchmark data directory in %s" % root_dir)
-
-        if not java_10_home or jvm.is_early_access_release(java_10_home):
-            raw_java_10_home = self._ask_property("Enter the JDK 10 root directory", check_path_exists=True, mandatory=False)
-            if raw_java_10_home and jvm.major_version(raw_java_10_home) == 10 and not jvm.is_early_access_release(raw_java_10_home):
-                java_10_home = io.normalize_path(raw_java_10_home) if raw_java_10_home else None
-            else:
-                benchmark_from_sources = False
-                self.o("********************************************************************************")
-                self.o("You don't have a valid JDK 10 installation and cannot benchmark source builds.")
-                self.o("")
-                self.o("You can still benchmark binary distributions with e.g.:")
-                self.o("")
-                self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
-                self.o("********************************************************************************")
-                self.o("")
 
         # We try to autodetect an existing ES source directory
         guess = self._guess_es_src_dir()
@@ -361,29 +324,6 @@ class ConfigFactory:
 
         # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
         repo_url = "https://github.com/elastic/elasticsearch.git"
-
-        if auto_detected_java_home:
-            java_home = auto_detected_java_home
-            local_benchmarks = True
-        else:
-            raw_java_home = self._ask_property("Enter the JDK root directory (version 8 or later)", check_path_exists=True, mandatory=False)
-            java_home = io.normalize_path(raw_java_home) if raw_java_home else None
-            if not java_home:
-                local_benchmarks = False
-                self.o("")
-                self.o("********************************************************************************")
-                self.o("You don't have a JDK installed but Elasticsearch requires one to run. This means")
-                self.o("that you cannot benchmark Elasticsearch on this machine.")
-                self.o("")
-                self.o("You can still benchmark against remote machines e.g.:")
-                self.o("")
-                self.o("  %s --pipeline=benchmark-only --target-host=\"NODE_IP:9200\"" % PROGRAM_NAME)
-                self.o("")
-                self.o("See %s for further info." % console.format.link("%srecipes.html" % DOC_LINK))
-                self.o("********************************************************************************")
-                self.o("")
-            else:
-                local_benchmarks = True
 
         if advanced_config:
             data_store_choice = self._ask_property("Where should metrics be kept?"
@@ -429,12 +369,6 @@ class ConfigFactory:
         # the Elasticsearch directory is just the last path component (relative to the source root directory)
         config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
 
-        config["runtime"] = {}
-        if java_home:
-            config["runtime"]["java.home"] = java_home
-        if java_10_home:
-            config["runtime"]["java10.home"] = java_10_home
-
         config["benchmarks"] = {}
         config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
 
@@ -462,20 +396,6 @@ class ConfigFactory:
 
         self.o("Configuration successfully written to %s. Happy benchmarking!" % config_file.location)
         self.o("")
-        if local_benchmarks and benchmark_from_sources:
-            self.o("To benchmark Elasticsearch with the default benchmark, run:")
-            self.o("")
-            self.o("  %s" % PROGRAM_NAME)
-            self.o("")
-        elif local_benchmarks:
-            self.o("To benchmark Elasticsearch 6.0.0 with the default benchmark, run:")
-            self.o("")
-            self.o("  %s --distribution-version=6.0.0" % PROGRAM_NAME)
-            self.o("")
-        else:
-            # we've already printed an info for the user. No need to repeat that.
-            pass
-
         self.o("More info about Rally:")
         self.o("")
         self.o("* Type %s --help" % PROGRAM_NAME)
@@ -710,6 +630,11 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
             config["distributions"].pop("release.2.url", None)
             config["distributions"].pop("release.url", None)
         current_version = 16
+        config["meta"]["config.version"] = str(current_version)
+
+    if current_version == 16 and target_version > current_version:
+        config.pop("runtime", None)
+        current_version = 17
         config["meta"]["config.version"] = str(current_version)
 
     # all migrations done
