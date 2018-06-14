@@ -2,7 +2,8 @@
   "template": "rally-results-*",
   "settings": {
     "index": {
-      "refresh_interval": "5s"
+      "refresh_interval": "5s",
+      "number_of_shards": 1
     }
   },
   "mappings": {
