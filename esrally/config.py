@@ -38,8 +38,8 @@ class ConfigFile:
         """
         return os.path.isfile(self.location)
 
-    def load(self, interpolation=configparser.ExtendedInterpolation()):
-        config = configparser.ConfigParser(interpolation=interpolation)
+    def load(self):
+        config = configparser.ConfigParser()
         config.read(self.location, encoding="utf-8")
         return config
 
@@ -370,7 +370,7 @@ class ConfigFactory:
         config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
 
         config["benchmarks"] = {}
-        config["benchmarks"]["local.dataset.cache"] = "${node:root.dir}/data"
+        config["benchmarks"]["local.dataset.cache"] = os.path.join(root_dir, "data")
 
         config["reporting"] = {}
         config["reporting"]["datastore.type"] = data_store_type
@@ -515,7 +515,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                           % (target_version, current_version))
     # but first a backup...
     config_file.backup()
-    config = config_file.load(interpolation=None)
+    config = config_file.load()
 
     if current_version == 12 and target_version > current_version:
         # the current configuration allows to benchmark from sources
@@ -633,6 +633,10 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
 
     if current_version == 16 and target_version > current_version:
         config.pop("runtime", None)
+        if "benchmarks" in config and "local.dataset.cache" in config["benchmarks"]:
+            if config["benchmarks"]["local.dataset.cache"] == "${node:root.dir}/data":
+                root_dir = config["node"]["root.dir"]
+                config["benchmarks"]["local.dataset.cache"] = os.path.join(root_dir, "data")
         current_version = 17
         config["meta"]["config.version"] = str(current_version)
 

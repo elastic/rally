@@ -252,6 +252,7 @@ class ConfigFactoryTests(TestCase):
             for k, v in config_store.config[section].items():
                 print("%s::%s: %s" % (section, k, v))
 
+        root_dir = io.normalize_path(os.path.abspath("./in-memory/benchmarks"))
         self.assertTrue("meta" in config_store.config)
         self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_store.config["meta"]["config.version"])
 
@@ -259,15 +260,16 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("local", config_store.config["system"]["env.name"])
 
         self.assertTrue("node" in config_store.config)
-        self.assertEqual(io.normalize_path(os.path.abspath("./in-memory/benchmarks")), config_store.config["node"]["root.dir"])
-        self.assertEqual(io.normalize_path(os.path.abspath("./in-memory/benchmarks/src")), config_store.config["node"]["src.root.dir"])
+
+        self.assertEqual(root_dir, config_store.config["node"]["root.dir"])
+        self.assertEqual(os.path.join(root_dir, "src"), config_store.config["node"]["src.root.dir"])
 
         self.assertTrue("source" in config_store.config)
         self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
         self.assertEqual("elasticsearch", config_store.config["source"]["elasticsearch.src.subdir"])
 
         self.assertTrue("benchmarks" in config_store.config)
-        self.assertEqual("${node:root.dir}/data", config_store.config["benchmarks"]["local.dataset.cache"])
+        self.assertEqual(os.path.join(root_dir, "data"), config_store.config["benchmarks"]["local.dataset.cache"])
 
         self.assertTrue("reporting" in config_store.config)
         self.assertEqual("in-memory", config_store.config["reporting"]["datastore.type"])
@@ -764,6 +766,30 @@ class ConfigMigrationTests(TestCase):
         # does not remove section
         self.assertIn("distributions", config_file.config)
         self.assertNotIn("release.url", config_file.config["distributions"])
+
+    def test_migrate_from_16_to_17(self):
+        config_file = InMemoryConfigStore("test")
+        sample_config = {
+            "meta": {
+                "config.version": 16
+            },
+            "node": {
+                "root.dir": "/home/user/.rally/benchmarks"
+            },
+            "runtime": {
+                "java.home": "/usr/local/javas/10"
+            },
+            "benchmarks": {
+                "local.dataset.cache": "${node:root.dir}/data"
+            }
+        }
+        config_file.store(sample_config)
+        config.migrate(config_file, 16, 17, out=null_output)
+
+        self.assertTrue(config_file.backup_created)
+        self.assertEqual("17", config_file.config["meta"]["config.version"])
+        self.assertNotIn("runtime", config_file.config)
+        self.assertEqual("/home/user/.rally/benchmarks/data", config_file.config["benchmarks"]["local.dataset.cache"])
 
 
 
