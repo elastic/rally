@@ -4,16 +4,10 @@ set -e
 
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
-# we will not test ES 1.x anymore because it does not work with (out of the box) with Java 9 anymore (Java 8 is still fine). On startup it
-# fails with:
-#
-#       java.lang.UnsupportedOperationException: Boot class path mechanism is not supported
-#
-# Temporarily disable testing ES 2.x because it does not start with JDK 10 (sets unrecognized JVM options)
-# readonly DISTRIBUTIONS=(2.4.6 5.6.7)
-readonly DISTRIBUTIONS=(5.6.7)
+readonly DISTRIBUTIONS=(1.7.6 2.4.6 5.6.9)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
+readonly ES_METRICS_STORE_JAVA_HOME="${JAVA8_HOME}"
 readonly ES_METRICS_STORE_VERSION="6.2.1"
 readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
 readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
@@ -76,19 +70,10 @@ function set_up {
     local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
     local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
 
-    # if the build defines these variables we'll explicitly use them instead of auto-detection
-    if [ -n "${JAVA_HOME}" ] && [ -n "${RUNTIME_JAVA_HOME}" ]; then
-        # configure for tests with an in-memory metrics store
-        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --assume-defaults --configuration-name="integration-test"
-        # configure for tests with an Elasticsearch metrics store
-        esrally configure --java-home="${JAVA_HOME}" --runtime-java-home="${RUNTIME_JAVA_HOME}" --assume-defaults --configuration-name="es-integration-test"
-    else
-        # configure for tests with an in-memory metrics store
-        esrally configure --assume-defaults --configuration-name="integration-test"
-        # configure for tests with an Elasticsearch metrics store
-        esrally configure --assume-defaults --configuration-name="es-integration-test"
-
-    fi
+    # configure for tests with an in-memory metrics store
+    esrally configure --assume-defaults --configuration-name="integration-test"
+    # configure for tests with an Elasticsearch metrics store
+    esrally configure --assume-defaults --configuration-name="es-integration-test"
 
     # configure Elasticsearch instead of in-memory after the fact
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
@@ -114,6 +99,7 @@ function set_up {
     # Delete and exit if archive is somehow corrupted, despite getting downloaded correctly.
     tar -xzf "${ES_ARTIFACT}" || { rm -f "${ES_ARTIFACT}"; exit 1; }
     cd "${ES_ARTIFACT_PATH}"
+    export JAVA_HOME=${ES_METRICS_STORE_JAVA_HOME}
     bin/elasticsearch &
     # store PID so we can kill ES later
     ES_PID=$!
@@ -164,10 +150,10 @@ function test_sources {
     # build Elasticsearch and a core plugin
     info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap] [--elasticsearch-plugins=analysis-icu]"
     kill_rally_processes
-    esrally --configuration-name="${cfg}" --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
+    esrally --configuration-name="${cfg}" --on-error=abort --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
     info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=4gheap,ea] [--laps=2]"
     kill_rally_processes
-    esrally --configuration-name="${cfg}" --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car="4gheap,ea" --laps=2
+    esrally --configuration-name="${cfg}" --on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car="4gheap,ea" --laps=2
 }
 
 function test_distributions {
@@ -180,7 +166,7 @@ function test_distributions {
             random_configuration cfg
             info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=4gheap]"
             kill_rally_processes
-            esrally --configuration-name="${cfg}" --distribution-version="${dist}" --track="${track}" --test-mode --car=4gheap
+            esrally --configuration-name="${cfg}" --on-error=abort --distribution-version="${dist}" --track="${track}" --test-mode --car=4gheap
         done
     done
 }
@@ -193,7 +179,7 @@ function test_benchmark_only {
 
     info "test benchmark-only [--configuration-name=${cfg}]"
     kill_rally_processes
-    esrally --configuration-name="${cfg}" --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --track-params="cluster_health:'yellow'"
+    esrally --configuration-name="${cfg}" --on-error=abort --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --track-params="cluster_health:'yellow'"
 }
 
 function run_test {

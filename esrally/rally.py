@@ -127,9 +127,6 @@ def create_arg_parser():
             help="Automatically accept all options with default values (default: false)",
             default=False,
             action="store_true")
-        # undocumented - only as a workaround for integration tests
-        p.add_argument("--java-home", default=None)
-        p.add_argument("--runtime-java-home", default=None)
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -137,6 +134,11 @@ def create_arg_parser():
             help="define the version of the Elasticsearch distribution to download. "
                  "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
             default="")
+        p.add_argument(
+            "--runtime-jdk",
+            type=positive_number,
+            help="The major version of the runtime JDK to use.",
+            default=None)
 
         track_source_group = p.add_mutually_exclusive_group()
         track_source_group.add_argument(
@@ -331,9 +333,7 @@ def ensure_configuration_present(cfg, args, sub_command):
     if sub_command == "configure":
         config.ConfigFactory().create_config(cfg.config_file,
                                              advanced_config=args.advanced_config,
-                                             assume_defaults=args.assume_defaults,
-                                             java_home=args.java_home,
-                                             runtime_java_home=args.runtime_java_home)
+                                             assume_defaults=args.assume_defaults)
         exit(0)
     else:
         if cfg.config_present():
@@ -536,6 +536,7 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", opts.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", opts.to_dict(args.telemetry_params))
 

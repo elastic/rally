@@ -15,7 +15,6 @@ Rally can build Elasticsearch either from sources or use an `official binary dis
 Let's go through an example step by step: First run ``esrally``::
 
     dm@io:~ $ esrally
-
         ____        ____
        / __ \____ _/ / /_  __
       / /_/ / __ `/ / / / / /
@@ -27,41 +26,10 @@ Let's go through an example step by step: First run ``esrally``::
 
       esrally configure --advanced-config
 
-    * Autodetecting available third-party software
-      git    : [OK]
-      JDK    : [OK]
-
-    * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
-    Enter the JDK 10 root directory (Press Enter to skip):
-
-As you can see above, Rally autodetects if git and a JDK are installed. It also searches for a JDK 10; if you don't have it, that's no problem, you are just not able to build Elasticsearch from sources. Let's assume you press Enter and don't specify a path for JDK 10::
-
-    ********************************************************************************
-    You don't have a valid JDK 10 installation and cannot benchmark source builds.
-
-    You can still benchmark binary distributions with e.g.:
-
-      esrally --distribution-version=6.0.0
-    ********************************************************************************
-
-As you can see, Rally tells you that you cannot build Elasticsearch from sources but you can still benchmark official binary distributions.
-
-It's also possible that Rally cannot automatically your JDK home directory. In that case, it will ask you later in the configuration process. If you do not provide a JDK home directory, Rally cannot start Elasticsearch on this machine but you can still use it as a load generator to :doc:`benchmark remote clusters </recipes>`.
-
-If you specify a valid path for JDK 10, Rally will try to autodetect your Elasticsearch project directory (either in the current directory or in ``../elasticsearch``) or will choose a default directory::
-
     * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
     * Setting up benchmark source directory in /Users/dm/.rally/benchmarks/src/elasticsearch
 
-If a valid path for JDK 10 was not found (or entered), it will not ask you for a source directory and just go on.
-
-Now Rally is done::
-
     Configuration successfully written to /Users/dm/.rally/rally.ini. Happy benchmarking!
-
-    To benchmark Elasticsearch 6.0.0 with the default benchmark, run:
-
-      esrally --distribution-version=6.0.0
 
     More info about Rally:
 
@@ -102,7 +70,6 @@ Rally will ask you a few more things in the advanced setup:
 
 * **Benchmark data directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different data directory here.
 * **Elasticsearch project directory**: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with the Gradle Wrapper in this directory (it runs ``./gradlew clean`` and ``./gradlew :distribution:tar:assemble``).
-* **JDK root directory**: Rally will only ask this if it could not autodetect the JDK home by itself. Just enter the root directory of the JDK you want to use. By default, Rally will choose Java 8 if available and fallback to Java 10.
 * **Metrics store type**: You can choose between ``in-memory`` which requires no additional setup or ``elasticsearch`` which requires that you start a dedicated Elasticsearch instance to store metrics but gives you much more flexibility to analyse results.
 * **Metrics store settings** (only for metrics store type ``elasticsearch``): Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. When using self-signed certificates on the Elasticsearch metrics store, certificate verification can be turned off by setting the ``datastore.ssl.verification_mode`` setting to ``none``. Alternatively you can enter the path to the certificate authority's signing certificate in ``datastore.ssl.certificate_authorities``. Both settings are optional.
 * **Name for this benchmark environment** (only for metrics store type ``elasticsearch``): You can use the same metrics store for multiple environments (e.g. local, continuous integration etc.) so you can separate metrics from different environments by choosing a different name.

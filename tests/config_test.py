@@ -234,13 +234,9 @@ class AutoLoadConfigTests(TestCase):
 
 class ConfigFactoryTests(TestCase):
     @mock.patch("esrally.utils.git.is_working_copy")
-    @mock.patch("esrally.utils.jvm.is_early_access_release")
-    @mock.patch("esrally.utils.io.guess_java_home")
     @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_simple_config(self, guess_install_location, guess_java_home, is_ea_release, working_copy):
+    def test_create_simple_config(self, guess_install_location, working_copy):
         guess_install_location.side_effect = ["/tests/usr/bin/git"]
-        guess_java_home.return_value = "/tests/java10/home"
-        is_ea_release.return_value = False
         # Rally checks in the parent and sibling directories whether there is an ES working copy. We don't want this detection logic
         # to succeed spuriously (e.g. on developer machines).
         working_copy.return_value = False
@@ -270,10 +266,6 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
         self.assertEqual("elasticsearch", config_store.config["source"]["elasticsearch.src.subdir"])
 
-        self.assertTrue("runtime" in config_store.config)
-        self.assertEqual("/tests/java10/home", config_store.config["runtime"]["java.home"])
-        self.assertEqual("/tests/java10/home", config_store.config["runtime"]["java10.home"])
-
         self.assertTrue("benchmarks" in config_store.config)
         self.assertEqual("${node:root.dir}/data", config_store.config["benchmarks"]["local.dataset.cache"])
 
@@ -297,55 +289,7 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("distributions" in config_store.config)
         self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
-    @mock.patch("esrally.utils.jvm.is_early_access_release")
-    @mock.patch("esrally.utils.jvm.major_version")
-    @mock.patch("esrally.utils.io.guess_java_home")
-    @mock.patch("esrally.utils.io.guess_install_location")
-    @mock.patch("esrally.utils.io.normalize_path")
-    @mock.patch("os.path.exists")
-    def test_create_simple_config_no_java_detected(self, path_exists, normalize_path, guess_install_location, guess_java_home,
-                                                   major_jvm_version, jvm_is_early_access_release):
-        guess_install_location.side_effect = ["/tests/usr/bin/git"]
-        guess_java_home.return_value = None
-        normalize_path.side_effect = ["/home/user/.rally/benchmarks", "/tests/java10/home", "/tests/java8/home",
-                                      "/home/user/.rally/benchmarks/src"]
-        major_jvm_version.return_value = 10
-        jvm_is_early_access_release.return_value = False
-        path_exists.return_value = True
-
-        f = config.ConfigFactory(i=MockInput(["/tests/java10/home", "/Projects/elasticsearch/src", "/tests/java8/home"]), o=null_output)
-
-        config_store = InMemoryConfigStore("test")
-        f.create_config(config_store)
-
-        self.assertIsNotNone(config_store.config)
-        self.assertTrue("runtime" in config_store.config)
-        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
-
-    @mock.patch("esrally.utils.io.guess_java_home")
-    @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_simple_config_no_java_installed(self, guess_install_location, guess_java_home):
-        guess_install_location.side_effect = ["/tests/usr/bin/git"]
-        guess_java_home.return_value = None
-
-        # the input is the question for the JDK home and the JDK 10 home directory - the user does not define one
-        f = config.ConfigFactory(i=MockInput(["", ""]), o=null_output)
-
-        config_store = InMemoryConfigStore("test")
-        f.create_config(config_store)
-
-        self.assertIsNotNone(config_store.config)
-        self.assertFalse("java.home" in config_store.config["runtime"])
-        self.assertFalse("java10.home" in config_store.config["runtime"])
-
-    @mock.patch("esrally.utils.jvm.is_early_access_release")
-    @mock.patch("esrally.utils.io.guess_java_home")
-    @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_advanced_config(self, guess_install_location, guess_java_home, is_ea_release):
-        guess_install_location.side_effect = ["/tests/usr/bin/git"]
-        guess_java_home.side_effect = ["/tests/java8/home", "/tests/java10/home"]
-        is_ea_release.return_value = False
-
+    def test_create_advanced_config(self):
         f = config.ConfigFactory(i=MockInput([
             # benchmark root directory
             "/var/data/rally",
@@ -378,9 +322,6 @@ class ConfigFactoryTests(TestCase):
         self.assertTrue("node" in config_store.config)
         self.assertEqual("/var/data/rally", config_store.config["node"]["root.dir"])
         self.assertTrue("source" in config_store.config)
-        self.assertTrue("runtime" in config_store.config)
-        self.assertEqual("/tests/java8/home", config_store.config["runtime"]["java.home"])
-        self.assertEqual("/tests/java10/home", config_store.config["runtime"]["java10.home"])
         self.assertTrue("benchmarks" in config_store.config)
 
         self.assertTrue("reporting" in config_store.config)
@@ -434,10 +375,7 @@ class ConfigMigrationTests(TestCase):
             config.migrate(config_file, config.Config.EARLIEST_SUPPORTED_VERSION - 1, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
 
     # catch all test, migrations are checked in more detail in the other tests
-    @mock.patch("esrally.utils.io.get_size")
-    @mock.patch("esrally.time.sleep")
-    def test_migrate_from_earliest_supported_to_latest(self, sleep, get_size):
-        get_size.return_value = 0
+    def test_migrate_from_earliest_supported_to_latest(self):
         config_file = InMemoryConfigStore("test")
         sample_config = {
             "meta": {

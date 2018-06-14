@@ -231,8 +231,8 @@ class InProcessLauncher:
         self.metrics_store = metrics_store
         self._clock = clock
         self.races_root_dir = races_root_dir
-        self.java_home = self.cfg.opts("runtime", "java.home")
         self.keep_running = self.cfg.opts("mechanic", "keep.running")
+        self.override_runtime_jdk = self.cfg.opts("mechanic", "runtime.jdk")
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
@@ -241,19 +241,17 @@ class InProcessLauncher:
         #
         # We also do this only once per host otherwise we would kill instances that we've just launched.
         process.kill_running_es_instances(self.races_root_dir)
-        java_major_version = jvm.major_version(self.java_home)
-        self.logger.info("Detected Java major version [%s].", java_major_version)
-
         node_count_on_host = len(node_configurations)
-        return [self._start_node(node_configuration, node_count_on_host, java_major_version) for node_configuration in node_configurations]
+        return [self._start_node(node_configuration, node_count_on_host) for node_configuration in node_configurations]
 
-    def _start_node(self, node_configuration, node_count_on_host, java_major_version):
+    def _start_node(self, node_configuration, node_count_on_host):
         host_name = node_configuration.ip
         node_name = node_configuration.node_name
         car = node_configuration.car
         binary_path = node_configuration.binary_path
         data_paths = node_configuration.data_paths
         node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
+        java_major_version, java_home = self._resolve_java_home(car)
 
         self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
 
@@ -273,7 +271,7 @@ class InProcessLauncher:
         ]
 
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
-        env = self._prepare_env(car, node_name, t)
+        env = self._prepare_env(car, node_name, java_home, t)
         t.on_pre_node_start(node_name)
         node_process = self._start_process(env, node_name, binary_path)
         node = cluster.Node(node_process, host_name, node_name, t)
@@ -283,21 +281,37 @@ class InProcessLauncher:
 
         return node
 
-    def _prepare_env(self, car, node_name, t):
+    def _resolve_java_home(self, car):
+        runtime_jdk_versions = self._determine_runtime_jdks(car)
+        self.logger.info("Allowed JDK versions are %s.", runtime_jdk_versions)
+        major, java_home = jvm.resolve_path(runtime_jdk_versions)
+        self.logger.info("Detected JDK with major version [%s] in [%s].", major, java_home)
+        return major, java_home
+
+    def _determine_runtime_jdks(self, car):
+        if self.override_runtime_jdk:
+            return [self.override_runtime_jdk]
+        else:
+            runtime_jdks = car.mandatory_var("runtime.jdk")
+            try:
+                return [int(v) for v in runtime_jdks.split(",")]
+            except ValueError:
+                raise exceptions.SystemSetupError("Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(runtime_jdks))
+
+    def _prepare_env(self, car, node_name, java_home, t):
         env = {}
         env.update(os.environ)
         env.update(car.env)
-        # Unix specific!:
-        self._set_env(env, "PATH", "%s/bin" % self.java_home, separator=":")
+        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep)
         # Don't merge here!
-        env["JAVA_HOME"] = self.java_home
+        env["JAVA_HOME"] = java_home
 
         # we just blindly trust telemetry here...
         for k, v in t.instrument_candidate_env(car, node_name).items():
             self._set_env(env, k, v)
 
         exit_on_oome_flag = "-XX:+ExitOnOutOfMemoryError"
-        if jvm.supports_option(self.java_home, exit_on_oome_flag):
+        if jvm.supports_option(java_home, exit_on_oome_flag):
             self.logger.info("Setting [%s] to detect out of memory errors during the benchmark.", exit_on_oome_flag)
             self._set_env(env, "ES_JAVA_OPTS", exit_on_oome_flag)
         else:
