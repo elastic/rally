@@ -512,6 +512,7 @@ class DistributionRepositoryTests(TestCase):
             "release.cache": "true"
         }, version="5.5.0")
         self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.5.0.tar.gz", repo.download_url)
+        self.assertEqual("elasticsearch-5.5.0.tar.gz", repo.file_name)
         self.assertTrue(repo.cache)
 
     def test_release_repo_config_with_user_url(self):
@@ -522,6 +523,7 @@ class DistributionRepositoryTests(TestCase):
             "release.cache": "false"
         }, version="2.4.3")
         self.assertEqual("https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-2.4.3.tar.gz", repo.download_url)
+        self.assertEqual("elasticsearch-2.4.3.tar.gz", repo.file_name)
         self.assertFalse(repo.cache)
 
     def test_missing_url(self):

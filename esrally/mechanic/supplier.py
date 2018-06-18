@@ -293,8 +293,8 @@ class ElasticsearchDistributionSupplier:
 
     def fetch(self):
         io.ensure_dir(self.distributions_root)
-        distribution_path = "%s/elasticsearch-%s.tar.gz" % (self.distributions_root, self.version)
         download_url = self.repo.download_url
+        distribution_path = os.path.join(self.distributions_root, self.repo.file_name)
         self.logger.info("Resolved download URL [%s] for version [%s]", download_url, self.version)
         if not os.path.isfile(distribution_path) or not self.repo.cache:
             try:
@@ -486,6 +486,11 @@ class DistributionRepository:
         # rally.ini
         override_key = "{}.url".format(self.name)
         return self._url_for(override_key, default_key)
+
+    @property
+    def file_name(self):
+        url = self.download_url
+        return url[url.rfind("/") + 1:]
 
     def plugin_download_url(self, plugin_name):
         # team repo
