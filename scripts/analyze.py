@@ -42,7 +42,14 @@ def decode_percentile_key(k):
 
 
 def data_series_name(d, label_key):
-    return d[label_key]
+    data_series = []
+    for lbl in label_key.split(","):
+        path = lbl.split(".")
+        doc = d
+        for k in path:
+            doc = doc[k]
+        data_series.append(doc)
+    return ",".join(data_series)
 
 
 def include(series):
@@ -103,10 +110,9 @@ def plot_throughput(raw_data, label_key):
                 "data_series": data_series,
                 "max": throughput_metrics["max"],
                 "median": throughput_metrics["median"],
-                "min": throughput_metrics["min"]
+                "min": throughput_metrics["min"],
+                "unit": throughput_metrics["unit"]
             })
-            # should all be the same
-            unit = throughput_metrics["unit"]
 
     for op, results in throughput_per_op.items():
         fig, ax = create_plot()
@@ -115,12 +121,15 @@ def plot_throughput(raw_data, label_key):
         min_throughput = []
         max_throughput = []
         width = 0.35
+        unit = ""
 
         for candidate in results:
             x_tick_labels.append(candidate["data_series"])
             cmin = candidate["min"]
             cmedian = candidate["median"]
             cmax = candidate["max"]
+            # all units per op are the same but they can change across operations.
+            unit = candidate["unit"]
             if cmin and cmedian and cmax:
                 min_throughput.append(cmedian - cmin)
                 throughput.append(cmedian)
@@ -190,7 +199,7 @@ def parse_args():
     parser.add_argument(
         "--label",
         help="defines which attribute to use for labelling data series (default: trial-timestamp).",
-        choices=["environment", "trial-timestamp", "user-tags", "challenge", "car"],
+        # choices=["environment", "trial-timestamp", "user-tags", "challenge", "car"],
         default="trial-timestamp")
 
     parser.add_argument("path",
