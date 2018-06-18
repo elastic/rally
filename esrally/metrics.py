@@ -97,6 +97,9 @@ class EsClient:
                 if e.status_code == 504 and execution_count < max_execution_count:
                     self.logger.debug("Gateway timeout in attempt [%d/%d].", execution_count, max_execution_count)
                     time.sleep(1)
+                elif e.status_code == 429 and execution_count < max_execution_count:
+                    self.logger.debug("Execution rejected in attempt [%d/%d].", execution_count, max_execution_count)
+                    time.sleep(3)
                 else:
                     node = self._client.transport.hosts[0]
                     msg = "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on " \
