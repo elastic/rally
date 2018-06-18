@@ -7,7 +7,7 @@ import shlex
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster
-from esrally.utils import console, process, jvm
+from esrally.utils import process, jvm
 
 
 def wait_for_rest_layer(es, max_attempts=20):
@@ -58,6 +58,7 @@ class ClusterLauncher:
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         all_hosts = self.cfg.opts("client", "hosts").all_hosts
         default_hosts = self.cfg.opts("client", "hosts").default
+        preserve = self.cfg.opts("mechanic", "preserve.install")
 
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
@@ -80,7 +81,7 @@ class ClusterLauncher:
         ])
 
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
-        c = cluster.Cluster(default_hosts, [], t)
+        c = cluster.Cluster(default_hosts, [], t, preserve)
 
         self.logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
         if wait_for_rest_layer(es_default, max_attempts=40):
@@ -209,9 +210,8 @@ class ExternalLauncher:
             self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         elif user_defined_version != distribution_version:
-            console.warn(
-                "Specified distribution version '%s' on the command line differs from version '%s' reported by the cluster." %
-                (user_defined_version, distribution_version), logger=self.logger)
+            self.logger.warning("Distribution version '%s' on command line differs from actual cluster version '%s'.",
+                                user_defined_version, distribution_version)
         t.attach_to_cluster(c)
         return c.nodes
 

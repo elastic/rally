@@ -5,7 +5,7 @@ from collections import defaultdict
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
-from esrally.utils import net
+from esrally.utils import net, console
 from esrally.mechanic import supplier, provisioner, launcher, team
 
 
@@ -276,6 +276,7 @@ class MechanicActor(actor.RallyActor):
             self.children.append(m)
             self.send(m, msg.for_nodes(ip=hosts))
         else:
+            console.info("Preparing for race ...", flush=True)
             self.logger.info("Cluster consisting of %s will be provisioned by Rally.", hosts)
             msg.hosts = hosts
             # Initialize the children array to have the right size to
@@ -346,6 +347,8 @@ class MechanicActor(actor.RallyActor):
 
     @actor.no_retry("mechanic")
     def receiveMsg_StopEngine(self, msg, sender):
+        if self.cluster.preserve:
+            console.info("Keeping benchmark candidate including index at (may need several GB).")
         # detach from cluster and gather all system metrics
         self.cluster_launcher.stop(self.cluster)
         # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the

@@ -47,19 +47,22 @@ class Cluster:
     """
     Cluster exposes APIs of the running benchmark candidate.
     """
-    def __init__(self, hosts, nodes, telemetry):
+    def __init__(self, hosts, nodes, telemetry, preserve=False):
         """
         Creates a new Elasticsearch cluster.
 
         :param hosts: An array of host/port pairs.
         :param nodes: The nodes of which this cluster consists of. Mandatory.
         :param telemetry Telemetry attached to this cluster. Mandatory.
+        :param preserve Whether the cluster will be kept around after the benchmark. Optional.
+
         """
         self.hosts = hosts
         self.nodes = nodes
         self.telemetry = telemetry
         self.distribution_version = None
         self.source_revision = None
+        self.preserve = preserve
 
     def node(self, name):
         """

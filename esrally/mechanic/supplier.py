@@ -5,7 +5,7 @@ import logging
 import urllib.error
 
 from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import git, console, io, process, net, jvm, convert
+from esrally.utils import git, io, process, net, jvm, convert
 from esrally.exceptions import BuildError, SystemSetupError
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
@@ -162,7 +162,6 @@ class CompositeSupplier:
 
     def __call__(self, *args, **kwargs):
         binaries = {}
-        console.info("Preparing for race ...", flush=True)
         try:
             for supplier in self.suppliers:
                 supplier.fetch()
@@ -304,7 +303,6 @@ class ElasticsearchDistributionSupplier:
                 progress.finish()
                 self.logger.info("Successfully downloaded Elasticsearch [%s].", self.version)
             except urllib.error.HTTPError:
-                console.println("[FAILED]")
                 self.logger.exception("Cannot download Elasticsearch distribution for version [%s] from [%s].", self.version, download_url)
                 raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
                                                   "version [%s] is correct." % (download_url, self.version))
@@ -398,7 +396,7 @@ class SourceRepository:
     def _try_init(self, may_skip_init=False):
         if not git.is_working_copy(self.src_dir):
             if self.has_remote():
-                console.println("Downloading sources for %s from %s to %s." % (self.name, self.remote_url, self.src_dir))
+                self.logger.info("Downloading sources for %s from %s to %s.", self.name, self.remote_url, self.src_dir)
                 git.clone(self.src_dir, self.remote_url)
             elif os.path.isdir(self.src_dir) and may_skip_init:
                 self.logger.info("Skipping repository initialization for %s.", self.name)

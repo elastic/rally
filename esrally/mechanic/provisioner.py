@@ -7,7 +7,7 @@ import jinja2
 
 from esrally import exceptions
 from esrally.mechanic import team
-from esrally.utils import io, console, process, versions
+from esrally.utils import io, process, versions
 
 
 def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
@@ -84,7 +84,6 @@ def cleanup(preserve, install_dir, data_paths):
     logger = logging.getLogger(__name__)
     if preserve:
         logger.info("Preserving benchmark candidate installation at [%s].", install_dir)
-        console.info("Keeping benchmark candidate including index at [%s] (will need several GB)." % install_dir)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
@@ -139,7 +138,7 @@ class BareProvisioner:
 
     def prepare(self, binary):
         if not self.preserve:
-            console.info("Rally will delete the benchmark candidate after the benchmark")
+            logging.getLogger(__name__).info("Rally will delete the benchmark candidate after the benchmark")
         self.es_installer.install(binary["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
