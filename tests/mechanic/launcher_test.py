@@ -116,6 +116,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "client", "options", self.client_options)
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         cluster = cluster_launcher.start()
@@ -129,6 +130,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "client", "options", self.client_options)
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         cluster = cluster_launcher.start()
@@ -149,6 +151,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "client", "options", opts.ClientOptions("raise-error-on-info:true"))
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         with self.assertRaisesRegex(exceptions.LaunchError,
