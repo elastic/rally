@@ -1128,14 +1128,17 @@ def create_race(cfg, track, challenge):
     user_tags = extract_user_tags_from_config(cfg)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
+    car_params = cfg.opts("mechanic", "car.params")
+    plugin_params = cfg.opts("mechanic", "plugin.params")
     rally_version = version.version()
 
-    return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car, total_laps)
+    return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
+                car_params, plugin_params, total_laps)
 
 
 class Race:
     def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 total_laps, cluster=None, lap_results=None, results=None):
+                 car_params, plugin_params, total_laps, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
         if lap_results is None:
@@ -1150,6 +1153,8 @@ class Race:
         self.track_params = track_params
         self.challenge = challenge
         self.car = car
+        self.car_params = car_params
+        self.plugin_params = plugin_params
         self.total_laps = total_laps
         # will be set later - contains hosts, revision, distribution_version, ...
         self.cluster = cluster
@@ -1204,6 +1209,10 @@ class Race:
             d["challenge"] = self.challenge_name
         if self.track_params:
             d["track-params"] = self.track_params
+        if self.car_params:
+            d["car-params"] = self.car_params
+        if self.plugin_params:
+            d["plugin-params"] = self.plugin_params
         return d
 
     def to_result_dicts(self):
@@ -1235,6 +1244,10 @@ class Race:
             result_template["challenge"] = self.challenge_name
         if self.track_params:
             result_template["track-params"] = self.track_params
+        if self.car_params:
+            result_template["car-params"] = self.car_params
+        if self.plugin_params:
+            result_template["plugin-params"] = self.plugin_params
 
         all_results = []
 
@@ -1258,7 +1271,8 @@ class Race:
         # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
         return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
-                    d["track"], d.get("track-params"), d.get("challenge"), d["car"], d["total-laps"], results=d["results"])
+                    d["track"], d.get("track-params"), d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
+                    d["total-laps"], results=d["results"])
 
 
 class RaceStore:

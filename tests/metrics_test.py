@@ -653,7 +653,7 @@ class EsRaceStoreTests(TestCase):
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=EsRaceStoreTests.TRIAL_ID,
                             trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
-                            challenge=t.default_challenge, car="4gheap",
+                            challenge=t.default_challenge, car="defaults", car_params={"heap_size": "512mb"}, plugin_params=None,
                             total_laps=12,
                             cluster=EsRaceStoreTests.DictHolder(
                                 {
@@ -698,7 +698,10 @@ class EsRaceStoreTests(TestCase):
                 "shard-count": 3
             },
             "challenge": "index",
-            "car": "4gheap",
+            "car": "defaults",
+            "car-params": {
+                "heap_size": "512mb"
+            },
             "total-laps": 12,
             "cluster": {
                 "distribution-version": "5.0.0",
@@ -766,7 +769,7 @@ class EsResultsStoreTests(TestCase):
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=EsResultsStoreTests.TRIAL_ID,
                             trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
-                            challenge=t.default_challenge, car="4gheap",
+                            challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
                             total_laps=12,
                             cluster=c,
                             lap_results=[],
@@ -811,6 +814,9 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugin-params": {
+                    "some-param": True
+                },
                 "node-count": 1,
                 "plugins": ["x-pack"],
                 "active": True,
@@ -832,6 +838,9 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugin-params": {
+                    "some-param": True
+                },
                 "node-count": 1,
                 "plugins": ["x-pack"],
                 "active": True,
@@ -854,6 +863,9 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugin-params": {
+                    "some-param": True
+                },
                 "node-count": 1,
                 "plugins": ["x-pack"],
                 "active": True,
@@ -880,6 +892,9 @@ class EsResultsStoreTests(TestCase):
                 "track": "unittest-track",
                 "challenge": "index",
                 "car": "4gheap",
+                "plugin-params": {
+                    "some-param": True
+                },
                 "node-count": 1,
                 "plugins": ["x-pack"],
                 "active": True,
@@ -1092,7 +1107,7 @@ class FileRaceStoreTests(TestCase):
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=FileRaceStoreTests.TRIAL_ID,
                             trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
-                            challenge=t.default_challenge, car="4gheap",
+                            challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
                             total_laps=12,
                             cluster=FileRaceStoreTests.DictHolder(
                                 {

@@ -13,6 +13,8 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "system", "trial.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
         cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
+        cfg.add(config.Scope.application, "mechanic", "car.params", {})
+        cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
         cfg.add(config.Scope.application, "race", "laps", 1)
         cfg.add(config.Scope.application, "race", "user.tag", "")
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
