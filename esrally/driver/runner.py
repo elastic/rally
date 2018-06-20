@@ -543,6 +543,7 @@ class Query(Runner):
     """
 
     def __init__(self):
+        super().__init__()
         self.scroll_id = None
         self.es = None
 

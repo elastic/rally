@@ -851,6 +851,61 @@ class QueryRunnerTests(TestCase):
         self.assertFalse("error-type" in results)
 
     @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_cannot_clear_scroll(self, es):
+        import elasticsearch
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "timed_out": False,
+            "took": 53,
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # page 2 has no results
+            {
+                "_scroll_id": "some-scroll-id",
+                "timed_out": False,
+                "took": 2,
+                "hits": {
+                    "hits": []
+                }
+            },
+            # delete scroll id raises an exception
+            elasticsearch.ConnectionTimeout()
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": 5,
+            "results-per-page": 100,
+            "index": "unittest",
+            "type": "type",
+            "cache": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            results = query_runner(es, params)
+
+        self.assertEqual(2, results["weight"])
+        self.assertEqual(2, results["pages"])
+        self.assertEqual(1, results["hits"])
+        self.assertEqual("pages", results["unit"])
+        self.assertEqual(55, results["took"])
+        self.assertFalse("error-type" in results)
+
+    @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_request_all_pages(self, es):
         # page 1
         es.search.return_value = {
