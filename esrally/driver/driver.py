@@ -998,11 +998,18 @@ class Executor:
                 # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
                 latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
                 # last sample should bump progress to 100% if externally completed.
-                completed = percent_completed if not self.complete.is_set() else 1.0
+                completed = self.complete.is_set() or runner.completed
+                if completed:
+                    progress = 1.0
+                elif runner.percent_completed:
+                    progress = runner.percent_completed
+                else:
+                    progress = percent_completed
+                # progress = percent_completed if not completed else 1.0
                 self.sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
-                                 total_ops, total_ops_unit, (stop - total_start), completed)
+                                 total_ops, total_ops_unit, (stop - total_start), progress)
 
-                if self.complete.is_set():
+                if completed:
                     self.logger.info("Task is considered completed due to external event.")
                     break
         except BaseException:
