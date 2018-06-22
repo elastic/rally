@@ -16,6 +16,8 @@ You want to benchmark Elasticsearch? Then Rally is for you. It can help you with
 
 We have also put considerable effort in Rally to ensure that benchmarking data are reproducible.
 
+In general, Rally works with all versions of Elasticsearch starting from 1.x but benchmarking with plugins and benchmarking source builds will only work from Elasticsearch 5.0 onwards.
+
 Quick Start
 -----------
 
@@ -24,7 +26,7 @@ Installing Rally
 
 **Note**: If you actively develop on Elasticsearch, we recommend that you `install Rally in development mode <https://esrally.readthedocs.io/en/latest/developing.html#installation-instructions-for-development>`_ instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest master version.
 
-Install Python 3.4+ including ``pip3``, JDK 8 and git 1.9+. Then run the following command, optionally prefixed by ``sudo`` if necessary::
+Install Python 3.4+ including ``pip3``, git 1.9+ and an `appropriate JDK to run Elasticsearch <https://www.elastic.co/support/matrix#matrix_jvm>`_ Be sure that ``JAVA_HOME`` points to that JDK. Then run the following command, optionally prefixed by ``sudo`` if necessary::
 
     pip3 install esrally
 
@@ -43,9 +45,9 @@ Run your first race
 
 Now we're ready to run our first race::
 
-    esrally --distribution-version=5.0.0
+    esrally --distribution-version=6.0.0
 
-This will download Elasticsearch 5.0.0 and run Rally's default track against it. After the race, a summary report is written to the command line:::
+This will download Elasticsearch 6.0.0 and run Rally's default track - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a summary report is written to the command line:::
 
     ------------------------------------------------------
         _______             __   _____
@@ -57,11 +59,11 @@ This will download Elasticsearch 5.0.0 and run Rally's default track against it.
 
     |                         Metric |                 Task |     Value |   Unit |
     |-------------------------------:|---------------------:|----------:|-------:|
-    |                  Indexing time |                      |   28.0997 |    min |
-    |                     Merge time |                      |   6.84378 |    min |
-    |                   Refresh time |                      |   3.06045 |    min |
-    |                     Flush time |                      |  0.106517 |    min |
-    |            Merge throttle time |                      |   1.28193 |    min |
+    |            Total indexing time |                      |   28.0997 |    min |
+    |               Total merge time |                      |   6.84378 |    min |
+    |             Total refresh time |                      |   3.06045 |    min |
+    |               Total flush time |                      |  0.106517 |    min |
+    |      Total merge throttle time |                      |   1.28193 |    min |
     |               Median CPU usage |                      |     471.6 |      % |
     |             Total Young Gen GC |                      |    16.237 |      s |
     |               Total Old Gen GC |                      |     1.796 |      s |
