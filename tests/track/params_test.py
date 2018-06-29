@@ -151,6 +151,73 @@ class ActionMetaDataTests(TestCase):
         # and we're back to random
         self.assertEqual(conflict(conflict_action, "100"), next(generator))
 
+    def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
+        def idx(id):
+            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
+
+        def conflict(action, id):
+            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % (action, id)
+
+        pseudo_random_conflicts = iter([
+            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+            0.2,
+            0.25,
+            0.2,
+            # no conflict
+            0.3,
+            0.4,
+            0.35,
+            # conflict again
+            0.0,
+            0.2,
+            0.15
+        ])
+
+        # we use this value as `idx_range` in the calculation: idx = round((self.id_up_to - 1) * (1 - idx_range))
+        pseudo_exponential_distribution = iter([
+            # id_up_to = 1 -> idx = 0
+            0.013375248172714948,
+            # id_up_to = 1 -> idx = 0
+            0.042495604491024914,
+            # id_up_to = 1 -> idx = 0
+            0.005491072642023834,
+            # no conflict: id_up_to = 2
+            # no conflict: id_up_to = 3
+            # no conflict: id_up_to = 4
+            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.028557879547255083)) = 3
+            0.028557879547255083,
+            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.209771474243926352)) = 2
+            0.209771474243926352
+        ])
+
+        conflict_action = random.choice(["index", "update"])
+
+        generator = params.GenerateActionMetaData("test_index", "test_type",
+                                                  conflicting_ids=[100, 200, 300, 400, 500, 600],
+                                                  conflict_probability=25,
+                                                  # heavily biased towards recent ids
+                                                  recency=1.0,
+                                                  on_conflict=conflict_action,
+                                                  rand=lambda: next(pseudo_random_conflicts),
+                                                  # we don't use this one here because recency is > 0.
+                                                  # randint=lambda x, y: next(chosen_index_of_conflicting_ids),
+                                                  randexp=lambda lmbda: next(pseudo_exponential_distribution)
+                                                  )
+
+        # first one is always *not* drawn from a random index
+        self.assertEqual(idx("100"), next(generator))
+        # now we start using random ids
+        self.assertEqual(conflict(conflict_action, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, "100"), next(generator))
+        # no conflict
+        self.assertEqual(idx("200"), next(generator))
+        self.assertEqual(idx("300"), next(generator))
+        self.assertEqual(idx("400"), next(generator))
+        # conflict
+        self.assertEqual(conflict(conflict_action, "400"), next(generator))
+        self.assertEqual(conflict(conflict_action, "300"), next(generator))
+
     def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
         def idx(id):
             return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
@@ -877,7 +944,7 @@ class BulkDataGeneratorTests(TestCase):
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus],
                                        batch_size=5, bulk_size=5,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       pipeline=None,
+                                       recency=None, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -935,7 +1002,7 @@ class BulkDataGeneratorTests(TestCase):
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=corpora,
                                        batch_size=5, bulk_size=5,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       pipeline=None,
+                                       recency=None, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -987,7 +1054,7 @@ class BulkDataGeneratorTests(TestCase):
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus], batch_size=3, bulk_size=3,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       pipeline=None,
+                                       recency=None, pipeline=None,
                                        original_params={
                                            "body": "foo",
                                            "custom-param": "bar"

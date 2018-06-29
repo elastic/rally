@@ -401,13 +401,17 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
 
         if self.id_conflicts != IndexIdConflict.NoConflicts:
-            self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100, min_operator=operator.lt)
+            self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100,
+                                                         min_operator=operator.lt)
             self.on_conflict = params.get("on-conflict", "index")
             if self.on_conflict not in ["index", "update"]:
                 raise exceptions.InvalidSyntax("Unknown 'on-conflict' setting [{}]".format(self.on_conflict))
+            self.recency = self.float_param(params, name="recency", default_value=0, min_value=0, max_value=1, min_operator=operator.lt)
+
         else:
             self.conflict_probability = None
             self.on_conflict = None
+            self.recency = None
 
         self.corpora = self.used_corpora(track, params)
 
@@ -476,7 +480,7 @@ class BulkIndexParamSource(ParamSource):
     def partition(self, partition_index, total_partitions):
         return PartitionBulkIndexParamSource(self.corpora, partition_index, total_partitions, self.batch_size, self.bulk_size,
                                              self.ingest_percentage, self.id_conflicts, self.conflict_probability, self.on_conflict,
-                                             self.pipeline, self._params)
+                                             self.recency, self.pipeline, self._params)
 
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
@@ -487,7 +491,7 @@ class BulkIndexParamSource(ParamSource):
 
 class PartitionBulkIndexParamSource:
     def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, ingest_percentage,
-                 id_conflicts, conflict_probability, on_conflict, pipeline=None, original_params=None):
+                 id_conflicts, conflict_probability, on_conflict, recency, pipeline=None, original_params=None):
         """
 
         :param corpora: Specification of affected document corpora.
@@ -499,6 +503,8 @@ class PartitionBulkIndexParamSource:
         :param id_conflicts: The type of id conflicts.
         :param conflict_probability: A number between (0.0, 100.0] that defines the probability that a document is replaced by another one.
         :param on_conflict: A string indicating which action should be taken on id conflicts (either "index" or "update").
+        :param recency: A number between [0.0, 1.0] indicating whether to bias generation of conflicting ids towards more recent ones.
+                        May be None.
         :param pipeline: The name of the ingest pipeline to run.
         :param original_params: The original dict passed to the parent parameter source.
         """
@@ -511,7 +517,8 @@ class PartitionBulkIndexParamSource:
         self.id_conflicts = id_conflicts
         self.pipeline = pipeline
         self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
-                                               bulk_size, id_conflicts, conflict_probability, on_conflict, pipeline, original_params)
+                                               bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
+                                               pipeline, original_params)
 
     def partition(self, partition_index, total_partitions):
         raise exceptions.RallyError("Cannot partition a PartitionBulkIndexParamSource further")
@@ -566,19 +573,21 @@ def chain(*iterables):
                 yield element
 
 
-def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict):
+def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
+                          on_conflict, recency):
     source = Slice(io.FileSource, offset, num_lines)
 
     if docs.includes_action_and_meta_data:
         am_handler = SourceActionMetaData(source)
     else:
         am_handler = GenerateActionMetaData(docs.target_index, docs.target_type,
-                                            build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability, on_conflict)
+                                            build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability,
+                                            on_conflict, recency)
 
     return IndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
 
 
-def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
+def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
                    create_reader):
     logger = logging.getLogger(__name__)
     readers = []
@@ -590,7 +599,7 @@ def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id
                 logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
                             "from corpus [%s]." % (client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name))
                 readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
-                                             on_conflict))
+                                             on_conflict, recency))
             else:
                 logger.info("Task-relative client at index [%d] skips [%s] (no documents to read).", client_index, corpus.name)
     return readers
@@ -648,8 +657,8 @@ def bulk_generator(readers, client_index, pipeline, original_params):
             yield params
 
 
-def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, pipeline,
-                    original_params, create_reader=create_default_reader):
+def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
+                    pipeline, original_params, create_reader=create_default_reader):
     """
     Calculates the necessary schedule for bulk operations.
 
@@ -661,6 +670,8 @@ def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, i
     :param id_conflicts: The type of id conflicts to simulate.
     :param conflict_probability: A number between (0.0, 100.0] that defines the probability that a document is replaced by another one.
     :param on_conflict: A string indicating which action should be taken on id conflicts (either "index" or "update").
+    :param recency: A number between [0.0, 1.0] indicating whether to bias generation of conflicting ids towards more recent ones.
+                    May be None.
     :param pipeline: Name of the ingest pipeline to use. May be None.
     :param original_params: A dict of original parameters that were passed from the track. They will be merged into the returned parameters.
     :param create_reader: A function to create the index reader. By default a file based index reader will be created. This parameter is
@@ -668,22 +679,26 @@ def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, i
     :return: A generator for the bulk operations of the given client.
     """
     readers = create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
-                             create_reader)
+                             recency, create_reader)
     return bulk_generator(chain(*readers), client_index, pipeline, original_params)
 
 
 class GenerateActionMetaData:
-    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None,
-                 rand=random.random, randint=random.randint):
+    RECENCY_SLOPE = 30
+
+    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None, recency=None,
+                 rand=random.random, randint=random.randint, randexp=random.expovariate):
         self.index_name = index_name
         self.type_name = type_name
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
         # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100.
         self.conflict_probability = conflict_probability / 100.0 if conflict_probability is not None else 0
+        self.recency = recency if recency is not None else 0
 
         self.rand = rand
         self.randint = randint
+        self.randexp = randexp
         self.id_up_to = 0
 
     def __iter__(self):
@@ -692,7 +707,21 @@ class GenerateActionMetaData:
     def __next__(self):
         if self.conflicting_ids is not None:
             if self.conflict_probability and self.id_up_to > 0 and self.rand() <= self.conflict_probability:
-                doc_id = self.conflicting_ids[self.randint(0, self.id_up_to - 1)]
+                # a recency of zero means that we don't care about recency and just take a random number
+                # within the whole interval.
+                if self.recency == 0:
+                    idx = self.randint(0, self.id_up_to - 1)
+                else:
+                    # A recency > 0 biases id selection towards more recent ids. The recency parameter decides
+                    # by how much we bias. See docs for the resulting curve.
+                    #
+                    # idx_range is in the interval [0, 1].
+                    idx_range = min(self.randexp(GenerateActionMetaData.RECENCY_SLOPE * self.recency), 1)
+                    # the resulting index is in the range [0, self.id_up_to). Note that a smaller idx_range
+                    # biases towards more recently used ids (higher indexes).
+                    idx = round((self.id_up_to - 1) * (1 - idx_range))
+
+                doc_id = self.conflicting_ids[idx]
                 action = self.on_conflict
             else:
                 if self.id_up_to >= len(self.conflicting_ids):
