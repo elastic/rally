@@ -715,11 +715,11 @@ class GenerateActionMetaData:
                     # A recency > 0 biases id selection towards more recent ids. The recency parameter decides
                     # by how much we bias. See docs for the resulting curve.
                     #
-                    # idx_range is in the interval [0;1].
+                    # idx_range is in the interval [0, 1].
                     idx_range = min(self.randexp(GenerateActionMetaData.RECENCY_SLOPE * self.recency), 1)
                     # the resulting index is in the range [0, self.id_up_to). Note that a smaller idx_range
                     # biases towards more recently used ids (higher indexes).
-                    idx = int(round((self.id_up_to - 1) * (1 - idx_range)))
+                    idx = round((self.id_up_to - 1) * (1 - idx_range))
 
                 doc_id = self.conflicting_ids[idx]
                 action = self.on_conflict

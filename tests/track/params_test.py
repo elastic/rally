@@ -173,7 +173,7 @@ class ActionMetaDataTests(TestCase):
             0.15
         ])
 
-        # we use this value as `idx_range` in the calculation: idx = int(round((self.id_up_to - 1) * (1 - idx_range)))
+        # we use this value as `idx_range` in the calculation: idx = round((self.id_up_to - 1) * (1 - idx_range))
         pseudo_exponential_distribution = iter([
             # id_up_to = 1 -> idx = 0
             0.013375248172714948,
@@ -184,9 +184,9 @@ class ActionMetaDataTests(TestCase):
             # no conflict: id_up_to = 2
             # no conflict: id_up_to = 3
             # no conflict: id_up_to = 4
-            # id_up_to = 4 -> idx = int(round((4 - 1) * (1 - 0.028557879547255083))) = 3
+            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.028557879547255083)) = 3
             0.028557879547255083,
-            # id_up_to = 4 -> idx = int(round((4 - 1) * (1 - 0.209771474243926352))) = 2
+            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.209771474243926352)) = 2
             0.209771474243926352
         ])
 
