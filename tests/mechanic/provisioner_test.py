@@ -468,19 +468,17 @@ class PluginInstallerTests(TestCase):
 
 
 class DockerProvisionerTests(TestCase):
-    @mock.patch("esrally.utils.sysstats.total_memory")
     @mock.patch("uuid.uuid4")
-    def test_provisioning(self, uuid4, total_memory):
-        total_memory.return_value = convert.gb_to_bytes(64)
+    def test_provisioning_with_defaults(self, uuid4):
         uuid4.return_value = "9dbc682e-d32a-4669-8fbe-56fb77120dd4"
         node_root_dir = tempfile.gettempdir()
         log_dir = os.path.join(node_root_dir, "logs", "server")
-        data_dir = "%s/data/9dbc682e-d32a-4669-8fbe-56fb77120dd4" % node_root_dir
+        data_dir = os.path.join(node_root_dir, "data", "9dbc682e-d32a-4669-8fbe-56fb77120dd4")
 
-        rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../esrally"))
+        rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, "esrally"))
 
         c = team.Car("unit-test-car", None, "/tmp", variables={
-            "xpack.security.enabled": False
+            "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss"
         })
 
         docker = provisioner.DockerProvisioner(car=c,
@@ -489,11 +487,11 @@ class DockerProvisionerTests(TestCase):
                                                ip="10.17.22.33",
                                                http_port=39200,
                                                node_root_dir=node_root_dir,
-                                               distribution_version="5.0.0",
+                                               distribution_version="6.3.0",
                                                rally_root=rally_root,
                                                preserve=False)
 
-        self.assertEqual({
+        self.assertDictEqual({
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/usr/share/elasticsearch/data"],
@@ -503,19 +501,16 @@ class DockerProvisionerTests(TestCase):
             "transport_port": "39300-39400",
             "node_count_per_host": 1,
             "cluster_settings": {
-                "xpack.security.enabled": "false",
-                "xpack.ml.enabled": "false",
-                "xpack.monitoring.enabled": "false",
-                "xpack.watcher.enabled": "false",
                 "indices.query.bool.max_clause_count": 5000
             },
-            "xpack.security.enabled": False
+            "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss"
         }, docker.config_vars)
 
-        self.assertEqual({
+        self.assertDictEqual({
             "es_data_dir": data_dir,
             "es_log_dir": log_dir,
-            "es_version": "5.0.0",
+            "es_version": "6.3.0",
+            "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
             "http_port": 39200,
             "mounts": {}
         }, docker.docker_vars(mounts={}))
@@ -528,7 +523,54 @@ services:
   elasticsearch1:
     cap_add:
       - IPC_LOCK
-    image: "docker.elastic.co/elasticsearch/elasticsearch:5.0.0"
+    image: "docker.elastic.co/elasticsearch/elasticsearch-oss:6.3.0"
+    ports:
+      - 39200:39200
+      - 9300
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - %s:/usr/share/elasticsearch/data
+      - %s:/var/log/elasticsearch""" % (data_dir, log_dir), docker_cfg)
+
+    @mock.patch("uuid.uuid4")
+    def test_provisioning_with_variables(self, uuid4):
+        uuid4.return_value = "86f42ae0-5840-4b5b-918d-41e7907cb644"
+        node_root_dir = tempfile.gettempdir()
+        log_dir = os.path.join(node_root_dir, "logs", "server")
+        data_dir = os.path.join(node_root_dir, "data", "86f42ae0-5840-4b5b-918d-41e7907cb644")
+
+        rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, "esrally"))
+
+        c = team.Car("unit-test-car", None, "/tmp", variables={
+            "docker_image": "docker.elastic.co/elasticsearch/elasticsearch",
+            "docker_mem_limit": "256m",
+            "docker_cpu_count": 2
+        })
+
+        docker = provisioner.DockerProvisioner(car=c,
+                                               node_name="rally-node-0",
+                                               cluster_settings=None,
+                                               ip="10.17.22.33",
+                                               http_port=39200,
+                                               node_root_dir=node_root_dir,
+                                               distribution_version="6.3.0",
+                                               rally_root=rally_root,
+                                               preserve=False)
+
+        docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
+
+        self.assertEqual(
+"""version: '2'
+cpu_count: 2
+mem_limit: 256m
+services:
+  elasticsearch1:
+    cap_add:
+      - IPC_LOCK
+    image: "docker.elastic.co/elasticsearch/elasticsearch:6.3.0"
     ports:
       - 39200:39200
       - 9300

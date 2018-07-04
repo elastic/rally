@@ -368,15 +368,6 @@ class DockerProvisioner:
         self.preserve = preserve
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
         self.logger = logging.getLogger(__name__)
-
-        # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
-        merged_cluster_settings = cluster_settings.copy()
-        # disable x-pack features as we don't use them and want to compare with plain vanilla ES
-        merged_cluster_settings["xpack.security.enabled"] = "false"
-        merged_cluster_settings["xpack.ml.enabled"] = "false"
-        merged_cluster_settings["xpack.monitoring.enabled"] = "false"
-        merged_cluster_settings["xpack.watcher.enabled"] = "false"
-
         provisioner_defaults = {
             "cluster_name": "rally-benchmark",
             "node_name": self.node_name,
@@ -388,7 +379,7 @@ class DockerProvisioner:
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
             "node_count_per_host": 1,
-            "cluster_settings": merged_cluster_settings
+            "cluster_settings": cluster_settings
         }
 
         self.config_vars = {}
@@ -449,13 +440,21 @@ class DockerProvisioner:
         cleanup(self.preserve, self.install_dir, [])
 
     def docker_vars(self, mounts):
-        return {
+        v = {
             "es_version": self.distribution_version,
+            "docker_image": self.car.mandatory_var("docker_image"),
             "http_port": self.http_port,
             "es_data_dir": self.data_paths[0],
             "es_log_dir": self.node_log_dir,
             "mounts": mounts
         }
+        self._add_if_defined_for_car(v, "docker_mem_limit")
+        self._add_if_defined_for_car(v, "docker_cpu_count")
+        return v
+
+    def _add_if_defined_for_car(self, variables, key):
+        if key in self.car.variables:
+            variables[key] = self.car.variables[key]
 
     def _render_template(self, loader, template_name, variables):
         try:
