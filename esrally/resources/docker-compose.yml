@@ -20,6 +20,7 @@ services:
     volumes:
       - {{es_data_dir}}:/usr/share/elasticsearch/data
       - {{es_log_dir}}:/var/log/elasticsearch
+      - {{es_heap_dump_dir}}:/usr/share/elasticsearch/heapdump
 {%- for host_path, docker_path in mounts.items() %}
       - {{host_path}}:{{docker_path}}
 {%- endfor %}

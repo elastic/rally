@@ -359,6 +359,7 @@ class DockerProvisioner:
         self.http_port = http_port
         self.node_root_dir = node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
+        self.heap_dump_dir = "%s/heapdump" % node_root_dir
         self.distribution_version = distribution_version
         self.rally_root = rally_root
         self.install_dir = "%s/install" % node_root_dir
@@ -368,12 +369,15 @@ class DockerProvisioner:
         self.preserve = preserve
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
         self.logger = logging.getLogger(__name__)
+
         provisioner_defaults = {
             "cluster_name": "rally-benchmark",
             "node_name": self.node_name,
             # we bind-mount the directories below on the host to these ones.
+            "install_root_path": "/usr/share/elasticsearch",
             "data_paths": ["/usr/share/elasticsearch/data"],
             "log_path": "/var/log/elasticsearch",
+            "heap_dump_path": "/usr/share/elasticsearch/heapdump",
             # Docker container needs to expose service on external interfaces
             "network_host": "0.0.0.0",
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
@@ -395,6 +399,7 @@ class DockerProvisioner:
         try:
             io.ensure_dir(self.install_dir)
             io.ensure_dir(self.node_log_dir)
+            io.ensure_dir(self.heap_dump_dir)
             io.ensure_dir(self.data_paths[0])
         finally:
             os.umask(previous_umask)
@@ -446,6 +451,7 @@ class DockerProvisioner:
             "http_port": self.http_port,
             "es_data_dir": self.data_paths[0],
             "es_log_dir": self.node_log_dir,
+            "es_heap_dump_dir": self.heap_dump_dir,
             "mounts": mounts
         }
         self._add_if_defined_for_car(v, "docker_mem_limit")

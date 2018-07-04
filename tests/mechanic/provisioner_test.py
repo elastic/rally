@@ -473,6 +473,7 @@ class DockerProvisionerTests(TestCase):
         uuid4.return_value = "9dbc682e-d32a-4669-8fbe-56fb77120dd4"
         node_root_dir = tempfile.gettempdir()
         log_dir = os.path.join(node_root_dir, "logs", "server")
+        heap_dump_dir = os.path.join(node_root_dir, "heapdump")
         data_dir = os.path.join(node_root_dir, "data", "9dbc682e-d32a-4669-8fbe-56fb77120dd4")
 
         rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, "esrally"))
@@ -494,8 +495,10 @@ class DockerProvisionerTests(TestCase):
         self.assertDictEqual({
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
+            "install_root_path": "/usr/share/elasticsearch",
             "data_paths": ["/usr/share/elasticsearch/data"],
             "log_path": "/var/log/elasticsearch",
+            "heap_dump_path": "/usr/share/elasticsearch/heapdump",
             "network_host": "0.0.0.0",
             "http_port": "39200-39300",
             "transport_port": "39300-39400",
@@ -509,6 +512,7 @@ class DockerProvisionerTests(TestCase):
         self.assertDictEqual({
             "es_data_dir": data_dir,
             "es_log_dir": log_dir,
+            "es_heap_dump_dir": heap_dump_dir,
             "es_version": "6.3.0",
             "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
             "http_port": 39200,
@@ -533,13 +537,15 @@ services:
         hard: -1
     volumes:
       - %s:/usr/share/elasticsearch/data
-      - %s:/var/log/elasticsearch""" % (data_dir, log_dir), docker_cfg)
+      - %s:/var/log/elasticsearch
+      - %s:/usr/share/elasticsearch/heapdump""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
 
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_variables(self, uuid4):
         uuid4.return_value = "86f42ae0-5840-4b5b-918d-41e7907cb644"
         node_root_dir = tempfile.gettempdir()
         log_dir = os.path.join(node_root_dir, "logs", "server")
+        heap_dump_dir = os.path.join(node_root_dir, "heapdump")
         data_dir = os.path.join(node_root_dir, "data", "86f42ae0-5840-4b5b-918d-41e7907cb644")
 
         rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, "esrally"))
@@ -580,4 +586,5 @@ services:
         hard: -1
     volumes:
       - %s:/usr/share/elasticsearch/data
-      - %s:/var/log/elasticsearch""" % (data_dir, log_dir), docker_cfg)
+      - %s:/var/log/elasticsearch
+      - %s:/usr/share/elasticsearch/heapdump""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
