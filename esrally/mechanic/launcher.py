@@ -143,8 +143,15 @@ class DockerLauncher:
         t.setDaemon(True)
         t.start()
         if startup_event.wait(timeout=DockerLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            self.logger.info("Started node=%s with pid=%s", node_name, p.pid)
-            return p
+            p.poll()
+            # has the process terminated?
+            if p.returncode:
+                msg = "Node [%s] has terminated with exit code [%s]." % (node_name, str(p.returncode))
+                self.logger.error(msg)
+                raise exceptions.LaunchError(msg)
+            else:
+                self.logger.info("Started node [%s] with PID [%s].", node_name, p.pid)
+                return p
         else:
             msg = "Could not start node '%s' within timeout period of %s seconds." % (
                 node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
