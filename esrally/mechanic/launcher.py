@@ -104,6 +104,85 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
+class StartupWatcher:
+    def __init__(self, node_name, server, startup_event):
+        self.node_name = node_name
+        self.server = server
+        self.startup_event = startup_event
+        self.logger = logging.getLogger(__name__)
+
+    def watch(self):
+        """
+        Reads the output from the ES (node) subprocess.
+        """
+        lines_to_log = 0
+        while True:
+            line = self.server.stdout.readline().decode("utf-8")
+            if len(line) == 0:
+                self.logger.info("%s (stdout): No more output. Process has likely terminated.", self.node_name)
+                self.await_termination(self.server)
+                self.startup_event.set()
+                break
+            line = line.rstrip()
+
+            # if an error occurs, log the next few lines
+            if "error" in line.lower():
+                lines_to_log = 10
+            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
+            if not self.startup_event.isSet() or lines_to_log > 0:
+                self.logger.info("%s (stdout): %s", self.node_name, line)
+                lines_to_log -= 1
+
+            # no need to check as soon as we have detected node startup
+            if not self.startup_event.isSet():
+                if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
+                    self.logger.error("[%s] encountered initialization errors.", self.node_name)
+                    # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
+                    self.await_termination(self.server)
+                    self.startup_event.set()
+                if line.endswith("started") and not self.startup_event.isSet():
+                    self.startup_event.set()
+                    self.logger.info("[%s] has successfully started.", self.node_name)
+
+    def await_termination(self, server, timeout=5):
+        # wait a moment to ensure the process has terminated
+        wait = timeout
+        while not server.returncode or wait == 0:
+            time.sleep(0.1)
+            server.poll()
+            wait -= 1
+
+
+def _start(process, node_name):
+    log = logging.getLogger(__name__)
+    startup_event = threading.Event()
+    watcher = StartupWatcher(node_name, process, startup_event)
+    t = threading.Thread(target=watcher.watch)
+    t.setDaemon(True)
+    t.start()
+    if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
+        process.poll()
+        # has the process terminated?
+        if process.returncode:
+            msg = "Node [%s] has terminated with exit code [%s]." % (node_name, str(process.returncode))
+            log.error(msg)
+            raise exceptions.LaunchError(msg)
+        else:
+            log.info("Started node [%s] with PID [%s].", node_name, process.pid)
+            return process
+    else:
+        msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
+            node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
+        # check if the process has terminated already
+        process.poll()
+        if process.returncode:
+            msg += " The process has already terminated with exit code [%s]." % str(process.returncode)
+        else:
+            msg += " The process seems to be still running with PID [%s]." % process.pid
+        log.error(msg)
+        raise exceptions.LaunchError(msg)
+
+
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
@@ -125,7 +204,7 @@ class DockerLauncher:
             binary_path = node_configuration.binary_path
             self.binary_paths[node_name] = binary_path
 
-            p = self._start_process(cmd="docker-compose -f %s up" % binary_path, node_name=node_name, log_dir=node_configuration.log_path)
+            p = self._start_process(cmd="docker-compose -f %s up" % binary_path, node_name=node_name)
             # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
             node_telemetry = [
                 telemetry.DiskIo(self.metrics_store, len(node_configurations)),
@@ -136,47 +215,9 @@ class DockerLauncher:
             nodes.append(cluster.Node(p, host_name, node_name, t))
         return nodes
 
-    def _start_process(self, cmd, node_name, log_dir):
-        startup_event = threading.Event()
-        p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        t = threading.Thread(target=self._read_output, args=(node_name, p, startup_event))
-        t.setDaemon(True)
-        t.start()
-        if startup_event.wait(timeout=DockerLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            p.poll()
-            # has the process terminated?
-            if p.returncode:
-                msg = "Node [%s] has terminated with exit code [%s]." % (node_name, str(p.returncode))
-                self.logger.error(msg)
-                raise exceptions.LaunchError(msg)
-            else:
-                self.logger.info("Started node [%s] with PID [%s].", node_name, p.pid)
-                return p
-        else:
-            msg = "Could not start node '%s' within timeout period of %s seconds." % (
-                node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
-            self.logger.error(msg)
-            raise exceptions.LaunchError("%s Please check the logs in '%s' for more details." % (msg, log_dir))
-
-    def _read_output(self, node_name, server, startup_event):
-        """
-        Reads the output from the ES (node) subprocess.
-        """
-        while True:
-            l = server.stdout.readline().decode("utf-8")
-            if len(l) == 0:
-                break
-            l = l.rstrip()
-
-            if l.find("Initialization Failed") != -1:
-                self.logger.warning("[%s] has started with initialization errors.", node_name)
-                startup_event.set()
-            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
-            if not startup_event.isSet():
-                self.logger.info("%s: %s", node_name, l.replace("\n", "\n%s (stdout): " % node_name))
-            if l.endswith("] started") and not startup_event.isSet():
-                startup_event.set()
-                self.logger.info("[%s] has successfully started.", node_name)
+    def _start_process(self, cmd, node_name):
+        return _start(subprocess.Popen(shlex.split(cmd),
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL), node_name)
 
     def stop(self, nodes):
         if self.keep_running:
@@ -337,74 +378,8 @@ class InProcessLauncher:
         if os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
-        startup_event = threading.Event()
         cmd = ["bin/elasticsearch"]
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
-        t = threading.Thread(target=self._read_output, args=(node_name, process, startup_event))
-        t.setDaemon(True)
-        t.start()
-        if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-            process.poll()
-            # has the process terminated?
-            if process.returncode:
-                msg = "Node [%s] has terminated with exit code [%s]." % (node_name, str(process.returncode))
-                self.logger.error(msg)
-                raise exceptions.LaunchError(msg)
-            else:
-                self.logger.info("Started node [%s] with PID [%s].", node_name, process.pid)
-                return process
-        else:
-            msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
-                node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
-            # check if the process has terminated already
-            process.poll()
-            if process.returncode:
-                msg += " The process has already terminated with exit code [%s]." % str(process.returncode)
-            else:
-                msg += " The process seems to be still running with PID [%s]." % process.pid
-            self.logger.error(msg)
-            raise exceptions.LaunchError(msg)
-
-    def _read_output(self, node_name, server, startup_event):
-        """
-        Reads the output from the ES (node) subprocess.
-        """
-        lines_to_log = 0
-        while True:
-            line = server.stdout.readline().decode("utf-8")
-            if len(line) == 0:
-                self.logger.info("%s (stdout): No more output. Process has likely terminated.", node_name)
-                self.await_termination(server)
-                startup_event.set()
-                break
-            line = line.rstrip()
-
-            # if an error occurs, log the next few lines
-            if "error" in line.lower():
-                lines_to_log = 10
-            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
-            if not startup_event.isSet() or lines_to_log > 0:
-                self.logger.info("%s (stdout): %s", node_name, line)
-                lines_to_log -= 1
-
-            # no need to check as soon as we have detected node startup
-            if not startup_event.isSet():
-                if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
-                    self.logger.error("[%s] encountered initialization errors.", node_name)
-                    # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
-                    self.await_termination(server)
-                    startup_event.set()
-                if line.endswith("started") and not startup_event.isSet():
-                    startup_event.set()
-                    self.logger.info("[%s] has successfully started.", node_name)
-
-    def await_termination(self, server, timeout=5):
-        # wait a moment to ensure the process has terminated
-        wait = timeout
-        while not server.returncode or wait == 0:
-            time.sleep(0.1)
-            server.poll()
-            wait -= 1
+        return _start(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env), node_name)
 
     def stop(self, nodes):
         if self.keep_running:
