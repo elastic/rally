@@ -522,7 +522,7 @@ class DockerProvisionerTests(TestCase):
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-"""version: '2'
+"""version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -569,14 +569,14 @@ services:
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-"""version: '2'
-cpu_count: 2
-mem_limit: 256m
+"""version: '2.2'
 services:
   elasticsearch1:
     cap_add:
       - IPC_LOCK
     image: "docker.elastic.co/elasticsearch/elasticsearch:6.3.0"
+    cpu_count: 2
+    mem_limit: 256m
     ports:
       - 39200:39200
       - 9300

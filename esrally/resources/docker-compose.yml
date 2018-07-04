@@ -1,15 +1,15 @@
-version: '2'
-{%- if docker_cpu_count is defined %}
-cpu_count: {{docker_cpu_count}}
-{%- endif %}
-{%- if docker_mem_limit is defined %}
-mem_limit: {{docker_mem_limit}}
-{%- endif %}
+version: '2.2'
 services:
   elasticsearch1:
     cap_add:
       - IPC_LOCK
     image: "{{docker_image}}:{{es_version}}"
+    {%- if docker_cpu_count is defined %}
+    cpu_count: {{docker_cpu_count}}
+    {%- endif %}
+    {%- if docker_mem_limit is defined %}
+    mem_limit: {{docker_mem_limit}}
+    {%- endif %}
     ports:
       - {{http_port}}:{{http_port}}
       - 9300
