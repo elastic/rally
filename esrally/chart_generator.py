@@ -22,15 +22,15 @@ color_scheme_rgba = [
 ]
 
 
-def index_label(combination_label, challenge, car, plugins, node_count):
-    if combination_label:
-        return combination_label
+def index_label(race_config):
+    if race_config.label:
+        return race_config.label
 
-    label = "%s-%s" % (challenge, car)
-    if plugins:
-        label += "-%s" % plugins.replace(":", "-").replace(",", "+")
-    if node_count > 1:
-        label += " (%d nodes)" % node_count
+    label = "%s-%s" % (race_config.challenge, race_config.car)
+    if race_config.plugins:
+        label += "-%s" % race_config.plugins.replace(":", "-").replace(",", "+")
+    if race_config.node_count > 1:
+        label += " (%d nodes)" % race_config.node_count
     return label
 
 
@@ -46,7 +46,7 @@ class BarCharts:
     # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
 
     @staticmethod
-    def gc(title, environment, track, combination_name, challenge, car, node_count):
+    def gc(title, environment, race_config):
         vis_state = {
             "title": title,
             "type": "histogram",
@@ -205,7 +205,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": filter_string(environment, combination_name, track, challenge, car, node_count),
+                    "query": filter_string(environment, race_config),
                     "analyze_wildcard": True
                 }
             },
@@ -228,7 +228,7 @@ class BarCharts:
         }
 
     @staticmethod
-    def io(title, environment, track, combination_name, challenge, car, node_count):
+    def io(title, environment, race_config):
         vis_state = {
             "title": title,
             "type": "histogram",
@@ -387,7 +387,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": filter_string(environment, combination_name, track, challenge, car, node_count),
+                    "query": filter_string(environment, race_config),
                     "analyze_wildcard": True
                 }
             },
@@ -410,9 +410,9 @@ class BarCharts:
         }
 
     @staticmethod
-    def query(environment, track, combination_name, challenge, car, node_count, q):
+    def query(environment, race_config, q):
         metric = "latency"
-        title = format_title(environment, track, "%s-p99-%s" % (q, metric))
+        title = format_title(environment, race_config.track, "%s-%s-p99-%s" % (race_config.label, q, metric))
         label = "Query Latency [ms]"
 
         vis_state = {
@@ -540,8 +540,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "name:\"%s\" AND task:\"%s\" AND %s" %
-                             (metric, q, filter_string(environment, combination_name, track, challenge, car, node_count)),
+                    "query": "name:\"%s\" AND task:\"%s\" AND %s" % (metric, q, filter_string(environment, race_config)),
                     "analyze_wildcard": True
                 }
             },
@@ -564,23 +563,23 @@ class BarCharts:
         }
 
     @staticmethod
-    def index(environment, track, cci, title):
+    def index(environment, race_configs, title):
         filters = []
-        for idx, item in enumerate(cci):
-            combination_name, combination_label, challenge, car, plugins, node_count, index_task = item
-            label = index_label(combination_label, challenge, car, plugins, node_count)
-            filters.append({
-                "input": {
-                    "query": {
-                        "query_string": {
-                            "analyze_wildcard": True,
-                            "query": "task:\"%s\" AND %s"
-                                     % (index_task, filter_string(environment, combination_name, track, challenge, car, node_count))
+        for idx, race_config in enumerate(race_configs):
+            label = index_label(race_config)
+            # the assumption is that we only have one bulk task
+            for bulk_task in race_config.bulk_tasks:
+                filters.append({
+                    "input": {
+                        "query": {
+                            "query_string": {
+                                "analyze_wildcard": True,
+                                "query": "task:\"%s\" AND %s" % (bulk_task, filter_string(environment, race_config))
+                            }
                         }
-                    }
-                },
-                "label": label
-            })
+                    },
+                    "label": label
+                })
 
         vis_state = {
             "aggs": [
@@ -742,7 +741,7 @@ class BarCharts:
 
 class TimeSeriesCharts:
     @staticmethod
-    def gc(title, environment, track, combination_name, challenge, car, node_count):
+    def gc(title, environment, race_config):
         vis_state = {
             "title": title,
             "type": "metrics",
@@ -798,14 +797,14 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string(environment, combination_name, track, challenge, car, node_count),
+                "filter": filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
                         "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:gc) "
-                                        "AND environment:\"%s\"" % (track, environment),
+                                        "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "trial-timestamp",
@@ -834,7 +833,7 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
-    def io(title, environment, track, combination_name, challenge, car, node_count):
+    def io(title, environment, race_config):
         vis_state = {
             "title": title,
             "type": "metrics",
@@ -890,14 +889,14 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string(environment, combination_name, track, challenge, car, node_count),
+                "filter": filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
                         "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:io) "
-                                        "AND environment:\"%s\"" % (track, environment),
+                                        "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "trial-timestamp",
@@ -926,9 +925,9 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
-    def query(environment, track, combination_name, challenge, car, node_count, q):
+    def query(environment, race_config, q):
         metric = "latency"
-        title = format_title(environment, track, "%s-%s" % (q, metric))
+        title = format_title(environment, race_config.track, "%s-%s-%s" % (race_config.label, q, metric))
 
         vis_state = {
             "title": title,
@@ -1043,15 +1042,14 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4())
                     }
                 ],
-                "filter": "task:\"%s\" AND name:\"%s\" AND %s" %
-                          (q, metric, filter_string(environment, combination_name, track, challenge, car, node_count)),
+                "filter": "task:\"%s\" AND name:\"%s\" AND %s" % (q, metric, filter_string(environment, race_config)),
                 "annotations": [
                     {
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
                         "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:query) "
-                                        "AND environment:\"%s\"" % (track, environment),
+                                        "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "trial-timestamp",
@@ -1080,20 +1078,21 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
-    def index(environment, track, cci, title):
+    def index(environment, race_configs, title):
         filters = []
-        for idx, item in enumerate(cci):
-            combination_name, combination_label, challenge, car, plugins, node_count, index_task = item
-            label = index_label(combination_label, challenge, car, plugins, node_count)
-            filters.append(
-                {
-                    "filter": "task:\"%s\" AND %s"
-                              % (index_task, filter_string(environment, combination_name, track, challenge, car, node_count)),
-                    "label": label,
-                    "color": color_scheme_rgba[idx % len(color_scheme_rgba)],
-                    "id": str(uuid.uuid4())
-                }
-            )
+        # any race_config will do - they all belong to the same track
+        t = race_configs[0].track
+        for idx, race_config in enumerate(race_configs):
+            label = index_label(race_config)
+            for bulk_task in race_config.bulk_tasks:
+                filters.append(
+                    {
+                        "filter": "task:\"%s\" AND %s" % (bulk_task, filter_string(environment, race_config)),
+                        "label": label,
+                        "color": color_scheme_rgba[idx % len(color_scheme_rgba)],
+                        "id": str(uuid.uuid4())
+                    }
+                )
 
         vis_state = {
             "title": title,
@@ -1124,7 +1123,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:\"%s\" AND track:\"%s\"" % (environment, track),
+                        "filter": "environment:\"%s\" AND track:\"%s\"" % (environment, t),
                         "split_filters": filters,
                         "label": "Indexing Throughput",
                         "value_template": "{{value}} docs/s",
@@ -1137,14 +1136,14 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true" % (environment, track),
+                "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true"  % (environment, t),
                 "annotations": [
                     {
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
                         "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:indexing) "
-                                        "AND environment:\"%s\"" % (track, environment),
+                                        "AND environment:\"%s\"" % (t, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "trial-timestamp",
@@ -1179,82 +1178,51 @@ def load_track(cfg, name=None):
     return track.load_track(cfg)
 
 
-def generate_index_ops(chart_type, race_config, environment):
-    def tracks_for_index():
-        t = race_config["track"]
-        cci = []
-        for combination in race_config["combinations"]:
-            combination_name = combination.get("name")
-            combination_label = combination.get("label")
-            challenge = combination["challenge"]
-            car = combination["car"]
-            node_count = int(combination.get("node-count", 1))
-            plugins = combination.get("plugins")
-            for task in t.find_challenge_or_default(challenge).schedule:
-                for sub_task in task:
-                    if sub_task.operation.type == track.OperationType.Bulk.name:
-                        cci.append((combination_name, combination_label, challenge, car, plugins, node_count, sub_task.name))
-        return t.name, cci
-
-    t, cci = tracks_for_index()
-    title = format_title(environment, t, "indexing-throughput")
-    return [chart_type.index(environment, t, cci, title)]
+def generate_index_ops(chart_type, race_configs, environment):
+    idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
+    if idx_race_configs:
+        title = format_title(environment, idx_race_configs[0].track, "indexing-throughput")
+        return [chart_type.index(environment, idx_race_configs, title)]
+    else:
+        return []
 
 
-def default_tracks(race_config):
-    defaults = []
-    for combination in race_config["combinations"]:
-        t = race_config["track"]
-        combination_name = combination.get("name")
-        challenge = combination["challenge"]
-        car = combination["car"]
-        node_count = int(combination.get("node-count", 1))
-        # only generate some charts for the default combination (we might want to make this configurable)
-        default_combination = combination.get("default-combination", False)
-        ops = []
-        if default_combination:
-            for task in t.find_challenge(challenge).schedule:
-                for sub_task in task:
-                    # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
-                    if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
-                        ops.append(sub_task.name)
-            defaults.append((t.name, combination_name, challenge, car, node_count, ops))
-
-    return defaults
-
-
-def filter_string(environment, combination_name, t, challenge, car, node_count):
-    if combination_name:
-        return "environment:\"%s\" AND active:true AND user-tags.name:\"%s\"" % (environment, combination_name)
+def filter_string(environment, race_config):
+    if race_config.name:
+        return "environment:\"%s\" AND active:true AND user-tags.name:\"%s\"" % (environment, race_config.name)
     else:
         return "environment:\"%s\" AND active:true AND track:\"%s\" AND challenge:\"%s\" AND car:\"%s\" AND node-count:%d" \
-               % (environment, t, challenge, car, node_count)
+               % (environment, race_config.track, race_config.challenge, race_config.car, race_config.node_count)
 
 
-def generate_queries(chart_type, race_config, environment):
+def generate_queries(chart_type, race_configs, environment):
     # output JSON structures
     structures = []
-    for track, combination_name, challenge, car, node_count, queries in default_tracks(race_config):
-        for q in queries:
-            structures.append(chart_type.query(environment, track, combination_name, challenge, car, node_count, q))
+
+    for race_config in race_configs:
+        if "query" in race_config.charts:
+            for q in race_config.throttled_tasks:
+                structures.append(chart_type.query(environment, race_config, q))
     return structures
 
 
-def generate_io(chart_type, race_config, environment):
+def generate_io(chart_type, race_configs, environment):
     # output JSON structures
     structures = []
-    for track, combination_name, challenge, car, node_count, queries in default_tracks(race_config):
-        title = format_title(environment, track, "io")
-        structures.append(chart_type.io(title, environment, track, combination_name, challenge, car, node_count))
+    for race_config in race_configs:
+        if "io" in race_config.charts:
+            title = format_title(environment, race_config.track, "%s-io" % race_config.label)
+            structures.append(chart_type.io(title, environment, race_config))
 
     return structures
 
 
-def generate_gc(chart_type, race_config, environment):
+def generate_gc(chart_type, race_configs, environment):
     structures = []
-    for track, combination_name, challenge, car, node_count, queries in default_tracks(race_config):
-        title = format_title(environment, track, "gc")
-        structures.append(chart_type.gc(title, environment, track, combination_name, challenge, car, node_count))
+    for race_config in race_configs:
+        if "gc" in race_config.charts:
+            title = format_title(environment, race_config.track, "%s-gc" % race_config.label)
+            structures.append(chart_type.gc(title, environment, race_config))
 
     return structures
 
@@ -1318,6 +1286,67 @@ def generate_dashboard(environment, track, charts):
     }
 
 
+class RaceConfig:
+    def __init__(self, track, cfg=None, challenge=None, car=None, node_count=None, charts=None):
+        self.track = track
+        if cfg:
+            self.configuration = cfg
+        else:
+            self.configuration = {
+                "charts": charts,
+                "challenge": challenge,
+                "car": car,
+                "node-count": node_count
+            }
+
+    @property
+    def name(self):
+        return self.configuration.get("name")
+
+    @property
+    def label(self):
+        return self.configuration.get("label")
+
+    @property
+    def charts(self):
+        return self.configuration["charts"]
+
+    @property
+    def node_count(self):
+        return self.configuration.get("node-count", 1)
+
+    @property
+    def challenge(self):
+        return self.configuration["challenge"]
+
+    @property
+    def car(self):
+        return self.configuration["car"]
+
+    @property
+    def plugins(self):
+        return self.configuration.get("plugins", "")
+
+    @property
+    def bulk_tasks(self):
+        task_names = []
+        for task in self.track.find_challenge_or_default(self.challenge).schedule:
+            for sub_task in task:
+                if sub_task.operation.type == track.OperationType.Bulk.name:
+                    task_names.append(sub_task.name)
+        return task_names
+
+    @property
+    def throttled_tasks(self):
+        task_names = []
+        for task in self.track.find_challenge_or_default(self.challenge).schedule:
+            for sub_task in task:
+                # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
+                if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
+                    task_names.append(sub_task.name)
+        return task_names
+
+
 def load_race_configs(cfg):
     chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
     if chart_spec_path:
@@ -1325,29 +1354,26 @@ def load_race_configs(cfg):
         race_configs = []
         with open(io.normalize_path(chart_spec_path), mode="rt", encoding="utf-8") as f:
             for item in json.load(f):
-                # load track based on its name and replace it
-                item["track"] = load_track(cfg, item["track"])
-                race_configs.append(item)
+                    t = load_track(cfg, item["track"])
+                    race_configs_per_track = []
+                    for configuration in item["configurations"]:
+                        race_configs_per_track.append(RaceConfig(track=t, cfg=configuration))
+                    if race_configs_per_track:
+                        race_configs.append(race_configs_per_track)
     else:
-        t = load_track(cfg)
-
         car_names = cfg.opts("mechanic", "car.names")
         if len(car_names) > 1:
             raise exceptions.SystemSetupError("Chart generator supports only a single car but got %s" % car_names)
         else:
             car_name = car_names[0]
-
         race_configs = [
-            {
-                "track": t,
-                "combinations": [
-                    {
-                        "challenge": cfg.opts("track", "challenge.name"),
-                        "car": car_name,
-                        "node-count": cfg.opts("generator", "node.count")
-                    }
-                ]
-            }
+            [
+                RaceConfig(track=load_track(cfg),
+                           challenge=cfg.opts("track", "challenge.name"),
+                           car=car_name,
+                           node_count=cfg.opts("generator", "node.count"),
+                           charts=["indexing", "query", "gc", "io"])
+             ]
         ]
     return race_configs
 
@@ -1364,14 +1390,13 @@ def generate(cfg):
 
     structures = []
     console.info("Generating charts...", flush=True)
-    for race_config in race_configs:
+    for race_configs_per_track in race_configs:
+        charts = generate_index_ops(chart_type, race_configs_per_track, env) + \
+                 generate_io(chart_type, race_configs_per_track, env) + \
+                 generate_gc(chart_type, race_configs_per_track, env) + \
+                 generate_queries(chart_type, race_configs_per_track, env)
 
-        charts = generate_index_ops(chart_type, race_config, env) + \
-                 generate_io(chart_type, race_config, env) + \
-                 generate_gc(chart_type, race_config, env) + \
-                 generate_queries(chart_type, race_config, env)
-
-        dashboard = generate_dashboard(env, race_config["track"], charts)
+        dashboard = generate_dashboard(env, race_configs_per_track[0].track, charts)
 
         structures.extend(charts)
         structures.append(dashboard)
