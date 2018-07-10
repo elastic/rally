@@ -1,3 +1,36 @@
+### 1.0.0
+
+#### Enhancements
+
+* [#529](https://github.com/elastic/rally/pull/529): Allow to control recency of ids in conflicts
+* [#523](https://github.com/elastic/rally/pull/523): Use a single shard for metrics indices
+* [#522](https://github.com/elastic/rally/pull/522): Fine-tune logging
+* [#521](https://github.com/elastic/rally/pull/521): Remove deprecated usage of parameter source
+* [#518](https://github.com/elastic/rally/pull/518): Derive JDK version at runtime
+* [#516](https://github.com/elastic/rally/pull/516): Add multi-cluster support for NodeStats telemetry device
+* [#515](https://github.com/elastic/rally/pull/515): Fold all stats per shard in the same doc for CCR
+* [#514](https://github.com/elastic/rally/pull/514): Report indexing times per shard
+* [#513](https://github.com/elastic/rally/pull/513): Allow to store custom metric document format
+* [#512](https://github.com/elastic/rally/pull/512): Make challenges optional
+* [#509](https://github.com/elastic/rally/pull/509): Remove post_launch bootstrap phase
+* [#508](https://github.com/elastic/rally/pull/508): Add node-stats-include-mem option to record jvm heap stats
+* [#507](https://github.com/elastic/rally/pull/507): Set retry-on-timeout=true for ES clients used by Telemetry devices
+* [#503](https://github.com/elastic/rally/pull/503): Use file-based logging configuration
+* [#497](https://github.com/elastic/rally/pull/497): Add record_process_stats() for process.* stats
+
+#### Bug Fixes
+
+* [#526](https://github.com/elastic/rally/pull/526): Resolve artefact name based on download URL
+* [#524](https://github.com/elastic/rally/pull/524): Disable interpolation for config file
+* [#511](https://github.com/elastic/rally/pull/511): Don't fail if conflict-probability is zero
+* [#510](https://github.com/elastic/rally/pull/510): Allow conflict-probability value of 0
+* [#500](https://github.com/elastic/rally/pull/500): Convert exception to string in driver
+
+#### Doc Changes
+
+* [#499](https://github.com/elastic/rally/pull/499): Omit needless words in track tutorial
+* [#494](https://github.com/elastic/rally/pull/494): Remove usage of "please" in docs
+
 ### 0.11.0
 
 #### Enhancements
