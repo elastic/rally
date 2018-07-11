@@ -21,6 +21,8 @@ In general, Rally works with all versions of Elasticsearch starting from 1.x but
 Quick Start
 -----------
 
+Rally is developed for Unix and is actively tested on Linux and MacOS. Rally supports `benchmarking Elasticsearch clusters running on Windows <http://esrally.readthedocs.io/en/stable/recipes.html#benchmarking-an-existing-cluster>`_ but Rally itself needs to be installed on machines running Unix.
+
 Installing Rally
 ~~~~~~~~~~~~~~~~
 
