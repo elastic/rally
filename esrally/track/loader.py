@@ -544,7 +544,7 @@ def post_process_for_test_mode(t):
                     document_set.document_archive = "%s-1k%s%s" % (path_2, ext_2, ext)
                     document_set.document_file = "%s-1k%s" % (path_2, ext_2)
                 elif document_set.has_uncompressed_corpus():
-                    path, ext = io.splitext(corpus.document_file)
+                    path, ext = io.splitext(document_set.document_file)
                     document_set.document_file = "%s-1k%s" % (path, ext)
                 else:
                     raise exceptions.RallyAssertionError("Document corpus [%s] has neither compressed nor uncompressed corpus." %
