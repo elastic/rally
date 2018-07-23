@@ -1,5 +1,6 @@
 import os
 import datetime
+import logging
 import unittest.mock as mock
 from unittest import TestCase
 import elasticsearch.exceptions
@@ -137,7 +138,81 @@ class EsClientTests(TestCase):
         self.assertEqual("An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
                          "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
 
-    def test_retries_on_timeouts(self):
+    @mock.patch("esrally.time.sleep")
+    def test_retries_on_bad_gateway(self, mocked_sleep):
+        bad_gateway = elasticsearch.exceptions.TransportError(502, "Bad Gateway")
+
+        # should return on first success
+        operation = mock.Mock(side_effect=[bad_gateway, bad_gateway, "success", bad_gateway])
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        logger = logging.getLogger("esrally.metrics")
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
+            test_result = client.guarded(operation)
+            mocked_sleep.assert_called_with(1)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Bad Gateway', 502, 2, 3)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Bad Gateway', 502, 2, 3)
+            self.assertEqual("success", test_result)
+
+            operation.assert_has_calls([
+                mock.call(),
+                mock.call(),
+                mock.call()
+            ])
+
+    @mock.patch("esrally.time.sleep")
+    def test_fails_after_too_many_bad_gateway_errors(self, mocked_sleep):
+        def bad_gateway():
+            raise elasticsearch.exceptions.TransportError(502, "Bad Gateway")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            client.guarded(bad_gateway)
+
+        mocked_sleep.assert_called_with(1)
+        self.assertEqual("A transport error occurred while running the operation [bad_gateway] against your Elasticsearch metrics "
+                         "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
+
+    @mock.patch("esrally.time.sleep")
+    def test_retries_on_service_unavailable(self, mocked_sleep):
+        service_unavailable = elasticsearch.exceptions.TransportError(503, "Service Unavailable")
+
+        # should return on first success
+        operation = mock.Mock(side_effect=[service_unavailable, service_unavailable, "success", service_unavailable])
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        logger = logging.getLogger("esrally.metrics")
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
+            test_result = client.guarded(operation)
+            mocked_sleep.assert_called_with(1)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Service Unavailable', 503, 2, 3)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Service Unavailable', 503, 2, 3)
+            self.assertEqual("success", test_result)
+
+            operation.assert_has_calls([
+                mock.call(),
+                mock.call(),
+                mock.call()
+            ])
+
+    @mock.patch("esrally.time.sleep")
+    def test_fails_after_too_many_service_unavailable_errors(self, mocked_sleep):
+        def service_unavailable():
+            raise elasticsearch.exceptions.TransportError(503, "Service Unavailable")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            client.guarded(service_unavailable)
+        mocked_sleep.assert_called_with(1)
+        self.assertEqual("A transport error occurred while running the operation [service_unavailable] against your Elasticsearch metrics "
+                         "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
+
+    @mock.patch("esrally.time.sleep")
+    def test_retries_on_gateway_timeout(self, mocked_sleep):
         gateway_timeout = elasticsearch.exceptions.TransportError(504, "Gateway timeout")
 
         # should return on first success
@@ -145,15 +220,22 @@ class EsClientTests(TestCase):
 
         client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
-        self.assertEqual("success", client.guarded(operation))
+        logger = logging.getLogger("esrally.metrics")
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
+            test_result = client.guarded(operation)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Gateway Timeout', 504, 2, 3)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Gateway Timeout', 504, 2, 3)
+            mocked_sleep.assert_called_with(1)
+            self.assertEqual("success", test_result)
 
-        operation.assert_has_calls([
-            mock.call(),
-            mock.call(),
-            mock.call()
-        ])
+            operation.assert_has_calls([
+                mock.call(),
+                mock.call(),
+                mock.call()
+            ])
 
-    def test_fails_after_too_many_timeouts(self):
+    @mock.patch("esrally.time.sleep")
+    def test_fails_after_too_many_gateway_timeout_errors(self, mocked_sleep):
         def gateway_timeout():
             raise elasticsearch.exceptions.TransportError(504, "Gateway timeout")
 
@@ -161,7 +243,44 @@ class EsClientTests(TestCase):
 
         with self.assertRaises(exceptions.RallyError) as ctx:
             client.guarded(gateway_timeout)
+        mocked_sleep.assert_called_with(1)
         self.assertEqual("A transport error occurred while running the operation [gateway_timeout] against your Elasticsearch metrics "
+                         "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
+
+    @mock.patch("esrally.time.sleep")
+    def test_retries_on_too_many_requests(self, mocked_sleep):
+        too_many_requests = elasticsearch.exceptions.TransportError(429, "Too Many Requests")
+
+        # should return on first success
+        operation = mock.Mock(side_effect=[too_many_requests, too_many_requests, "success", too_many_requests])
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        logger = logging.getLogger("esrally.metrics")
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
+            test_result = client.guarded(operation)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Too Many Requests', 429, 2, 3)
+            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Too Many Requests', 429, 2, 3)
+            mocked_sleep.assert_called_with(3)
+            self.assertEqual("success", test_result)
+
+            operation.assert_has_calls([
+                mock.call(),
+                mock.call(),
+                mock.call()
+            ])
+
+    @mock.patch("esrally.time.sleep")
+    def test_fails_after_too_many_requests_error(self, mocked_sleep):
+        def too_many_requests():
+            raise elasticsearch.exceptions.TransportError(429, "Too Many Requests")
+
+        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            client.guarded(too_many_requests)
+        mocked_sleep.assert_called_with(3)
+        self.assertEqual("A transport error occurred while running the operation [too_many_requests] against your Elasticsearch metrics "
                          "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
 
 
