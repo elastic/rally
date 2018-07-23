@@ -151,8 +151,11 @@ class EsClientTests(TestCase):
         with mock.patch.object(logger, "debug") as mocked_debug_logger:
             test_result = client.guarded(operation)
             mocked_sleep.assert_called_with(1)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Bad Gateway', 502, 2, 3)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Bad Gateway', 502, 2, 3)
+            mocked_debug_logger.assert_has_calls([
+                mock.call("%s (code: %d) in attempt [%d/%d].", "Bad Gateway", 502, 1, 3),
+                mock.call("%s (code: %d) in attempt [%d/%d].", "Bad Gateway", 502, 2, 3)],
+                any_order=True
+            )
             self.assertEqual("success", test_result)
 
             operation.assert_has_calls([
@@ -188,8 +191,11 @@ class EsClientTests(TestCase):
         with mock.patch.object(logger, "debug") as mocked_debug_logger:
             test_result = client.guarded(operation)
             mocked_sleep.assert_called_with(1)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Service Unavailable', 503, 2, 3)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Service Unavailable', 503, 2, 3)
+            mocked_debug_logger.assert_has_calls([
+                mock.call("%s (code: %d) in attempt [%d/%d].", "Service Unavailable", 503, 1, 3),
+                mock.call("%s (code: %d) in attempt [%d/%d].", "Service Unavailable", 503, 2, 3)],
+                any_order=True
+            )
             self.assertEqual("success", test_result)
 
             operation.assert_has_calls([
@@ -223,8 +229,11 @@ class EsClientTests(TestCase):
         logger = logging.getLogger("esrally.metrics")
         with mock.patch.object(logger, "debug") as mocked_debug_logger:
             test_result = client.guarded(operation)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Gateway Timeout', 504, 2, 3)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Gateway Timeout', 504, 2, 3)
+            mocked_debug_logger.assert_has_calls([
+                mock.call('%s (code: %d) in attempt [%d/%d].', 'Gateway Timeout', 504, 1, 3),
+                mock.call('%s (code: %d) in attempt [%d/%d].', 'Gateway Timeout', 504, 2, 3)],
+                any_order=True
+            )
             mocked_sleep.assert_called_with(1)
             self.assertEqual("success", test_result)
 
@@ -259,8 +268,11 @@ class EsClientTests(TestCase):
         logger = logging.getLogger("esrally.metrics")
         with mock.patch.object(logger, "debug") as mocked_debug_logger:
             test_result = client.guarded(operation)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Too Many Requests', 429, 2, 3)
-            mocked_debug_logger.assert_called_with('%s (code: %d) in attempt [%d/%d].', 'Too Many Requests', 429, 2, 3)
+            mocked_debug_logger.assert_has_calls([
+                mock.call('%s (code: %d) in attempt [%d/%d].', 'Too Many Requests', 429, 1, 3),
+                mock.call('%s (code: %d) in attempt [%d/%d].', 'Too Many Requests', 429, 2, 3)],
+                any_order=True
+            )
             mocked_sleep.assert_called_with(3)
             self.assertEqual("success", test_result)
 
