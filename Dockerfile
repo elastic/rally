@@ -25,6 +25,7 @@ ENV HOME /home/${NEW_USER}
 ENV PYENV_ROOT=/home/${NEW_USER}/.pyenv
 ENV PATH=$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
 ENV JAVA_HOME=/opt/jdk-10
+ENV JAVA10_HOME=/opt/jdk-10
 ENV RUNTIME_JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 
 RUN pyenv install 3.4.8
