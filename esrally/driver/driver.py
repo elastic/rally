@@ -172,7 +172,7 @@ class DriverActor(actor.RallyActor):
                 self.logger.info("Load generator [%d] has exited.", driver_index)
             else:
                 self.logger.error("Load generator [%d] has exited prematurely. Aborting benchmark.", driver_index)
-                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely.".format(driver_index)))
+                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [{}] has exited prematurely.".format(driver_index)))
         else:
             self.logger.info("A track preparator has exited.")
 
