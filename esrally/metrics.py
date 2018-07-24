@@ -10,6 +10,7 @@ from enum import Enum, IntEnum
 import tabulate
 from esrally import time, exceptions, config, version, paths
 from esrally.utils import console, io, versions
+from http.client import responses
 
 
 class EsClient:
@@ -93,12 +94,9 @@ class EsClient:
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
-                # gateway timeout - let's wait a bit and retry
-                if e.status_code == 504 and execution_count < max_execution_count:
-                    self.logger.debug("Gateway timeout in attempt [%d/%d].", execution_count, max_execution_count)
-                    time.sleep(1)
-                elif e.status_code == 429 and execution_count < max_execution_count:
-                    self.logger.debug("Execution rejected in attempt [%d/%d].", execution_count, max_execution_count)
+                if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
+                    self.logger.debug("%s (code: %d) in attempt [%d/%d].",
+                                      responses[e.status_code], e.status_code, execution_count, max_execution_count)
                     time.sleep(3)
                 else:
                     node = self._client.transport.hosts[0]
