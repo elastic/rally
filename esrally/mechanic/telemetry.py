@@ -483,6 +483,7 @@ class NodeStatsRecorder:
         for node_stats in current_sample:
             node_name = node_stats["name"]
             collected_node_stats = collections.OrderedDict()
+            collected_node_stats["name"] = "node-stats"
 
             if self.include_indices:
                 collected_node_stats.update(
