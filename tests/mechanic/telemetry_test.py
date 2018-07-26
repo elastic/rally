@@ -680,7 +680,11 @@ class NodeStatsRecorderTests(TestCase):
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
 
-        metrics_store_put_doc.assert_called_once_with(NodeStatsRecorderTests.default_stats_response_flattened,
+        expected_doc = collections.OrderedDict()
+        expected_doc["name"] = "node-stats"
+        expected_doc.update(NodeStatsRecorderTests.default_stats_response_flattened)
+
+        metrics_store_put_doc.assert_called_once_with(expected_doc,
                                                       level=MetaInfoScope.node,
                                                       node_name="rally0",
                                                       meta_data=metrics_store_meta_data)
@@ -864,7 +868,8 @@ class NodeStatsRecorderTests(TestCase):
         recorder.record()
 
         metrics_store_put_doc.assert_called_once_with(
-            {"indices_docs_count": 76892364,
+            {"name": "node-stats",
+             "indices_docs_count": 76892364,
              "indices_docs_deleted": 324530,
              "indices_fielddata_evictions": 17,
              "indices_fielddata_memory_size_in_bytes": 6936,
