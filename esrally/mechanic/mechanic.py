@@ -1,4 +1,5 @@
 import sys
+import json
 from collections import defaultdict
 
 import thespian.actors
@@ -270,7 +271,6 @@ class MechanicActor(actor.RallyActor):
         if msg.external:
             self.logger.info("Cluster will not be provisioned by Rally.")
             if msg.cluster_settings:
-                import json
                 pretty_settings = json.dumps(msg.cluster_settings, indent=2)
                 warning = "Ensure that these settings are defined in elasticsearch.yml:\n\n{}\n\nIf they are absent, running this track " \
                           "will fail or lead to unexpected results.".format(pretty_settings)
