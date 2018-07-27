@@ -1,5 +1,5 @@
-import logging
 import sys
+import json
 from collections import defaultdict
 
 import thespian.actors
@@ -270,6 +270,11 @@ class MechanicActor(actor.RallyActor):
 
         if msg.external:
             self.logger.info("Cluster will not be provisioned by Rally.")
+            if msg.cluster_settings:
+                pretty_settings = json.dumps(msg.cluster_settings, indent=2)
+                warning = "Ensure that these settings are defined in elasticsearch.yml:\n\n{}\n\nIf they are absent, running this track " \
+                          "will fail or lead to unexpected results.".format(pretty_settings)
+                console.warn(warning, logger=self.logger)
             # just create one actor for this special case and run it on the coordinator node (i.e. here)
             m = self.createActor(NodeMechanicActor,
                                  targetActorRequirements={"coordinator": True})
@@ -634,10 +639,6 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
         l = launcher.InProcessLauncher(cfg, metrics_store, races_root)
     elif external:
-        if cluster_settings:
-            logging.getLogger(__name__).warning(
-                "Cannot apply challenge-specific cluster settings [%s] for an externally provisioned cluster. Please ensure that the cluster "
-                "settings are present or the benchmark may fail or behave unexpectedly." % cluster_settings)
         if len(plugins) > 0:
             raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "
                                               "\"--elasticsearch-plugins\" and try again.")
