@@ -120,6 +120,28 @@ class EsClientTests(TestCase):
         def __init__(self, hosts):
             self.transport = EsClientTests.TransportMock(hosts)
 
+    @mock.patch("esrally.client.EsClientFactory")
+    def test_config_opts_parsing(self, client_esclientfactory):
+        cfg = config.Config()
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", "127.0.0.1")
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", 9200)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", random.choice(["True", "true"]))
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", "elastic")
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", "elastic")
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "true")
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.certification_authorities", "foobar")
+        f = metrics.EsClientFactory(cfg)
+        client_esclientfactory.assert_called_with(
+            hosts=[{"host": "127.0.0.1", "port": 9200}],
+            client_options={
+                "use_ssl": True,
+                "verify_certs": True,
+                "timeout": 120,
+                "basic_auth_user": "elastic",
+                "basic_auth_password": "elastic"
+            }
+        )
+
     def test_raises_sytem_setup_error_on_connection_problems(self):
         def raise_connection_error():
             raise elasticsearch.exceptions.ConnectionError("unit-test")

@@ -123,8 +123,7 @@ class EsClientFactory:
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
-        # poor man's boolean conversion
-        secure = self._config.opts("reporting", "datastore.secure") == "True"
+        secure = str(self._config.opts("reporting", "datastore.secure")).capitalize() == "True"
         user = self._config.opts("reporting", "datastore.user")
         password = self._config.opts("reporting", "datastore.password")
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
