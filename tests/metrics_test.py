@@ -3,6 +3,7 @@ import datetime
 import logging
 import unittest.mock as mock
 import random
+import string
 from unittest import TestCase
 import elasticsearch.exceptions
 
@@ -123,23 +124,34 @@ class EsClientTests(TestCase):
     @mock.patch("esrally.client.EsClientFactory")
     def test_config_opts_parsing(self, client_esclientfactory):
         cfg = config.Config()
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", "127.0.0.1")
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", 9200)
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", random.choice(["True", "true"]))
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", "elastic")
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", "elastic")
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "true")
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.certification_authorities", "foobar")
+
+        _datastore_host = ".".join([str(random.randint(1,254)) for _ in range(4)])
+        _datastore_port = random.randint(1024,65535)
+        _datastore_secure = random.choice(["True", "true"])
+        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
+        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
+        _datastore_verify_certs = random.choice([True, False])
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
         f = metrics.EsClientFactory(cfg)
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "basic_auth_user": _datastore_user,
+            "basic_auth_password": _datastore_password,
+            "verify_certs": _datastore_verify_certs
+        }
+
         client_esclientfactory.assert_called_with(
-            hosts=[{"host": "127.0.0.1", "port": 9200}],
-            client_options={
-                "use_ssl": True,
-                "verify_certs": True,
-                "timeout": 120,
-                "basic_auth_user": "elastic",
-                "basic_auth_password": "elastic"
-            }
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options
         )
 
     def test_raises_sytem_setup_error_on_connection_problems(self):
