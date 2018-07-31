@@ -9,7 +9,7 @@ from enum import Enum, IntEnum
 
 import tabulate
 from esrally import time, exceptions, config, version, paths
-from esrally.utils import console, io, versions
+from esrally.utils import convert, console, io, versions
 from http.client import responses
 
 
@@ -123,8 +123,7 @@ class EsClientFactory:
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
-        # poor man's boolean conversion
-        secure = self._config.opts("reporting", "datastore.secure") == "True"
+        secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
         user = self._config.opts("reporting", "datastore.user")
         password = self._config.opts("reporting", "datastore.password")
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
