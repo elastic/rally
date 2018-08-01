@@ -9,6 +9,8 @@ readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_JAVA_HOME="${JAVA8_HOME}"
 readonly ES_METRICS_STORE_VERSION="6.2.1"
+readonly ES_METRICS_STORE_HTTP_PORT="62200"
+readonly ES_METRICS_STORE_TRANSPORT_PORT="63200"
 readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
 readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
@@ -80,10 +82,10 @@ function set_up {
 
     # configure Elasticsearch instead of in-memory after the fact
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
-    perl -i -pe 's/datastore\.type.*/datastore.type = elasticsearch/g' ${es_config_file_path}
-    perl -i -pe 's/datastore\.host.*/datastore.host = localhost/g'  ${es_config_file_path}
-    perl -i -pe 's/datastore\.port.*/datastore.port = 9200/g'  ${es_config_file_path}
-    perl -i -pe 's/datastore\.secure.*/datastore.secure = False/g'  ${es_config_file_path}
+    perl -i -pe "s/datastore\.type.*/datastore.type = elasticsearch/g" ${es_config_file_path}
+    perl -i -pe "s/datastore\.host.*/datastore.host = localhost/g"  ${es_config_file_path}
+    perl -i -pe "s/datastore\.port.*/datastore.port = ${ES_METRICS_STORE_HTTP_PORT}/g"  ${es_config_file_path}
+    perl -i -pe "s/datastore\.secure.*/datastore.secure = False/g"  ${es_config_file_path}
 
     info "Final configuration for ${in_memory_config_file_path}:"
     cat "${in_memory_config_file_path}"
@@ -103,14 +105,14 @@ function set_up {
     tar -xzf "${ES_ARTIFACT}" || { rm -f "${ES_ARTIFACT}"; exit 1; }
     cd "${ES_ARTIFACT_PATH}"
     export JAVA_HOME=${ES_METRICS_STORE_JAVA_HOME}
-    bin/elasticsearch &
+    bin/elasticsearch -Ehttp.port=${ES_METRICS_STORE_HTTP_PORT} -Etransport.tcp.port=${ES_METRICS_STORE_TRANSPORT_PORT} &
     # store PID so we can kill ES later
     ES_PID=$!
 
     # Wait for ES cluster to be up and running
     while true
     do
-        curl "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s" > /dev/null 2>&1 && break
+        curl "http://localhost:${ES_METRICS_STORE_HTTP_PORT}/_cluster/health?wait_for_status=yellow&timeout=5s" > /dev/null 2>&1 && break
         info "Waiting for ES metrics store..."
         sleep 1
     done ;
@@ -182,7 +184,14 @@ function test_benchmark_only {
 
     info "test benchmark-only [--configuration-name=${cfg}]"
     kill_rally_processes
-    esrally --configuration-name="${cfg}" --on-error=abort --pipeline=benchmark-only --track=geonames --test-mode --challenge=append-no-conflicts-index-only --track-params="cluster_health:'yellow'"
+    esrally --target-host="localhost:${ES_METRICS_STORE_HTTP_PORT}" \
+            --configuration-name="${cfg}" \
+            --on-error=abort \
+            --pipeline=benchmark-only \
+            --track=geonames \
+            --test-mode \
+            --challenge=append-no-conflicts-index-only \
+            --track-params="cluster_health:'yellow'"
 }
 
 function run_test {
