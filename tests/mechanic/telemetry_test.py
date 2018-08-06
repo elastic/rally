@@ -317,7 +317,8 @@ class CcrStatsRecorderTests(TestCase):
         shard_metadata = {
             "cluster": "remote",
             "index": "follower",
-            "shard": shard_id
+            "shard": shard_id,
+            "name": "ccr-stats"
         }
 
         metrics_store_put_doc.assert_called_with(
@@ -386,12 +387,14 @@ class CcrStatsRecorderTests(TestCase):
             {
                 "cluster": "remote",
                 "index": "follower",
-                "shard": 0
+                "shard": 0,
+                "name": "ccr-stats"
             },
             {
                 "cluster": "remote",
                 "index": "follower",
-                "shard": 1
+                "shard": 1,
+                "name": "ccr-stats"
             }
         ]
 
@@ -483,7 +486,8 @@ class CcrStatsRecorderTests(TestCase):
         shard_metadata = {
             "cluster": "remote",
             "index": "follower1",
-            "shard": 0
+            "shard": 0,
+            "name": "ccr-stats"
         }
 
         metrics_store_put_doc.assert_has_calls([

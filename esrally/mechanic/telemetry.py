@@ -416,7 +416,8 @@ class CcrStatsRecorder:
                 shard_metadata = {
                     "cluster": self.cluster_name,
                     "index": name,
-                    "shard": shard_id
+                    "shard": shard_id,
+                    "name": "ccr-stats"
                 }
 
                 self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
