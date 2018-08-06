@@ -378,7 +378,7 @@ class CcrStatsRecorder:
         import elasticsearch
 
         try:
-            ccr_stats_api_endpoint = "/_xpack/ccr/_stats"
+            ccr_stats_api_endpoint = "/_ccr/stats"
             stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false"})
         except elasticsearch.TransportError as e:
             msg = "A transport error occurred while collecting CCR stats from the endpoint [{}] on " \
@@ -410,14 +410,16 @@ class CcrStatsRecorder:
         :param stats: A dict with returned CCR stats for the index.
         """
 
-        for shard_num, shard_stats in stats.items():
-            shard_metadata = {
-                "cluster": self.cluster_name,
-                "index": name,
-                "shard": shard_num
-            }
+        for shard_stats in stats:
+            shard_id = shard_stats.get("shard_id", None)
+            if shard_id is not None:
+                shard_metadata = {
+                    "cluster": self.cluster_name,
+                    "index": name,
+                    "shard": shard_id
+                }
 
-            self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+                self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):
