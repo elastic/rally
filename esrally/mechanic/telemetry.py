@@ -411,12 +411,11 @@ class CcrStatsRecorder:
         """
 
         for shard_stats in stats:
-            shard_id = shard_stats.get("shard_id", None)
-            if shard_id is not None:
+            if "shard_id" in shard_stats:
                 shard_metadata = {
                     "cluster": self.cluster_name,
                     "index": name,
-                    "shard": shard_id,
+                    "shard": shard_stats["shard_id"],
                     "name": "ccr-stats"
                 }
 
