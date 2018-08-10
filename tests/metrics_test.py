@@ -64,7 +64,7 @@ class TransportErrors:
                         504: "Gateway Timeout",
                         429: "Too Many Requests"}
 
-    def __init__(self, max_err_responses=2):
+    def __init__(self, max_err_responses=10):
         self.max_err_responses = max_err_responses
         # allow duplicates in list of error codes
         self.rnd_err_codes = [
@@ -203,39 +203,49 @@ class EsClientTests(TestCase):
                          "store on host [127.0.0.1] at port [9243].", ctx.exception.args[0])
 
     def test_retries_on_various_transport_errors(self):
+        @mock.patch("random.randint")
         @mock.patch("esrally.time.sleep")
-        def test_transport_errors(side_effect, expected_calls, time_to_wait, mocked_sleep):
+        def test_transport_error_retries(side_effect, expected_logging_calls, expected_sleep_calls, mocked_sleep, mocked_randint):
             # should return on first success
             operation = mock.Mock(side_effect=side_effect)
+
+            # Disable additional randomization time in exponential backoff calls
+            mocked_randint.return_value = 0
 
             client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
             logger = logging.getLogger("esrally.metrics")
             with mock.patch.object(logger, "debug") as mocked_debug_logger:
                 test_result = client.guarded(operation)
-                mocked_sleep.assert_called_with(time_to_wait)
+                mocked_sleep.assert_has_calls(expected_sleep_calls)
                 mocked_debug_logger.assert_has_calls(
-                    expected_calls,
+                    expected_logging_calls,
                     any_order=True
                 )
                 self.assertEqual("success", test_result)
 
+        max_retry = 10
         all_err_codes = TransportErrors.err_return_codes
-        transport_errors = TransportErrors()
+        transport_errors = TransportErrors(max_err_responses=max_retry)
         rnd_err_codes = transport_errors.code_list
         rnd_side_effects = transport_errors.side_effects
         rnd_mocked_logger_calls = []
-        time_to_sleep = 3
+
+        # The sec to sleep for 10 transport errors is
+        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
+        mocked_sleep_calls = [mock.call(float(2**i)) for i in range(0, max_retry)]
 
         for rnd_err_idx, rnd_err_code in enumerate(rnd_err_codes):
             # List of logger.debug calls to expect
             rnd_mocked_logger_calls.append(
-                mock.call("%s (code: %d) in attempt [%d/%d].", all_err_codes[rnd_err_code], rnd_err_code, rnd_err_idx+1, 3)
+                mock.call("%s (code: %d) in attempt [%d/%d].",
+                          all_err_codes[rnd_err_code], rnd_err_code,
+                          rnd_err_idx+1, max_retry+1)
             )
 
-        test_transport_errors(rnd_side_effects,
-                              rnd_mocked_logger_calls,
-                              time_to_sleep)
+        test_transport_error_retries(rnd_side_effects,
+                                     rnd_mocked_logger_calls,
+                                     mocked_sleep_calls)
 
     @mock.patch("esrally.time.sleep")
     def test_fails_after_too_many_errors(self, mocked_sleep):
@@ -248,7 +258,6 @@ class EsClientTests(TestCase):
         with self.assertRaises(exceptions.RallyError) as ctx:
             client.guarded(random_transport_error, rnd_code)
 
-        mocked_sleep.assert_called_with(3)
         self.assertEqual("A transport error occurred while running the operation "
                          "[random_transport_error] against your Elasticsearch metrics "
                          "store on host [127.0.0.1] at port [9243].",

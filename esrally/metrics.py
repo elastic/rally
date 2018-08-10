@@ -2,8 +2,10 @@ import collections
 import logging
 import math
 import pickle
+import random
 import statistics
 import sys
+import time
 import zlib
 from enum import Enum, IntEnum
 
@@ -53,11 +55,13 @@ class EsClient:
 
     def guarded(self, target, *args, **kwargs):
         import elasticsearch
-        max_execution_count = 3
+        max_execution_count = 11
         execution_count = 0
 
         while execution_count < max_execution_count:
+            time_to_sleep = 2 ** execution_count + (random.randint(0, 1000) / 1000)
             execution_count += 1
+
             try:
                 return target(*args, **kwargs)
             except elasticsearch.exceptions.AuthenticationException:
@@ -79,7 +83,7 @@ class EsClient:
             except elasticsearch.exceptions.ConnectionTimeout:
                 if execution_count < max_execution_count:
                     self.logger.debug("Connection timeout in attempt [%d/%d].", execution_count, max_execution_count)
-                    time.sleep(1)
+                    time.sleep(time_to_sleep)
                 else:
                     operation = target.__name__
                     self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
@@ -97,7 +101,7 @@ class EsClient:
                 if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
                     self.logger.debug("%s (code: %d) in attempt [%d/%d].",
                                       responses[e.status_code], e.status_code, execution_count, max_execution_count)
-                    time.sleep(3)
+                    time.sleep(time_to_sleep)
                 else:
                     node = self._client.transport.hosts[0]
                     msg = "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on " \
