@@ -59,7 +59,7 @@ class EsClient:
         execution_count = 0
 
         while execution_count < max_execution_count:
-            time_to_sleep = 2 ** execution_count + (random.randint(0, 1000) / 1000)
+            time_to_sleep = 2 ** execution_count + random.random()
             execution_count += 1
 
             try:
@@ -99,8 +99,8 @@ class EsClient:
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
                 if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
-                    self.logger.debug("%s (code: %d) in attempt [%d/%d].",
-                                      responses[e.status_code], e.status_code, execution_count, max_execution_count)
+                    self.logger.debug("%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                                      responses[e.status_code], e.status_code, execution_count, max_execution_count, time_to_sleep)
                     time.sleep(time_to_sleep)
                 else:
                     node = self._client.transport.hosts[0]
