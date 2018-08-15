@@ -417,9 +417,13 @@ Default value: ``timeout:60``
 Here are a few common examples:
 
 * Enable HTTP compression: ``--client-options="compressed:true"``
-* Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
-* Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the `Elasticsearch Python client docs <http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication>`_)
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
+
+Examples for various HTTP TLS/SSL configurations (e.g. if you have X-Pack Security installed):
+
+* Enable SSL, server side only verification, using public certificate: ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
+* Enable SSL, server side only verification, private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"``
+* Enable SSL, server and client side verification, private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (needed if ``xpack.security.http.ssl.client_authentication: required``, see also `Elasticsearch HTTP TLS/SSL settings <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-settings.html#http-tls-ssl-settings>`_)
 
 ``on-error``
 ~~~~~~~~~~~~

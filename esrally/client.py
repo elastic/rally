@@ -1,9 +1,9 @@
 import gzip
 import logging
-
 import certifi
 import urllib3
 
+from esrally import exceptions
 
 class EsClientFactory:
     """
@@ -43,7 +43,28 @@ class EsClientFactory:
                 # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
                 urllib3.disable_warnings()
             else:
-                self.logger.info("SSL certificate verification: on")
+                self.ssl_context.verify_mode=ssl.CERT_REQUIRED
+                # When using SSL_context, all SSL related kwargs in client options get ignored
+                client_cert = self.client_options.pop("client_cert", False)
+                client_key = self.client_options.pop("client_key", False)
+
+                if not client_cert and not client_key:
+                    self.logger.info("SSL server side only certificate verification: on")
+                elif bool(client_cert) != bool(client_key):
+                    self.logger.error(
+                        "Supplied client-options contain only one of client_cert/client_key. "
+                        "If your Elasticsearch setup requires client certificate verification both need to be supplied. "
+                        "See https://esrally.readthedocs.io/en/stable/command_line_reference.html?highlight=client_options#id2"
+                    )
+                    defined_client_ssl_option = "client_key" if client_key else "client_cert"
+                    missing_client_ssl_option = "client_cert" if client_key else "client_key"
+                    raise exceptions.InvalidSyntax("'{}' is missing from client-options but '{}' "
+                                                   "has been specified".format(defined_client_ssl_option,
+                                                                               missing_client_ssl_option))
+                else:
+                    self.logger.info("SSL server and client side certificate verification: on")
+                    self.ssl_context.load_cert_chain(certfile=client_cert,
+                                                     keyfile=client_key)
         else:
             self.logger.info("SSL support: off")
             self.client_options["scheme"] = "http"
