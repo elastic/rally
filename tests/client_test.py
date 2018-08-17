@@ -27,7 +27,8 @@ class EsClientFactoryTests(TestCase):
 
         self.assertDictEqual(original_client_options, client_options)
 
-    def test_create_https_connection_verify_server(self):
+    @mock.patch.object(ssl.SSLContext, "load_cert_chain")
+    def test_create_https_connection_verify_server(self, mocked_load_cert_chain):
         hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
@@ -37,7 +38,16 @@ class EsClientFactoryTests(TestCase):
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        f = client.EsClientFactory(hosts, client_options)
+        logger = logging.getLogger("esrally.client")
+        with mock.patch.object(logger, "info") as mocked_info_logger:
+            f = client.EsClientFactory(hosts, client_options)
+        mocked_info_logger.assert_has_calls([
+            mock.call("SSL support: on"),
+            mock.call("SSL certificate verification: on")
+        ])
+
+        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
+                                                  "certs"
 
         self.assertEqual(hosts, f.hosts)
         self.assertTrue(f.ssl_context.check_hostname)
@@ -65,7 +75,14 @@ class EsClientFactoryTests(TestCase):
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        f = client.EsClientFactory(hosts, client_options)
+        logger = logging.getLogger("esrally.client")
+        with mock.patch.object(logger, "info") as mocked_info_logger:
+            f = client.EsClientFactory(hosts, client_options)
+        mocked_info_logger.assert_has_calls([
+            mock.call("SSL support: on"),
+            mock.call("SSL certificate verification: on"),
+            mock.call("SSL client authentication: on")
+        ])
 
         mocked_load_cert_chain.assert_called_with(
             certfile=client_options["client_cert"],
@@ -98,7 +115,13 @@ class EsClientFactoryTests(TestCase):
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        f = client.EsClientFactory(hosts, client_options)
+        logger = logging.getLogger("esrally.client")
+        with mock.patch.object(logger, "info") as mocked_info_logger:
+            f = client.EsClientFactory(hosts, client_options)
+        mocked_info_logger.assert_has_calls([
+            mock.call("SSL support: on"),
+            mock.call("SSL certificate verification: on")
+        ])
 
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
             "certs"
@@ -151,7 +174,8 @@ class EsClientFactoryTests(TestCase):
             ctx.exception.args[0]
         )
 
-    def test_create_https_connection_unverified_certificate(self):
+    @mock.patch.object(ssl.SSLContext, "load_cert_chain")
+    def test_create_https_connection_unverified_certificate(self, mocked_load_cert_chain):
         hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
@@ -162,7 +186,16 @@ class EsClientFactoryTests(TestCase):
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = dict(client_options)
 
-        f = client.EsClientFactory(hosts, client_options)
+        logger = logging.getLogger("esrally.client")
+        with mock.patch.object(logger, "info") as mocked_info_logger:
+            f = client.EsClientFactory(hosts, client_options)
+        mocked_info_logger.assert_has_calls([
+            mock.call("SSL support: on"),
+            mock.call("SSL certificate verification: off")
+        ])
+
+        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
+                                                  "certs"
 
         self.assertEqual(hosts, f.hosts)
         self.assertFalse(f.ssl_context.check_hostname)
@@ -174,5 +207,47 @@ class EsClientFactoryTests(TestCase):
         self.assertNotIn("verify_certs", f.client_options)
         self.assertNotIn("basic_auth_user", f.client_options)
         self.assertNotIn("basic_auth_password", f.client_options)
+
+        self.assertDictEqual(original_client_options, client_options)
+
+    @mock.patch.object(ssl.SSLContext, "load_cert_chain")
+    def test_create_https_connection_unverified_certificate_present_client_certificates(self, mocked_load_cert_chain):
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        client_options = {
+            "use_ssl": True,
+            "verify_certs": False,
+            "http_auth": ("user", "password"),
+            "client_cert": os.path.join(EsClientFactoryTests.cwd, "utils/resources/certs/client.crt"),
+            "client_key": os.path.join(EsClientFactoryTests.cwd, "utils/resources/certs/client.key")
+        }
+        # make a copy so we can verify later that the factory did not modify it
+        original_client_options = deepcopy(client_options)
+
+        logger = logging.getLogger("esrally.client")
+        with mock.patch.object(logger, "info") as mocked_info_logger:
+            f = client.EsClientFactory(hosts, client_options)
+        mocked_info_logger.assert_has_calls([
+            mock.call("SSL certificate verification: off"),
+            mock.call("SSL client authentication: on")
+        ])
+
+        mocked_load_cert_chain.assert_called_with(
+            certfile=client_options["client_cert"],
+            keyfile=client_options["client_key"]
+        )
+
+        self.assertEqual(hosts, f.hosts)
+        self.assertFalse(f.ssl_context.check_hostname)
+        self.assertEqual(ssl.CERT_NONE, f.ssl_context.verify_mode)
+
+        self.assertEqual("https", f.client_options["scheme"])
+        self.assertEqual(("user", "password"), f.client_options["http_auth"])
+        self.assertNotIn("use_ssl", f.client_options)
+        self.assertNotIn("verify_certs", f.client_options)
+        self.assertNotIn("basic_auth_user", f.client_options)
+        self.assertNotIn("basic_auth_password", f.client_options)
+        self.assertNotIn("ca_certs", f.client_options)
+        self.assertNotIn("client_cert", f.client_options)
+        self.assertNotIn("client_key", f.client_options)
 
         self.assertDictEqual(original_client_options, client_options)

@@ -25,16 +25,15 @@ class EsClientFactory:
         # we're using an SSL context now and it is not allowed to have use_ssl present in client options anymore
         if self.client_options.pop("use_ssl", False):
             import ssl
-            from elasticsearch.connection import create_ssl_context
             self.logger.info("SSL support: on")
             self.client_options["scheme"] = "https"
 
-            self.ssl_context = create_ssl_context(cafile=self.client_options.pop("ca_certs", certifi.where()))
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=self.client_options.pop("ca_certs", certifi.where()))
 
             if not self.client_options.pop("verify_certs", True):
                 self.logger.info("SSL certificate verification: off")
-                self.ssl_context.check_hostname = False
                 self.ssl_context.verify_mode = ssl.CERT_NONE
+                self.ssl_context.check_hostname = False
 
                 self.logger.warning("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
                                     "benchmark. Disabling urllib warnings now to avoid a logging storm. "
@@ -43,28 +42,30 @@ class EsClientFactory:
                 # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
                 urllib3.disable_warnings()
             else:
+                # verify server certificates; order of properties set here matters!
                 self.ssl_context.verify_mode=ssl.CERT_REQUIRED
-                # When using SSL_context, all SSL related kwargs in client options get ignored
-                client_cert = self.client_options.pop("client_cert", False)
-                client_key = self.client_options.pop("client_key", False)
+                self.ssl_context.check_hostname = True
+                self.logger.info("SSL certificate verification: on")
 
-                if not client_cert and not client_key:
-                    self.logger.info("SSL server side only certificate verification: on")
-                elif bool(client_cert) != bool(client_key):
-                    self.logger.error(
-                        "Supplied client-options contain only one of client_cert/client_key. "
-                        "If your Elasticsearch setup requires client certificate verification both need to be supplied. "
-                        "See https://esrally.readthedocs.io/en/stable/command_line_reference.html?highlight=client_options#id2"
-                    )
-                    defined_client_ssl_option = "client_key" if client_key else "client_cert"
-                    missing_client_ssl_option = "client_cert" if client_key else "client_key"
-                    raise exceptions.InvalidSyntax("'{}' is missing from client-options but '{}' "
-                                                   "has been specified".format(defined_client_ssl_option,
-                                                                               missing_client_ssl_option))
-                else:
-                    self.logger.info("SSL server and client side certificate verification: on")
-                    self.ssl_context.load_cert_chain(certfile=client_cert,
-                                                     keyfile=client_key)
+            # When using SSL_context, all SSL related kwargs in client options get ignored
+            client_cert = self.client_options.pop("client_cert", False)
+            client_key = self.client_options.pop("client_key", False)
+
+            if bool(client_cert) != bool(client_key):
+                self.logger.error(
+                    "Supplied client-options contain only one of client_cert/client_key. "
+                    "If your Elasticsearch setup requires client certificate verification both need to be supplied. "
+                    "See https://esrally.readthedocs.io/en/stable/command_line_reference.html?highlight=client_options#id2"
+                )
+                defined_client_ssl_option = "client_key" if client_key else "client_cert"
+                missing_client_ssl_option = "client_cert" if client_key else "client_key"
+                raise exceptions.InvalidSyntax("'{}' is missing from client-options but '{}' "
+                                               "has been specified".format(defined_client_ssl_option,
+                                                                           missing_client_ssl_option))
+            elif client_cert and client_key:
+                self.logger.info("SSL client authentication: on")
+                self.ssl_context.load_cert_chain(certfile=client_cert,
+                                                 keyfile=client_key)
         else:
             self.logger.info("SSL support: off")
             self.client_options["scheme"] = "http"
