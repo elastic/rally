@@ -66,7 +66,7 @@ class EsClientFactory:
                 console.println(
                     "'{}' is missing from client-options but '{}' has been specified.\n"
                     "If your Elasticsearch setup requires client certificate verification both need to be supplied.\n"
-                    "Read the documentation at {}//command_line_reference.html?highlight=client_options#id2\n".format(
+                    "Read the documentation at {}/command_line_reference.html#client-options\n".format(
                         missing_client_ssl_option,
                         defined_client_ssl_option,
                         console.format.link(DOC_LINK))
