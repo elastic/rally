@@ -417,9 +417,26 @@ Default value: ``timeout:60``
 Here are a few common examples:
 
 * Enable HTTP compression: ``--client-options="compressed:true"``
-* Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
-* Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the `Elasticsearch Python client docs <http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication>`_)
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
+
+**TLS/SSL**
+
+This is applicable e.g. if you have X-Pack Security installed.
+Enable it with ``use_ssl:true``.
+
+**TLS/SSL Certificate Verification**
+
+Server certificate verification is controlled with the ``verify_certs`` boolean. The default value is `true`. To disable use ``verify_certs:false``.
+If ``verify_certs:true``, Rally will attempt to verify the certificate provided by Elasticsearch. If they are private certificates, you will also need to supply the private CA certificate using ``ca_certs:'/path/to/cacert.pem'``.
+
+You can also optionally present client certificates, e.g. if Elasticsearch has been configured with ``xpack.security.http.ssl.client_authentication: required`` (see also `Elasticsearch HTTP TLS/SSL settings <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-settings.html#http-tls-ssl-settings>`_).
+Client certificates can be presented regardless of the ``verify_certs`` setting, but it's strongly recommended to always verify the server certificates.
+
+**TLS/SSL Examples**
+
+* Enable SSL, verify server certificates using public CA: ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
+* Enable SSL, verify server certificates using private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"``
+* Enable SSL, verify server certificates using private CA, present client certificates: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem'"``
 
 ``on-error``
 ~~~~~~~~~~~~
