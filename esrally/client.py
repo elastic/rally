@@ -3,7 +3,9 @@ import logging
 import certifi
 import urllib3
 
-from esrally import exceptions
+from esrally import exceptions, DOC_LINK
+from esrally.utils import console
+
 
 class EsClientFactory:
     """
@@ -28,10 +30,13 @@ class EsClientFactory:
             self.logger.info("SSL support: on")
             self.client_options["scheme"] = "https"
 
+            # ssl.Purpose.CLIENT_AUTH allows presenting client certs and can only be enabled during instantiation
+            # but can be disabled via the verify_mode property later on.
             self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=self.client_options.pop("ca_certs", certifi.where()))
 
             if not self.client_options.pop("verify_certs", True):
                 self.logger.info("SSL certificate verification: off")
+                # order matters to avoid ValueError: check_hostname needs a SSL context with either CERT_OPTIONAL or CERT_REQUIRED
                 self.ssl_context.verify_mode = ssl.CERT_NONE
                 self.ssl_context.check_hostname = False
 
@@ -42,7 +47,6 @@ class EsClientFactory:
                 # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
                 urllib3.disable_warnings()
             else:
-                # verify server certificates; order of properties set here matters!
                 self.ssl_context.verify_mode=ssl.CERT_REQUIRED
                 self.ssl_context.check_hostname = True
                 self.logger.info("SSL certificate verification: on")
@@ -51,17 +55,27 @@ class EsClientFactory:
             client_cert = self.client_options.pop("client_cert", False)
             client_key = self.client_options.pop("client_key", False)
 
-            if bool(client_cert) != bool(client_key):
+            if not client_cert and not client_key:
+                self.logger.info("SSL client authentication: off")
+            elif bool(client_cert) != bool(client_key):
                 self.logger.error(
                     "Supplied client-options contain only one of client_cert/client_key. "
-                    "If your Elasticsearch setup requires client certificate verification both need to be supplied. "
-                    "See https://esrally.readthedocs.io/en/stable/command_line_reference.html?highlight=client_options#id2"
                 )
                 defined_client_ssl_option = "client_key" if client_key else "client_cert"
                 missing_client_ssl_option = "client_cert" if client_key else "client_key"
-                raise exceptions.InvalidSyntax("'{}' is missing from client-options but '{}' "
-                                               "has been specified".format(defined_client_ssl_option,
-                                                                           missing_client_ssl_option))
+                console.println(
+                    "'{}' is missing from client-options but '{}' has been specified.\n"
+                    "If your Elasticsearch setup requires client certificate verification both need to be supplied.\n"
+                    "Read the documentation at {}//command_line_reference.html?highlight=client_options#id2\n".format(
+                        missing_client_ssl_option,
+                        defined_client_ssl_option,
+                        console.format.link(DOC_LINK))
+                )
+                raise exceptions.SystemSetupError(
+                    "Cannot specify '{}' without also specifying '{}' in client-options.".format(
+                        defined_client_ssl_option,
+                        missing_client_ssl_option,
+                        DOC_LINK))
             elif client_cert and client_key:
                 self.logger.info("SSL client authentication: on")
                 self.ssl_context.load_cert_chain(certfile=client_cert,

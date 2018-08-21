@@ -1,12 +1,13 @@
-import os
-import ssl
-import random
 import logging
+import os
+import random
+import ssl
 
 from copy import deepcopy
 from unittest import TestCase, mock
 
-from esrally import client, exceptions
+from esrally import client, exceptions, DOC_LINK
+from esrally.utils import console
 
 
 class EsClientFactoryTests(TestCase):
@@ -43,7 +44,8 @@ class EsClientFactoryTests(TestCase):
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls([
             mock.call("SSL support: on"),
-            mock.call("SSL certificate verification: on")
+            mock.call("SSL certificate verification: on"),
+            mock.call("SSL client authentication: off")
         ])
 
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
@@ -120,7 +122,8 @@ class EsClientFactoryTests(TestCase):
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls([
             mock.call("SSL support: on"),
-            mock.call("SSL certificate verification: on")
+            mock.call("SSL certificate verification: on"),
+            mock.call("SSL client authentication: off")
         ])
 
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
@@ -157,17 +160,20 @@ class EsClientFactoryTests(TestCase):
             {random_client_ssl_option: client_ssl_options[random_client_ssl_option]}
         )
 
-        logger = logging.getLogger("esrally.client")
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            with mock.patch.object(logger, "error") as mocked_error_logger:
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            with mock.patch.object(console, "println") as mocked_console_println:
                 f = client.EsClientFactory(hosts, client_options)
-            mocked_error_logger.assert_called_once_with(
-                "Supplied client-options contain only one of client_cert/client_key. "
-                "If your Elasticsearch setup requires client certificate verification both need to be supplied. "
-                "See https://esrally.readthedocs.io/en/stable/command_line_reference.html?highlight=client_options#id2"
+        mocked_console_println.assert_called_once_with(
+            "'{}' is missing from client-options but '{}' has been specified.\n"
+            "If your Elasticsearch setup requires client certificate verification both need to be supplied.\n"
+            "Read the documentation at {}//command_line_reference.html?highlight=client_options#id2\n".format(
+                missing_client_ssl_option,
+                random_client_ssl_option,
+                console.format.link(DOC_LINK)
             )
+        )
         self.assertEqual(
-            "'{}' is missing from client-options but '{}' has been specified".format(
+            "Cannot specify '{}' without also specifying '{}' in client-options.".format(
                 random_client_ssl_option,
                 missing_client_ssl_option
             ),
@@ -191,7 +197,8 @@ class EsClientFactoryTests(TestCase):
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls([
             mock.call("SSL support: on"),
-            mock.call("SSL certificate verification: off")
+            mock.call("SSL certificate verification: off"),
+            mock.call("SSL client authentication: off")
         ])
 
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
