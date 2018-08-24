@@ -459,6 +459,140 @@ class TrackPreparationTests(TestCase):
         self.assertEqual(0, decompress.call_count)
         self.assertEqual(0, prepare_file_offset_table.call_count)
 
+    def test_used_corpora(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "challenge.name", "default-challenge")
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [
+                {"name": "logs-181998"},
+                {"name": "logs-191998"},
+                {"name": "logs-201998"},
+            ],
+            "corpora": [
+                {
+                    "name": "http_logs_unparsed",
+                    "target-type": "type",
+                    "documents": [
+                        {
+                            "target-index": "logs-181998",
+                            "source-file": "documents-181998.unparsed.json.bz2",
+                            "document-count": 2708746,
+                            "compressed-bytes": 13064317,
+                            "uncompressed-bytes": 303920342
+                        },
+                        {
+                            "target-index": "logs-191998",
+                            "source-file": "documents-191998.unparsed.json.bz2",
+                            "document-count": 9697882,
+                            "compressed-bytes": 47211781,
+                            "uncompressed-bytes": 1088378738
+                        },
+                        {
+                            "target-index": "logs-201998",
+                            "source-file": "documents-201998.unparsed.json.bz2",
+                            "document-count": 13053463,
+                            "compressed-bytes": 63174979,
+                            "uncompressed-bytes": 1456836090
+                        }
+                    ]
+                },
+                {
+                    "name": "http_logs",
+                    "target-type": "type",
+                    "documents": [
+                        {
+                            "target-index": "logs-181998",
+                            "source-file": "documents-181998.json.bz2",
+                            "document-count": 2708746,
+                            "compressed-bytes": 13815456,
+                            "uncompressed-bytes": 363512754
+                        },
+                        {
+                            "target-index": "logs-191998",
+                            "source-file": "documents-191998.json.bz2",
+                            "document-count": 9697882,
+                            "compressed-bytes": 49439633,
+                            "uncompressed-bytes": 1301732149
+                        },
+                        {
+                            "target-index": "logs-201998",
+                            "source-file": "documents-201998.json.bz2",
+                            "document-count": 13053463,
+                            "compressed-bytes": 65623436,
+                            "uncompressed-bytes": 1744012279
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "bulk-index-1",
+                    "operation-type": "bulk",
+                    "corpora": ["http_logs"],
+                    "indices": ["logs-181998"],
+                    "bulk-size": 500
+                },
+                {
+                    "name": "bulk-index-2",
+                    "operation-type": "bulk",
+                    "corpora": ["http_logs"],
+                    "indices": ["logs-191998"],
+                    "bulk-size": 500
+                },
+                {
+                    "name": "bulk-index-3",
+                    "operation-type": "bulk",
+                    "corpora": ["http_logs_unparsed"],
+                    "indices": ["logs-201998"],
+                    "bulk-size": 500
+                },
+                {
+                    "name": "node-stats",
+                    "operation-type": "node-stats"
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "name": "index-1",
+                                        "operation": "bulk-index-1",
+                                    },
+                                    {
+                                        "name": "index-2",
+                                        "operation": "bulk-index-2",
+                                    },
+                                    {
+                                        "name": "index-3",
+                                        "operation": "bulk-index-3",
+                                    },
+                                ]
+                            }
+                        },
+                        {
+                            "operation": "node-stats"
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", track_specification, "/mappings")
+        used_corpora = sorted(loader.used_corpora(full_track, cfg), key=lambda c: c.name)
+        self.assertEqual(2, len(used_corpora))
+        self.assertEqual("http_logs", used_corpora[0].name)
+        # each bulk operation requires a different data file but they should have been merged properly.
+        self.assertEqual({"documents-181998.json.bz2", "documents-191998.json.bz2"},
+                         {d.document_archive for d in used_corpora[0].documents})
+
+        self.assertEqual("http_logs_unparsed", used_corpora[1].name)
+        self.assertEqual({"documents-201998.unparsed.json.bz2"}, {d.document_archive for d in used_corpora[1].documents})
+
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("os.path.getsize")

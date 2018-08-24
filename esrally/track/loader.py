@@ -228,6 +228,19 @@ def operation_parameters(t, op):
         return params.param_source_for_operation(op.type, t, op.params)
 
 
+def used_corpora(t, cfg):
+    corpora = {}
+    challenge = t.find_challenge_or_default(cfg.opts("track", "challenge.name"))
+    for task in challenge.schedule:
+        for sub_task in task:
+            param_source = operation_parameters(t, sub_task.operation)
+            if hasattr(param_source, "corpora"):
+                for c in param_source.corpora:
+                    # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.
+                    corpora[c.name] = corpora.get(c.name, c).union(c)
+    return corpora.values()
+
+
 def prepare_track(t, cfg):
     """
     Ensures that all track data are available for running the benchmark.
@@ -238,7 +251,7 @@ def prepare_track(t, cfg):
     logger = logging.getLogger(__name__)
     offline = cfg.opts("system", "offline.mode")
     test_mode = cfg.opts("track", "test.mode.enabled")
-    for corpus in t.corpora:
+    for corpus in used_corpora(t, cfg):
         data_root = data_dir(cfg, t.name, corpus.name)
         logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s.", corpus.name, t.name, data_root)
         prep = DocumentSetPreparator(t.name, offline, test_mode)
