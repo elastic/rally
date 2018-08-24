@@ -215,7 +215,8 @@ class DocumentCorpus:
         return DocumentCorpus(self.name, filtered)
 
     def union(self, other):
-        assert self.name == other.name, "Both document corpora must have the same name"
+        if self.name != other.name:
+            raise exceptions.RallyAssertionError("Both document corpora must have the same name")
         if self is other:
             return self
         else:

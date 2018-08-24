@@ -153,5 +153,5 @@ class DocumentCorpusTests(TestCase):
         b = track.DocumentCorpus("other", documents=[
             track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-02"),
         ])
-        with self.assertRaisesRegex(AssertionError, "Both document corpora must have the same name"):
+        with self.assertRaisesRegex(exceptions.RallyAssertionError, "Both document corpora must have the same name"):
             a.union(b)
