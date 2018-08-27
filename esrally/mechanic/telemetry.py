@@ -143,7 +143,7 @@ class FlightRecorder(TelemetryDevice):
     internal = False
     command = "jfr"
     human_name = "Flight Recorder"
-    help = "Enables Java Flight Recorder (requires an Oracle JDK)"
+    help = "Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)"
 
     def __init__(self, telemetry_params, log_root, java_major_version):
         super().__init__()
@@ -155,15 +155,17 @@ class FlightRecorder(TelemetryDevice):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jfr" % (self.log_root, car.safe_name, candidate_id)
 
-        console.println("\n***************************************************************************\n")
-        console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
-        console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
-        console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
-        console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
-        console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
-        console.println("\n***************************************************************************\n")
+        # JFR was integrated into OpenJDK 11 and is not a commercial feature anymore.
+        if self.java_major_version < 11:
+            console.println("\n***************************************************************************\n")
+            console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
+            console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
+            console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
+            console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
+            console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
+            console.println("\n***************************************************************************\n")
 
-        time.sleep(3)
+            time.sleep(3)
 
         console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=self.logger)
 
@@ -174,7 +176,10 @@ class FlightRecorder(TelemetryDevice):
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
-        java_opts = "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
+        java_opts = "-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
+
+        if self.java_major_version < 11:
+            java_opts += "-XX:+UnlockCommercialFeatures "
 
         if self.java_major_version < 9:
             java_opts += "-XX:+FlightRecorder "
