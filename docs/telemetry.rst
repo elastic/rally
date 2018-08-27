@@ -31,7 +31,7 @@ You can attach one or more of these telemetry devices to the benchmarked cluster
 jfr
 ---
 
-The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Java Flight Recorder ships only with Oracle JDK, so Rally assumes that Oracle JDK is used for benchmarking.
+The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Up to JDK 11, Java flight recorder ships only with Oracle JDK, so Rally assumes that Oracle JDK is used for benchmarking. If you run benchmarks on JDK 11 or later, Java flight recorder is also available on OpenJDK.
 
 To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will then write a flight recording file which can be opened in `Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_. Rally prints the location of the flight recording file on the command line.
 
@@ -44,7 +44,7 @@ Supported telemetry parameters:
 
 .. note::
 
-   The licensing terms of Java flight recorder do not allow you to run it in production environments without a valid license (for details, refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
+   Up to JDK 11 Java flight recorder ship only with Oracle JDK and the licensing terms do not allow you to run it in production environments without a valid license (for details, refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
 
 jit
 ---

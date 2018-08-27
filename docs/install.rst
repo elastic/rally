@@ -101,9 +101,7 @@ In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --ve
 JDK
 ~~~
 
-A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator to :doc:`benchmark remote clusters </recipes>`, no JDK is required.
-
-We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK check your operating system's documentation pages.
+A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator to :doc:`benchmark remote clusters </recipes>`, no JDK is required. For details on how to install a JDK check your operating system's documentation pages.
 
 To find the JDK, Rally expects the environment variable ``JAVA_HOME`` to be set on all targeted machines. To have more specific control, for example when you want to benchmark across a wide range of Elasticsearch releases, you can also set ``JAVAx_HOME`` where ``x``  is the major version of a JDK (e.g. ``JAVA8_HOME`` would point to a JDK 8 installation). Rally will then choose the highest supported JDK per version of Elasticsearch that is available.
 
