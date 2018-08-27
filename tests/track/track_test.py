@@ -126,3 +126,32 @@ class DocumentCorpusTests(TestCase):
         self.assertEqual(2, len(filtered_corpus.documents))
         self.assertEqual("logs-01", filtered_corpus.documents[0].target_index)
         self.assertEqual("logs-02", filtered_corpus.documents[1].target_index)
+
+    def test_union_document_corpus_is_reflexive(self):
+        corpus = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=6, target_index="logs-02"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7, target_index="logs-03"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=8, target_index=None)
+        ])
+        self.assertTrue(corpus.union(corpus) is corpus)
+
+    def test_union_document_corpora_is_symmetric(self):
+        a = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+        ])
+        b = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-02"),
+        ])
+        self.assertEqual(b.union(a), a.union(b))
+        self.assertEqual(2, len(a.union(b).documents))
+
+    def test_cannot_union_mixed_document_corpora(self):
+        a = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+        ])
+        b = track.DocumentCorpus("other", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-02"),
+        ])
+        with self.assertRaisesRegex(exceptions.RallyAssertionError, "Both document corpora must have the same name"):
+            a.union(b)

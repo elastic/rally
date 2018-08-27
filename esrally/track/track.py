@@ -214,6 +214,14 @@ class DocumentCorpus:
             filtered.append(d)
         return DocumentCorpus(self.name, filtered)
 
+    def union(self, other):
+        if self.name != other.name:
+            raise exceptions.RallyAssertionError("Both document corpora must have the same name")
+        if self is other:
+            return self
+        else:
+            return DocumentCorpus(self.name, list(set(self.documents).union(other.documents)))
+
     def __str__(self):
         return self.name
 
