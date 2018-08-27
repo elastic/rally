@@ -283,6 +283,8 @@ class TrackPreparationActor(actor.RallyActor):
         # is present on all machines.
         if msg.track.has_plugins:
             track.track_repo(cfg, fetch=True, update=True)
+            # we also need to load track plugins eagerly as the respective parameter sources could require
+            track.load_track_plugins(cfg, runner.register_runner, scheduler.register_scheduler)
         # Beware: This is a potentially long-running operation and we're completely blocking our actor here. We should do this
         # maybe in a background thread.
         track.prepare_track(msg.track, cfg)
