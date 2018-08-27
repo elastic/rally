@@ -96,6 +96,8 @@ popd >/dev/null 2>&1
 export THESPLOG_FILE="${THESPLOG_FILE:-${HOME}/.rally/logs/actor-system-internal.log}"
 # this value is in bytes, the default is 50kB. We increase it to 200kiB.
 export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
+# adjust the default log level from WARNING
+export THESPLOG_THRESHOLD="INFO"
 
 # Provide a consistent binary name to the user and hide the fact that we call another binary under the hood.
 export RALLY_ALTERNATIVE_BINARY_NAME=$(basename "$0")
