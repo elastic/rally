@@ -3,6 +3,7 @@ import logging
 import os
 import glob
 import urllib.error
+import tempfile
 
 import jinja2
 import jinja2.exceptions
@@ -622,7 +623,12 @@ class TrackFileReader:
         self.logger.info("Reading track specification file [%s].", track_spec_file)
         try:
             rendered = render_template_from_file(track_spec_file, self.track_params)
-            self.logger.info("Final rendered track for '%s': %s", track_spec_file, rendered)
+            # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
+            # involving lines numbers and it also does not bloat Rally's log file so much.
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+            with open(tmp.name, "wt", encoding="utf-8") as f:
+                f.write(rendered)
+            self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
             track_spec = json.loads(rendered)
         except jinja2.exceptions.TemplateNotFound:
             self.logger.exception("Could not load [%s]", track_spec_file)
