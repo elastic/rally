@@ -840,14 +840,16 @@ class TrackPostProcessingTests(TestCase):
                                         "clients": 4,
                                         "operation": "search",
                                         "warmup-iterations": 1000,
-                                        "iterations": 2000
+                                        "iterations": 2000,
+                                        "target-interval": 30
                                     },
                                     {
                                         "name": "search #2",
                                         "clients": 1,
                                         "operation": "search",
                                         "warmup-iterations": 1000,
-                                        "iterations": 2000
+                                        "iterations": 2000,
+                                        "target-throughput": 200
                                     },
                                     {
                                         "name": "search #3",

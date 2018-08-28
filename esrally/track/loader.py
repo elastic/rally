@@ -586,6 +586,11 @@ def post_process_for_test_mode(t):
                 if leaf_task.time_period is not None and leaf_task.time_period > 10:
                     leaf_task.time_period = 10
                     logger.info("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
+
+                logger.info("Avoiding throughput throttling")
+                leaf_task.params.pop("target-throughput", None)
+                leaf_task.params.pop("target-interval", None)
+
     return t
 
 
