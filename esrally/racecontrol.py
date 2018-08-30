@@ -97,9 +97,11 @@ class BenchmarkActor(actor.RallyActor):
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
 
+    @actor.no_retry("race control")
     def receiveMsg_Setup(self, msg, sender):
         self.setup(msg, sender)
 
+    @actor.no_retry("race control")
     def receiveMsg_EngineStarted(self, msg, sender):
         self.logger.info("Mechanic has started engine successfully.")
         self.metrics_store.meta_info = msg.system_meta_info
@@ -114,6 +116,7 @@ class BenchmarkActor(actor.RallyActor):
         # start running we assume that each race has at least one lap
         self.run()
 
+    @actor.no_retry("race control")
     def receiveMsg_TaskFinished(self, msg, sender):
         self.logger.info("Task has finished.")
         self.logger.info("Bulk adding request metrics to metrics store.")
@@ -122,17 +125,20 @@ class BenchmarkActor(actor.RallyActor):
         # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
         self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
         self.cancelled = True
         # even notify the start sender if it is the originator. The reason is that we call #ask() which waits for a reply.
         # We also need to ask in order to avoid races between this notification and the following ActorExitRequest.
         self.send(self.start_sender, msg)
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.logger.info("Received a benchmark failure from [%s] and will forward it now.", sender)
         self.error = True
         self.send(self.start_sender, msg)
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkComplete(self, msg, sender):
         self.logger.info("Benchmark is complete.")
         self.logger.info("Bulk adding request metrics to metrics store.")
@@ -141,6 +147,7 @@ class BenchmarkActor(actor.RallyActor):
         self.main_driver = None
         self.send(self.mechanic, mechanic.OnBenchmarkStop())
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkStopped(self, msg, sender):
         self.logger.info("Bulk adding system metrics to metrics store.")
         self.metrics_store.bulk_add(msg.system_metrics)
@@ -153,6 +160,7 @@ class BenchmarkActor(actor.RallyActor):
         else:
             self.teardown()
 
+    @actor.no_retry("race control")
     def receiveMsg_EngineStopped(self, msg, sender):
         self.logger.info("Mechanic has stopped engine successfully.")
         self.logger.info("Bulk adding system metrics to metrics store.")
