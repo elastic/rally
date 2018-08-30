@@ -1,6 +1,26 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.0.1
+------------------------
+
+Logs are not rotated
+^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.0.1 we have disabled automatic rotation of logs by default because it can lead to race conditions due to Rally's multi-process architecture. If you did not change the default out-of-the-box logging configuration, Rally will automatically fix your configuration. Otherwise, you need to replace all instances of ``logging.handlers.TimedRotatingFileHandler`` with ``logging.handlers.WatchedFileHandler`` to disable log rotation.
+
+To rotate logs we recommend to use external tools like `logrotate <https://linux.die.net/man/8/logrotate>`_. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
+
+    /home/user/.rally/logs/rally.log {
+            daily                   # rotate daily
+            rotate 7                # keep the last seven log files
+            maxage 14               # remove logs older than 14 days
+            compress                # compress old logs ...
+            delaycompress           # ... after moving them
+            missingok               # ignore missing log files
+            notifempty              # don't attempt to rotate empty ones
+    }
+
 Migrating to Rally 1.0.0
 ------------------------
 

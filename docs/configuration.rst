@@ -119,7 +119,19 @@ Logging in Rally is configured in ``~/.rally/logging.json``. For more informatio
 * The Python reference documentation on the `logging configuration schema <https://docs.python.org/3/library/logging.config.html#logging-config-dictschema>`_ explains the file format.
 * The `logging handler documentation <https://docs.python.org/3/library/logging.handlers.html>`_ describes how to customize where log output is written to.
 
-By default, Rally will log all output to ``~/.rally/logs/rally.log`` and rotate this file daily.
+By default, Rally will log all output to ``~/.rally/logs/rally.log``.
+
+The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
+
+    /home/user/.rally/logs/rally.log {
+            daily                   # rotate daily
+            rotate 7                # keep the last seven log files
+            maxage 14               # remove logs older than 14 days
+            compress                # compress old logs ...
+            delaycompress           # ... after moving them
+            missingok               # ignore missing log files
+            notifempty              # don't attempt to rotate empty ones
+    }
 
 Example
 ~~~~~~~
