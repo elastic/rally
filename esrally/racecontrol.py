@@ -178,8 +178,6 @@ class BenchmarkActor(actor.RallyActor):
 
     def setup(self, msg, sender):
         self.start_sender = sender
-        self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
-
         self.cfg = msg.cfg
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set but there are rare
         # cases (external pipeline and user did not specify the distribution version) where we need to derive it ourselves. For source
@@ -211,6 +209,7 @@ class BenchmarkActor(actor.RallyActor):
         self.race_store = metrics.race_store(self.cfg)
         self.logger.info("Asking mechanic to start the engine.")
         cluster_settings = challenge.cluster_settings
+        self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(self.mechanic, mechanic.StartEngine(self.cfg, self.metrics_store.open_context, cluster_settings, msg.sources, msg.build,
                                                       msg.distribution, msg.external, msg.docker))
 
