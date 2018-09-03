@@ -1281,29 +1281,38 @@ def time_period_based(sched, warmup_time_period, time_period, runner, params):
         iterations = params.size()
         if iterations:
             for it in range(0, iterations):
-                sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
-                percent_completed = (it + 1) / iterations
-                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-                next_scheduled = sched.next(next_scheduled)
+                try:
+                    sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
+                    percent_completed = (it + 1) / iterations
+                    yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+                    next_scheduled = sched.next(next_scheduled)
+                except StopIteration:
+                    return
         else:
             param_source_knows_progress = hasattr(params, "percent_completed")
             while True:
-                sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
-                # does not contribute at all to completion. Hence, we cannot define completion.
-                percent_completed = params.percent_completed if param_source_knows_progress else None
-                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-                next_scheduled = sched.next(next_scheduled)
+                try:
+                    sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
+                    # does not contribute at all to completion. Hence, we cannot define completion.
+                    percent_completed = params.percent_completed if param_source_knows_progress else None
+                    yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+                    next_scheduled = sched.next(next_scheduled)
+                except StopIteration:
+                    return
     else:
         end = start + warmup_time_period + time_period
         it = 0
 
         while time.perf_counter() < end:
-            now = time.perf_counter()
-            sample_type = metrics.SampleType.Warmup if now - start < warmup_time_period else metrics.SampleType.Normal
-            percent_completed = (now - start) / (warmup_time_period + time_period)
-            yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-            next_scheduled = sched.next(next_scheduled)
-            it += 1
+            try:
+                now = time.perf_counter()
+                sample_type = metrics.SampleType.Warmup if now - start < warmup_time_period else metrics.SampleType.Normal
+                percent_completed = (now - start) / (warmup_time_period + time_period)
+                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+                next_scheduled = sched.next(next_scheduled)
+                it += 1
+            except StopIteration:
+                return
 
 
 def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
@@ -1322,7 +1331,10 @@ def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
     if total_iterations == 0:
         raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
     for it in range(0, total_iterations):
-        sample_type = metrics.SampleType.Warmup if it < warmup_iterations else metrics.SampleType.Normal
-        percent_completed = (it + 1) / total_iterations
-        yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-        next_scheduled = sched.next(next_scheduled)
+        try:
+            sample_type = metrics.SampleType.Warmup if it < warmup_iterations else metrics.SampleType.Normal
+            percent_completed = (it + 1) / total_iterations
+            yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+            next_scheduled = sched.next(next_scheduled)
+        except StopIteration:
+            return

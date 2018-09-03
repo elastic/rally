@@ -29,6 +29,9 @@ it35: python-caches-clean
 it36: python-caches-clean
 	tox -e py36
 
+it37: python-caches-clean
+	tox -e py37
+
 benchmark:
 	python3 setup.py pytest --addopts="-s benchmarks"
 
