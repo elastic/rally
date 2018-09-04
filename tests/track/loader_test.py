@@ -1367,6 +1367,58 @@ class TrackSpecificationReaderTests(TestCase):
                          "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
                          ctx.exception.args[0])
 
+    def test_load_invalid_index_body(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [
+                {
+                    "name": "index-historical",
+                    "body": "body.json",
+                    "types": ["_doc"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "documents": [
+                        {
+                            "source-file": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000
+                        }
+                    ]
+                }
+            ],
+            "schedule": [
+                {
+                    "clients": 8,
+                    "operation": {
+                        "name": "index-append",
+                        "operation-type": "index",
+                        "bulk-size": 5000
+                    }
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader(
+            track_params={"number_of_shards": 3},
+            source=io.DictStringFileSourceFactory({
+                "/mappings/body.json": ["""
+            {
+                "settings": {
+                    "number_of_shards": {{ number_of_shards }}
+                },
+                "mappings": {
+                    "_doc": "no closing quotation mark!!,
+                }
+            }
+            """]
+            }))
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Could not load file template for 'definition for index index-historical in body.json'", ctx.exception.args[0])
+
     def test_parse_unique_task_names(self):
         track_specification = {
             "description": "description for unit test",
