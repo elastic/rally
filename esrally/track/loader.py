@@ -231,14 +231,15 @@ def operation_parameters(t, op):
 
 def used_corpora(t, cfg):
     corpora = {}
-    challenge = t.find_challenge_or_default(cfg.opts("track", "challenge.name"))
-    for task in challenge.schedule:
-        for sub_task in task:
-            param_source = operation_parameters(t, sub_task.operation)
-            if hasattr(param_source, "corpora"):
-                for c in param_source.corpora:
-                    # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.
-                    corpora[c.name] = corpora.get(c.name, c).union(c)
+    if t.corpora:
+        challenge = t.find_challenge_or_default(cfg.opts("track", "challenge.name"))
+        for task in challenge.schedule:
+            for sub_task in task:
+                param_source = operation_parameters(t, sub_task.operation)
+                if hasattr(param_source, "corpora"):
+                    for c in param_source.corpora:
+                        # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.
+                        corpora[c.name] = corpora.get(c.name, c).union(c)
     return corpora.values()
 
 
