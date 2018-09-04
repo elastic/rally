@@ -69,7 +69,9 @@ def no_retry(f, actor_name):
             msg = "Error in {}".format(actor_name)
             # log here as the full trace might get lost.
             logging.getLogger(__name__).exception(msg)
-            self.send(sender, BenchmarkFailure(msg, e))
+            # don't forward the exception as is because the main process might not have this class available on the load path
+            # and will fail then while deserializing the cause.
+            self.send(sender, BenchmarkFailure("{} ({})".format(msg, str(e))))
     return guard
 
 
