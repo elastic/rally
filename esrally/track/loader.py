@@ -633,7 +633,7 @@ class TrackFileReader:
         except jinja2.exceptions.TemplateNotFound:
             self.logger.exception("Could not load [%s]", track_spec_file)
             raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
-        except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
+        except Exception as e:
             self.logger.exception("Could not load [%s].", track_spec_file)
             # Convert to string early on to avoid serialization errors with Jinja exceptions.
             raise TrackSyntaxError("Could not load '{}'".format(track_spec_file), str(e))
@@ -775,7 +775,7 @@ class TrackSpecificationReader:
                                        template_name="default",
                                        template_vars=self.track_params)
             return json.loads(rendered)
-        except (json.JSONDecodeError, jinja2.exceptions.TemplateError) as e:
+        except Exception as e:
             self.logger.exception("Could not load file template for %s.", description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
