@@ -410,6 +410,7 @@ class OperationType(Enum):
     DeleteIndex = 1006
     CreateIndexTemplate = 1007
     DeleteIndexTemplate = 1008
+    ShrinkIndex = 1009
 
     @property
     def admin_op(self):
@@ -443,6 +444,8 @@ class OperationType(Enum):
             return OperationType.CreateIndexTemplate
         elif v == "delete-index-template":
             return OperationType.DeleteIndexTemplate
+        elif v == "shrink-index":
+            return OperationType.ShrinkIndex
         else:
             raise KeyError("No enum value for [%s]" % v)
 
