@@ -125,7 +125,9 @@ class RallyRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase")
-    def test_updates_locally(self, rebase, checkout, branches, fetch, is_working_copy):
+    @mock.patch("esrally.utils.git.current_branch")
+    def test_updates_locally(self, curr_branch, rebase, checkout, branches, fetch, is_working_copy):
+        curr_branch.return_value = "5"
         branches.return_value = ["1", "2", "5", "master"]
         is_working_copy.return_value = True
 
@@ -181,7 +183,9 @@ class RallyRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase")
-    def test_does_not_update_unknown_branch_remotely_local_fallback(self, rebase, checkout, branches, fetch, is_working_copy):
+    @mock.patch("esrally.utils.git.current_branch")
+    def test_does_not_update_unknown_branch_remotely_local_fallback(self, curr_branch, rebase, checkout, branches, fetch, is_working_copy):
+        curr_branch.return_value = "master"
         # we have only "master" remotely but a few more branches locally
         branches.side_effect = ["5", ["1", "2", "5", "master"]]
         is_working_copy.return_value = True

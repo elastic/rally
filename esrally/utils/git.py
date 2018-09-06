@@ -85,6 +85,11 @@ def head_revision(src_dir):
 
 
 @probed
+def current_branch(src_dir):
+    return process.run_subprocess_with_output("git -C {0} rev-parse --abbrev-ref HEAD".format(src_dir))[0].strip()
+
+
+@probed
 def branches(src_dir, remote=True):
     if remote:
         # alternatively: git for-each-ref refs/remotes/ --format='%(refname:short)'

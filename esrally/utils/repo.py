@@ -57,8 +57,9 @@ class RallyRepository:
                     self.logger.warning(msg)
             branch = versions.best_match(git.branches(self.repo_dir, remote=False), distribution_version)
             if branch:
-                self.logger.info("Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
-                git.checkout(self.repo_dir, branch=branch)
+                if git.current_branch(self.repo_dir) != branch:
+                    self.logger.info("Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
+                    git.checkout(self.repo_dir, branch=branch)
             else:
                 raise exceptions.SystemSetupError("Cannot find %s for distribution version %s" % (self.resource_name, distribution_version))
         except exceptions.SupplyError as e:
