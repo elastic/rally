@@ -19,8 +19,11 @@
   },
   "handlers": {
     "rally_log_handler": {
-      "class": "logging.handlers.WatchedFileHandler",
+      "class": "logging.handlers.TimedRotatingFileHandler",
       "filename": "${LOG_PATH}/rally.log",
+      "utc": true,
+      "when": "midnight",
+      "backupCount": 14,
       "encoding": "UTF-8",
       "formatter": "normal",
       "filters": ["isActorLog"]

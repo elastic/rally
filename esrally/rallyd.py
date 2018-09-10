@@ -52,6 +52,7 @@ def status():
 
 def main():
     check_python_version()
+    log.remove_obsolete_default_log_config()
     log.install_default_log_config()
     log.configure_logging()
     console.init()
