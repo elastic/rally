@@ -654,6 +654,34 @@ With the following snippet we will delete the `default`` index template::
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+shrink-index
+~~~~~~~~~~~~
+
+With the operation ``shrink-index`` you can execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_. Note that this does not correspond directly to the shrink index API call in Elasticsearch but it is a high-level operation that executes all the necessary low-level operations under the hood to shrink an index. It supports the following parameters:
+
+* ``source-index`` (mandatory): The name of the index that should be shrinked.
+* ``target-index`` (mandatory): The name of the index that contains the shrinked shards.
+* ``target-body`` (mandatory): The body containing settings and aliases for ``target-index``.
+* ``shrink-node`` (optional, defaults to a random data node): As a first step, the source index needs to be fully relocated to a single node. Rally will automatically choose a random data node in the cluster but you can choose one explicitly if needed.
+
+Example::
+
+    {
+      "operation-type": "shrink-index",
+      "shrink-node": "rally-node-0",
+      "source-index": "src",
+      "target-index": "target",
+      "target-body": {
+        "settings": {
+          "index.number_of_replicas": 1,
+          "index.number_of_shards": 1,
+          "index.codec": "best_compression"
+        }
+      }
+    }
+
+This will shrink the index ``src`` to ``target``. The target index will consist of one shard and have one replica. With ``shrink-node`` we also explicitly specify the name of the node where we want the source index to be relocated to.
+
 raw-request
 ~~~~~~~~~~~
 

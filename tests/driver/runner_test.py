@@ -1410,6 +1410,134 @@ class RawRequestRunnerTests(TestCase):
                                                              params={})
 
 
+class ShrinkIndexTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    # To avoid real sleeps in unit tests
+    @mock.patch("time.sleep")
+    def test_shrink_index_with_shrink_node(self, sleep, es):
+        # cluster health API
+        es.transport.perform_request.return_value = {
+            "status": "green",
+            "relocating_shards": 0
+        }
+
+        r = runner.ShrinkIndex()
+        params = {
+            "source-index": "src",
+            "target-index": "target",
+            "target-body": {
+                "settings": {
+                    "index.number_of_replicas": 2,
+                    "index.number_of_shards": 0
+                }
+            },
+            "shrink-node": "rally-node-0"
+        }
+
+        r(es, params)
+
+        es.indices.put_settings.assert_called_once_with(index="src",
+                                                        body={
+                                                            "settings": {
+                                                                "index.routing.allocation.require._name": "rally-node-0",
+                                                                "index.blocks.write": "true"
+                                                            }
+                                                        },
+                                                        preserve_existing=True)
+
+        es.transport.perform_request.assert_has_calls([
+            mock.call("GET", "/_cluster/health/src", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call("GET", "/_cluster/health/target", params={"wait_for_no_relocating_shards": "true"}),
+        ])
+
+        es.indices.shrink.assert_called_once_with(index="src", target="target", body={
+            "settings": {
+                "index.number_of_replicas": 2,
+                "index.number_of_shards": 0,
+                "index.routing.allocation.require._name": None,
+                "index.blocks.write": None
+            }
+        })
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    # To avoid real sleeps in unit tests
+    @mock.patch("time.sleep")
+    def test_shrink_index_derives_shrink_node(self, sleep, es):
+        # cluster health API
+        es.transport.perform_request.return_value = {
+            "status": "green",
+            "relocating_shards": 0
+        }
+        es.nodes.info.return_value = {
+            "_nodes": {
+                "total": 3,
+                "successful": 3,
+                "failed": 0
+            },
+            "cluster_name": "elasticsearch",
+            "nodes": {
+                "lsM0-tKnQqKEGVw-OZU5og": {
+                    "name": "node0",
+                    "roles": [
+                        "master",
+                        "data",
+                        "ingest"
+                    ]
+                },
+                "kxM0-tKnQqKEGVw-OZU5og": {
+                    "name": "node1",
+                    "roles": [
+                        "master"
+                    ]
+                },
+                "yyM0-tKnQqKEGVw-OZU5og": {
+                    "name": "node0",
+                    "roles": [
+                        "ingest"
+                    ]
+                }
+            }
+        }
+
+        r = runner.ShrinkIndex()
+        params = {
+            "source-index": "src",
+            "target-index": "target",
+            "target-body": {
+                "settings": {
+                    "index.number_of_replicas": 2,
+                    "index.number_of_shards": 0
+                }
+            }
+        }
+
+        r(es, params)
+
+        es.indices.put_settings.assert_called_once_with(index="src",
+                                                        body={
+                                                            "settings": {
+                                                                # the only data node in the cluster was chosen
+                                                                "index.routing.allocation.require._name": "node0",
+                                                                "index.blocks.write": "true"
+                                                            }
+                                                        },
+                                                        preserve_existing=True)
+
+        es.transport.perform_request.assert_has_calls([
+            mock.call("GET", "/_cluster/health/src", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call("GET", "/_cluster/health/target", params={"wait_for_no_relocating_shards": "true"}),
+        ])
+
+        es.indices.shrink.assert_called_once_with(index="src", target="target", body={
+            "settings": {
+                "index.number_of_replicas": 2,
+                "index.number_of_shards": 0,
+                "index.routing.allocation.require._name": None,
+                "index.blocks.write": None
+            }
+        })
+
+
 class RetryTests(TestCase):
     def test_is_transparent_on_success_when_no_retries(self):
         delegate = mock.Mock()

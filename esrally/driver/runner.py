@@ -1,8 +1,10 @@
 import sys
 import types
 import time
+import random
 import logging
 from collections import Counter, OrderedDict
+from copy import deepcopy
 
 from esrally import exceptions, track
 
@@ -26,6 +28,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()))
     register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()))
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()))
+    register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()))
 
 
 def runner_for(operation_type):
@@ -65,6 +68,7 @@ class Runner:
     """
     Base class for all operations against Elasticsearch.
     """
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
@@ -817,6 +821,78 @@ class DeleteIndexTemplate(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-index-template"
+
+
+class ShrinkIndex(Runner):
+    """
+    Execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_.
+
+    This is a high-level runner that actually executes multiple low-level operations under the hood.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.cluster_health = Retry(ClusterHealth())
+
+    def _wait_for(self, es, idx, description):
+        # wait a little bit before the first check
+        time.sleep(3)
+        result = self.cluster_health(es, params={
+            "index": idx,
+            "retries": sys.maxsize,
+            "request-params": {
+                "wait_for_no_relocating_shards": "true"
+            }
+        })
+        if not result["success"]:
+            raise exceptions.RallyAssertionError("Failed to wait for [{}].".format(description))
+
+    def __call__(self, es, params):
+        source_index = mandatory(params, "source-index", self)
+        target_index = mandatory(params, "target-index", self)
+        # we need to inject additional settings so we better copy the body
+        target_body = deepcopy(mandatory(params, "target-body", self))
+        shrink_node = params.get("shrink-node")
+        # Choose a random data node if none is specified
+        if not shrink_node:
+            node_names = []
+            # choose a random data node
+            for node in es.nodes.info()["nodes"].values():
+                if "data" in node["roles"]:
+                    node_names.append(node["name"])
+            if not node_names:
+                raise exceptions.RallyAssertionError("Could not choose a suitable shrink-node automatically. Please specify it explicitly.")
+            shrink_node = random.choice(node_names)
+        self.logger.info("Using [%s] as shrink node.", shrink_node)
+        self.logger.info("Preparing [%s] for shrinking.", source_index)
+        # prepare index for shrinking
+        es.indices.put_settings(index=source_index,
+                                body={
+                                    "settings": {
+                                        "index.routing.allocation.require._name": shrink_node,
+                                        "index.blocks.write": "true"
+                                    }
+                                },
+                                preserve_existing=True)
+
+        self.logger.info("Waiting for relocation to finish for index [%s]...", source_index)
+        self._wait_for(es, source_index, "shard relocation for index [{}]".format(source_index))
+        self.logger.info("Shrinking [%s] to [%s].", source_index, target_index)
+        if "settings" not in target_body:
+            target_body["settings"] = {}
+        target_body["settings"]["index.routing.allocation.require._name"] = None
+        target_body["settings"]["index.blocks.write"] = None
+        # kick off the shrink operation
+        es.indices.shrink(index=source_index, target=target_index, body=target_body)
+
+        self.logger.info("Waiting for shrink to finish for index [%s]...", source_index)
+        self._wait_for(es, target_index, "shrink for index [{}]".format(target_index))
+        self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, target_index)
+        # ops_count is not really important for this operation...
+        return 1, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "shrink-index"
 
 
 class RawRequest(Runner):
