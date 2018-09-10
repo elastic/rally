@@ -675,7 +675,8 @@ class DiskIo(InternalTelemetryDevice):
             else:
                 try:
                     self.disk_start = sysstats.disk_io_counters()
-                    self.logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
+                    self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
+                                        "I/O counters.")
                 except RuntimeError:
                     self.logger.exception("Could not determine I/O stats at benchmark start.")
 
