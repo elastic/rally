@@ -1,3 +1,33 @@
+### 1.0.1
+
+#### Enhancements
+
+* [#569](https://github.com/elastic/rally/pull/569): Add shrink index runner
+* [#559](https://github.com/elastic/rally/pull/559): Write rendered track to a temporary file
+* [#558](https://github.com/elastic/rally/pull/558): Avoid throughput throttling in test mode
+* [#557](https://github.com/elastic/rally/pull/557): Adjust flight recorder flags for JDK 11
+* [#556](https://github.com/elastic/rally/pull/556): Upgrade to Thespian 3.9.3
+* [#555](https://github.com/elastic/rally/pull/555): Load only required corpora
+* [#549](https://github.com/elastic/rally/pull/549): Exponential back-off for retrying transport errors to metrics store
+* [#546](https://github.com/elastic/rally/pull/546): Update ccr stats endpoint
+* [#545](https://github.com/elastic/rally/pull/545): Use non-standard port for metrics store in tests
+* [#540](https://github.com/elastic/rally/pull/540): Simplify filtering node-stats-related documents
+* [#538](https://github.com/elastic/rally/pull/538): Retry metric store for more transport errors
+
+#### Bug Fixes
+
+* [#565](https://github.com/elastic/rally/pull/565): Improve compatibility when loading invalid JSON
+* [#562](https://github.com/elastic/rally/pull/562): Defer startup of mechanic actor
+* [#560](https://github.com/elastic/rally/pull/560): Disable automatic log rotation
+* [#551](https://github.com/elastic/rally/pull/551): Fix HTTP TLS client certificate verification
+* [#544](https://github.com/elastic/rally/pull/544): Fix parsing of boolean values datastore.secure
+* [#542](https://github.com/elastic/rally/pull/542): Warn when cluster settings cannot be applied
+* [#537](https://github.com/elastic/rally/pull/537): make --test-mode work with uncompressed data #536
+
+#### Doc Changes
+
+* [#533](https://github.com/elastic/rally/pull/533): State clearly that only Unix is supported
+
 ### 1.0.0
 
 #### Enhancements
