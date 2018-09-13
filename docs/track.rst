@@ -707,13 +707,13 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 start-ml-datafeed
 ~~~~~~~~~~~~~~~~~
 
-With the operation ``start-ml-datafeed`` you can execute the `start datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__. The ``start-ml-datafeed`` operation supports the following parameters:
+With the operation ``start-ml-datafeed`` you can execute the `start datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__. The ``start-ml-datafeed`` operation supports the following parameters which are documented in the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation:
 
 * ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
-* ``body`` (optional, defaults to empty): Request body with start parameters. Please see the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation for more details.
-* ``start`` (optional, defaults to empty): Start timestamp of the datafeed. Please see the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation for more details.
-* ``end`` (optional, defaults to empty): End timestamp of the datafeed. Please see the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation for more details.
-* ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed starts. Please see the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation for more details.
+* ``body`` (optional, defaults to empty): Request body with start parameters.
+* ``start`` (optional, defaults to empty): Start timestamp of the datafeed.
+* ``end`` (optional, defaults to empty): End timestamp of the datafeed.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed starts.
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
