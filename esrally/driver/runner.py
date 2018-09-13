@@ -29,6 +29,14 @@ def register_default_runners():
     register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()))
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()))
     register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()))
+    register_runner(track.OperationType.CreateMlDatafeed.name, Retry(CreateMlDatafeed()))
+    register_runner(track.OperationType.DeleteMlDatafeed.name, Retry(DeleteMlDatafeed()))
+    register_runner(track.OperationType.StartMlDatafeed.name, Retry(StartMlDatafeed()))
+    register_runner(track.OperationType.StopMlDatafeed.name, Retry(StopMlDatafeed()))
+    register_runner(track.OperationType.CreateMlJob.name, Retry(CreateMlJob()))
+    register_runner(track.OperationType.DeleteMlJob.name, Retry(DeleteMlJob()))
+    register_runner(track.OperationType.OpenMlJob.name, Retry(OpenMlJob()))
+    register_runner(track.OperationType.CloseMlJob.name, Retry(CloseMlJob()))
 
 
 def runner_for(operation_type):
@@ -893,6 +901,124 @@ class ShrinkIndex(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "shrink-index"
+
+
+class CreateMlDatafeed(Runner):
+    """
+    Execute the `create datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        body = mandatory(params, "body", self)
+        es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-ml-datafeed"
+
+
+class DeleteMlDatafeed(Runner):
+    """
+    Execute the `delete datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        force = params.get("force", False)
+        # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
+        es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-ml-datafeed"
+
+
+class StartMlDatafeed(Runner):
+    """
+    Execute the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        body = params.get("body")
+        start = params.get("start")
+        end = params.get("end")
+        timeout = params.get("timeout")
+        es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "start-ml-datafeed"
+
+
+class StopMlDatafeed(Runner):
+    """
+    Execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "stop-ml-datafeed"
+
+
+class CreateMlJob(Runner):
+    """
+    Execute the `create job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        body = mandatory(params, "body", self)
+        es.xpack.ml.put_job(job_id=job_id, body=body)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-ml-job"
+
+
+class DeleteMlJob(Runner):
+    """
+    Execute the `delete job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        force = params.get("force", False)
+        # we don't want to fail if a job does not exist, thus we ignore 404s.
+        es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-ml-job"
+
+
+class OpenMlJob(Runner):
+    """
+    Execute the `open job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        es.xpack.ml.open_job(job_id=job_id)
+
+    def __repr__(self, *args, **kwargs):
+        return "open-ml-job"
+
+
+class CloseMlJob(Runner):
+    """
+    Execute the `close job API <http://www.elastic.co/guide/en/elasticsearch/reference/current/ml-close-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "close-ml-job"
 
 
 class RawRequest(Runner):

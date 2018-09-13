@@ -682,6 +682,94 @@ Example::
 
 This will shrink the index ``src`` to ``target``. The target index will consist of one shard and have one replica. With ``shrink-node`` we also explicitly specify the name of the node where we want the source index to be relocated to.
 
+delete-ml-datafeed
+~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-ml-datafeed`` you can execute the `delete datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_. The ``delete-ml-datafeed`` operation supports the following parameters:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to delete.
+* ``force`` (optional, defaults to ``false``): Whether to force deletion of a datafeed that has already been started.
+
+This runner will intentionally ignore 404s from Elasticsearch so it is safe to execute this runner regardless whether a corresponding machine learning datafeed exists.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-ml-datafeed
+~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-ml-datafeed`` you can execute the `create datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__. The ``create-ml-datafeed`` operation supports the following parameters:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to create.
+* ``body`` (mandatory): Request body containing the definition of the datafeed. Please see the `create datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__ documentation for more details.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+start-ml-datafeed
+~~~~~~~~~~~~~~~~~
+
+With the operation ``start-ml-datafeed`` you can execute the `start datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__. The ``start-ml-datafeed`` operation supports the following parameters which are documented in the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
+* ``body`` (optional, defaults to empty): Request body with start parameters.
+* ``start`` (optional, defaults to empty): Start timestamp of the datafeed.
+* ``end`` (optional, defaults to empty): End timestamp of the datafeed.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed starts.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+stop-ml-datafeed
+~~~~~~~~~~~~~~~~
+
+With the operation ``stop-ml-datafeed`` you can execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_. The ``stop-ml-datafeed`` operation supports the following parameters:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
+* ``force`` (optional, defaults to ``false``): Whether to forcefully stop an already started datafeed.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed stops.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+delete-ml-job
+~~~~~~~~~~~~~
+
+With the operation ``delete-ml-job`` you can execute the `delete jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_. The ``delete-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to delete.
+* ``force`` (optional, defaults to ``false``): Whether to force deletion of a job that has already been opened.
+
+This runner will intentionally ignore 404s from Elasticsearch so it is safe to execute this runner regardless whether a corresponding machine learning job exists.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-ml-job
+~~~~~~~~~~~~~
+
+With the operation ``create-ml-job`` you can execute the `create jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__. The ``create-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to create.
+* ``body`` (mandatory): Request body containing the definition of the job. Please see the `create job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__ documentation for more details.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+open-ml-job
+~~~~~~~~~~~
+
+With the operation ``open-ml-job`` you can execute the `open jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_. The ``open-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to open.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+close-ml-job
+~~~~~~~~~~~~
+
+With the operation ``close-ml-job`` you can execute the `close jobs API. The ``close-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to start.
+* ``force`` (optional, defaults to ``false``): Whether to forcefully stop an already opened job.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a job stops.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 raw-request
 ~~~~~~~~~~~
 

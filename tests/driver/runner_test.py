@@ -1,4 +1,5 @@
 import io
+import random
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -1313,6 +1314,165 @@ class DeleteIndexTemplateRunnerTests(TestCase):
             r(es, params)
 
         self.assertEqual(0, es.indices.delete_template.call_count)
+
+
+class CreateMlDatafeedTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_ml_datafeed(self, es):
+        params = {
+            "datafeed-id": "some-data-feed",
+            "body": {
+                "job_id": "total-requests",
+                "indices": ["server-metrics"]
+            }
+        }
+
+        r = runner.CreateMlDatafeed()
+        r(es, params)
+
+        es.xpack.ml.put_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
+
+
+class DeleteMlDatafeedTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_delete_ml_datafeed(self, es):
+        datafeed_id = "some-data-feed"
+        params = {
+            "datafeed-id": datafeed_id
+        }
+
+        r = runner.DeleteMlDatafeed()
+        r(es, params)
+
+        es.xpack.ml.delete_datafeed.assert_called_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
+
+
+class StartMlDatafeedTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_start_ml_datafeed_with_body(self, es):
+        params = {
+            "datafeed-id": "some-data-feed",
+            "body": {
+                "end": "now"
+            }
+        }
+
+        r = runner.StartMlDatafeed()
+        r(es, params)
+
+        es.xpack.ml.start_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"],
+                                                           body=params["body"],
+                                                           start=None,
+                                                           end=None,
+                                                           timeout=None)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_start_ml_datafeed_with_params(self, es):
+        params = {
+            "datafeed-id": "some-data-feed",
+            "start": "2017-01-01T01:00:00Z",
+            "end": "now",
+            "timeout": "10s"
+        }
+
+        r = runner.StartMlDatafeed()
+        r(es, params)
+
+        es.xpack.ml.start_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"],
+                                                           body=None,
+                                                           start=params["start"],
+                                                           end=params["end"],
+                                                           timeout=params["timeout"])
+
+
+class StopMlDatafeedTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_stop_ml_datafeed(self, es):
+        params = {
+            "datafeed-id": "some-data-feed",
+            "force": random.choice([False, True]),
+            "timeout": "5s"
+        }
+
+        r = runner.StopMlDatafeed()
+        r(es, params)
+
+        es.xpack.ml.stop_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"],
+                                                          force=params["force"],
+                                                          timeout=params["timeout"])
+
+
+class CreateMlJobTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_ml_job(self, es):
+        params = {
+            "job-id": "an-ml-job",
+            "body": {
+                "description": "Total sum of requests",
+                "analysis_config": {
+                    "bucket_span": "10m",
+                    "detectors": [
+                        {
+                            "detector_description": "Sum of total",
+                            "function": "sum",
+                            "field_name": "total"
+                        }
+                    ]
+                },
+                "data_description": {
+                    "time_field": "timestamp",
+                    "time_format": "epoch_ms"
+                }
+            }
+        }
+
+        r = runner.CreateMlJob()
+        r(es, params)
+
+        es.xpack.ml.put_job.assert_called_once_with(job_id=params["job-id"], body=params["body"])
+
+
+class DeleteMlJobTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_delete_ml_job(self, es):
+        job_id = "an-ml-job"
+        params = {
+            "job-id": job_id
+        }
+
+        r = runner.DeleteMlJob()
+        r(es, params)
+
+        es.xpack.ml.delete_job.assert_called_once_with(job_id=job_id, force=False, ignore=[404])
+
+
+class OpenMlJobTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_open_ml_job(self, es):
+        job_id = "an-ml-job"
+        params = {
+            "job-id": job_id
+        }
+
+        r = runner.OpenMlJob()
+        r(es, params)
+
+        es.xpack.ml.open_job.assert_called_once_with(job_id=job_id)
+
+
+class CloseMlJobTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_close_ml_job(self, es):
+        params = {
+            "job-id": "an-ml-job",
+            "force": random.choice([False, True]),
+            "timeout": "5s"
+        }
+
+        r = runner.CloseMlJob()
+        r(es, params)
+
+        es.xpack.ml.close_job.assert_called_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
 
 
 class RawRequestRunnerTests(TestCase):
