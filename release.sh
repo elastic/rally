@@ -66,7 +66,7 @@ git commit -a -m "Continue in $NEXT_RELEASE"
 git push origin master
 
 # Prepare offline installation package
-source scripts/offline-install.sh "${RELEASE_VERSION}"
+# source scripts/offline-install.sh "${RELEASE_VERSION}"
 
 echo ""
 echo "===================="
