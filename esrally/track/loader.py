@@ -546,7 +546,8 @@ def post_process_for_test_mode(t):
     logger = logging.getLogger(__name__)
     logger.info("Preparing track [%s] for test mode.", str(t))
     for corpus in t.corpora:
-        logger.info("Reducing corpus size to 1000 documents for [%s]", corpus.name)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Reducing corpus size to 1000 documents for [%s]", corpus.name)
         for document_set in corpus.documents:
             # TODO #341: Should we allow this for snapshots too?
             if document_set.is_bulk:
@@ -576,20 +577,23 @@ def post_process_for_test_mode(t):
                 # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
                 if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                     count = leaf_task.clients
-                    logger.info("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
                     leaf_task.warmup_iterations = count
                 if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                     count = leaf_task.clients
-                    logger.info("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
                     leaf_task.iterations = count
                 if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                     leaf_task.warmup_time_period = 0
-                    logger.info("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period)
                 if leaf_task.time_period is not None and leaf_task.time_period > 10:
                     leaf_task.time_period = 10
-                    logger.info("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
 
-                logger.info("Avoiding throughput throttling")
                 leaf_task.params.pop("target-throughput", None)
                 leaf_task.params.pop("target-interval", None)
 
