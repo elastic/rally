@@ -50,20 +50,25 @@ def register_runner(operation_type, runner):
     logger = logging.getLogger(__name__)
     if getattr(runner, "multi_cluster", False) == True:
         if "__enter__" in dir(runner) and "__exit__" in dir(runner):
-            logger.info("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
             __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
         else:
-            logger.info("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
             __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
-        logger.info("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
-        logger.info("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
     else:
-        logger.info("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner))
 
 
