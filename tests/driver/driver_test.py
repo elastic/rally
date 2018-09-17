@@ -1,6 +1,7 @@
 import unittest.mock as mock
 import threading
 import collections
+import time
 from unittest import TestCase
 from datetime import datetime
 
@@ -616,7 +617,7 @@ class ExecutorTests(TestCase):
                           warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
-        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=100)
+        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
         cancel = threading.Event()
         complete = threading.Event()
 
@@ -632,9 +633,9 @@ class ExecutorTests(TestCase):
         for sample in samples:
             self.assertEqual(2, sample.client_id)
             self.assertEqual(task, sample.task)
-            self.assertTrue(previous_absolute_time < sample.absolute_time)
+            self.assertLess(previous_absolute_time, sample.absolute_time)
             previous_absolute_time = sample.absolute_time
-            self.assertTrue(previous_relative_time < sample.relative_time)
+            self.assertLess(previous_relative_time, sample.relative_time)
             previous_relative_time = sample.relative_time
             # we don't have any warmup time period
             self.assertEqual(metrics.SampleType.Normal, sample.sample_type)

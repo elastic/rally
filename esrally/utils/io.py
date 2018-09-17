@@ -127,13 +127,7 @@ def ensure_dir(directory, mode=0o777):
     :param mode: The permission flags to use (if it does not exist).
     """
     if directory:
-        # TODO Python 3.7 compatibility: Set umask first. See https://docs.python.org/3.7/whatsnew/3.7.html#changes-in-the-python-api
-        try:
-            # avoid a race condition by trying to create the checkout directory
-            os.makedirs(directory, mode)
-        except OSError as exception:
-            if exception.errno != errno.EEXIST:
-                raise
+        os.makedirs(directory, mode, exist_ok=True)
 
 
 def _zipdir(source_directory, archive):
