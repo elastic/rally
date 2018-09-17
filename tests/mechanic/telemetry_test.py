@@ -1,6 +1,7 @@
 import random
 import collections
 import unittest.mock as mock
+import elasticsearch
 
 from unittest import TestCase
 from esrally import config, metrics, exceptions
@@ -156,7 +157,6 @@ class TransportClient:
 
     def perform_request(self, *args, **kwargs):
         if self._force_error:
-            import elasticsearch
             raise elasticsearch.TransportError
         else:
             return self._response
@@ -1953,6 +1953,114 @@ class IndexStatsTests(TestCase):
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
         ], any_order=True)
+
+
+class MlBucketProcessingTimeTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_put_doc):
+        es.search.side_effect = elasticsearch.TransportError("unit test error")
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        # cluster is not used by this device
+        t.detach_from_cluster(cluster=None)
+
+        self.assertEqual(0, metrics_store_put_doc.call_count)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_empty_result_does_not_store_metrics(self, es, metrics_store_put_doc):
+        es.search.return_value = {
+            "aggregations": {
+                "jobs": {
+                    "buckets": []
+                }
+            }
+        }
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        # cluster is not used by this device
+        t.detach_from_cluster(cluster=None)
+
+        self.assertEqual(0, metrics_store_put_doc.call_count)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_result_is_stored(self, es, metrics_store_put_doc):
+        es.search.return_value = {
+            "aggregations": {
+                "jobs": {
+                    "buckets": [
+                        {
+                            "key": "benchmark_ml_job_1",
+                            "doc_count": 4775,
+                            "max_pt": {
+                                "value": 36.0
+                            },
+                            "mean_pt": {
+                                "value": 12.3
+                            },
+                            "median_pt": {
+                                "values": {
+                                    "50.0": 17.2
+                                }
+                            },
+                            "min_pt": {
+                                "value": 2.2
+                            }
+                        },
+                        {
+                            "key": "benchmark_ml_job_2",
+                            "doc_count": 3333,
+                            "max_pt": {
+                                "value": 226.3
+                            },
+                            "mean_pt": {
+                                "value": 78.3
+                            },
+                            "median_pt": {
+                                "values": {
+                                    "50.0": 37.4
+                                }
+                            },
+                            "min_pt": {
+                                "value": 32.2
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        # cluster is not used by this device
+        t.detach_from_cluster(cluster=None)
+
+        metrics_store_put_doc.assert_has_calls([
+            mock.call(doc={
+                "name": "ml_processing_time",
+                "job_name": "benchmark_ml_job_1",
+                "min_millis": 2.2,
+                "mean_millis": 12.3,
+                "median_millis": 17.2,
+                "max_millis": 36.0
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "ml_processing_time",
+                "job_name": "benchmark_ml_job_2",
+                "min_millis": 32.2,
+                "mean_millis": 78.3,
+                "median_millis": 37.4,
+                "max_millis": 226.3
+            }, level=metrics.MetaInfoScope.cluster)
+        ])
 
 
 class IndexSizeTests(TestCase):

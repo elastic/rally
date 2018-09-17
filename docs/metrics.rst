@@ -152,3 +152,4 @@ Rally stores the following metrics:
 * ``final_index_size_bytes``: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
 * ``store_size_in_bytes``: The size in bytes of the index (excluding the translog) as reported by the indices stats API.
 * ``translog_size_in_bytes``: The size in bytes of the translog as reported by the indices stats API.
+* ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.
