@@ -26,7 +26,7 @@ Let's go through an example step by step: First run ``esrally``::
 
       esrally configure --advanced-config
 
-    * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
+    * Setting up benchmark root directory in /Users/dm/.rally/benchmarks
     * Setting up benchmark source directory in /Users/dm/.rally/benchmarks/src/elasticsearch
 
     Configuration successfully written to /Users/dm/.rally/rally.ini. Happy benchmarking!
@@ -68,7 +68,7 @@ Configuration Options
 
 Rally will ask you a few more things in the advanced setup:
 
-* **Benchmark data directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different data directory here.
+* **Benchmark root directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different root directory here.
 * **Elasticsearch project directory**: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with the Gradle Wrapper in this directory (it runs ``./gradlew clean`` and ``./gradlew :distribution:tar:assemble``).
 * **Metrics store type**: You can choose between ``in-memory`` which requires no additional setup or ``elasticsearch`` which requires that you start a dedicated Elasticsearch instance to store metrics but gives you much more flexibility to analyse results.
 * **Metrics store settings** (only for metrics store type ``elasticsearch``): Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. When using self-signed certificates on the Elasticsearch metrics store, certificate verification can be turned off by setting the ``datastore.ssl.verification_mode`` setting to ``none``. Alternatively you can enter the path to the certificate authority's signing certificate in ``datastore.ssl.certificate_authorities``. Both settings are optional.

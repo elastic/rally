@@ -301,9 +301,9 @@ class ConfigFactory:
 
         root_dir = io.normalize_path(os.path.abspath(os.path.join(config_file.config_dir, "benchmarks")))
         if advanced_config:
-            root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory", default_value=root_dir))
+            root_dir = io.normalize_path(self._ask_property("Enter the benchmark root directory", default_value=root_dir))
         else:
-            self.o("* Setting up benchmark data directory in %s" % root_dir)
+            self.o("* Setting up benchmark root directory in %s" % root_dir)
 
         # We try to autodetect an existing ES source directory
         guess = self._guess_es_src_dir()
