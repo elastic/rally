@@ -92,6 +92,12 @@ Where ``X`` is one of:
 * **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use ``--car-params="verbose_iw_logging_enabled:true"`` for that).
 * **Corresponding metrics keys**: ``merge_parts_total_time_*``
 
+ML processing time
+------------------
+
+* **Definition**: Minimum, mean, median and maximum time in milliseconds that a machine learning job has spent processing a single bucket.
+* **Corresponding metrics key**: ``ml_processing_time``
+
 
 Median CPU usage
 ----------------

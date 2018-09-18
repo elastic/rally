@@ -1133,15 +1133,29 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
                 "query": {
                     "bool": {
                         "must": [
-                            {"term": {"result_type": "bucket"}},
-                            # TODO: We could restrict this by job id if we need to measure multiple jobs...
-                            # {"term": {"job_id": "job_id"}}
+                            {"term": {"result_type": "bucket"}}
                         ]
                     }
                 },
                 "aggs": {
-                    "max_bucket_processing_time": {
-                        "max": {"field": "processing_time_ms"}
+                    "jobs": {
+                        "terms": {
+                            "field": "job_id"
+                        },
+                        "aggs": {
+                            "min_pt": {
+                                "min": {"field": "processing_time_ms"}
+                            },
+                            "max_pt": {
+                                "max": {"field": "processing_time_ms"}
+                            },
+                            "mean_pt": {
+                                "avg": {"field": "processing_time_ms"}
+                            },
+                            "median_pt": {
+                                "percentiles": {"field": "processing_time_ms", "percents": [50]}
+                            }
+                        }
                     }
                 }
             })
@@ -1149,9 +1163,15 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
             self.logger.exception("Could not retrieve ML bucket processing time.")
             return
         try:
-            value = results["aggregations"]["max_bucket_processing_time"]["value"]
-            if value:
-                self.metrics_store.put_value_cluster_level("ml_max_processing_time_millis", value, "ms")
+            for job in results["aggregations"]["jobs"]["buckets"]:
+                ml_job_stats = collections.OrderedDict()
+                ml_job_stats["name"] = "ml_processing_time"
+                ml_job_stats["job_name"] = job["key"]
+                ml_job_stats["min_millis"] = job["min_pt"]["value"]
+                ml_job_stats["mean_millis"] = job["mean_pt"]["value"]
+                ml_job_stats["median_millis"] = job["median_pt"]["values"]["50.0"]
+                ml_job_stats["max_millis"] = job["max_pt"]["value"]
+                self.metrics_store.put_doc(doc=dict(ml_job_stats), level=MetaInfoScope.cluster)
         except KeyError:
             # no ML running
             pass

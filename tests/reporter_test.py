@@ -45,6 +45,14 @@ class StatsCalculatorTests(TestCase):
                                       meta_data={"success": False})
         store.put_value_cluster_level("service_time", 215, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
                                       meta_data={"success": True})
+        store.put_doc(doc={
+            "name": "ml_processing_time",
+            "job_name": "benchmark_ml_job_1",
+            "min_millis": 2.2,
+            "mean_millis": 12.3,
+            "median_millis": 17.2,
+            "max_millis": 36.0
+        }, level=metrics.MetaInfoScope.cluster)
         store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
         store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
 
@@ -59,6 +67,12 @@ class StatsCalculatorTests(TestCase):
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
         self.assertEqual(6144, stats.index_size)
+        self.assertEqual(1, len(stats.ml_processing_time))
+        self.assertEqual("benchmark_ml_job_1", stats.ml_processing_time[0]["job_name"])
+        self.assertEqual(2.2, stats.ml_processing_time[0]["min_millis"])
+        self.assertEqual(12.3, stats.ml_processing_time[0]["mean_millis"])
+        self.assertEqual(17.2, stats.ml_processing_time[0]["median_millis"])
+        self.assertEqual(36.0, stats.ml_processing_time[0]["max_millis"])
 
 
 def select(l, name, operation=None, node=None):
