@@ -154,7 +154,7 @@ class StatsCalculator:
         result.merge_part_time_points = self.sum("merge_parts_total_time_points")
 
         self.logger.debug("Gathering ML max processing times.")
-        result.ml_processing_time = self.all("ml_processing_time")
+        result.ml_processing_time = self.ml_processing_time_stats()
 
         self.logger.debug("Gathering CPU usage metrics.")
         result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
@@ -195,9 +195,6 @@ class StatsCalculator:
     def one(self, metric_name):
         return self.store.get_one(metric_name, lap=self.lap)
 
-    def all(self, metric_name):
-        return self.store.get_raw(metric_name, lap=self.lap)
-
     def summary_stats(self, metric_name, task_name):
         median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         unit = self.store.get_unit(metric_name, task=task_name)
@@ -230,6 +227,21 @@ class StatsCalculator:
             }
         else:
             return {}
+
+    def ml_processing_time_stats(self):
+        values = self.store.get_raw("ml_processing_time")
+        result = []
+        if values:
+            for v in values:
+                result.append({
+                    "job": v["job"],
+                    "min": v["min"],
+                    "mean": v["mean"],
+                    "median": v["median"],
+                    "max": v["max"],
+                    "unit": v["unit"]
+                })
+        return result
 
     def error_rate(self, task_name):
         return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
@@ -272,7 +284,7 @@ class Stats:
         self.flush_time_per_shard = self.v(d, "flush_time_per_shard", default={})
         self.merge_throttle_time = self.v(d, "merge_throttle_time")
         self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
-        self.ml_processing_time = self.v(d, "ml_processing_time")
+        self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
 
         self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
         self.merge_part_time_stored_fields = self.v(d, "merge_part_time_stored_fields")
@@ -321,6 +333,18 @@ class Stats:
                         all_results.append(
                             {"task": item["task"], "operation": item["operation"], "name": "error_rate",
                              "value": {"single": item["error_rate"]}})
+            elif metric == "ml_processing_time":
+                for item in value:
+                    all_results.append({
+                        "job": item["job"],
+                        "name": "ml_processing_time",
+                        "value": {
+                            "min": item["min"],
+                            "mean": item["mean"],
+                            "median": item["median"],
+                            "max": item["max"]
+                        }
+                    })
             elif metric == "node_metrics":
                 for item in value:
                     if "startup_time" in item:
@@ -525,11 +549,12 @@ class SummaryReporter:
     def report_ml_processing_times(self, stats):
         lines = []
         for processing_time in stats.ml_processing_time:
-            job_name = processing_time["job_name"]
-            lines.append(self.line("Min ML processing time", job_name, processing_time["min_millis"], "s", convert.ms_to_seconds)),
-            lines.append(self.line("Mean ML processing time", job_name, processing_time["mean_millis"], "s", convert.ms_to_seconds)),
-            lines.append(self.line("Median ML processing time", job_name, processing_time["median_millis"], "s", convert.ms_to_seconds)),
-            lines.append(self.line("Max ML processing time", job_name, processing_time["max_millis"], "s", convert.ms_to_seconds))
+            job_name = processing_time["job"]
+            unit = processing_time["unit"]
+            lines.append(self.line("Min ML processing time", job_name, processing_time["min"], unit)),
+            lines.append(self.line("Mean ML processing time", job_name, processing_time["mean"], unit)),
+            lines.append(self.line("Median ML processing time", job_name, processing_time["median"], unit)),
+            lines.append(self.line("Max ML processing time", job_name, processing_time["max"], unit))
         return lines
 
     def report_cpu_usage(self, stats):
@@ -714,18 +739,19 @@ class ComparisonReporter:
     def report_ml_processing_times(self, baseline_stats, contender_stats):
         lines = []
         for baseline in baseline_stats.ml_processing_time:
-            job_name = baseline["job_name"]
+            job_name = baseline["job"]
+            unit = baseline["unit"]
             # O(n^2) but we assume here only a *very* limited number of jobs (usually just one)
             for contender in contender_stats.ml_processing_time:
-                if contender["job_name"] == job_name:
-                    lines.append(self.line("Min ML processing time", baseline["min_millis"], contender["min_millis"],
-                                           job_name, "s", treat_increase_as_improvement=False, formatter=convert.ms_to_seconds))
-                    lines.append(self.line("Mean ML processing time", baseline["mean_millis"], contender["mean_millis"],
-                                           job_name, "s", treat_increase_as_improvement=False, formatter=convert.ms_to_seconds))
-                    lines.append(self.line("Median ML processing time", baseline["median_millis"], contender["median_millis"],
-                                           job_name, "s", treat_increase_as_improvement=False, formatter=convert.ms_to_seconds))
-                    lines.append(self.line("Max ML processing time", baseline["max_millis"], contender["max_millis"],
-                                           job_name, "s", treat_increase_as_improvement=False, formatter=convert.ms_to_seconds))
+                if contender["job"] == job_name:
+                    lines.append(self.line("Min ML processing time", baseline["min"], contender["min"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(self.line("Mean ML processing time", baseline["mean"], contender["mean"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(self.line("Median ML processing time", baseline["median"], contender["median"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(self.line("Max ML processing time", baseline["max"], contender["max"],
+                                           job_name, unit, treat_increase_as_improvement=False))
         return lines
 
     def report_total_times(self, baseline_stats, contender_stats):

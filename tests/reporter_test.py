@@ -47,11 +47,12 @@ class StatsCalculatorTests(TestCase):
                                       meta_data={"success": True})
         store.put_doc(doc={
             "name": "ml_processing_time",
-            "job_name": "benchmark_ml_job_1",
-            "min_millis": 2.2,
-            "mean_millis": 12.3,
-            "median_millis": 17.2,
-            "max_millis": 36.0
+            "job": "benchmark_ml_job_1",
+            "min": 2.2,
+            "mean": 12.3,
+            "median": 17.2,
+            "max": 36.0,
+            "unit": "ms"
         }, level=metrics.MetaInfoScope.cluster)
         store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
         store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
@@ -68,16 +69,17 @@ class StatsCalculatorTests(TestCase):
 
         self.assertEqual(6144, stats.index_size)
         self.assertEqual(1, len(stats.ml_processing_time))
-        self.assertEqual("benchmark_ml_job_1", stats.ml_processing_time[0]["job_name"])
-        self.assertEqual(2.2, stats.ml_processing_time[0]["min_millis"])
-        self.assertEqual(12.3, stats.ml_processing_time[0]["mean_millis"])
-        self.assertEqual(17.2, stats.ml_processing_time[0]["median_millis"])
-        self.assertEqual(36.0, stats.ml_processing_time[0]["max_millis"])
+        self.assertEqual("benchmark_ml_job_1", stats.ml_processing_time[0]["job"])
+        self.assertEqual(2.2, stats.ml_processing_time[0]["min"])
+        self.assertEqual(12.3, stats.ml_processing_time[0]["mean"])
+        self.assertEqual(17.2, stats.ml_processing_time[0]["median"])
+        self.assertEqual(36.0, stats.ml_processing_time[0]["max"])
+        self.assertEqual("ms", stats.ml_processing_time[0]["unit"])
 
 
-def select(l, name, operation=None, node=None):
+def select(l, name, operation=None, job=None, node=None):
     for item in l:
-        if item["name"] == name and item.get("operation") == operation and item.get("node") == node:
+        if item["name"] == name and item.get("operation") == operation and item.get("node") == node and item.get("job") == job:
             return item
     return None
 
@@ -115,6 +117,22 @@ class StatsTests(TestCase):
                     "node": "rally-node-1",
                     "startup_time": 4.2
                 }
+            ],
+            "ml_processing_time": [
+                {
+                    "job": "job_1",
+                    "min": 3.3,
+                    "mean": 5.2,
+                    "median": 5.8,
+                    "max": 12.34
+                },
+                {
+                    "job": "job_2",
+                    "min": 3.55,
+                    "mean": 4.2,
+                    "median": 4.9,
+                    "max": 9.4
+                },
             ],
             "young_gc_time": 68,
             "old_gc_time": 0,
@@ -187,6 +205,28 @@ class StatsTests(TestCase):
                 "single": 4.2
             }
         }, select(metric_list, "startup_time", node="rally-node-1"))
+
+        self.assertEqual({
+            "name": "ml_processing_time",
+            "job": "job_1",
+            "value": {
+                "min": 3.3,
+                "mean": 5.2,
+                "median": 5.8,
+                "max": 12.34
+            }
+        }, select(metric_list, "ml_processing_time", job="job_1"))
+
+        self.assertEqual({
+            "name": "ml_processing_time",
+            "job": "job_2",
+            "value": {
+                "min": 3.55,
+                "mean": 4.2,
+                "median": 4.9,
+                "max": 9.4
+            }
+        }, select(metric_list, "ml_processing_time", job="job_2"))
 
         self.assertEqual({
             "name": "young_gc_time",

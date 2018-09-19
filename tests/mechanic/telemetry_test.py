@@ -2046,19 +2046,21 @@ class MlBucketProcessingTimeTests(TestCase):
         metrics_store_put_doc.assert_has_calls([
             mock.call(doc={
                 "name": "ml_processing_time",
-                "job_name": "benchmark_ml_job_1",
-                "min_millis": 2.2,
-                "mean_millis": 12.3,
-                "median_millis": 17.2,
-                "max_millis": 36.0
+                "job": "benchmark_ml_job_1",
+                "min": 2.2,
+                "mean": 12.3,
+                "median": 17.2,
+                "max": 36.0,
+                "unit": "ms"
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "ml_processing_time",
-                "job_name": "benchmark_ml_job_2",
-                "min_millis": 32.2,
-                "mean_millis": 78.3,
-                "median_millis": 37.4,
-                "max_millis": 226.3
+                "job": "benchmark_ml_job_2",
+                "min": 32.2,
+                "mean": 78.3,
+                "median": 37.4,
+                "max": 226.3,
+                "unit": "ms"
             }, level=metrics.MetaInfoScope.cluster)
         ])
 

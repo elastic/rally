@@ -74,6 +74,9 @@
         "operation": {
           "type": "keyword"
         },
+        "job": {
+          "type": "keyword"
+        },
         "name": {
           "type": "keyword"
         },
@@ -84,6 +87,9 @@
               "type": "double"
             },
             "min": {
+              "type": "double"
+            },
+            "mean": {
               "type": "double"
             },
             "median": {

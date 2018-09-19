@@ -1166,11 +1166,12 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
             for job in results["aggregations"]["jobs"]["buckets"]:
                 ml_job_stats = collections.OrderedDict()
                 ml_job_stats["name"] = "ml_processing_time"
-                ml_job_stats["job_name"] = job["key"]
-                ml_job_stats["min_millis"] = job["min_pt"]["value"]
-                ml_job_stats["mean_millis"] = job["mean_pt"]["value"]
-                ml_job_stats["median_millis"] = job["median_pt"]["values"]["50.0"]
-                ml_job_stats["max_millis"] = job["max_pt"]["value"]
+                ml_job_stats["job"] = job["key"]
+                ml_job_stats["min"] = job["min_pt"]["value"]
+                ml_job_stats["mean"] = job["mean_pt"]["value"]
+                ml_job_stats["median"] = job["median_pt"]["values"]["50.0"]
+                ml_job_stats["max"] = job["max_pt"]["value"]
+                ml_job_stats["unit"] = "ms"
                 self.metrics_store.put_doc(doc=dict(ml_job_stats), level=MetaInfoScope.cluster)
         except KeyError:
             # no ML running

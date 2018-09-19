@@ -66,6 +66,18 @@
         "value": {
           "type": "float"
         },
+        "min": {
+          "type": "float"
+        },
+        "max": {
+          "type": "float"
+        },
+        "mean": {
+          "type": "float"
+        },
+        "median": {
+          "type": "float"
+        },
         "unit": {
           "type": "keyword"
         },
@@ -79,6 +91,9 @@
           "type": "keyword"
         },
         "operation-type": {
+          "type": "keyword"
+        },
+        "job": {
           "type": "keyword"
         }
       }
