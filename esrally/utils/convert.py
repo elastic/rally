@@ -25,6 +25,10 @@ def bytes_to_human_string(b):
     return "%d bytes" % b
 
 
+def number_of_documents_to_human_string(number_of_documents):
+    return "{:,}".format(number_of_documents)
+
+
 def mb_to_bytes(mb):
     return int(mb * 1024 * 1024) if mb else mb
 
