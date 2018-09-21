@@ -44,7 +44,7 @@ def list_tracks(cfg):
 
     data = []
     for t in available_tracks:
-        line = [t.name, t.description, convert.number_of_documents_to_human_string(t.number_of_documents),
+        line = [t.name, t.description, convert.number_to_human_string(t.number_of_documents),
                 convert.bytes_to_human_string(t.compressed_size_in_bytes),
                 convert.bytes_to_human_string(t.uncompressed_size_in_bytes)]
         if not only_auto_generated_challenges:
