@@ -405,8 +405,6 @@ We support the following data types:
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
 * Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
 
-In addition to the options, supported by the Elasticsearch client, it is also possible to enable HTTP compression by specifying ``compressed:true``
-
 Default value: ``timeout:60``
 
 .. warning::
@@ -416,7 +414,7 @@ Default value: ``timeout:60``
 
 Here are a few common examples:
 
-* Enable HTTP compression: ``--client-options="compressed:true"``
+* Enable HTTP compression: ``--client-options="http_compress:true"``
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
 
 **TLS/SSL**

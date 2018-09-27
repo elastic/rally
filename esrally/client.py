@@ -1,4 +1,3 @@
-import gzip
 import logging
 import certifi
 import urllib3
@@ -90,6 +89,15 @@ class EsClientFactory:
         else:
             self.logger.info("HTTP basic authentication: off")
 
+        if self._is_set(self.client_options, "compressed"):
+            console.warn("You set the deprecated client option 'compressed‘. Please use 'http_compress' instead.", logger=self.logger)
+            self.client_options["http_compress"] = self.client_options.pop("compressed")
+
+        if self._is_set(self.client_options, "http_compress"):
+                self.logger.info("HTTP compression: on")
+        else:
+            self.logger.info("HTTP compression: off")
+
     def _is_set(self, client_opts, k):
         try:
             return client_opts[k]
@@ -97,31 +105,5 @@ class EsClientFactory:
             return False
 
     def create(self):
-        class PoolWrap(object):
-            def __init__(self, pool, compressed=False, **kwargs):
-                self.pool = pool
-                self.compressed = compressed
-
-            def urlopen(self, method, url, body, retries, headers, **kw):
-                if body is not None and self.compressed:
-                    body = gzip.compress(body)
-                return self.pool.urlopen(method, url, body=body, retries=retries, headers=headers, **kw)
-
-            def __getattr__(self, attr_name):
-                return getattr(self.pool, attr_name)
-
         import elasticsearch
-
-        class ConfigurableHttpConnection(elasticsearch.Urllib3HttpConnection):
-            def __init__(self, compressed=False, **kwargs):
-                super(ConfigurableHttpConnection, self).__init__(**kwargs)
-                if compressed:
-                    logging.getLogger(__name__).info("HTTP compression: on")
-                    self.headers.update(urllib3.make_headers(accept_encoding=True))
-                    self.headers.update({"Content-Encoding": "gzip"})
-                else:
-                    logging.getLogger(__name__).info("HTTP compression: off")
-                self.pool = PoolWrap(self.pool, **kwargs)
-
-        return elasticsearch.Elasticsearch(hosts=self.hosts, connection_class=ConfigurableHttpConnection,
-                                           ssl_context=self.ssl_context, **self.client_options)
+        return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
