@@ -391,22 +391,18 @@ class CcrStatsRecorder:
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        if self.indices:
-            # Record metrics only for indices specified with telemetry-params.
-            for index in self.indices:
+        if "indices" in stats:
+            for indices in stats["indices"]:
                 try:
-                    if stats[index]:
-                        self.record_stats_per_index(index, stats[index])
+                    if self.indices and indices["index"] not in self.indices:
+                        # Skip metrics for indices not part of user supplied whitelist (ccr-stats-indices) in telemetry params.
+                        continue
+                    self.record_stats_per_index(indices["index"], indices["shards"])
                 except KeyError:
-                    self.logger.warning("The telemetry parameter 'ccr-stats-indices' specified the index [%s] for cluster [%s] but there "
-                                        "are no stats available. Maybe the index hasn't been created yet, ignoring.",
-                                        index, self.cluster_name)
-        else:
-            # Record metrics for every index returned by the CCR stats API.
-            if stats:
-                for index_name, stats in stats.items():
-                    self.record_stats_per_index(index_name, stats)
-            pass
+                    self.logger.warning(
+                        "The 'indices' key in {0} does not contain an 'index' or 'shards' key "
+                        "Maybe the output format of the {0} endpoint has changed. Skipping.".format(ccr_stats_api_endpoint)
+                    )
         time.sleep(self.sample_interval)
 
     def record_stats_per_index(self, name, stats):

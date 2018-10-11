@@ -279,48 +279,59 @@ class CcrStatsRecorderTests(TestCase):
     def test_stores_default_ccr_stats(self, metrics_store_put_doc):
         java_signed_maxlong = CcrStatsRecorderTests.java_signed_maxlong
 
-        shard_id = random.randint(0, 999),
-        leader_global_checkpoint = random.randint(0, java_signed_maxlong),
-        leader_max_seq_no = random.randint(0, java_signed_maxlong),
-        follower_global_checkpoint = random.randint(0, java_signed_maxlong),
-        follower_max_seq_no = random.randint(0, java_signed_maxlong),
-        last_requested_seq_no = random.randint(0, java_signed_maxlong),
-        number_of_concurrent_reads = random.randint(0, java_signed_maxlong),
-        number_of_concurrent_writes = random.randint(0, java_signed_maxlong),
-        number_of_queued_writes = random.randint(0, java_signed_maxlong),
-        index_metadata_version = random.randint(0, java_signed_maxlong),
-        total_fetch_time_millis = random.randint(0, java_signed_maxlong),
-        number_of_successful_fetches = random.randint(0, java_signed_maxlong),
-        number_of_failed_fetches = random.randint(0, java_signed_maxlong),
-        operations_received = random.randint(0, java_signed_maxlong),
-        total_transferred_bytes = random.randint(0, java_signed_maxlong),
-        total_index_time_millis = random.randint(0, java_signed_maxlong),
-        number_of_successful_bulk_operations = random.randint(0, java_signed_maxlong),
-        number_of_failed_bulk_operations = random.randint(0, java_signed_maxlong),
+        shard_id = random.randint(0, 999)
+        leader_index = "leader_cluster:leader"
+        follower_index = "follower"
+        leader_global_checkpoint = random.randint(0, java_signed_maxlong)
+        leader_max_seq_no = random.randint(0, java_signed_maxlong)
+        follower_global_checkpoint = random.randint(0, java_signed_maxlong)
+        follower_max_seq_no = random.randint(0, java_signed_maxlong)
+        last_requested_seq_no = random.randint(0, java_signed_maxlong)
+        number_of_concurrent_reads = random.randint(0, java_signed_maxlong)
+        number_of_concurrent_writes = random.randint(0, java_signed_maxlong)
+        number_of_queued_writes = random.randint(0, java_signed_maxlong)
+        mapping_version = random.randint(0, java_signed_maxlong)
+        total_fetch_time_millis = random.randint(0, java_signed_maxlong)
+        number_of_successful_fetches = random.randint(0, java_signed_maxlong)
+        number_of_failed_fetches = random.randint(0, java_signed_maxlong)
+        operations_received = random.randint(0, java_signed_maxlong)
+        total_transferred_bytes = random.randint(0, java_signed_maxlong)
+        total_index_time_millis = random.randint(0, java_signed_maxlong)
+        time_since_last_fetch_millis = random.randint(0, java_signed_maxlong)
+        number_of_successful_bulk_operations = random.randint(0, java_signed_maxlong)
+        number_of_failed_bulk_operations = random.randint(0, java_signed_maxlong)
         number_of_operations_indexed = random.randint(0, java_signed_maxlong)
 
         ccr_stats_follower_response = {
-            "follower": [
+            "indices": [
                 {
-                    "shard_id": shard_id,
-                    "follower_global_checkpoint": follower_global_checkpoint,
-                    "follower_max_seq_no": follower_max_seq_no,
-                    "index_metadata_version": index_metadata_version,
-                    "last_requested_seq_no": last_requested_seq_no,
-                    "leader_global_checkpoint": leader_global_checkpoint,
-                    "leader_max_seq_no": leader_max_seq_no,
-                    "number_of_concurrent_reads": number_of_concurrent_reads,
-                    "number_of_concurrent_writes": number_of_concurrent_writes,
-                    "number_of_failed_bulk_operations": number_of_failed_bulk_operations,
-                    "number_of_failed_fetches": number_of_failed_fetches,
-                    "number_of_operations_indexed": number_of_operations_indexed,
-                    "number_of_queued_writes": number_of_queued_writes,
-                    "number_of_successful_bulk_operations": number_of_successful_bulk_operations,
-                    "number_of_successful_fetches": number_of_successful_fetches,
-                    "operations_received": operations_received,
-                    "total_fetch_time_millis": total_fetch_time_millis,
-                    "total_index_time_millis": total_index_time_millis,
-                    "total_transferred_bytes": total_transferred_bytes
+                    "index": follower_index,
+                    "shards": [
+                        {
+                            "shard_id": shard_id,
+                            "follower_global_checkpoint": follower_global_checkpoint,
+                            "leader_index": leader_index,
+                            "follower_index": follower_index,
+                            "follower_max_seq_no": follower_max_seq_no,
+                            "mapping_version": mapping_version,
+                            "last_requested_seq_no": last_requested_seq_no,
+                            "leader_global_checkpoint": leader_global_checkpoint,
+                            "leader_max_seq_no": leader_max_seq_no,
+                            "number_of_concurrent_reads": number_of_concurrent_reads,
+                            "number_of_concurrent_writes": number_of_concurrent_writes,
+                            "number_of_failed_bulk_operations": number_of_failed_bulk_operations,
+                            "number_of_failed_fetches": number_of_failed_fetches,
+                            "number_of_operations_indexed": number_of_operations_indexed,
+                            "number_of_queued_writes": number_of_queued_writes,
+                            "number_of_successful_bulk_operations": number_of_successful_bulk_operations,
+                            "number_of_successful_fetches": number_of_successful_fetches,
+                            "operations_received": operations_received,
+                            "time_since_last_fetch_mills": time_since_last_fetch_millis,
+                            "total_fetch_time_millis": total_fetch_time_millis,
+                            "total_index_time_millis": total_index_time_millis,
+                            "total_transferred_bytes": total_transferred_bytes
+                        }
+                    ]
                 }
             ]
         }
@@ -333,13 +344,13 @@ class CcrStatsRecorderTests(TestCase):
 
         shard_metadata = {
             "cluster": "remote",
-            "index": "follower",
+            "index": follower_index,
             "shard": shard_id,
             "name": "ccr-stats"
         }
 
         metrics_store_put_doc.assert_called_with(
-            ccr_stats_follower_response["follower"][0],
+            ccr_stats_follower_response["indices"][0]["shards"][0],
             level=MetaInfoScope.cluster,
             meta_data=shard_metadata
         )
@@ -348,6 +359,8 @@ class CcrStatsRecorderTests(TestCase):
     def test_stores_default_ccr_stats_many_shards(self, metrics_store_put_doc):
         java_signed_maxlong = CcrStatsRecorderTests.java_signed_maxlong
 
+        leader_index="leader_cluster:leader"
+        follower_index="follower"
         shard_range = range(2)
         leader_global_checkpoint = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         leader_max_seq_no = [random.randint(0, java_signed_maxlong) for _ in shard_range]
@@ -357,40 +370,49 @@ class CcrStatsRecorderTests(TestCase):
         number_of_concurrent_reads = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_concurrent_writes = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_queued_writes = [random.randint(0, java_signed_maxlong) for _ in shard_range]
-        index_metadata_version = [random.randint(0, java_signed_maxlong) for _ in shard_range]
+        mapping_version = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         total_fetch_time_millis = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_successful_fetches = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_failed_fetches = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         operations_received = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         total_transferred_bytes = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         total_index_time_millis = [random.randint(0, java_signed_maxlong) for _ in shard_range]
+        time_since_last_fetch_millis = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_successful_bulk_operations = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_failed_bulk_operations = [random.randint(0, java_signed_maxlong) for _ in shard_range]
         number_of_operations_indexed = [random.randint(0, java_signed_maxlong) for _ in shard_range]
 
         ccr_stats_follower_response = {
-            "follower": [
+            "indices": [
                 {
-                    "shard_id": shard_id,
-                    "follower_global_checkpoint": follower_global_checkpoint[shard_id],
-                    "follower_max_seq_no": follower_max_seq_no[shard_id],
-                    "index_metadata_version": index_metadata_version[shard_id],
-                    "last_requested_seq_no": last_requested_seq_no[shard_id],
-                    "leader_global_checkpoint": leader_global_checkpoint[shard_id],
-                    "leader_max_seq_no": leader_max_seq_no[shard_id],
-                    "number_of_concurrent_reads": number_of_concurrent_reads[shard_id],
-                    "number_of_concurrent_writes": number_of_concurrent_writes[shard_id],
-                    "number_of_failed_bulk_operations": number_of_failed_bulk_operations[shard_id],
-                    "number_of_failed_fetches": number_of_failed_fetches[shard_id],
-                    "number_of_operations_indexed": number_of_operations_indexed[shard_id],
-                    "number_of_queued_writes": number_of_queued_writes[shard_id],
-                    "number_of_successful_bulk_operations": number_of_successful_bulk_operations[shard_id],
-                    "number_of_successful_fetches": number_of_successful_fetches[shard_id],
-                    "operations_received": operations_received[shard_id],
-                    "total_fetch_time_millis": total_fetch_time_millis[shard_id],
-                    "total_index_time_millis": total_index_time_millis[shard_id],
-                    "total_transferred_bytes": total_transferred_bytes[shard_id]
-                } for shard_id in shard_range
+                    "index": follower_index,
+                    "shards": [
+                        {
+                            "shard_id": shard_id,
+                            "follower_global_checkpoint": follower_global_checkpoint[shard_id],
+                            "leader_index": leader_index,
+                            "follower_index": follower_index,
+                            "follower_max_seq_no": follower_max_seq_no[shard_id],
+                            "mapping_version": mapping_version[shard_id],
+                            "last_requested_seq_no": last_requested_seq_no[shard_id],
+                            "leader_global_checkpoint": leader_global_checkpoint[shard_id],
+                            "leader_max_seq_no": leader_max_seq_no[shard_id],
+                            "number_of_concurrent_reads": number_of_concurrent_reads[shard_id],
+                            "number_of_concurrent_writes": number_of_concurrent_writes[shard_id],
+                            "number_of_failed_bulk_operations": number_of_failed_bulk_operations[shard_id],
+                            "number_of_failed_fetches": number_of_failed_fetches[shard_id],
+                            "number_of_operations_indexed": number_of_operations_indexed[shard_id],
+                            "number_of_queued_writes": number_of_queued_writes[shard_id],
+                            "number_of_successful_bulk_operations": number_of_successful_bulk_operations[shard_id],
+                            "number_of_successful_fetches": number_of_successful_fetches[shard_id],
+                            "operations_received": operations_received[shard_id],
+                            "total_fetch_time_millis": total_fetch_time_millis[shard_id],
+                            "total_index_time_millis": total_index_time_millis[shard_id],
+                            "total_transferred_bytes": total_transferred_bytes[shard_id],
+                            "time_since_last_fetch_millis": time_since_last_fetch_millis[shard_id]
+                        } for shard_id in shard_range
+                    ]
+                }
             ]
         }
 
@@ -416,8 +438,8 @@ class CcrStatsRecorderTests(TestCase):
         ]
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(ccr_stats_follower_response["follower"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata[0]),
-            mock.call(ccr_stats_follower_response["follower"][1], level=MetaInfoScope.cluster, meta_data=shard_metadata[1])
+            mock.call(ccr_stats_follower_response["indices"][0]["shards"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata[0]),
+            mock.call(ccr_stats_follower_response["indices"][0]["shards"][1], level=MetaInfoScope.cluster, meta_data=shard_metadata[1])
             ],
             any_order=True
         )
@@ -426,70 +448,89 @@ class CcrStatsRecorderTests(TestCase):
     def test_stores_filtered_ccr_stats(self, metrics_store_put_doc):
         java_signed_maxlong = CcrStatsRecorderTests.java_signed_maxlong
 
-        leader_global_checkpoint = random.randint(0, java_signed_maxlong),
-        leader_max_seq_no = random.randint(0, java_signed_maxlong),
-        follower_global_checkpoint = random.randint(0, java_signed_maxlong),
-        follower_max_seq_no = random.randint(0, java_signed_maxlong),
-        last_requested_seq_no = random.randint(0, java_signed_maxlong),
-        number_of_concurrent_reads = random.randint(0, java_signed_maxlong),
-        number_of_concurrent_writes = random.randint(0, java_signed_maxlong),
-        number_of_queued_writes = random.randint(0, java_signed_maxlong),
-        index_metadata_version = random.randint(0, java_signed_maxlong),
-        total_fetch_time_millis = random.randint(0, java_signed_maxlong),
-        number_of_successful_fetches = random.randint(0, java_signed_maxlong),
-        number_of_failed_fetches = random.randint(0, java_signed_maxlong),
-        operations_received = random.randint(0, java_signed_maxlong),
-        total_transferred_bytes = random.randint(0, java_signed_maxlong),
-        total_index_time_millis = random.randint(0, java_signed_maxlong),
-        number_of_successful_bulk_operations = random.randint(0, java_signed_maxlong),
-        number_of_failed_bulk_operations = random.randint(0, java_signed_maxlong),
+        leader_global_checkpoint = random.randint(0, java_signed_maxlong)
+        leader_max_seq_no = random.randint(0, java_signed_maxlong)
+        follower_global_checkpoint = random.randint(0, java_signed_maxlong)
+        leader_index1 = "leader_cluster:leader1"
+        follower_index1 = "follower1"
+        leader_index2 = "leader_cluster:leader2"
+        follower_index2 = "follower2"
+        follower_max_seq_no = random.randint(0, java_signed_maxlong)
+        last_requested_seq_no = random.randint(0, java_signed_maxlong)
+        number_of_concurrent_reads = random.randint(0, java_signed_maxlong)
+        number_of_concurrent_writes = random.randint(0, java_signed_maxlong)
+        number_of_queued_writes = random.randint(0, java_signed_maxlong)
+        mapping_version = random.randint(0, java_signed_maxlong)
+        total_fetch_time_millis = random.randint(0, java_signed_maxlong)
+        number_of_successful_fetches = random.randint(0, java_signed_maxlong)
+        number_of_failed_fetches = random.randint(0, java_signed_maxlong)
+        operations_received = random.randint(0, java_signed_maxlong)
+        total_transferred_bytes = random.randint(0, java_signed_maxlong)
+        total_index_time_millis = random.randint(0, java_signed_maxlong)
+        time_since_last_fetch_millis = random.randint(0, java_signed_maxlong)
+        number_of_successful_bulk_operations = random.randint(0, java_signed_maxlong)
+        number_of_failed_bulk_operations = random.randint(0, java_signed_maxlong)
         number_of_operations_indexed = random.randint(0, java_signed_maxlong)
 
         ccr_stats_follower_response = {
-            "follower1": [
+            "indices": [
                 {
-                    "shard_id": 0,
-                    "follower_global_checkpoint": follower_global_checkpoint,
-                    "follower_max_seq_no": follower_max_seq_no,
-                    "index_metadata_version": index_metadata_version,
-                    "last_requested_seq_no": last_requested_seq_no,
-                    "leader_global_checkpoint": leader_global_checkpoint,
-                    "leader_max_seq_no": leader_max_seq_no,
-                    "number_of_concurrent_reads": number_of_concurrent_reads,
-                    "number_of_concurrent_writes": number_of_concurrent_writes,
-                    "number_of_failed_bulk_operations": number_of_failed_bulk_operations,
-                    "number_of_failed_fetches": number_of_failed_fetches,
-                    "number_of_operations_indexed": number_of_operations_indexed,
-                    "number_of_queued_writes": number_of_queued_writes,
-                    "number_of_successful_bulk_operations": number_of_successful_bulk_operations,
-                    "number_of_successful_fetches": number_of_successful_fetches,
-                    "operations_received": operations_received,
-                    "total_fetch_time_millis": total_fetch_time_millis,
-                    "total_index_time_millis": total_index_time_millis,
-                    "total_transferred_bytes": total_transferred_bytes
-                }
-            ],
-            "follower2": [
+                    "index": "follower1",
+                    "shards": [
+                        {
+                            "shard_id": 0,
+                            "leader_index": leader_index1,
+                            "follower_index": follower_index1,
+                            "follower_global_checkpoint": follower_global_checkpoint,
+                            "follower_max_seq_no": follower_max_seq_no,
+                            "mapping_version": mapping_version,
+                            "last_requested_seq_no": last_requested_seq_no,
+                            "leader_global_checkpoint": leader_global_checkpoint,
+                            "leader_max_seq_no": leader_max_seq_no,
+                            "number_of_concurrent_reads": number_of_concurrent_reads,
+                            "number_of_concurrent_writes": number_of_concurrent_writes,
+                            "number_of_failed_bulk_operations": number_of_failed_bulk_operations,
+                            "number_of_failed_fetches": number_of_failed_fetches,
+                            "number_of_operations_indexed": number_of_operations_indexed,
+                            "number_of_queued_writes": number_of_queued_writes,
+                            "number_of_successful_bulk_operations": number_of_successful_bulk_operations,
+                            "number_of_successful_fetches": number_of_successful_fetches,
+                            "operations_received": operations_received,
+                            "time_since_last_fetch_millis": time_since_last_fetch_millis,
+                            "total_fetch_time_millis": total_fetch_time_millis,
+                            "total_index_time_millis": total_index_time_millis,
+                            "total_transferred_bytes": total_transferred_bytes
+                        }
+                    ]
+                },
                 {
-                    "shard_id": 1,
-                    "follower_global_checkpoint": follower_global_checkpoint,
-                    "follower_max_seq_no": follower_max_seq_no,
-                    "index_metadata_version": index_metadata_version,
-                    "last_requested_seq_no": last_requested_seq_no,
-                    "leader_global_checkpoint": leader_global_checkpoint,
-                    "leader_max_seq_no": leader_max_seq_no,
-                    "number_of_concurrent_reads": number_of_concurrent_reads,
-                    "number_of_concurrent_writes": number_of_concurrent_writes,
-                    "number_of_failed_bulk_operations": number_of_failed_bulk_operations,
-                    "number_of_failed_fetches": number_of_failed_fetches,
-                    "number_of_operations_indexed": number_of_operations_indexed,
-                    "number_of_queued_writes": number_of_queued_writes,
-                    "number_of_successful_bulk_operations": number_of_successful_bulk_operations,
-                    "number_of_successful_fetches": number_of_successful_fetches,
-                    "operations_received": operations_received,
-                    "total_fetch_time_millis": total_fetch_time_millis,
-                    "total_index_time_millis": total_index_time_millis,
-                    "total_transferred_bytes": total_transferred_bytes
+                    "index": "follower2",
+                    "shards": [
+                        {
+                            "shard_id": 1,
+                            "leader_index": leader_index2,
+                            "follower_index": follower_index2,
+                            "follower_global_checkpoint": follower_global_checkpoint,
+                            "follower_max_seq_no": follower_max_seq_no,
+                            "mapping_version": mapping_version,
+                            "last_requested_seq_no": last_requested_seq_no,
+                            "leader_global_checkpoint": leader_global_checkpoint,
+                            "leader_max_seq_no": leader_max_seq_no,
+                            "number_of_concurrent_reads": number_of_concurrent_reads,
+                            "number_of_concurrent_writes": number_of_concurrent_writes,
+                            "number_of_failed_bulk_operations": number_of_failed_bulk_operations,
+                            "number_of_failed_fetches": number_of_failed_fetches,
+                            "number_of_operations_indexed": number_of_operations_indexed,
+                            "number_of_queued_writes": number_of_queued_writes,
+                            "number_of_successful_bulk_operations": number_of_successful_bulk_operations,
+                            "number_of_successful_fetches": number_of_successful_fetches,
+                            "operations_received": operations_received,
+                            "time_since_last_fetch_millis": time_since_last_fetch_millis,
+                            "total_fetch_time_millis": total_fetch_time_millis,
+                            "total_index_time_millis": total_index_time_millis,
+                            "total_transferred_bytes": total_transferred_bytes
+                        }
+                        ]
                 }
             ]
         }
@@ -497,18 +538,18 @@ class CcrStatsRecorderTests(TestCase):
         client = Client(transport_client=TransportClient(response=ccr_stats_follower_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.CcrStatsRecorder("remote", client, metrics_store, 1, indices=["follower1"])
+        recorder = telemetry.CcrStatsRecorder("remote", client, metrics_store, 1, indices=[follower_index1])
         recorder.record()
 
         shard_metadata = {
             "cluster": "remote",
-            "index": "follower1",
+            "index": follower_index1,
             "shard": 0,
             "name": "ccr-stats"
         }
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(ccr_stats_follower_response["follower1"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata)
+            mock.call(ccr_stats_follower_response["indices"][0]["shards"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata)
             ],
             any_order=True
         )
