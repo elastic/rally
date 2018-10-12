@@ -35,7 +35,7 @@ class RallyRepository:
 
     def update(self, distribution_version):
         try:
-            if self.remote and not self.offline:
+            if self.remote:
                 branch = versions.best_match(git.branches(self.repo_dir, remote=self.remote), distribution_version)
                 if branch:
                     # Allow uncommitted changes iff we do not have to change the branch

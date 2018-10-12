@@ -1,3 +1,4 @@
+import random
 from unittest import TestCase
 import unittest.mock as mock
 
@@ -112,7 +113,7 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=random.choice([True, False]))
 
         r.update(distribution_version="1.7.3")
 
