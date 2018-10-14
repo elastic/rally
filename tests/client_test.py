@@ -6,8 +6,13 @@ import ssl
 from copy import deepcopy
 from unittest import TestCase, mock
 
+from elasticsearch.connection_pool import DummyConnectionPool
+from elasticsearch.transport import Transport
+
 from esrally import client, exceptions, DOC_LINK
 from esrally.utils import console
+
+from urllib3 import ProxyManager
 
 
 class EsClientFactoryTests(TestCase):
@@ -258,3 +263,109 @@ class EsClientFactoryTests(TestCase):
         self.assertNotIn("client_key", f.client_options)
 
         self.assertDictEqual(original_client_options, client_options)
+
+
+class ProxyEnabledEsClientFactoryTests(TestCase):
+
+    class DummyResponse(object):
+        """
+        A dummy response used as a return value in mock testing
+        """
+        
+        def __init__(self):
+            self.status = 200
+            self.data = b'{}'
+            self.headers = {}
+    
+        def getheaders(self):
+            return self.headers
+
+    def setUp(self):
+        super(ProxyEnabledEsClientFactoryTests, self).setUp()
+        os.environ['http_proxy'] = 'http://localhost:3128'
+        os.environ.pop('esrally_benchmark_no_proxy', None)
+        self.hosts = [{"host": "192.168.50.1", "port": 9200}]
+        self.client_options = {}
+        self.base_headers = {'connection': 'keep-alive', 'content-type': 'application/json'}
+
+    def tearDown(self):
+        os.environ.pop('http_proxy', None)
+        super(ProxyEnabledEsClientFactoryTests, self).tearDown()
+
+    def test_http_proxy_not_present(self):
+        os.environ.pop('http_proxy', None)
+        es = client.EsClientFactory(self.hosts, self.client_options).create()
+        pool = es.transport.connection_pool.get_connection().pool
+        self.assertFalse(isinstance(pool, ProxyManager))
+        
+    def test_proxy_manager_configured(self):
+        es = client.EsClientFactory(self.hosts, self.client_options).create()
+        pool = es.transport.connection_pool.get_connection().pool
+        self.assertTrue(isinstance(pool, ProxyManager))
+        self.assertEqual("%s://%s:%i" % (pool.proxy.scheme, pool.proxy.host, pool.proxy.port), os.environ['http_proxy'])
+
+    def test_proxy_manager_single_host(self):
+        es = client.EsClientFactory(self.hosts, self.client_options).create()
+        with mock.patch.object(ProxyManager, "urlopen", return_value=__class__.DummyResponse()) as mocked_urlopen:
+            for i in range(3):
+                es.cluster.health()
+            mocked_urlopen.assert_has_calls([
+                mock.call('GET', 'http://%(host)s:%(port)s/_cluster/health' % self.hosts[0],
+                    None, headers=self.base_headers, retries=False)
+            ] * 3)
+
+    def test_proxy_manager_round_robin(self):
+        self.hosts = [
+            {"host": "192.168.50.1", "port": 9200},
+            {"host": "192.168.50.2", "port": 9200},
+        ]
+        es = client.EsClientFactory(self.hosts, self.client_options).create()
+        self.assertEqual(len(es.transport.connection_pool.connections), 2)
+        with mock.patch.object(ProxyManager, "urlopen", return_value=__class__.DummyResponse()) as mocked_urlopen:
+            for i in range(6):
+                es.cluster.health()
+            # two pooled objects which each round-robin
+            # n.b. the objects in the pool are randomly shuffled by default..
+            mocked_urlopen.assert_has_calls([
+                mock.call('GET', 'http://%(host)s:%(port)s/_cluster/health' % self.hosts[x],
+                    None, headers=self.base_headers, retries=False)
+                for x in [0, 0, 1, 1, 0, 0]
+            ])
+
+    def test_proxy_manager_ssl(self):
+        self.client_options = {
+            "use_ssl": True,
+            "verify_certs": False,
+            "basic_auth_user": "user",
+            "basic_auth_password": "password"
+        }
+        headers = deepcopy(self.base_headers)
+        headers['authorization'] = 'Basic dXNlcjpwYXNzd29yZA=='
+        es = client.EsClientFactory(self.hosts, self.client_options).create()
+        with mock.patch.object(ProxyManager, "urlopen", return_value=__class__.DummyResponse()) as mocked_urlopen:
+            es.cluster.health()
+            mocked_urlopen.assert_has_calls([
+                mock.call('GET', 'https://%(host)s:%(port)s/_cluster/health' % self.hosts[0],
+                    None, headers=headers, retries=False)
+            ])
+
+    def test_no_proxy_var_set_true(self):
+        for truthy in ['true', 'True', 'tRuE']:
+            os.environ['esrally_benchmark_no_proxy'] = truthy
+            es = client.EsClientFactory(self.hosts, self.client_options).create()
+            pool = es.transport.connection_pool.get_connection().pool
+            self.assertFalse(isinstance(pool, ProxyManager))
+
+    def test_no_proxy_var_set_not_true(self):
+        for not_truthy in ['false', 'False', 'etc']:
+            os.environ['esrally_benchmark_no_proxy'] = not_truthy
+            es = client.EsClientFactory(self.hosts, self.client_options).create()
+            pool = es.transport.connection_pool.get_connection().pool
+            self.assertTrue(isinstance(pool, ProxyManager))
+
+    def test_no_proxy_var_not_set(self):
+        os.environ.pop('esrally_benchmark_no_proxy', None)
+        es = client.EsClientFactory(self.hosts, self.client_options).create()
+        pool = es.transport.connection_pool.get_connection().pool
+        self.assertTrue(isinstance(pool, ProxyManager))
+

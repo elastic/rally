@@ -108,7 +108,11 @@ To verify that Rally will connect via the proxy server you can check the log fil
 
 .. note::
 
-   Rally will use this proxy server only for downloading benchmark-related data. It will not use this proxy for the actual benchmark.
+   Rally will use this proxy server for downloading benchmark-related data, and the actual benchmark.
+   
+   If you do not need to use the proxy server to reach the cluster being benchmarked, then you can use:
+
+   ``export esrally_benchmark_no_proxy=true``
 
 Logging
 -------

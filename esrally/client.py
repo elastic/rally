@@ -1,6 +1,10 @@
 import logging
 import certifi
+import os
+import threading
 import urllib3
+
+from elasticsearch.connection import Urllib3HttpConnection
 
 from esrally import exceptions, DOC_LINK
 from esrally.utils import console
@@ -15,6 +19,7 @@ class EsClientFactory:
         self.client_options = dict(client_options)
         self.ssl_context = None
         self.logger = logging.getLogger(__name__)
+        self._set_proxy_manager()
 
         masked_client_options = dict(client_options)
         if "basic_auth_password" in masked_client_options:
@@ -25,6 +30,7 @@ class EsClientFactory:
 
         # we're using an SSL context now and it is not allowed to have use_ssl present in client options anymore
         if self.client_options.pop("use_ssl", False):
+            self.client_options["proxied_hosts_use_ssl"] = True
             import ssl
             self.logger.info("SSL support: on")
             self.client_options["scheme"] = "https"
@@ -98,6 +104,14 @@ class EsClientFactory:
         else:
             self.logger.info("HTTP compression: off")
 
+    def _set_proxy_manager(self):
+        if os.environ.get('esrally_benchmark_no_proxy', '').lower() == 'true':
+            return
+        http_proxy = os.environ.get('http_proxy', None)
+        if http_proxy and len(http_proxy):
+            self.client_options['connection_class']  = ProxyEnabledConnectionClass
+            self.client_options['proxy_enabled_hosts'] = self.hosts
+
     def _is_set(self, client_opts, k):
         try:
             return client_opts[k]
@@ -107,3 +121,47 @@ class EsClientFactory:
     def create(self):
         import elasticsearch
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
+
+
+class ProxyEnabledConnectionClass(Urllib3HttpConnection):
+    """
+    Extends and monkey patches elasticsearch.connection.Urllib3HttpConnection for http_proxy support.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(ProxyEnabledConnectionClass, self).__init__(*args, **kwargs)
+        self.proxy_address = os.environ.get('http_proxy')
+        self.proxy_enabled_hosts = kwargs.pop('proxy_enabled_hosts')
+        if kwargs.pop('proxied_hosts_use_ssl', False):
+            self.proxied_scheme = 'https'
+        else:
+            self.proxied_scheme = 'http'
+        self.non_proxy_aware_pool = self.pool
+        self.pool = urllib3.ProxyManager(self.proxy_address, **self.non_proxy_aware_pool.conn_kw)
+        self.proxy_enabled_data = threading.local()
+
+    def get_proxy_enabled_host(self):
+        """
+        Returns hosts in a simple round-robin fashion, like the default elasticsearch.connection_pool.RoundRobinSelector
+        See https://github.com/elastic/elasticsearch-py/blob/master/elasticsearch/connection_pool.py
+        """
+        self.proxy_enabled_data.rr = getattr(self.proxy_enabled_data, 'rr', -1) + 1
+        self.proxy_enabled_data.rr %= len(self.proxy_enabled_hosts)
+        return self.proxy_enabled_hosts[self.proxy_enabled_data.rr]
+
+    def new_perform_request(self, method, url, params=None, body=None, timeout=None, ignore=(), headers=None):
+        """
+        This method replaces the original Urllib3HttpConnection.perform_request method.
+        """
+        proxy_enabled_host = self.get_proxy_enabled_host()
+        return self.original_perform_request(
+            method,
+            '%s://%s:%s%s' % (self.proxied_scheme, proxy_enabled_host['host'], proxy_enabled_host['port'], url),
+            params=params, body=body, timeout=timeout, ignore=ignore, headers=headers
+        )
+
+
+# Monkey patch
+ProxyEnabledConnectionClass.original_perform_request = ProxyEnabledConnectionClass.perform_request
+ProxyEnabledConnectionClass.perform_request = ProxyEnabledConnectionClass.new_perform_request
+
