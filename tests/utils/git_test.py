@@ -27,23 +27,21 @@ class GitTests(TestCase):
         run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
 
     @mock.patch("esrally.utils.io.ensure_dir")
-    @mock.patch("esrally.utils.process.run_subprocess")
-    def test_clone_successful(self, run_subprocess, ensure_dir):
-        run_subprocess.return_value = False
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_clone_successful(self, run_subprocess_with_logging, ensure_dir):
+        run_subprocess_with_logging.return_value = 0
         src = "/src"
         remote = "http://github.com/some/project"
 
         git.clone(src, remote)
 
         ensure_dir.assert_called_with(src)
-        run_subprocess.assert_called_with("git clone http://github.com/some/project /src")
+        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
 
     @mock.patch("esrally.utils.io.ensure_dir")
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_clone_with_error(self, run_subprocess_with_logging, run_subprocess, ensure_dir):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = True
+    def test_clone_with_error(self, run_subprocess_with_logging, ensure_dir):
+        run_subprocess_with_logging.return_value = 128
         src = "/src"
         remote = "http://github.com/some/project"
 
@@ -52,7 +50,7 @@ class GitTests(TestCase):
         self.assertEqual("Could not clone from [http://github.com/some/project] to [/src]", ctx.exception.args[0])
 
         ensure_dir.assert_called_with(src)
-        run_subprocess.assert_called_with("git clone http://github.com/some/project /src")
+        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")

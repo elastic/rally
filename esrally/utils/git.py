@@ -32,7 +32,7 @@ def is_working_copy(src):
 def clone(src, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
-    if process.run_subprocess("git clone %s %s" % (remote, src)):
+    if process.run_subprocess_with_logging("git clone %s %s" % (remote, src)):
         raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
 
 
