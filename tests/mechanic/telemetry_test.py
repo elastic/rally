@@ -270,9 +270,9 @@ class CcrStatsRecorderTests(TestCase):
         client = Client(transport_client=TransportClient(response={}, force_error=True))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        with self.assertRaisesRegexp(exceptions.RallyError,
-                                     "A transport error occurred while collecting CCR stats from the endpoint \[/_ccr/stats\] on "
-                                     "cluster \[remote\]"):
+        with self.assertRaisesRegex(exceptions.RallyError,
+                                    "A transport error occurred while collecting CCR stats from the endpoint \[/_ccr/stats\] on "
+                                    "cluster \[remote\]"):
             telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
