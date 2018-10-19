@@ -601,7 +601,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
             if "source" not in config:
                 return
             for k, v in config["source"].items():
-                plugin_match = re.match('^plugin\.([^.]+)\.build\.task$',k)
+                plugin_match = re.match(r"^plugin\.([^.]+)\.build\.task$",k)
                 if plugin_match != None and len(plugin_match.groups()) > 0 :
                     plugin_name = plugin_match.group(1)
                     new_key = "plugin.{}.build.command".format(plugin_name)

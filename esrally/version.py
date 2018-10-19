@@ -6,7 +6,7 @@ from esrally.utils import git, io
 
 __version__ = pkg_resources.require("esrally")[0].version
 
-__RALLY_VERSION_PATTERN = re.compile("^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:.(.+))?$")
+__RALLY_VERSION_PATTERN = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:.(.+))?$")
 
 
 def version():

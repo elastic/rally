@@ -10,6 +10,28 @@ from esrally import metrics, exceptions
 from esrally.utils import convert, io as rio, console
 
 
+FINAL_SCORE = r"""
+------------------------------------------------------
+    _______             __   _____
+   / ____(_)___  ____ _/ /  / ___/_________  ________
+  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
+ / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
+/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
+------------------------------------------------------
+            """
+
+LAP_SCORE = r"""
+--------------------------------------------------
+    __                   _____
+   / /   ____ _____     / ___/_________  ________
+  / /   / __ `/ __ \    \__ \/ ___/ __ \/ ___/ _ \
+ / /___/ /_/ / /_/ /   ___/ / /__/ /_/ / /  /  __/
+/_____/\__,_/ .___/   /____/\___/\____/_/   \___/
+           /_/
+--------------------------------------------------
+"""
+
+
 def calculate_results(metrics_store, race, lap=None):
     calc = StatsCalculator(metrics_store, race.challenge, lap)
     return calc()
@@ -420,26 +442,9 @@ class SummaryReporter:
 
     def report(self):
         if self.is_final_report():
-            print_internal("")
-            print_header("------------------------------------------------------")
-            print_header("    _______             __   _____                    ")
-            print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
-            print_header("  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \\")
-            print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
-            print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
-            print_header("------------------------------------------------------")
-            print_internal("")
+            print_header(FINAL_SCORE)
         else:
-            print_internal("")
-            print_header("--------------------------------------------------")
-            print_header("    __                   _____                    ")
-            print_header("   / /   ____ _____     / ___/_________  ________ ")
-            print_header("  / /   / __ `/ __ \    \__ \/ ___/ __ \/ ___/ _ \\")
-            print_header(" / /___/ /_/ / /_/ /   ___/ / /__/ /_/ / /  /  __/")
-            print_header("/_____/\__,_/ .___/   /____/\___/\____/_/   \___/ ")
-            print_header("           /_/                                    ")
-            print_header("--------------------------------------------------")
-            print_internal("")
+            print_header(LAP_SCORE)
 
         stats = self.results
 
@@ -634,15 +639,7 @@ class ComparisonReporter:
         if r2.challenge_name:
             print_internal("  Challenge: %s" % r2.challenge_name)
         print_internal("  Car: %s" % r2.car_name)
-        print_internal("")
-        print_header("------------------------------------------------------")
-        print_header("    _______             __   _____                    ")
-        print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
-        print_header("  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \\")
-        print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
-        print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
-        print_header("------------------------------------------------------")
-        print_internal("")
+        print_header(FINAL_SCORE)
 
         metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain=True)
         metric_table_rich = self.metrics_table(baseline_stats, contender_stats, plain=False)

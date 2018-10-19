@@ -242,7 +242,7 @@ class CcrStatsTests(TestCase):
             "ccr-stats-sample-interval": -1 * random.random()
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was .*\."):
+                                    r"The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was .*\."):
             telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
     def test_wrong_cluster_name_in_ccr_stats_indices_forbidden(self):
@@ -256,9 +256,9 @@ class CcrStatsTests(TestCase):
             }
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
-                                    "the cluster names \[{}] specified in --target-hosts "
-                                    "but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))
+                                    r"The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
+                                    r"the cluster names \[{}] specified in --target-hosts "
+                                    r"but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))
                                     ):
             telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
@@ -271,8 +271,8 @@ class CcrStatsRecorderTests(TestCase):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         with self.assertRaisesRegex(exceptions.RallyError,
-                                    "A transport error occurred while collecting CCR stats from the endpoint \[/_ccr/stats\] on "
-                                    "cluster \[remote\]"):
+                                    r"A transport error occurred while collecting CCR stats from the endpoint \[/_ccr/stats\] on "
+                                    r"cluster \[remote\]"):
             telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")

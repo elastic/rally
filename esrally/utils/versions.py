@@ -2,9 +2,9 @@ import re
 
 from esrally import exceptions
 
-VERSIONS = re.compile("^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$")
+VERSIONS = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$")
 
-VERSIONS_OPTIONAL = re.compile("^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-(.+))?$")
+VERSIONS_OPTIONAL = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-(.+))?$")
 
 
 def _versions_pattern(strict):

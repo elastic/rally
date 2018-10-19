@@ -13,7 +13,7 @@ if __version__.endswith("dev0"):
 else:
     DOC_LINK = "https://esrally.readthedocs.io/en/%s/" % __version__
 
-BANNER = """
+BANNER = r"""
     ____        ____
    / __ \____ _/ / /_  __
   / /_/ / __ `/ / / / / /
