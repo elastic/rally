@@ -793,7 +793,7 @@ class NodeStatsRecorderTests(TestCase):
             "node-stats-sample-interval": -1 * random.random()
         }
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was .*\."):
+                                    r"The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was .*\."):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="default", client=client, metrics_store=metrics_store)
 
     def test_flatten_indices_fields(self):

@@ -38,7 +38,7 @@ class VersionsTests(TestCase):
     def test_components_ignores_invalid_versions(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             versions.components("5.0.0a")
-        self.assertEqual("version string '5.0.0a' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'", ctx.exception.args[0])
+        self.assertEqual(r"version string '5.0.0a' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'", ctx.exception.args[0])
 
     def test_versions_parses_correct_version_string(self):
         self.assertEqual(["5.0.3", "5.0", "5"], versions.versions("5.0.3"))
@@ -48,7 +48,7 @@ class VersionsTests(TestCase):
     def test_versions_rejects_invalid_version_strings(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             versions.versions("5.0.0a-SNAPSHOT")
-        self.assertEqual("version string '5.0.0a-SNAPSHOT' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"
+        self.assertEqual(r"version string '5.0.0a-SNAPSHOT' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"
                          , ctx.exception.args[0])
 
     def test_find_best_match(self):
