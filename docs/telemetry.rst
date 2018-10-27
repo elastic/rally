@@ -77,7 +77,7 @@ node-stats
 
     This telemetry device will record a lot of metrics and likely skew your measurement results.
 
-The node-stats telemetry devices regularly calls the node-stats API and records metrics from the following sections:
+The node-stats telemetry devices regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
 
 * Indices stats (key ``indices`` in the node-stats API)
 * Thread pool stats (key ``jvm.thread_pool`` in the node-stats API)
@@ -90,6 +90,9 @@ Supported telemetry parameters:
 
 * ``node-stats-sample-interval`` (default: 1): A positive number greater than zero denoting the sampling interval in seconds.
 * ``node-stats-include-indices`` (default: ``false``): A boolean indicating whether indices stats should be included.
+* ``node-stats-include-indices-metrics`` (default: ``false``): A comma-separated string specifying the Indices stats metrics to include. This is useful, for example, to restrict the collected Indices stats metrics. Specifying this parameter implicitly enables collection of Indices stats, so you don't also need to specify ``node-stats-include-indices: true``.
+
+  Example: ``node-stats-include-indices-metrics: "docs, refresh"`` will **only** collect the ``docs`` and ``refresh`` metrics from Indices stats.
 * ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
