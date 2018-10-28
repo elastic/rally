@@ -468,6 +468,18 @@ class NodeStatsRecorder:
                 "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval))
 
         self.include_indices = telemetry_params.get("node-stats-include-indices", False)
+        self.include_indices_metrics = telemetry_params.get("node-stats-include-indices-metrics", False)
+
+        if self.include_indices_metrics:
+            if isinstance(self.include_indices_metrics, str):
+                self.include_indices_metrics_list = self.include_indices_metrics.split(",")
+            else:
+                # we don't validate the allowable metrics as they may change across ES versions
+                raise exceptions.SystemSetupError(
+                    "The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was {}".format(
+                        type(self.include_indices_metrics))
+                    )
+
         self.include_thread_pools = telemetry_params.get("node-stats-include-thread-pools", True)
         self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
         self.include_breakers = telemetry_params.get("node-stats-include-breakers", True)
@@ -488,11 +500,12 @@ class NodeStatsRecorder:
             collected_node_stats = collections.OrderedDict()
             collected_node_stats["name"] = "node-stats"
 
-            if self.include_indices:
+            if self.include_indices or self.include_indices_metrics:
                 collected_node_stats.update(
                     self.indices_stats(node_name, node_stats,
-                                       include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
-                                                        "segments", "translog", "request_cache"]))
+                                       include=self.include_indices_metrics_list if self.include_indices_metrics
+                                       else ["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
+                                             "segments", "translog", "request_cache"]))
             if self.include_thread_pools:
                 collected_node_stats.update(self.thread_pool_stats(node_name, node_stats))
             if self.include_breakers:
