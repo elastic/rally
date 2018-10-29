@@ -384,15 +384,17 @@ class CcrStatsRecorder:
 
         try:
             ccr_stats_api_endpoint = "/_ccr/stats"
-            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false"})
+            filter_path = "follow_stats"
+            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false",
+                                                                                                 "filter_path": filter_path})
         except elasticsearch.TransportError as e:
-            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}] on " \
-                  "cluster [{}]".format(ccr_stats_api_endpoint, self.cluster_name)
+            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on " \
+                  "cluster [{}]".format(ccr_stats_api_endpoint, filter_path, self.cluster_name)
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        if "indices" in stats:
-            for indices in stats["indices"]:
+        if filter_path in stats and "indices" in stats[filter_path]:
+            for indices in stats[filter_path]["indices"]:
                 try:
                     if self.indices and indices["index"] not in self.indices:
                         # Skip metrics for indices not part of user supplied whitelist (ccr-stats-indices) in telemetry params.
