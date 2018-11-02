@@ -8,6 +8,7 @@ Install the following software packages:
 
 * Python 3.4 or better available as ``python3`` on the path (verify with: ``python3 --version``)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
+* ``virtualenv`` available on the path (verify with ``virtualenv --version``)
 * JDK 8 or 9
 * git 1.9 or better
 
