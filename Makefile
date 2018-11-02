@@ -1,3 +1,7 @@
+# We assume an active virtualenv for development
+install:
+	-@python3 setup.py -q develop --upgrade
+
 clean: nondocs-clean docs-clean
 
 nondocs-clean:
@@ -53,4 +57,4 @@ docker-it: nondocs-clean python-caches-clean
 	docker-compose build --pull; `# add --pull here to rebuild a fresh image` \
 	docker-compose run --rm rally-tests /bin/bash -c "make docs-clean && make it"
 
-.PHONY: clean nondocs-clean docs-clean python-caches-clean docs test docker-it it it34 it35 it36 benchmark coverage release release-checks
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean docs test docker-it it it34 it35 it36 benchmark coverage release release-checks
