@@ -273,6 +273,8 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 
 This activates Java flight recorder and the JIT compiler telemetry devices.
 
+.. _clr_telemetry_params:
+
 ``telemetry-params``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -283,6 +285,18 @@ Example::
     esrally --telemetry=jfr --telemetry-params="recording-template:'profile'"
 
 This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
+
+For more complex cases specify a JSON file. Store the following as ``telemetry-params.json``::
+
+   {
+     "node-stats-sample-interval": 10,
+     "node-stats-include-indices-metrics": "completion,docs,fielddata"
+   }
+
+and reference it when running Rally::
+
+   esrally --telemetry="node-stats" --telemetry-params="telemetry-params.json"
+
 
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~

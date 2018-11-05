@@ -8,7 +8,7 @@ import tabulate
 import threading
 
 from esrally import metrics, time, exceptions
-from esrally.utils import io, sysstats, console, versions
+from esrally.utils import io, sysstats, console, versions, opts
 from esrally.metrics import MetaInfoScope
 
 
@@ -474,13 +474,16 @@ class NodeStatsRecorder:
 
         if self.include_indices_metrics:
             if isinstance(self.include_indices_metrics, str):
-                self.include_indices_metrics_list = self.include_indices_metrics.split(",")
+                self.include_indices_metrics_list = opts.csv_to_list(self.include_indices_metrics)
             else:
                 # we don't validate the allowable metrics as they may change across ES versions
                 raise exceptions.SystemSetupError(
                     "The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was {}".format(
                         type(self.include_indices_metrics))
                     )
+        else:
+            self.include_indices_metrics_list = ["docs", "store", "indexing", "search", "merges", "query_cache",
+                                                 "fielddata", "segments", "translog", "request_cache"]
 
         self.include_thread_pools = telemetry_params.get("node-stats-include-thread-pools", True)
         self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
@@ -504,10 +507,7 @@ class NodeStatsRecorder:
 
             if self.include_indices or self.include_indices_metrics:
                 collected_node_stats.update(
-                    self.indices_stats(node_name, node_stats,
-                                       include=self.include_indices_metrics_list if self.include_indices_metrics
-                                       else ["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
-                                             "segments", "translog", "request_cache"]))
+                    self.indices_stats(node_name, node_stats, include=self.include_indices_metrics_list))
             if self.include_thread_pools:
                 collected_node_stats.update(self.thread_pool_stats(node_name, node_stats))
             if self.include_breakers:
