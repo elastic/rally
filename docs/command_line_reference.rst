@@ -483,6 +483,18 @@ This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 92
 
 You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
 
+``limit``
+~~~~~~~~~
+
+Allows to control the number of races returned by ``esrally list races`` The default value is 10.
+
+**Example**
+
+The following invocation will list the 50 most recent races::
+
+   esrally list races --limit=50
+
+
 ``quiet``
 ~~~~~~~~~
 
