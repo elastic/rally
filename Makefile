@@ -1,6 +1,9 @@
 # We assume an active virtualenv for development
 install:
 	-@python3 setup.py -q develop --upgrade
+	# also install development dependencies
+	# workaround for https://github.com/elastic/rally/issues/439
+	-@pip3 install -q sphinx sphinx_rtd_theme
 
 clean: nondocs-clean docs-clean
 
