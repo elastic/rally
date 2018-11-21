@@ -1,3 +1,27 @@
+### 1.0.2
+
+#### Enhancements
+
+* [#599](https://github.com/elastic/rally/pull/599): Simplify development setup
+* [#594](https://github.com/elastic/rally/pull/594): Add make install as default target
+* [#587](https://github.com/elastic/rally/pull/587): Fix typos and inconsistencies in help documentation
+* [#576](https://github.com/elastic/rally/pull/576): Improved formatting of document count in list tracks output
+* [#574](https://github.com/elastic/rally/pull/574): Rename benchmark data directory to root directory
+* [#572](https://github.com/elastic/rally/pull/572): More fine-grained ML metrics
+* [#571](https://github.com/elastic/rally/pull/571): Reduce logging when loading tracks
+* [#570](https://github.com/elastic/rally/pull/570): Add ML API runners
+* [#563](https://github.com/elastic/rally/pull/563): Make Rally compatible with Python 3.7
+
+#### Bug Fixes
+
+* [#586](https://github.com/elastic/rally/pull/586): Don't fail git clone is tty is not attached
+* [#579](https://github.com/elastic/rally/pull/579): Switch to official approach for HTTP compression
+* [#575](https://github.com/elastic/rally/pull/575): Always use remote branch for updates
+
+#### Doc Changes
+
+* [#598](https://github.com/elastic/rally/pull/598): Document --limit
+
 
 
 ### 1.0.1
