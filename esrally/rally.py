@@ -608,7 +608,7 @@ def main():
     logger.info("OS [%s]", str(os.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
-    logger.info("Command line arguments: %s", args)
+    logger.debug("Command line arguments: %s", args)
     # Configure networking
     net.init()
     if not args.offline:
