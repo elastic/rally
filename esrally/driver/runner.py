@@ -551,6 +551,7 @@ class Query(Runner):
                   Always 1 for normal queries and the number of retrieved pages for scroll queries.
     * ``unit``: The unit in which to interpret ``weight``. Always "ops".
     * ``hits``: Total number of hits for this operation.
+    * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
     * ``timed_out``: Whether the search has timed out. For scroll queries, this flag is ``True`` if the flag was ``True`` for any of the
                      queries issued.
 
@@ -580,10 +581,17 @@ class Query(Runner):
             body=mandatory(params, "body", self),
             **request_params)
         hits = r["hits"]["total"]
+        if isinstance(hits, dict):
+            hits_total = hits["value"]
+            hits_relation = hits["relation"]
+        else:
+            hits_total = hits
+            hits_relation = "eq"
         return {
             "weight": 1,
             "unit": "ops",
-            "hits": hits,
+            "hits": hits_total,
+            "hits_relation": hits_relation,
             "timed_out": r["timed_out"],
             "took": r["took"]
         }
@@ -633,6 +641,8 @@ class Query(Runner):
             "weight": retrieved_pages,
             "pages": retrieved_pages,
             "hits": hits,
+            # as Rally determines the number of hits in a scroll, the result is always accurate.
+            "hits_relation": "eq",
             "unit": "pages",
             "timed_out": timed_out,
             "took": took
