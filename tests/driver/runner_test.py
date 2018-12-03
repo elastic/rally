@@ -559,6 +559,48 @@ class QueryRunnerTests(TestCase):
             "timed_out": False,
             "took": 5,
             "hits": {
+                "total": {
+                    "value": 1,
+                    "relation": "gte"
+                },
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+                ]
+            }
+        }
+
+        query_runner = runner.Query()
+
+        params = {
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            result = query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertEqual(1, result["hits"])
+        self.assertEqual("gte", result["hits_relation"])
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(5, result["took"])
+        self.assertFalse("error-type" in result)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_query_hits_total_as_number(self, es):
+        es.search.return_value = {
+            "timed_out": False,
+            "took": 5,
+            "hits": {
                 "total": 2,
                 "hits": [
                     {
@@ -587,6 +629,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
         self.assertEqual(2, result["hits"])
+        self.assertEqual("eq", result["hits_relation"])
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
@@ -597,7 +640,10 @@ class QueryRunnerTests(TestCase):
             "timed_out": False,
             "took": 5,
             "hits": {
-                "total": 2,
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
                         "some-doc-1"
@@ -628,6 +674,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
         self.assertEqual(2, result["hits"])
+        self.assertEqual("eq", result["hits_relation"])
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
@@ -678,6 +725,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["weight"])
         self.assertEqual(1, results["pages"])
         self.assertEqual(2, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
         self.assertEqual(4, results["took"])
         self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
@@ -726,6 +774,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(1, results["weight"])
         self.assertEqual(1, results["pages"])
         self.assertEqual(2, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
         self.assertEqual(4, results["took"])
         self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
@@ -790,6 +839,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(3, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
         self.assertEqual(79, results["took"])
         self.assertEqual("pages", results["unit"])
         self.assertTrue(results["timed_out"])
@@ -847,6 +897,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(1, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
         self.assertEqual("pages", results["unit"])
         self.assertEqual(55, results["took"])
         self.assertFalse("error-type" in results)
@@ -902,6 +953,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(1, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
         self.assertEqual("pages", results["unit"])
         self.assertEqual(55, results["took"])
         self.assertFalse("error-type" in results)
@@ -967,6 +1019,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(4, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
         self.assertEqual(900, results["took"])
         self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
