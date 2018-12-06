@@ -259,6 +259,71 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
+    def test_bulk_index_error_no_shards(self, es):
+        es.bulk.return_value = {
+            "took": 20,
+            "errors": True,
+            "items": [
+                {
+                    "create": {
+                        "_index": "test",
+                        "_type": "doc",
+                        "_id": "1",
+                        "status": 429,
+                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@1]"
+                    }
+                },
+                {
+                    "create": {
+                        "_index": "test",
+                        "_type": "doc",
+                        "_id": "2",
+                        "status": 429,
+                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@2]"
+                    }
+                },
+                {
+                    "create": {
+                        "_index": "test",
+                        "_type": "doc",
+                        "_id": "3",
+                        "status": 429,
+                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@3]"
+                    }
+                }
+            ]
+        }
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": [
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line",
+            ],
+            "action-metadata-present": True,
+            "detailed-results": False,
+            "bulk-size": 3,
+            "index": "test"
+        }
+
+        result = bulk(es, bulk_params)
+
+        self.assertEqual("test", result["index"])
+        self.assertEqual(20, result["took"])
+        self.assertEqual(3, result["weight"])
+        self.assertEqual(3, result["bulk-size"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(False, result["success"])
+        self.assertEqual(3, result["error-count"])
+        self.assertEqual("bulk", result["error-type"])
+
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
     def test_mixed_bulk_with_simple_stats(self, es):
         es.bulk.return_value = {
             "took": 30,

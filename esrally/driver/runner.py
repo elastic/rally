@@ -434,7 +434,7 @@ class BulkIndex(Runner):
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
                 data = next(iter(item.values()))
-                if data["status"] > 299 or data["_shards"]["failed"] > 0:
+                if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
         stats = {
@@ -449,8 +449,10 @@ class BulkIndex(Runner):
         return stats
 
     def extract_error_details(self, error_details, data):
-        if data.get("error") and data["error"].get("reason"):
-            error_details.add((data["status"], data["error"]["reason"]))
+        error_data = data.get("error", {})
+        error_reason = error_data.get("reason") if isinstance(error_data, dict) else str(error_data)
+        if error_data:
+            error_details.add((data["status"], error_reason))
         else:
             error_details.add((data["status"], None))
 
