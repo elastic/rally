@@ -136,6 +136,14 @@ class StatsTests(TestCase):
             ],
             "young_gc_time": 68,
             "old_gc_time": 0,
+            "merge_time": 3702,
+            "merge_time_per_shard": {
+                "min": 40,
+                "median": 3702,
+                "max": 3900,
+                "unit": "ms"
+            },
+            "merge_count": 2,
             "refresh_time": 596,
             "refresh_time_per_shard": {
                 "min": 48,
@@ -143,8 +151,10 @@ class StatsTests(TestCase):
                 "max": 204,
                 "unit": "ms"
             },
+            "refresh_count": 10,
             "flush_time": None,
-            "flush_time_per_shard": {}
+            "flush_time_per_shard": {},
+            "flush_count": 0
         }
 
         s = reporter.Stats(d)
@@ -243,6 +253,30 @@ class StatsTests(TestCase):
         }, select(metric_list, "old_gc_time"))
 
         self.assertEqual({
+            "name": "merge_time",
+            "value": {
+                "single": 3702
+            }
+        }, select(metric_list, "merge_time"))
+
+        self.assertEqual({
+            "name": "merge_time_per_shard",
+            "value": {
+                "min": 40,
+                "median": 3702,
+                "max": 3900,
+                "unit": "ms"
+            }
+        }, select(metric_list, "merge_time_per_shard"))
+
+        self.assertEqual({
+            "name": "merge_count",
+            "value": {
+                "single": 2
+            }
+        }, select(metric_list, "merge_count"))
+
+        self.assertEqual({
             "name": "refresh_time",
             "value": {
                 "single": 596
@@ -259,8 +293,21 @@ class StatsTests(TestCase):
             }
         }, select(metric_list, "refresh_time_per_shard"))
 
+        self.assertEqual({
+            "name": "refresh_count",
+            "value": {
+                "single": 10
+            }
+        }, select(metric_list, "refresh_count"))
+
         self.assertIsNone(select(metric_list, "flush_time"))
         self.assertIsNone(select(metric_list, "flush_time_per_shard"))
+        self.assertEqual({
+            "name": "flush_count",
+            "value": {
+                "single": 0
+            }
+        }, select(metric_list, "flush_count"))
 
 
 class FormatterTests(TestCase):

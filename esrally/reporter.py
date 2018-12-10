@@ -160,10 +160,13 @@ class StatsCalculator:
         result.indexing_throttle_time_per_shard = self.shard_stats("indexing_throttle_time")
         result.merge_time = self.sum("merges_total_time")
         result.merge_time_per_shard = self.shard_stats("merges_total_time")
+        result.merge_count = self.sum("merges_total_count")
         result.refresh_time = self.sum("refresh_total_time")
         result.refresh_time_per_shard = self.shard_stats("refresh_total_time")
+        result.refresh_count = self.sum("refresh_total_count")
         result.flush_time = self.sum("flush_total_time")
         result.flush_time_per_shard = self.shard_stats("flush_total_time")
+        result.flush_count = self.sum("flush_total_count")
         result.merge_throttle_time = self.sum("merges_total_throttled_time")
         result.merge_throttle_time_per_shard = self.shard_stats("merges_total_throttled_time")
 
@@ -300,10 +303,13 @@ class Stats:
         self.indexing_throttle_time_per_shard = self.v(d, "indexing_throttle_time_per_shard", default={})
         self.merge_time = self.v(d, "merge_time")
         self.merge_time_per_shard = self.v(d, "merge_time_per_shard", default={})
+        self.merge_count = self.v(d, "merge_count")
         self.refresh_time = self.v(d, "refresh_time")
         self.refresh_time_per_shard = self.v(d, "refresh_time_per_shard", default={})
+        self.refresh_count = self.v(d, "refresh_count")
         self.flush_time = self.v(d, "flush_time")
         self.flush_time_per_shard = self.v(d, "flush_time_per_shard", default={})
+        self.flush_count = self.v(d, "flush_count")
         self.merge_throttle_time = self.v(d, "merge_throttle_time")
         self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
         self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
@@ -451,6 +457,7 @@ class SummaryReporter:
         warnings = []
         metrics_table = []
         metrics_table.extend(self.report_total_times(stats))
+        metrics_table.extend(self.report_total_counts(stats))
         metrics_table.extend(self.report_merge_part_times(stats))
         metrics_table.extend(self.report_ml_processing_times(stats))
 
@@ -533,10 +540,22 @@ class SummaryReporter:
     def report_total_time(self, name, total_time, total_time_per_shard):
         unit = "min"
         return self.join(
-            self.line("Total {}".format(name), "", total_time, unit, convert.ms_to_minutes),
+            self.line("Total primaries {}".format(name), "", total_time, unit, convert.ms_to_minutes),
             self.line("Min {} per shard".format(name), "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes),
             self.line("Median {} per shard".format(name), "", total_time_per_shard.get("median"), unit, convert.ms_to_minutes),
             self.line("Max {} per shard".format(name), "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes),
+        )
+
+    def report_total_counts(self, stats):
+        lines = []
+        lines.extend(self.report_total_count("merge count", stats.merge_count))
+        lines.extend(self.report_total_count("refresh count", stats.refresh_count))
+        lines.extend(self.report_total_count("flush count", stats.flush_count))
+        return lines
+
+    def report_total_count(self, name, total_count):
+        return self.join(
+            self.line("Total primaries {}".format(name), "", total_count, ""),
         )
 
     def report_merge_part_times(self, stats):
@@ -569,8 +588,8 @@ class SummaryReporter:
 
     def report_gc_times(self, stats):
         return self.join(
-            self.line("Total Young Gen GC", "", stats.young_gc_time, "s", convert.ms_to_seconds),
-            self.line("Total Old Gen GC", "", stats.old_gc_time, "s", convert.ms_to_seconds)
+            self.line("Total primaries Young Gen GC", "", stats.young_gc_time, "s", convert.ms_to_seconds),
+            self.line("Total primaries Old Gen GC", "", stats.old_gc_time, "s", convert.ms_to_seconds)
         )
 
     def report_disk_usage(self, stats):
@@ -771,12 +790,18 @@ class ComparisonReporter:
         lines.extend(self.report_total_time("flush time",
                                             baseline_stats.flush_time, baseline_stats.flush_time_per_shard,
                                             contender_stats.flush_time, contender_stats.flush_time_per_shard))
+        lines.extend(self.report_total_count("merge count",
+                                             baseline_stats.merge_count, contender_stats.merge_count))
+        lines.extend(self.report_total_count("refresh count",
+                                             baseline_stats.refresh_count, contender_stats.refresh_count))
+        lines.extend(self.report_total_count("flush count",
+                                             baseline_stats.flush_count, contender_stats.flush_count))
         return lines
 
     def report_total_time(self, name, baseline_total, baseline_per_shard, contender_total, contender_per_shard):
         unit = "min"
         return self.join(
-            self.line("Total {}".format(name), baseline_total, contender_total, "", unit,
+            self.line("Total primaries {}".format(name), baseline_total, contender_total, "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
             self.line("Min {} per shard".format(name), baseline_per_shard.get("min"), contender_per_shard.get("min"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
@@ -786,11 +811,17 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
         )
 
+    def report_total_count(self, name, baseline_total, contender_total):
+        return self.join(
+            self.line("Total primaries {}".format(name), baseline_total, contender_total, "", "",
+                      treat_increase_as_improvement=False)
+        )
+
     def report_gc_times(self, baseline_stats, contender_stats):
         return self.join(
-            self.line("Total Young Gen GC", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
+            self.line("Total primaries Young Gen GC", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
-            self.line("Total Old Gen GC", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
+            self.line("Total primaries Old Gen GC", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds)
         )
 
