@@ -2,6 +2,7 @@
 
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
+RELEASE_VERSION=$1
 
 # test number of parameters
 if [[ $# != 2 ]]
@@ -25,3 +26,13 @@ then
     echo "The release process requires a valid GitHub token. See RELEASE.md for details."
     exit 1
 fi
+
+if [[ $(uname) == "Darwin" && -z "${GPG_TTY+set}" ]]
+then
+    echo "Error: to allow git to create signed commits on Mac OS you need to set \"export GPG_TTY=\$(tty)\"."
+    exit 1
+fi
+
+# Check if there will be any errors during CHANGELOG.md generation
+CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
+
