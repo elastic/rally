@@ -2128,18 +2128,15 @@ class IndexStatsTests(TestCase):
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "merges_total_count",
-                "value": 3,
-                "unit": "",
+                "value": 3
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "refresh_total_count",
-                "value": 10,
-                "unit": ""
+                "value": 10
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "flush_total_count",
-                "value": 0,
-                "unit": ""
+                "value": 0
             }, level=metrics.MetaInfoScope.cluster),
         ])
 

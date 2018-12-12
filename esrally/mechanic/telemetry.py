@@ -1116,8 +1116,7 @@ class IndexStats(InternalTelemetryDevice):
         if value is not None:
             doc = {
                 "name": name,
-                "value": value,
-                "unit": "",
+                "value": value
             }
             values.append(doc)
 

@@ -30,32 +30,50 @@ Indexing throttle time per shard
 Total merge time
 ----------------
 
-* **Definition**: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Total runtime of merges of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_time``
+
+Total merge count
+-----------------
+
+* **Definition**: Total number of merges of primary shards, as reported by indices stats API under ``_all/primaries``.
+* **Corresponding metrics key**: ``merges_total_count``
 
 Merge time per shard
 --------------------
 
-* **Definition**: Minimum, median and maximum time of merges per primary shard as reported by the indices stats API.
+* **Definition**: Minimum, median and maximum time of merges per primary shard, as reported by the indices stats API.
 * **Corresponding metrics key**: ``merges_total_time`` (property: ``per-shard``)
 
 Total refresh time
 ------------------
 
-* **Definition**: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Total time used for index refresh of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``refresh_total_time``
+
+Total refresh count
+-------------------
+
+* **Definition**: Total number of refreshes of primary shards, as reported by indices stats API under ``_all/primaries``.
+* **Corresponding metrics key**: ``refresh_total_count``
 
 Refresh time per shard
 ----------------------
 
-* **Definition**: Minimum, median and maximum time for index refresh per primary shard as reported by the indices stats API.
+* **Definition**: Minimum, median and maximum time for index refresh per primary shard, as reported by the indices stats API.
 * **Corresponding metrics key**: ``refresh_total_time`` (property: ``per-shard``)
 
 Total flush time
 ----------------
 
-* **Definition**: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Total time used for index flush of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``flush_total_time``
+
+Total flush count
+-------------------
+
+* **Definition**: Total number of flushes of primary shards, as reported by indices stats API under ``_all/primaries``.
+* **Corresponding metrics key**: ``flush_total_count``
 
 Flush time per shard
 --------------------
@@ -66,7 +84,7 @@ Flush time per shard
 Total merge throttle time
 -------------------------
 
-* **Definition**: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Total time within merges have been throttled, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_throttled_time``
 
 Merge throttle time per shard
