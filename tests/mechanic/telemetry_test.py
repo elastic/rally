@@ -1917,16 +1917,19 @@ class IndexStatsTests(TestCase):
                     },
                     "merges": {
                         "total_time_in_millis": 0,
-                        "total_throttled_time_in_millis": 0
+                        "total_throttled_time_in_millis": 0,
+                        "total": 0
                     },
                     "indexing": {
                         "index_time_in_millis": 0
                     },
                     "refresh": {
-                        "total_time_in_millis": 0
+                        "total_time_in_millis": 0,
+                        "total": 0
                     },
                     "flush": {
-                        "total_time_in_millis": 0
+                        "total_time_in_millis": 0,
+                        "total": 0
                     }
                 }
             }
@@ -1951,16 +1954,19 @@ class IndexStatsTests(TestCase):
                     },
                     "merges": {
                         "total_time_in_millis": 509341,
-                        "total_throttled_time_in_millis": 98925
+                        "total_throttled_time_in_millis": 98925,
+                        "total": 3
                     },
                     "indexing": {
                         "index_time_in_millis": 1065688
                     },
                     "refresh": {
-                        "total_time_in_millis": 158465
+                        "total_time_in_millis": 158465,
+                        "total": 10
                     },
                     "flush": {
-                        "total_time_in_millis": 19082
+                        "total_time_in_millis": 0,
+                        "total": 0
                     }
                 },
                 "total": {
@@ -1998,7 +2004,7 @@ class IndexStatsTests(TestCase):
                                     "total_time_in_millis": 81004
                                 },
                                 "flush": {
-                                    "total_time_in_millis": 9879
+                                    "total_time_in_millis": 0
                                 }
                             }
                         ],
@@ -2018,7 +2024,7 @@ class IndexStatsTests(TestCase):
                                     "total_time_in_millis": 77461,
                                 },
                                 "flush": {
-                                    "total_time_in_millis": 9203
+                                    "total_time_in_millis": 0
                                 }
                             }
                         ]
@@ -2042,7 +2048,7 @@ class IndexStatsTests(TestCase):
                                     "total_time_in_millis": 81004,
                                 },
                                 "flush": {
-                                    "total_time_in_millis": 9879
+                                    "total_time_in_millis": 0
                                 }
                             }
                         ],
@@ -2063,7 +2069,7 @@ class IndexStatsTests(TestCase):
                                     "total_time_in_millis": 77461,
                                 },
                                 "flush": {
-                                    "total_time_in_millis": 9203
+                                    "total_time_in_millis": 0
                                 }
                             }
                         ]
@@ -2115,10 +2121,22 @@ class IndexStatsTests(TestCase):
             }, level=metrics.MetaInfoScope.cluster),
             mock.call(doc={
                 "name": "flush_total_time",
-                "value": 19082,
+                "value": 0,
                 "unit": "ms",
-                # [9203, 9879]
+                # [0, 0]
                 "per-shard": [s["flush"]["total_time_in_millis"] for s in primary_shards]
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "merges_total_count",
+                "value": 3
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "refresh_total_count",
+                "value": 10
+            }, level=metrics.MetaInfoScope.cluster),
+            mock.call(doc={
+                "name": "flush_total_count",
+                "value": 0
             }, level=metrics.MetaInfoScope.cluster),
         ])
 

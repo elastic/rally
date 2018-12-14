@@ -1061,6 +1061,9 @@ class IndexStats(InternalTelemetryDevice):
         for t in self.index_times(index_stats):
             self.metrics_store.put_doc(doc=t, level=metrics.MetaInfoScope.cluster)
 
+        for ct in self.index_counts(index_stats):
+            self.metrics_store.put_doc(doc=ct, level=metrics.MetaInfoScope.cluster)
+
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
@@ -1090,7 +1093,7 @@ class IndexStats(InternalTelemetryDevice):
     def index_time(self, values, stats, name, path, per_shard_stats):
         primary_total_stats = self.extract_value(stats, ["_all", "primaries"], default_value={})
         value = self.extract_value(primary_total_stats, path)
-        if value:
+        if value is not None:
             doc = {
                 "name": name,
                 "value": value,
@@ -1098,6 +1101,23 @@ class IndexStats(InternalTelemetryDevice):
             }
             if per_shard_stats:
                 doc["per-shard"] = self.primary_shard_stats(stats, path)
+            values.append(doc)
+
+    def index_counts(self, stats):
+        counts = []
+        self.index_count(counts, stats, "merges_total_count", ["merges", "total"])
+        self.index_count(counts, stats, "refresh_total_count", ["refresh", "total"])
+        self.index_count(counts, stats, "flush_total_count", ["flush", "total"])
+        return counts
+
+    def index_count(self, values, stats, name, path):
+        primary_total_stats = self.extract_value(stats, ["_all", "primaries"], default_value={})
+        value = self.extract_value(primary_total_stats, path)
+        if value is not None:
+            doc = {
+                "name": name,
+                "value": value
+            }
             values.append(doc)
 
     def primary_shard_stats(self, stats, path):
