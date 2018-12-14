@@ -38,77 +38,77 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
     ------------------------------------------------------
 
-    |   Lap |                                         Metric |                   Task |     Value |    Unit |
-    |------:|-----------------------------------------------:|-----------------------:|----------:|--------:|
-    |   All |          Total indexing time of primary shards |                        |   54.5878 |     min |
-    |   All |                    Min indexing time per shard |                        |   10.7519 |     min |
-    |   All |                 Median indexing time per shard |                        |   10.9219 |     min |
-    |   All |                    Max indexing time per shard |                        |   11.1754 |     min |
-    |   All | Total indexing throttle time of primary shards |                        |         0 |     min |
-    |   All |           Min indexing throttle time per shard |                        |         0 |     min |
-    |   All |        Median indexing throttle time per shard |                        |         0 |     min |
-    |   All |           Max indexing throttle time per shard |                        |         0 |     min |
-    |   All |             Total merge time of primary shards |                        |   20.4128 |     min |
-    |   All |            Total merge count of primary shards |                        |       136 |         |
-    |   All |                       Min merge time per shard |                        |   3.82548 |     min |
-    |   All |                    Median merge time per shard |                        |    4.1088 |     min |
-    |   All |                       Max merge time per shard |                        |   4.38148 |     min |
-    |   All |    Total merge throttle time of primary shards |                        |   1.17975 |     min |
-    |   All |              Min merge throttle time per shard |                        |    0.1169 |     min |
-    |   All |           Median merge throttle time per shard |                        |   0.26585 |     min |
-    |   All |              Max merge throttle time per shard |                        |  0.291033 |     min |
-    |   All |           Total refresh time of primary shards |                        |    7.0317 |     min |
-    |   All |          Total refresh count of primary shards |                        |       420 |         |
-    |   All |                     Min refresh time per shard |                        |   1.37088 |     min |
-    |   All |                  Median refresh time per shard |                        |    1.4076 |     min |
-    |   All |                     Max refresh time per shard |                        |   1.43343 |     min |
-    |   All |             Total flush time of primary shards |                        |  0.599417 |     min |
-    |   All |            Total flush count of primary shards |                        |        10 |         |
-    |   All |                       Min flush time per shard |                        | 0.0946333 |     min |
-    |   All |                    Median flush time per shard |                        |  0.118767 |     min |
-    |   All |                       Max flush time per shard |                        |   0.14145 |     min |
-    |   All |                               Median CPU usage |                        |     284.4 |       % |
-    |   All |                             Total Young Gen GC |                        |    12.868 |       s |
-    |   All |                               Total Old Gen GC |                        |     3.803 |       s |
-    |   All |                                     Store size |                        |   3.17241 |      GB |
-    |   All |                                  Translog size |                        |   2.62736 |      GB |
-    |   All |                                     Index size |                        |   5.79977 |      GB |
-    |   All |                                Totally written |                        |   22.8536 |      GB |
-    |   All |                         Heap used for segments |                        |   18.8885 |      MB |
-    |   All |                       Heap used for doc values |                        | 0.0322647 |      MB |
-    |   All |                            Heap used for terms |                        |   17.7184 |      MB |
-    |   All |                            Heap used for norms |                        | 0.0723877 |      MB |
-    |   All |                           Heap used for points |                        |  0.277171 |      MB |
-    |   All |                    Heap used for stored fields |                        |  0.788307 |      MB |
-    |   All |                                  Segment count |                        |        94 |         |
-    |   All |                                 Min Throughput |           index-append |   38089.5 |  docs/s |
-    |   All |                              Median Throughput |           index-append |   38613.9 |  docs/s |
-    |   All |                                 Max Throughput |           index-append |   40693.3 |  docs/s |
-    |   All |                        50th percentile latency |           index-append |   803.417 |      ms |
-    |   All |                        90th percentile latency |           index-append |    1913.7 |      ms |
-    |   All |                        99th percentile latency |           index-append |   3591.23 |      ms |
-    |   All |                      99.9th percentile latency |           index-append |   6176.23 |      ms |
-    |   All |                       100th percentile latency |           index-append |   6642.97 |      ms |
-    |   All |                   50th percentile service time |           index-append |   803.417 |      ms |
-    |   All |                   90th percentile service time |           index-append |    1913.7 |      ms |
-    |   All |                   99th percentile service time |           index-append |   3591.23 |      ms |
-    |   All |                 99.9th percentile service time |           index-append |   6176.23 |      ms |
-    |   All |                  100th percentile service time |           index-append |   6642.97 |      ms |
-    |   All |                                     error rate |           index-append |         0 |       % |
-    |   All |                                           ...  |                    ... |       ... |     ... |
-    |   All |                                           ...  |                    ... |       ... |     ... |
-    |   All |                                 Min Throughput | large_prohibited_terms |         2 |   ops/s |
-    |   All |                              Median Throughput | large_prohibited_terms |         2 |   ops/s |
-    |   All |                                 Max Throughput | large_prohibited_terms |         2 |   ops/s |
-    |   All |                        50th percentile latency | large_prohibited_terms |   344.429 |      ms |
-    |   All |                        90th percentile latency | large_prohibited_terms |   353.187 |      ms |
-    |   All |                        99th percentile latency | large_prohibited_terms |    377.22 |      ms |
-    |   All |                       100th percentile latency | large_prohibited_terms |   392.918 |      ms |
-    |   All |                   50th percentile service time | large_prohibited_terms |   341.177 |      ms |
-    |   All |                   90th percentile service time | large_prohibited_terms |   349.979 |      ms |
-    |   All |                   99th percentile service time | large_prohibited_terms |   374.958 |      ms |
-    |   All |                  100th percentile service time | large_prohibited_terms |    388.62 |      ms |
-    |   All |                                     error rate | large_prohibited_terms |         0 |       % |
+    |   Lap |                                                          Metric |                   Task |     Value |    Unit |
+    |------:|----------------------------------------------------------------:|-----------------------:|----------:|--------:|
+    |   All |                      Cumulative indexing time of primary shards |                        |   54.5878 |     min |
+    |   All |              Min cumulative indexing time across primary shards |                        |   10.7519 |     min |
+    |   All |           Median cumulative indexing time across primary shards |                        |   10.9219 |     min |
+    |   All |              Max cumulative indexing time across primary shards |                        |   11.1754 |     min |
+    |   All |             Cumulative indexing throttle time of primary shards |                        |         0 |     min |
+    |   All |     Min cumulative indexing throttle time across primary shards |                        |         0 |     min |
+    |   All |  Median cumulative indexing throttle time across primary shards |                        |         0 |     min |
+    |   All |     Max cumulative indexing throttle time across primary shards |                        |         0 |     min |
+    |   All |                         Cumulative merge time of primary shards |                        |   20.4128 |     min |
+    |   All |                        Cumulative merge count of primary shards |                        |       136 |         |
+    |   All |                 Min cumulative merge time across primary shards |                        |   3.82548 |     min |
+    |   All |              Median cumulative merge time across primary shards |                        |    4.1088 |     min |
+    |   All |                 Max cumulative merge time across primary shards |                        |   4.38148 |     min |
+    |   All |                Cumulative merge throttle time of primary shards |                        |   1.17975 |     min |
+    |   All |        Min cumulative merge throttle time across primary shards |                        |    0.1169 |     min |
+    |   All |     Median cumulative merge throttle time across primary shards |                        |   0.26585 |     min |
+    |   All |        Max cumulative merge throttle time across primary shards |                        |  0.291033 |     min |
+    |   All |                       Cumulative refresh time of primary shards |                        |    7.0317 |     min |
+    |   All |                      Cumulative refresh count of primary shards |                        |       420 |         |
+    |   All |               Min cumulative refresh time across primary shards |                        |   1.37088 |     min |
+    |   All |            Median cumulative refresh time across primary shards |                        |    1.4076 |     min |
+    |   All |               Max cumulative refresh time across primary shards |                        |   1.43343 |     min |
+    |   All |                         Cumulative flush time of primary shards |                        |  0.599417 |     min |
+    |   All |                        Cumulative flush count of primary shards |                        |        10 |         |
+    |   All |                 Min cumulative flush time across primary shards |                        | 0.0946333 |     min |
+    |   All |              Median cumulative flush time across primary shards |                        |  0.118767 |     min |
+    |   All |                 Max cumulative flush time across primary shards |                        |   0.14145 |     min |
+    |   All |                                                Median CPU usage |                        |     284.4 |       % |
+    |   All |                                              Total Young Gen GC |                        |    12.868 |       s |
+    |   All |                                                Total Old Gen GC |                        |     3.803 |       s |
+    |   All |                                                      Store size |                        |   3.17241 |      GB |
+    |   All |                                                   Translog size |                        |   2.62736 |      GB |
+    |   All |                                                      Index size |                        |   5.79977 |      GB |
+    |   All |                                                 Totally written |                        |   22.8536 |      GB |
+    |   All |                                          Heap used for segments |                        |   18.8885 |      MB |
+    |   All |                                        Heap used for doc values |                        | 0.0322647 |      MB |
+    |   All |                                             Heap used for terms |                        |   17.7184 |      MB |
+    |   All |                                             Heap used for norms |                        | 0.0723877 |      MB |
+    |   All |                                            Heap used for points |                        |  0.277171 |      MB |
+    |   All |                                     Heap used for stored fields |                        |  0.788307 |      MB |
+    |   All |                                                   Segment count |                        |        94 |         |
+    |   All |                                                  Min Throughput |           index-append |   38089.5 |  docs/s |
+    |   All |                                               Median Throughput |           index-append |   38613.9 |  docs/s |
+    |   All |                                                  Max Throughput |           index-append |   40693.3 |  docs/s |
+    |   All |                                         50th percentile latency |           index-append |   803.417 |      ms |
+    |   All |                                         90th percentile latency |           index-append |    1913.7 |      ms |
+    |   All |                                         99th percentile latency |           index-append |   3591.23 |      ms |
+    |   All |                                       99.9th percentile latency |           index-append |   6176.23 |      ms |
+    |   All |                                        100th percentile latency |           index-append |   6642.97 |      ms |
+    |   All |                                    50th percentile service time |           index-append |   803.417 |      ms |
+    |   All |                                    90th percentile service time |           index-append |    1913.7 |      ms |
+    |   All |                                    99th percentile service time |           index-append |   3591.23 |      ms |
+    |   All |                                  99.9th percentile service time |           index-append |   6176.23 |      ms |
+    |   All |                                   100th percentile service time |           index-append |   6642.97 |      ms |
+    |   All |                                                      error rate |           index-append |         0 |       % |
+    |   All |                                                            ...  |                    ... |       ... |     ... |
+    |   All |                                                            ...  |                    ... |       ... |     ... |
+    |   All |                                                  Min Throughput | large_prohibited_terms |         2 |   ops/s |
+    |   All |                                               Median Throughput | large_prohibited_terms |         2 |   ops/s |
+    |   All |                                                  Max Throughput | large_prohibited_terms |         2 |   ops/s |
+    |   All |                                         50th percentile latency | large_prohibited_terms |   344.429 |      ms |
+    |   All |                                         90th percentile latency | large_prohibited_terms |   353.187 |      ms |
+    |   All |                                         99th percentile latency | large_prohibited_terms |    377.22 |      ms |
+    |   All |                                        100th percentile latency | large_prohibited_terms |   392.918 |      ms |
+    |   All |                                    50th percentile service time | large_prohibited_terms |   341.177 |      ms |
+    |   All |                                    90th percentile service time | large_prohibited_terms |   349.979 |      ms |
+    |   All |                                    99th percentile service time | large_prohibited_terms |   374.958 |      ms |
+    |   All |                                   100th percentile service time | large_prohibited_terms |    388.62 |      ms |
+    |   All |                                                      error rate | large_prohibited_terms |         0 |       % |
 
 
     ----------------------------------
