@@ -2,7 +2,7 @@ import unittest.mock as mock
 import random
 from unittest import TestCase
 
-from esrally import racecontrol, config, exceptions
+from esrally import racecontrol, config, exceptions, DOC_LINK
 
 
 class RaceControlTests(TestCase):
@@ -11,8 +11,9 @@ class RaceControlTests(TestCase):
             ["from-sources-complete", "Builds and provisions Elasticsearch, runs a benchmark and reports results."],
             ["from-sources-skip-build", "Provisions Elasticsearch (skips the build), runs a benchmark and reports results."],
             ["from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results."],
-            ["benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results"]
+            ["benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results"],
         ]
+
         self.assertEqual(expected, racecontrol.available_pipelines())
 
     def test_prevents_running_an_unknown_pipeline(self):
@@ -26,8 +27,9 @@ class RaceControlTests(TestCase):
 
     def test_runs_a_known_pipeline(self):
         mock_pipeline = mock.Mock()
+        test_pipeline_name = "unit-test-pipeline"
 
-        p = racecontrol.Pipeline("unit-test-pipeline", "Pipeline intended for unit-testing", mock_pipeline)
+        racecontrol.Pipeline("unit-test-pipeline", "Pipeline intended for unit-testing", mock_pipeline)
 
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
@@ -38,16 +40,17 @@ class RaceControlTests(TestCase):
         mock_pipeline.assert_called_once_with(cfg)
 
         # ensure we remove it again from the list of registered pipelines to avoid unwanted side effects
-        del p
+        del racecontrol.pipelines[test_pipeline_name]
 
     def test_conflicting_pipeline_and_distribution_version(self):
         mock_pipeline = mock.Mock()
+        test_pipeline_name = "unit-test-pipeline"
         rnd_pipeline_name = False
 
         while not rnd_pipeline_name or rnd_pipeline_name == "from-distribution":
             rnd_pipeline_name = random.choice(racecontrol.available_pipelines())[0]
 
-        p = racecontrol.Pipeline("unit-test-pipeline", "Pipeline intended for unit-testing", mock_pipeline)
+        racecontrol.Pipeline(test_pipeline_name, "Pipeline intended for unit-testing", mock_pipeline)
 
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "race", "pipeline", rnd_pipeline_name)
@@ -61,7 +64,7 @@ class RaceControlTests(TestCase):
             "but you specified {}.\n"
             "If you intend to benchmark an externally provisioned cluster, don't specify --distribution-version otherwise\n"
             "please read the docs for from-distribution pipeline at "
-            "https://esrally.readthedocs.io/en/stable/pipelines.html#from-distribution".format(rnd_pipeline_name))
+            "{}/pipelines.html#from-distribution".format(rnd_pipeline_name, DOC_LINK))
 
         # ensure we remove it again from the list of registered pipelines to avoid unwanted side effects
-        del p
+        del racecontrol.pipelines[test_pipeline_name]

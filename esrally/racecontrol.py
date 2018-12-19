@@ -5,7 +5,7 @@ import sys
 import tabulate
 import thespian.actors
 
-from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, PROGRAM_NAME
+from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, DOC_LINK, PROGRAM_NAME
 from esrally.utils import console, convert, opts
 
 # benchmarks with external candidates are really scary and we should warn users.
@@ -385,7 +385,7 @@ def run(cfg):
                 "but you specified {}.\n"
                 "If you intend to benchmark an externally provisioned cluster, don't specify --distribution-version otherwise\n"
                 "please read the docs for from-distribution pipeline at "
-                "https://esrally.readthedocs.io/en/stable/pipelines.html#from-distribution".format(name))
+                "{}/pipelines.html#from-distribution".format(name, DOC_LINK))
         logger.info("User specified pipeline [%s].", name)
 
     try:
