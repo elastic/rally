@@ -29,7 +29,10 @@ then
 fi
 
 echo "Updating changelog"
-echo -e "$(python3 changelog.py ${RELEASE_VERSION})\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+# For exit on error to work we have to separate 
+#  CHANGELOG.md generation into two steps.
+CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
+printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
 git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
 
 # * Update version in `setup.py` and `docs/conf.py`
@@ -50,6 +53,7 @@ fi
 # Build new version
 python3 setup.py bdist_wheel
 # Upload to PyPI
+printf "\033[0;31mUploading to PyPI. Please enter your credentials ...\033[0m\n"
 twine upload dist/esrally-${RELEASE_VERSION}-*.whl
 
 # Create (signed) release tag
