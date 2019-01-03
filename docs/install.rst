@@ -142,6 +142,13 @@ You can also use Virtualenv to install Rally into an isolated Python environment
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
 
+PyEnv Install
+------------------
+
+Rally can be tested with different Python versions and it uses pyenv to manage them. 
+
+Please refer to PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
+
 .. _install_offline-install:
 
 Offline Install

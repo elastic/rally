@@ -9,7 +9,8 @@ Install the following software packages:
 * Python 3.4 or better available as ``python3`` on the path (verify with: ``python3 --version``)
 * ``pip3`` available on the path (verify with ``pip3 --version``)
 * ``virtualenv`` available on the path (verify with ``virtualenv --version``)
-* JDK 8 or 9
+* Pyenv installed and ``eval "$(pyenv init -)"`` is added to the shell configuration file. For more details please refer to the PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
+* JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/master/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
 * git 1.9 or better
 
 Check the :doc:`installation guide </install>` for detailed installation instructions for these packages.
@@ -23,7 +24,8 @@ Installation Instructions for Development
 
     git clone https://github.com/elastic/rally.git
     cd rally
-    virtualenv -p python3 .venv
+    make prereq
+    make install
     source .venv/bin/activate
     ./rally
 
