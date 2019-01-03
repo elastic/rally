@@ -67,6 +67,10 @@ then
     exit 2
 fi
 
+__NOTICE_OUTPUT_FILE="NOTICE.txt"
+echo "Preparing ${__NOTICE_OUTPUT_FILE}"
+source create-notice.sh
+
 # Build new version
 python3 setup.py bdist_wheel
 # Upload to PyPI
