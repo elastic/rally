@@ -155,7 +155,7 @@ Translog size
 * **Definition**: The size in bytes of the translog as reported by the indices stats API.
 * **Corresponding metrics key**: ``translog_size_in_bytes``
 
-Totally written
+Total written
 ---------------
 
 * **Definition**: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
