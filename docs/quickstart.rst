@@ -73,7 +73,7 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     |   All |                                                      Store size |                        |   3.17241 |      GB |
     |   All |                                                   Translog size |                        |   2.62736 |      GB |
     |   All |                                                      Index size |                        |   5.79977 |      GB |
-    |   All |                                                 Totally written |                        |   22.8536 |      GB |
+    |   All |                                                   Total written |                        |   22.8536 |      GB |
     |   All |                                          Heap used for segments |                        |   18.8885 |      MB |
     |   All |                                        Heap used for doc values |                        | 0.0322647 |      MB |
     |   All |                                             Heap used for terms |                        |   17.7184 |      MB |

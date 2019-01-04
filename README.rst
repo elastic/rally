@@ -70,7 +70,7 @@ This will download Elasticsearch 6.0.0 and run Rally's default track - the `geon
     |             Total Young Gen GC |                      |    16.237 |      s |
     |               Total Old Gen GC |                      |     1.796 |      s |
     |                     Index size |                      |   2.60124 |     GB |
-    |                Totally written |                      |   11.8144 |     GB |
+    |                  Total written |                      |   11.8144 |     GB |
     |         Heap used for segments |                      |   14.7326 |     MB |
     |       Heap used for doc values |                      |  0.115917 |     MB |
     |            Heap used for terms |                      |   13.3203 |     MB |

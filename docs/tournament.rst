@@ -94,7 +94,7 @@ We can see that the user tag helps us to recognize races. We want to compare the
                                       Total Young Gen GC [s]      39.447       40.456    +1.00900
                                         Total Old Gen GC [s]       7.108        7.703    +0.59500
                                              Index size [GB]     3.25475      3.25098    -0.00377
-                                        Totally written [GB]     17.8434      18.3143    +0.47083
+                                          Total written [GB]     17.8434      18.3143    +0.47083
                                  Heap used for segments [MB]     21.7504      21.5901    -0.16037
                                Heap used for doc values [MB]     0.16436      0.13905    -0.02531
                                     Heap used for terms [MB]     20.0293      19.9159    -0.11345
