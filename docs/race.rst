@@ -72,7 +72,7 @@ When the race has finished, Rally will show a summary on the command line::
     |              Total Young Gen GC |              |    72.078 |      s |
     |                Total Old Gen GC |              |     3.426 |      s |
     |                      Index size |              |   2.26661 |     GB |
-    |                 Total written |              |    30.083 |     GB |
+    |                   Total written |              |    30.083 |     GB |
     |          Heap used for segments |              |   10.7148 |     MB |
     |        Heap used for doc values |              | 0.0135536 |     MB |
     |             Heap used for terms |              |   9.22965 |     MB |
