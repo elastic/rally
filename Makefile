@@ -68,7 +68,7 @@ install: venv-create
 clean: nondocs-clean docs-clean
 
 nondocs-clean:
-	rm -rf .benchmarks .eggs .tox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml
+	rm -rf .benchmarks .eggs .tox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
 
 docs-clean:
 	cd docs && $(MAKE) clean

@@ -38,23 +38,32 @@ long_description = str_from_file("README.rst")
 
 ################################################################################################
 #
-# Adapt `scripts/offline-install.sh` whenever changing dependencies here.
+# Adapt `create-notice.sh` whenever changing dependencies here.
 #
-# That script grabs all license files so we include them in the offline package.
+# That script grabs all license files so we include them in the notice file.
 #
 ################################################################################################
 install_requires = [
+    # License: Apache 2.0
+    # transitive dependency urllib3: MIT
     "elasticsearch==6.2.0",
+    # License: BSD
     "psutil==5.4.0",
+    # License: MIT
     "py-cpuinfo==3.2.0",
+    # License: MIT
     "tabulate==0.8.1",
+    # License: MIT
     "jsonschema==2.5.1",
+    # License: BSD
+    # transitive dependency Markupsafe: BSD
     "Jinja2==2.9.5",
-    # remote messaging
+    # License: MIT
     "thespian==3.9.3",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
+    # License: MPL 2.0
     "certifi"
 ]
 
