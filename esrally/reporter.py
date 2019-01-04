@@ -620,7 +620,7 @@ class SummaryReporter:
             self.line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
             self.line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
             self.line("Index size", "", stats.index_size, "GB", convert.bytes_to_gb),
-            self.line("Totally written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
+            self.line("Total written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
         )
 
     def report_segment_memory(self, stats):
@@ -902,7 +902,7 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
+            self.line("Total written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
         )
 
