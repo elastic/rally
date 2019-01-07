@@ -684,12 +684,12 @@ class ExecutorTests(TestCase):
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4},
                               completes_parent=True)
-            schedule = driver.schedule_for(test_track, task, 0)
             sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
 
             cancel = threading.Event()
             complete = threading.Event()
 
+            schedule = driver.schedule_for(test_track, task, 0)
             execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
             execute_schedule()
 
