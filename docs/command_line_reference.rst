@@ -150,6 +150,12 @@ You can use ``--include-tasks`` to specify a comma-separated list of tasks that 
 
 Selects the team repository that Rally should use to resolve cars. By default the ``default`` team repository is used, which is available in the Github project `rally-teams <https://github.com/elastic/rally-teams>`__. See the documentation about :doc:`cars </car>` on how to add your own team repositories.
 
+``team-revision``
+~~~~~~~~~~~~~~~~~
+
+Selects a specific revision in the team repository. By default, Rally will choose the most appropriate branch on its own (see the :doc:`car reference </car>` for more details) but in some cases it is necessary to specify a certain commit. This is mostly needed when benchmarking specific historic commits of Elasticsearch which are incompatible with the current master branch of the team repository.
+
+
 ``team-path``
 ~~~~~~~~~~~~~
 

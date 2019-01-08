@@ -172,6 +172,10 @@ def create_arg_parser():
             help="Define the repository from where Rally will load teams and cars (default: default).",
             default="default")
         p.add_argument(
+            "--team-revision",
+            help="Define a specific revision in the team repository that Rally should use.",
+            default=None)
+        p.add_argument(
             "--offline",
             help="Assume that Rally has no connection to the Internet (default: false).",
             default=False,
@@ -542,8 +546,10 @@ def main():
     if args.team_path:
         cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", None)
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", args.team_revision)
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
