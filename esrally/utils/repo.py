@@ -82,3 +82,7 @@ class RallyRepository:
         except exceptions.SupplyError as e:
             tb = sys.exc_info()[2]
             raise exceptions.DataError("Cannot update %s in [%s] (%s)." % (self.resource_name, self.repo_dir, e.message)).with_traceback(tb)
+
+    def checkout(self, revision):
+        self.logger.info("Checking out revision [%s] in [%s].", revision, self.repo_dir)
+        git.checkout(self.repo_dir, revision)

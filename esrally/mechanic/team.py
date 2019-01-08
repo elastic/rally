@@ -132,6 +132,7 @@ def team_path(cfg):
     else:
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("mechanic", "repository.name")
+        repo_revision = cfg.opts("mechanic", "repository.revision")
         offline = cfg.opts("system", "offline.mode")
         remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
         root = cfg.opts("node", "root.dir")
@@ -139,7 +140,10 @@ def team_path(cfg):
         teams_dir = os.path.join(root, team_repositories)
 
         current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
-        current_team_repo.update(distribution_version)
+        if repo_revision:
+            current_team_repo.checkout(repo_revision)
+        else:
+            current_team_repo.update(distribution_version)
         return current_team_repo.repo_dir
 
 

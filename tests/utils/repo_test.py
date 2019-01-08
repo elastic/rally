@@ -253,4 +253,19 @@ class RallyRepositoryTests(TestCase):
         self.assertEqual(0, checkout.call_count)
         self.assertEqual(0, rebase.call_count)
 
+    @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
+    @mock.patch("esrally.utils.git.fetch", autospec=True)
+    @mock.patch("esrally.utils.git.checkout", autospec=True)
+    def test_checkout_revision(self, checkout, fetch, is_working_copy):
+        is_working_copy.return_value = True
 
+        r = repo.RallyRepository(
+            remote_url=None,
+            root_dir="/rally-resources",
+            repo_name="unit-test",
+            resource_name="unittest-resources",
+            offline=False)
+
+        r.checkout("abcdef123")
+
+        checkout.assert_called_with("/rally-resources/unit-test", "abcdef123")
