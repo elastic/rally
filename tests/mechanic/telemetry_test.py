@@ -24,6 +24,7 @@ from unittest import TestCase
 from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
 from esrally.metrics import MetaInfoScope
+from esrally.utils import console
 
 
 def create_config():
@@ -621,6 +622,30 @@ class CcrStatsRecorderTests(TestCase):
             mock.call(ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata)
             ],
             any_order=True
+        )
+
+
+class NodeStatsTests(TestCase):
+    warning = """You have enabled the node-stats telemetry device, but requests to the _nodes/stats Elasticsearch endpoint
+          trigger additional refreshes and WILL SKEW results.
+    """
+
+    @mock.patch("esrally.mechanic.telemetry.NodeStatsRecorder", mock.Mock())
+    @mock.patch("esrally.mechanic.telemetry.SamplerThread", mock.Mock())
+    def test_prints_warning_using_node_stats(self):
+        clients = {"default": Client()}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "node-stats-sample-interval": random.randint(1, 100)
+        }
+        t = telemetry.NodeStats(telemetry_params, clients, metrics_store)
+
+        with mock.patch.object(console, "warn") as mocked_console_warn:
+            t.on_benchmark_start()
+        mocked_console_warn.assert_called_once_with(
+            NodeStatsTests.warning,
+            logger=t.logger
         )
 
 
