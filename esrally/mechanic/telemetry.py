@@ -443,14 +443,19 @@ class CcrStatsRecorder:
 
 
 class NodeStats(TelemetryDevice):
+    """
+    Gathers different node stats.
+    """
+
     internal = False
     command = "node-stats"
     human_name = "Node Stats"
     help = "Regularly samples node stats"
+    warning = """You have enabled the node-stats telemetry device, but requests to the _nodes/stats Elasticsearch endpoint
+          trigger additional refreshes and WILL SKEW results.
+          If you still require this, consider reducing the interval.
+    """
 
-    """
-    Gathers different node stats.
-    """
     def __init__(self, telemetry_params, clients, metrics_store):
         super().__init__()
         self.telemetry_params = telemetry_params
@@ -464,6 +469,8 @@ class NodeStats(TelemetryDevice):
         super().attach_to_cluster(cluster)
 
     def on_benchmark_start(self):
+        console.warn(NodeStats.warning, logger=self.logger)
+
         recorder = []
         for cluster_name in self.specified_cluster_names:
             recorder = NodeStatsRecorder(self.telemetry_params, cluster_name, self.clients[cluster_name], self.metrics_store)
