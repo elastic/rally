@@ -453,7 +453,6 @@ class NodeStats(TelemetryDevice):
     help = "Regularly samples node stats"
     warning = """You have enabled the node-stats telemetry device, but requests to the _nodes/stats Elasticsearch endpoint
           trigger additional refreshes and WILL SKEW results.
-          If you still require this, consider reducing the interval.
     """
 
     def __init__(self, telemetry_params, clients, metrics_store):
