@@ -20,7 +20,7 @@ import sys
 import logging
 
 from esrally import exceptions
-from esrally.utils import git, console, versions
+from esrally.utils import io, git, console, versions
 
 
 class RallyRepository:
@@ -47,8 +47,12 @@ class RallyRepository:
                     console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name)
         else:
             if not git.is_working_copy(self.repo_dir):
-                raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
-                                                  .format(src=self.repo_dir))
+                if io.exists(self.repo_dir):
+                    raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
+                                                      .format(src=self.repo_dir))
+                else:
+                    raise exceptions.SystemSetupError("Expected a git repository at [{src}] but the directory does not exist."
+                                                      .format(src=self.repo_dir))
 
     def update(self, distribution_version):
         try:

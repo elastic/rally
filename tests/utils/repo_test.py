@@ -24,9 +24,11 @@ from esrally.utils import repo
 
 
 class RallyRepositoryTests(TestCase):
+    @mock.patch("esrally.utils.io.exists", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
-    def test_fails_in_offline_mode_if_not_a_git_repo(self, is_working_copy):
+    def test_fails_in_offline_mode_if_not_a_git_repo(self, is_working_copy, exists):
         is_working_copy.return_value = False
+        exists.return_value = True
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             repo.RallyRepository(
@@ -38,6 +40,23 @@ class RallyRepositoryTests(TestCase):
 
         self.assertEqual("[/rally-resources/unit-test] must be a git repository.\n\n"
                          "Please run:\ngit -C /rally-resources/unit-test init", ctx.exception.args[0])
+
+    @mock.patch("esrally.utils.io.exists", autospec=True)
+    @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
+    def test_fails_in_offline_mode_if_not_existing(self, is_working_copy, exists):
+        is_working_copy.return_value = False
+        exists.return_value = False
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            repo.RallyRepository(
+                remote_url=None,
+                root_dir="/rally-resources",
+                repo_name="unit-test",
+                resource_name="unittest-resources",
+                offline=True)
+
+        self.assertEqual("Expected a git repository at [/rally-resources/unit-test] but the directory does not exist.",
+                         ctx.exception.args[0])
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_does_nothing_if_working_copy_present(self, is_working_copy):
