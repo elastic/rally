@@ -124,6 +124,7 @@ def has_internet_connection():
         logger.debug("Probing result is HTTP status [%s]", str(status))
         return status == 200
     except BaseException:
+        logger.debug("Could not detect a working Internet connection", exc_info=True)
         return False
 
 
