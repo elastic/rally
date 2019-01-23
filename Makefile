@@ -61,9 +61,10 @@ install: venv-create
 	. $(VENV_ACTIVATE_FILE); pip3 install tox
 	# install coverage
 	. $(VENV_ACTIVATE_FILE); pip3 install coverage
-	# also install development dependencies
+	# also install development/release dependencies
 	# workaround for https://github.com/elastic/rally/issues/439
-	. $(VENV_ACTIVATE_FILE); pip3 install -q sphinx sphinx_rtd_theme
+	. $(VENV_ACTIVATE_FILE); pip3 install -q sphinx sphinx_rtd_theme twin wheel
+	. $(VENV_ACTIVATE_FILE); pip3 install --pre github3.py
 
 clean: nondocs-clean docs-clean
 
