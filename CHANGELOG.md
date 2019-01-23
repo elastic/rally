@@ -1,3 +1,29 @@
+### 1.0.3
+
+#### Enhancements
+
+* [#630](https://github.com/elastic/rally/pull/630): Improve error message on missing repo directory
+* [#627](https://github.com/elastic/rally/pull/627): Warn about skewed results when using node-stats telemetry device
+* [#625](https://github.com/elastic/rally/pull/625): Allow to specify a team revision
+* [#622](https://github.com/elastic/rally/pull/622): Include NOTICE.txt in release
+* [#620](https://github.com/elastic/rally/pull/620): Add license headers
+* [#617](https://github.com/elastic/rally/pull/617): Fix conflicting pipelines and distribution version
+* [#615](https://github.com/elastic/rally/pull/615): Add refresh/merge/flush totals in summary
+* [#612](https://github.com/elastic/rally/pull/612): Extract hits either as number or structured object
+* [#606](https://github.com/elastic/rally/pull/606): Improve release.sh script and prerequisites
+* [#604](https://github.com/elastic/rally/pull/604): Change logging level for esrally command line to DEBUG
+
+#### Bug Fixes
+
+* [#613](https://github.com/elastic/rally/pull/613): Error can be a string, and shards not always present in response.
+
+#### Doc Changes
+
+* [#632](https://github.com/elastic/rally/pull/632): Update Release documentation for Rally
+* [#623](https://github.com/elastic/rally/pull/623): Update Developing Rally docs sections
+* [#621](https://github.com/elastic/rally/pull/621): Minor typo
+* [#610](https://github.com/elastic/rally/pull/610): Command fails with "=", ":" is needed.
+
 ### 1.0.2
 
 #### Enhancements
@@ -486,7 +512,7 @@ For details please refer to the updated [JSON schema for Rally tracks](https://g
 
 Hint: This is just relevant for you, if you have defined your own tracks. We already took care of updating the [official Rally tracks](https://github.com/elastic/rally-tracks).
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.4.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.4.0+is0X0P+0closed)
 
 ### 0.3.0
 
@@ -505,7 +531,7 @@ This influences the command line interface in a couple of ways:
 
 We have also [moved tracks](https://github.com/elastic/rally/issues/69) to a [dedicated repository](https://github.com/elastic/rally-tracks). This allows you to support tracks for multiple versions of Elasticsearch but also requires that all users have `git` installed.
  
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.3.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.3.0+is0X0P+0closed)
 
 #### Simplified configuration in 0.3
 
@@ -524,7 +550,7 @@ Please raise a ticket in case of problems.
 * [Support for perf profiler](https://github.com/elastic/rally/issues/28)
 * [Add a fulltext benchmark](https://github.com/elastic/rally/issues/38)
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.1+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.2.1+is0X0P+0closed)
 
 ### 0.2.0
 
@@ -535,7 +561,7 @@ Major changes:
 * We store [benchmark environment data](elastic/rally#54) alongside metrics.
 * A new percolator track](elastic/rally#74) contributed by [Martijn van Groningen](https://github.com/martijnvg). Thanks!
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.2.0+is0X0P+0closed)
 
 ### 0.1.0
 
@@ -549,7 +575,7 @@ disassembled JIT compiler output which can be used for low-level analysis. We re
 during a benchmark. One of the use-cases for this is to run a benchmark based on a released build of Elasticsearch rather than building it
 ourselves.
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.1.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.1.0+is0X0P+0closed)
 
 ### 0.0.3
 
@@ -561,4 +587,4 @@ Major changes:
   
   Related issues: #8, #21, #46, 
   
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.0.3+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.0.3+is0X0P+0closed)
