@@ -241,7 +241,7 @@ def create_arg_parser():
         p.add_argument(
             "--laps",
             type=positive_number,
-            help="Dumber of laps that the benchmark should run (default: 1).",
+            help="Number of laps that the benchmark should run (default: 1).",
             default=1)
         p.add_argument(
             "--client-options",
