@@ -38,7 +38,6 @@ readonly RELATIVE_DOWNLOAD_DIR="esrally-dist-${RALLY_VERSION}"
 readonly ABSOLUTE_DOWNLOAD_DIR="${WD}/${RELATIVE_DOWNLOAD_DIR}"
 readonly ABSOLUTE_DOWNLOAD_BIN_DIR="${ABSOLUTE_DOWNLOAD_DIR}/bin"
 
-# see http://stackoverflow.com/a/246128
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
   DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
