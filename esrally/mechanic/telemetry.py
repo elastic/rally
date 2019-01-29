@@ -422,7 +422,6 @@ class CcrStatsRecorder:
                         "The 'indices' key in {0} does not contain an 'index' or 'shards' key "
                         "Maybe the output format of the {0} endpoint has changed. Skipping.".format(ccr_stats_api_endpoint)
                     )
-        time.sleep(self.sample_interval)
 
     def record_stats_per_index(self, name, stats):
         """
@@ -548,8 +547,6 @@ class NodeStatsRecorder:
                                        level=MetaInfoScope.node,
                                        node_name=node_name,
                                        meta_data=self.metrics_store_meta_data)
-
-        time.sleep(self.sample_interval)
 
     def flatten_stats_fields(self, prefix=None, stats=None):
         """
