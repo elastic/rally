@@ -656,12 +656,14 @@ class MergeParts(InternalTelemetryDevice):
         merge_times = {}
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
-            if not io.is_archive(log_file):
+            if io.is_archive(log_file):
+                self.logger.debug("Skipping archived logs in [%s].", log_path)
+            elif io.has_extension(log_file, ".json"):
+                self.logger.debug("Skipping JSON-formatted logs in [%s].", log_path)
+            else:
                 self.logger.debug("Analyzing merge times in [%s]", log_path)
                 with open(log_path, mode="rt", encoding="utf-8") as f:
                     self._extract_merge_times(f, merge_times)
-            else:
-                self.logger.debug("Skipping archived logs in [%s].", log_path)
         if merge_times:
             self._store_merge_times(merge_times)
         self.logger.info("Finished analyzing merge times. Extracted [%s] different merge time components.", len(merge_times))
