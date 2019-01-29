@@ -422,7 +422,6 @@ class CcrStatsRecorder:
                         "The 'indices' key in {0} does not contain an 'index' or 'shards' key "
                         "Maybe the output format of the {0} endpoint has changed. Skipping.".format(ccr_stats_api_endpoint)
                     )
-        time.sleep(self.sample_interval)
 
     def record_stats_per_index(self, name, stats):
         """
