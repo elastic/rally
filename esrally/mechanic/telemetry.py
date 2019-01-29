@@ -548,8 +548,6 @@ class NodeStatsRecorder:
                                        node_name=node_name,
                                        meta_data=self.metrics_store_meta_data)
 
-        time.sleep(self.sample_interval)
-
     def flatten_stats_fields(self, prefix=None, stats=None):
         """
         Flatten provided dict using an optional prefix and top level key filters.
