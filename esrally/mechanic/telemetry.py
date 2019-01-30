@@ -31,7 +31,7 @@ from esrally.metrics import MetaInfoScope
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
-    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat, NodeStats]]
+    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat, NodeStats, RecoveryStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -440,6 +440,124 @@ class CcrStatsRecorder:
                 }
 
                 self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+
+
+class RecoveryStats(TelemetryDevice):
+    internal = False
+    command = "recovery-stats"
+    human_name = "Recovery Stats"
+    help = "Regularly samples shard recovery stats"
+
+    """
+    Gathers recovery stats on a cluster level
+    """
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``recovery-stats-indices``: JSON structure specifying the index pattern per cluster to publish stats from.
+            Not all clusters need to be specified, but any name used must be be present in target.hosts. Alternatively,
+            the index pattern can be specified as a string can be specified in case only one cluster is involved.
+            Example:
+            {"recovery-stats-indices": {"cluster_a": ["follower"],"default": ["leader"]}
+
+            ``recovery-stats-sample-interval``: positive integer controlling the sampling interval. Default: 1 second.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("recovery-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                "The telemetry parameter 'recovery-stats-sample-interval' must be greater than zero but was {}."
+                    .format(self.sample_interval))
+        self.specified_cluster_names = self.clients.keys()
+        indices_per_cluster = self.telemetry_params.get("recovery-stats-indices", False)
+        # allow the user to specify either an index pattern as string or as a JSON object
+        if isinstance(indices_per_cluster, str):
+            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
+        else:
+            self.indices_per_cluster = indices_per_cluster
+
+        if self.indices_per_cluster:
+            for cluster_name in self.indices_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        "The telemetry parameter 'recovery-stats-indices' must be a JSON Object with keys matching "
+                        "the cluster names [{}] specified in --target-hosts "
+                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+            self.specified_cluster_names = self.indices_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = RecoveryStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
+                                             self.sample_interval,
+                                             self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class RecoveryStatsRecorder:
+    """
+    Collects and pushes recovery stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param indices: optional list of indices to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.indices = indices
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "recovery stats"
+
+    def record(self):
+        """
+        Collect recovery stats for indexes (optionally) specified in telemetry parameters and push to metrics store.
+        """
+        import elasticsearch
+
+        try:
+            stats = self.client.indices.recovery(index=self.indices, active_only=True, detailed=False)
+        except elasticsearch.TransportError:
+            msg = "A transport error occurred while collecting recovery stats on cluster [{}]".format(self.cluster_name)
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        for idx, idx_stats in stats.items():
+            for shard in idx_stats["shards"]:
+                shard_metadata = {
+                    "cluster": self.cluster_name,
+                    "index": idx,
+                    "shard": shard["id"],
+                    "name": "recovery-stats"
+                }
+                self.metrics_store.put_doc(shard, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):
