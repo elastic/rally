@@ -102,6 +102,8 @@ class ConnectOptions:
 
 
 class TargetHosts(ConnectOptions):
+    DEFAULT = "default"
+
     def __init__(self, argvalue):
         self.argname = "--target-hosts"
         self.argvalue = argvalue
@@ -118,7 +120,7 @@ class TargetHosts(ConnectOptions):
             defined as a json string or file.
             """
 
-            return {"default": _normalize_hosts(arg)}
+            return {TargetHosts.DEFAULT: _normalize_hosts(arg)}
 
         self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
 
@@ -154,7 +156,7 @@ class ClientOptions(ConnectOptions):
             defined as a json string or file.
             """
 
-            return {"default": kv_to_map(arg)}
+            return {TargetHosts.DEFAULT: kv_to_map(arg)}
 
         if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts != None:
             # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.

@@ -16,13 +16,14 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Available telemetry devices:
 
-   Command     Name                   Description
-   ----------  ---------------------  -----------------------------------------------------
-   jit         JIT Compiler Profiler  Enables JIT compiler logs.
-   gc          GC log                 Enables GC logs.
-   jfr         Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK)
-   perf        perf stat              Reads CPU PMU counters (requires Linux and perf)
-   node-stats  Node Stats             Regularly samples node stats
+   Command         Name                   Description
+   --------------  ---------------------  --------------------------------------------------------------------
+   jit             JIT Compiler Profiler  Enables JIT compiler logs.
+   gc              GC log                 Enables GC logs.
+   jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+   perf            perf stat              Reads CPU PMU counters (requires Linux and perf)
+   node-stats      Node Stats             Regularly samples node stats
+   recovery-stats  Recovery Stats         Regularly samples shard recovery stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -78,7 +79,7 @@ node-stats
     Using this telemetry device will skew your results because the node-stats API triggers additional refreshes.
     Additionally a lot of metrics get recorded impacting the measurement results even further.
 
-The node-stats telemetry devices regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
+The node-stats telemetry device regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
 
 * Indices stats (key ``indices`` in the node-stats API)
 * Thread pool stats (key ``jvm.thread_pool`` in the node-stats API)
@@ -100,3 +101,13 @@ Supported telemetry parameters:
 * ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether JVM heap stats should be included.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
+
+recovery-stats
+--------------
+
+The recovery-stats telemetry device regularly calls the `indices recovery API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-recovery.html>`_ and records one metrics document per shard.
+
+Supported telemetry parameters:
+
+* ``recovery-stats-indices`` (default: all indices): An index pattern for which recovery stats should be checked.
+* ``recovery-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
