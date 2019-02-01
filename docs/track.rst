@@ -776,7 +776,7 @@ raw-request
 With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`. The ``raw-request`` operation supports the following parameters:
 
 * ``method`` (optional, defaults to ``GET``): The HTTP request method to use
-* ``path`` (mandatory): Path for the API call (excluding host and port)
+* ``path`` (mandatory): Path for the API call (excluding host and port). The path must begin with a ``/``. Example: ``/myindex/_flush``.
 * ``header`` (optional): A structure containing any request headers as key-value pairs.
 * ``body`` (optional): The document body.
 * ``request-params`` (optional): A structure containing HTTP request parameters.
