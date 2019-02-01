@@ -16,14 +16,14 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Available telemetry devices:
 
-    Command         Name                   Description
-    --------------  ---------------------  --------------------------------------------------------------------
-    jit             JIT Compiler Profiler  Enables JIT compiler logs.
-    gc              GC log                 Enables GC logs.
-    jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-    perf            perf stat              Reads CPU PMU counters (requires Linux and perf)
-    node-stats      Node Stats             Regularly samples node stats
-    recovery-stats  Recovery Stats         Regularly samples shard recovery stats
+   Command         Name                   Description
+   --------------  ---------------------  --------------------------------------------------------------------
+   jit             JIT Compiler Profiler  Enables JIT compiler logs.
+   gc              GC log                 Enables GC logs.
+   jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+   perf            perf stat              Reads CPU PMU counters (requires Linux and perf)
+   node-stats      Node Stats             Regularly samples node stats
+   recovery-stats  Recovery Stats         Regularly samples shard recovery stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
