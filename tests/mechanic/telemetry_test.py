@@ -729,12 +729,14 @@ class RecoveryStatsTests(TestCase):
         shard_metadata = {
             "cluster": "leader",
             "index": "index1",
-            "shard": 0,
-            "name": "recovery-stats"
+            "shard": 0
         }
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(response["index1"]["shards"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata)
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index1"]["shards"][0]
+            }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
         ],  any_order=True)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
@@ -797,35 +799,45 @@ class RecoveryStatsTests(TestCase):
         recorder.record()
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(response["index1"]["shards"][0], level=MetaInfoScope.cluster, meta_data={
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index1"]["shards"][0]
+            }, level=MetaInfoScope.cluster, meta_data={
                 "cluster": "leader",
                 "index": "index1",
-                "shard": 0,
-                "name": "recovery-stats"
+                "shard": 0
             }),
-            mock.call(response["index1"]["shards"][1], level=MetaInfoScope.cluster, meta_data={
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index1"]["shards"][1]
+            }, level=MetaInfoScope.cluster, meta_data={
                 "cluster": "leader",
                 "index": "index1",
-                "shard": 1,
-                "name": "recovery-stats"
+                "shard": 1
             }),
-            mock.call(response["index2"]["shards"][0], level=MetaInfoScope.cluster, meta_data={
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index2"]["shards"][0]
+            }, level=MetaInfoScope.cluster, meta_data={
                 "cluster": "leader",
                 "index": "index2",
-                "shard": 0,
-                "name": "recovery-stats"
+                "shard": 0
             }),
-            mock.call(response["index2"]["shards"][1], level=MetaInfoScope.cluster, meta_data={
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index2"]["shards"][1]
+            }, level=MetaInfoScope.cluster, meta_data={
                 "cluster": "leader",
                 "index": "index2",
-                "shard": 1,
-                "name": "recovery-stats"
+                "shard": 1
             }),
-            mock.call(response["index2"]["shards"][2], level=MetaInfoScope.cluster, meta_data={
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index2"]["shards"][2]
+            }, level=MetaInfoScope.cluster, meta_data={
                 "cluster": "leader",
                 "index": "index2",
-                "shard": 2,
-                "name": "recovery-stats"
+                "shard": 2
             }),
         ],  any_order=True)
 

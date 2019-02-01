@@ -551,13 +551,16 @@ class RecoveryStatsRecorder:
 
         for idx, idx_stats in stats.items():
             for shard in idx_stats["shards"]:
+                doc = {
+                    "name": "recovery-stats",
+                    "shard": shard
+                }
                 shard_metadata = {
                     "cluster": self.cluster_name,
                     "index": idx,
-                    "shard": shard["id"],
-                    "name": "recovery-stats"
+                    "shard": shard["id"]
                 }
-                self.metrics_store.put_doc(shard, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+                self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):
