@@ -29,7 +29,8 @@ PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME); have you executed make venv-create?\033[0m\n"
 
 prereq: make-requirements.txt
-	pyenv install $(PY34)
+# Temporarily disable Python 3.4 builds
+#	pyenv install $(PY34)
 	pyenv install $(PY35)
 	pyenv install $(PY36)
 	pyenv install $(PY37)
@@ -88,9 +89,10 @@ test: check-venv
 it: check-venv python-caches-clean
 	. $(VENV_ACTIVATE_FILE); tox
 
-it34: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py34
-
+# Temporarily disable Python 3.4 builds
+#it34: check-venv python-caches-clean
+#	. $(VENV_ACTIVATE_FILE); tox -e py34
+#
 it35: check-venv python-caches-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py35
 
