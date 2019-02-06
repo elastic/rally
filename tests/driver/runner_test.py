@@ -1275,23 +1275,25 @@ class CreateIndexRunnerTests(TestCase):
     def test_creates_multiple_indices(self, es):
         r = runner.CreateIndex()
 
+        request_params = {
+            "wait_for_active_shards": True
+        }
+
         params = {
             "indices": [
                 ("indexA", {"settings": {}}),
                 ("indexB", {"settings": {}}),
             ],
-            "request-params": {
-                "wait_for_active_shards": True
-            }
+            "request-params": request_params
         }
 
         result = r(es, params)
 
         self.assertEqual((2, "ops"), result)
 
-        es.indices.create.assert_has_calls([
-            mock.call(index="indexA", body={"settings": {}}, wait_for_active_shards=True),
-            mock.call(index="indexB", body={"settings": {}}, wait_for_active_shards=True)
+        es.transport.perform_request.assert_has_calls([
+            mock.call(method="PUT", url="/indexA", body={"settings": {}}, params=request_params),
+            mock.call(method="PUT", url="/indexB", body={"settings": {}}, params=request_params)
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")

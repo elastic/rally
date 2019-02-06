@@ -783,7 +783,12 @@ class CreateIndex(Runner):
         indices = mandatory(params, "indices", self)
         request_params = params.get("request-params", {})
         for index, body in indices:
-            es.indices.create(index=index, body=body, **request_params)
+            # We don't use es.indices.create() because it doesn't support params
+            # Ref: https://elasticsearch-py.readthedocs.io/en/master/api.html?highlight=indices%20create#elasticsearch.client.IndicesClient.create
+            es.transport.perform_request(method="PUT",
+                                         url="/{}".format(index),
+                                         body=body,
+                                         params=request_params)
         return len(indices), "ops"
 
     def __repr__(self, *args, **kwargs):
