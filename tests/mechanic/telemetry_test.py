@@ -989,6 +989,18 @@ class NodeStatsRecorderTests(TestCase):
                                 "peak_max_in_bytes": 469368832
                             }
                         }
+                    },
+                    "gc": {
+                        "collectors": {
+                            "young": {
+                                "collection_count": 3,
+                                "collection_time_in_millis": 309
+                            },
+                            "old": {
+                                "collection_count": 2,
+                                "collection_time_in_millis": 229
+                            }
+                        }
                     }
                 },
                 "process": {
@@ -1090,6 +1102,10 @@ class NodeStatsRecorderTests(TestCase):
         "jvm_mem_pools_old_max_in_bytes": 469368832,
         "jvm_mem_pools_old_peak_used_in_bytes": 52336480,
         "jvm_mem_pools_old_peak_max_in_bytes": 469368832,
+        "jvm_gc_collectors_young_collection_count": 3,
+        "jvm_gc_collectors_young_collection_time_in_millis": 309,
+        "jvm_gc_collectors_old_collection_count": 2,
+        "jvm_gc_collectors_old_collection_time_in_millis": 229,
         "process_cpu_percent": 10,
         "process_cpu_total_in_millis": 56520,
         "breakers_parent_limit_size_in_bytes": 726571417,
@@ -1274,6 +1290,18 @@ class NodeStatsRecorderTests(TestCase):
                                     "peak_max_in_bytes": 469368832
                                 }
                             }
+                        },
+                        "gc": {
+                            "collectors": {
+                                "young": {
+                                    "collection_count": 3,
+                                    "collection_time_in_millis": 309
+                                },
+                                "old": {
+                                    "collection_count": 2,
+                                    "collection_time_in_millis": 229
+                                }
+                            }
                         }
                     },
                     "process": {
@@ -1395,6 +1423,10 @@ class NodeStatsRecorderTests(TestCase):
              "jvm_mem_pools_young_peak_max_in_bytes": 139591680,
              "jvm_mem_pools_young_peak_used_in_bytes": 139591680,
              "jvm_mem_pools_young_used_in_bytes": 66378576,
+             "jvm_gc_collectors_young_collection_count": 3,
+             "jvm_gc_collectors_young_collection_time_in_millis": 309,
+             "jvm_gc_collectors_old_collection_count": 2,
+             "jvm_gc_collectors_old_collection_time_in_millis": 229,
              "transport_rx_count": 77,
              "transport_rx_size_in_bytes": 98723498,
              "transport_server_open": 12,
@@ -1534,6 +1566,18 @@ class NodeStatsRecorderTests(TestCase):
                                     "peak_max_in_bytes": 469368832
                                 }
                             }
+                        },
+                        "gc": {
+                            "collectors": {
+                                "young": {
+                                    "collection_count": 3,
+                                    "collection_time_in_millis": 309
+                                },
+                                "old": {
+                                    "collection_count": 2,
+                                    "collection_time_in_millis": 229
+                                }
+                            }
                         }
                     },
                     "process": {
@@ -1630,6 +1674,10 @@ class NodeStatsRecorderTests(TestCase):
              "jvm_mem_pools_young_peak_max_in_bytes": 139591680,
              "jvm_mem_pools_young_peak_used_in_bytes": 139591680,
              "jvm_mem_pools_young_used_in_bytes": 66378576,
+             "jvm_gc_collectors_young_collection_count": 3,
+             "jvm_gc_collectors_young_collection_time_in_millis": 309,
+             "jvm_gc_collectors_old_collection_count": 2,
+             "jvm_gc_collectors_old_collection_time_in_millis": 229,
              "transport_rx_count": 77,
              "transport_rx_size_in_bytes": 98723498,
              "transport_server_open": 12,
