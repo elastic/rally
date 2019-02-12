@@ -634,6 +634,7 @@ class NodeStatsRecorder:
         self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.include_process = telemetry_params.get("node-stats-include-process", True)
         self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
+        self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.client = client
         self.metrics_store = metrics_store
         self.metrics_store_meta_data = {"cluster": cluster_name}
@@ -659,6 +660,8 @@ class NodeStatsRecorder:
                 collected_node_stats.update(self.jvm_buffer_pool_stats(node_name, node_stats))
             if self.include_mem_stats:
                 collected_node_stats.update(self.jvm_mem_stats(node_name, node_stats))
+            if self.include_gc_stats:
+                collected_node_stats.update(self.jvm_gc_stats(node_name, node_stats))
             if self.include_network:
                 collected_node_stats.update(self.network_stats(node_name, node_stats))
             if self.include_process:
@@ -714,6 +717,9 @@ class NodeStatsRecorder:
 
     def jvm_mem_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
+
+    def jvm_gc_stats(self, node_name, node_stats):
+        return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
 
     def network_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="transport", stats=node_stats.get("transport"))
