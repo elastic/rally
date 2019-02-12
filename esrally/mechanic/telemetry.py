@@ -637,7 +637,7 @@ class NodeStatsRecorder:
         self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.client = client
         self.metrics_store = metrics_store
-        self.metrics_store_meta_data = {"cluster": cluster_name}
+        self.cluster_name = cluster_name
 
     def __str__(self):
         return "node stats"
@@ -646,6 +646,10 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
+            metrics_store_meta_data = {
+                "cluster": self.cluster_name,
+                "node_name": node_name
+            }
             collected_node_stats = collections.OrderedDict()
             collected_node_stats["name"] = "node-stats"
 
@@ -670,7 +674,7 @@ class NodeStatsRecorder:
             self.metrics_store.put_doc(dict(collected_node_stats),
                                        level=MetaInfoScope.node,
                                        node_name=node_name,
-                                       meta_data=self.metrics_store_meta_data)
+                                       meta_data=metrics_store_meta_data)
 
     def flatten_stats_fields(self, prefix=None, stats=None):
         """

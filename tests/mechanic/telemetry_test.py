@@ -1148,7 +1148,10 @@ class NodeStatsRecorderTests(TestCase):
         client = Client(nodes=SubClient(stats=NodeStatsRecorderTests.node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        metrics_store_meta_data = {"cluster": "remote"}
+        node_name = [NodeStatsRecorderTests.node_stats_response["nodes"][node]["name"]
+                     for node in NodeStatsRecorderTests.node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
+
         telemetry_params = {}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
@@ -1350,7 +1353,8 @@ class NodeStatsRecorderTests(TestCase):
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        metrics_store_meta_data = {"cluster": "remote"}
+        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
         telemetry_params = {
             "node-stats-include-indices": True
         }
@@ -1626,7 +1630,8 @@ class NodeStatsRecorderTests(TestCase):
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        metrics_store_meta_data = {"cluster": "remote"}
+        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
         telemetry_params = {
             "node-stats-include-indices-metrics": "refresh,docs"
         }
