@@ -375,7 +375,7 @@ class BulkIndex(Runner):
             # only half of the lines are documents
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
-            response = es.bulk(body=params["body"], index=index, doc_type=params["type"], params=bulk_params)
+            response = es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params)
 
         stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 

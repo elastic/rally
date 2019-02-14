@@ -92,6 +92,10 @@ Then store the following mapping file as ``index.json`` in the tutorial director
       }
     }
 
+.. note::
+   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
+
+
 For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
 
 Finally, store the track as ``track.json`` in the tutorial directory::
@@ -170,6 +174,9 @@ Finally, store the track as ``track.json`` in the tutorial directory::
 
 
 The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
+
+.. note::
+   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the ``types`` property above.
 
 .. note::
 

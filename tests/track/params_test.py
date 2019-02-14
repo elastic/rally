@@ -123,6 +123,10 @@ class ActionMetaDataTests(TestCase):
         self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}'),
                          next(params.GenerateActionMetaData("test_index", "test_type")))
 
+    def test_generate_action_meta_data_typeless(self):
+        self.assertEqual(("index", '{"index": {"_index": "test_index"}}'),
+                         next(params.GenerateActionMetaData("test_index", type_name=None)))
+
     def test_generate_action_meta_data_with_id_conflicts(self):
         def idx(id):
             return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
@@ -169,11 +173,17 @@ class ActionMetaDataTests(TestCase):
         self.assertEqual(conflict(conflict_action, "100"), next(generator))
 
     def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
-        def idx(id):
-            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
+        def idx(type_name, id):
+            if type_name:
+                return "index", '{"index": {"_index": "test_index", "_type": "%s", "_id": "%s"}}' % (type_name, id)
+            else:
+                return "index", '{"index": {"_index": "test_index", "_id": "%s"}}' % id
 
-        def conflict(action, id):
-            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % (action, id)
+        def conflict(action, type_name, id):
+            if type_name:
+                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}' % (action, type_name, id)
+            else:
+                return action, '{"%s": {"_index": "test_index", "_id": "%s"}}' % (action, id)
 
         pseudo_random_conflicts = iter([
             # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
@@ -208,8 +218,9 @@ class ActionMetaDataTests(TestCase):
         ])
 
         conflict_action = random.choice(["index", "update"])
+        type_name = random.choice([None, "test_type"])
 
-        generator = params.GenerateActionMetaData("test_index", "test_type",
+        generator = params.GenerateActionMetaData("test_index", type_name=type_name,
                                                   conflicting_ids=[100, 200, 300, 400, 500, 600],
                                                   conflict_probability=25,
                                                   # heavily biased towards recent ids
@@ -222,18 +233,18 @@ class ActionMetaDataTests(TestCase):
                                                   )
 
         # first one is always *not* drawn from a random index
-        self.assertEqual(idx("100"), next(generator))
+        self.assertEqual(idx(type_name, "100"), next(generator))
         # now we start using random ids
-        self.assertEqual(conflict(conflict_action, "100"), next(generator))
-        self.assertEqual(conflict(conflict_action, "100"), next(generator))
-        self.assertEqual(conflict(conflict_action, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
         # no conflict
-        self.assertEqual(idx("200"), next(generator))
-        self.assertEqual(idx("300"), next(generator))
-        self.assertEqual(idx("400"), next(generator))
+        self.assertEqual(idx(type_name, "200"), next(generator))
+        self.assertEqual(idx(type_name, "300"), next(generator))
+        self.assertEqual(idx(type_name, "400"), next(generator))
         # conflict
-        self.assertEqual(conflict(conflict_action, "400"), next(generator))
-        self.assertEqual(conflict(conflict_action, "300"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "400"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "300"), next(generator))
 
     def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
         def idx(id):
