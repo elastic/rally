@@ -850,10 +850,10 @@ class TrackSpecificationReader:
                         target_idx = None
                         target_type = None
                     else:
-                        # we need an index and a type name if no meta-data are present
+                        # we need an index if no meta-data are present.
                         target_idx = self._r(doc_spec, "target-index", mandatory=corpus_target_idx is None,
                                              default_value=corpus_target_idx, error_ctx=docs)
-                        target_type = self._r(doc_spec, "target-type", mandatory=corpus_target_type is None,
+                        target_type = self._r(doc_spec, "target-type", mandatory=False,
                                               default_value=corpus_target_type, error_ctx=docs)
 
                     docs = track.Documents(source_format=source_format,

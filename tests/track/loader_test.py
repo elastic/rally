@@ -1616,6 +1616,84 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
         self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
 
+    def test_parse_valid_without_types(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [
+                {
+                    "name": "index-historical",
+                    "body": "body.json"
+                    # no type information here
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "base-url": "https://localhost/data",
+                    "documents": [
+                        {
+                            "source-file": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        },
+                    ]
+                }
+            ],
+            "schedule": [
+                {
+                    "clients": 8,
+                    "operation": {
+                        "name": "index-append",
+                        "operation-type": "bulk",
+                        "bulk-size": 5000
+                    }
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader(
+            track_params={"number_of_shards": 3},
+            source=io.DictStringFileSourceFactory({
+                "/mappings/body.json": ["""
+            {
+                "settings": {
+                    "number_of_shards": {{ number_of_shards }}
+                }
+            }
+            """]
+            }))
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("description for unit test", resulting_track.description)
+        # indices
+        self.assertEqual(1, len(resulting_track.indices))
+        self.assertEqual("index-historical", resulting_track.indices[0].name)
+        self.assertDictEqual({
+            "settings": {
+                "number_of_shards": 3
+            }
+        }, resulting_track.indices[0].body)
+        self.assertEqual(0, len(resulting_track.indices[0].types))
+        # corpora
+        self.assertEqual(1, len(resulting_track.corpora))
+        self.assertEqual("test", resulting_track.corpora[0].name)
+        self.assertEqual(1, len(resulting_track.corpora[0].documents))
+
+        docs_primary = resulting_track.corpora[0].documents[0]
+        self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_primary.source_format)
+        self.assertEqual("documents-main.json", docs_primary.document_file)
+        self.assertEqual("documents-main.json.bz2", docs_primary.document_archive)
+        self.assertEqual("https://localhost/data", docs_primary.base_url)
+        self.assertFalse(docs_primary.includes_action_and_meta_data)
+        self.assertEqual(10, docs_primary.number_of_documents)
+        self.assertEqual(100, docs_primary.compressed_size_in_bytes)
+        self.assertEqual(10000, docs_primary.uncompressed_size_in_bytes)
+        self.assertEqual("index-historical", docs_primary.target_index)
+        self.assertIsNone(docs_primary.target_type)
+
+        # challenges
+        self.assertEqual(1, len(resulting_track.challenges))
+
     def test_parse_valid_track_specification_with_index_template(self):
         track_specification = {
             "description": "description for unit test",

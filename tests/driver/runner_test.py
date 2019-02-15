@@ -177,7 +177,7 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_success_without_metadata(self, es):
+    def test_bulk_index_success_without_metadata_with_doc_type(self, es):
         es.bulk.return_value = {
             "errors": False
         }
@@ -207,6 +207,37 @@ class BulkIndexRunnerTests(TestCase):
         self.assertFalse("error-type" in result)
 
         es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="test-type", params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):
+        es.bulk.return_value = {
+            "errors": False
+        }
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": [
+                "index_line",
+                "index_line",
+                "index_line"
+            ],
+            "action-metadata-present": False,
+            "bulk-size": 3,
+            "index": "test-index"
+        }
+
+        result = bulk(es, bulk_params)
+
+        self.assertIsNone(result["took"])
+        self.assertEqual("test-index", result["index"])
+        self.assertEqual(3, result["weight"])
+        self.assertEqual(3, result["bulk-size"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(True, result["success"])
+        self.assertEqual(0, result["error-count"])
+        self.assertFalse("error-type" in result)
+
+        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type=None, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_error(self, es):

@@ -703,13 +703,22 @@ def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, i
 class GenerateActionMetaData:
     RECENCY_SLOPE = 30
 
-    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None, recency=None,
-                 rand=random.random, randint=random.randint, randexp=random.expovariate):
-        self.index_name = index_name
-        self.type_name = type_name
+    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None,
+                 recency=None, rand=random.random, randint=random.randint, randexp=random.expovariate):
+        if type_name:
+            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % \
+                                           (index_name, type_name, "%s")
+            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % \
+                                            (index_name, type_name, "%s")
+            self.meta_data_index_no_id = '{"index": {"_index": "%s", "_type": "%s"}}' % (index_name, type_name)
+        else:
+            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}' % (index_name, "%s")
+            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}' % (index_name, "%s")
+            self.meta_data_index_no_id = '{"index": {"_index": "%s"}}' % index_name
+
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
-        # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100.
+        # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100
         self.conflict_probability = conflict_probability / 100.0 if conflict_probability is not None else 0
         self.recency = recency if recency is not None else 0
 
@@ -748,13 +757,13 @@ class GenerateActionMetaData:
                 action = "index"
 
             if action == "index":
-                return "index", '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
+                return "index", self.meta_data_index_with_id % doc_id
             elif action == "update":
-                return "update", '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % (self.index_name, self.type_name, doc_id)
+                return "update", self.meta_data_update_with_id % doc_id
             else:
                 raise exceptions.RallyAssertionError("Unknown action [{}]".format(action))
         else:
-            return "index", '{"index": {"_index": "%s", "_type": "%s"}}' % (self.index_name, self.type_name)
+            return "index", self.meta_data_index_no_id
 
 
 class SourceActionMetaData:
