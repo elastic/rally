@@ -326,7 +326,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -357,7 +357,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -403,7 +403,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -436,7 +436,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
@@ -491,7 +491,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
 
     def test_get_value(self):
         throughput = 5000
@@ -538,7 +538,7 @@ class EsMetricsTests(TestCase):
 
         actual_throughput = self.metrics_store.get_one("indexing_throughput", lap=3)
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", body=expected_query)
 
         self.assertEqual(throughput, actual_throughput)
 
@@ -595,7 +595,7 @@ class EsMetricsTests(TestCase):
 
         actual_median_throughput = self.metrics_store.get_median("indexing_throughput", lap=3)
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", body=expected_query)
 
         self.assertEqual(median_throughput, actual_median_throughput)
 
@@ -732,7 +732,7 @@ class EsMetricsTests(TestCase):
         }
 
         actual_error_rate = self.metrics_store.get_error_rate("scroll_query", lap=3)
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="metrics", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", body=expected_query)
         return actual_error_rate
 
 
@@ -847,7 +847,7 @@ class EsRaceStoreTests(TestCase):
                 ]
             }
         }
-        self.es_mock.index.assert_called_with(index="rally-races-2016-01", doc_type="races", item=expected_doc)
+        self.es_mock.index.assert_called_with(index="rally-races-2016-01", doc_type="_doc", item=expected_doc)
 
 
 class EsResultsStoreTests(TestCase):
@@ -1021,7 +1021,7 @@ class EsResultsStoreTests(TestCase):
                 }
             }
         ]
-        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="results", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="_doc", items=expected_docs)
 
 
 class InMemoryMetricsStoreTests(TestCase):
