@@ -369,7 +369,11 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this query. Only needed if the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use. If you have defined multiple indices and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
-* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Python ES client API docs <http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.Elasticsearch.search>`_. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+  NOTE:
+    1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+    2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 * ``body`` (mandatory): The query body.
 * ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
@@ -386,7 +390,7 @@ Example::
       },
       "request-params": {
         "_source_include": "some_field",
-        "analyze_wildcard": false
+        "analyze_wildcard": "false"
       }
     }
 
@@ -435,7 +439,7 @@ cluster-health
 
 With the operation ``cluster-health`` you can execute the `cluster health API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html>`_. It supports the following properties:
 
-* ``request-params`` (optional): A structure containing any request parameters that are allowed by the cluster health API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the cluster health API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 * ``index`` (optional): The name of the index that should be used to check.
 
 The ``cluster-health`` operation will check whether the expected cluster health and will report a failure if this is not the case. Use ``--on-error`` on the command line to control Rally's behavior in case of such failures.
@@ -471,13 +475,13 @@ With the operation ``create-index`` you can execute the `create index API <https
 If you want it to create all indices that have been declared in the ``indices`` section you can specify the following properties:
 
 * ``settings`` (optional): Allows to specify additional index settings that will be merged with the index settings specified in the body of the index in the ``indices`` section.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to create one specific index instead, you can specify the following properties:
 
 * ``index`` (mandatory): One or more names of the indices that should be created. If only one index should be created, you can use a string otherwise this needs to be a list of strings.
 * ``body`` (optional): The body for the create index API call.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -490,7 +494,7 @@ The following snippet will create all indices that have been defined in the ``in
         "index.number_of_shards": 1
       },
       "request-params": {
-        "wait_for_active_shards": true
+        "wait_for_active_shards": "true"
       }
     }
 
@@ -529,13 +533,13 @@ With the operation ``delete-index`` you can execute the `delete index API <https
 If you want it to delete all indices that have been declared in the ``indices`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to delete one specific index (pattern) instead, you can specify the following properties:
 
 * ``index`` (mandatory): One or more names of the indices that should be deleted. If only one index should be deleted, you can use a string otherwise this needs to be a list of strings.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -555,8 +559,8 @@ With the following snippet we will delete all ``logs-*`` indices::
       "only-if-exists": false,
       "request-params": {
         "expand_wildcards": "all",
-        "allow_no_indices": true,
-        "ignore_unavailable": true
+        "allow_no_indices": "true",
+        "ignore_unavailable": "true"
       }
     }
 
@@ -571,13 +575,13 @@ If you want it to create index templates that have been declared in the ``templa
 
 * ``template`` (optional): If you specify a template name, only the template with this name will be created.
 * ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the index template in the ``templates`` section.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`__ that are allowed by the create index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to create one specific index instead, you can specify the following properties:
 
 * ``template`` (mandatory): The name of the index template that should be created.
 * ``body`` (mandatory): The body for the create index template API call.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`__ that are allowed by the create index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -587,7 +591,7 @@ The following snippet will create all index templates that have been defined in 
       "name": "create-all-templates",
       "operation-type": "create-index-template",
       "request-params": {
-        "create": true
+        "create": "true"
       }
     }
 
@@ -625,7 +629,7 @@ With the operation ``delete-index-template`` you can execute the `delete index t
 If you want it to delete all index templates that have been declared in the ``templates`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index template should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`__ that are allowed by the delete index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 If you want it to delete one specific index template instead, you can specify the following properties:
 
@@ -633,7 +637,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
 * ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`__ that are allowed by the delete index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
 

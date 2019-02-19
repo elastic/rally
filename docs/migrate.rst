@@ -1,6 +1,45 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.1.0
+------------------------
+
+``request-params`` in operations are passed as is and not serialized
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With Rally 1.1.0 any operations supporting the option ``request-params`` property will pass the structure as is without attempting to serialize values.
+Until now, ``request-params`` relied on parameters being supported by the Elasticsearch Python client API calls. This means that for example boolean type parameters
+should be specified as strings i.e. ``"true"`` or ``"false"`` rather than ``true/false``.
+
+**Example**
+
+Using ``create-index`` before ``1.1.0``::
+
+    {
+      "name": "create-all-indices",
+      "operation-type": "create-index",
+      "settings": {
+        "index.number_of_shards": 1
+      },
+      "request-params": {
+        "wait_for_active_shards": true
+      }
+    }
+
+Using ``create-index`` starting with ``1.1.0``::
+
+    {
+      "name": "create-all-indices",
+      "operation-type": "create-index",
+      "settings": {
+        "index.number_of_shards": 1
+      },
+      "request-params": {
+        "wait_for_active_shards": "true"
+      }
+    }
+
+
 Migrating to Rally 1.0.1
 ------------------------
 
