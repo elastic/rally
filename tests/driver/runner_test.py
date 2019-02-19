@@ -690,6 +690,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "cache": True,
             "body": {
                 "query": {
                     "match_all": {}
@@ -707,6 +708,65 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            doc_type=None,
+            body=params["body"],
+            params={"request_cache": "true"}
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_query_match_using_request_params(self, es):
+        es.search.return_value = {
+            "timed_out": False,
+            "took": 62,
+            "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+
+                ]
+            }
+        }
+
+        query_runner = runner.Query()
+        params = {
+            "cache": True,
+            "body": None,
+            "request-params": {
+                "q": "user:kimchy"
+            }
+        }
+
+        with query_runner:
+            result = query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertEqual(2, result["hits"])
+        self.assertEqual("eq", result["hits_relation"])
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(62, result["took"])
+        self.assertFalse("error-type" in result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            doc_type=None,
+            body=params["body"],
+            params={
+                "request_cache": "true",
+                "q": "user:kimchy"
+            }
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_query_hits_total_as_number(self, es):
