@@ -5,7 +5,7 @@ Migrating to Rally 1.1.0
 ------------------------
 
 ``request-params`` in operations are passed as is and not serialized
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 With Rally 1.1.0 any operations supporting the option ``request-params`` property will pass the structure as is without attempting to serialize values.
 Until now, ``request-params`` relied on parameters being supported by the Elasticsearch Python client API calls. This means that for example boolean type parameters
