@@ -593,7 +593,7 @@ class Query(Runner):
     def request_body_query(self, es, params):
         request_params = params.get("request-params", {})
         if "cache" in params:
-            request_params["request_cache"] = str(params["cache"]).lower() if isinstance(params["cache"], bool) else params["cache"]
+            request_params["request_cache"] = str(params["cache"]).lower()
         r = es.search(
             index=params.get("index", "_all"),
             doc_type=params.get("type"),
