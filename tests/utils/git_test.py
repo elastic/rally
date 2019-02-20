@@ -137,7 +137,7 @@ class GitTests(TestCase):
         run_subprocess.return_value = False
         git.pull_ts("/src", "20160101T110000Z")
         run_subprocess.assert_called_with(
-                "git -C /src fetch --quiet origin && git -C /src checkout "
+                "git -C /src fetch --prune --quiet origin && git -C /src checkout "
                 "--quiet `git -C /src rev-list -n 1 --before=\"20160101T110000Z\" --date=iso8601 origin/master`")
 
     @mock.patch("esrally.utils.process.run_subprocess")
@@ -146,7 +146,7 @@ class GitTests(TestCase):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.return_value = False
         git.pull_revision("/src", "3694a07")
-        run_subprocess.assert_called_with("git -C /src fetch --quiet origin && git -C /src checkout --quiet 3694a07")
+        run_subprocess.assert_called_with("git -C /src fetch --prune --quiet origin && git -C /src checkout --quiet 3694a07")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")

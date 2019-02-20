@@ -84,7 +84,7 @@ def pull(src_dir, remote="origin", branch="master"):
 @probed
 def pull_ts(src_dir, ts):
     if process.run_subprocess(
-            "git -C {0} fetch --quiet origin && git -C {0} checkout --quiet `git -C {0} rev-list -n 1 --before=\"{1}\" "
+            "git -C {0} fetch --prune --quiet origin && git -C {0} checkout --quiet `git -C {0} rev-list -n 1 --before=\"{1}\" "
             "--date=iso8601 origin/master`".format(src_dir, ts)):
         raise exceptions.SupplyError("Could not fetch source tree for timestamped revision [%s]" % ts)
 
@@ -92,7 +92,7 @@ def pull_ts(src_dir, ts):
 @probed
 def pull_revision(src_dir, revision):
     if process.run_subprocess(
-                    "git -C {0} fetch --quiet origin && git -C {0} checkout --quiet {1}".format(src_dir, revision)):
+                    "git -C {0} fetch --prune --quiet origin && git -C {0} checkout --quiet {1}".format(src_dir, revision)):
         raise exceptions.SupplyError("Could not fetch source tree for revision [%s]" % revision)
 
 
