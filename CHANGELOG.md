@@ -1,3 +1,26 @@
+### 1.0.4
+
+#### Enhancements
+
+* [#650](https://github.com/elastic/rally/pull/650): Use --prune for all git fetch operations
+* [#647](https://github.com/elastic/rally/pull/647): Make types optional
+* [#646](https://github.com/elastic/rally/pull/646): Add node_name in node-stats docs for ...
+* [#644](https://github.com/elastic/rally/pull/644): Allow collection of jvm gc section in node-stats telemetry device
+* [#642](https://github.com/elastic/rally/pull/642): Allow passing any request parameter to the create index API
+* [#641](https://github.com/elastic/rally/pull/641): Temporarily disable Python 3.4 in build
+* [#639](https://github.com/elastic/rally/pull/639): Add recovery-stats telemetry device
+* [#637](https://github.com/elastic/rally/pull/637): Ignore JSON logs for merge parts analysis
+* [#633](https://github.com/elastic/rally/pull/633): Ensure Makefile install target includes all release dependencies
+
+#### Bug Fixes
+
+* [#638](https://github.com/elastic/rally/pull/638): Correct recorder-based sampling interval
+
+#### Doc Changes
+
+* [#640](https://github.com/elastic/rally/pull/640): docs: Clarify that path should start with / for raw-request
+* [#634](https://github.com/elastic/rally/pull/634): Fix typo
+
 ### 1.0.3
 
 #### Enhancements
