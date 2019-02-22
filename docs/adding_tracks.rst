@@ -971,10 +971,10 @@ This implementation is usually not sufficient as it does not take into account t
     class RandomScheduler:
         def __init__(self, params):
             # assume one client by default
-            clients = self.params.get("clients", 1)
+            clients = params.get("clients", 1)
             # scale accordingly with the number of clients!
-            self.lower_bound = clients * self.params.get("lower-bound-millis", 10)
-            self.upper_bound = clients * self.params.get("upper-bound-millis", 900)
+            self.lower_bound = clients * params.get("lower-bound-millis", 10)
+            self.upper_bound = clients * params.get("upper-bound-millis", 900)
 
         def next(self, current):
             return current + random.randint(self.lower_bound, self.upper_bound) / 1000.0
