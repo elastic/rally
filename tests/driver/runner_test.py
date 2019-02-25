@@ -192,7 +192,7 @@ class BulkIndexRunnerTests(TestCase):
             "action-metadata-present": False,
             "bulk-size": 3,
             "index": "test-index",
-            "type": "test-type"
+            "type": "_doc"
         }
 
         result = bulk(es, bulk_params)

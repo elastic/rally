@@ -764,7 +764,7 @@ class EsRaceStoreTests(TestCase):
         ]
 
         t = track.Track(name="unittest",
-                        indices=[track.Index(name="tests", types=["test-type"])],
+                        indices=[track.Index(name="tests", types=["_doc"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=EsRaceStoreTests.TRIAL_ID,
@@ -875,7 +875,7 @@ class EsResultsStoreTests(TestCase):
         ]
 
         t = track.Track(name="unittest-track",
-                        indices=[track.Index(name="tests", types=["test-type"])],
+                        indices=[track.Index(name="tests", types=["_doc"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         c = cluster.Cluster([], [], None)
@@ -1218,7 +1218,7 @@ class FileRaceStoreTests(TestCase):
         ]
 
         t = track.Track(name="unittest",
-                        indices=[track.Index(name="tests", types=["test-type"])],
+                        indices=[track.Index(name="tests", types=["_doc"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", trial_id=FileRaceStoreTests.TRIAL_ID,
