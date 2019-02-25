@@ -206,7 +206,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(0, result["error-count"])
         self.assertFalse("error-type" in result)
 
-        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="test-type", params={})
+        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):

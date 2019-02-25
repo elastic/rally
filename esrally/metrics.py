@@ -788,7 +788,7 @@ class EsMetricsStore(MetricsStore):
     """
     A metrics store backed by Elasticsearch.
     """
-    METRICS_DOC_TYPE = "metrics"
+    METRICS_DOC_TYPE = "_doc"
 
     def __init__(self,
                  cfg,
@@ -1390,7 +1390,7 @@ class FileRaceStore(RaceStore):
 
 class EsRaceStore(RaceStore):
     INDEX_PREFIX = "rally-races-"
-    RACE_DOC_TYPE = "races"
+    RACE_DOC_TYPE = "_doc"
 
     def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1471,7 +1471,7 @@ class EsResultsStore:
     Stores the results of a race in a format that is better suited for reporting with Kibana.
     """
     INDEX_PREFIX = "rally-results-"
-    RESULTS_DOC_TYPE = "results"
+    RESULTS_DOC_TYPE = "_doc"
 
     def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
