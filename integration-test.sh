@@ -33,6 +33,8 @@ readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
 
 ES_PID=-1
+PROXY_CONTAINER_ID=-1
+PROXY_SERVER_AVAILABLE=0
 
 function check_prerequisites {
     local curl_major_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 1,1)
@@ -55,6 +57,14 @@ function log {
 
 function info {
     log "INFO" "${1}"
+}
+
+function warn {
+    log "WARN" "${1}"
+}
+
+function error {
+    log "ERROR" "${1}"
 }
 
 function kill_rally_processes {
@@ -84,18 +94,9 @@ function kill_related_es_processes {
     set -e
 }
 
-function set_up {
-    info "setting up"
-    kill_rally_processes
-    kill_related_es_processes
-
+function set_up_metrics_store {
     local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
     local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
-
-    # configure for tests with an in-memory metrics store
-    esrally configure --assume-defaults --configuration-name="integration-test"
-    # configure for tests with an Elasticsearch metrics store
-    esrally configure --assume-defaults --configuration-name="es-integration-test"
 
     # configure Elasticsearch instead of in-memory after the fact
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
@@ -134,7 +135,46 @@ function set_up {
         sleep 1
     done ;
     info "ES metrics store is up and running."
-    popd
+    popd > /dev/null
+}
+
+function set_up_proxy_server {
+    # we want to see output to stderr for diagnosing problems
+    if docker ps > /dev/null; then
+        info "Docker is available. Proxy-related tests will be run"
+        # Portably create a temporary config directory for Squid on Linux or MacOS
+        local config_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'tmp_squid_cfg')
+
+        cat > ${config_dir}/squid.conf <<"EOF"
+auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/squidpasswords
+auth_param basic realm proxy
+acl authenticated proxy_auth REQUIRED
+http_access allow authenticated
+http_port 3128
+EOF
+
+        cat > ${config_dir}/squidpasswords <<"EOF"
+testuser:$apr1$GcQaaItl$lhi4JoDsWBpZbkXVbI51O/
+EOF
+        PROXY_CONTAINER_ID=$(docker run --rm --name squid -d -v ${config_dir}/squidpasswords:/etc/squid/squidpasswords -v ${config_dir}/squid.conf:/etc/squid/squid.conf -p 3128:3128 datadog/squid)
+        PROXY_SERVER_AVAILABLE=1
+    else
+        warn "Docker is not available. Skipping proxy-related tests."
+    fi
+}
+
+function set_up {
+    info "setting up"
+    kill_rally_processes
+    kill_related_es_processes
+
+    # configure for tests with an in-memory metrics store
+    esrally configure --assume-defaults --configuration-name="integration-test"
+    # configure for tests with an Elasticsearch metrics store
+    esrally configure --assume-defaults --configuration-name="es-integration-test"
+
+    set_up_metrics_store
+    set_up_proxy_server
 }
 
 function random_configuration {
@@ -211,7 +251,84 @@ function test_benchmark_only {
             --track-params="cluster_health:'yellow'"
 }
 
+function test_proxy_connection {
+    readonly rally_log="${HOME}/.rally/logs/rally.log"
+    readonly rally_log_backup="${HOME}/.rally/logs/rally.log.it.bak"
+    # isolate invocations so we see only the log output from the current invocation
+    set +e
+    mv -f ${rally_log} "${rally_log_backup}"
+    set -e
+
+    set +e
+    esrally list tracks
+    unset http_proxy
+    set -e
+
+    if grep -F -q "Connecting directly to the Internet" "$rally_log"; then
+        info "Successfully checked that direct internet connection is used."
+        rm -f ${rally_log}
+    else
+        error "Could not find indication that direct internet connection is used. Please check ${rally_log}."
+        exit 1
+    fi
+
+    # test that we cannot connect to the Internet if the proxy authentication is missing
+    export http_proxy=http://127.0.0.1:3128
+    # this invocation *may* lead to an error but this is ok
+    set +e
+    esrally list tracks
+    unset http_proxy
+    set -e
+    if grep -F -q "Connecting via proxy URL [http://127.0.0.1:3128] to the Internet" "$rally_log"; then
+        info "Successfully checked that proxy is used."
+    else
+        error "Could not find indication that proxy access is used. Please check ${rally_log}."
+        exit 1
+    fi
+
+    if grep -F -q "No Internet connection detected" "$rally_log"; then
+        info "Successfully checked that unauthenticated proxy access is prevented."
+        rm -f ${rally_log}
+    else
+        error "Could not find indication that unauthenticated proxy access is prevented. Please check ${rally_log}."
+        exit 1
+    fi
+
+    # test that we can connect to the Internet if the proxy authentication is set
+
+    export http_proxy=http://testuser:testuser@127.0.0.1:3128
+    # this invocation *may* lead to an error but this is ok
+    set +e
+    esrally list tracks
+    unset http_proxy
+    set -e
+
+    if grep -F -q "Connecting via proxy URL [http://testuser:testuser@127.0.0.1:3128] to the Internet" "$rally_log"; then
+        info "Successfully checked that proxy is used."
+    else
+        error "Could not find indication that proxy access is used. Please check ${rally_log}."
+        exit 1
+    fi
+
+    if grep -F -q "Detected a working Internet connection" "$rally_log"; then
+        info "Successfully checked that authenticated proxy access is allowed."
+        rm -f ${rally_log}
+    else
+        error "Could not find indication that authenticated proxy access is allowed. Please check ${rally_log}."
+        exit 1
+    fi
+    # restore original file (but only on success so we keep the test's Rally log file for inspection on errors).
+    set +e
+    mv -f ${rally_log_backup} "${rally_log}"
+    set -e
+
+}
+
 function run_test {
+    if [ "${PROXY_SERVER_AVAILABLE}" == "1" ]; then
+        echo "**************************************** TESTING PROXY CONNECTIONS *********************************"
+        test_proxy_connection
+    fi
     echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
     test_configure
     echo "**************************************** TESTING RALLY LIST COMMANDS *******************************************"
@@ -230,7 +347,13 @@ function tear_down {
     set +e
     # terminate metrics store
     if [ "${ES_PID}" != "-1" ]; then
-        kill -9 ${ES_PID}
+        info "Stopping Elasticsearch metrics store with PID [${ES_PID}]"
+        kill -9 ${ES_PID} > /dev/null
+    fi
+    # stop Docker container for tests
+    if [ "${PROXY_CONTAINER_ID}" != "-1" ]; then
+        info "Stopping Docker container [${PROXY_CONTAINER_ID}]"
+        docker stop ${PROXY_CONTAINER_ID} > /dev/null
     fi
 
     rm -f ~/.rally/rally*integration-test.ini
