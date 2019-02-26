@@ -538,7 +538,7 @@ class EsMetricsTests(TestCase):
 
         actual_throughput = self.metrics_store.get_one("indexing_throughput", lap=3)
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
         self.assertEqual(throughput, actual_throughput)
 
@@ -595,7 +595,7 @@ class EsMetricsTests(TestCase):
 
         actual_median_throughput = self.metrics_store.get_median("indexing_throughput", lap=3)
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
         self.assertEqual(median_throughput, actual_median_throughput)
 
@@ -732,7 +732,7 @@ class EsMetricsTests(TestCase):
         }
 
         actual_error_rate = self.metrics_store.get_error_rate("scroll_query", lap=3)
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", body=expected_query)
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
         return actual_error_rate
 
 

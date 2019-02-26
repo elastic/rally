@@ -37,12 +37,30 @@ class EsClient:
     Provides a stripped-down client interface that is easier to exchange for testing
     """
 
-    def __init__(self, client):
+    def __init__(self, client, cluster_version=None):
         self._client = client
         self.logger = logging.getLogger(__name__)
+        self._cluster_version = cluster_version
+
+    # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
+    def probe_version(self):
+        info = self.guarded(self._client.info)
+        try:
+            self._cluster_version = versions.components(info["version"]["number"])
+        except BaseException:
+            msg = "Could not determine version of metrics cluster"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
 
     def put_template(self, name, template):
-        return self.guarded(self._client.indices.put_template, name, template)
+        # TODO #653: Remove version-specific support for metrics stores before 7.0.0 (also adjust template)
+        if self._cluster_version[0] > 6:
+            return self.guarded(self._client.indices.put_template, name=name, body=template, params={
+                # allows to include the type name although it is not allowed anymore by default
+                "include_type_name": "true"
+            })
+        else:
+            return self.guarded(self._client.indices.put_template, name=name, body=template)
 
     def template_exists(self, name):
         return self.guarded(self._client.indices.exists_template, name)
@@ -61,14 +79,18 @@ class EsClient:
         return self.guarded(self._client.indices.refresh, index=index)
 
     def bulk_index(self, index, doc_type, items):
+        # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         import elasticsearch.helpers
-        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
+        if self._cluster_version[0] > 6:
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index)
+        else:
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
     def index(self, index, doc_type, item):
-        self.guarded(self._client.index, index=index, doc_type=doc_type, body=item)
+        self.bulk_index(index, doc_type, [{"_source": item}])
 
-    def search(self, index, doc_type, body):
-        return self.guarded(self._client.search, index=index, doc_type=doc_type, body=body)
+    def search(self, index, body):
+        return self.guarded(self._client.search, index=index, body=body)
 
     def guarded(self, target, *args, **kwargs):
         import elasticsearch
@@ -149,6 +171,7 @@ class EsClientFactory:
         password = self._config.opts("reporting", "datastore.password")
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
+        self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
 
         from esrally import client
 
@@ -168,7 +191,10 @@ class EsClientFactory:
         self._client = factory.create()
 
     def create(self):
-        return EsClient(self._client)
+        c = EsClient(self._client)
+        if self.probe_version:
+            c.probe_version()
+        return c
 
 
 class IndexTemplateProvider:
@@ -848,8 +874,8 @@ class EsMetricsStore(MetricsStore):
         query = {
             "query": self._query_by_name(name, task, operation_type, sample_type, lap)
         }
-        self.logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s].", self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
@@ -865,9 +891,8 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        self.logger.debug("Issuing get_error_rate against index=[%s], doc_type=[%s], query=[%s]",
-                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get_error_rate against index=[%s], query=[%s]", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         buckets = result["aggregations"]["error_rate"]["buckets"]
         self.logger.debug("Query returned [%d] buckets.", len(buckets))
         count_success = 0
@@ -908,9 +933,8 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        self.logger.debug("Issuing get_stats against index=[%s], doc_type=[%s], query=[%s]",
-                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         return result["aggregations"]["metric_stats"]
 
     def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
@@ -928,10 +952,12 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        self.logger.debug("Issuing get_percentiles against index=[%s], doc_type=[%s], query=[%s]",
-                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get_percentiles against index=[%s], query=[%s]", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
         self.logger.debug("get_percentiles produced %d hits", hits)
         if hits > 0:
             raw = result["aggregations"]["percentile_stats"]["values"]
@@ -1434,8 +1460,12 @@ class EsRaceStore(RaceStore):
                 }
             ]
         }
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
-        if result["hits"]["total"] > 0:
+        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
+        if hits > 0:
             return [Race.from_dict(v["_source"]) for v in result["hits"]["hits"]]
         else:
             return []
@@ -1459,8 +1489,12 @@ class EsRaceStore(RaceStore):
                 }
             }
         }
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
-        if result["hits"]["total"] == 1:
+        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
+        if hits == 1:
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
         else:
             return None

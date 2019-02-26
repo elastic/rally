@@ -39,6 +39,8 @@ def create_config():
     cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
     cfg.add(config.Scope.application, "reporting", "datastore.user", "")
     cfg.add(config.Scope.application, "reporting", "datastore.password", "")
+    # disable version probing to avoid any network calls in tests
+    cfg.add(config.Scope.application, "reporting", "datastore.probe.cluster_version", False)
     # only internal devices are active
     cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
     return cfg
