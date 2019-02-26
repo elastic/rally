@@ -254,13 +254,17 @@ function test_benchmark_only {
 function test_proxy_connection {
     readonly rally_log="${HOME}/.rally/logs/rally.log"
     readonly rally_log_backup="${HOME}/.rally/logs/rally.log.it.bak"
+    local cfg
+
+    random_configuration cfg
+
     # isolate invocations so we see only the log output from the current invocation
     set +e
     mv -f ${rally_log} "${rally_log_backup}"
     set -e
 
     set +e
-    esrally list tracks
+    esrally list tracks --configuration-name="${cfg}"
     unset http_proxy
     set -e
 
@@ -276,7 +280,7 @@ function test_proxy_connection {
     export http_proxy=http://127.0.0.1:3128
     # this invocation *may* lead to an error but this is ok
     set +e
-    esrally list tracks
+    esrally list tracks --configuration-name="${cfg}"
     unset http_proxy
     set -e
     if grep -F -q "Connecting via proxy URL [http://127.0.0.1:3128] to the Internet" "$rally_log"; then
@@ -299,7 +303,7 @@ function test_proxy_connection {
     export http_proxy=http://testuser:testuser@127.0.0.1:3128
     # this invocation *may* lead to an error but this is ok
     set +e
-    esrally list tracks
+    esrally list tracks --configuration-name="${cfg}"
     unset http_proxy
     set -e
 
