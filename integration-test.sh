@@ -142,8 +142,8 @@ function set_up_proxy_server {
     # we want to see output to stderr for diagnosing problems
     if docker ps > /dev/null; then
         info "Docker is available. Proxy-related tests will be run"
-        # Portably create a temporary config directory for Squid on Linux or MacOS
-        local config_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'tmp_squid_cfg')
+        local config_dir="$PWD/.rally_it/proxy_tmp"
+        mkdir -p ${config_dir}
 
         cat > ${config_dir}/squid.conf <<"EOF"
 auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/squidpasswords
@@ -358,6 +358,7 @@ function tear_down {
 
     rm -f ~/.rally/rally*integration-test.ini
     rm -rf .rally_it/cache/"${ES_ARTIFACT_PATH}"
+    rm -rf .rally_it/proxy_tmp
     set -e
     kill_rally_processes
     # run this after the metrics store has been stopped otherwise we might forcefully terminate our metrics store.
