@@ -593,12 +593,12 @@ class Query(Runner):
     def request_body_query(self, es, params):
         request_params = params.get("request-params", {})
         if "cache" in params:
-            request_params["request_cache"] = params["cache"]
+            request_params["request_cache"] = str(params["cache"]).lower()
         r = es.search(
             index=params.get("index", "_all"),
             doc_type=params.get("type"),
             body=mandatory(params, "body", self),
-            **request_params)
+            params=request_params)
         hits = r["hits"]["total"]
         if isinstance(hits, dict):
             hits_total = hits["value"]
@@ -637,7 +637,7 @@ class Query(Runner):
                     scroll="10s",
                     size=size,
                     request_cache=cache,
-                    **request_params
+                    params=request_params
                 )
                 # This should only happen if we concurrently create an index and start searching
                 self.scroll_id = r.get("_scroll_id", None)
@@ -727,9 +727,7 @@ class ClusterHealth(Runner):
             # either the user has defined something or we're good with any count of relocating shards.
             expected_relocating_shards = int(request_params.get("wait_for_relocating_shards", sys.maxsize))
 
-        # This would not work if the request parameter is not a proper method parameter for the ES client...
-        # result = es.cluster.health(**request_params)
-        result = es.transport.perform_request("GET", _make_path("_cluster", "health", index), params=request_params)
+        result = es.cluster.health(index=index, params=request_params)
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
@@ -783,12 +781,7 @@ class CreateIndex(Runner):
         indices = mandatory(params, "indices", self)
         request_params = params.get("request-params", {})
         for index, body in indices:
-            # We don't use es.indices.create() because it doesn't support params
-            # Ref: https://elasticsearch-py.readthedocs.io/en/master/api.html?highlight=indices%20create#elasticsearch.client.IndicesClient.create
-            es.transport.perform_request(method="PUT",
-                                         url="/{}".format(index),
-                                         body=body,
-                                         params=request_params)
+            es.indices.create(index=index, body=body, params=request_params)
         return len(indices), "ops"
 
     def __repr__(self, *args, **kwargs):
@@ -809,11 +802,11 @@ class DeleteIndex(Runner):
 
         for index_name in indices:
             if not only_if_exists:
-                es.indices.delete(index=index_name, **request_params)
+                es.indices.delete(index=index_name, params=request_params)
                 ops += 1
             elif only_if_exists and es.indices.exists(index=index_name):
                 self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                es.indices.delete(index=index_name, **request_params)
+                es.indices.delete(index=index_name, params=request_params)
                 ops += 1
 
         return ops, "ops"
@@ -833,7 +826,7 @@ class CreateIndexTemplate(Runner):
         for template, body in templates:
             es.indices.put_template(name=template,
                                     body=body,
-                                    **request_params)
+                                    params=request_params)
         return len(templates), "ops"
 
     def __repr__(self, *args, **kwargs):
@@ -853,11 +846,11 @@ class DeleteIndexTemplate(Runner):
 
         for template_name, delete_matching_indices, index_pattern in template_names:
             if not only_if_exists:
-                es.indices.delete_template(name=template_name, **request_params)
+                es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
             elif only_if_exists and es.indices.exists_template(template_name):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
-                es.indices.delete_template(name=template_name, **request_params)
+                es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
             if delete_matching_indices and index_pattern:

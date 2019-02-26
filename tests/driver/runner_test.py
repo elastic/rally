@@ -690,6 +690,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "cache": True,
             "body": {
                 "query": {
                     "match_all": {}
@@ -707,6 +708,65 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            doc_type=None,
+            body=params["body"],
+            params={"request_cache": "true"}
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_query_match_using_request_params(self, es):
+        es.search.return_value = {
+            "timed_out": False,
+            "took": 62,
+            "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+
+                ]
+            }
+        }
+
+        query_runner = runner.Query()
+        params = {
+            "cache": True,
+            "body": None,
+            "request-params": {
+                "q": "user:kimchy"
+            }
+        }
+
+        with query_runner:
+            result = query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertEqual(2, result["hits"])
+        self.assertEqual("eq", result["hits_relation"])
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(62, result["took"])
+        self.assertFalse("error-type" in result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            doc_type=None,
+            body=params["body"],
+            params={
+                "request_cache": "true",
+                "q": "user:kimchy"
+            }
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_query_hits_total_as_number(self, es):
@@ -1195,7 +1255,7 @@ class PutPipelineRunnerTests(TestCase):
 class ClusterHealthRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_waits_for_expected_cluster_status(self, es):
-        es.transport.perform_request.return_value = {
+        es.cluster.health.return_value = {
             "status": "green",
             "relocating_shards": 0
         }
@@ -1217,11 +1277,11 @@ class ClusterHealthRunnerTests(TestCase):
             "relocating-shards": 0
         }, result)
 
-        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health", params={"wait_for_status": "green"})
+        es.cluster.health.assert_called_once_with(index=None, params={"wait_for_status": "green"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_accepts_better_cluster_status(self, es):
-        es.transport.perform_request.return_value = {
+        es.cluster.health.return_value = {
             "status": "green",
             "relocating_shards": 0
         }
@@ -1243,11 +1303,11 @@ class ClusterHealthRunnerTests(TestCase):
             "relocating-shards": 0
         }, result)
 
-        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health", params={"wait_for_status": "yellow"})
+        es.cluster.health.assert_called_once_with(index=None, params={"wait_for_status": "yellow"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_rejects_relocating_shards(self, es):
-        es.transport.perform_request.return_value = {
+        es.cluster.health.return_value = {
             "status": "yellow",
             "relocating_shards": 3
         }
@@ -1271,12 +1331,12 @@ class ClusterHealthRunnerTests(TestCase):
             "relocating-shards": 3
         }, result)
 
-        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health/logs-*",
-                                                             params={"wait_for_status": "red", "wait_for_no_relocating_shards": True})
+        es.cluster.health.assert_called_once_with(index="logs-*",
+                                                  params={"wait_for_status": "red", "wait_for_no_relocating_shards": True})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_rejects_unknown_cluster_status(self, es):
-        es.transport.perform_request.return_value = {
+        es.cluster.health.return_value = {
             "status": None,
             "relocating_shards": 0
         }
@@ -1298,7 +1358,7 @@ class ClusterHealthRunnerTests(TestCase):
             "relocating-shards": 0
         }, result)
 
-        es.transport.perform_request.assert_called_once_with("GET", "/_cluster/health", params={"wait_for_status": "green"})
+        es.cluster.health.assert_called_once_with(index=None, params={"wait_for_status": "green"})
 
 
 class CreateIndexRunnerTests(TestCase):
@@ -1307,7 +1367,7 @@ class CreateIndexRunnerTests(TestCase):
         r = runner.CreateIndex()
 
         request_params = {
-            "wait_for_active_shards": True
+            "wait_for_active_shards": "true"
         }
 
         params = {
@@ -1322,9 +1382,9 @@ class CreateIndexRunnerTests(TestCase):
 
         self.assertEqual((2, "ops"), result)
 
-        es.transport.perform_request.assert_has_calls([
-            mock.call(method="PUT", url="/indexA", body={"settings": {}}, params=request_params),
-            mock.call(method="PUT", url="/indexB", body={"settings": {}}, params=request_params)
+        es.indices.create.assert_has_calls([
+            mock.call(index="indexA", body={"settings": {}}, params=request_params),
+            mock.call(index="indexB", body={"settings": {}}, params=request_params)
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1356,7 +1416,7 @@ class DeleteIndexRunnerTests(TestCase):
 
         self.assertEqual((1, "ops"), result)
 
-        es.indices.delete.assert_called_once_with(index="indexB")
+        es.indices.delete.assert_called_once_with(index="indexB", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_deletes_all_indices(self, es):
@@ -1366,7 +1426,7 @@ class DeleteIndexRunnerTests(TestCase):
             "indices": ["indexA", "indexB"],
             "only-if-exists": False,
             "request-params": {
-                "ignore_unavailable": True,
+                "ignore_unavailable": "true",
                 "expand_wildcards": "none"
             }
         }
@@ -1376,8 +1436,8 @@ class DeleteIndexRunnerTests(TestCase):
         self.assertEqual((2, "ops"), result)
 
         es.indices.delete.assert_has_calls([
-            mock.call(index="indexA", ignore_unavailable=True, expand_wildcards="none"),
-            mock.call(index="indexB", ignore_unavailable=True, expand_wildcards="none")
+            mock.call(index="indexA", params=params["request-params"]),
+            mock.call(index="indexB", params=params["request-params"])
         ])
         self.assertEqual(0, es.indices.exists.call_count)
 
@@ -1394,7 +1454,7 @@ class CreateIndexTemplateRunnerTests(TestCase):
             ],
             "request-params": {
                 "timeout": 50,
-                "create": True
+                "create": "true"
             }
         }
 
@@ -1403,8 +1463,8 @@ class CreateIndexTemplateRunnerTests(TestCase):
         self.assertEqual((2, "ops"), result)
 
         es.indices.put_template.assert_has_calls([
-            mock.call(name="templateA", body={"settings": {}}, timeout=50, create=True),
-            mock.call(name="templateB", body={"settings": {}}, timeout=50, create=True)
+            mock.call(name="templateA", body={"settings": {}}, params=params["request-params"]),
+            mock.call(name="templateB", body={"settings": {}}, params=params["request-params"])
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1440,8 +1500,8 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         self.assertEqual((3, "ops"), result)
 
         es.indices.delete_template.assert_has_calls([
-            mock.call(name="templateA", timeout=60),
-            mock.call(name="templateB", timeout=60)
+            mock.call(name="templateA", params=params["request-params"]),
+            mock.call(name="templateB", params=params["request-params"])
         ])
         es.indices.delete.assert_called_once_with(index="logs-*")
 
@@ -1467,7 +1527,7 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         # 2 times delete index template, one time delete matching indices
         self.assertEqual((1, "ops"), result)
 
-        es.indices.delete_template.assert_called_once_with(name="templateB", timeout=60)
+        es.indices.delete_template.assert_called_once_with(name="templateB", params=params["request-params"])
         # not called because the matching index is empty.
         self.assertEqual(0, es.indices.delete.call_count)
 
@@ -1744,7 +1804,7 @@ class ShrinkIndexTests(TestCase):
     @mock.patch("time.sleep")
     def test_shrink_index_with_shrink_node(self, sleep, es):
         # cluster health API
-        es.transport.perform_request.return_value = {
+        es.cluster.health.return_value = {
             "status": "green",
             "relocating_shards": 0
         }
@@ -1773,9 +1833,9 @@ class ShrinkIndexTests(TestCase):
                                                         },
                                                         preserve_existing=True)
 
-        es.transport.perform_request.assert_has_calls([
-            mock.call("GET", "/_cluster/health/src", params={"wait_for_no_relocating_shards": "true"}),
-            mock.call("GET", "/_cluster/health/target", params={"wait_for_no_relocating_shards": "true"}),
+        es.cluster.health.assert_has_calls([
+            mock.call(index="src", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="target", params={"wait_for_no_relocating_shards": "true"}),
         ])
 
         es.indices.shrink.assert_called_once_with(index="src", target="target", body={
@@ -1792,7 +1852,7 @@ class ShrinkIndexTests(TestCase):
     @mock.patch("time.sleep")
     def test_shrink_index_derives_shrink_node(self, sleep, es):
         # cluster health API
-        es.transport.perform_request.return_value = {
+        es.cluster.health.return_value = {
             "status": "green",
             "relocating_shards": 0
         }
@@ -1851,9 +1911,9 @@ class ShrinkIndexTests(TestCase):
                                                         },
                                                         preserve_existing=True)
 
-        es.transport.perform_request.assert_has_calls([
-            mock.call("GET", "/_cluster/health/src", params={"wait_for_no_relocating_shards": "true"}),
-            mock.call("GET", "/_cluster/health/target", params={"wait_for_no_relocating_shards": "true"}),
+        es.cluster.health.assert_has_calls([
+            mock.call(index="src", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="target", params={"wait_for_no_relocating_shards": "true"}),
         ])
 
         es.indices.shrink.assert_called_once_with(index="src", target="target", body={
