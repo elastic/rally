@@ -68,6 +68,9 @@ class EsClient:
     def delete_template(self,  name):
         self.guarded(self._client.indices.delete_template, name)
 
+    def get_index(self, name):
+        return self.guarded(self._client.indices.get,  name)
+
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
         return self.guarded(self._client.indices.create, index=index, ignore=400)
@@ -847,12 +850,34 @@ class EsMetricsStore(MetricsStore):
             self._client.put_template("rally-metrics", self._get_template())
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
+            else:
+                # TODO: Remove this compatibility layer with Rally 1.1.1
+                # this could be an old index with a different document type, inspect and change accordingly
+                index_info = self._client.get_index(self._index)
+                # metrics is the old type name -> we have an old index, don't touch it
+                if "metrics" in index_info[self._index]["mappings"]:
+                    old_index_name = self._index
+                    self._index = self._migrated_index_name(old_index_name)
+                    self.logger.info("[%s] already exists with an old mapping. Creating [%s] to avoid mapping issues.",
+                                     old_index_name, self._index)
+                    self._client.create_index(index=self._index)
+                else:
+                    self.logger.info("[%s] already exists with proper mapping.", self._index)
+        else:
+            # we still need to check for the correct index name - prefer the one with the suffix
+            new_name = self._migrated_index_name(self._index)
+            if self._client.exists(index=new_name):
+                self._index = new_name
+
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
 
     def index_name(self):
         ts = time.from_is8601(self._trial_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
+
+    def _migrated_index_name(self, original_name):
+        return "{}.new".format(original_name)
 
     def _get_template(self):
         return self._index_template_provider.metrics_template()
@@ -1433,7 +1458,14 @@ class EsRaceStore(RaceStore):
     def _store(self, doc):
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
+        # TODO: Remove this compatibility layer with Rally 1.1.1
+        idx = self.index_name()
+        if self.client.exists(idx):
+            index_info = self.client.get_index(idx)
+            # races is the old type name -> we have an old index, don't touch it
+            if "races" in index_info[idx]["mappings"]:
+                idx = "{}.new".format(idx)
+        self.client.index(index=idx, doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
 
     def index_name(self):
         return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.trial_timestamp.year, self.trial_timestamp.month)
@@ -1523,7 +1555,14 @@ class EsResultsStore:
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
+        # TODO: Remove this compatibility layer with Rally 1.1.1
+        idx = self.index_name()
+        if self.client.exists(idx):
+            index_info = self.client.get_index(idx)
+            # results is the old type name -> we have an old index, don't touch it
+            if "results" in index_info[idx]["mappings"]:
+                idx = "{}.new".format(idx)
+        self.client.bulk_index(index=idx, doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
 
     def index_name(self):
         return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.trial_timestamp.year, self.trial_timestamp.month)
