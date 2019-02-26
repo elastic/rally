@@ -268,7 +268,7 @@ function test_proxy_connection {
         info "Successfully checked that direct internet connection is used."
         rm -f ${rally_log}
     else
-        error "Could not find indication that direct internet connection is used. Please check ${rally_log}."
+        error "Could not find indication that direct internet connection is used. Check ${rally_log}."
         exit 1
     fi
 
@@ -282,7 +282,7 @@ function test_proxy_connection {
     if grep -F -q "Connecting via proxy URL [http://127.0.0.1:3128] to the Internet" "$rally_log"; then
         info "Successfully checked that proxy is used."
     else
-        error "Could not find indication that proxy access is used. Please check ${rally_log}."
+        error "Could not find indication that proxy access is used. Check ${rally_log}."
         exit 1
     fi
 
@@ -290,7 +290,7 @@ function test_proxy_connection {
         info "Successfully checked that unauthenticated proxy access is prevented."
         rm -f ${rally_log}
     else
-        error "Could not find indication that unauthenticated proxy access is prevented. Please check ${rally_log}."
+        error "Could not find indication that unauthenticated proxy access is prevented. Check ${rally_log}."
         exit 1
     fi
 
@@ -306,7 +306,7 @@ function test_proxy_connection {
     if grep -F -q "Connecting via proxy URL [http://testuser:testuser@127.0.0.1:3128] to the Internet" "$rally_log"; then
         info "Successfully checked that proxy is used."
     else
-        error "Could not find indication that proxy access is used. Please check ${rally_log}."
+        error "Could not find indication that proxy access is used. Check ${rally_log}."
         exit 1
     fi
 
@@ -314,7 +314,7 @@ function test_proxy_connection {
         info "Successfully checked that authenticated proxy access is allowed."
         rm -f ${rally_log}
     else
-        error "Could not find indication that authenticated proxy access is allowed. Please check ${rally_log}."
+        error "Could not find indication that authenticated proxy access is allowed. Check ${rally_log}."
         exit 1
     fi
     # restore original file (but only on success so we keep the test's Rally log file for inspection on errors).
