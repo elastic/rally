@@ -34,7 +34,8 @@ prereq: make-requirements.txt
 	pyenv install $(PY35)
 	pyenv install $(PY36)
 	pyenv install $(PY37)
-	pyenv global system $(PY34) $(PY35) $(PY36) $(PY37)
+#	pyenv global system $(PY34) $(PY35) $(PY36) $(PY37)
+	pyenv global system $(PY35) $(PY36) $(PY37)
 	-@ printf $(PYENV_PREREQ_HELP)
 
 venv-create:
