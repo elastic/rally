@@ -43,7 +43,7 @@ venv-create:
 		printf $(PYENV_ERROR); \
 		exit 1; \
 	fi;
-	@if [[ ! $(PATH) =~ $(PYENV_REGEX) ]]; then \
+	@if [[ ! "$(PATH)" =~ $(PYENV_REGEX) ]]; then \
 		printf $(PYENV_PATH_ERROR); \
 		exit 1; \
 	fi;
