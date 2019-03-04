@@ -1171,7 +1171,8 @@ def race_store(cfg):
 def list_races(cfg):
     def format_dict(d):
         if d:
-            return ", ".join(["%s=%s" % (k, v) for k, v in d.items()])
+            items=sorted(d.items())
+            return ", ".join(["%s=%s" % (k, v) for k, v in items])
         else:
             return None
 
