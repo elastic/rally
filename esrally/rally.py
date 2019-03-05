@@ -80,8 +80,8 @@ def create_arg_parser():
     # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
     generate_parser.add_argument(
         "--chart-spec-path",
-        help="Path to a JSON file containing all combinations of charts to generate."
-    )
+        help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
+             "multiple files.")
     generate_parser.add_argument(
         "--track",
         help="Define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
@@ -103,6 +103,11 @@ def create_arg_parser():
         help="Chart type to generate (default: time-series).",
         choices=["time-series", "bar"],
         default="time-series")
+    generate_parser.add_argument(
+        "--chart-flavor",
+        help="Which flavor to generate Dashboard and visualizations for (default: oss). Only required for nightly dashboards.",
+        choices=["oss", "default"],
+        default="oss")
     generate_parser.add_argument(
         "--quiet",
         help="Suppress as much as output as possible (default: false).",
@@ -597,6 +602,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
     if sub_command == "generate":
         cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
+        cfg.add(config.Scope.applicationOverride, "generator", "chart.flavor", args.chart_flavor)
         cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
 
         if args.chart_spec_path and (args.track or args.challenge or args.car or args.node_count):

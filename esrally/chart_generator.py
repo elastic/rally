@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import glob
 import uuid
 import json
 
@@ -60,7 +61,7 @@ def format_title(environment, track_name, suffix=None):
 
 class BarCharts:
     UI_STATE_JSON = json.dumps({})
-    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
+    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"})
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -208,7 +209,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "size": 5,
                         "order": "desc",
                         "orderBy": "_term"
@@ -390,7 +391,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "size": 5,
                         "order": "desc",
                         "orderBy": "_term"
@@ -543,7 +544,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "size": 10,
                         "order": "desc",
                         "orderBy": "_term"
@@ -629,7 +630,7 @@ class BarCharts:
                     "enabled": True,
                     "id": "3",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "order": "desc",
                         "orderBy": "_term",
                         "size": 10
@@ -1205,11 +1206,23 @@ def generate_index_ops(chart_type, race_configs, environment):
 
 
 def filter_string(environment, race_config):
+    nightly_extra_filter = ""
+    if race_config.flavor:
+        # Nightlies have two dashboards and we need to filter by flavor.
+        # Release charts don't filter by flavor; instead visualize all by term user-tag.setup
+        nightly_extra_filter = ' AND distribution-flavor:"{}"'.format(race_config.flavor)
     if race_config.name:
-        return "environment:\"%s\" AND active:true AND user-tags.name:\"%s\"" % (environment, race_config.name)
+        return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
+            environment,
+            race_config.name,
+            nightly_extra_filter)
     else:
-        return "environment:\"%s\" AND active:true AND track:\"%s\" AND challenge:\"%s\" AND car:\"%s\" AND node-count:%d" \
-               % (environment, race_config.track, race_config.challenge, race_config.car, race_config.node_count)
+        return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
+            environment,
+            race_config.track,
+            race_config.challenge,
+            race_config.car,
+            race_config.node_count)
 
 
 def generate_queries(chart_type, race_configs, environment):
@@ -1304,10 +1317,11 @@ def generate_dashboard(environment, track, charts):
 
 
 class RaceConfig:
-    def __init__(self, track, cfg=None, challenge=None, car=None, node_count=None, charts=None):
+    def __init__(self, track, cfg=None, flavor="oss", challenge=None, car=None, node_count=None, charts=None):
         self.track = track
         if cfg:
             self.configuration = cfg
+            self.configuration["flavor"] = flavor
         else:
             self.configuration = {
                 "charts": charts,
@@ -1319,6 +1333,10 @@ class RaceConfig:
     @property
     def name(self):
         return self.configuration.get("name")
+
+    @property
+    def flavor(self):
+        return self.configuration.get("flavor")
 
     @property
     def label(self):
@@ -1366,17 +1384,20 @@ class RaceConfig:
 
 def load_race_configs(cfg):
     chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
+    flavor = cfg.opts("generator", "chart.flavor", mandatory=False)
     if chart_spec_path:
         import json
         race_configs = []
-        with open(io.normalize_path(chart_spec_path), mode="rt", encoding="utf-8") as f:
-            for item in json.load(f):
-                    t = load_track(cfg, item["track"])
-                    race_configs_per_track = []
-                    for configuration in item["configurations"]:
-                        race_configs_per_track.append(RaceConfig(track=t, cfg=configuration))
-                    if race_configs_per_track:
-                        race_configs.append(race_configs_per_track)
+
+        for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
+            with open(_track_file, mode="rt", encoding="utf-8") as f:
+                for item in json.load(f):
+                        t = load_track(cfg, item["track"])
+                        race_configs_per_track = []
+                        for configuration in item["configurations"]:
+                            race_configs_per_track.append(RaceConfig(track=t, cfg=configuration, flavor=flavor))
+                        if race_configs_per_track:
+                            race_configs.append(race_configs_per_track)
     else:
         car_names = cfg.opts("mechanic", "car.names")
         if len(car_names) > 1:
