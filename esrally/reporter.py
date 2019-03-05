@@ -677,7 +677,7 @@ class ComparisonReporter:
         print_internal("  Car: %s" % r1.car_name)
         if r1.user_tags:
             r1_user_tags = ", ".join(["%s=%s" % (k, v) for k, v in sorted(r1.user_tags.items())])
-            print_internal("  User Tags: %s" % r1_user_tags)
+            print_internal("  User tags: %s" % r1_user_tags)
         print_internal("")
         print_internal("with contender")
         print_internal("  Race timestamp: %s" % r2.trial_timestamp)
@@ -686,7 +686,7 @@ class ComparisonReporter:
         print_internal("  Car: %s" % r2.car_name)
         if r2.user_tags:
             r2_user_tags = ", ".join(["%s=%s" % (k, v) for k, v in sorted(r2.user_tags.items())])
-            print_internal("  User Tags: %s" % r2_user_tags)
+            print_internal("  User tags: %s" % r2_user_tags)
         print_header(FINAL_SCORE)
 
         metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain=True)
