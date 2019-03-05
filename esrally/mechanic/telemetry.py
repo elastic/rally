@@ -980,8 +980,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         client_info = self.client.info()
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
+        # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
+        distribution_flavor = client_info["version"].get("build_flavor", "oss")
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
 
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
@@ -1062,8 +1065,11 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
         client_info = self.client.info()
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
+        # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
+        distribution_flavor = client_info["version"].get("build_flavor", "oss")
 
         cluster.distribution_version = distribution_version
+        cluster.distribution_flavor = distribution_flavor
         cluster.source_revision = revision
 
         for node_stats in self.client.nodes.stats(metric="_all")["nodes"].values():

@@ -34,17 +34,19 @@ METRIC_FLUSH_INTERVAL_SECONDS = 30
 ##############################
 
 class ClusterMetaInfo:
-    def __init__(self, nodes, revision, distribution_version):
+    def __init__(self, nodes, revision, distribution_version, distribution_flavor):
         self.nodes = nodes
         self.revision = revision
         self.distribution_version = distribution_version
+        self.distribution_flavor = distribution_flavor
 
     def as_dict(self):
         return {
             "nodes": [n.as_dict() for n in self.nodes],
             "node-count": len(self.nodes),
             "revision": self.revision,
-            "distribution-version": self.distribution_version
+            "distribution-version": self.distribution_version,
+            "distribution-flavor": self.distribution_flavor
         }
 
 
@@ -402,7 +404,8 @@ class MechanicActor(actor.RallyActor):
         self.send(self.race_control,
                   EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.cluster.nodes],
                                                 self.cluster.source_revision,
-                                                self.cluster.distribution_version),
+                                                self.cluster.distribution_version,
+                                                self.cluster.distribution_flavor),
                                 self.metrics_store.meta_info))
         self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
 

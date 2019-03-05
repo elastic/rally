@@ -1295,6 +1295,7 @@ class Race:
             "trial-id": self.trial_id,
             "trial-timestamp": time.to_iso8601(self.trial_timestamp),
             "distribution-version": self.cluster.distribution_version,
+            "distribution-flavor": self.cluster.distribution_flavor,
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
