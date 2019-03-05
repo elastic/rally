@@ -106,8 +106,7 @@ def create_arg_parser():
     generate_parser.add_argument(
         "--chart-flavor",
         help="Which flavor to generate Dashboard and visualizations for (default: oss). Only required for nightly dashboards.",
-        choices=["oss", "default"],
-        default="oss")
+        choices=["oss", "default"])
     generate_parser.add_argument(
         "--quiet",
         help="Suppress as much as output as possible (default: false).",
