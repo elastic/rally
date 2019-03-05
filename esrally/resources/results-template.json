@@ -59,6 +59,9 @@
         "plugins": {
           "type": "keyword"
         },
+        "distribution-flavor": {
+          "type": "keyword"
+        },
         "distribution-version": {
           "type": "keyword"
         },

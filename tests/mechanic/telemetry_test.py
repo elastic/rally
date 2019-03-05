@@ -1783,6 +1783,7 @@ class ClusterEnvironmentInfoTests(TestCase):
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "oss"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
             mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
             mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_vendor", "Oracle Corporation"),
@@ -2007,21 +2008,21 @@ class ClusterMetaDataInfoTests(TestCase):
                     "plugins": [
                         {
                             "name": "analysis-icu",
-                            "version": "5.0.0",
+                            "version": "6.5.1",
                             "description": "The ICU Analysis plugin integrates Lucene ICU module ...",
                             "classname": "org.elasticsearch.plugin.analysis.icu.AnalysisICUPlugin",
                             "has_native_controller": False
                         },
                         {
                             "name": "ingest-geoip",
-                            "version": "5.0.0",
+                            "version": "6.5.1",
                             "description": "Ingest processor that uses looksup geo data ...",
                             "classname": "org.elasticsearch.ingest.geoip.IngestGeoIpPlugin",
                             "has_native_controller": False
                         },
                         {
                             "name": "ingest-user-agent",
-                            "version": "5.0.0",
+                            "version": "6.5.1",
                             "description": "Ingest processor that extracts information from a user agent",
                             "classname": "org.elasticsearch.ingest.useragent.IngestUserAgentPlugin",
                             "has_native_controller": False
@@ -2031,11 +2032,11 @@ class ClusterMetaDataInfoTests(TestCase):
             }
         }
         cluster_info = {
-            "version":
-                {
-                    "build_hash": "253032b",
-                    "number": "5.0.0"
-                }
+            "version": {
+                "number": "6.5.1",
+                "build_flavor": "default",
+                "build_hash": "8c58350",
+            }
         }
         client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
 
@@ -2047,8 +2048,9 @@ class ClusterMetaDataInfoTests(TestCase):
 
         t.attach_to_cluster(c)
 
-        self.assertEqual("5.0.0", c.distribution_version)
-        self.assertEqual("253032b", c.source_revision)
+        self.assertEqual("6.5.1", c.distribution_version)
+        self.assertEqual("default", c.distribution_flavor)
+        self.assertEqual("8c58350", c.source_revision)
         self.assertEqual(1, len(c.nodes))
         n = c.nodes[0]
         self.assertEqual("127.0.0.1", n.ip)
@@ -2130,6 +2132,7 @@ class ClusterMetaDataInfoTests(TestCase):
         t.attach_to_cluster(c)
 
         self.assertEqual("1.7.5", c.distribution_version)
+        self.assertEqual("oss", c.distribution_flavor)
         self.assertEqual("c730b59357f8ebc555286794dcd90b3411f517c9", c.source_revision)
         self.assertEqual(1, len(c.nodes))
         n = c.nodes[0]

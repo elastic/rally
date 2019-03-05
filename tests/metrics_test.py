@@ -880,6 +880,7 @@ class EsResultsStoreTests(TestCase):
 
         c = cluster.Cluster([], [], None)
         c.distribution_version = "5.0.0"
+        c.distribution_flavor = "oss"
         node = c.add_node("localhost", "rally-node-0")
         node.plugins.append("x-pack")
 
@@ -923,6 +924,7 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
                 "user-tags": {
@@ -947,6 +949,7 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
                 "user-tags": {
@@ -972,6 +975,7 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
                 "user-tags": {
@@ -1001,6 +1005,7 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "trial-id": EsResultsStoreTests.TRIAL_ID,
                 "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
                 "user-tags": {
