@@ -428,6 +428,11 @@ class BarCharts:
         }
 
     @staticmethod
+    def segment_memory(title, environment, race_config):
+        # don't generate segment memory charts for releases
+        return None
+
+    @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
         title = format_title(environment, race_config.track, "%s-%s-p99-%s" % (race_config.label, q, metric))
@@ -943,6 +948,121 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
+    def segment_memory(title, environment, race_config):
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "bytes",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "avg",
+                                "field": "value.single"
+                            }
+                        ],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "environment:nightly AND track:geonames",
+                        "split_filters": [
+                            {
+                                "filter": "memory_segments",
+                                "label": "Segments",
+                                "color": color_scheme_rgba[0],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_doc_values",
+                                "label": "Doc Values",
+                                "color": color_scheme_rgba[1],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_terms",
+                                "label": "Terms",
+                                "color": color_scheme_rgba[2],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_norms",
+                                "label": "Norms",
+                                "color": color_scheme_rgba[3],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_points",
+                                "label": "Points",
+                                "color": color_scheme_rgba[4],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_stored_fields",
+                                "label": "Stored Fields",
+                                "color": color_scheme_rgba[5],
+                                "id": str(uuid.uuid4())
+                            }
+                        ],
+                        "label": "Segment Memory",
+                        "value_template": "{{value}}",
+                        "steps": 0,
+                        "axis_min": "0"
+                    }
+                ],
+                "show_legend": 1,
+                "time_field": "trial-timestamp",
+                "type": "timeseries",
+                "filter": filter_string(environment, race_config),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:segment_memory) "
+                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ],
+                "show_grid": 1,
+                "drop_last_bucket": 0
+            },
+            "aggs": []
+        }
+
+        return {
+            "_id": str(uuid.uuid4()),
+            "_type": "visualization",
+            "_source": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": "{\"query\":{\"query\":{\"query_string\":{\"query\":\"*\"}},\"language\":\"lucene\"},\"filter\":[]}"
+                }
+            }
+        }
+
+    @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
         title = format_title(environment, race_config.track, "%s-%s-%s" % (race_config.label, q, metric))
@@ -1257,6 +1377,17 @@ def generate_gc(chart_type, race_configs, environment):
     return structures
 
 
+def generate_segment_memory(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        if "segment_memory" in race_config.charts:
+            title = format_title(environment, race_config.track, "%s-segment-memory" % race_config.label)
+            chart = chart_type.segment_memory(title, environment, race_config)
+            if chart:
+                structures.append(chart)
+    return structures
+
+
 def generate_dashboard(environment, track, charts):
     panels = []
 
@@ -1432,6 +1563,7 @@ def generate(cfg):
         charts = generate_index_ops(chart_type, race_configs_per_track, env) + \
                  generate_io(chart_type, race_configs_per_track, env) + \
                  generate_gc(chart_type, race_configs_per_track, env) + \
+                 generate_segment_memory(chart_type, race_configs_per_track, env) + \
                  generate_queries(chart_type, race_configs_per_track, env)
 
         dashboard = generate_dashboard(env, race_configs_per_track[0].track, charts)
