@@ -1326,12 +1326,14 @@ def load_track(cfg, name=None):
 def generate_index_ops(chart_type, race_configs, environment):
     idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
     for race_conf in idx_race_configs:
-        print("Gen index visualization for race config with name:[{}] / label:[{}]".format(race_conf.name, race_conf.label))
+        # TODO: Add Rally based logging
+        print("Gen index visualization for race config with name:[{}] / label:[{}] / flavor: {} / license: {}".format(race_conf.name, race_conf.label, race_conf.flavor, race_conf.lic))
+    charts = []
+
     if idx_race_configs:
-        title = format_title(environment, idx_race_configs[0].track, "indexing-throughput", flavor=race_configs[0].flavor)
-        return [chart_type.index(environment, idx_race_configs, title)]
-    else:
-        return []
+        title = format_title(environment, race_configs[0].track, "indexing-throughput", flavor=race_configs[0].flavor)
+        charts = [chart_type.index(environment, idx_race_configs, title)]
+    return charts
 
 
 def filter_string(environment, race_config):
@@ -1407,8 +1409,6 @@ def flavored_title(environment, flavor=None):
     """
     As we generate two sets of Time Series/Nightly charts per flavor, the titles needs to be different.
     """
-
-    print("environment is {}".format(environment))
     return "{}-{}".format(environment, flavor) if is_nightly(environment) else environment
 
 
@@ -1544,27 +1544,29 @@ class RaceConfig:
 
 def load_race_configs(cfg):
     chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
-    flavor = cfg.opts("generator", "chart.flavor", mandatory=False)
+    chart_type = cfg.opts("generator", "chart.type")
+
     if chart_spec_path:
         import json
-        race_configs = []
+        race_configs = {"oss": [], "default": []}
 
         for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
             with open(_track_file, mode="rt", encoding="utf-8") as f:
                 for item in json.load(f):
                     t = load_track(cfg, item["track"])
-                    race_configs_per_track = []
                     for flavor in item["flavors"]:
+                        race_configs_per_track = []
+                        _flavor_name = flavor["name"]
                         for lic in flavor["licenses"]:
                             # Bar charts need to go only through oss flavor
-                            if cfg.opts("generator", "chart.type") == "bar":
-                                print("flavor is [{}] and lic is [{}]".format(flavor["name"], lic["name"]))
-                                if flavor["name"] != "oss" and lic["name"] != "oss":
+                            if chart_type == "bar":
+                                print("flavor is [{}] and lic is [{}]".format(_flavor_name, lic["name"]))
+                                if _flavor_name != "oss" and lic["name"] != "oss":
                                     continue
                             for configuration in lic["configurations"]:
-                                race_configs_per_track.append(RaceConfig(track=t, cfg=configuration, flavor=flavor, lic=lic))
-                            if race_configs_per_track:
-                                race_configs.append(race_configs_per_track)
+                                race_configs_per_track.append(RaceConfig(track=t, cfg=configuration, flavor=_flavor_name, lic=lic["name"]))
+                        if race_configs_per_track:
+                            race_configs[_flavor_name].append(race_configs_per_track)
     else:
         car_names = cfg.opts("mechanic", "car.names")
         if len(car_names) > 1:
@@ -1596,7 +1598,7 @@ def generate(cfg):
     structures = []
     console.info("Generating charts...", flush=True)
     if chart_type == BarCharts:
-        for race_configs_per_track in race_configs:
+        for race_configs_per_track in race_configs["oss"]:
             charts = generate_index_ops(chart_type, race_configs_per_track, env) + \
                      generate_io(chart_type, race_configs_per_track, env) + \
                      generate_gc(chart_type, race_configs_per_track, env) + \
@@ -1608,17 +1610,20 @@ def generate(cfg):
             structures.extend(charts)
             structures.append(dashboard)
     else:
-        for race_configs_per_track in race_configs:
-            charts = generate_index_ops(chart_type, race_configs_per_track, env) + \
+        for flavor, race_configs_per_flavor in race_configs.items():
+            for race_configs_per_track in race_configs_per_flavor:
+                # TODO Add Rally based logging?
+                print("Generating charts for race_configs starting with:[{}] all of them flavor:[{}]".format(race_configs_per_track[0].name, flavor))
+                charts = generate_index_ops(chart_type, race_configs_per_track, env) + \
                      generate_io(chart_type, race_configs_per_track, env) + \
                      generate_gc(chart_type, race_configs_per_track, env) + \
                      generate_segment_memory(chart_type, race_configs_per_track, env) + \
                      generate_queries(chart_type, race_configs_per_track, env)
 
-            dashboard = generate_dashboard(env, race_configs_per_track[0].track, charts, race_configs_per_track[0].flavor)
+                dashboard = generate_dashboard(env, race_configs_per_track[0].track, charts, flavor)
 
-            structures.extend(charts)
-            structures.append(dashboard)
+                structures.extend(charts)
+                structures.append(dashboard)
 
     output_path = cfg.opts("generator", "output.path")
     if output_path:
