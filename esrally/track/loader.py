@@ -185,7 +185,7 @@ class GitTrackRepository:
         self.track_name = cfg.opts("track", "track.name", mandatory=False)
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("track", "repository.name")
-        repo_revision = cfg.opts("track", "repository.revision")
+        repo_revision = cfg.opts("track", "repository.revision", mandatory=False)
         offline = cfg.opts("system", "offline.mode")
         remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)
         root = cfg.opts("node", "root.dir")
