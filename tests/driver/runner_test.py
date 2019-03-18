@@ -1798,6 +1798,31 @@ class RawRequestRunnerTests(TestCase):
                                                              params={})
 
 
+class SleepTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    # To avoid real sleeps in unit tests
+    @mock.patch("time.sleep")
+    def test_missing_parameter(self, sleep, es):
+        r = runner.Sleep()
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'sleep' did not provide the mandatory parameter "
+                                    "'duration'. Please add it to your parameter source."):
+            r(es, params={})
+
+        self.assertEqual(0, es.call_count)
+        self.assertEqual(0, sleep.call_count)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    # To avoid real sleeps in unit tests
+    @mock.patch("time.sleep")
+    def test_sleep(self, sleep, es):
+        r = runner.Sleep()
+        r(es, params={"duration": 4.3})
+
+        self.assertEqual(0, es.call_count)
+        sleep.assert_called_once_with(4.3)
+
+
 class ShrinkIndexTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests

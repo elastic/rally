@@ -793,6 +793,18 @@ With the operation ``raw-request`` you can execute arbitrary HTTP requests again
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 * ``ignore`` (optional): An array of HTTP response status codes to ignore (i.e. consider as successful).
 
+sleep
+~~~~~
+
+With the operation ``sleep`` you can sleep for a certain duration to ensure no requests are executed by the corresponding clients. The ``sleep`` operation supports the following parameter:
+
+* ``duration`` (mandatory): A non-negative number that defines the sleep duration in seconds.
+
+.. note::
+    The ``sleep`` operation is only useful in very limited circumstances. To throttle throughput, specify a ``target-throughput`` on the corresponding task instead.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 schedule
 ~~~~~~~~
 

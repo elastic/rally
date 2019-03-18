@@ -36,6 +36,8 @@ def register_default_runners():
     register_runner(track.OperationType.NodesStats.name, NodeStats())
     register_runner(track.OperationType.Search.name, Query())
     register_runner(track.OperationType.RawRequest.name, RawRequest())
+    # This is an administrative operation but there is no need for a retry here as we don't issue a request
+    register_runner(track.OperationType.Sleep.name, Sleep())
 
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
@@ -1068,6 +1070,18 @@ class RawRequest(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "raw-request"
+
+
+class Sleep(Runner):
+    """
+    Sleeps for the specified duration not issuing any request.
+    """
+
+    def __call__(self, es, params):
+        time.sleep(mandatory(params, "duration", "sleep"))
+
+    def __repr__(self, *args, **kwargs):
+        return "sleep"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
