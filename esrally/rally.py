@@ -169,7 +169,7 @@ def create_arg_parser():
             help="Define the path to a track.")
         track_source_group.add_argument(
             "--track-revision",
-            help="Define a specific revision in the tracks repository that Rally should use.",
+            help="Define a specific revision in the track repository that Rally should use.",
             default=None)
         p.add_argument(
             "--team-repository",
