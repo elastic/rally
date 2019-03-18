@@ -69,7 +69,7 @@ def format_title(chart_type, environment, track_name, suffix=None, flavor=None):
 
 class BarCharts:
     UI_STATE_JSON = json.dumps({})
-    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"})
+    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
 
     @staticmethod
     def gc(title, environment, race_config):
