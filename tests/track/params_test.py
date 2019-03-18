@@ -1184,6 +1184,26 @@ class ParamsRegistrationTests(TestCase):
         params._unregister_param_source_for_name(source_name)
 
 
+class SleepParamSourceTests(TestCase):
+    def test_missing_duration_parameter(self):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax, "parameter 'duration' is mandatory for sleep operation"):
+            params.SleepParamSource(track.Track(name="unit-test"), params={})
+
+    def test_duration_parameter_wrong_type(self):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax,
+                                    "parameter 'duration' for sleep operation must be a number"):
+            params.SleepParamSource(track.Track(name="unit-test"), params={"duration": "this is a string"})
+
+    def test_duration_parameter_negative_number(self):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax,
+                                    "parameter 'duration' must be non-negative but was -1.0"):
+            params.SleepParamSource(track.Track(name="unit-test"), params={"duration": -1.0})
+
+    def test_param_source_passes_all_parameters(self):
+        p = params.SleepParamSource(track.Track(name="unit-test"), params={"duration": 3.4, "additional": True})
+        self.assertDictEqual({"duration": 3.4, "additional": True}, p.params())
+
+
 class CreateIndexParamSourceTests(TestCase):
     def test_create_index_inline_with_body(self):
         source = params.CreateIndexParamSource(track.Track(name="unit-test"), params={

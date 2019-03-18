@@ -436,6 +436,7 @@ class OperationType(Enum):
     DeleteMlJob = 1015
     OpenMlJob = 1016
     CloseMlJob = 1017
+    Sleep = 1018
 
     @property
     def admin_op(self):
@@ -487,6 +488,8 @@ class OperationType(Enum):
             return OperationType.OpenMlJob
         elif v == "close-ml-job":
             return OperationType.CloseMlJob
+        elif v == "sleep":
+            return OperationType.Sleep
         else:
             raise KeyError("No enum value for [%s]" % v)
 

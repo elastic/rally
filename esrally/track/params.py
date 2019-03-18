@@ -21,6 +21,7 @@ import time
 import math
 import types
 import operator
+import numbers
 from enum import Enum
 
 from esrally import exceptions
@@ -128,6 +129,23 @@ class DelegatingParamSource(ParamSource):
 
     def params(self):
         return self.delegate(self.track, self._params, **self.kwargs)
+
+
+class SleepParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        try:
+            duration = params["duration"]
+        except KeyError:
+            raise exceptions.InvalidSyntax("parameter 'duration' is mandatory for sleep operation")
+
+        if not isinstance(duration, numbers.Number):
+            raise exceptions.InvalidSyntax("parameter 'duration' for sleep operation must be a number")
+        if duration < 0:
+            raise exceptions.InvalidSyntax("parameter 'duration' must be non-negative but was {}".format(duration))
+
+    def params(self):
+        return dict(self._params)
 
 
 class CreateIndexParamSource(ParamSource):
@@ -889,6 +907,7 @@ register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndex
 register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
+register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)
