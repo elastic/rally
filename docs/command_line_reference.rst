@@ -64,6 +64,11 @@ Examples::
 
 Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See the :doc:`track reference </track>` on how to add your own track repositories. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
+``track-revision``
+~~~~~~~~~~~~~~~~~~
+
+Selects a specific revision in the track repository. By default, Rally will choose the most appropriate branch on its own but in some cases it is necessary to specify a certain commit. This is mostly needed when testing whether a change in performance has occurred due to a change in the workload. 
+
 ``track``
 ~~~~~~~~~
 
