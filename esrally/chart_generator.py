@@ -53,23 +53,19 @@ def index_label(race_config):
     return label
 
 
-def format_title(chart_type, environment, track_name, suffix=None, flavor=None):
-    title = "{}-{}".format(environment, track_name)
-
-    # as we generate two sets of Time Series/Nightly charts per flavor, the titles needs to be different.
-    if chart_type == TimeSeriesCharts:
-        if flavor:
-            title = "{}-{}-{}".format(environment, flavor, track_name)
-        else:
-            title = "{}-{}".format(environment, track_name)
-    if suffix:
-        title += "-{}".format(suffix)
-    return title
-
-
 class BarCharts:
     UI_STATE_JSON = json.dumps({})
     # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
+
+    @staticmethod
+    # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
+    def format_title(environment, track_name, flavor=None, suffix=None):
+        title = "{}-{}".format(environment, track_name)
+
+        if suffix:
+            title += "-{}".format(suffix)
+
+        return title
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -443,7 +439,7 @@ class BarCharts:
     @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
-        title = format_title(BarCharts, environment, race_config.track, "%s-%s-p99-%s" % (race_config.label, q, metric))
+        title = BarCharts.format_title(environment, race_config.track, suffix="%s-%s-p99-%s" % (race_config.label, q, metric))
         label = "Query Latency [ms]"
 
         vis_state = {
@@ -775,6 +771,17 @@ class BarCharts:
 
 class TimeSeriesCharts:
     @staticmethod
+    def format_title(environment, track_name, flavor=None, suffix=None):
+        title = "{}-{}".format(environment, track_name)
+
+        if flavor:
+            title = "{}-{}-{}".format(environment, flavor, track_name)
+        if suffix:
+            title += "-{}".format(suffix)
+
+        return title
+
+    @staticmethod
     def gc(title, environment, race_config):
         vis_state = {
             "title": title,
@@ -1076,7 +1083,8 @@ class TimeSeriesCharts:
     @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
-        title = format_title(TimeSeriesCharts, environment, race_config.track, "%s-%s-%s" % (race_config.label, q, metric), flavor=race_config.flavor)
+        title = TimeSeriesCharts.format_title(environment, race_config.track, flavor=race_config.flavor,
+                                              suffix="%s-%s-%s" % (race_config.label, q, metric))
 
         vis_state = {
             "title": title,
@@ -1338,7 +1346,7 @@ def generate_index_ops(chart_type, race_configs, environment, logger):
     charts = []
 
     if idx_race_configs:
-        title = format_title(chart_type, environment, race_configs[0].track, "indexing-throughput", flavor=race_configs[0].flavor)
+        title = chart_type.format_title(environment, race_configs[0].track, flavor=race_configs[0].flavor, suffix="indexing-throughput")
         charts = [chart_type.index(environment, idx_race_configs, title)]
     return charts
 
@@ -1382,7 +1390,7 @@ def generate_io(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "io" in race_config.charts:
-            title = format_title(chart_type, environment, race_config.track, "%s-io" % race_config.label, flavor=race_config.flavor)
+            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor, suffix="%s-io" % race_config.label)
             structures.append(chart_type.io(title, environment, race_config))
 
     return structures
@@ -1392,8 +1400,7 @@ def generate_gc(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "gc" in race_config.charts:
-            title = format_title(chart_type,
-                                 environment, race_config.track, "%s-gc" % race_config.label, flavor=race_config.flavor)
+            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor, suffix="%s-gc" % race_config.label)
             structures.append(chart_type.gc(title, environment, race_config))
 
     return structures
@@ -1403,7 +1410,8 @@ def generate_segment_memory(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "segment_memory" in race_config.charts:
-            title = format_title(chart_type, environment, race_config.track, "%s-segment-memory" % race_config.label, flavor=race_config.flavor)
+            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor,
+                                            suffix="%s-segment-memory" % race_config.label)
             chart = chart_type.segment_memory(title, environment, race_config)
             if chart:
                 structures.append(chart)
@@ -1439,7 +1447,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
         "_id": str(uuid.uuid4()),
         "_type": "dashboard",
         "_source": {
-            "title": format_title(chart_type, environment, track.name, flavor=flavor),
+            "title": chart_type.format_title(environment, track.name, flavor=flavor),
             "hits": 0,
             "description": "",
             "panelsJSON": json.dumps(panels),
