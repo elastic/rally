@@ -1334,7 +1334,7 @@ def generate_index_ops(chart_type, race_configs, environment, logger):
     idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
     for race_conf in idx_race_configs:
         logger.debug("Gen index visualization for race config with name:[%s] / label:[%s] / flavor: [%s] / license: [%s]",
-                     race_conf.name, race_conf.label, race_conf.flavor, race_conf.lic)
+                     race_conf.name, race_conf.label, race_conf.flavor, race_conf.es_license)
     charts = []
 
     if idx_race_configs:
@@ -1470,12 +1470,12 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
 
 
 class RaceConfig:
-    def __init__(self, track, cfg=None, flavor=None, lic=None, challenge=None, car=None, node_count=None, charts=None):
+    def __init__(self, track, cfg=None, flavor=None, es_license=None, challenge=None, car=None, node_count=None, charts=None):
         self.track = track
         if cfg:
             self.configuration = cfg
             self.configuration["flavor"] = flavor
-            self.configuration["lic"] = lic
+            self.configuration["es_license"] = es_license
         else:
             self.configuration = {
                 "charts": charts,
@@ -1493,8 +1493,8 @@ class RaceConfig:
         return self.configuration.get("flavor")
 
     @property
-    def lic(self):
-        return self.configuration.get("lic")
+    def es_license(self):
+        return self.configuration.get("es_license")
 
     @property
     def label(self):
@@ -1544,7 +1544,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
     def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss"):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
-            configs_per_lic.append(RaceConfig(track=t, cfg=race_config, flavor=flavor_name, lic=lic))
+            configs_per_lic.append(RaceConfig(track=t, cfg=race_config, flavor=flavor_name, es_license=lic))
         return configs_per_lic
 
     def add_race_configs(license_configs, flavor_name):
