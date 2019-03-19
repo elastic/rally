@@ -1333,8 +1333,8 @@ def load_track(cfg, name=None):
 def generate_index_ops(chart_type, race_configs, environment, logger):
     idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
     for race_conf in idx_race_configs:
-        logger.debug("Gen index visualization for race config with name:[{}] / label:[{}] / flavor: {} / license: {}".format(
-            race_conf.name, race_conf.label, race_conf.flavor, race_conf.lic))
+        logger.debug("Gen index visualization for race config with name:[%s] / label:[%s] / flavor: [%s] / license: [%s]",
+                     race_conf.name, race_conf.label, race_conf.flavor, race_conf.lic)
     charts = []
 
     if idx_race_configs:
@@ -1622,7 +1622,8 @@ def gen_charts_from_track_combinations(race_configs, chart_type, env, logger):
     structures = []
     for flavor, race_configs_per_flavor in race_configs.items():
         for race_configs_per_track in race_configs_per_flavor:
-            logger.debug("Generating charts for race_configs with name:[{}]/flavor:[{}]".format(race_configs_per_track[0].name, flavor))
+            logger.debug("Generating charts for race_configs with name:[%s]/flavor:[%s]",
+                         race_configs_per_track[0].name, flavor)
             charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, chart_type, env, flavor, logger)
 
             structures.extend(charts)
