@@ -17,6 +17,7 @@
 
 import io
 import random
+import elasticsearch
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -663,6 +664,46 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(234, result["total-document-size-bytes"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
+
+
+class ForceMergeRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_force_merge_with_defaults(self, es):
+        force_merge = runner.ForceMerge()
+        force_merge(es, params={})
+
+        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=None)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_force_merge_override_request_timeout(self, es):
+        force_merge = runner.ForceMerge()
+        force_merge(es, params={"request-timeout": 50000})
+
+        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=50000)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_force_merge_with_params(self, es):
+        force_merge = runner.ForceMerge()
+        force_merge(es, params={"max-num-segments": 1, "request-timeout": 50000})
+
+        es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=50000)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_optimize_with_defaults(self, es):
+        es.indices.forcemerge.side_effect = elasticsearch.TransportError(400, "Bad Request")
+
+        force_merge = runner.ForceMerge()
+        force_merge(es, params={})
+
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", timeout=None)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_optimize_with_params(self, es):
+        es.indices.forcemerge.side_effect = elasticsearch.TransportError(400, "Bad Request")
+        force_merge = runner.ForceMerge()
+        force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
+
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3", timeout=17000)
 
 
 class QueryRunnerTests(TestCase):

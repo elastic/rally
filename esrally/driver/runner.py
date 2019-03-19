@@ -493,27 +493,24 @@ class ForceMerge(Runner):
 
     def __call__(self, es, params):
         import elasticsearch
+        max_num_segments = params.get("max-num-segments")
+        # preliminary support for overriding the global request timeout (see #567). As force-merge falls back to
+        # the raw transport API (where the keyword argument is called `timeout`) in some cases we will always need
+        # a special handling for the force-merge API.
+        request_timeout = params.get("request-timeout")
         try:
-            if "max-num-segments" in params:
-                max_num_segments = params["max-num-segments"]
-            elif "max_num_segments" in params:
-                self.logger.warning("Your parameter source uses the deprecated name [max_num_segments]. "
-                                    "Please change it to [max-num-segments].")
-                max_num_segments = params["max_num_segments"]
-            else:
-                max_num_segments = None
-
             if max_num_segments:
-                es.indices.forcemerge(index="_all", max_num_segments=max_num_segments)
+                es.indices.forcemerge(index="_all", max_num_segments=max_num_segments, request_timeout=request_timeout)
             else:
-                es.indices.forcemerge(index="_all")
+                es.indices.forcemerge(index="_all", request_timeout=request_timeout)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
                 if max_num_segments:
-                    es.transport.perform_request("POST", "/_optimize?max_num_segments={}".format(max_num_segments))
+                    es.transport.perform_request("POST", "/_optimize?max_num_segments={}".format(max_num_segments),
+                                                 timeout=request_timeout)
                 else:
-                    es.transport.perform_request("POST", "/_optimize")
+                    es.transport.perform_request("POST", "/_optimize", timeout=request_timeout)
             else:
                 raise e
 
