@@ -68,6 +68,20 @@ class BarCharts:
         return title
 
     @staticmethod
+    def filter_string(environment, race_config):
+        if race_config.name:
+            return 'environment:"{}" AND active:true AND user-tags.name:"{}"'.format(
+                environment,
+                race_config.name)
+        else:
+            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
+                environment,
+                race_config.track,
+                race_config.challenge,
+                race_config.car,
+                race_config.node_count)
+
+    @staticmethod
     def gc(title, environment, race_config):
         vis_state = {
             "title": title,
@@ -227,7 +241,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": filter_string(environment, race_config),
+                    "query": BarCharts.filter_string(environment, race_config),
                     "analyze_wildcard": True
                 }
             },
@@ -409,7 +423,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": filter_string(environment, race_config),
+                    "query": BarCharts.filter_string(environment, race_config),
                     "analyze_wildcard": True
                 }
             },
@@ -567,7 +581,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "name:\"%s\" AND task:\"%s\" AND %s" % (metric, q, filter_string(environment, race_config)),
+                    "query": "name:\"%s\" AND task:\"%s\" AND %s" % (metric, q, BarCharts.filter_string(environment, race_config)),
                     "analyze_wildcard": True
                 }
             },
@@ -601,7 +615,7 @@ class BarCharts:
                         "query": {
                             "query_string": {
                                 "analyze_wildcard": True,
-                                "query": "task:\"%s\" AND %s" % (bulk_task, filter_string(environment, race_config))
+                                "query": "task:\"%s\" AND %s" % (bulk_task, BarCharts.filter_string(environment, race_config))
                             }
                         }
                     },
@@ -779,6 +793,25 @@ class TimeSeriesCharts:
         return title
 
     @staticmethod
+    def filter_string(environment, race_config):
+        nightly_extra_filter = ""
+        if race_config.flavor:
+            # Time series charts need to support flavors and produce customized titles.
+            nightly_extra_filter = ' AND distribution-flavor:"{}"'.format(race_config.flavor)
+        if race_config.name:
+            return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
+                environment,
+                race_config.name,
+                nightly_extra_filter)
+        else:
+            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
+                environment,
+                race_config.track,
+                race_config.challenge,
+                race_config.car,
+                race_config.node_count)
+
+    @staticmethod
     def gc(title, environment, race_config):
         vis_state = {
             "title": title,
@@ -835,7 +868,7 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string_time_series(environment, race_config),
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
@@ -927,7 +960,7 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string_time_series(environment, race_config),
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
@@ -1041,7 +1074,7 @@ class TimeSeriesCharts:
                 "show_legend": 1,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string_time_series(environment, race_config),
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
@@ -1196,7 +1229,8 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4())
                     }
                 ],
-                "filter": "task:\"%s\" AND name:\"%s\" AND %s" % (q, metric, filter_string_time_series(environment, race_config)),
+                "filter": "task:\"%s\" AND name:\"%s\" AND %s" % (q, metric, TimeSeriesCharts.filter_string(
+                    environment, race_config)),
                 "annotations": [
                     {
                         "fields": "message",
@@ -1241,7 +1275,7 @@ class TimeSeriesCharts:
             for bulk_task in race_config.bulk_tasks:
                 filters.append(
                     {
-                        "filter": "task:\"%s\" AND %s" % (bulk_task, filter_string_time_series(environment, race_config)),
+                        "filter": "task:\"%s\" AND %s" % (bulk_task, TimeSeriesCharts.filter_string(environment, race_config)),
                         "label": label,
                         "color": color_scheme_rgba[idx % len(color_scheme_rgba)],
                         "id": str(uuid.uuid4())
@@ -1343,29 +1377,6 @@ def generate_index_ops(chart_type, race_configs, environment, logger):
         title = chart_type.format_title(environment, race_configs[0].track, flavor=race_configs[0].flavor, suffix="indexing-throughput")
         charts = [chart_type.index(environment, idx_race_configs, title)]
     return charts
-
-
-def filter_string_time_series(environment, race_config):
-    filter_string(environment, race_config, is_time_series=True)
-
-
-def filter_string(environment, race_config, is_time_series=False):
-    nightly_extra_filter = ""
-    if is_time_series and race_config.flavor:
-        # Time series charts need to support flavors and produce customized titles.
-        nightly_extra_filter = ' AND distribution-flavor:"{}"'.format(race_config.flavor)
-    if race_config.name:
-        return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
-            environment,
-            race_config.name,
-            nightly_extra_filter)
-    else:
-        return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
-            environment,
-            race_config.track,
-            race_config.challenge,
-            race_config.car,
-            race_config.node_count)
 
 
 def generate_queries(chart_type, race_configs, environment):
