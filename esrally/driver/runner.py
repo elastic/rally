@@ -508,11 +508,12 @@ class ForceMerge(Runner):
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
+                params = {"request_timeout": request_timeout}
                 if max_num_segments:
                     es.transport.perform_request("POST", "/_optimize?max_num_segments={}".format(max_num_segments),
-                                                 timeout=request_timeout)
+                                                 params=params)
                 else:
-                    es.transport.perform_request("POST", "/_optimize", timeout=request_timeout)
+                    es.transport.perform_request("POST", "/_optimize", params=params)
             else:
                 raise e
 

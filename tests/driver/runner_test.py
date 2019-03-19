@@ -695,7 +695,7 @@ class ForceMergeRunnerTests(TestCase):
         force_merge = runner.ForceMerge()
         force_merge(es, params={})
 
-        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", timeout=None)
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", params={"request_timeout": None})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_optimize_with_params(self, es):
@@ -703,7 +703,8 @@ class ForceMergeRunnerTests(TestCase):
         force_merge = runner.ForceMerge()
         force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
 
-        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3", timeout=17000)
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3",
+                                                             params={"request_timeout": 17000})
 
 
 class QueryRunnerTests(TestCase):
