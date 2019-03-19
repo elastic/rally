@@ -765,9 +765,6 @@ class BarCharts:
             }
         }
 
-    def __repr__(self):
-        return "BarCharts"
-
 
 class TimeSeriesCharts:
     @staticmethod
@@ -1326,9 +1323,6 @@ class TimeSeriesCharts:
                 }
             }
         }
-
-    def __repr__(self):
-        return "TimeSeriesCharts"
 
 
 def load_track(cfg, name=None):
