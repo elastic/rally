@@ -49,12 +49,19 @@ function main {
     add_license "py-cpuinfo" "https://raw.githubusercontent.com/workhorsy/py-cpuinfo/master/LICENSE"
     add_license "tabulate" "https://bitbucket.org/astanin/python-tabulate/raw/03182bf9b8a2becbc54d17aa7e3e7dfed072c5f5/LICENSE"
     add_license "thespian" "https://raw.githubusercontent.com/kquick/Thespian/master/LICENSE.txt"
+    add_license "boto3" "https://raw.githubusercontent.com/boto/boto3/develop/LICENSE"
 
     # transitive dependencies
     # Jinja2 -> Markupsafe
     add_license "Markupsafe" "https://raw.githubusercontent.com/pallets/markupsafe/master/LICENSE.rst"
     # elasticsearch -> urllib3
     add_license "urllib3" "https://raw.githubusercontent.com/shazow/urllib3/master/LICENSE.txt"
+    # boto3 -> s3transfer
+    add_license "s3transfer" "https://raw.githubusercontent.com/boto/s3transfer/develop/LICENSE.txt"
+    # boto3 -> jmespath
+    add_license "jmespath" "https://raw.githubusercontent.com/jmespath/jmespath.py/develop/LICENSE.txt"
+    # boto3 -> botocore
+    add_license "botocore" "https://raw.githubusercontent.com/boto/botocore/develop/LICENSE.txt"
 }
 
 main
