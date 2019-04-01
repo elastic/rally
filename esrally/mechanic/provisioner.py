@@ -23,7 +23,7 @@ import logging
 import jinja2
 
 from esrally import exceptions
-from esrally.mechanic import team
+from esrally.mechanic import team, java_resolver
 from esrally.utils import io, process, versions
 
 
@@ -37,8 +37,10 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
-    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, all_node_ips, ip, http_port)
-    plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
+    _, java_home = java_resolver.java_home(car, cfg)
+
+    es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port)
+    plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
 
@@ -220,8 +222,9 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, node_name, node_root_dir, all_node_ips, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
+    def __init__(self, car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
         self.car = car
+        self.java_home = java_home
         self.node_name = node_name
         self.node_root_dir = node_root_dir
         self.install_dir = "%s/install" % node_root_dir
@@ -254,7 +257,7 @@ class ElasticsearchInstaller:
         shutil.rmtree(config_path)
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables=variables)
+        self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
 
     def cleanup(self, preserve):
         cleanup(preserve, self.install_dir, self.data_paths)
@@ -307,8 +310,9 @@ class ElasticsearchInstaller:
 
 
 class PluginInstaller:
-    def __init__(self, plugin, hook_handler_class=team.BootstrapHookHandler):
+    def __init__(self, plugin, java_home, hook_handler_class=team.BootstrapHookHandler):
         self.plugin = plugin
+        self.java_home = java_home
         self.hook_handler = hook_handler_class(self.plugin)
         if self.hook_handler.can_load():
             self.hook_handler.load()
@@ -323,7 +327,7 @@ class PluginInstaller:
             self.logger.info("Installing [%s] into [%s]", self.plugin_name, es_home_path)
             install_cmd = '%s install --batch "%s"' % (installer_binary_path, self.plugin_name)
 
-        return_code = process.run_subprocess_with_logging(install_cmd)
+        return_code = process.run_subprocess_with_logging(install_cmd, env={"JAVA_HOME": self.java_home})
         # see: https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html
         if return_code == 0:
             self.logger.info("Successfully installed [%s].", self.plugin_name)
@@ -337,7 +341,7 @@ class PluginInstaller:
                                         (self.plugin_name, str(return_code)))
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables=variables)
+        self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
 
     @property
     def variables(self):
