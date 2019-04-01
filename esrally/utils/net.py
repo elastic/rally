@@ -65,39 +65,84 @@ class Progress:
         self.p.finish()
 
 
+# This function is not meant to be called externally and only exists for unit tests
+def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    # lazily initialize S3 support - we might not need it
+    import boto3.s3.transfer
+
+    class S3ProgressAdapter:
+        def __init__(self, size, progress):
+            self._expected_size_in_bytes = size
+            self._progress = progress
+            self._bytes_read = 0
+
+        def __call__(self, bytes_amount):
+            self._bytes_read += bytes_amount
+            self._progress(self._bytes_read, self._expected_size_in_bytes)
+
+    s3 = boto3.resource("s3")
+    progress_callback = S3ProgressAdapter(expected_size_in_bytes, progress_indicator) if progress_indicator else None
+    s3.Bucket(bucket_name).download_file(bucket_path, local_path,
+                                         Callback=progress_callback,
+                                         Config=boto3.s3.transfer.TransferConfig(use_threads=False))
+
+
+def download_s3(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    logger = logging.getLogger(__name__)
+
+    bucket_and_path = url[5:]
+    bucket_end_index = bucket_and_path.find("/")
+    bucket = bucket_and_path[:bucket_end_index]
+    # we need to remove the leading "/"
+    bucket_path = bucket_and_path[bucket_end_index + 1:]
+
+    logger.info("Downloading from S3 bucket [%s] and path [%s] to [%s].", bucket, bucket_path, local_path)
+    _download_from_s3_bucket(bucket, bucket_path, local_path, expected_size_in_bytes, progress_indicator)
+
+    return expected_size_in_bytes
+
+
+def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    with __http().request("GET", url, preload_content=False, retries=10,
+                          timeout=urllib3.Timeout(connect=45, read=240)) as r, open(local_path, "wb") as out_file:
+        if r.status > 299:
+            raise urllib.error.HTTPError(url, r.status, "", None, None)
+        # noinspection PyBroadException
+        try:
+            size_from_content_header = int(r.getheader("Content-Length"))
+            if expected_size_in_bytes is None:
+                expected_size_in_bytes = size_from_content_header
+        except BaseException:
+            size_from_content_header = None
+
+        chunk_size = 2 ** 16
+        bytes_read = 0
+
+        for chunk in r.stream(chunk_size):
+            out_file.write(chunk)
+            bytes_read += len(chunk)
+            if progress_indicator and size_from_content_header:
+                progress_indicator(bytes_read, size_from_content_header)
+        return expected_size_in_bytes
+
+
 def download(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
     """
     Downloads a single file from a URL to the provided local path.
 
-    :param url: The remote URL specifying one file that should be downloaded. May be either a HTTP or HTTPS URL.
+    :param url: The remote URL specifying one file that should be downloaded. May be either a HTTP, HTTPS or S3 URL.
     :param local_path: The local file name of the file that should be downloaded.
     :param expected_size_in_bytes: The expected file size in bytes if known. It will be used to verify that all data have been downloaded.
-    :param progress_indicator A callable that can be use to report progress to the user. It is expected to take two parameters 
-    ``bytes_read`` and ``total_bytes``. If not provided, no progress is shown. Note that ``total_bytes`` is derived from 
-    the ``Content-Length`` header and not from the parameter ``expected_size_in_bytes``.
+    :param progress_indicator A callable that can be use to report progress to the user. It is expected to take two parameters
+    ``bytes_read`` and ``total_bytes``. If not provided, no progress is shown. Note that ``total_bytes`` is derived from
+    the ``Content-Length`` header and not from the parameter ``expected_size_in_bytes`` for downloads via HTTP(S).
     """
     tmp_data_set_path = local_path + ".tmp"
     try:
-        with __http().request("GET", url, preload_content=False, retries=10,
-                              timeout=urllib3.Timeout(connect=45, read=240)) as r, open(tmp_data_set_path, "wb") as out_file:
-            if r.status > 299:
-                raise urllib.error.HTTPError(url, r.status, "", None, None)
-            # noinspection PyBroadException
-            try:
-                size_from_content_header = int(r.getheader("Content-Length"))
-                if expected_size_in_bytes is None:
-                    expected_size_in_bytes = size_from_content_header
-            except BaseException:
-                size_from_content_header = None
-
-            chunk_size = 2 ** 16
-            bytes_read = 0
-
-            for chunk in r.stream(chunk_size):
-                out_file.write(chunk)
-                bytes_read += len(chunk)
-                if progress_indicator and size_from_content_header:
-                    progress_indicator(bytes_read, size_from_content_header)
+        if url.startswith("s3"):
+            expected_size_in_bytes = download_s3(url, tmp_data_set_path, expected_size_in_bytes, progress_indicator)
+        else:
+            expected_size_in_bytes = download_http(url, tmp_data_set_path, expected_size_in_bytes, progress_indicator)
     except BaseException:
         if os.path.isfile(tmp_data_set_path):
             os.remove(tmp_data_set_path)

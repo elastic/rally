@@ -64,7 +64,13 @@ install_requires = [
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
     # License: MPL 2.0
-    "certifi"
+    "certifi",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   botocore: Apache 2.0
+    #   jmespath: MIT
+    #   s3transfer: Apache 2.0
+    "boto3==1.9.120"
 ]
 
 tests_require = [
