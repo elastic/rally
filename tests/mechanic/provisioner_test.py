@@ -42,6 +42,7 @@ class BareProvisionerTests(TestCase):
             root_path=None,
             config_paths=["~/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
+            java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
             node_root_dir="~/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
@@ -91,8 +92,11 @@ class BareProvisionerTests(TestCase):
         def can_load(self):
             return False
 
-        def invoke(self, phase, variables):
-            self.hook_calls[phase] = variables
+        def invoke(self, phase, variables, **kwargs):
+            self.hook_calls[phase] = {
+                "variables": variables,
+                "kwargs": kwargs
+            }
 
     class MockRallyTeamXPackPlugin:
         """
@@ -144,6 +148,7 @@ class BareProvisionerTests(TestCase):
             root_path=None,
             config_paths=["~/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
+            java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
             node_root_dir="~/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
@@ -154,6 +159,7 @@ class BareProvisionerTests(TestCase):
                                         es_installer=installer,
                                         plugin_installers=[
                                             provisioner.PluginInstaller(BareProvisionerTests.MockRallyTeamXPackPlugin(),
+                                                                        java_home="/usr/local/javas/java8",
                                                                         hook_handler_class=BareProvisionerTests.NoopHookHandler)
                                         ],
                                         preserve=True,
@@ -220,6 +226,7 @@ class BareProvisionerTests(TestCase):
             root_path=None,
             config_paths=["~/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
+            java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
             node_root_dir="~/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
@@ -230,6 +237,7 @@ class BareProvisionerTests(TestCase):
                                         es_installer=installer,
                                         plugin_installers=[
                                             provisioner.PluginInstaller(BareProvisionerTests.MockRallyTeamXPackPlugin(),
+                                                                        java_home="/usr/local/javas/java8",
                                                                         hook_handler_class=BareProvisionerTests.NoopHookHandler)
                                         ],
                                         preserve=True,
@@ -281,8 +289,11 @@ class NoopHookHandler:
     def can_load(self):
         return False
 
-    def invoke(self, phase, variables):
-        self.hook_calls[phase] = variables
+    def invoke(self, phase, variables, **kwargs):
+        self.hook_calls[phase] = {
+            "variables": variables,
+            "kwargs": kwargs,
+        }
 
 
 class ElasticsearchInstallerTests(TestCase):
@@ -292,6 +303,7 @@ class ElasticsearchInstallerTests(TestCase):
         mock_path_exists.return_value = False
 
         installer = provisioner.ElasticsearchInstaller(car=team.Car("defaults", None, "/tmp"),
+                                                       java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
@@ -311,6 +323,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                                     root_path=None,
                                                                     config_paths="/tmp",
                                                                     variables={"data_paths": "/tmp/some/data-path-dir"}),
+                                                       java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
@@ -330,6 +343,7 @@ class ElasticsearchInstallerTests(TestCase):
         installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
                                                                     root_path=None,
                                                                     config_paths="/tmp"),
+                                                       java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
                                                        ip="10.17.22.23",
@@ -366,6 +380,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                                     root_path=None,
                                                                     config_paths="/tmp",
                                                                     variables={"data_paths": "/tmp/some/data-path-dir"}),
+                                                       java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
                                                        ip="10.17.22.23",
@@ -398,6 +413,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                                     root_path="/tmp",
                                                                     config_paths="/tmp/templates",
                                                                     variables={"data_paths": "/tmp/some/data-path-dir"}),
+                                                       java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
                                                        ip="10.17.22.23",
@@ -408,7 +424,9 @@ class ElasticsearchInstallerTests(TestCase):
         self.assertEqual(0, len(installer.hook_handler.hook_calls))
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
         self.assertEqual(1, len(installer.hook_handler.hook_calls))
-        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"])
+        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
+        self.assertEqual({"env": {"JAVA_HOME": "/usr/local/javas/java8"}},
+                         installer.hook_handler.hook_calls["post_install"]["kwargs"])
 
 
 class PluginInstallerTests(TestCase):
@@ -417,11 +435,15 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 0
 
         plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", variables={"active": True})
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home="/usr/local/javas/java8",
+                                                hook_handler_class=NoopHookHandler)
 
         installer.install(es_home_path="/opt/elasticsearch")
 
-        installer_subprocess.assert_called_with('/opt/elasticsearch/bin/elasticsearch-plugin install --batch "unit-test-plugin"')
+        installer_subprocess.assert_called_with(
+            '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "unit-test-plugin"',
+            env={"JAVA_HOME": "/usr/local/javas/java8"})
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_unknown_plugin(self, installer_subprocess):
@@ -429,13 +451,17 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 64
 
         plugin = team.PluginDescriptor(name="unknown")
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home="/usr/local/javas/java8",
+                                                hook_handler_class=NoopHookHandler)
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             installer.install(es_home_path="/opt/elasticsearch")
         self.assertEqual("Unknown plugin [unknown]", ctx.exception.args[0])
 
-        installer_subprocess.assert_called_with('/opt/elasticsearch/bin/elasticsearch-plugin install --batch "unknown"')
+        installer_subprocess.assert_called_with(
+            '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "unknown"',
+            env={"JAVA_HOME": "/usr/local/javas/java8"})
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_with_io_error(self, installer_subprocess):
@@ -443,13 +469,17 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 74
 
         plugin = team.PluginDescriptor(name="simple")
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home="/usr/local/javas/java8",
+                                                hook_handler_class=NoopHookHandler)
 
         with self.assertRaises(exceptions.SupplyError) as ctx:
             installer.install(es_home_path="/opt/elasticsearch")
         self.assertEqual("I/O error while trying to install [simple]", ctx.exception.args[0])
 
-        installer_subprocess.assert_called_with('/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"')
+        installer_subprocess.assert_called_with(
+            '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"',
+            env={"JAVA_HOME": "/usr/local/javas/java8"})
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_with_unknown_error(self, installer_subprocess):
@@ -457,31 +487,47 @@ class PluginInstallerTests(TestCase):
         installer_subprocess.return_value = 12987
 
         plugin = team.PluginDescriptor(name="simple")
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home="/usr/local/javas/java8",
+                                                hook_handler_class=NoopHookHandler)
 
         with self.assertRaises(exceptions.RallyError) as ctx:
             installer.install(es_home_path="/opt/elasticsearch")
         self.assertEqual("Unknown error while trying to install [simple] (installer return code [12987]). Please check the logs.",
                          ctx.exception.args[0])
 
-        installer_subprocess.assert_called_with('/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"')
+        installer_subprocess.assert_called_with(
+            '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"',
+            env={"JAVA_HOME": "/usr/local/javas/java8"})
 
     def test_pass_plugin_properties(self):
-        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_paths=["/etc/plugin"], variables={"active": True})
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
+        plugin = team.PluginDescriptor(name="unit-test-plugin",
+                                       config="default",
+                                       config_paths=["/etc/plugin"],
+                                       variables={"active": True})
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home="/usr/local/javas/java8",
+                                                hook_handler_class=NoopHookHandler)
 
         self.assertEqual("unit-test-plugin", installer.plugin_name)
         self.assertEqual({"active": True}, installer.variables)
         self.assertEqual(["/etc/plugin"], installer.config_source_paths)
 
     def test_invokes_hook(self):
-        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", config_paths=["/etc/plugin"], variables={"active": True})
-        installer = provisioner.PluginInstaller(plugin, hook_handler_class=NoopHookHandler)
+        plugin = team.PluginDescriptor(name="unit-test-plugin",
+                                       config="default",
+                                       config_paths=["/etc/plugin"],
+                                       variables={"active": True})
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home="/usr/local/javas/java8",
+                                                hook_handler_class=NoopHookHandler)
 
         self.assertEqual(0, len(installer.hook_handler.hook_calls))
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
         self.assertEqual(1, len(installer.hook_handler.hook_calls))
-        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"])
+        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
+        self.assertEqual({"env": {"JAVA_HOME": "/usr/local/javas/java8"}},
+                         installer.hook_handler.hook_calls["post_install"]["kwargs"])
 
 
 class DockerProvisionerTests(TestCase):

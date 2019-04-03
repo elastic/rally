@@ -23,7 +23,7 @@ import threading
 import shlex
 
 from esrally import config, time, exceptions, client
-from esrally.mechanic import telemetry, cluster
+from esrally.mechanic import telemetry, cluster, java_resolver
 from esrally.utils import process, jvm
 
 
@@ -298,7 +298,6 @@ class InProcessLauncher:
         self._clock = clock
         self.races_root_dir = races_root_dir
         self.keep_running = self.cfg.opts("mechanic", "keep.running")
-        self.override_runtime_jdk = self.cfg.opts("mechanic", "runtime.jdk")
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
@@ -317,7 +316,7 @@ class InProcessLauncher:
         binary_path = node_configuration.binary_path
         data_paths = node_configuration.data_paths
         node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
-        java_major_version, java_home = self._resolve_java_home(car)
+        java_major_version, java_home = java_resolver.java_home(car, self.cfg)
 
         self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
 
@@ -345,23 +344,6 @@ class InProcessLauncher:
         t.attach_to_node(node)
 
         return node
-
-    def _resolve_java_home(self, car):
-        runtime_jdk_versions = self._determine_runtime_jdks(car)
-        self.logger.info("Allowed JDK versions are %s.", runtime_jdk_versions)
-        major, java_home = jvm.resolve_path(runtime_jdk_versions)
-        self.logger.info("Detected JDK with major version [%s] in [%s].", major, java_home)
-        return major, java_home
-
-    def _determine_runtime_jdks(self, car):
-        if self.override_runtime_jdk:
-            return [self.override_runtime_jdk]
-        else:
-            runtime_jdks = car.mandatory_var("runtime.jdk")
-            try:
-                return [int(v) for v in runtime_jdks.split(",")]
-            except ValueError:
-                raise exceptions.SystemSetupError("Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(runtime_jdks))
 
     def _prepare_env(self, car, node_name, java_home, t):
         env = {}
