@@ -2154,16 +2154,33 @@ class ClusterMetaDataInfoTests(TestCase):
         self.assertEqual("unknown", n.fs[1]["spins"])
 
 
-class GcTimesSummaryTests(TestCase):
+class JvmStatsSummaryTests(TestCase):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
-    def test_stores_only_diff_of_gc_times(self, metrics_store_node_level, metrics_store_cluster_level):
+    def test_stores_only_diff_of_gc_times(self,
+                                          metrics_store_node_level,
+                                          metrics_store_cluster_level,
+                                          metrics_store_put_doc):
         nodes_stats_at_start = {
             "nodes": {
                 "FCFjozkeTiOpN-SI88YEcg": {
                     "name": "rally0",
                     "host": "127.0.0.1",
                     "jvm": {
+                        "mem": {
+                            "pools": {
+                                "young": {
+                                    "peak_used_in_bytes": 228432256,
+                                },
+                                "survivor": {
+                                    "peak_used_in_bytes": 3333333,
+                                },
+                                "old": {
+                                    "peak_used_in_bytes": 300008222,
+                                }
+                            }
+                        },
                         "gc": {
                             "collectors": {
                                 "old": {
@@ -2183,7 +2200,7 @@ class GcTimesSummaryTests(TestCase):
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.GcTimesSummary(client, metrics_store)
+        device = telemetry.JvmStatsSummary(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_start()
         # now we'd need to change the node stats response
@@ -2193,6 +2210,19 @@ class GcTimesSummaryTests(TestCase):
                     "name": "rally0",
                     "host": "127.0.0.1",
                     "jvm": {
+                        "mem": {
+                            "pools": {
+                                "young": {
+                                    "peak_used_in_bytes": 558432256,
+                                },
+                                "survivor": {
+                                    "peak_used_in_bytes": 69730304,
+                                },
+                                "old": {
+                                    "peak_used_in_bytes": 3084912096,
+                                }
+                            }
+                        },
                         "gc": {
                             "collectors": {
                                 "old": {
@@ -2212,12 +2242,29 @@ class GcTimesSummaryTests(TestCase):
 
         metrics_store_node_level.assert_has_calls([
             mock.call("rally0", "node_young_gen_gc_time", 700, "ms"),
-            mock.call("rally0", "node_old_gen_gc_time", 1500, "ms")
+            mock.call("rally0", "node_old_gen_gc_time", 1500, "ms"),
         ])
 
         metrics_store_cluster_level.assert_has_calls([
             mock.call("node_total_young_gen_gc_time", 700, "ms"),
             mock.call("node_total_old_gen_gc_time", 1500, "ms")
+        ])
+        metrics_store_put_doc.assert_has_calls([
+            mock.call({
+                "name": "jvm_memory_pool_stats",
+                "young": {
+                    "peak_usage": 558432256,
+                    "unit": "byte"
+                },
+                "survivor": {
+                    "peak_usage": 69730304,
+                    "unit": "byte"
+                },
+                "old": {
+                    "peak_usage": 3084912096,
+                    "unit": "byte"
+                },
+            }, level=MetaInfoScope.node, node_name="rally0"),
         ])
 
 
