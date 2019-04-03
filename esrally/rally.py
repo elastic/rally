@@ -80,8 +80,8 @@ def create_arg_parser():
     # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
     generate_parser.add_argument(
         "--chart-spec-path",
-        help="Path to a JSON file containing all combinations of charts to generate."
-    )
+        help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
+             "multiple files.")
     generate_parser.add_argument(
         "--track",
         help="Define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME

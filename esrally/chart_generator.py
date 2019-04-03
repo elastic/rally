@@ -15,8 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import glob
 import uuid
 import json
+import logging
 
 from esrally import track, config, exceptions
 from esrally.utils import io, console
@@ -51,16 +53,33 @@ def index_label(race_config):
     return label
 
 
-def format_title(environment, track_name, suffix=None):
-    if suffix:
-        return "%s-%s-%s" % (environment, track_name, suffix)
-    else:
-        return "%s-%s" % (environment, track_name)
-
-
 class BarCharts:
     UI_STATE_JSON = json.dumps({})
     # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
+
+    @staticmethod
+    # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
+    def format_title(environment, track_name, flavor=None, suffix=None):
+        title = "{}-{}".format(environment, track_name)
+
+        if suffix:
+            title += "-{}".format(suffix)
+
+        return title
+
+    @staticmethod
+    def filter_string(environment, race_config):
+        if race_config.name:
+            return 'environment:"{}" AND active:true AND user-tags.name:"{}"'.format(
+                environment,
+                race_config.name)
+        else:
+            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
+                environment,
+                race_config.track,
+                race_config.challenge,
+                race_config.car,
+                race_config.node_count)
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -208,7 +227,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "size": 5,
                         "order": "desc",
                         "orderBy": "_term"
@@ -222,7 +241,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": filter_string(environment, race_config),
+                    "query": BarCharts.filter_string(environment, race_config),
                     "analyze_wildcard": True
                 }
             },
@@ -390,7 +409,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "size": 5,
                         "order": "desc",
                         "orderBy": "_term"
@@ -404,7 +423,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": filter_string(environment, race_config),
+                    "query": BarCharts.filter_string(environment, race_config),
                     "analyze_wildcard": True
                 }
             },
@@ -427,9 +446,14 @@ class BarCharts:
         }
 
     @staticmethod
+    def segment_memory(title, environment, race_config):
+        # don't generate segment memory charts for releases
+        return None
+
+    @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
-        title = format_title(environment, race_config.track, "%s-%s-p99-%s" % (race_config.label, q, metric))
+        title = BarCharts.format_title(environment, race_config.track, suffix="%s-%s-p99-%s" % (race_config.label, q, metric))
         label = "Query Latency [ms]"
 
         vis_state = {
@@ -543,7 +567,7 @@ class BarCharts:
                     "type": "terms",
                     "schema": "group",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "size": 10,
                         "order": "desc",
                         "orderBy": "_term"
@@ -557,7 +581,7 @@ class BarCharts:
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "name:\"%s\" AND task:\"%s\" AND %s" % (metric, q, filter_string(environment, race_config)),
+                    "query": "name:\"%s\" AND task:\"%s\" AND %s" % (metric, q, BarCharts.filter_string(environment, race_config)),
                     "analyze_wildcard": True
                 }
             },
@@ -591,7 +615,7 @@ class BarCharts:
                         "query": {
                             "query_string": {
                                 "analyze_wildcard": True,
-                                "query": "task:\"%s\" AND %s" % (bulk_task, filter_string(environment, race_config))
+                                "query": "task:\"%s\" AND %s" % (bulk_task, BarCharts.filter_string(environment, race_config))
                             }
                         }
                     },
@@ -629,7 +653,7 @@ class BarCharts:
                     "enabled": True,
                     "id": "3",
                     "params": {
-                        "field": "user-tags.env",
+                        "field": "user-tags.setup",
                         "order": "desc",
                         "orderBy": "_term",
                         "size": 10
@@ -758,6 +782,36 @@ class BarCharts:
 
 class TimeSeriesCharts:
     @staticmethod
+    def format_title(environment, track_name, flavor=None, suffix=None):
+        title = "{}-{}".format(environment, track_name)
+
+        if flavor:
+            title = "{}-{}-{}".format(environment, flavor, track_name)
+        if suffix:
+            title += "-{}".format(suffix)
+
+        return title
+
+    @staticmethod
+    def filter_string(environment, race_config):
+        nightly_extra_filter = ""
+        if race_config.flavor:
+            # Time series charts need to support flavors and produce customized titles.
+            nightly_extra_filter = ' AND distribution-flavor:"{}"'.format(race_config.flavor)
+        if race_config.name:
+            return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
+                environment,
+                race_config.name,
+                nightly_extra_filter)
+        else:
+            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
+                environment,
+                race_config.track,
+                race_config.challenge,
+                race_config.car,
+                race_config.node_count)
+
+    @staticmethod
     def gc(title, environment, race_config):
         vis_state = {
             "title": title,
@@ -814,7 +868,7 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string(environment, race_config),
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
@@ -906,7 +960,7 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": filter_string(environment, race_config),
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
                     {
                         "fields": "message",
@@ -942,9 +996,125 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
+    def segment_memory(title, environment, race_config):
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "bytes",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "avg",
+                                "field": "value.single"
+                            }
+                        ],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "environment:nightly AND track:geonames",
+                        "split_filters": [
+                            {
+                                "filter": "memory_segments",
+                                "label": "Segments",
+                                "color": color_scheme_rgba[0],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_doc_values",
+                                "label": "Doc Values",
+                                "color": color_scheme_rgba[1],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_terms",
+                                "label": "Terms",
+                                "color": color_scheme_rgba[2],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_norms",
+                                "label": "Norms",
+                                "color": color_scheme_rgba[3],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_points",
+                                "label": "Points",
+                                "color": color_scheme_rgba[4],
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "memory_stored_fields",
+                                "label": "Stored Fields",
+                                "color": color_scheme_rgba[5],
+                                "id": str(uuid.uuid4())
+                            }
+                        ],
+                        "label": "Segment Memory",
+                        "value_template": "{{value}}",
+                        "steps": 0,
+                        "axis_min": "0"
+                    }
+                ],
+                "show_legend": 1,
+                "time_field": "trial-timestamp",
+                "type": "timeseries",
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:segment_memory) "
+                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "trial-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ],
+                "show_grid": 1,
+                "drop_last_bucket": 0
+            },
+            "aggs": []
+        }
+
+        return {
+            "_id": str(uuid.uuid4()),
+            "_type": "visualization",
+            "_source": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": "{\"query\":{\"query\":{\"query_string\":{\"query\":\"*\"}},\"language\":\"lucene\"},\"filter\":[]}"
+                }
+            }
+        }
+
+    @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
-        title = format_title(environment, race_config.track, "%s-%s-%s" % (race_config.label, q, metric))
+        title = TimeSeriesCharts.format_title(environment, race_config.track, flavor=race_config.flavor,
+                                              suffix="%s-%s-%s" % (race_config.label, q, metric))
 
         vis_state = {
             "title": title,
@@ -1059,7 +1229,8 @@ class TimeSeriesCharts:
                         "id": str(uuid.uuid4())
                     }
                 ],
-                "filter": "task:\"%s\" AND name:\"%s\" AND %s" % (q, metric, filter_string(environment, race_config)),
+                "filter": "task:\"%s\" AND name:\"%s\" AND %s" % (q, metric, TimeSeriesCharts.filter_string(
+                    environment, race_config)),
                 "annotations": [
                     {
                         "fields": "message",
@@ -1104,7 +1275,7 @@ class TimeSeriesCharts:
             for bulk_task in race_config.bulk_tasks:
                 filters.append(
                     {
-                        "filter": "task:\"%s\" AND %s" % (bulk_task, filter_string(environment, race_config)),
+                        "filter": "task:\"%s\" AND %s" % (bulk_task, TimeSeriesCharts.filter_string(environment, race_config)),
                         "label": label,
                         "color": color_scheme_rgba[idx % len(color_scheme_rgba)],
                         "id": str(uuid.uuid4())
@@ -1195,21 +1366,17 @@ def load_track(cfg, name=None):
     return track.load_track(cfg)
 
 
-def generate_index_ops(chart_type, race_configs, environment):
+def generate_index_ops(chart_type, race_configs, environment, logger):
     idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
+    for race_conf in idx_race_configs:
+        logger.debug("Gen index visualization for race config with name:[%s] / label:[%s] / flavor: [%s] / license: [%s]",
+                     race_conf.name, race_conf.label, race_conf.flavor, race_conf.es_license)
+    charts = []
+
     if idx_race_configs:
-        title = format_title(environment, idx_race_configs[0].track, "indexing-throughput")
-        return [chart_type.index(environment, idx_race_configs, title)]
-    else:
-        return []
-
-
-def filter_string(environment, race_config):
-    if race_config.name:
-        return "environment:\"%s\" AND active:true AND user-tags.name:\"%s\"" % (environment, race_config.name)
-    else:
-        return "environment:\"%s\" AND active:true AND track:\"%s\" AND challenge:\"%s\" AND car:\"%s\" AND node-count:%d" \
-               % (environment, race_config.track, race_config.challenge, race_config.car, race_config.node_count)
+        title = chart_type.format_title(environment, race_configs[0].track, flavor=race_configs[0].flavor, suffix="indexing-throughput")
+        charts = [chart_type.index(environment, idx_race_configs, title)]
+    return charts
 
 
 def generate_queries(chart_type, race_configs, environment):
@@ -1228,7 +1395,7 @@ def generate_io(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "io" in race_config.charts:
-            title = format_title(environment, race_config.track, "%s-io" % race_config.label)
+            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor, suffix="%s-io" % race_config.label)
             structures.append(chart_type.io(title, environment, race_config))
 
     return structures
@@ -1238,13 +1405,25 @@ def generate_gc(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "gc" in race_config.charts:
-            title = format_title(environment, race_config.track, "%s-gc" % race_config.label)
+            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor, suffix="%s-gc" % race_config.label)
             structures.append(chart_type.gc(title, environment, race_config))
 
     return structures
 
 
-def generate_dashboard(environment, track, charts):
+def generate_segment_memory(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        if "segment_memory" in race_config.charts:
+            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor,
+                                            suffix="%s-segment-memory" % race_config.label)
+            chart = chart_type.segment_memory(title, environment, race_config)
+            if chart:
+                structures.append(chart)
+    return structures
+
+
+def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     panels = []
 
     width = 6
@@ -1273,7 +1452,7 @@ def generate_dashboard(environment, track, charts):
         "_id": str(uuid.uuid4()),
         "_type": "dashboard",
         "_source": {
-            "title": format_title(environment, track.name),
+            "title": chart_type.format_title(environment, track.name, flavor=flavor),
             "hits": 0,
             "description": "",
             "panelsJSON": json.dumps(panels),
@@ -1304,10 +1483,12 @@ def generate_dashboard(environment, track, charts):
 
 
 class RaceConfig:
-    def __init__(self, track, cfg=None, challenge=None, car=None, node_count=None, charts=None):
+    def __init__(self, track, cfg=None, flavor=None, es_license=None, challenge=None, car=None, node_count=None, charts=None):
         self.track = track
         if cfg:
             self.configuration = cfg
+            self.configuration["flavor"] = flavor
+            self.configuration["es_license"] = es_license
         else:
             self.configuration = {
                 "charts": charts,
@@ -1319,6 +1500,14 @@ class RaceConfig:
     @property
     def name(self):
         return self.configuration.get("name")
+
+    @property
+    def flavor(self):
+        return self.configuration.get("flavor")
+
+    @property
+    def es_license(self):
+        return self.configuration.get("es_license")
 
     @property
     def label(self):
@@ -1364,19 +1553,44 @@ class RaceConfig:
         return task_names
 
 
-def load_race_configs(cfg):
-    chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
+def load_race_configs(cfg, chart_type, chart_spec_path=None):
+    def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss"):
+        configs_per_lic = []
+        for race_config in race_configs_per_lic:
+            configs_per_lic.append(RaceConfig(track=t, cfg=race_config, flavor=flavor_name, es_license=lic))
+        return configs_per_lic
+
+    def add_race_configs(license_configs, flavor_name):
+        if chart_type == BarCharts:
+            # Only one license config, "oss", is present in bar charts
+            _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "oss"]
+            if _lic_conf:
+                race_configs_per_track.extend(add_configs(_lic_conf[0]))
+        else:
+            for lic_config in license_configs:
+                race_configs_per_track.extend(add_configs(lic_config["configurations"], flavor_name, lic_config["name"]))
+
     if chart_spec_path:
         import json
-        race_configs = []
-        with open(io.normalize_path(chart_spec_path), mode="rt", encoding="utf-8") as f:
-            for item in json.load(f):
+
+        race_configs = {"oss": [], "default": []}
+        if chart_type == BarCharts:
+            race_configs = []
+
+        for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
+            with open(_track_file, mode="rt", encoding="utf-8") as f:
+                for item in json.load(f):
                     t = load_track(cfg, item["track"])
-                    race_configs_per_track = []
-                    for configuration in item["configurations"]:
-                        race_configs_per_track.append(RaceConfig(track=t, cfg=configuration))
-                    if race_configs_per_track:
-                        race_configs.append(race_configs_per_track)
+                    for flavor in item["flavors"]:
+                        race_configs_per_track = []
+                        _flavor_name = flavor["name"]
+                        add_race_configs(flavor["licenses"], _flavor_name)
+
+                        if race_configs_per_track:
+                            if chart_type == BarCharts:
+                                race_configs.append(race_configs_per_track)
+                            else:
+                                race_configs[_flavor_name].append(race_configs_per_track)
     else:
         car_names = cfg.opts("mechanic", "car.names")
         if len(car_names) > 1:
@@ -1395,28 +1609,67 @@ def load_race_configs(cfg):
     return race_configs
 
 
+def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, logger=None):
+    charts = generate_index_ops(chart_type, race_configs, env, logger) + \
+             generate_io(chart_type, race_configs, env) + \
+             generate_gc(chart_type, race_configs, env) + \
+             generate_segment_memory(chart_type, race_configs, env) + \
+             generate_queries(chart_type, race_configs, env)
+
+    dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
+
+    return charts, dashboard
+
+
+def gen_charts_per_track(race_configs, chart_type, env, flavor=None, logger=None):
+    structures = []
+    for race_configs_per_track in race_configs:
+        charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, chart_type, env, flavor, logger)
+        structures.extend(charts)
+        structures.append(dashboard)
+
+    return structures
+
+
+def gen_charts_from_track_combinations(race_configs, chart_type, env, logger):
+    structures = []
+    for flavor, race_configs_per_flavor in race_configs.items():
+        for race_configs_per_track in race_configs_per_flavor:
+            logger.debug("Generating charts for race_configs with name:[%s]/flavor:[%s]",
+                         race_configs_per_track[0].name, flavor)
+            charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, chart_type, env, flavor, logger)
+
+            structures.extend(charts)
+            structures.append(dashboard)
+
+    return structures
+
+
 def generate(cfg):
+    logger = logging.getLogger(__name__)
+
+    chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
     if cfg.opts("generator", "chart.type") == "time-series":
         chart_type = TimeSeriesCharts
     else:
         chart_type = BarCharts
 
     console.info("Loading track data...", flush=True)
-    race_configs = load_race_configs(cfg)
+    race_configs = load_race_configs(cfg, chart_type, chart_spec_path)
     env = cfg.opts("system", "env.name")
 
     structures = []
     console.info("Generating charts...", flush=True)
-    for race_configs_per_track in race_configs:
-        charts = generate_index_ops(chart_type, race_configs_per_track, env) + \
-                 generate_io(chart_type, race_configs_per_track, env) + \
-                 generate_gc(chart_type, race_configs_per_track, env) + \
-                 generate_queries(chart_type, race_configs_per_track, env)
 
-        dashboard = generate_dashboard(env, race_configs_per_track[0].track, charts)
-
-        structures.extend(charts)
-        structures.append(dashboard)
+    if chart_spec_path:
+        if chart_type == BarCharts:
+            # bar charts are flavor agnostic and split results based on a separate `user.setup` field
+            structures = gen_charts_per_track(race_configs, chart_type, env, logger=logger)
+        elif chart_type == TimeSeriesCharts:
+            structures = gen_charts_from_track_combinations(race_configs, chart_type, env, logger)
+    else:
+        # Process a normal track
+        structures = gen_charts_per_track(race_configs, chart_type, env, logger=logger)
 
     output_path = cfg.opts("generator", "output.path")
     if output_path:
