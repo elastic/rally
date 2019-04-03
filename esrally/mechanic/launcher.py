@@ -91,7 +91,7 @@ class ClusterLauncher:
             telemetry.NodeStats(telemetry_params, es, self.metrics_store),
             telemetry.ClusterMetaDataInfo(es_default),
             telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
-            telemetry.GcTimesSummary(es_default, self.metrics_store),
+            telemetry.JvmStatsSummary(es_default, self.metrics_store),
             telemetry.IndexStats(es_default, self.metrics_store),
             telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
             telemetry.CcrStats(telemetry_params, es, self.metrics_store),
