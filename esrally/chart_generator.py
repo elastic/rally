@@ -1026,7 +1026,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:nightly AND track:geonames",
+                        "filter": "environment:{} AND track:geonames".format(environment),
                         "split_filters": [
                             {
                                 "filter": "memory_segments",
