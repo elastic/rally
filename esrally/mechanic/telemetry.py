@@ -431,14 +431,17 @@ class CcrStatsRecorder:
 
         for shard_stats in stats:
             if "shard_id" in shard_stats:
+                doc = {
+                    "name": "ccr-stats",
+                    "shard": shard_stats
+                }
                 shard_metadata = {
                     "cluster": self.cluster_name,
                     "index": name,
-                    "shard": shard_stats["shard_id"],
-                    "name": "ccr-stats"
+                    "shard": shard_stats["shard_id"]
                 }
 
-                self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+                self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class RecoveryStats(TelemetryDevice):

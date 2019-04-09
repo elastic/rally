@@ -386,12 +386,14 @@ class CcrStatsRecorderTests(TestCase):
         shard_metadata = {
             "cluster": "remote",
             "index": follower_index,
-            "shard": shard_id,
-            "name": "ccr-stats"
+            "shard": shard_id
         }
 
         metrics_store_put_doc.assert_called_with(
-            ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0],
+            {
+                "name": "ccr-stats",
+                "shard": ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0]
+            },
             level=MetaInfoScope.cluster,
             meta_data=shard_metadata
         )
@@ -483,20 +485,30 @@ class CcrStatsRecorderTests(TestCase):
             {
                 "cluster": "remote",
                 "index": "follower",
-                "shard": 0,
-                "name": "ccr-stats"
+                "shard": 0
             },
             {
                 "cluster": "remote",
                 "index": "follower",
-                "shard": 1,
-                "name": "ccr-stats"
+                "shard": 1
             }
         ]
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata[0]),
-            mock.call(ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][1], level=MetaInfoScope.cluster, meta_data=shard_metadata[1])
+            mock.call(
+                {
+                    "name": "ccr-stats",
+                    "shard": ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0]
+                },
+                level=MetaInfoScope.cluster,
+                meta_data=shard_metadata[0]),
+            mock.call(
+                {
+                    "name": "ccr-stats",
+                    "shard": ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][1]
+                },
+                level=MetaInfoScope.cluster,
+                meta_data=shard_metadata[1])
             ],
             any_order=True
         )
@@ -620,12 +632,17 @@ class CcrStatsRecorderTests(TestCase):
         shard_metadata = {
             "cluster": "remote",
             "index": follower_index1,
-            "shard": 0,
-            "name": "ccr-stats"
+            "shard": 0
         }
 
         metrics_store_put_doc.assert_has_calls([
-            mock.call(ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0], level=MetaInfoScope.cluster, meta_data=shard_metadata)
+            mock.call(
+                {
+                    "name": "ccr-stats",
+                    "shard": ccr_stats_filtered_follower_response["follow_stats"]["indices"][0]["shards"][0]
+                },
+                level=MetaInfoScope.cluster,
+                meta_data=shard_metadata)
             ],
             any_order=True
         )

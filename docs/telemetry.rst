@@ -114,3 +114,13 @@ Supported telemetry parameters:
 
 * ``recovery-stats-indices`` (default: all indices): An index pattern for which recovery stats should be checked.
 * ``recovery-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+ccr-stats
+---------
+
+The ccr-stats telemetry device regularly calls the `cross-cluster replication stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-get-stats.html>`_ and records one metrics document per shard.
+
+Supported telemetry parameters:
+
+* ``ccr-stats-indices`` (default: all indices): An index pattern for which ccr stats should be checked.
+* ``ccr-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
