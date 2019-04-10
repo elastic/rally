@@ -142,6 +142,8 @@ def _do_print(msg, end, flush):
             except BaseException:
                 # force-close quietly
                 pass
+        else:
+            raise
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
