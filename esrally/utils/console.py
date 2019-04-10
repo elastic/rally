@@ -21,7 +21,7 @@ import shutil
 
 QUIET = False
 PLAIN = False
-DETACHED = False
+CLOSED = False
 
 
 class PlainFormat:
@@ -127,14 +127,14 @@ def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None
 
 
 def _do_print(msg, end, flush):
-    global DETACHED
-    if DETACHED:
+    global CLOSED
+    if CLOSED:
         return
     try:
         print(msg, end=end, flush=flush)
     except OSError as e:
         if e.errno == 5:
-            DETACHED = True
+            CLOSED = True
             # we need to close, otherwise the runtime will eventually want to flush which will fail.
             # noinspection PyBroadException
             try:
@@ -180,8 +180,8 @@ class CmdLineProgressReporter:
         :param message: A message to display (will be left-aligned)
         :param progress: A progress indication (will be right-aligned)
         """
-        global DETACHED
-        if QUIET or DETACHED:
+        global CLOSED
+        if QUIET or CLOSED:
             return
         w = self._width
         if self._first_print:
@@ -195,7 +195,7 @@ class CmdLineProgressReporter:
             _do_print("\n{0}{1}".format(final_message, formatted_progress), end="", flush=False)
         else:
             _do_print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="", flush=False)
-        if not DETACHED:
+        if not CLOSED:
             sys.stdout.flush()
 
     def _truncate(self, text, max_length, omission="..."):
@@ -205,7 +205,7 @@ class CmdLineProgressReporter:
             return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
 
     def finish(self):
-        if QUIET or DETACHED:
+        if QUIET or CLOSED:
             return
         # print a final statement in order to end the progress line
         _do_print("", end="\n", flush=True)
