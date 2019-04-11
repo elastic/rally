@@ -24,6 +24,7 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    perf            perf stat              Reads CPU PMU counters (requires Linux and perf)
    node-stats      Node Stats             Regularly samples node stats
    recovery-stats  Recovery Stats         Regularly samples shard recovery stats
+   ccr-stats       CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
