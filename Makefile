@@ -30,10 +30,10 @@ VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME)
 
 prereq: make-requirements.txt
 # Temporarily disable Python 3.4 builds
-#	pyenv install $(PY34)
-	pyenv install $(PY35)
-	pyenv install $(PY36)
-	pyenv install $(PY37)
+#	pyenv install --skip-existing $(PY34)
+	pyenv install --skip-existing $(PY35)
+	pyenv install --skip-existing $(PY36)
+	pyenv install --skip-existing $(PY37)
 #	pyenv global system $(PY34) $(PY35) $(PY36) $(PY37)
 	pyenv global system $(PY35) $(PY36) $(PY37)
 	-@ printf $(PYENV_PREREQ_HELP)
