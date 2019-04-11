@@ -63,6 +63,8 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
 
 Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. However, note that Kibana will not be auto-configured by Rally.
 
+.. _configuration_options:
+
 Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~
 
