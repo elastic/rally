@@ -21,6 +21,7 @@ import shutil
 
 QUIET = False
 PLAIN = False
+CLOSED = False
 
 
 class PlainFormat:
@@ -125,15 +126,34 @@ def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None
             , logger=logger.error if logger else None)
 
 
+def _do_print(msg, end, flush):
+    global CLOSED
+    if CLOSED:
+        return
+    try:
+        print(msg, end=end, flush=flush)
+    except OSError as e:
+        if e.errno == 5:
+            CLOSED = True
+            # we need to close, otherwise the runtime will eventually want to flush which will fail.
+            # noinspection PyBroadException
+            try:
+                sys.stdout.close()
+            except BaseException:
+                # force-close quietly
+                pass
+        else:
+            raise
+
+
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
-    # TODO: Checking for sys.stdout.isatty() prevents shell redirections and pipes (useful for list commands). Can we remove this check?
-    if not QUIET and sys.stdout.isatty():
+    if not QUIET:
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
-            print(format.underline_for(complete_msg, underline_symbol=overline), flush=flush)
-        print(complete_msg, end=end, flush=flush)
+            _do_print(format.underline_for(complete_msg, underline_symbol=overline), end="\n", flush=flush)
+        _do_print(complete_msg, end=end, flush=flush)
         if underline:
-            print(format.underline_for(complete_msg, underline_symbol=underline), flush=flush)
+            _do_print(format.underline_for(complete_msg, underline_symbol=underline), end="\n", flush=flush)
     if logger:
         logger(msg)
 
@@ -162,21 +182,23 @@ class CmdLineProgressReporter:
         :param message: A message to display (will be left-aligned)
         :param progress: A progress indication (will be right-aligned)
         """
-        if QUIET or not sys.stdout.isatty():
+        global CLOSED
+        if QUIET or CLOSED:
             return
         w = self._width
         if self._first_print:
-            print(" " * w, end="")
+            _do_print(" " * w, end="", flush=True)
             self._first_print = False
 
         final_message = self._truncate(message, self._width - len(progress))
 
         formatted_progress = progress.rjust(w - len(final_message))
         if self._plain_output:
-            print("\n{0}{1}".format(final_message, formatted_progress), end="")
+            _do_print("\n{0}{1}".format(final_message, formatted_progress), end="", flush=False)
         else:
-            print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")
-        sys.stdout.flush()
+            _do_print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="", flush=False)
+        if not CLOSED:
+            sys.stdout.flush()
 
     def _truncate(self, text, max_length, omission="..."):
         if len(text) <= max_length:
@@ -185,7 +207,7 @@ class CmdLineProgressReporter:
             return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
 
     def finish(self):
-        if QUIET or not sys.stdout.isatty():
+        if QUIET or CLOSED:
             return
         # print a final statement in order to end the progress line
-        print("")
+        _do_print("", end="\n", flush=True)
