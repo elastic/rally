@@ -152,18 +152,16 @@ From now on, Rally will treat your repository as default and you need to run Ral
 
 .. _recipe_testing_rally_against_ccr_clusters:
 
-Testing Rally against CCR Clusters using a remote metric store
+Testing Rally against CCR clusters using a remote metric store
 --------------------------------------------------------------
 
-Testing Rally features (such as the ``ccr-stats`` telemetry device) requiring Elasticsearch clusters configured for `cross-cluster replication <https://www.elastic.co/guide/en/elastic-stack-overview/current/ccr-getting-started.html>`_ can be a time consuming process.
-
-For this reason we've created an example under `recipes/ccr in Rally's repository <https://github.com/elastic/rally/tree/master/recipes/ccr>`_ simplifying it.
+Testing Rally features (such as the ``ccr-stats`` telemetry device) requiring Elasticsearch clusters configured for `cross-cluster replication <https://www.elastic.co/guide/en/elastic-stack-overview/current/ccr-getting-started.html>`_ can be a time consuming process. Use `recipes/ccr in Rally's repository <https://github.com/elastic/rally/tree/master/recipes/ccr>`_ to test a simple but complete example.
 
 Running the ``start.sh`` script requires Docker locally installed and performs the following actions:
 
-1. Starts a small single node Elasticsearch cluster locally, to serve as a :ref:`metrics store <configuration_options>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
+1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :ref:`metrics store <configuration_options>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
 2. Creates a new configuration file for Rally under ``~/.rally/rally-metricstore.ini`` referencing Elasticsearch from step 1.
-3. Starts two additional small local Elasticsearch clusters with 1 node each, (version ``7.0.0`` by default) called ``leader`` and ``follower`` listening at ports 329201 and 32902 respectively.
+3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``7.0.0`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
 4. Accepts the trial license.
 5. Configures ``leader`` on the ``follower`` as a `remote cluster <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-remote-clusters.html#configuring-remote-clusters>`_.
 6. Sets an `auto-follow pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-put-auto-follow-pattern.html#ccr-put-auto-follow-pattern>`_ on the follower for every index on the leader to be replicated as ``<leader-index-name>-copy``.
@@ -171,6 +169,6 @@ Running the ``start.sh`` script requires Docker locally installed and performs t
 
 Rally will push metrics to the metric store configured in 1. and they can be visualized by accessing Kibana at `http://locahost:5601 <http://localhost:5601>`_.
 
-To tear down everything just issue ``./stop.sh``.
+To tear down everything issue ``./stop.sh``.
 
 It is possible to specify a different version of Elasticsearch for step 3. by setting ``export ES_VERSION=<the_desired_version>``.
