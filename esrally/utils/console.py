@@ -132,15 +132,18 @@ def _do_print(msg, end, flush):
         return
     try:
         print(msg, end=end, flush=flush)
-    except OSError:
-        CLOSED = True
-        # we need to close, otherwise the runtime will eventually want to flush which will fail.
-        # noinspection PyBroadException
-        try:
-            sys.stdout.close()
-        except BaseException:
-            # force-close quietly
-            pass
+    except OSError as e:
+        if e.errno == 5:
+            CLOSED = True
+            # we need to close, otherwise the runtime will eventually want to flush which will fail.
+            # noinspection PyBroadException
+            try:
+                sys.stdout.close()
+            except BaseException:
+                # force-close quietly
+                pass
+        else:
+            raise
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
