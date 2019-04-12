@@ -31,7 +31,8 @@ from esrally.metrics import MetaInfoScope
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
-    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat, NodeStats, RecoveryStats]]
+    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat,
+                                                                               NodeStats, RecoveryStats, CcrStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -431,14 +432,16 @@ class CcrStatsRecorder:
 
         for shard_stats in stats:
             if "shard_id" in shard_stats:
+                doc = {
+                    "name": "ccr-stats",
+                    "shard": shard_stats
+                }
                 shard_metadata = {
                     "cluster": self.cluster_name,
-                    "index": name,
-                    "shard": shard_stats["shard_id"],
-                    "name": "ccr-stats"
+                    "index": name
                 }
 
-                self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+                self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class RecoveryStats(TelemetryDevice):

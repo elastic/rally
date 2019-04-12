@@ -1,0 +1,48 @@
+version: '2.2'
+services:
+  leader-es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION}
+    container_name: leader-node01
+    environment:
+      - cluster.name=leader
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata1:/usr/share/elasticsearch/data
+    ports:
+      - 39201:9200
+    networks:
+      - esnet
+
+  follower-es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION}
+    container_name: follower-node01
+    environment:
+      - cluster.name=follower
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata2:/usr/share/elasticsearch/data
+    ports:
+      - 39202:9200
+    networks:
+      - esnet
+
+volumes:
+  esdata1:
+    driver: local
+  esdata2:
+    driver: local
+
+networks:
+  esnet:
