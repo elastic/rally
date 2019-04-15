@@ -562,6 +562,7 @@ class DockerProvisionerTests(TestCase):
             "data_paths": ["/usr/share/elasticsearch/data"],
             "log_path": "/var/log/elasticsearch",
             "heap_dump_path": "/usr/share/elasticsearch/heapdump",
+            "discovery_type": "single-node",
             "network_host": "0.0.0.0",
             "http_port": "39200-39300",
             "transport_port": "39300-39400",
