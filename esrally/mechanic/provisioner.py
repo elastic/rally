@@ -401,6 +401,7 @@ class DockerProvisioner:
             "heap_dump_path": "/usr/share/elasticsearch/heapdump",
             # Docker container needs to expose service on external interfaces
             "network_host": "0.0.0.0",
+            "discovery_type": "single-node",
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
             "node_count_per_host": 1,
