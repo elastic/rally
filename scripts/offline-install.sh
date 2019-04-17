@@ -55,7 +55,7 @@ function main {
 
     mkdir -p "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
     # Prepare install
-    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
+    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --no-binary=MarkupSafe
 
 
     echo "Preparing NOTICE file"
