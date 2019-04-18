@@ -782,22 +782,27 @@ class BarCharts:
 
 class TimeSeriesCharts:
     @staticmethod
-    def format_title(environment, track_name, flavor=None, suffix=None):
-        title = "{}-{}".format(environment, track_name)
-
+    def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
         if flavor:
-            title = "{}-{}-{}".format(environment, flavor, track_name)
+            title = [environment, flavor, str(track_name)]
+        elif es_license:
+            title = [environment, es_license, str(track_name)]
+        elif flavor and es_license:
+            raise exceptions.RallyAssertionError(
+                "Specify either flavor [{}] or license [{}] but not both".format(flavor, es_license))
+        else:
+            title = [environment, str(track_name)]
         if suffix:
-            title += "-{}".format(suffix)
+            title.append(suffix)
 
-        return title
+        return "-".join(title)
 
     @staticmethod
     def filter_string(environment, race_config):
         nightly_extra_filter = ""
-        if race_config.flavor:
-            # Time series charts need to support flavors and produce customized titles.
-            nightly_extra_filter = ' AND distribution-flavor:"{}"'.format(race_config.flavor)
+        if race_config.es_license:
+            # Time series charts need to support different licenses and produce customized titles.
+            nightly_extra_filter = ' AND user-tags.license:"{}"'.format(race_config.es_license)
         if race_config.name:
             return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
                 environment,
@@ -1113,7 +1118,7 @@ class TimeSeriesCharts:
     @staticmethod
     def query(environment, race_config, q):
         metric = "latency"
-        title = TimeSeriesCharts.format_title(environment, race_config.track, flavor=race_config.flavor,
+        title = TimeSeriesCharts.format_title(environment, race_config.track, es_license=race_config.es_license,
                                               suffix="%s-%s-%s" % (race_config.label, q, metric))
 
         vis_state = {
@@ -1324,7 +1329,7 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "trial-timestamp",
                 "type": "timeseries",
-                "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true"  % (environment, t),
+                "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true" % (environment, t),
                 "annotations": [
                     {
                         "fields": "message",
@@ -1395,7 +1400,8 @@ def generate_io(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "io" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor, suffix="%s-io" % race_config.label)
+            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
+                                            suffix="%s-io" % race_config.label)
             structures.append(chart_type.io(title, environment, race_config))
 
     return structures
@@ -1405,7 +1411,8 @@ def generate_gc(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "gc" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor, suffix="%s-gc" % race_config.label)
+            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
+                                            suffix="%s-gc" % race_config.label)
             structures.append(chart_type.gc(title, environment, race_config))
 
     return structures
@@ -1415,7 +1422,7 @@ def generate_segment_memory(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "segment_memory" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, flavor=race_config.flavor,
+            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
                                             suffix="%s-segment-memory" % race_config.label)
             chart = chart_type.segment_memory(title, environment, race_config)
             if chart:
