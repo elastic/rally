@@ -238,12 +238,14 @@ class StatsCalculator:
         return self.store.get_one(metric_name, lap=self.lap)
 
     def summary_stats(self, metric_name, task_name):
+        mean = self.store.get_mean(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         unit = self.store.get_unit(metric_name, task=task_name)
         stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
         if median and stats:
             return {
                 "min": stats["min"],
+                "mean": mean,
                 "median": median,
                 "max": stats["max"],
                 "unit": unit
@@ -301,11 +303,16 @@ class StatsCalculator:
                                                      sample_type=sample_type,
                                                      percentiles=percentiles_for_sample_size(sample_size),
                                                      lap=self.lap)
-            # safely encode so we don't have any dots in field names
-            safe_percentiles = collections.OrderedDict()
+            mean = self.store.get_mean(metric_name,
+                                       task=task,
+                                       sample_type=sample_type,
+                                       lap=self.lap)
+            stats = collections.OrderedDict()
             for k, v in percentiles.items():
-                safe_percentiles[encode_float_key(k)] = v
-            return safe_percentiles
+                # safely encode so we don't have any dots in field names
+                stats[encode_float_key(k)] = v
+            stats["mean"] = mean
+            return stats
         else:
             return {}
 
