@@ -812,6 +812,20 @@ class MetricsStore:
         percentiles = self.get_percentiles(name, task, operation_type, sample_type, lap, percentiles=[median])
         return percentiles[median] if percentiles else None
 
+    def get_mean(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+        """
+        Retrieves mean of the given metric.
+
+        :param name: The metric name to query.
+        :param task The task name to query. Optional.
+        :param operation_type The operation type to query. Optional.
+        :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param lap The lap to query. Optional. By default, all laps are considered.
+        :return: The mean.
+        """
+        stats = self.get_stats(name, task, operation_type, sample_type, lap)
+        return stats["avg"] if stats else None
+
 
 class EsMetricsStore(MetricsStore):
     """

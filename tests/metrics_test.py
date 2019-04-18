@@ -542,6 +542,64 @@ class EsMetricsTests(TestCase):
 
         self.assertEqual(throughput, actual_throughput)
 
+    def test_get_mean(self):
+        mean_throughput = 1734
+        search_result = {
+            "hits": {
+                "total": 1,
+            },
+            "aggregations": {
+                "metric_stats": {
+                    "count": 17,
+                    "min": 1208,
+                    "max": 1839,
+                    "avg": mean_throughput,
+                    "sum": 28934
+                }
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "trial-id": EsMetricsTests.TRIAL_ID
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "indexing_throughput"
+                            }
+                        },
+                        {
+                            "term": {
+                                "lap": 3
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": 0,
+            "aggs": {
+                "metric_stats": {
+                    "stats": {
+                        "field": "value"
+                    }
+                }
+            }
+        }
+
+        actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput", lap=3)
+
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+
+        self.assertEqual(mean_throughput, actual_mean_throughput)
+
     def test_get_median(self):
         median_throughput = 30535
         search_result = {
@@ -1078,6 +1136,20 @@ class InMemoryMetricsStoreTests(TestCase):
         self.assert_equal_percentiles("query_latency", [0.0], {0.0: 1.0})
 
         self.assert_equal_percentiles("query_latency", [99, 99.9, 100], {99: 990.0, 99.9: 999.0, 100: 1000.0})
+
+    def test_get_mean(self):
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.lap = 1
+        for i in range(1, 100):
+            self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
+
+        self.assertAlmostEqual(50, self.metrics_store.get_mean("query_latency", lap=1))
 
     def test_get_median(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,

@@ -46,6 +46,7 @@ class StatsCalculatorTests(TestCase):
 
         store.put_value_cluster_level("throughput", 500, unit="docs/s", task="index #1", operation_type=track.OperationType.Bulk)
         store.put_value_cluster_level("throughput", 1000, unit="docs/s", task="index #1", operation_type=track.OperationType.Bulk)
+        store.put_value_cluster_level("throughput", 1000, unit="docs/s", task="index #1", operation_type=track.OperationType.Bulk)
         store.put_value_cluster_level("throughput", 2000, unit="docs/s", task="index #1", operation_type=track.OperationType.Bulk)
 
         store.put_value_cluster_level("latency", 2800, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
@@ -60,7 +61,7 @@ class StatsCalculatorTests(TestCase):
                                       meta_data={"success": True})
         store.put_value_cluster_level("service_time", 200, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
                                       meta_data={"success": False})
-        store.put_value_cluster_level("service_time", 215, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
+        store.put_value_cluster_level("service_time", 210, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
                                       meta_data={"success": True})
         store.put_doc(doc={
             "name": "ml_processing_time",
@@ -79,9 +80,10 @@ class StatsCalculatorTests(TestCase):
         del store
 
         opm = stats.metrics("index #1")
-        self.assertEqual(collections.OrderedDict([("min", 500), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
-        self.assertEqual(collections.OrderedDict([("50_0", 220), ("100_0", 225)]), opm["latency"])
-        self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 215)]), opm["service_time"])
+        self.assertEqual(collections.OrderedDict(
+            [("min", 500), ("mean", 1125), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
+        self.assertEqual(collections.OrderedDict([("50_0", 220), ("100_0", 225), ("mean", 215)]), opm["latency"])
+        self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 210), ("mean", 200)]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
         self.assertEqual(6144, stats.index_size)
