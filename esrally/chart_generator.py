@@ -1364,10 +1364,12 @@ class TimeSeriesCharts:
         }
 
 
-def load_track(cfg, name=None):
+def load_track(cfg, name=None, track_params={}):
     # hack to make this work with multiple tracks (Rally core is usually not meant to be used this way)
     if name:
         cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
+    # another hack to ensure any track-params in the race config are used by Rally's track loader
+    cfg.add(config.Scope.applicationOverride, "track", "params", track_params)
     return track.load_track(cfg)
 
 
@@ -1564,7 +1566,12 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
     def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss"):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
-            configs_per_lic.append(RaceConfig(track=t, cfg=race_config, flavor=flavor_name, es_license=lic))
+            configs_per_lic.append(
+                RaceConfig(track=load_track(cfg, item["track"], race_config.get("track-params", {})),
+                           cfg=race_config,
+                           flavor=flavor_name,
+                           es_license=lic)
+            )
         return configs_per_lic
 
     def add_race_configs(license_configs, flavor_name):
@@ -1587,7 +1594,6 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
             with open(_track_file, mode="rt", encoding="utf-8") as f:
                 for item in json.load(f):
-                    t = load_track(cfg, item["track"])
                     for flavor in item["flavors"]:
                         race_configs_per_track = []
                         _flavor_name = flavor["name"]
