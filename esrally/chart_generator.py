@@ -59,7 +59,7 @@ class BarCharts:
 
     @staticmethod
     # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
-    def format_title(environment, track_name, flavor=None, suffix=None):
+    def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
         title = "{}-{}".format(environment, track_name)
 
         if suffix:
