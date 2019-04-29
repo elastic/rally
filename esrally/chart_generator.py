@@ -1364,13 +1364,23 @@ class TimeSeriesCharts:
         }
 
 
-def load_track(cfg, name=None, track_params={}):
-    # hack to make this work with multiple tracks (Rally core is usually not meant to be used this way)
-    if name:
-        cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
-    # another hack to ensure any track-params in the race config are used by Rally's track loader
-    cfg.add(config.Scope.applicationOverride, "track", "params", track_params)
-    return track.load_track(cfg)
+class RaceConfigTrack:
+    def __init__(self, cfg, name=None):
+        self.cached_track = self.load_track(cfg, name)
+
+    def load_track(self, cfg, name=None, params={}):
+        # hack to make this work with multiple tracks (Rally core is usually not meant to be used this way)
+        if name:
+            cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
+        # another hack to ensure any track-params in the race config are used by Rally's track loader
+        cfg.add(config.Scope.applicationOverride, "track", "params", params)
+        return track.load_track(cfg)
+
+    def get_track(self, cfg, name=None, params={}):
+        if params:
+            return self.load_track(cfg, name, params)
+        # if no params specified, return the initially cached, (non-parametrized) track
+        return self.cached_track
 
 
 def generate_index_ops(chart_type, race_configs, environment, logger):
@@ -1567,7 +1577,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
             configs_per_lic.append(
-                RaceConfig(track=load_track(cfg, item["track"], race_config.get("track-params", {})),
+                RaceConfig(track=race_config_track.get_track(cfg, item["track"], race_config.get("track-params", {})),
                            cfg=race_config,
                            flavor=flavor_name,
                            es_license=lic)
@@ -1594,6 +1604,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
             with open(_track_file, mode="rt", encoding="utf-8") as f:
                 for item in json.load(f):
+                    race_config_track = RaceConfigTrack(cfg, item["track"])
                     for flavor in item["flavors"]:
                         race_configs_per_track = []
                         _flavor_name = flavor["name"]
@@ -1612,7 +1623,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
             car_name = car_names[0]
         race_configs = [
             [
-                RaceConfig(track=load_track(cfg),
+                RaceConfig(track=track.load_track(cfg),
                            challenge=cfg.opts("track", "challenge.name"),
                            car=car_name,
                            node_count=cfg.opts("generator", "node.count"),
