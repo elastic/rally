@@ -67,3 +67,11 @@ class InvalidSyntax(RallyError):
 
 class InvalidName(RallyError):
     pass
+
+
+class TrackConfigError(RallyError):
+    """
+    Thrown when something is wrong with the track config e.g. user supplied a track-param
+    that can't be set
+    """
+    pass

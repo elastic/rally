@@ -18,6 +18,7 @@
 import json
 import logging
 import os
+import re
 import glob
 import urllib.error
 import tempfile
@@ -26,9 +27,11 @@ import jinja2
 import jinja2.exceptions
 import jsonschema
 import tabulate
+
 from esrally import exceptions, time, PROGRAM_NAME
 from esrally.track import params, track
 from esrally.utils import io, convert, net, console, modules, repo
+from jinja2 import meta
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -468,6 +471,52 @@ class DocumentSetPreparator:
                 return False
 
 
+class TemplateSource:
+    """
+    Prepares the fully assembled track file. Doesn't render using jinja2, but embeds track fragments referenced with
+    rally.collect(parts=...
+    """
+
+    collect_parts_re = re.compile(r'''{{\ +?rally.collect\(parts="(.+?(?="))"\)\ +?}}''')
+
+    def __init__(self, base_path, template_file_name):
+        self.base_path = base_path
+        self.template_file_name = template_file_name
+        self.assembled_source = None
+
+    def load_template_from_file(self):
+        loader = jinja2.FileSystemLoader(self.base_path)
+        print("template file name is "+self.template_file_name)
+        base_track = loader.get_source(jinja2.Environment(), self.template_file_name)
+        # TODO check if base_track is empty
+        self.assembled_source = self.replace_includes(self.base_path, base_track[0])
+
+    def replace_includes(self, base_path, track_fragment):
+        match = TemplateSource.collect_parts_re.findall(track_fragment)
+        if match:
+            # Construct replacement dict for matched captures
+            repl = []
+            for glob_pattern in match:
+                full_glob_path = os.path.join(base_path, glob_pattern)
+                sub_source = self.read_glob_files(full_glob_path)
+                repl.append(self.replace_includes(base_path=io.dirname(full_glob_path), track_fragment=sub_source))
+
+            def replstring(matchobj):
+                # matchobj.pos has the matched group id
+                return repl[matchobj.pos]
+
+            return TemplateSource.collect_parts_re.sub(replstring, track_fragment)
+        return track_fragment
+
+    def read_glob_files(self, pattern):
+        source = []
+        files = glob.glob(pattern)
+        for fname in files:
+            with open(fname) as fp:
+                source.append(fp.read())
+        return "".join(source)
+
+
 def render_template(loader, template_name, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
     macros = """
         {% macro collect(parts) -%}
@@ -483,6 +532,7 @@ def render_template(loader, template_name, template_vars=None, glob_helper=lambd
     env = jinja2.Environment(
         loader=jinja2.ChoiceLoader([jinja2.DictLoader({"rally.helpers": macros}), loader])
     )
+    print(template_vars)
     if template_vars:
         for k, v in template_vars.items():
             env.globals[k] = v
@@ -495,6 +545,18 @@ def render_template(loader, template_name, template_vars=None, glob_helper=lambd
     return template.render()
 
 
+def check_unused_track_params(assembled_source, template_vars):
+    j2env = jinja2.Environment()
+    ast = j2env.parse(assembled_source)
+    j2_variables = meta.find_undeclared_variables(ast)
+
+    for k in template_vars:
+        if k not in j2_variables:
+            raise exceptions.TrackConfigError(
+                "You've declared [{}] track-param but this is not overriding any of "
+                "the jinja2 variables specified in the track".format(k))
+
+
 def render_template_from_file(template_file_name, template_vars):
     def relative_glob(start, f):
         result = glob.glob(os.path.join(start, f))
@@ -504,6 +566,10 @@ def render_template_from_file(template_file_name, template_vars):
             return []
 
     base_path = io.dirname(template_file_name)
+    template_source = TemplateSource(base_path, io.basename(template_file_name))
+    template_source.load_template_from_file()
+    check_unused_track_params(template_source.assembled_source, template_vars)
+
     return render_template(loader=jinja2.FileSystemLoader(base_path),
                            template_name=io.basename(template_file_name),
                            template_vars=template_vars,

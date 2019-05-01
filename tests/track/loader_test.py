@@ -15,11 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import re
-import unittest.mock as mock
-from unittest import TestCase
-
+import glob
 import jinja2
+import re
+import textwrap
+import unittest.mock as mock
+
+from unittest import TestCase
 
 from esrally import exceptions, config
 from esrally.utils import io
@@ -684,6 +686,109 @@ class TrackPreparationTests(TestCase):
 
         self.assertEqual(0, prepare_file_offset_table.call_count)
 
+
+class TemplateSource(TestCase):
+    def test_load_template_from_file(self):
+        pass
+
+    @mock.patch("esrally.utils.io.dirname")
+    @mock.patch.object(loader.TemplateSource, "read_glob_files")
+    def test_entrypoint_of_replace_includes(self, patched_read_glob, patched_dirname):
+        track = textwrap.dedent('''
+        {% import "rally.helpers" as rally with context %}
+        {
+          "version": 2,
+          "description": "unittest track",
+          "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+          "indices": [
+            {
+              "name": "geonames",
+              "body": "index.json"
+            }
+          ],
+          "corpora": [
+            {
+              "name": "geonames",
+              "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "documents": [
+                {
+                  "source-file": "documents-2.json.bz2",
+                  "document-count": 11396505,
+                  "compressed-bytes": 264698741,
+                  "uncompressed-bytes": 3547614383
+                }
+              ]
+            }
+          ],
+          "operations": [
+            {{ rally.collect(parts="operations/*.json") }}
+          ],
+          "challenges": [
+            {{ rally.collect(parts="challenges/*.json") }}
+          ]
+        }
+        ''')
+
+        def dummy_read_glob(c):
+            return "{{\"replaced {}\": \"true\"}}".format(c)
+
+        patched_read_glob.side_effect = dummy_read_glob
+
+        base_path = "~/.rally/benchmarks/tracks/default/geonames"
+        template_file_name = "track.json"
+        tmpl_src = loader.TemplateSource(base_path, template_file_name)
+        tmpl_src.replace_includes(base_path, track)
+        expected_response = textwrap.dedent('''                                    
+            {% import "rally.helpers" as rally with context %}
+            {
+              "version": 2,
+              "description": "unittest track",
+              "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "indices": [
+                {
+                  "name": "geonames",
+                  "body": "index.json"
+                }
+              ],
+              "corpora": [
+                {
+                  "name": "geonames",
+                  "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+                  "documents": [
+                    {
+                      "source-file": "documents-2.json.bz2",
+                      "document-count": 11396505,
+                      "compressed-bytes": 264698741,
+                      "uncompressed-bytes": 3547614383
+                    }
+                  ]
+                }
+              ],
+              "operations": [
+                {"replaced ~/.rally/benchmarks/tracks/default/geonames/operations/*.json": "true"}
+              ],
+              "challenges": [
+                {"replaced ~/.rally/benchmarks/tracks/default/geonames/operations/*.json": "true"}
+              ]
+            }
+            ''')
+
+        self.assertEqual(
+            expected_response,
+            tmpl_src.replace_includes(base_path, track)
+        )
+
+    @mock.patch.object(glob, "glob")
+    def test_read_glob_files(self, mocked_glob):
+        tmpl_obj = loader.TemplateSource("/some/path/to/a/rally/track", "track.json")
+        mocked_glob.side_effect = lambda pat: [
+            "resources/track_fragment_1.json",
+            "resources/track_fragment_2.json"
+        ]
+        response = tmpl_obj.read_glob_files("unused_pattern*.json")
+        expected_response = '{\n  "item1": "value1"\n}\n{\n  "item2": "value2"\n}\n'
+
+        self.assertEqual(expected_response, response)
 
 class TemplateRenderTests(TestCase):
     def test_render_simple_template(self):
