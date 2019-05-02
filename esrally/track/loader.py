@@ -473,15 +473,18 @@ class DocumentSetPreparator:
 
 class TemplateSource:
     """
-    Prepares the fully assembled track file. Doesn't render using jinja2, but embeds track fragments referenced with
+    Prepares the fully assembled track file from file or string.
+    Doesn't render using jinja2, but embeds track fragments referenced with
     rally.collect(parts=...
     """
 
     collect_parts_re = re.compile(r'''{{\ +?rally.collect\(parts="(.+?(?="))"\)\ +?}}''')
 
-    def __init__(self, base_path, template_file_name):
+    def __init__(self, base_path, template_file_name, source=io.FileSource, fileglobber=glob.glob):
         self.base_path = base_path
         self.template_file_name = template_file_name
+        self.source = source
+        self.fileglobber = fileglobber
         self.assembled_source = None
 
     def load_template_from_file(self):
@@ -491,33 +494,36 @@ class TemplateSource:
         # TODO check if base_track is empty
         self.assembled_source = self.replace_includes(self.base_path, base_track[0])
 
+    def load_template_from_string(self, template_source):
+        self.assembled_source = self.replace_includes(self.base_path, template_source)
+
     def replace_includes(self, base_path, track_fragment):
         match = TemplateSource.collect_parts_re.findall(track_fragment)
         if match:
             # Construct replacement dict for matched captures
-            repl = []
+            repl = {}
             for glob_pattern in match:
                 full_glob_path = os.path.join(base_path, glob_pattern)
                 sub_source = self.read_glob_files(full_glob_path)
-                repl.append(self.replace_includes(base_path=io.dirname(full_glob_path), track_fragment=sub_source))
+                repl[glob_pattern] = self.replace_includes(base_path=io.dirname(full_glob_path), track_fragment=sub_source)
 
             def replstring(matchobj):
-                # matchobj.pos has the matched group id
-                return repl[matchobj.pos]
+                # matchobj.groups() is a tuple and first element contains the matched group id
+                return repl[matchobj.groups()[0]]
 
             return TemplateSource.collect_parts_re.sub(replstring, track_fragment)
         return track_fragment
 
     def read_glob_files(self, pattern):
         source = []
-        files = glob.glob(pattern)
+        files = self.fileglobber(pattern)
         for fname in files:
-            with open(fname) as fp:
+            with self.source(fname, mode="rt") as fp:
                 source.append(fp.read())
-        return "".join(source)
+        return ",\n".join(source)
 
 
-def render_template(loader, template_name, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
+def render_template(template_source, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
     macros = """
         {% macro collect(parts) -%}
             {% set comma = joiner() %}
@@ -528,10 +534,12 @@ def render_template(loader, template_name, template_vars=None, glob_helper=lambd
         {%- endmacro %}
     """
 
+    loader = jinja2.BaseLoader()
     # place helpers dict loader first to prevent users from overriding our macros.
     env = jinja2.Environment(
         loader=jinja2.ChoiceLoader([jinja2.DictLoader({"rally.helpers": macros}), loader])
     )
+
     print(template_vars)
     if template_vars:
         for k, v in template_vars.items():
@@ -540,16 +548,21 @@ def render_template(loader, template_name, template_vars=None, glob_helper=lambd
     env.globals["now"] = clock.now()
     env.globals["glob"] = glob_helper
     env.filters["days_ago"] = time.days_ago
-    template = env.get_template(template_name)
+    template = env.from_string(template_source)
 
     return template.render()
 
 
 def check_unused_track_params(assembled_source, template_vars):
     j2env = jinja2.Environment()
+    # we don't need the following j2 filters/macros but we define them anyway to prevent parsing failures
+    j2env.globals["now"] = time.Clock()
+    j2env.globals["glob"] = lambda c: ""
+    j2env.filters["days_ago"] = time.days_ago
     ast = j2env.parse(assembled_source)
     j2_variables = meta.find_undeclared_variables(ast)
 
+    print(assembled_source)
     for k in template_vars:
         if k not in j2_variables:
             raise exceptions.TrackConfigError(
@@ -570,8 +583,7 @@ def render_template_from_file(template_file_name, template_vars):
     template_source.load_template_from_file()
     check_unused_track_params(template_source.assembled_source, template_vars)
 
-    return render_template(loader=jinja2.FileSystemLoader(base_path),
-                           template_name=io.basename(template_file_name),
+    return render_template(template_source=template_source.assembled_source,
                            template_vars=template_vars,
                            glob_helper=lambda f: relative_glob(base_path, f))
 
@@ -845,8 +857,12 @@ class TrackSpecificationReader:
         index_name = self._r(index_spec, "name")
         body_file = self._r(index_spec, "body", mandatory=False)
         if body_file:
+            idx_body_tmpl_src = TemplateSource(mapping_dir, body_file, self.source)
             with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
-                body = self._load_template(f.read(), "definition for index {} in {}".format(index_name, body_file))
+                idx_body_tmpl_src.load_template_from_string(f.read())
+                body = self._load_template(
+                    idx_body_tmpl_src.assembled_source,
+                    "definition for index {} in {}".format(index_name, body_file))
         else:
             body = None
 
@@ -854,18 +870,22 @@ class TrackSpecificationReader:
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
+        template_file = self._r(tpl_spec, "template")
         index_pattern = self._r(tpl_spec, "index-pattern")
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
-        template_file = os.path.join(mapping_dir, self._r(tpl_spec, "template"))
+        template_file = os.path.join(mapping_dir, template_file)
+        idx_tmpl_src = TemplateSource(mapping_dir, template_file, self.source)
         with self.source(template_file, "rt") as f:
-            template_content = self._load_template(f.read(), "definition for index template {} in {}".format(name, template_file))
+            idx_tmpl_src.load_template_from_string(f.read())
+            template_content = self._load_template(
+                idx_tmpl_src.assembled_source,
+                "definition for index template {} in {}".format(name, template_file))
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
         self.logger.info("Loading template [%s].", description)
         try:
-            rendered = render_template(loader=jinja2.DictLoader({"default": contents}),
-                                       template_name="default",
+            rendered = render_template(contents,
                                        template_vars=self.track_params)
             return json.loads(rendered)
         except Exception as e:

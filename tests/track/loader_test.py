@@ -17,6 +17,7 @@
 
 import glob
 import jinja2
+import os
 import re
 import textwrap
 import unittest.mock as mock
@@ -737,7 +738,6 @@ class TemplateSource(TestCase):
         base_path = "~/.rally/benchmarks/tracks/default/geonames"
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
-        tmpl_src.replace_includes(base_path, track)
         expected_response = textwrap.dedent('''                                    
             {% import "rally.helpers" as rally with context %}
             {
@@ -768,7 +768,7 @@ class TemplateSource(TestCase):
                 {"replaced ~/.rally/benchmarks/tracks/default/geonames/operations/*.json": "true"}
               ],
               "challenges": [
-                {"replaced ~/.rally/benchmarks/tracks/default/geonames/operations/*.json": "true"}
+                {"replaced ~/.rally/benchmarks/tracks/default/geonames/challenges/*.json": "true"}
               ]
             }
             ''')
@@ -778,17 +778,20 @@ class TemplateSource(TestCase):
             tmpl_src.replace_includes(base_path, track)
         )
 
-    @mock.patch.object(glob, "glob")
-    def test_read_glob_files(self, mocked_glob):
-        tmpl_obj = loader.TemplateSource("/some/path/to/a/rally/track", "track.json")
-        mocked_glob.side_effect = lambda pat: [
-            "resources/track_fragment_1.json",
-            "resources/track_fragment_2.json"
-        ]
-        response = tmpl_obj.read_glob_files("unused_pattern*.json")
-        expected_response = '{\n  "item1": "value1"\n}\n{\n  "item2": "value2"\n}\n'
+    def test_read_glob_files(self):
+        tmpl_obj = loader.TemplateSource(
+            base_path="/some/path/to/a/rally/track",
+            template_file_name="track.json",
+            fileglobber=lambda pat: [
+                os.path.join(os.path.dirname(__file__), "resources", "track_fragment_1.json"),
+                os.path.join(os.path.dirname(__file__), "resources", "track_fragment_2.json")
+            ]
+        )
+        response = tmpl_obj.read_glob_files("*track_fragment_*.json")
+        expected_response = '{\n  "item1": "value1"\n}\n,\n{\n  "item2": "value2"\n}\n'
 
         self.assertEqual(expected_response, response)
+
 
 class TemplateRenderTests(TestCase):
     def test_render_simple_template(self):
@@ -799,8 +802,7 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(
-            loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
+        rendered = loader.render_template(template, clock=StaticClock)
 
         expected = """
         {
@@ -818,8 +820,7 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(
-            loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", template_vars={"greeting": "Hi"}, clock=StaticClock)
+        rendered = loader.render_template(template, template_vars={"greeting": "Hi"}, clock=StaticClock)
 
         expected = """
         {
@@ -849,15 +850,24 @@ class TemplateRenderTests(TestCase):
         }
         """
 
+        source=io.DictStringFileSourceFactory({
+            "dynamic-key-1": [
+                textwrap.dedent('"dkey1": "value1"')
+                ],
+            "dynamic-key-2": [
+                textwrap.dedent('"dkey2": "value2"')
+            ],
+            "dynamic-key-3": [
+                textwrap.dedent('"dkey3": "value3"')
+            ]
+        })
+
+        template_source = loader.TemplateSource("", "track.json", source=source, fileglobber=key_globber)
+        template_source.load_template_from_string(template)
+
         rendered = loader.render_template(
-            loader=jinja2.DictLoader(
-                {
-                    "unittest": template,
-                    "dynamic-key-1": '"dkey1": "value1"',
-                    "dynamic-key-2": '"dkey2": "value2"',
-                    "dynamic-key-3": '"dkey3": "value3"',
-                }),
-            template_name="unittest", glob_helper=key_globber, clock=StaticClock)
+            template_source.assembled_source,
+            clock=StaticClock)
 
         expected = """
         {
@@ -871,30 +881,20 @@ class TemplateRenderTests(TestCase):
         self.assertEqualIgnoreWhitespace(expected, rendered)
 
     def test_render_template_with_variables(self):
-        def key_globber(e):
-            if e == "dynamic-key-*":
-                return ["dynamic-key-1", "dynamic-key-2"]
-            else:
-                return []
-
         template = """
         {% set _clients = clients if clients is defined else 16 %}
         {% set _bulk_size = bulk_size if bulk_size is defined else 100 %}
         {% import "rally.helpers" as rally with context %}
         {
             "key1": "static value",
-            {{ rally.collect(parts="dynamic-key-*") }}
-
+            "dkey1": {{ _clients }},
+            "dkey2": {{ _bulk_size }}
         }
         """
         rendered = loader.render_template(
-            loader=jinja2.DictLoader(
-                {
-                    "unittest": template,
-                    "dynamic-key-1": '"dkey1": {{ _clients }}',
-                    "dynamic-key-2": '"dkey2": {{ _bulk_size }}',
-                }),
-            template_name="unittest", template_vars={"clients": 8}, glob_helper=key_globber, clock=StaticClock)
+                template,
+                template_vars={"clients": 8},
+                clock=StaticClock)
 
         expected = """
         {
