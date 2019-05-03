@@ -1,41 +1,36 @@
-FROM ubuntu:18.04
+FROM ubuntu:16.04
 
-ENV ELASTIC_CONTAINER true
-ENV JAVA_HOME /opt/jdk-${jdkVersion}
+ARG NEW_USER_UID
+ARG NEW_USER
 
-COPY --from=builder /opt/jdk-${jdkVersion} /opt/jdk-${jdkVersion}
+RUN apt-get -y update && \
+    apt-get install -y curl python3 python3-pip vim openssh-client \
+    git make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev \
+    openjdk-8-jdk
 
-RUN apt-get update && apt-get install -y \
-    gcc \
-    python3-dev
-    python3-pip \
-  && rm -rf /var/lib/apt/lists/*
+RUN pip3 install tox virtualenvwrapper twine sphinx sphinx_rtd_theme wheel
 
-RUN pip3 install -y esrally
+RUN curl --progress-bar -o openjdk-11_linux-x64_bin.tar.gz \
+    https://download.java.net/java/ga/jdk11/openjdk-11_linux-x64_bin.tar.gz && \
+    mkdir -p /opt/jdk-11 ; tar xzf openjdk-11_linux-x64_bin.tar.gz -C /opt/jdk-11 --strip-components 1 && rm openjdk-11_linux-x64_bin.tar.gz
 
-RUN groupadd -g 1000 rally && \
-    adduser -u 1000 -g 1000 -d /rally rally
+RUN useradd -u ${NEW_USER_UID} -U -d /home/${NEW_USER} -s /bin/bash -m ${NEW_USER}
 
-WORKDIR /rally
+USER ${NEW_USER}
+WORKDIR /home/${NEW_USER}
 
-COPY --chown=1000:0 bin/docker-entrypoint.sh /docker-entrypoint.sh
+RUN git clone https://github.com/yyuu/pyenv.git ~/.pyenv
 
-# Openshift overrides USER and uses random ones with uid>1024 and gid=0
-# Allow ENTRYPOINT (and Rally) to run even with a different user
-RUN chgrp 0 /docker-entrypoint.sh && \
-    chmod g=u /etc/passwd && \
-    chmod 0775 /docker-entrypoint.sh
+ENV HOME /home/${NEW_USER}
+ENV PYENV_ROOT=/home/${NEW_USER}/.pyenv
+ENV PATH=$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
+ENV JAVA_HOME=/opt/jdk-11
+ENV JAVA8_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+ENV JAVA11_HOME=/opt/jdk-11
+ENV RUNTIME_JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 
-EXPOSE 9200 9300
-
-LABEL org.label-schema.schema-version="1.0" \
-  org.label-schema.vendor="Elastic" \
-  org.label-schema.name="rally" \
-  org.label-schema.version="${version}" \
-  org.label-schema.url="https://esrally.readthedocs.io/en/stable/" \
-  org.label-schema.vcs-url="https://github.com/elastic/rally" \
-  license="${license}"
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
-# Dummy overridable parameter parsed by entrypoint
-CMD ["eswrapper"]
+RUN pyenv install 3.4.8
+RUN pyenv install 3.5.5
+RUN pyenv install 3.6.5
+RUN pyenv install 3.7.0
+RUN pyenv global 3.7.0 3.6.5 3.5.5 3.4.8
