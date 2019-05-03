@@ -591,6 +591,8 @@ def main():
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
 
     cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+    # Use this key as global state to keep track of unused params after rendering all templates
+    cfg.add(config.Scope.applicationOverride, "track", "unused_params", opts.to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)

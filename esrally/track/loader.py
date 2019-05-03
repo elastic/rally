@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import copy
 import json
 import logging
 import os
@@ -553,7 +554,7 @@ def render_template(template_source, template_vars=None, glob_helper=lambda f: [
     return template.render()
 
 
-def check_unused_track_params(assembled_source, template_vars):
+def check_unused_track_params(assembled_source):
     j2env = jinja2.Environment()
     # we don't need the following j2 filters/macros but we define them anyway to prevent parsing failures
     j2env.globals["now"] = time.Clock()
@@ -562,12 +563,12 @@ def check_unused_track_params(assembled_source, template_vars):
     ast = j2env.parse(assembled_source)
     j2_variables = meta.find_undeclared_variables(ast)
 
+    unused_track_params = UnusedTrackParams().track_params
     print(assembled_source)
-    for k in template_vars:
-        if k not in j2_variables:
-            raise exceptions.TrackConfigError(
-                "You've declared [{}] track-param but this is not overriding any of "
-                "the jinja2 variables specified in the track".format(k))
+    # use list() to force a copy as the dict maybe mutated
+    for k in unused_track_params:
+        if k in j2_variables:
+            UnusedTrackParams().remove_param(k)
 
 
 def render_template_from_file(template_file_name, template_vars):
@@ -581,7 +582,7 @@ def render_template_from_file(template_file_name, template_vars):
     base_path = io.dirname(template_file_name)
     template_source = TemplateSource(base_path, io.basename(template_file_name))
     template_source.load_template_from_file()
-    check_unused_track_params(template_source.assembled_source, template_vars)
+    check_unused_track_params(template_source.assembled_source)
 
     return render_template(template_source=template_source.assembled_source,
                            template_vars=template_vars,
@@ -700,6 +701,33 @@ def post_process_for_test_mode(t):
     return t
 
 
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class UnusedTrackParams(metaclass=Singleton):
+    def __init__(self):
+        self.track_params = []
+
+    def remove_param(self, key):
+        self.track_params.remove(key)
+
+    def set_params(self, keys):
+        self.track_params = copy.deepcopy(keys)
+
+    def exit_if_not_empty(self):
+        if self.track_params:
+            raise exceptions.TrackConfigError(
+                "You've declared {} using track-param but they didn't override "
+                "any of the jinja2 variables defined in the track or index settings or "
+                "index templates.".format(self.track_params))
+
+
 class TrackFileReader:
     MINIMUM_SUPPORTED_TRACK_VERSION = 2
     MAXIMUM_SUPPORTED_TRACK_VERSION = 2
@@ -712,6 +740,8 @@ class TrackFileReader:
         with open(track_schema_file, mode="rt", encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
         self.track_params = cfg.opts("track", "params")
+        # TODO check if the singleton can be defined at an earlier stage
+        UnusedTrackParams().set_params(list(self.track_params.keys()))
         self.read_track = TrackSpecificationReader(self.track_params)
         self.logger = logging.getLogger(__name__)
 
@@ -828,7 +858,8 @@ class TrackSpecificationReader:
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
         challenges = self._create_challenges(track_specification)
-
+        # at this point, *all* track params must have been referenced in the templates
+        UnusedTrackParams().exit_if_not_empty()
         return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
                            templates=templates, corpora=corpora)
 
@@ -884,6 +915,7 @@ class TrackSpecificationReader:
 
     def _load_template(self, contents, description):
         self.logger.info("Loading template [%s].", description)
+        check_unused_track_params(contents)
         try:
             rendered = render_template(contents,
                                        template_vars=self.track_params)

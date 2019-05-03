@@ -15,8 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import glob
-import jinja2
+import json
 import os
 import re
 import textwrap
@@ -1059,13 +1058,123 @@ class TrackPostProcessingTests(TestCase):
             ]
         }
 
-        self.assertEqual(self.as_track(expected_post_processed),
-                         loader.post_process_for_test_mode(self.as_track(track_specification)))
+        index_body = '{"settings": {}}'
+        self.assertEqual(
+            self.as_track(expected_post_processed, index_body=index_body),
+            loader.post_process_for_test_mode(
+                self.as_track(track_specification, index_body=index_body)
+            )
+        )
 
-    def as_track(self, track_specification):
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/test-index-body.json": ['{"settings": {}}']
-        }))
+    def test_failed_post_processes_track_spec_with_mismatched_track_params(self):
+        track_source = textwrap.dedent('''{
+            "indices": [
+                {
+                    "name": "test-index",
+                    "body": "test-index-body.json",
+                    "types": ["test-type"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "unittest",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk",
+                    "bulk-size": 5000
+                },
+                {
+                    "name": "search",
+                    "operation-type": "search"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "description": "Default challenge",
+                    "schedule": [
+                        {
+                            "clients": {{ bulk_indexing_clients | default(8) }},
+                            "operation": "index-append",
+                            "warmup-time-period": 100,
+                            "time-period": 240
+                        },
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "name": "search #1",
+                                        "clients": 4,
+                                        "operation": "search",
+                                        "warmup-iterations": 1000,
+                                        "iterations": 2000,
+                                        "target-interval": 30
+                                    },
+                                    {
+                                        "name": "search #2",
+                                        "clients": 1,
+                                        "operation": "search",
+                                        "warmup-iterations": 1000,
+                                        "iterations": 2000,
+                                        "target-throughput": 200
+                                    },
+                                    {
+                                        "name": "search #3",
+                                        "clients": 1,
+                                        "operation": "search",
+                                        "iterations": 1
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }''')
+
+        index_body = '{"settings": { "index.number_of_shards": {{ number_of_shards | default(5) }}}}'
+        track_params = {"bulk_indexing_clients": 8, "number_of_shards": 5}
+        loader.UnusedTrackParams().set_params(list(track_params.keys()))
+        unused_track_params = loader.UnusedTrackParams().track_params
+
+        # singleton should now contain both track params
+        template_source = loader.TemplateSource("unittestpath", "unittesttrack")
+        template_source.load_template_from_string(track_source)
+
+        loader.check_unused_track_params(template_source.assembled_source)
+        # `bulk_indexing_clients` is used in main track file and gets consumed
+        self.assertEqual(
+            ["number_of_shards"],
+            unused_track_params
+        )
+        rendered_track = loader.render_template(template_source.assembled_source, track_params)
+        track_spec = json.loads(rendered_track)
+
+        self.as_track(track_spec, track_params, index_body)
+        # `number_of_shards` is used in mappings and gets consumed
+        self.assertEqual(
+            [],
+            unused_track_params
+        )
+
+    def as_track(self, track_specification, track_params=None, index_body=None):
+        reader = loader.TrackSpecificationReader(
+            track_params=track_params,
+            source=io.DictStringFileSourceFactory({
+                "/mappings/test-index-body.json": [index_body]
+            })
+        )
         return reader("unittest", track_specification, "/mappings")
 
 
