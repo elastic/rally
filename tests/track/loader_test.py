@@ -1207,8 +1207,7 @@ class TrackPostProcessingTests(TestCase):
         index_body = '{"settings": { "index.number_of_shards": {{ number_of_shards | default(5) }}}}'
         track_params = {
             "bulk_indexing_clients": 8,
-            # deliberate typo using `-` in track-param here
-            "number_of-shards": 5
+            "number_of-shards": 5  # deliberate typo using `-` instead of `_`
         }
         unused_track_params = loader.UnusedTrackParams(list(track_params.keys()))
 
