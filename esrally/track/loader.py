@@ -779,7 +779,7 @@ class TrackFileReader:
         if TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION < track_version:
             raise exceptions.RallyError("Track {} requires a newer version of Rally. Please upgrade Rally (supported track version: {}, "
                                         "required track version: {}).".format(track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION,
-                                                                             track_version))
+                                                                              track_version))
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
