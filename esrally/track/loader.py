@@ -733,7 +733,6 @@ class TrackFileReader:
         with open(track_schema_file, mode="rt", encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
         self.track_params = cfg.opts("track", "params")
-        # TODO check if the singleton can be defined at an earlier stage
         self.unused_track_params = UnusedTrackParams(list(self.track_params.keys()))
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
