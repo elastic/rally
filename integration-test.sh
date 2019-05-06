@@ -31,6 +31,8 @@ readonly ES_METRICS_STORE_TRANSPORT_PORT="63200"
 readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
 readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
+readonly RALLY_LOG="${HOME}/.rally/logs/rally.log"
+readonly RALLY_LOG_BACKUP="${HOME}/.rally/logs/rally.log.it.bak"
 
 ES_PID=-1
 PROXY_CONTAINER_ID=-1
@@ -65,6 +67,18 @@ function warn {
 
 function error {
     log "ERROR" "${1}"
+}
+
+function backup_rally_log {
+    set +e
+    mv -f ${RALLY_LOG} "${RALLY_LOG_BACKUP}"
+    set -e
+}
+
+function restore_rally_log {
+    set +e
+    mv -f ${RALLY_LOG_BACKUP} "${RALLY_LOG}"
+    set -e
 }
 
 function kill_rally_processes {
@@ -183,6 +197,16 @@ function random_configuration {
     eval "$1='${CONFIGURATIONS[$((RANDOM%num_configs))]}'"
 }
 
+function random_track {
+    local num_tracks=${#TRACKS[*]}
+    eval "$1='${TRACKS[$((RANDOM%num_tracks))]}'"
+}
+
+function random_distribution {
+    local num_distributions=${#DISTRIBUTIONS[*]}
+    eval "$1='${DISTRIBUTIONS[$((RANDOM%num_distributions))]}'"
+}
+
 function test_configure {
     info "test configure()"
     # just run to test the configuration procedure, don't use this configuration in other tests.
@@ -233,6 +257,50 @@ function test_distributions {
     done
 }
 
+function test_distribution_fails_with_wrong_track_params {
+    local cfg
+    local distribution
+    local track
+    local track_params
+    local defined_track_params
+    local undefined_track_params
+
+    random_configuration cfg
+    random_distribution dist
+    random_track track
+
+    undefined_track_params="number_of-replicas:0" # - simulates a typo
+
+    if [[ ${track} == "geonames" ]]; then
+        defined_track_params="conflict_probability:45,"
+    fi
+
+    local track_params="${defined_track_params}${undefined_track_params}"
+    readonly err_msg="Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
+
+    info "test distribution [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--track-params=${track_params}], [--car=4gheap]"
+    kill_rally_processes
+
+    backup_rally_log
+    set +e
+    esrally --configuration-name="${cfg}" --on-error=abort --distribution-version="${dist}" --track="${track}" --track-params="${track_params}" --test-mode --car=4gheap
+    ret_code=$?
+    set -e
+
+    # we expect Rally to fail, referencing $undefined_track_params in its log
+    if [[ ${ret_code} -eq 0 ]]; then
+        error "Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
+        error ${err_msg}
+        exit ${ret_code}
+    elif [[ ${ret_code} -ne 0 ]]; then
+        if ! grep -q "('Error in race control ((\"You\\\'ve declared \[\\\'number_of-replicas\\\'\] using track-param but they didn\\\'t override any of the jinja2 variables defined in the track or index settings or index templates" ${RALLY_LOG}; then
+            error ${err_msg}
+            exit ${ret_code}
+        fi
+    fi
+    restore_rally_log
+}
+
 function test_benchmark_only {
     # we just use our metrics cluster for these benchmarks. It's not ideal but simpler.
     local cfg
@@ -252,27 +320,23 @@ function test_benchmark_only {
 }
 
 function test_proxy_connection {
-    readonly rally_log="${HOME}/.rally/logs/rally.log"
-    readonly rally_log_backup="${HOME}/.rally/logs/rally.log.it.bak"
     local cfg
 
     random_configuration cfg
 
     # isolate invocations so we see only the log output from the current invocation
-    set +e
-    mv -f ${rally_log} "${rally_log_backup}"
-    set -e
+    backup_rally_log
 
     set +e
     esrally list tracks --configuration-name="${cfg}"
     unset http_proxy
     set -e
 
-    if grep -F -q "Connecting directly to the Internet" "$rally_log"; then
+    if grep -F -q "Connecting directly to the Internet" "$RALLY_LOG"; then
         info "Successfully checked that direct internet connection is used."
-        rm -f ${rally_log}
+        rm -f ${RALLY_LOG}
     else
-        error "Could not find indication that direct internet connection is used. Check ${rally_log}."
+        error "Could not find indication that direct internet connection is used. Check ${RALLY_LOG}."
         exit 1
     fi
 
@@ -283,18 +347,18 @@ function test_proxy_connection {
     esrally list tracks --configuration-name="${cfg}"
     unset http_proxy
     set -e
-    if grep -F -q "Connecting via proxy URL [http://127.0.0.1:3128] to the Internet" "$rally_log"; then
+    if grep -F -q "Connecting via proxy URL [http://127.0.0.1:3128] to the Internet" "$RALLY_LOG"; then
         info "Successfully checked that proxy is used."
     else
-        error "Could not find indication that proxy access is used. Check ${rally_log}."
+        error "Could not find indication that proxy access is used. Check ${RALLY_LOG}."
         exit 1
     fi
 
-    if grep -F -q "No Internet connection detected" "$rally_log"; then
+    if grep -F -q "No Internet connection detected" "$RALLY_LOG"; then
         info "Successfully checked that unauthenticated proxy access is prevented."
-        rm -f ${rally_log}
+        rm -f ${RALLY_LOG}
     else
-        error "Could not find indication that unauthenticated proxy access is prevented. Check ${rally_log}."
+        error "Could not find indication that unauthenticated proxy access is prevented. Check ${RALLY_LOG}."
         exit 1
     fi
 
@@ -307,25 +371,22 @@ function test_proxy_connection {
     unset http_proxy
     set -e
 
-    if grep -F -q "Connecting via proxy URL [http://testuser:testuser@127.0.0.1:3128] to the Internet" "$rally_log"; then
+    if grep -F -q "Connecting via proxy URL [http://testuser:testuser@127.0.0.1:3128] to the Internet" "$RALLY_LOG"; then
         info "Successfully checked that proxy is used."
     else
-        error "Could not find indication that proxy access is used. Check ${rally_log}."
+        error "Could not find indication that proxy access is used. Check ${RALLY_LOG}."
         exit 1
     fi
 
-    if grep -F -q "Detected a working Internet connection" "$rally_log"; then
+    if grep -F -q "Detected a working Internet connection" "$RALLY_LOG"; then
         info "Successfully checked that authenticated proxy access is allowed."
-        rm -f ${rally_log}
+        rm -f ${RALLY_LOG}
     else
-        error "Could not find indication that authenticated proxy access is allowed. Check ${rally_log}."
+        error "Could not find indication that authenticated proxy access is allowed. Check ${RALLY_LOG}."
         exit 1
     fi
     # restore original file (but only on success so we keep the test's Rally log file for inspection on errors).
-    set +e
-    mv -f ${rally_log_backup} "${rally_log}"
-    set -e
-
+    restore_rally_log
 }
 
 function run_test {
@@ -337,6 +398,8 @@ function run_test {
     test_configure
     echo "**************************************** TESTING RALLY LIST COMMANDS *******************************************"
     test_list
+    echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
+    test_distribution_fails_with_wrong_track_params
     echo "**************************************** TESTING RALLY WITH ES FROM SOURCES ************************************"
     test_sources
     echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"
