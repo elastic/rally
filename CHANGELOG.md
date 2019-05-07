@@ -1,3 +1,42 @@
+### 1.1.0
+
+#### Enhancements
+
+* [#683](https://github.com/elastic/rally/pull/683): Store mean for response-related metrics
+* [#681](https://github.com/elastic/rally/pull/681): Use single node discovery type if suitable
+* [#679](https://github.com/elastic/rally/pull/679): Skip Python install if already existing
+* [#678](https://github.com/elastic/rally/pull/678): Upgrade Jinja to 2.10.1
+* [#674](https://github.com/elastic/rally/pull/674): [Experimental] Capture peak usage of JVM mem pools
+* [#671](https://github.com/elastic/rally/pull/671): Add ability to download from S3 buckets
+* [#670](https://github.com/elastic/rally/pull/670): Pass JAVA12_HOME in integration tests
+* [#669](https://github.com/elastic/rally/pull/669): Allow to override request timeout for force-merge
+* [#668](https://github.com/elastic/rally/pull/668): Chart generator segment memory and new track combinations
+* [#667](https://github.com/elastic/rally/pull/667): Add sleep operation
+* [#666](https://github.com/elastic/rally/pull/666): Introduce new command line parameter --track-revision
+* [#662](https://github.com/elastic/rally/pull/662): Add distribution flavor to metrics metadata
+* [#660](https://github.com/elastic/rally/pull/660): Add user tags when comparing races
+* [#659](https://github.com/elastic/rally/pull/659): Sort the track parameters / user tags when listing races
+* [#654](https://github.com/elastic/rally/pull/654): Allow to use ES 7.x as metrics store
+* [#649](https://github.com/elastic/rally/pull/649) (Breaking): Pass request-params as is in supported operations
+* [#648](https://github.com/elastic/rally/pull/648): Updates to support 7.x APIs
+
+#### Bug Fixes
+
+* [#687](https://github.com/elastic/rally/pull/687): Fix release charts after #684
+* [#686](https://github.com/elastic/rally/pull/686): Honor track-params in chart-generator
+* [#684](https://github.com/elastic/rally/pull/684): Use license instead of dist flavor in charts
+* [#682](https://github.com/elastic/rally/pull/682): Provide a platform-independent Rally binary
+* [#675](https://github.com/elastic/rally/pull/675): Fix chart generator segment memory bug
+* [#673](https://github.com/elastic/rally/pull/673): Honor runtime JDK in provisioner
+* [#661](https://github.com/elastic/rally/pull/661): Small change in the venv-create
+* [#655](https://github.com/elastic/rally/pull/655): Add compatibility layer for existing metrics store
+* [#652](https://github.com/elastic/rally/pull/652): Properly authenticate at proxy server
+
+#### Doc Changes
+
+* [#676](https://github.com/elastic/rally/pull/676): Document ccr-stats telemetry device
+* [#651](https://github.com/elastic/rally/pull/651): fix typo in custom_scheduler example
+
 ### 1.0.4
 
 #### Enhancements
