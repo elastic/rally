@@ -905,7 +905,7 @@ class TemplateRenderTests(TestCase):
         self.assertEqual(strip_ws(expected), strip_ws(actual))
 
 
-class UnusedTrackParamsTests(TestCase):
+class CompleteTrackParamsTests(TestCase):
     assembled_source = textwrap.dedent('''{% import "rally.helpers" as rally with context %}
         "key1": "value1",
         "key2": {{ value2 | default(3) }},
@@ -913,35 +913,22 @@ class UnusedTrackParamsTests(TestCase):
         "key4": {{ value2 | default(3) }}
     ''')
 
-    def test_check_unused_track_params_does_not_fail_with_no_track_params(self):
-        loader.register_all_params_in_track(
-            assembled_source=UnusedTrackParamsTests.assembled_source,
-            complete_track_params=None
+    def test_check_complete_track_params_contains_all_track_params(self):
+        complete_track_params = loader.CompleteTrackParams()
+        loader.register_all_params_in_track(CompleteTrackParamsTests.assembled_source, complete_track_params)
+
+        self.assertEqual(
+            ["value2", "value3"],
+            complete_track_params.sorted_track_defined_params
         )
 
-
-    def test_check_unused_track_params_does_not_fail_with_empty_track_params(self):
-        unused_track_params = loader.CompleteTrackParams()
-        loader.register_all_params_in_track(
-            assembled_source=UnusedTrackParamsTests.assembled_source,
-            complete_track_params=unused_track_params
-        )
+    def test_check_complete_track_params_does_not_fail_with_no_track_params(self):
+        complete_track_params = loader.CompleteTrackParams()
+        loader.register_all_params_in_track('{}', complete_track_params)
 
         self.assertEqual(
             [],
-            unused_track_params.user_defined_track_params
-        )
-
-    def test_check_unused_track_params_decrements_matched_track_params(self):
-        unused_track_params = loader.CompleteTrackParams(["unused_value", "value2"])
-        loader.register_all_params_in_track(
-            assembled_source=UnusedTrackParamsTests.assembled_source,
-            complete_track_params=unused_track_params
-        )
-
-        self.assertEqual(
-            ["unused_value"],
-            unused_track_params.user_defined_track_params
+            complete_track_params.sorted_track_defined_params
         )
 
 
@@ -1171,75 +1158,26 @@ class TrackPostProcessingTests(TestCase):
             ]
         }
 
-        index_body = '{"settings": {}}'
+        complete_track_params = loader.CompleteTrackParams()
+        index_body = '{"settings": {"index.number_of_shards": {{ number_of_shards | default(5) }}, '\
+                     '"index.number_of_replicas": {{ number_of_replicas | default(0)}} }}'
+
         self.assertEqual(
-            self.as_track(expected_post_processed, index_body=index_body),
+            self.as_track(expected_post_processed, complete_track_params=complete_track_params, index_body=index_body),
             loader.post_process_for_test_mode(
-                self.as_track(track_specification, index_body=index_body)
+                self.as_track(track_specification, complete_track_params=complete_track_params, index_body=index_body)
             )
         )
 
-    def test_succeed_post_processes_track_spec_with_mismatched_track_params(self):
-        index_body = '{"settings": { "index.number_of_shards": {{ number_of_shards | default(5) }}}}'
-        track_params = {"bulk_indexing_clients": 8, "number_of_shards": 5}
-        unused_track_params = loader.CompleteTrackParams(list(track_params.keys()))
-
-        template_source = loader.TemplateSource("unittestpath", "unittesttrack")
-        template_source.load_template_from_string(TrackPostProcessingTests.track_with_params_as_string)
-
-        loader.register_all_params_in_track(template_source.assembled_source, unused_track_params)
-        # `bulk_indexing_clients` is used in main track file and gets consumed
         self.assertEqual(
-            ["number_of_shards"],
-            unused_track_params.user_defined_track_params
-        )
-        rendered_track = loader.render_template(template_source.assembled_source, track_params)
-        track_spec = json.loads(rendered_track)
-
-        self.as_track(track_spec, track_params=track_params, unused_track_params=unused_track_params, index_body=index_body)
-        # `number_of_shards` is used in mappings and gets consumed
-        self.assertEqual(
-            [],
-            unused_track_params.user_defined_track_params
+            ["number_of_replicas", "number_of_shards"],
+            complete_track_params.sorted_track_defined_params
         )
 
-    def test_failed_post_processes_track_spec_with_mismatched_track_params(self):
-        index_body = '{"settings": { "index.number_of_shards": {{ number_of_shards | default(5) }}}}'
-        track_params = {
-            "bulk_indexing_clients": 8,
-            "number_of-shards": 5  # deliberate typo using `-` instead of `_`
-        }
-        unused_track_params = loader.CompleteTrackParams(list(track_params.keys()))
-
-        template_source = loader.TemplateSource("unittestpath", "unittesttrack")
-        template_source.load_template_from_string(TrackPostProcessingTests.track_with_params_as_string)
-
-        loader.register_all_params_in_track(template_source.assembled_source, unused_track_params)
-        # `bulk_indexing_clients` is used in main track file and gets consumed
-        self.assertEqual(
-            ["number_of-shards"],
-            unused_track_params.user_defined_track_params
-        )
-        rendered_track = loader.render_template(template_source.assembled_source, track_params)
-        track_spec = json.loads(rendered_track)
-
-        with self.assertRaises(exceptions.TrackConfigError) as ctx:
-            self.as_track(track_spec, track_params=track_params, unused_track_params=unused_track_params, index_body=index_body)
-        self.assertEqual(
-            "You've declared ['number_of-shards'] using track-param but they didn't override "
-            "any of the jinja2 variables defined in the track or index settings or "
-            "index templates.",
-            ctx.exception.args[0]
-        )
-        self.assertEqual(
-            ['number_of-shards'],
-            unused_track_params.user_defined_track_params
-        )
-
-    def as_track(self, track_specification, track_params=None, unused_track_params=None, index_body=None):
+    def as_track(self, track_specification, track_params=None, complete_track_params=None, index_body=None):
         reader = loader.TrackSpecificationReader(
             track_params=track_params,
-            unused_track_params=unused_track_params,
+            complete_track_params=complete_track_params,
             source=io.DictStringFileSourceFactory({
                 "/mappings/test-index-body.json": [index_body]
             })
@@ -1425,7 +1363,8 @@ class TrackSpecificationReaderTests(TestCase):
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'document-count' is missing.", ctx.exception.args[0])
 
-    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_with_mixed_warmup_iterations_and_measurement(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1480,7 +1419,8 @@ class TrackSpecificationReaderTests(TestCase):
                          "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
                          ctx.exception.args[0])
 
-    def test_parse_missing_challenge_or_challenges(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_missing_challenge_or_challenges(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1513,7 +1453,8 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. You must define 'challenge', 'challenges' or 'schedule' but none is specified.",
                          ctx.exception.args[0])
 
-    def test_parse_challenge_and_challenges_are_defined(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_challenge_and_challenges_are_defined(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1548,14 +1489,15 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only "
                          "one of them is allowed.", ctx.exception.args[0])
 
-    def test_parse_with_mixed_warmup_time_period_and_iterations(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_with_mixed_warmup_time_period_and_iterations(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": [ "docs" ]
+                    "types": ["docs"]
                 }
             ],
             "corpora": [
@@ -1667,7 +1609,8 @@ class TrackSpecificationReaderTests(TestCase):
                          "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
                          ctx.exception.args[0])
 
-    def test_load_invalid_index_body(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_load_invalid_index_body(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1827,8 +1770,10 @@ class TrackSpecificationReaderTests(TestCase):
                 }
             ]
         }
+        complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"number_of_shards": 3},
+            complete_track_params=complete_track_params,
             source=io.DictStringFileSourceFactory({
             "/mappings/body.json": ["""
             {
@@ -1843,6 +1788,11 @@ class TrackSpecificationReaderTests(TestCase):
             """]
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
+        # j2 variables defined in the track -- used for checking mismatching user track params
+        self.assertEqual(
+            ["number_of_shards"],
+            complete_track_params.sorted_track_defined_params
+        )
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         # indices
@@ -1899,7 +1849,9 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
         self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
 
-    def test_parse_valid_without_types(self):
+
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_valid_without_types(self, mocked_param_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1990,8 +1942,10 @@ class TrackSpecificationReaderTests(TestCase):
             "operations": [],
             "challenges": []
         }
+        complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"index_pattern": "*"},
+            complete_track_params=complete_track_params,
             source=io.DictStringFileSourceFactory({
                 "/mappings/default-template.json": ["""
                 {
@@ -2003,6 +1957,10 @@ class TrackSpecificationReaderTests(TestCase):
                 """],
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(
+            ["index_pattern", "number_of_shards"],
+            complete_track_params.sorted_track_defined_params
+        )
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(0, len(resulting_track.indices))

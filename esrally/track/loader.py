@@ -530,7 +530,7 @@ class TemplateSource:
         return ",\n".join(source)
 
 
-def render_template(loader, template_source, template_vars=None, glob_helper=lambda f: [], clock=time.Clock):
+def render_template(template_source, template_vars=None, glob_helper=lambda f: [], clock=time.Clock, loader=None):
     macros = """
         {% macro collect(parts) -%}
             {% set comma = joiner() %}
@@ -561,7 +561,7 @@ def render_template(loader, template_source, template_vars=None, glob_helper=lam
     return template.render()
 
 
-def register_all_params_in_track(assembled_source, complete_track_params):
+def register_all_params_in_track(assembled_source, complete_track_params=None):
     j2env = jinja2.Environment()
     # we don't need the following j2 filters/macros but we define them anyway to prevent parsing failures
     j2env.globals["now"] = time.Clock()
@@ -787,7 +787,6 @@ class TrackFileReader:
         current_track = self.read_track(track_name, track_spec, mapping_dir)
 
         unused_user_defined_track_params = self.unused_user_defined_track_params()
-
         if len(unused_user_defined_track_params) > 0:
             err_msg = (
                 "Some of your track parameter(s) {} are not used by this track; perhaps you intend to use {} instead.\n\n"
@@ -949,8 +948,7 @@ class TrackSpecificationReader:
         self.logger.info("Loading template [%s].", description)
         register_all_params_in_track(contents, self.complete_track_params)
         try:
-            rendered = render_template(loader=jinja2.BaseLoader(),
-                                       template_source=contents,
+            rendered = render_template(template_source=contents,
                                        template_vars=self.track_params)
             return json.loads(rendered)
         except Exception as e:
