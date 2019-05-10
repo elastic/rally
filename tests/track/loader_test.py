@@ -914,17 +914,17 @@ class UnusedTrackParamsTests(TestCase):
     ''')
 
     def test_check_unused_track_params_does_not_fail_with_no_track_params(self):
-        loader.register_unused_track_params(
+        loader.register_all_params_in_track(
             assembled_source=UnusedTrackParamsTests.assembled_source,
-            referenced_track_params=None
+            complete_track_params=None
         )
 
 
     def test_check_unused_track_params_does_not_fail_with_empty_track_params(self):
-        unused_track_params = loader.ReferencedTrackParams()
-        loader.register_unused_track_params(
+        unused_track_params = loader.CompleteTrackParams()
+        loader.register_all_params_in_track(
             assembled_source=UnusedTrackParamsTests.assembled_source,
-            referenced_track_params=unused_track_params
+            complete_track_params=unused_track_params
         )
 
         self.assertEqual(
@@ -933,10 +933,10 @@ class UnusedTrackParamsTests(TestCase):
         )
 
     def test_check_unused_track_params_decrements_matched_track_params(self):
-        unused_track_params = loader.ReferencedTrackParams(["unused_value", "value2"])
-        loader.register_unused_track_params(
+        unused_track_params = loader.CompleteTrackParams(["unused_value", "value2"])
+        loader.register_all_params_in_track(
             assembled_source=UnusedTrackParamsTests.assembled_source,
-            referenced_track_params=unused_track_params
+            complete_track_params=unused_track_params
         )
 
         self.assertEqual(
@@ -1182,12 +1182,12 @@ class TrackPostProcessingTests(TestCase):
     def test_succeed_post_processes_track_spec_with_mismatched_track_params(self):
         index_body = '{"settings": { "index.number_of_shards": {{ number_of_shards | default(5) }}}}'
         track_params = {"bulk_indexing_clients": 8, "number_of_shards": 5}
-        unused_track_params = loader.ReferencedTrackParams(list(track_params.keys()))
+        unused_track_params = loader.CompleteTrackParams(list(track_params.keys()))
 
         template_source = loader.TemplateSource("unittestpath", "unittesttrack")
         template_source.load_template_from_string(TrackPostProcessingTests.track_with_params_as_string)
 
-        loader.register_unused_track_params(template_source.assembled_source, unused_track_params)
+        loader.register_all_params_in_track(template_source.assembled_source, unused_track_params)
         # `bulk_indexing_clients` is used in main track file and gets consumed
         self.assertEqual(
             ["number_of_shards"],
@@ -1209,12 +1209,12 @@ class TrackPostProcessingTests(TestCase):
             "bulk_indexing_clients": 8,
             "number_of-shards": 5  # deliberate typo using `-` instead of `_`
         }
-        unused_track_params = loader.ReferencedTrackParams(list(track_params.keys()))
+        unused_track_params = loader.CompleteTrackParams(list(track_params.keys()))
 
         template_source = loader.TemplateSource("unittestpath", "unittesttrack")
         template_source.load_template_from_string(TrackPostProcessingTests.track_with_params_as_string)
 
-        loader.register_unused_track_params(template_source.assembled_source, unused_track_params)
+        loader.register_all_params_in_track(template_source.assembled_source, unused_track_params)
         # `bulk_indexing_clients` is used in main track file and gets consumed
         self.assertEqual(
             ["number_of-shards"],
