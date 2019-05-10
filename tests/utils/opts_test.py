@@ -35,6 +35,25 @@ class ConfigHelperFunctionTests(TestCase):
                          opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5"]))
 
 
+class GenericHelperFunctionTests(TestCase):
+    def test_list_as_bulleted_list(self):
+        src_list = ["param-1", "param-2", "a_longer-parameter"]
+
+        self.assertEqual(
+            ["- param-1", "- param-2", "- a_longer-parameter"],
+            opts.list_as_bulleted_list(src_list)
+        )
+
+
+    def test_list_as_double_quoted_list(self):
+        src_list = ["oneitem", "_another-weird_item", "param-3"]
+
+        self.assertEqual(
+            opts.list_as_double_quoted_list(src_list),
+            ['"oneitem"', '"_another-weird_item"', '"param-3"']
+        )
+
+
 class TestTargetHosts(TestCase):
     def test_empty_arg_parses_as_empty_list(self):
         self.assertEqual([], opts.TargetHosts('').default)

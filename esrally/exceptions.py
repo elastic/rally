@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+
 class RallyError(Exception):
     """
     Base class for all Rally exceptions
