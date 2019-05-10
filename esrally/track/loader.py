@@ -802,7 +802,7 @@ class TrackFileReader:
                     "\n".join(opts.list_as_bulleted_list(sorted(list(self.track_params.keys())))),
                     "\n".join(opts.list_as_bulleted_list(self.complete_track_params.sorted_track_defined_params))))
 
-            self.logger.fatal(err_msg)
+            self.logger.exception(err_msg)
             # also dump the message on the console
             console.println(err_msg)
             raise exceptions.TrackConfigError(

@@ -260,14 +260,14 @@ function test_distributions {
 function test_distribution_fails_with_wrong_track_params {
     local cfg
     local distribution
-    local track
+    # TODO check if randomization of track is possible
+    local track="geonames" # fixed value for now, as the available track params vary between tracks
     local track_params
     local defined_track_params
     local undefined_track_params
 
     random_configuration cfg
     random_distribution dist
-    random_track track
 
     undefined_track_params="number_of-replicas:0" # - simulates a typo
 
@@ -287,13 +287,14 @@ function test_distribution_fails_with_wrong_track_params {
     ret_code=$?
     set -e
 
-    # we expect Rally to fail, referencing $undefined_track_params in its log
+    # we expect Rally to fail, with full details in its log file
     if [[ ${ret_code} -eq 0 ]]; then
         error "Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
         error ${err_msg}
         exit ${ret_code}
     elif [[ ${ret_code} -ne 0 ]]; then
-        if ! grep -q "('Error in race control ((\"You\\\'ve declared \[\\\'number_of-replicas\\\'\] using track-param but they didn\\\'t override any of the jinja2 variables defined in the track or index settings or index templates" ${RALLY_LOG}; then
+        # need to use grep -P which is unavailable with macOS grep
+        if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu grep -Pzoq '.*ERROR Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n- bulk_indexing_clients\n- bulk_size\n- cluster_health\n- conflict_probability\n- index_settings\n- ingest_percentage\n- number_of_replicas\n- number_of_shards\n- on_conflict\n- recency\n- source_enabled\n*' /rally.log; then
             error ${err_msg}
             exit ${ret_code}
         fi
