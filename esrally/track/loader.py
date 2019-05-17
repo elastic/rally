@@ -794,8 +794,8 @@ class TrackFileReader:
                 "{}\n\n"
                 "All parameters exposed by this track:\n"
                 "{}".format(
-                    ",".join(opts.list_as_double_quoted_list(unused_user_defined_track_params)),
-                    ",".join(opts.list_as_double_quoted_list(sorted(self.list_of_close_matches(
+                    ",".join(opts.list_as_double_quoted_list(sorted(unused_user_defined_track_params))),
+                    ",".join(opts.list_as_double_quoted_list(sorted(opts.make_list_of_close_matches(
                         unused_user_defined_track_params,
                         self.complete_track_params.track_defined_params
                     )))),
@@ -810,20 +810,12 @@ class TrackFileReader:
             )
         return current_track
 
+    # TODO tests for this
     def unused_user_defined_track_params(self):
         set_user_params = set(list(self.track_params.keys()))
         set_user_params.difference_update(self.complete_track_params.track_defined_params)
 
         return list(set_user_params)
-
-    def list_of_close_matches(self, word_list, all_possibilities):
-        close_matches = []
-        for param in word_list:
-            matched_word = difflib.get_close_matches(param, all_possibilities, n=1)
-            if matched_word:
-                close_matches.append(matched_word[0])
-
-        return close_matches
 
 
 class TrackPluginReader:

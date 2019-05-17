@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import difflib
 import json
 from esrally.utils import io
 
@@ -84,6 +85,24 @@ def list_as_bulleted_list(src_list):
 
 def list_as_double_quoted_list(src_list):
     return ["\"{}\"".format(param) for param in src_list]
+
+
+def make_list_of_close_matches(word_list, all_possibilities):
+    """
+    Returns list of closest matches for `word_list` from `all_possibilities`.
+    e.g. [num_of-shards] will return [num_of_shards] when all_possibilities=["num_of_shards", "num_of_replicas"]
+
+    :param word_list: A list of strings that we want to find closest matches for.
+    :param all_possibilities: List of strings that the algorithm will calculate the closest match from.
+    :return:
+    """
+    close_matches = []
+    for param in word_list:
+        matched_word = difflib.get_close_matches(param, all_possibilities, n=1)
+        if matched_word:
+            close_matches.append(matched_word[0])
+
+    return close_matches
 
 
 class ConnectOptions:
