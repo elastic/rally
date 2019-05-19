@@ -810,7 +810,6 @@ class TrackFileReader:
             )
         return current_track
 
-    # TODO tests for this
     def unused_user_defined_track_params(self):
         set_user_params = set(list(self.track_params.keys()))
         set_user_params.difference_update(self.complete_track_params.track_defined_params)
