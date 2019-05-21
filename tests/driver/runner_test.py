@@ -376,6 +376,7 @@ class BulkIndexRunnerTests(TestCase):
     def test_mixed_bulk_with_simple_stats(self, es):
         es.bulk.return_value = {
             "took": 30,
+            "ingest_took": 20,
             "errors": True,
             "items": [
                 {
@@ -469,6 +470,7 @@ class BulkIndexRunnerTests(TestCase):
 
         self.assertEqual("test", result["index"])
         self.assertEqual(30, result["took"])
+        self.assertEqual(20, result["ingest_took"])
         self.assertEqual(4, result["weight"])
         self.assertEqual(4, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -478,10 +480,16 @@ class BulkIndexRunnerTests(TestCase):
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
+        es.bulk.return_value.pop("ingest_took")
+        result = bulk(es, bulk_params)
+        self.assertNotIn("ingest_took", result)
+
+
     @mock.patch("elasticsearch.Elasticsearch")
     def test_mixed_bulk_with_detailed_stats(self, es):
         es.bulk.return_value = {
             "took": 30,
+            "ingest_took": 20,
             "errors": True,
             "items": [
                 {
@@ -613,6 +621,7 @@ class BulkIndexRunnerTests(TestCase):
 
         self.assertEqual("test", result["index"])
         self.assertEqual(30, result["took"])
+        self.assertEqual(20, result["ingest_took"])
         self.assertEqual(6, result["weight"])
         self.assertEqual(6, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -664,6 +673,10 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(234, result["total-document-size-bytes"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
+
+        es.bulk.return_value.pop("ingest_took")
+        result = bulk(es, bulk_params)
+        self.assertNotIn("ingest_took", result)
 
 
 class ForceMergeRunnerTests(TestCase):
