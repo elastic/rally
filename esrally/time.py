@@ -16,7 +16,7 @@
 # under the License.
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def to_epoch_millis(t):
@@ -51,14 +51,17 @@ def sleep(seconds):
     time.sleep(seconds)
 
 
-def _to_datetime(val, date_format=None):
+def _to_datetime(val, date_format=None, default_tz=timezone.utc):
     if isinstance(val, datetime):
         return val
     # unix timestamp
     elif isinstance(val, float):
-        return datetime.fromtimestamp(val)
+        return datetime.fromtimestamp(val, default_tz)
     elif isinstance(val, str):
-        return datetime.strptime(val, date_format)
+        ret = datetime.strptime(val, date_format)
+        if ret.tzinfo is None:
+            ret = ret.replace(tzinfo=default_tz)
+        return ret
     else:
         raise TypeError("Cannot convert unrecognized type '%s' with value '%s' to datetime." % (type(val), str(val)))
 
