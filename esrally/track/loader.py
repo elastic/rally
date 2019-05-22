@@ -529,7 +529,23 @@ class TemplateSource:
         return ",\n".join(source)
 
 
-def render_template(template_source, template_vars=None, glob_helper=lambda f: [], clock=time.Clock, loader=None):
+def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock):
+    """
+    Dict of internal global variables used by our jinja2 renderers
+    """
+
+    return {
+        "globals": {
+            "now": clock.now(),
+            "glob": glob_helper
+        },
+        "filters": {
+            "days_ago": time.days_ago
+        }
+    }
+
+
+def render_template(template_source, template_vars=None, template_internal_vars=None, loader=None):
     macros = """
         {% macro collect(parts) -%}
             {% set comma = joiner() %}
@@ -553,20 +569,24 @@ def render_template(template_source, template_vars=None, glob_helper=lambda f: [
         for k, v in template_vars.items():
             env.globals[k] = v
     # ensure that user variables never override our internal variables
-    env.globals["now"] = clock.now()
-    env.globals["glob"] = glob_helper
-    env.filters["days_ago"] = time.days_ago
+    if template_internal_vars:
+        for macro_type in template_internal_vars:
+            for env_global_key, env_global_value in template_internal_vars[macro_type].items():
+                getattr(env, macro_type)[env_global_key] = env_global_value
+
     template = env.from_string(template_source)
     return template.render()
 
 
 def register_all_params_in_track(assembled_source, complete_track_params=None):
     j2env = jinja2.Environment()
+
     # we don't need the following j2 filters/macros but we define them anyway to prevent parsing failures
-    j2env.globals["now"] = time.Clock().now()
-    # use dummy macro for glob, we don't require it to assemble the source
-    j2env.globals["glob"] = lambda c: ""
-    j2env.filters["days_ago"] = time.days_ago
+    internal_template_vars = default_internal_template_vars()
+    for macro_type in internal_template_vars:
+        for env_global_key, env_global_value in internal_template_vars[macro_type].items():
+            getattr(j2env, macro_type)[env_global_key] = env_global_value
+
     ast = j2env.parse(assembled_source)
     j2_variables = meta.find_undeclared_variables(ast)
     if complete_track_params:
@@ -589,7 +609,7 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
     return render_template(loader=jinja2.FileSystemLoader(base_path),
                            template_source=template_source.assembled_source,
                            template_vars=template_vars,
-                           glob_helper=lambda f: relative_glob(base_path, f))
+                           template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f)))
 
 
 def filter_included_tasks(t, filters):

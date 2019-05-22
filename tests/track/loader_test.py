@@ -790,6 +790,8 @@ class TemplateSource(TestCase):
 
 
 class TemplateRenderTests(TestCase):
+    unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock)
+
     def test_render_simple_template(self):
         template = """
         {
@@ -798,7 +800,7 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(template, clock=StaticClock)
+        rendered = loader.render_template(template, template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -816,7 +818,8 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(template, template_vars={"greeting": "Hi"}, clock=StaticClock)
+        rendered = loader.render_template(template, template_vars={"greeting": "Hi"},
+                                          template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -863,7 +866,7 @@ class TemplateRenderTests(TestCase):
 
         rendered = loader.render_template(
             template_source.assembled_source,
-            clock=StaticClock)
+            template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -888,9 +891,9 @@ class TemplateRenderTests(TestCase):
         }
         """
         rendered = loader.render_template(
-                template,
-                template_vars={"clients": 8},
-                clock=StaticClock)
+            template,
+            template_vars={"clients": 8},
+            template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
