@@ -152,9 +152,14 @@ function set_up_metrics_store {
     popd > /dev/null
 }
 
+function docker_is_running {
+    docker ps > /dev/null
+    return $?
+}
+
 function set_up_proxy_server {
     # we want to see output to stderr for diagnosing problems
-    if docker ps > /dev/null; then
+    if docker_is_running; then
         info "Docker is available. Proxy-related tests will be run"
         local config_dir="$PWD/.rally_it/proxy_tmp"
         mkdir -p ${config_dir}
@@ -292,9 +297,9 @@ function test_distribution_fails_with_wrong_track_params {
         error "Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
         error ${err_msg}
         exit ${ret_code}
-    elif [[ ${ret_code} -ne 0 ]]; then
+    elif docker_is_running && [[ ${ret_code} -ne 0 ]]; then
         # need to use grep -P which is unavailable with macOS grep
-        if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu grep -Pzoq '.*ERROR Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n- bulk_indexing_clients\n- bulk_size\n- cluster_health\n- conflict_probability\n- index_settings\n- ingest_percentage\n- number_of_replicas\n- number_of_shards\n- on_conflict\n- recency\n- source_enabled\n*' /rally.log; then
+        if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu:xenial grep -Pzoq '.*CRITICAL Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n- bulk_indexing_clients\n- bulk_size\n- cluster_health\n- conflict_probability\n- index_settings\n- ingest_percentage\n- number_of_replicas\n- number_of_shards\n- on_conflict\n- recency\n- source_enabled\n*' /rally.log; then
             error ${err_msg}
             exit ${ret_code}
         fi

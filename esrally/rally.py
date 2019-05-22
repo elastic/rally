@@ -432,6 +432,8 @@ def with_actor_system(runnable, cfg):
         if not already_running:
             shutdown_complete = False
             times_interrupted = 0
+            # give some time for any outstanding messages to be delivered to the actor system
+            time.sleep(3)
             while not shutdown_complete and times_interrupted < 2:
                 try:
                     logger.info("Attempting to shutdown internal actor system.")

@@ -15,8 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import copy
-import difflib
 import json
 import logging
 import os
@@ -34,6 +32,7 @@ from esrally import exceptions, time, PROGRAM_NAME
 from esrally.track import params, track
 from esrally.utils import io, convert, net, console, modules, opts, repo
 from jinja2 import meta
+
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
     """
@@ -497,7 +496,7 @@ class TemplateSource:
         try:
             base_track = loader.get_source(jinja2.Environment(), self.template_file_name)
         except jinja2.TemplateNotFound:
-            self.logger.exception("Could not track from [%s].", self.template_file_name)
+            self.logger.exception("Could not load track from [%s].", self.template_file_name)
             raise TrackSyntaxError("Could not load track from '{}'".format(self.template_file_name))
         self.assembled_source = self.replace_includes(self.base_path, base_track[0])
 
@@ -525,7 +524,7 @@ class TemplateSource:
         source = []
         files = self.fileglobber(pattern)
         for fname in files:
-            with self.source(fname, mode="rt") as fp:
+            with self.source(fname, mode="rt", encoding="utf-8") as fp:
                 source.append(fp.read())
         return ",\n".join(source)
 
@@ -564,14 +563,14 @@ def render_template(template_source, template_vars=None, glob_helper=lambda f: [
 def register_all_params_in_track(assembled_source, complete_track_params=None):
     j2env = jinja2.Environment()
     # we don't need the following j2 filters/macros but we define them anyway to prevent parsing failures
-    j2env.globals["now"] = time.Clock()
+    j2env.globals["now"] = time.Clock().now()
     # use dummy macro for glob, we don't require it to assemble the source
     j2env.globals["glob"] = lambda c: ""
     j2env.filters["days_ago"] = time.days_ago
     ast = j2env.parse(assembled_source)
     j2_variables = meta.find_undeclared_variables(ast)
-    # print("The j2 variables are {}".format(j2_variables))
-    complete_track_params.populate_track_defined_params(j2_variables)
+    if complete_track_params:
+        complete_track_params.populate_track_defined_params(j2_variables)
 
 
 def render_template_from_file(template_file_name, template_vars, complete_track_params=None):
@@ -585,7 +584,6 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
     base_path = io.dirname(template_file_name)
     template_source = TemplateSource(base_path, io.basename(template_file_name))
     template_source.load_template_from_file()
-    # print(template_source.assembled_source)
     register_all_params_in_track(template_source.assembled_source, complete_track_params)
 
     return render_template(loader=jinja2.FileSystemLoader(base_path),
@@ -707,8 +705,9 @@ def post_process_for_test_mode(t):
 
 
 class CompleteTrackParams:
-    def __init__(self):
+    def __init__(self, user_specified_track_params=None):
         self.track_defined_params = set()
+        self.user_specified_track_params = user_specified_track_params
 
     def populate_track_defined_params(self, list_of_track_params=None):
         self.track_defined_params.update(set(list_of_track_params))
@@ -716,6 +715,12 @@ class CompleteTrackParams:
     @property
     def sorted_track_defined_params(self):
         return sorted(self.track_defined_params)
+
+    def unused_user_defined_track_params(self):
+        set_user_params = set(list(self.user_specified_track_params.keys()))
+        set_user_params.difference_update(self.track_defined_params)
+
+        return list(set_user_params)
 
 
 class TrackFileReader:
@@ -730,7 +735,7 @@ class TrackFileReader:
         with open(track_schema_file, mode="rt", encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
         self.track_params = cfg.opts("track", "params")
-        self.complete_track_params = CompleteTrackParams()
+        self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
             complete_track_params=self.complete_track_params)
@@ -786,7 +791,7 @@ class TrackFileReader:
 
         current_track = self.read_track(track_name, track_spec, mapping_dir)
 
-        unused_user_defined_track_params = self.unused_user_defined_track_params()
+        unused_user_defined_track_params = self.complete_track_params.unused_user_defined_track_params()
         if len(unused_user_defined_track_params) > 0:
             err_msg = (
                 "Some of your track parameter(s) {} are not used by this track; perhaps you intend to use {} instead.\n\n"
@@ -794,27 +799,21 @@ class TrackFileReader:
                 "{}\n\n"
                 "All parameters exposed by this track:\n"
                 "{}".format(
-                    ",".join(opts.list_as_double_quoted_list(sorted(unused_user_defined_track_params))),
-                    ",".join(opts.list_as_double_quoted_list(sorted(opts.make_list_of_close_matches(
+                    ",".join(opts.double_quoted_list_of(sorted(unused_user_defined_track_params))),
+                    ",".join(opts.double_quoted_list_of(sorted(opts.make_list_of_close_matches(
                         unused_user_defined_track_params,
                         self.complete_track_params.track_defined_params
                     )))),
-                    "\n".join(opts.list_as_bulleted_list(sorted(list(self.track_params.keys())))),
-                    "\n".join(opts.list_as_bulleted_list(self.complete_track_params.sorted_track_defined_params))))
+                    "\n".join(opts.bulleted_list_of(sorted(list(self.track_params.keys())))),
+                    "\n".join(opts.bulleted_list_of(self.complete_track_params.sorted_track_defined_params))))
 
-            self.logger.exception(err_msg)
+            self.logger.critical(err_msg)
             # also dump the message on the console
             console.println(err_msg)
             raise exceptions.TrackConfigError(
-                "There is a problem with one or more of the supplied track-params. Check the Rally log file for details."
+                "Unused track parameters {}.".format(sorted(unused_user_defined_track_params))
             )
         return current_track
-
-    def unused_user_defined_track_params(self):
-        set_user_params = set(list(self.track_params.keys()))
-        set_user_params.difference_update(self.complete_track_params.track_defined_params)
-
-        return list(set_user_params)
 
 
 class TrackPluginReader:

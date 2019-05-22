@@ -76,8 +76,8 @@ class DictStringFileSourceFactory:
     def __init__(self, name_to_contents):
         self.name_to_contents = name_to_contents
 
-    def __call__(self, name, mode):
-        return StringAsFileSource(self.name_to_contents[name], mode)
+    def __call__(self, name, mode, encoding="utf-8"):
+        return StringAsFileSource(self.name_to_contents[name], mode, encoding)
 
 
 class StringAsFileSource:
@@ -85,10 +85,11 @@ class StringAsFileSource:
     Implementation of ``FileSource`` intended for tests. It's kept close to ``FileSource`` to simplify maintenance but it is not meant to
      be used in production code.
     """
-    def __init__(self, contents, mode):
+    def __init__(self, contents, mode, encoding="utf-8"):
         """
         :param contents: The file contents as an array of strings. Each item in the array should correspond to one line.
         :param mode: The file mode. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
+        :param encoding: The file encoding. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
         """
         self.contents = contents
         self.current_index = 0

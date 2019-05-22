@@ -41,14 +41,14 @@ class GenericHelperFunctionTests(TestCase):
 
         self.assertEqual(
             ["- param-1", "- param-2", "- a_longer-parameter"],
-            opts.list_as_bulleted_list(src_list)
+            opts.bulleted_list_of(src_list)
         )
 
     def test_list_as_double_quoted_list(self):
         src_list = ["oneitem", "_another-weird_item", "param-3"]
 
         self.assertEqual(
-            opts.list_as_double_quoted_list(src_list),
+            opts.double_quoted_list_of(src_list),
             ['"oneitem"', '"_another-weird_item"', '"param-3"']
         )
 

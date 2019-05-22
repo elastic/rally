@@ -846,7 +846,7 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        source=io.DictStringFileSourceFactory({
+        source = io.DictStringFileSourceFactory({
             "dynamic-key-1": [
                 textwrap.dedent('"dkey1": "value1"')
                 ],
@@ -929,6 +929,28 @@ class CompleteTrackParamsTests(TestCase):
         self.assertEqual(
             [],
             complete_track_params.sorted_track_defined_params
+        )
+
+    def test_unused_user_defined_track_params(self):
+        track_params = {
+            "number_of_repliacs": 1,  # deliberate typo
+            "enable_source": True,  # unknown parameter
+            "number_of_shards": 5
+        }
+
+        complete_track_params = loader.CompleteTrackParams(user_specified_track_params=track_params)
+        complete_track_params.populate_track_defined_params(list_of_track_params=[
+            "bulk_indexing_clients",
+            "bulk_indexing_iterations",
+            "bulk_size",
+            "cluster_health",
+            "number_of_replicas",
+            "number_of_shards"]
+        )
+
+        self.assertEqual(
+            ["enable_source", "number_of_repliacs"],
+            sorted(complete_track_params.unused_user_defined_track_params())
         )
 
 
@@ -1317,40 +1339,6 @@ class TrackFilterTests(TestCase):
         self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[0].tasks])
         self.assertEqual("match-all-serial", schedule[1].name)
         self.assertEqual("cluster-stats", schedule[2].name)
-
-
-class TrackFileReaderTests(TestCase):
-    @mock.patch("esrally.track.loader.TrackSpecificationReader")
-    def test_unused_user_defined_track_params(self, mocked_track_specification_reader):
-        track_params = {
-            "number_of_repliacs": 1,  # deliberate typo
-            "enable_source": True,  # unknown parameter
-            "number_of_shards": 5
-        }
-
-        class MockedCompletedTrackParams:
-            def __init__(self):
-                self.track_defined_params = {
-                    "bulk_indexing_clients",
-                    "bulk_indexing_iterations",
-                    "bulk_size",
-                    "cluster_health",
-                    "number_of_replicas",
-                    "number_of_shards"
-                }
-
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "node", "rally.root", "/unittest_patch")
-        cfg.add(config.Scope.application, "track", "params", track_params)
-        with mock.patch("builtins.open", new_callable=mock.mock_open()) as _:
-            with mock.patch("json.loads") as _:
-                track_file_reader = loader.TrackFileReader(cfg)
-        track_file_reader.complete_track_params = MockedCompletedTrackParams()
-
-        self.assertEqual(
-            ["enable_source", "number_of_repliacs"],
-            sorted(track_file_reader.unused_user_defined_track_params())
-        )
 
 
 class TrackSpecificationReaderTests(TestCase):

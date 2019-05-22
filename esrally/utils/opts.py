@@ -79,11 +79,11 @@ def to_dict(arg, default_parser=kv_to_map):
         return default_parser(csv_to_list(arg))
 
 
-def list_as_bulleted_list(src_list):
+def bulleted_list_of(src_list):
     return ["- {}".format(param) for param in src_list]
 
 
-def list_as_double_quoted_list(src_list):
+def double_quoted_list_of(src_list):
     return ["\"{}\"".format(param) for param in src_list]
 
 
