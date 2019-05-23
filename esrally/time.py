@@ -51,7 +51,7 @@ def sleep(seconds):
     time.sleep(seconds)
 
 
-def _to_datetime(val, date_format=None, default_tz=timezone.utc):
+def _to_datetime(val, date_format=None, default_tz=None):
     if isinstance(val, datetime):
         return val
     # unix timestamp
@@ -66,7 +66,7 @@ def _to_datetime(val, date_format=None, default_tz=timezone.utc):
         raise TypeError("Cannot convert unrecognized type '%s' with value '%s' to datetime." % (type(val), str(val)))
 
 
-def days_ago(start_date, end_date, date_format="%d-%m-%Y"):
+def days_ago(start_date, end_date, date_format="%d-%m-%Y", default_tz=timezone.utc):
     """
 
     Calculates the difference in days between a start date and an end date.
@@ -75,10 +75,12 @@ def days_ago(start_date, end_date, date_format="%d-%m-%Y"):
     :param end_date: The end date. May be a datetime instance, a unix timestamp or a string representation of a date.
     :param date_format: If one or both date values are provided as strings, the date format which is needed for conversion.
     Default: "%d-%m-%Y"
+    :param default_tz: Timezone to use for dates using unix timestamp or not already specified in date_format
+    Default: timezone.UTC
     :return: The difference between start and end date in complete days.
     """
-    start = _to_datetime(start_date, date_format)
-    end = _to_datetime(end_date, date_format)
+    start = _to_datetime(start_date, date_format, default_tz)
+    end = _to_datetime(end_date, date_format, default_tz)
     return (end - start).days
 
 
