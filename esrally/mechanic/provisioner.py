@@ -283,8 +283,6 @@ class ElasticsearchInstaller:
             "all_node_ips": "[\"%s\"]" % "\",\"".join(self.all_node_ips),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
             "minimum_master_nodes": len(self.all_node_ips),
-            # We allow multiple nodes per host but we do not allow that they share their data directories
-            "node_count_per_host": 1,
             "install_root_path": self.es_home_path
         }
         variables = {}
@@ -404,7 +402,6 @@ class DockerProvisioner:
             "discovery_type": "single-node",
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
-            "node_count_per_host": 1,
             "cluster_settings": cluster_settings
         }
 

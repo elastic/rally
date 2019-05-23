@@ -81,7 +81,6 @@ class BareProvisionerTests(TestCase):
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
             "minimum_master_nodes": 2,
-            "node_count_per_host": 1,
             "install_root_path": "/opt/elasticsearch-5.0.0"
         }, config_vars)
 
@@ -196,7 +195,6 @@ class BareProvisionerTests(TestCase):
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
             "minimum_master_nodes": 2,
-            "node_count_per_host": 1,
             "install_root_path": "/opt/elasticsearch-5.0.0",
             "plugin_name": "x-pack-security",
             "xpack_security_enabled": True
@@ -274,7 +272,6 @@ class BareProvisionerTests(TestCase):
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
             "minimum_master_nodes": 2,
-            "node_count_per_host": 1,
             "install_root_path": "/opt/elasticsearch-6.3.0",
             "plugin_name": "x-pack-security",
             "xpack_security_enabled": True
@@ -365,7 +362,6 @@ class ElasticsearchInstallerTests(TestCase):
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
             "minimum_master_nodes": 2,
-            "node_count_per_host": 1,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT"
         }, installer.variables)
 
@@ -402,7 +398,6 @@ class ElasticsearchInstallerTests(TestCase):
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
             "minimum_master_nodes": 2,
-            "node_count_per_host": 1,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT"
         }, installer.variables)
 
@@ -566,7 +561,6 @@ class DockerProvisionerTests(TestCase):
             "network_host": "0.0.0.0",
             "http_port": "39200-39300",
             "transport_port": "39300-39400",
-            "node_count_per_host": 1,
             "cluster_settings": {
                 "indices.query.bool.max_clause_count": 5000
             },
