@@ -31,7 +31,7 @@ from esrally.metrics import MetaInfoScope
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
-    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat,
+    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
                                                                                NodeStats, RecoveryStats, CcrStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
@@ -261,45 +261,6 @@ class Gc(TelemetryDevice):
         else:
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
             return {"ES_JAVA_OPTS": "-Xlog:gc*=info,safepoint=info,age*=trace:file=%s:utctime,uptimemillis,level,tags:filecount=0" % log_file}
-
-
-class PerfStat(TelemetryDevice):
-    internal = False
-    command = "perf"
-    human_name = "perf stat"
-    help = "Reads CPU PMU counters (requires Linux and perf)"
-
-    def __init__(self, log_root):
-        super().__init__()
-        self.log_root = log_root
-        self.process = None
-        self.node = None
-        self.log = None
-        self.attached = False
-
-    def attach_to_node(self, node):
-        io.ensure_dir(self.log_root)
-        log_file = "%s/%s.perf.log" % (self.log_root, node.node_name)
-
-        console.info("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=self.logger)
-
-        self.log = open(log_file, "wb")
-
-        self.process = subprocess.Popen(["perf", "stat", "-p %s" % node.process.pid],
-                                        stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        self.node = node
-        self.attached = True
-
-    def detach_from_node(self, node, running):
-        if self.attached and running:
-            self.logger.info("Dumping PMU counters for node [%s]", node.node_name)
-            os.kill(self.process.pid, signal.SIGINT)
-            try:
-                self.process.wait(10.0)
-            except subprocess.TimeoutExpired:
-                self.logger.warning("perf stat did not terminate")
-            self.log.close()
-            self.attached = False
 
 
 class CcrStats(TelemetryDevice):

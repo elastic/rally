@@ -21,7 +21,6 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    jit             JIT Compiler Profiler  Enables JIT compiler logs.
    gc              GC log                 Enables GC logs.
    jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   perf            perf stat              Reads CPU PMU counters (requires Linux and perf)
    node-stats      Node Stats             Regularly samples node stats
    recovery-stats  Recovery Stats         Regularly samples shard recovery stats
    ccr-stats       CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
@@ -66,11 +65,6 @@ gc
 --
 
 The ``gc`` telemetry device enables GC logs for the benchmark candidate. You can use tools like `GCViewer <https://github.com/chewiebug/GCViewer>`_ to analyze the GC logs.
-
-perf
-----
-
-The ``perf`` telemetry device runs ``perf stat`` on each benchmarked node and writes the output to a log file. It can be used to capture low-level CPU statistics. Note that the perf tool, which is only available on Linux, must be installed before using this telemetry device.
 
 node-stats
 ----------
