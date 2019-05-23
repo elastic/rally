@@ -445,6 +445,9 @@ class BulkIndex(Runner):
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
+        if "ingest_took" in response:
+            stats["ingest_took"] = response["ingest_took"]
+
         return stats
 
     def simple_stats(self, bulk_size, response):
@@ -462,6 +465,8 @@ class BulkIndex(Runner):
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
         }
+        if "ingest_took" in response:
+            stats["ingest_took"] = response["ingest_took"]
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
