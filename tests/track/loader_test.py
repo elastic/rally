@@ -15,11 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import json
+import os
 import re
+import textwrap
 import unittest.mock as mock
-from unittest import TestCase
 
-import jinja2
+from unittest import TestCase
 
 from esrally import exceptions, config
 from esrally.utils import io
@@ -685,7 +687,111 @@ class TrackPreparationTests(TestCase):
         self.assertEqual(0, prepare_file_offset_table.call_count)
 
 
+class TemplateSource(TestCase):
+    @mock.patch("esrally.utils.io.dirname")
+    @mock.patch.object(loader.TemplateSource, "read_glob_files")
+    def test_entrypoint_of_replace_includes(self, patched_read_glob, patched_dirname):
+        track = textwrap.dedent('''
+        {% import "rally.helpers" as rally with context %}
+        {
+          "version": 2,
+          "description": "unittest track",
+          "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+          "indices": [
+            {
+              "name": "geonames",
+              "body": "index.json"
+            }
+          ],
+          "corpora": [
+            {
+              "name": "geonames",
+              "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "documents": [
+                {
+                  "source-file": "documents-2.json.bz2",
+                  "document-count": 11396505,
+                  "compressed-bytes": 264698741,
+                  "uncompressed-bytes": 3547614383
+                }
+              ]
+            }
+          ],
+          "operations": [
+            {{ rally.collect(parts="operations/*.json") }}
+          ],
+          "challenges": [
+            {{ rally.collect(parts="challenges/*.json") }}
+          ]
+        }
+        ''')
+
+        def dummy_read_glob(c):
+            return "{{\"replaced {}\": \"true\"}}".format(c)
+
+        patched_read_glob.side_effect = dummy_read_glob
+
+        base_path = "~/.rally/benchmarks/tracks/default/geonames"
+        template_file_name = "track.json"
+        tmpl_src = loader.TemplateSource(base_path, template_file_name)
+        expected_response = textwrap.dedent('''                                    
+            {% import "rally.helpers" as rally with context %}
+            {
+              "version": 2,
+              "description": "unittest track",
+              "data-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+              "indices": [
+                {
+                  "name": "geonames",
+                  "body": "index.json"
+                }
+              ],
+              "corpora": [
+                {
+                  "name": "geonames",
+                  "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames",
+                  "documents": [
+                    {
+                      "source-file": "documents-2.json.bz2",
+                      "document-count": 11396505,
+                      "compressed-bytes": 264698741,
+                      "uncompressed-bytes": 3547614383
+                    }
+                  ]
+                }
+              ],
+              "operations": [
+                {"replaced ~/.rally/benchmarks/tracks/default/geonames/operations/*.json": "true"}
+              ],
+              "challenges": [
+                {"replaced ~/.rally/benchmarks/tracks/default/geonames/challenges/*.json": "true"}
+              ]
+            }
+            ''')
+
+        self.assertEqual(
+            expected_response,
+            tmpl_src.replace_includes(base_path, track)
+        )
+
+    def test_read_glob_files(self):
+        tmpl_obj = loader.TemplateSource(
+            base_path="/some/path/to/a/rally/track",
+            template_file_name="track.json",
+            fileglobber=lambda pat: [
+                os.path.join(os.path.dirname(__file__), "resources", "track_fragment_1.json"),
+                os.path.join(os.path.dirname(__file__), "resources", "track_fragment_2.json")
+            ]
+        )
+        response = tmpl_obj.read_glob_files("*track_fragment_*.json")
+        expected_response = '{\n  "item1": "value1"\n}\n,\n{\n  "item2": "value2"\n}\n'
+
+        self.assertEqual(expected_response, response)
+
+
 class TemplateRenderTests(TestCase):
+    unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock)
+
     def test_render_simple_template(self):
         template = """
         {
@@ -694,8 +800,7 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(
-            loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", clock=StaticClock)
+        rendered = loader.render_template(template, template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -713,8 +818,8 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(
-            loader=jinja2.DictLoader({"unittest": template}), template_name="unittest", template_vars={"greeting": "Hi"}, clock=StaticClock)
+        rendered = loader.render_template(template, template_vars={"greeting": "Hi"},
+                                          template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -744,15 +849,24 @@ class TemplateRenderTests(TestCase):
         }
         """
 
+        source = io.DictStringFileSourceFactory({
+            "dynamic-key-1": [
+                textwrap.dedent('"dkey1": "value1"')
+                ],
+            "dynamic-key-2": [
+                textwrap.dedent('"dkey2": "value2"')
+            ],
+            "dynamic-key-3": [
+                textwrap.dedent('"dkey3": "value3"')
+            ]
+        })
+
+        template_source = loader.TemplateSource("", "track.json", source=source, fileglobber=key_globber)
+        template_source.load_template_from_string(template)
+
         rendered = loader.render_template(
-            loader=jinja2.DictLoader(
-                {
-                    "unittest": template,
-                    "dynamic-key-1": '"dkey1": "value1"',
-                    "dynamic-key-2": '"dkey2": "value2"',
-                    "dynamic-key-3": '"dkey3": "value3"',
-                }),
-            template_name="unittest", glob_helper=key_globber, clock=StaticClock)
+            template_source.assembled_source,
+            template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -766,30 +880,20 @@ class TemplateRenderTests(TestCase):
         self.assertEqualIgnoreWhitespace(expected, rendered)
 
     def test_render_template_with_variables(self):
-        def key_globber(e):
-            if e == "dynamic-key-*":
-                return ["dynamic-key-1", "dynamic-key-2"]
-            else:
-                return []
-
         template = """
         {% set _clients = clients if clients is defined else 16 %}
         {% set _bulk_size = bulk_size if bulk_size is defined else 100 %}
         {% import "rally.helpers" as rally with context %}
         {
             "key1": "static value",
-            {{ rally.collect(parts="dynamic-key-*") }}
-
+            "dkey1": {{ _clients }},
+            "dkey2": {{ _bulk_size }}
         }
         """
         rendered = loader.render_template(
-            loader=jinja2.DictLoader(
-                {
-                    "unittest": template,
-                    "dynamic-key-1": '"dkey1": {{ _clients }}',
-                    "dynamic-key-2": '"dkey2": {{ _bulk_size }}',
-                }),
-            template_name="unittest", template_vars={"clients": 8}, glob_helper=key_globber, clock=StaticClock)
+            template,
+            template_vars={"clients": 8},
+            template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
 
         expected = """
         {
@@ -804,7 +908,148 @@ class TemplateRenderTests(TestCase):
         self.assertEqual(strip_ws(expected), strip_ws(actual))
 
 
+class CompleteTrackParamsTests(TestCase):
+    assembled_source = textwrap.dedent('''{% import "rally.helpers" as rally with context %}
+        "key1": "value1",
+        "key2": {{ value2 | default(3) }},
+        "key3": {{ value3 | default("default_value3") }}
+        "key4": {{ value2 | default(3) }}
+    ''')
+
+    def test_check_complete_track_params_contains_all_track_params(self):
+        complete_track_params = loader.CompleteTrackParams()
+        loader.register_all_params_in_track(CompleteTrackParamsTests.assembled_source, complete_track_params)
+
+        self.assertEqual(
+            ["value2", "value3"],
+            complete_track_params.sorted_track_defined_params
+        )
+
+    def test_check_complete_track_params_does_not_fail_with_no_track_params(self):
+        complete_track_params = loader.CompleteTrackParams()
+        loader.register_all_params_in_track('{}', complete_track_params)
+
+        self.assertEqual(
+            [],
+            complete_track_params.sorted_track_defined_params
+        )
+
+    def test_unused_user_defined_track_params(self):
+        track_params = {
+            "number_of_repliacs": 1,  # deliberate typo
+            "enable_source": True,  # unknown parameter
+            "number_of_shards": 5
+        }
+
+        complete_track_params = loader.CompleteTrackParams(user_specified_track_params=track_params)
+        complete_track_params.populate_track_defined_params(list_of_track_params=[
+            "bulk_indexing_clients",
+            "bulk_indexing_iterations",
+            "bulk_size",
+            "cluster_health",
+            "number_of_replicas",
+            "number_of_shards"]
+        )
+
+        self.assertEqual(
+            ["enable_source", "number_of_repliacs"],
+            sorted(complete_track_params.unused_user_defined_track_params())
+        )
+
+    def test_unused_user_defined_track_params_doesnt_fail_with_detaults(self):
+        complete_track_params = loader.CompleteTrackParams()
+        complete_track_params.populate_track_defined_params(list_of_track_params=[
+            "bulk_indexing_clients",
+            "bulk_indexing_iterations",
+            "bulk_size",
+            "cluster_health",
+            "number_of_replicas",
+            "number_of_shards"]
+        )
+
+        self.assertEqual(
+            [],
+            sorted(complete_track_params.unused_user_defined_track_params())
+        )
+
+
 class TrackPostProcessingTests(TestCase):
+    track_with_params_as_string = textwrap.dedent('''{
+        "indices": [
+            {
+                "name": "test-index",
+                "body": "test-index-body.json",
+                "types": ["test-type"]
+            }
+        ],
+        "corpora": [
+            {
+                "name": "unittest",
+                "documents": [
+                    {
+                        "source-file": "documents.json.bz2",
+                        "document-count": 10,
+                        "compressed-bytes": 100,
+                        "uncompressed-bytes": 10000
+                    }
+                ]
+            }
+        ],
+        "operations": [
+            {
+                "name": "index-append",
+                "operation-type": "bulk",
+                "bulk-size": 5000
+            },
+            {
+                "name": "search",
+                "operation-type": "search"
+            }
+        ],
+        "challenges": [
+            {
+                "name": "default-challenge",
+                "description": "Default challenge",
+                "schedule": [
+                    {
+                        "clients": {{ bulk_indexing_clients | default(8) }},
+                        "operation": "index-append",
+                        "warmup-time-period": 100,
+                        "time-period": 240
+                    },
+                    {
+                        "parallel": {
+                            "tasks": [
+                                {
+                                    "name": "search #1",
+                                    "clients": 4,
+                                    "operation": "search",
+                                    "warmup-iterations": 1000,
+                                    "iterations": 2000,
+                                    "target-interval": 30
+                                },
+                                {
+                                    "name": "search #2",
+                                    "clients": 1,
+                                    "operation": "search",
+                                    "warmup-iterations": 1000,
+                                    "iterations": 2000,
+                                    "target-throughput": 200
+                                },
+                                {
+                                    "name": "search #3",
+                                    "clients": 1,
+                                    "operation": "search",
+                                    "iterations": 1
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }''')
+
     def test_post_processes_track_spec(self):
         track_specification = {
             "indices": [
@@ -954,13 +1199,30 @@ class TrackPostProcessingTests(TestCase):
             ]
         }
 
-        self.assertEqual(self.as_track(expected_post_processed),
-                         loader.post_process_for_test_mode(self.as_track(track_specification)))
+        complete_track_params = loader.CompleteTrackParams()
+        index_body = '{"settings": {"index.number_of_shards": {{ number_of_shards | default(5) }}, '\
+                     '"index.number_of_replicas": {{ number_of_replicas | default(0)}} }}'
 
-    def as_track(self, track_specification):
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/test-index-body.json": ['{"settings": {}}']
-        }))
+        self.assertEqual(
+            self.as_track(expected_post_processed, complete_track_params=complete_track_params, index_body=index_body),
+            loader.post_process_for_test_mode(
+                self.as_track(track_specification, complete_track_params=complete_track_params, index_body=index_body)
+            )
+        )
+
+        self.assertEqual(
+            ["number_of_replicas", "number_of_shards"],
+            complete_track_params.sorted_track_defined_params
+        )
+
+    def as_track(self, track_specification, track_params=None, complete_track_params=None, index_body=None):
+        reader = loader.TrackSpecificationReader(
+            track_params=track_params,
+            complete_track_params=complete_track_params,
+            source=io.DictStringFileSourceFactory({
+                "/mappings/test-index-body.json": [index_body]
+            })
+        )
         return reader("unittest", track_specification, "/mappings")
 
 
@@ -1142,7 +1404,8 @@ class TrackSpecificationReaderTests(TestCase):
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'document-count' is missing.", ctx.exception.args[0])
 
-    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_with_mixed_warmup_iterations_and_measurement(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1197,7 +1460,8 @@ class TrackSpecificationReaderTests(TestCase):
                          "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
                          ctx.exception.args[0])
 
-    def test_parse_missing_challenge_or_challenges(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_missing_challenge_or_challenges(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1230,7 +1494,8 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. You must define 'challenge', 'challenges' or 'schedule' but none is specified.",
                          ctx.exception.args[0])
 
-    def test_parse_challenge_and_challenges_are_defined(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_challenge_and_challenges_are_defined(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1265,14 +1530,15 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only "
                          "one of them is allowed.", ctx.exception.args[0])
 
-    def test_parse_with_mixed_warmup_time_period_and_iterations(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_with_mixed_warmup_time_period_and_iterations(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": [ "docs" ]
+                    "types": ["docs"]
                 }
             ],
             "corpora": [
@@ -1384,7 +1650,8 @@ class TrackSpecificationReaderTests(TestCase):
                          "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
                          ctx.exception.args[0])
 
-    def test_load_invalid_index_body(self):
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_load_invalid_index_body(self, mocked_params_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1544,8 +1811,10 @@ class TrackSpecificationReaderTests(TestCase):
                 }
             ]
         }
+        complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"number_of_shards": 3},
+            complete_track_params=complete_track_params,
             source=io.DictStringFileSourceFactory({
             "/mappings/body.json": ["""
             {
@@ -1560,6 +1829,11 @@ class TrackSpecificationReaderTests(TestCase):
             """]
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
+        # j2 variables defined in the track -- used for checking mismatching user track params
+        self.assertEqual(
+            ["number_of_shards"],
+            complete_track_params.sorted_track_defined_params
+        )
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         # indices
@@ -1616,7 +1890,9 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
         self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
 
-    def test_parse_valid_without_types(self):
+
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_valid_without_types(self, mocked_param_checker):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1707,8 +1983,10 @@ class TrackSpecificationReaderTests(TestCase):
             "operations": [],
             "challenges": []
         }
+        complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"index_pattern": "*"},
+            complete_track_params=complete_track_params,
             source=io.DictStringFileSourceFactory({
                 "/mappings/default-template.json": ["""
                 {
@@ -1720,6 +1998,10 @@ class TrackSpecificationReaderTests(TestCase):
                 """],
         }))
         resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(
+            ["index_pattern", "number_of_shards"],
+            complete_track_params.sorted_track_defined_params
+        )
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(0, len(resulting_track.indices))
