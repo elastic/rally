@@ -876,52 +876,6 @@ class DiskIo(InternalTelemetryDevice):
                 self.logger.exception("Could not determine I/O stats at benchmark end.")
 
 
-class CpuUsage(InternalTelemetryDevice):
-    """
-    Gathers CPU usage statistics.
-    """
-    def __init__(self, metrics_store):
-        super().__init__()
-        self.metrics_store = metrics_store
-        self.sampler = None
-        self.node = None
-
-    def attach_to_node(self, node):
-        self.node = node
-
-    def on_benchmark_start(self):
-        if self.node:
-            recorder = CpuUsageRecorder(self.node, self.metrics_store)
-            self.sampler = SamplerThread(recorder)
-            self.sampler.setDaemon(True)
-            self.sampler.start()
-
-    def on_benchmark_stop(self):
-        if self.sampler:
-            self.sampler.finish()
-
-
-class CpuUsageRecorder:
-    def __init__(self, node, metrics_store):
-        self.node = node
-        self.process = sysstats.setup_process_stats(node.process.pid)
-        self.metrics_store = metrics_store
-        # the call is blocking already; there is no need for additional waiting in the sampler thread.
-        self.sample_interval = 0
-
-    def record(self):
-        import psutil
-        try:
-            self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",
-                                                    value=sysstats.cpu_utilization(self.process), unit="%")
-        # this can happen when the Elasticsearch process has been terminated already and we were not quick enough to stop.
-        except psutil.NoSuchProcess:
-            pass
-
-    def __str__(self):
-        return "cpu utilization"
-
-
 def store_node_attribute_metadata(metrics_store, nodes_info):
     # push up all node level attributes to cluster level iff the values are identical for all nodes
     pseudo_cluster_attributes = {}

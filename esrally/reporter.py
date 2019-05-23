@@ -198,9 +198,6 @@ class StatsCalculator:
         self.logger.debug("Gathering ML max processing times.")
         result.ml_processing_time = self.ml_processing_time_stats()
 
-        self.logger.debug("Gathering CPU usage metrics.")
-        result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
-
         self.logger.debug("Gathering garbage collection metrics.")
         result.young_gc_time = self.sum("node_total_young_gen_gc_time")
         result.old_gc_time = self.sum("node_total_old_gen_gc_time")
@@ -345,8 +342,6 @@ class Stats:
         self.merge_part_time_vectors = self.v(d, "merge_part_time_vectors")
         self.merge_part_time_points = self.v(d, "merge_part_time_points")
 
-        self.median_cpu_usage = self.v(d, "median_cpu_usage")
-
         self.young_gc_time = self.v(d, "young_gc_time")
         self.old_gc_time = self.v(d, "old_gc_time")
 
@@ -484,7 +479,6 @@ class SummaryReporter:
         metrics_table.extend(self.report_merge_part_times(stats))
         metrics_table.extend(self.report_ml_processing_times(stats))
 
-        metrics_table.extend(self.report_cpu_usage(stats))
         metrics_table.extend(self.report_gc_times(stats))
 
         metrics_table.extend(self.report_disk_usage(stats))
@@ -610,11 +604,6 @@ class SummaryReporter:
             lines.append(self.line("Median ML processing time", job_name, processing_time["median"], unit)),
             lines.append(self.line("Max ML processing time", job_name, processing_time["max"], unit))
         return lines
-
-    def report_cpu_usage(self, stats):
-        return self.join(
-            self.line("Median CPU usage", "", stats.median_cpu_usage, "%")
-        )
 
     def report_gc_times(self, stats):
         return self.join(
