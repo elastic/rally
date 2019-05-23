@@ -727,7 +727,7 @@ def post_process_for_test_mode(t):
 class CompleteTrackParams:
     def __init__(self, user_specified_track_params=None):
         self.track_defined_params = set()
-        self.user_specified_track_params = user_specified_track_params
+        self.user_specified_track_params = user_specified_track_params if user_specified_track_params else {}
 
     def populate_track_defined_params(self, list_of_track_params=None):
         self.track_defined_params.update(set(list_of_track_params))

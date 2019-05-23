@@ -956,6 +956,22 @@ class CompleteTrackParamsTests(TestCase):
             sorted(complete_track_params.unused_user_defined_track_params())
         )
 
+    def test_unused_user_defined_track_params_doesnt_fail_with_detaults(self):
+        complete_track_params = loader.CompleteTrackParams()
+        complete_track_params.populate_track_defined_params(list_of_track_params=[
+            "bulk_indexing_clients",
+            "bulk_indexing_iterations",
+            "bulk_size",
+            "cluster_health",
+            "number_of_replicas",
+            "number_of_shards"]
+        )
+
+        self.assertEqual(
+            [],
+            sorted(complete_track_params.unused_user_defined_track_params())
+        )
+
 
 class TrackPostProcessingTests(TestCase):
     track_with_params_as_string = textwrap.dedent('''{
