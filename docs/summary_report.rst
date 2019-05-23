@@ -117,13 +117,6 @@ ML processing time
 * **Corresponding metrics key**: ``ml_processing_time``
 
 
-Median CPU usage
-----------------
-
-* **Definition**: Median CPU usage in percent of the Elasticsearch process during the whole race based on a one second sample period. The maximum value is N * 100% where N is the number of CPU cores available
-* **Corresponding metrics key**: ``cpu_utilization_1s``
-
-
 Total Young Gen GC
 ------------------
 

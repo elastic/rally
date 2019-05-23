@@ -1,6 +1,15 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.2.0
+------------------------
+
+CPU usage is not measured anymore
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.2.0, CPU usage will neither be measured nor reported. We suggest to use system monitoring tools like ``vmstat`` or `Metricbeat <https://www.elastic.co/downloads/beats/metricbeat>`_ to measure CPU usage instead.
+
+
 Migrating to Rally 1.1.0
 ------------------------
 

@@ -226,7 +226,6 @@ class DockerLauncher:
             # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
             node_telemetry = [
                 telemetry.DiskIo(self.metrics_store, len(node_configurations)),
-                telemetry.CpuUsage(self.metrics_store),
                 telemetry.NodeEnvironmentInfo(self.metrics_store)
             ]
             t = telemetry.Telemetry(devices=node_telemetry)
@@ -328,7 +327,6 @@ class InProcessLauncher:
             telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.PerfStat(node_telemetry_dir),
             telemetry.DiskIo(self.metrics_store, node_count_on_host),
-            telemetry.CpuUsage(self.metrics_store),
             telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.MergeParts(self.metrics_store, node_configuration.log_path),

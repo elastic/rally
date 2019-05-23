@@ -91,12 +91,3 @@ def setup_process_stats(pid):
     :return: An opaque handle that has to be provided for all subsequent calls to process stats APIs.
     """
     return psutil.Process(pid)
-
-
-def cpu_utilization(handle, interval=1.0):
-    """
-    :param handle: handle retrieved by calling setup_process_stats(pid).
-    :param interval: The measurement interval in seconds. Optional. Defaults to 1 second.
-    :return: The CPU usage in percent.
-    """
-    return handle.cpu_percent(interval=interval)
