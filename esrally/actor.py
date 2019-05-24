@@ -247,8 +247,5 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
                                            logDefs=log.load_configuration(),
                                            capabilities=capabilities)
     except thespian.actors.ActorSystemException:
-        logger.exception("Could not initialize internal actor system. Terminating.")
-        console.error("Could not initialize successfully.\n")
-        console.error("Are there are still processes from a previous race?")
-        console.error("Please check and terminate related Python processes before running Rally again.\n")
+        logger.exception("Could not initialize internal actor system.")
         raise
