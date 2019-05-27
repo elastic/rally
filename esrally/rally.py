@@ -409,6 +409,7 @@ def race(cfg):
 
 
 def with_actor_system(runnable, cfg):
+    import thespian.actors
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))
@@ -416,11 +417,17 @@ def with_actor_system(runnable, cfg):
         actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
-    except RuntimeError as e:
+    # This happens when the admin process could not be started, e.g. because it could not open a socket.
+    except thespian.actors.InvalidActorAddress:
+        logger.info("Falling back to offline actor system.")
+        actor.use_offline_actor_system()
+        actors = actor.bootstrap_actor_system(try_join=True)
+    except Exception as e:
         logger.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
             console.warn("Could not determine a socket address. Are you running without any network? Switching to degraded mode.",
                          logger=logger)
+            logger.info("Falling back to offline actor system.")
             actor.use_offline_actor_system()
             actors = actor.bootstrap_actor_system(try_join=True)
         else:
