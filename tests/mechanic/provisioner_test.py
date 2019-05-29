@@ -18,11 +18,14 @@
 import os
 import tempfile
 import unittest.mock as mock
+from pathlib import Path
 from unittest import TestCase
 
 from esrally.mechanic import provisioner, team
 from esrally.utils import convert
 from esrally import exceptions
+
+HOME_DIR = str(Path.home())
 
 
 class BareProvisionerTests(TestCase):
@@ -40,11 +43,11 @@ class BareProvisionerTests(TestCase):
         team.Car(
             names="unit-test-car",
             root_path=None,
-            config_paths=["~/.rally/benchmarks/teams/default/my-car"],
+            config_paths=[f"{HOME_DIR}/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
             java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
-            node_root_dir="~/.rally/benchmarks/races/unittest",
+            node_root_dir=f"{HOME_DIR}/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
             ip="10.17.22.23",
             http_port=9200)
@@ -63,7 +66,7 @@ class BareProvisionerTests(TestCase):
         self.assertEqual(1, len(apply_config_calls))
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
-        self.assertEqual("~/.rally/benchmarks/teams/default/my-car", source_root_path)
+        self.assertEqual(f"{HOME_DIR}/.rally/benchmarks/teams/default/my-car", source_root_path)
         self.assertEqual("/opt/elasticsearch-5.0.0", target_root_path)
         self.assertEqual({
             "cluster_settings": {
@@ -73,8 +76,8 @@ class BareProvisionerTests(TestCase):
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-5.0.0/data"],
-            "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
-            "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
+            "log_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/heapdump",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
             "http_port": "9200-9300",
@@ -145,11 +148,11 @@ class BareProvisionerTests(TestCase):
         team.Car(
             names="unit-test-car",
             root_path=None,
-            config_paths=["~/.rally/benchmarks/teams/default/my-car"],
+            config_paths=[f"{HOME_DIR}/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
             java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
-            node_root_dir="~/.rally/benchmarks/races/unittest",
+            node_root_dir=f"{HOME_DIR}/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
             ip="10.17.22.23",
             http_port=9200)
@@ -173,7 +176,7 @@ class BareProvisionerTests(TestCase):
         self.assertEqual(1, len(apply_config_calls))
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
-        self.assertEqual("~/.rally/benchmarks/teams/default/my-car", source_root_path)
+        self.assertEqual(f"{HOME_DIR}/.rally/benchmarks/teams/default/my-car", source_root_path)
         self.assertEqual("/opt/elasticsearch-5.0.0", target_root_path)
 
         self.maxDiff = None
@@ -187,8 +190,8 @@ class BareProvisionerTests(TestCase):
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-5.0.0/data"],
-            "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
-            "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
+            "log_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/heapdump",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
             "http_port": "9200-9300",
@@ -222,11 +225,11 @@ class BareProvisionerTests(TestCase):
         team.Car(
             names="unit-test-car",
             root_path=None,
-            config_paths=["~/.rally/benchmarks/teams/default/my-car"],
+            config_paths=[f"{HOME_DIR}/.rally/benchmarks/teams/default/my-car"],
             variables={"heap": "4g"}),
             java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
-            node_root_dir="~/.rally/benchmarks/races/unittest",
+            node_root_dir=f"{HOME_DIR}/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
             ip="10.17.22.23",
             http_port=9200)
@@ -250,7 +253,7 @@ class BareProvisionerTests(TestCase):
         self.assertEqual(1, len(apply_config_calls))
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
-        self.assertEqual("~/.rally/benchmarks/teams/default/my-car", source_root_path)
+        self.assertEqual(f"{HOME_DIR}/.rally/benchmarks/teams/default/my-car", source_root_path)
         self.assertEqual("/opt/elasticsearch-6.3.0", target_root_path)
 
         self.maxDiff = None
@@ -264,8 +267,8 @@ class BareProvisionerTests(TestCase):
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-6.3.0/data"],
-            "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
-            "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
+            "log_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/heapdump",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
             "http_port": "9200-9300",
@@ -305,7 +308,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
                                                        http_port=9200,
-                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
+                                                       node_root_dir=f"{HOME_DIR}/.rally/benchmarks/races/unittest")
         installer.cleanup(preserve=True)
 
         self.assertEqual(0, mock_path_exists.call_count)
@@ -325,7 +328,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        all_node_ips={"127.0.0.1"},
                                                        ip="127.0.0.1",
                                                        http_port=9200,
-                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
+                                                       node_root_dir=f"{HOME_DIR}/.rally/benchmarks/races/unittest")
         installer.cleanup(preserve=True)
 
         expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/challenge/es-bin")]
@@ -345,7 +348,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
                                                        ip="10.17.22.23",
                                                        http_port=9200,
-                                                       node_root_dir="~/.rally/benchmarks/races/unittest")
+                                                       node_root_dir=f"{HOME_DIR}/.rally/benchmarks/races/unittest")
 
         installer.install("/data/builds/distributions")
         self.assertEqual(installer.es_home_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
@@ -354,8 +357,8 @@ class ElasticsearchInstallerTests(TestCase):
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/install/elasticsearch-5.0.0-SNAPSHOT/data"],
-            "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
-            "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
+            "log_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": f"{HOME_DIR}/.rally/benchmarks/races/unittest/heapdump",
             "node_ip": "10.17.22.23",
             "network_host": "10.17.22.23",
             "http_port": "9200-9300",
