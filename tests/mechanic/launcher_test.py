@@ -14,12 +14,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import datetime
+import logging
+import os
+import threading
+from io import BytesIO
 from unittest import TestCase, mock
 
-from esrally import config, exceptions
+from esrally import config, exceptions, metrics, paths
+from esrally.mechanic import launcher, provisioner, team
+from esrally.mechanic.launcher import StartupWatcher
 from esrally.utils import opts
-from esrally.mechanic import launcher
+from esrally.utils.io import guess_java_home
 
 
 class MockMetricsStore:
@@ -93,6 +99,116 @@ class SubClient:
         return self._info
 
 
+logging.basicConfig(level=logging.DEBUG)
+HOME_DIR = os.path.expanduser("~")
+
+
+def create_config():
+    cfg = config.Config()
+    # collect some mandatory config here
+    cfg.add(config.Scope.application, "node", "root.dir", HOME_DIR + "/.rally/benchmarks")
+    cfg.add(config.Scope.application, 'reporting', 'datastore.type', None)
+    cfg.add(config.Scope.application, 'track', 'params', None)
+    cfg.add(config.Scope.application, 'system', 'env.name', "unittest")
+    cfg.add(config.Scope.application, 'mechanic', 'keep.running', False)
+    cfg.add(config.Scope.application, 'mechanic', 'runtime.jdk', 12)
+    cfg.add(config.Scope.application, 'mechanic', 'telemetry.devices', [])
+    cfg.add(config.Scope.application, 'mechanic', 'telemetry.params', None)
+
+    return cfg
+
+
+def create_metrics_store(cfg, car):
+    cls = metrics.metrics_store_class(cfg)
+    metrics_store = cls(cfg)
+    metrics_store.lap = 0
+
+    metrics_store.open(trial_id="test",
+                       track_name="test",
+                       trial_timestamp=datetime.datetime.now(),
+                       challenge_name="test",
+                       car_name=car.name)
+    return metrics_store
+
+
+def create_default_car():
+    return team.load_car(HOME_DIR + "/.rally/benchmarks/teams/default",
+                         ["defaults"],
+                         None)
+
+
+def create_provisioner(car, ver):
+    installer = provisioner.ElasticsearchInstaller(car=car,
+                                                   java_home=guess_java_home(),
+                                                   node_name="rally-node-0",
+                                                   node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
+                                                   ip="0.0.0.0",
+                                                   all_node_ips=["0.0.0.0"],
+                                                   http_port=9200)
+    p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
+                                    es_installer=installer,
+                                    plugin_installers=[],
+                                    preserve=True,
+                                    distribution_version=ver)
+    return p
+
+
+class ProcessLauncherTests(TestCase):
+
+    # noinspection PyMethodMayBeStatic
+    def test_daemon_startstop(self):
+        cfg = create_config()
+        car = create_default_car()
+        p = create_provisioner(car, "6.8.0")
+        ms = create_metrics_store(cfg, car)
+
+        cfg.add(config.Scope.application, "mechanic", "daemon", True)
+        proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
+
+        node_config = p.prepare({"elasticsearch": HOME_DIR + "/Downloads/elasticsearch-oss-6.8.0.tar.gz"})
+        nodes = proc_launcher.start([node_config])
+        proc_launcher.stop(nodes)
+
+    # noinspection PyMethodMayBeStatic
+    def test_childproc_startstop(self):
+        cfg = create_config()
+        car = create_default_car()
+        p = create_provisioner(car, "6.8.0")
+        ms = create_metrics_store(cfg, car)
+        cfg.add(config.Scope.application, "mechanic", "daemon", False)
+        proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
+        node_config = p.prepare({"elasticsearch": HOME_DIR + "/Downloads/elasticsearch-oss-6.8.0.tar.gz"})
+        nodes = proc_launcher.start([node_config])
+        proc_launcher.stop(nodes)
+
+    # noinspection PyMethodMayBeStatic
+    def test_startup_watcher(self):
+        s = BytesIO()
+        s.writelines([b"[2019-05-31T06:55:27,732] ohabljkfn\n",
+                      b"[2019-05-31T06:55:27,732] piunasnfj\n",
+                      b"[2019-05-31T06:55:27,732] started\n",
+                      b"[2019-05-31T06:56:27,732] oiulhbjkn.\n",
+                      b"[2019-05-31T06:57:27,732] stopped\n", ])
+
+        startup_event = threading.Event()
+        watcher = StartupWatcher(node_name="test",
+                                 console=s,
+                                 startup_event=startup_event,
+                                 startup_timestamp=datetime.datetime(2019, 5, 31, 7))
+        t = threading.Thread(target=watcher.watch)
+        t.setDaemon(True)
+        t.start()
+        startup_event.wait(timeout=0.1)
+        self.assertFalse(startup_event.is_set())
+        offset = s.tell()
+
+        s.writelines([b"[2019-05-31T07:01:40,111] started\n",
+                      b"[2019-05-31T07:02:40,111] extralogs\n"])
+        s.seek(offset, 0)
+        startup_event.wait(timeout=0.1)
+        self.assertTrue(startup_event.is_set())
+
+
 class ExternalLauncherTests(TestCase):
     test_host = opts.TargetHosts("127.0.0.1:9200,10.17.0.5:19200")
     client_options = opts.ClientOptions("timeout:60")
@@ -102,7 +218,7 @@ class ExternalLauncherTests(TestCase):
 
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options",self.client_options)
+        cfg.add(config.Scope.application, "client", "options", self.client_options)
 
         m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         m.start()
@@ -138,7 +254,7 @@ class ClusterLauncherTests(TestCase):
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         cluster = cluster_launcher.start()
 
-        self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], cluster.hosts)
+        self.assertEqual([{"host": "10.0.0.10", "port": 9200}, {"host": "10.0.0.11", "port": 9200}], cluster.hosts)
         self.assertIsNotNone(cluster.telemetry)
 
     def test_launches_cluster_with_telemetry_client_timeout_enabled(self):

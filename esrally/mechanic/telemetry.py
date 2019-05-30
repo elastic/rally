@@ -793,7 +793,7 @@ class DiskIo(InternalTelemetryDevice):
 
     def attach_to_node(self, node):
         self.node = node
-        self.process = sysstats.setup_process_stats(node.process.pid)
+        self.process = sysstats.setup_process_stats(node.pid)
 
     def on_benchmark_start(self):
         if self.process is not None:
