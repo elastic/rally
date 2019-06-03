@@ -19,8 +19,9 @@ import os
 import sys
 import shutil
 
-QUIET = False
 PLAIN = False
+QUIET = False
+RALLY_RUNNING_IN_DOCKER = False
 
 
 class PlainFormat:
@@ -87,9 +88,10 @@ format = PlainFormat
 
 
 def init(quiet=False):
-    global QUIET, PLAIN, format
+    global QUIET, RALLY_RUNNING_IN_DOCKER, PLAIN, format
 
     QUIET = quiet
+    RALLY_RUNNING_IN_DOCKER = True if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE" else False
     if os.environ.get("TERM") == "dumb":
         PLAIN = True
         format = PlainFormat
@@ -110,6 +112,10 @@ def init(quiet=False):
             pass
 
 
+def running_in_docker():
+    return RALLY_RUNNING_IN_DOCKER
+
+
 def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
     println(msg, console_prefix="[INFO]", end=end, flush=flush, overline=overline, underline=underline,
             logger=logger.info if logger else None)
@@ -127,7 +133,7 @@ def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
     # TODO: Checking for sys.stdout.isatty() prevents shell redirections and pipes (useful for list commands). Can we remove this check?
-    if not QUIET and sys.stdout.isatty():
+    if not QUIET and (running_in_docker() or sys.stdout.isatty()):
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
             print(format.underline_for(complete_msg, underline_symbol=overline), flush=flush)
@@ -162,7 +168,7 @@ class CmdLineProgressReporter:
         :param message: A message to display (will be left-aligned)
         :param progress: A progress indication (will be right-aligned)
         """
-        if QUIET or not sys.stdout.isatty():
+        if QUIET or (not running_in_docker() and not sys.stdout.isatty()):
             return
         w = self._width
         if self._first_print:
@@ -185,7 +191,7 @@ class CmdLineProgressReporter:
             return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
 
     def finish(self):
-        if QUIET or not sys.stdout.isatty():
+        if QUIET or (not running_in_docker() and not sys.stdout.isatty()):
             return
         # print a final statement in order to end the progress line
         print("")

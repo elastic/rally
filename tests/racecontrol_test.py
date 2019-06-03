@@ -20,6 +20,7 @@ import random
 from unittest import TestCase
 
 from esrally import racecontrol, config, exceptions, DOC_LINK
+from esrally.utils import console
 
 
 class RaceControlTests(TestCase):
@@ -41,6 +42,25 @@ class RaceControlTests(TestCase):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             racecontrol.run(cfg)
         self.assertRegex(ctx.exception.args[0], r"Unknown pipeline \[invalid\]. List the available pipelines with [\S]+? list pipelines.")
+
+    def test_uses_benchmark_only_pipeline_in_docker(self):
+        console.RALLY_RUNNING_IN_DOCKER = True
+        mock_pipeline = mock.Mock()
+        test_pipeline_name = "unit-test-pipeline"
+        racecontrol.Pipeline("unit-test-pipeline", "Pipeline intended for unit-testing", mock_pipeline)
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
+        cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "7.1.1")
+
+        racecontrol.run(cfg)
+
+        self.assertEqual(
+            "benchmark-only",
+            cfg._opts[(config.Scope.applicationOverride, "race", "pipeline")]
+        )
+        mock_pipeline.assert_called_once_with(cfg)
+
+        del racecontrol.pipelines[test_pipeline_name]
 
     def test_runs_a_known_pipeline(self):
         mock_pipeline = mock.Mock()

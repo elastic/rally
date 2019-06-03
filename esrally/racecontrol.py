@@ -386,7 +386,10 @@ def run(cfg):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
 
-    if len(name) == 0:
+    if console.RALLY_RUNNING_IN_DOCKER:
+        # in this case only benchmarking remote Elasticsearch clusters makes sense
+        cfg.add(config.Scope.applicationOverride, "race", "pipeline", "benchmark-only")
+    elif len(name) == 0:
         # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set
         if cfg.exists("mechanic", "distribution.version"):
             name = "from-distribution"
