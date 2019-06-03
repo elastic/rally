@@ -17,9 +17,11 @@
 import datetime
 import logging
 import os
+import psutil
 import threading
 from io import BytesIO
 from unittest import TestCase, mock
+
 
 from esrally import config, exceptions, metrics, paths
 from esrally.mechanic import launcher, provisioner, team
@@ -106,7 +108,7 @@ HOME_DIR = os.path.expanduser("~")
 def create_config():
     cfg = config.Config()
     # collect some mandatory config here
-    cfg.add(config.Scope.application, "node", "root.dir", HOME_DIR + "/.rally/benchmarks")
+    cfg.add(config.Scope.application, "node", "root.dir", os.path.join(HOME_DIR, ".rally", "benchmarks"))
     cfg.add(config.Scope.application, 'reporting', 'datastore.type', None)
     cfg.add(config.Scope.application, 'track', 'params', None)
     cfg.add(config.Scope.application, 'system', 'env.name', "unittest")
@@ -141,7 +143,8 @@ def create_provisioner(car, ver):
     installer = provisioner.ElasticsearchInstaller(car=car,
                                                    java_home=guess_java_home(),
                                                    node_name="rally-node-0",
-                                                   node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
+                                                   node_root_dir= os.path.join(HOME_DIR, ".rally", "benchmarks",
+                                                                               "races", "unittest"),
                                                    ip="0.0.0.0",
                                                    all_node_ips=["0.0.0.0"],
                                                    http_port=9200)
@@ -155,8 +158,7 @@ def create_provisioner(car, ver):
 
 class ProcessLauncherTests(TestCase):
 
-    # noinspection PyMethodMayBeStatic
-    def test_daemon_startstop(self):
+    def test_daemon_start_stop(self):
         cfg = create_config()
         car = create_default_car()
         p = create_provisioner(car, "6.8.0")
@@ -167,10 +169,11 @@ class ProcessLauncherTests(TestCase):
 
         node_config = p.prepare({"elasticsearch": HOME_DIR + "/Downloads/elasticsearch-oss-6.8.0.tar.gz"})
         nodes = proc_launcher.start([node_config])
+        pid = nodes[0].pid
+        self.assertTrue(psutil.pid_exists(pid))
         proc_launcher.stop(nodes)
 
-    # noinspection PyMethodMayBeStatic
-    def test_childproc_startstop(self):
+    def test_child_process_start_stop(self):
         cfg = create_config()
         car = create_default_car()
         p = create_provisioner(car, "6.8.0")
@@ -179,9 +182,10 @@ class ProcessLauncherTests(TestCase):
         proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
         node_config = p.prepare({"elasticsearch": HOME_DIR + "/Downloads/elasticsearch-oss-6.8.0.tar.gz"})
         nodes = proc_launcher.start([node_config])
+        pid = nodes[0].pid
+        self.assertTrue(psutil.pid_exists(pid))
         proc_launcher.stop(nodes)
 
-    # noinspection PyMethodMayBeStatic
     def test_startup_watcher(self):
         s = BytesIO()
         s.writelines([b"[2019-05-31T06:55:27,732] ohabljkfn\n",
