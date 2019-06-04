@@ -22,9 +22,11 @@ from collections import defaultdict
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
+from esrally.mechanic.provisioner import NodeConfiguration
+from esrally.mechanic import telemetry
+from esrally.mechanic.team import Car
 from esrally.utils import net, console
-from esrally.mechanic import supplier, provisioner, launcher, team
-
+from esrally.mechanic import supplier, provisioner, launcher, team, cluster
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
@@ -37,6 +39,76 @@ def download(cfg):
                         challenge_root_path=challenge_root_path, car=car, plugins=plugins)
     binaries = s()
     console.println(json.dumps(binaries, indent=2), force=True)
+
+
+def provision(cfg):
+    challenge_root_path = paths.race_root(cfg)
+    car, plugins = load_team(cfg, False)
+
+    s = supplier.create(cfg, sources=False, distribution=True, build=False,
+                        challenge_root_path=challenge_root_path, car=car, plugins=plugins)
+
+    all_node_ips = []
+    cluster_settings = {}
+    node_ids = cfg.opts("provisioning", "node.ids", mandatory=True)
+    if isinstance(node_ids, str):
+        node_ids = [int(n) for n in node_ids.split(' ,')]
+    elif isinstance(node_ids, list):
+        node_ids = [int(n) for n in node_ids]
+
+    for node_id in node_ids:
+        p = provisioner.local_provisioner(cfg, car, plugins,
+                                          cluster_settings, all_node_ips,
+                                          challenge_root_path, node_id)
+        node_config = p.prepare(binary=s())
+        # TODO: implement node_config UUID, print here.
+        console.println(node_config.toJSON())
+
+
+def _load_node_cfg(cfg):
+    with open(cfg.opts("mechanic", "node.cfg"), "r") as f:
+        node_cfg = json.load(f)
+        car = Car(names=node_cfg['car']['names'],
+                  root_path=node_cfg['car']['root_path'],
+                  config_paths=node_cfg['car']['config_paths'],
+                  variables=node_cfg['car']['variables'])
+
+        return NodeConfiguration(car=car,
+                                 ip=node_cfg['ip'],
+                                 node_name=node_cfg['node_name'],
+                                 node_root_path=node_cfg['node_root_path'],
+                                 binary_path=node_cfg['binary_path'],
+                                 log_path=node_cfg['log_path'],
+                                 data_paths=node_cfg['data_paths'])
+
+
+def start(cfg):
+    node_cfg = _load_node_cfg(cfg)
+    launch = launcher.ProcessLauncher(cfg,
+                                      metrics_store=None,
+                                      races_root_dir=paths.races_root(cfg))
+    node = launch.start(node_configurations=[node_cfg])[0]
+    console.println(node.pid)
+
+
+def _load_node(cfg):
+    pid = int(cfg.opts("mechanic", "node.pid"))
+    host_name = cfg.opts("mechanic", "node.host_name", mandatory=False)
+    node_name = cfg.opts("mechanic", "node.node_name", mandatory=False)
+    t = telemetry.Telemetry(devices=[])
+
+    return cluster.Node(pid=pid,
+                        host_name=host_name,
+                        node_name=node_name,
+                        telemetry=t)
+
+
+def stop(cfg):
+    node = _load_node(cfg)
+    launch = launcher.ProcessLauncher(cfg,
+                                      metrics_store=None,
+                                      races_root_dir=paths.races_root(cfg))
+    launch.stop(nodes=[node])
 
 
 ##############################
@@ -77,7 +149,8 @@ class NodeMetaInfo:
 
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, ip=None, port=None,
+    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker,
+                 ip=None, port=None,
                  node_id=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
@@ -102,7 +175,8 @@ class StartEngine:
         :param node_ids: A list of node id to set.
         :return: A corresponding ``StartNodes`` message with the specified IP, port number and node ids.
         """
-        return StartNodes(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.build, self.distribution,
+        return StartNodes(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.build,
+                          self.distribution,
                           self.external, self.docker, all_node_ips, ip, port, node_ids)
 
 
@@ -262,7 +336,8 @@ class MechanicActor(actor.RallyActor):
         self.car = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
+        self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)),
+                         str(sender))
 
     def receiveMsg_ChildActorExited(self, msg, sender):
         if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
@@ -273,7 +348,8 @@ class MechanicActor(actor.RallyActor):
         self.send(self.race_control, actor.BenchmarkFailure(failmsg))
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        self.logger.info("MechanicActor#receiveMessage poison(msg = [%s] sender = [%s])", str(msg.poisonMessage), str(sender))
+        self.logger.info("MechanicActor#receiveMessage poison(msg = [%s] sender = [%s])", str(msg.poisonMessage),
+                         str(sender))
         # something went wrong with a child actor (or another actor with which we have communicated)
         if isinstance(msg.poisonMessage, StartEngine):
             failmsg = "Could not start benchmark candidate. Are Rally daemons on all targeted machines running?"
@@ -336,13 +412,15 @@ class MechanicActor(actor.RallyActor):
 
     @actor.no_retry("mechanic")
     def receiveMsg_MetricsMetaInfoApplied(self, msg, sender):
-        self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
+        self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started",
+                                                    self.on_cluster_started)
 
     @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStart(self, msg, sender):
         self.metrics_store.lap = msg.lap
         # in the first lap, we are in state "cluster_started", after that in "benchmark_stopped"
-        self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
+        self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"],
+                                             "benchmark_starting")
 
     @actor.no_retry("mechanic")
     def receiveMsg_BenchmarkStarted(self, msg, sender):
@@ -392,7 +470,8 @@ class MechanicActor(actor.RallyActor):
     @actor.no_retry("mechanic")
     def receiveMsg_NodesStopped(self, msg, sender):
         self.metrics_store.bulk_add(msg.system_metrics)
-        self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
+        self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped",
+                                                    self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
         self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
@@ -406,7 +485,8 @@ class MechanicActor(actor.RallyActor):
         else:
             # push down all meta data again
             self.send_to_children_and_transition(self.myAddress,
-                                                 ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started", "apply_meta_info")
+                                                 ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started",
+                                                 "apply_meta_info")
 
     def on_cluster_started(self):
         # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
@@ -493,8 +573,10 @@ class Dispatcher(actor.RallyActor):
 
     def receiveMsg_ActorSystemConventionUpdate(self, convmsg, sender):
         if not convmsg.remoteAdded:
-            self.logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.", convmsg.remoteAdminAddress)
-            self.start_sender(actor.BenchmarkFailure("Remote Rally node [%s] has been shutdown prematurely." % convmsg.remoteAdminAddress))
+            self.logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.",
+                                convmsg.remoteAdminAddress)
+            self.start_sender(actor.BenchmarkFailure(
+                "Remote Rally node [%s] has been shutdown prematurely." % convmsg.remoteAdminAddress))
         else:
             remote_ip = convmsg.remoteCapabilities.get('ip', None)
             self.logger.info("Remote Rally node [%s] has started.", remote_ip)
@@ -524,7 +606,8 @@ class Dispatcher(actor.RallyActor):
         self.send(self.start_sender, actor.BenchmarkFailure(msg.details))
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
+        self.logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)),
+                         str(sender))
 
 
 class NodeMechanicActor(actor.RallyActor):
@@ -571,11 +654,13 @@ class NodeMechanicActor(actor.RallyActor):
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
             self.metrics_store.lap = 0
 
-            self.mechanic = create(self.config, self.metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
+            self.mechanic = create(self.config, self.metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources,
+                                   msg.build,
                                    msg.distribution, msg.external, msg.docker)
             nodes = self.mechanic.start_engine()
             self.running = True
-            self.send(getattr(msg, "reply_to", sender), NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
+            self.send(getattr(msg, "reply_to", sender),
+                      NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
         except Exception:
             self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
@@ -651,11 +736,13 @@ def load_team(cfg, external):
     else:
         team_path = team.team_path(cfg)
         car = team.load_car(team_path, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
-        plugins = team.load_plugins(team_path, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
+        plugins = team.load_plugins(team_path, cfg.opts("mechanic", "car.plugins"),
+                                    cfg.opts("mechanic", "plugin.params"))
     return car, plugins
 
 
-def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
+def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=False, build=False, distribution=False,
+           external=False,
            docker=False):
     races_root = paths.races_root(cfg)
     challenge_root_path = paths.race_root(cfg)
@@ -670,8 +757,9 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         if len(plugins) > 0:
-            raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "
-                                              "\"--elasticsearch-plugins\" and try again.")
+            raise exceptions.SystemSetupError(
+                "You cannot specify any plugins for externally provisioned clusters. Please remove "
+                "\"--elasticsearch-plugins\" and try again.")
 
         s = lambda: None
         p = [provisioner.no_op_provisioner()]

@@ -23,8 +23,9 @@ import sys
 import time
 import uuid
 
-from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, log
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
+from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
+    log
 from esrally.mechanic import team, telemetry, mechanic
 from esrally.utils import io, convert, process, console, net, opts
 
@@ -56,6 +57,10 @@ def create_arg_parser():
         help="")
 
     race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This sub-command should typically be used.")
+    provision_parser = subparsers.add_parser("provision", help="Provision node(s) and exit.")
+    start_parser = subparsers.add_parser("start", help="Start a previously provisioned node and exit.")
+    stop_parser = subparsers.add_parser("stop", help="Stop a running node and exit.")
+
     # change in favor of "list telemetry", "list tracks", "list pipelines"
     list_parser = subparsers.add_parser("list", help="List configuration options")
     list_parser.add_argument(
@@ -168,6 +173,42 @@ def create_arg_parser():
         help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
         default=""
     )
+
+    provision_parser.add_argument(
+        "--team-repository",
+        help="Define the repository from where Rally will load teams and cars (default: default).",
+        default="default")
+    provision_parser.add_argument(
+        "--car",
+        help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+        default="defaults")  # optimized for local usage
+    provision_parser.add_argument(
+        "--car-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
+        default=""
+    )
+    provision_parser.add_argument(
+        "--distribution-version",
+        help="Define the version of the Elasticsearch distribution to download. "
+             "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+        default="")
+    provision_parser.add_argument("--node-ids",
+                                  help="ID(s) of nodes to provision",
+                                  nargs='+')
+    provision_parser.add_argument(
+        "--node-ip",
+        help="IP of node to provision",
+        default=None)
+    provision_parser.add_argument(
+        "--node-name",
+        help="name of node to provision",
+        default=None)
+    start_parser.add_argument("--node-cfg",
+                              help="path to JSON config for node to start",
+                              default=None)
+    stop_parser.add_argument("pid",
+                             help="pid of node to stop",
+                             default=None)
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -495,7 +536,8 @@ def with_actor_system(runnable, cfg):
                 console.println(SKULL)
                 console.println("")
             elif not shutdown_complete:
-                console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes.")
+                console.warn(
+                    "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes.")
 
 
 def generate(cfg):
@@ -507,16 +549,19 @@ SUB_COMMANDS = {
     "list": dispatch_list,
     "race": race,
     "download": mechanic.download,
-    "generate": generate
+    "provision": mechanic.provision,
+    "start": mechanic.start,
+    "stop": mechanic.stop,
+    "generate": generate,
 }
 
 
 def dispatch_sub_command(cfg, sub_command):
     try:
-        command = SUB_COMMANDS.get(sub_command)
-        if not command:
+        sub_command_fn = SUB_COMMANDS.get(sub_command)
+        if not sub_command_fn:
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
-        command(cfg)
+        sub_command_fn(cfg)
         return True
     except exceptions.RallyError as e:
         logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
@@ -650,6 +695,19 @@ def main():
         else:
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
+    if sub_command == "provision":
+        if args.node_ids:
+            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ids", args.node_ids)
+        if args.node_ip:
+            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ips", args.node_ip)
+        if args.node_name:
+            cfg.add(config.Scope.applicationOverride, "provisioning", "node.name", args.node_name)
+    if sub_command == "start":
+        if args.node_cfg:
+            cfg.add(config.Scope.applicationOverride, "mechanic", "node.cfg", args.node_cfg)
+    if sub_command == "stop":
+        if args.pid:
+            cfg.add(config.Scope.applicationOverride, "mechanic", "node.pid", args.pid)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
@@ -661,7 +719,7 @@ def main():
         client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
         if "timeout" not in client_options.default:
-           console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
+            console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
         if list(target_hosts.all_hosts) != list(client_options.all_client_options):
             console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
             exit(1)

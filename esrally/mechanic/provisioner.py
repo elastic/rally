@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import json
 import os
 import glob
 import shutil
@@ -84,6 +84,10 @@ class NodeConfiguration:
         self.binary_path = binary_path
         self.log_path = log_path
         self.data_paths = data_paths
+
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__,
+                          sort_keys=True, indent=4)
 
 
 class ConfigLoader:
