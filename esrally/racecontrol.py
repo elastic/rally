@@ -345,7 +345,7 @@ def from_distribution(cfg):
 
 
 def benchmark_only(cfg):
-    console.println(BOGUS_RESULTS_WARNING)
+    console.println(BOGUS_RESULTS_WARNING, flush=True)
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
