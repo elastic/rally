@@ -16,6 +16,7 @@
 # under the License.
 
 import unittest.mock as mock
+import os
 import random
 from unittest import TestCase
 
@@ -43,23 +44,36 @@ class RaceControlTests(TestCase):
             racecontrol.run(cfg)
         self.assertRegex(ctx.exception.args[0], r"Unknown pipeline \[invalid\]. List the available pipelines with [\S]+? list pipelines.")
 
-    def test_uses_benchmark_only_pipeline_in_docker(self):
-        console.RALLY_RUNNING_IN_DOCKER = True
+    @mock.patch.dict(os.environ, {"RALLY_RUNNING_IN_DOCKER": "true"})
+    def test_passes_benchmark_only_pipeline_in_docker(self):
+        mock_pipeline = mock.Mock()
+        test_pipeline_name = "benchmark-only"
+        racecontrol.Pipeline("benchmark-only", "Mocked benchmark-only pipeline for unittest", mock_pipeline)
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "race", "pipeline", "benchmark-only")
+
+        racecontrol.run(cfg)
+
+        mock_pipeline.assert_called_once_with(cfg)
+
+        del racecontrol.pipelines[test_pipeline_name]
+
+    @mock.patch.dict(os.environ, {"RALLY_RUNNING_IN_DOCKER": "true"})
+    def test_fails_without_benchmark_only_pipeline_in_docker(self):
         mock_pipeline = mock.Mock()
         test_pipeline_name = "unit-test-pipeline"
         racecontrol.Pipeline("unit-test-pipeline", "Pipeline intended for unit-testing", mock_pipeline)
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
-        cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "7.1.1")
 
-        racecontrol.run(cfg)
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            racecontrol.run(cfg)
 
         self.assertEqual(
-            "benchmark-only",
-            cfg._opts[(config.Scope.applicationOverride, "race", "pipeline")]
-        )
-        mock_pipeline.assert_called_once_with(cfg)
-
+            "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+            "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+            "For more details read the docs for the benchmark-only pipeline in https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n",
+            ctx.exception.args[0])
         del racecontrol.pipelines[test_pipeline_name]
 
     def test_runs_a_known_pipeline(self):

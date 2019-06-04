@@ -17,10 +17,11 @@
 
 import collections
 import logging
+import os
 import sys
-
 import tabulate
 import thespian.actors
+import urllib
 
 from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, DOC_LINK, PROGRAM_NAME
 from esrally.utils import console, convert, opts
@@ -386,9 +387,14 @@ def run(cfg):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
 
-    if console.RALLY_RUNNING_IN_DOCKER:
+    if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
         # in this case only benchmarking remote Elasticsearch clusters makes sense
-        cfg.add(config.Scope.applicationOverride, "race", "pipeline", "benchmark-only")
+        if name != "benchmark-only":
+            raise exceptions.SystemSetupError(
+                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+                "For more details read the docs for the benchmark-only pipeline in {}\n".format(
+                    urllib.parse.urljoin(DOC_LINK, "pipelines.html#benchmark-only")))
     elif len(name) == 0:
         # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set
         if cfg.exists("mechanic", "distribution.version"):

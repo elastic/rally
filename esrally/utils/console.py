@@ -91,7 +91,7 @@ def init(quiet=False):
     global QUIET, RALLY_RUNNING_IN_DOCKER, PLAIN, format
 
     QUIET = quiet
-    RALLY_RUNNING_IN_DOCKER = True if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE" else False
+    RALLY_RUNNING_IN_DOCKER = os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE"
     if os.environ.get("TERM") == "dumb":
         PLAIN = True
         format = PlainFormat
@@ -112,10 +112,6 @@ def init(quiet=False):
             pass
 
 
-def running_in_docker():
-    return RALLY_RUNNING_IN_DOCKER
-
-
 def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
     println(msg, console_prefix="[INFO]", end=end, flush=flush, overline=overline, underline=underline,
             logger=logger.info if logger else None)
@@ -133,7 +129,7 @@ def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None
 
 def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
     # TODO: Checking for sys.stdout.isatty() prevents shell redirections and pipes (useful for list commands). Can we remove this check?
-    if not QUIET and (running_in_docker() or sys.stdout.isatty()):
+    if not QUIET and (RALLY_RUNNING_IN_DOCKER or sys.stdout.isatty()):
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
             print(format.underline_for(complete_msg, underline_symbol=overline), flush=flush)
@@ -151,12 +147,15 @@ def progress(width=90):
 class CmdLineProgressReporter:
     """
     CmdLineProgressReporter supports displaying an updating progress indication together with an information message.
+
+    :param custom_print: allow use of a different print method to assist with patching in unittests
     """
 
-    def __init__(self, width, plain_output=False):
+    def __init__(self, width, plain_output=False, custom_print=print):
         self._width = width
         self._first_print = True
         self._plain_output = plain_output
+        self._custom_print = custom_print
 
     def print(self, message, progress):
         """
@@ -168,20 +167,20 @@ class CmdLineProgressReporter:
         :param message: A message to display (will be left-aligned)
         :param progress: A progress indication (will be right-aligned)
         """
-        if QUIET or (not running_in_docker() and not sys.stdout.isatty()):
+        if QUIET or (not RALLY_RUNNING_IN_DOCKER and not sys.stdout.isatty()):
             return
         w = self._width
         if self._first_print:
-            print(" " * w, end="")
+            self._custom_print(" " * w, end="")
             self._first_print = False
 
         final_message = self._truncate(message, self._width - len(progress))
 
         formatted_progress = progress.rjust(w - len(final_message))
         if self._plain_output:
-            print("\n{0}{1}".format(final_message, formatted_progress), end="")
+            self._custom_print("\n{0}{1}".format(final_message, formatted_progress), end="")
         else:
-            print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")
+            self._custom_print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")
         sys.stdout.flush()
 
     def _truncate(self, text, max_length, omission="..."):
@@ -191,7 +190,7 @@ class CmdLineProgressReporter:
             return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
 
     def finish(self):
-        if QUIET or (not running_in_docker() and not sys.stdout.isatty()):
+        if QUIET or (not RALLY_RUNNING_IN_DOCKER and not sys.stdout.isatty()):
             return
         # print a final statement in order to end the progress line
-        print("")
+        self._custom_print("")
