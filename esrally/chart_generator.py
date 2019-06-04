@@ -54,8 +54,13 @@ def index_label(race_config):
 
 
 class BarCharts:
-    UI_STATE_JSON = json.dumps({})
-    # UI_STATE_JSON = json.dumps({"vis": {"colors": {"bare": "#00BFB3", "docker": "#00A9E0", "ear": "#F04E98", "x-pack": "#FFCD00"}}})
+    UI_STATE_JSON = json.dumps(
+        {
+            "vis": {
+                "colors": dict(
+                    zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-oss", "ear-oss"], color_scheme_rgba))
+            }
+        })
 
     @staticmethod
     # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
@@ -452,9 +457,9 @@ class BarCharts:
 
     @staticmethod
     def query(environment, race_config, q):
-        metric = "latency"
+        metric = "service_time"
         title = BarCharts.format_title(environment, race_config.track, suffix="%s-%s-p99-%s" % (race_config.label, q, metric))
-        label = "Query Latency [ms]"
+        label = "Query Service Time [ms]"
 
         vis_state = {
             "title": title,
