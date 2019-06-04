@@ -197,8 +197,6 @@ def _start(pid, output, node_name):
     t.setDaemon(True)
     t.start()
     if startup_event.wait(timeout=ProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-        if not pid:
-            pid = _get_pid_from_file("./pid")
         # has the process terminated?
         if not psutil.pid_exists(pid):
             msg = "Node [%s] has terminated." % node_name
@@ -211,11 +209,10 @@ def _start(pid, output, node_name):
         msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
             node_name, ProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
         # check if the process has terminated already
-        if pid:
-            if not psutil.pid_exists(pid):
-                msg += " The process has already terminated."
-            else:
-                msg += " The process seems to be still running with PID [%s]." % pid
+        if not psutil.pid_exists(pid):
+            msg += " The process has already terminated."
+        else:
+            msg += " The process seems to be still running with PID [%s]." % pid
         log.error(msg)
         raise exceptions.LaunchError(msg)
 
@@ -315,41 +312,16 @@ def _get_pid_from_file(filename):
         return int(f.read())
 
 
-def _load_es_cfg(yaml_filename):
-    with open(yaml_filename, "r") as f:
-        return yaml.load(f, Loader=yaml.FullLoader)
+def wait_for_pidfile(pidfilename, timeout=10):
+    endtime = _time() + timeout
+    while _time() < endtime:
+        try:
+            with open(pidfilename, "rb") as f:
+                return int(f.read())
+        except FileNotFoundError:
+            time.sleep(0.5)
 
-
-def _get_es_log_filename(binary_path):
-    config_path = binary_path + "/config"
-    io.ensure_dir(config_path)
-    es_cfg = _load_es_cfg(config_path + "/elasticsearch.yml")
-    es_log_path = es_cfg["path.logs"]
-    es_cluster_name = es_cfg["cluster.name"]
-
-    es_log_file = "{}/{}.log".format(es_log_path, es_cluster_name)
-    return es_log_file
-
-
-class DelayedOpenWrapper:
-    def __init__(self, path):
-        self.path = path
-        self.output = None
-        self.timeout = 3
-
-    def readline(self):
-        if not self.output:
-            endtime = _time() + self.timeout
-            while _time() < endtime:
-                try:
-                    self.output = open(self.path, "rb")
-                    break
-                except FileNotFoundError:
-                    time.sleep(0.5)
-            if not self.output:
-                raise TimeoutError("Logfile not available after {} seconds!".format(self.timeout))
-
-        return self.output.readline()
+    raise TimeoutError("pid file not available after {} seconds!".format(timeout))
 
 
 class ProcessLauncher:
@@ -455,18 +427,14 @@ class ProcessLauncher:
                 logging.error(msg)
                 raise exceptions.LaunchError(msg)
 
-            es_log_file = _get_es_log_filename(binary_path)
-            output = DelayedOpenWrapper(es_log_file)
-            pid = None
+            return wait_for_pidfile("./pid")
         else:
             proc = subprocess.Popen(cmd,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL,
                                     env=env)
-            pid = proc.pid
-            output = proc.stdout
-        return _start(pid, output, node_name)
+            return _start(proc.pid, proc.stdout, node_name)
 
     def stop(self, nodes):
         if self.keep_running:
