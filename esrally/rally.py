@@ -502,20 +502,21 @@ def generate(cfg):
     chart_generator.generate(cfg)
 
 
+SUB_COMMANDS = {
+    "compare": reporter.compare,
+    "list": dispatch_list,
+    "race": race,
+    "download": mechanic.download,
+    "generate": generate
+}
+
+
 def dispatch_sub_command(cfg, sub_command):
     try:
-        if sub_command == "compare":
-            reporter.compare(cfg)
-        elif sub_command == "list":
-            dispatch_list(cfg)
-        elif sub_command == "download":
-            mechanic.download(cfg)
-        elif sub_command == "race":
-            race(cfg)
-        elif sub_command == "generate":
-            generate(cfg)
-        else:
+        command = SUB_COMMANDS.get(sub_command)
+        if not command:
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
+        command(cfg)
         return True
     except exceptions.RallyError as e:
         logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
