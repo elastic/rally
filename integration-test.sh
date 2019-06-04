@@ -395,6 +395,54 @@ function test_proxy_connection {
     restore_rally_log
 }
 
+function docker_compose_dev {
+    if [[ "$1" == "up" ]]; then
+        docker-compose -f docker/docker-compose-tests.yml up --abort-on-container-exit
+    elif [[ "$1" == "down" ]]; then
+        docker-compose -f docker/docker-compose-tests.yml down -v
+    fi
+}
+
+function test_docker_image {
+    if ! docker_is_running; then
+        info "Docker is not available. Skipping Docker image build tests."
+        return
+    fi
+
+    # First ensure any left overs have been cleaned up
+    docker_compose_dev down
+
+    export RALLY_VERSION=$(cat version.txt)
+    export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+
+    # Build the docker image
+    docker build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/Dockerfile-dev $PWD
+
+    export TEST_COMMAND="--pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose_dev up
+    docker_compose_dev down
+
+    # --list should work
+    export TEST_COMMAND="list tracks"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose_dev up
+    docker_compose_dev down
+
+    # --help should work
+    export TEST_COMMAND="--help"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose_dev up
+    docker_compose_dev down
+
+    # allow overriding CMD too
+    export TEST_COMMAND="esrally --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose_dev up
+    docker_compose_dev down
+    unset TEST_COMMAND
+}
+
 function run_test {
     if [ "${PROXY_SERVER_AVAILABLE}" == "1" ]; then
         echo "**************************************** TESTING PROXY CONNECTIONS *********************************"
@@ -412,6 +460,8 @@ function run_test {
     test_distributions
     echo "**************************************** TESTING RALLY BENCHMARK-ONLY PIPELINE *********************************"
     test_benchmark_only
+    echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
+    test_docker_image
 }
 
 function tear_down {

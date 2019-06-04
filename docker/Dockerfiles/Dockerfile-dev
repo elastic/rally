@@ -1,0 +1,77 @@
+##############################################################
+# Build stage 0 `builder`:
+# Install Rally from source inside a virtualenv
+################################################################################
+
+FROM python:3.7.3-slim as builder
+
+RUN apt-get -y update && \
+    apt-get install -y curl git gcc && \
+    apt-get -y upgrade && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /rally/esrally
+COPY setup.py /rally/
+COPY setup.cfg /rally/
+COPY version.txt /rally/
+COPY README.rst /rally/
+COPY MANIFEST.in /rally/
+COPY esrally/ /rally/esrally/
+
+RUN python3 -m venv /rally/venv
+ENV PATH="/rally/venv/bin:$PATH"
+
+WORKDIR /rally
+# Wipe away any lingering caches, copied over from the local machine
+RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
+RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
+RUN pip3 install /rally
+
+################################################################################
+# Build stage 1 (the actual Rally image):
+# Copy Rally from stage 0 and fix permissions to support randomized UIDs
+# Define VOLUME for ~/.rally
+# Add entrypoint
+################################################################################
+
+FROM python:3.7.3-slim
+ARG RALLY_VERSION
+ARG RALLY_LICENSE
+ENV RALLY_RUNNING_IN_DOCKER True
+
+RUN apt-get -y update && \
+    apt-get install -y curl git && \
+    apt-get -y upgrade && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 1000 rally && \
+    useradd -d /rally -m -k /dev/null -g 1000 -N -u 1000 -l -s /bin/bash rally
+
+COPY --chown=1000:0 --from=builder /rally/venv /rally/venv
+
+WORKDIR /rally
+COPY --chown=1000:0 docker/bin/entrypoint.sh /entrypoint.sh
+
+# Openshift overrides USER and uses random ones with uid>1024 and gid=0
+# Allow ENTRYPOINT (and Rally) to run even with a different user
+RUN chgrp 0 /entrypoint.sh && \
+    chmod g=u /etc/passwd && \
+    chmod 0775 /entrypoint.sh
+
+USER 1000
+
+ENV PATH=/rally/venv/bin:$PATH
+
+RUN esrally configure
+
+LABEL org.label-schema.schema-version="1.0" \
+  org.label-schema.vendor="Elastic" \
+  org.label-schema.name="rally" \
+  org.label-schema.version="${RALLY_VERSION}" \
+  org.label-schema.url="https://esrally.readthedocs.io/en/stable/" \
+  org.label-schema.vcs-url="https://github.com/elastic/rally" \
+  license="${RALLY_LICENSE}"
+
+VOLUME ["/rally"]
+
+ENTRYPOINT ["/entrypoint.sh"]
