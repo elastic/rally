@@ -387,15 +387,7 @@ def run(cfg):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
 
-    if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
-        # in this case only benchmarking remote Elasticsearch clusters makes sense
-        if name != "benchmark-only":
-            raise exceptions.SystemSetupError(
-                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
-                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-                "For more details read the docs for the benchmark-only pipeline in {}\n".format(
-                    urllib.parse.urljoin(DOC_LINK, "pipelines.html#benchmark-only")))
-    elif len(name) == 0:
+    if len(name) == 0:
         # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set
         if cfg.exists("mechanic", "distribution.version"):
             name = "from-distribution"
@@ -413,6 +405,15 @@ def run(cfg):
                 "please read the docs for from-distribution pipeline at "
                 "{}/pipelines.html#from-distribution".format(name, DOC_LINK))
         logger.info("User specified pipeline [%s].", name)
+
+    if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
+        # in this case only benchmarking remote Elasticsearch clusters makes sense
+        if name != "benchmark-only":
+            raise exceptions.SystemSetupError(
+                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+                "For more details read the docs for the benchmark-only pipeline in {}\n".format(
+                    urllib.parse.urljoin(DOC_LINK, "pipelines.html#benchmark-only")))
 
     try:
         pipeline = pipelines[name]

@@ -151,11 +151,11 @@ class CmdLineProgressReporter:
     :param custom_print: allow use of a different print method to assist with patching in unittests
     """
 
-    def __init__(self, width, plain_output=False, custom_print=print):
+    def __init__(self, width, plain_output=False, printer=print):
         self._width = width
         self._first_print = True
         self._plain_output = plain_output
-        self._custom_print = custom_print
+        self._custom_print = printer
 
     def print(self, message, progress):
         """

@@ -100,7 +100,7 @@ class TestCmdLineProgressReporter:
         message = "Unit test message"
         width = random.randint(20, 140)
         mock_printer = mock.Mock()
-        progress_reporter = console.CmdLineProgressReporter(width=width, custom_print=mock_printer)
+        progress_reporter = console.CmdLineProgressReporter(width=width, printer=mock_printer)
 
         progress_reporter.print(message=message, progress=".")
         mock_printer.assert_not_called()
@@ -116,7 +116,7 @@ class TestCmdLineProgressReporter:
         message = "Unit test message"
         width = random.randint(20, 140)
         mock_printer = mock.Mock()
-        progress_reporter = console.CmdLineProgressReporter(width=width, custom_print=mock_printer)
+        progress_reporter = console.CmdLineProgressReporter(width=width, printer=mock_printer)
         progress_reporter.print(message=message, progress=".")
         mock_printer.assert_not_called()
         patched_flush.assert_not_called()
@@ -134,7 +134,7 @@ class TestCmdLineProgressReporter:
         message = "Unit test message"
         width = random.randint(20, 140)
         mock_printer = mock.Mock()
-        progress_reporter = console.CmdLineProgressReporter(width=width, custom_print=mock_printer)
+        progress_reporter = console.CmdLineProgressReporter(width=width, printer=mock_printer)
         progress_reporter.print(message=message, progress=".")
         mock_printer.assert_has_calls([
             mock.call(" " * width, end=""),
@@ -152,7 +152,7 @@ class TestCmdLineProgressReporter:
         message = "Unit test message"
         width = random.randint(20, 140)
         mock_printer = mock.Mock()
-        progress_reporter = console.CmdLineProgressReporter(width=width, custom_print=mock_printer)
+        progress_reporter = console.CmdLineProgressReporter(width=width, printer=mock_printer)
         progress_reporter.print(message=message, progress=".")
         mock_printer.assert_not_called()
         patched_flush.assert_not_called()
@@ -167,7 +167,7 @@ class TestCmdLineProgressReporter:
 
         width = random.randint(20, 140)
         mock_printer = mock.Mock()
-        progress_reporter = console.CmdLineProgressReporter(width=width, custom_print=mock_printer)
+        progress_reporter = console.CmdLineProgressReporter(width=width, printer=mock_printer)
         progress_reporter.finish()
         mock_printer.assert_not_called()
 
@@ -182,6 +182,6 @@ class TestCmdLineProgressReporter:
 
         width = random.randint(20, 140)
         mock_printer = mock.Mock()
-        progress_reporter = console.CmdLineProgressReporter(width=width, custom_print=mock_printer)
+        progress_reporter = console.CmdLineProgressReporter(width=width, printer=mock_printer)
         progress_reporter.finish()
         mock_printer.assert_called_once_with("")
