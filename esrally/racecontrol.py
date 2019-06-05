@@ -17,10 +17,11 @@
 
 import collections
 import logging
+import os
 import sys
-
 import tabulate
 import thespian.actors
+import urllib
 
 from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, DOC_LINK, PROGRAM_NAME
 from esrally.utils import console, convert, opts
@@ -344,7 +345,7 @@ def from_distribution(cfg):
 
 
 def benchmark_only(cfg):
-    console.println(BOGUS_RESULTS_WARNING)
+    console.println(BOGUS_RESULTS_WARNING, flush=True)
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
@@ -404,6 +405,15 @@ def run(cfg):
                 "please read the docs for from-distribution pipeline at "
                 "{}/pipelines.html#from-distribution".format(name, DOC_LINK))
         logger.info("User specified pipeline [%s].", name)
+
+    if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
+        # in this case only benchmarking remote Elasticsearch clusters makes sense
+        if name != "benchmark-only":
+            raise exceptions.SystemSetupError(
+                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+                "For more details read the docs for the benchmark-only pipeline in {}\n".format(
+                    urllib.parse.urljoin(DOC_LINK, "pipelines.html#benchmark-only")))
 
     try:
         pipeline = pipelines[name]
