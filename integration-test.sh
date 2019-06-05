@@ -234,6 +234,19 @@ function test_list {
     esrally list telemetry --configuration-name="${cfg}"
 }
 
+function test_download {
+    local cfg
+    random_configuration cfg
+
+    for dist in "${DISTRIBUTIONS[@]}"
+    do
+        random_configuration cfg
+        info "test download [--configuration-name=${cfg}], [--distribution-version=${dist}]"
+        kill_rally_processes
+        esrally download --configuration-name="${cfg}" --distribution-version="${dist}" --quiet
+    done
+}
+
 function test_sources {
     local cfg
     random_configuration cfg
@@ -406,6 +419,8 @@ function run_test {
     test_list
     echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
     test_distribution_fails_with_wrong_track_params
+    echo "**************************************** TESTING RALLY DOWNLOAD COMMAND ***********************************"
+    test_download
     echo "**************************************** TESTING RALLY WITH ES FROM SOURCES ************************************"
     test_sources
     echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"

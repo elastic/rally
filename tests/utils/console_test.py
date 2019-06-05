@@ -25,6 +25,9 @@ from esrally.utils import console
 
 
 class ConsoleFunctionTests(TestCase):
+    oldconsole_quiet = None
+    oldconsole_rally_running_in_docker = None
+
     @classmethod
     def setUpClass(cls):
         cls.oldconsole_quiet = console.QUIET
@@ -75,9 +78,23 @@ class ConsoleFunctionTests(TestCase):
         console.println(msg="Unittest message")
         patched_print.assert_not_called()
 
+    @mock.patch("sys.stdout.isatty")
+    @mock.patch("builtins.print")
+    def test_println_force_prints_even_when_quiet(self, patched_print, patched_isatty):
+        console.init(quiet=True)
+        patched_isatty.return_value = random.choice([True, False])
+
+        console.println(msg="Unittest message", force=True)
+        patched_print.assert_called_once_with(
+            "Unittest message", end="\n", flush=False
+        )
+
 
 # pytest style class names need to start with Test and don't need to subclass
 class TestCmdLineProgressReporter:
+    oldconsole_quiet = None
+    oldconsole_rally_running_in_docker = None
+
     @classmethod
     def setup_class(cls):
         cls.oldconsole_quiet = console.QUIET

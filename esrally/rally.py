@@ -25,7 +25,7 @@ import uuid
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, log
 from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
-from esrally.mechanic import team, telemetry
+from esrally.mechanic import team, telemetry, mechanic
 from esrally.utils import io, convert, process, console, net, opts
 
 
@@ -144,6 +144,30 @@ def create_arg_parser():
             help="Automatically accept all options with default values (default: false).",
             default=False,
             action="store_true")
+
+    download_parser = subparsers.add_parser("download", help="Downloads an artifact")
+    download_parser.add_argument(
+        "--team-repository",
+        help="Define the repository from where Rally will load teams and cars (default: default).",
+        default="default")
+    download_parser.add_argument(
+        "--distribution-version",
+        help="Define the version of the Elasticsearch distribution to download. "
+             "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+        default="")
+    download_parser.add_argument(
+        "--distribution-repository",
+        help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+        default="release")
+    download_parser.add_argument(
+        "--car",
+        help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+        default="defaults")  # optimized for local usage
+    download_parser.add_argument(
+        "--car-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
+        default=""
+    )
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -293,11 +317,6 @@ def create_arg_parser():
             help="Write the command line report also to the provided file.",
             default="")
         p.add_argument(
-            "--quiet",
-            help="Suppress as much as output as possible (default: false).",
-            default=False,
-            action="store_true")
-        p.add_argument(
             "--preserve-install",
             help="Keep the benchmark candidate and its index. (default: %s)." % str(preserve_install).lower(),
             default=preserve_install)
@@ -332,12 +351,17 @@ def create_arg_parser():
             action="store_true",
             default=False)
 
-    for p in [parser, config_parser, list_parser, race_parser, compare_parser]:
+    for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
             help=argparse.SUPPRESS,
             default=None)
+        p.add_argument(
+            "--quiet",
+            help="Suppress as much as output as possible (default: false).",
+            default=False,
+            action="store_true")
 
     return parser
 
@@ -484,6 +508,8 @@ def dispatch_sub_command(cfg, sub_command):
             reporter.compare(cfg)
         elif sub_command == "list":
             dispatch_list(cfg)
+        elif sub_command == "download":
+            mechanic.download(cfg)
         elif sub_command == "race":
             race(cfg)
         elif sub_command == "generate":

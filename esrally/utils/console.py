@@ -112,24 +112,25 @@ def init(quiet=False):
             pass
 
 
-def info(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
-    println(msg, console_prefix="[INFO]", end=end, flush=flush, overline=overline, underline=underline,
+def info(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
+    println(msg, console_prefix="[INFO]", end=end, flush=flush, force=force, overline=overline, underline=underline,
             logger=logger.info if logger else None)
 
 
-def warn(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
-    println(msg, console_prefix="[WARNING]", end=end, flush=flush, overline=overline, underline=underline
+def warn(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
+    println(msg, console_prefix="[WARNING]", end=end, flush=flush, force=force, overline=overline, underline=underline
             , logger=logger.warning if logger else None)
 
 
-def error(msg, end="\n", flush=False, logger=None, overline=None, underline=None):
-    println(msg, console_prefix="[ERROR]", end=end, flush=flush, overline=overline, underline=underline
+def error(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
+    println(msg, console_prefix="[ERROR]", end=end, flush=flush, force=force, overline=overline, underline=underline
             , logger=logger.error if logger else None)
 
 
-def println(msg, console_prefix=None, end="\n", flush=False, logger=None, overline=None, underline=None):
+def println(msg, console_prefix=None, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
     # TODO: Checking for sys.stdout.isatty() prevents shell redirections and pipes (useful for list commands). Can we remove this check?
-    if not QUIET and (RALLY_RUNNING_IN_DOCKER or sys.stdout.isatty()):
+    allow_print = force or (not QUIET and (RALLY_RUNNING_IN_DOCKER or sys.stdout.isatty()))
+    if allow_print:
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
             print(format.underline_for(complete_msg, underline_symbol=overline), flush=flush)
@@ -148,7 +149,7 @@ class CmdLineProgressReporter:
     """
     CmdLineProgressReporter supports displaying an updating progress indication together with an information message.
 
-    :param custom_print: allow use of a different print method to assist with patching in unittests
+    :param printer: allow use of a different print method to assist with patching in unittests
     """
 
     def __init__(self, width, plain_output=False, printer=print):
