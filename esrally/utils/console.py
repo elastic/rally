@@ -155,7 +155,7 @@ class CmdLineProgressReporter:
         self._width = width
         self._first_print = True
         self._plain_output = plain_output
-        self._custom_print = printer
+        self._printer = printer
 
     def print(self, message, progress):
         """
@@ -171,16 +171,16 @@ class CmdLineProgressReporter:
             return
         w = self._width
         if self._first_print:
-            self._custom_print(" " * w, end="")
+            self._printer(" " * w, end="")
             self._first_print = False
 
         final_message = self._truncate(message, self._width - len(progress))
 
         formatted_progress = progress.rjust(w - len(final_message))
         if self._plain_output:
-            self._custom_print("\n{0}{1}".format(final_message, formatted_progress), end="")
+            self._printer("\n{0}{1}".format(final_message, formatted_progress), end="")
         else:
-            self._custom_print("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")
+            self._printer("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")
         sys.stdout.flush()
 
     def _truncate(self, text, max_length, omission="..."):
@@ -193,4 +193,4 @@ class CmdLineProgressReporter:
         if QUIET or (not RALLY_RUNNING_IN_DOCKER and not sys.stdout.isatty()):
             return
         # print a final statement in order to end the progress line
-        self._custom_print("")
+        self._printer("")
