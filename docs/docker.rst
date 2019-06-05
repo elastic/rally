@@ -55,75 +55,10 @@ Run the ``nyc_taxis`` track in ``test-mode`` using::
 
     $ docker run elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
-        ____        ____
-       / __ \____ _/ / /_  __
-      / /_/ / __ `/ / / / / /
-     / _, _/ /_/ / / / /_/ /
-    /_/ |_|\__,_/_/_/\__, /
-                    /____/
 
-    ...
+:NOTE: We didn't need to explicitly specify ``esrally`` as we'd normally do in a normal CLI invocation; the entrypoint in the Docker image does this automatically.
 
-    [INFO] Racing on track [nyc_taxis], challenge [append-no-conflicts] and car ['external'] with version [7.1.1].
-
-    [INFO] Downloading data for track nyc_taxis (30.6 kB total size)                  [100.0%]
-    [INFO] Decompressing track data from [/rally/.rally/benchmarks/data/nyc_taxis/documents-1k.json.bz2] to [/rally/.rally/benchmarks/data/nyc_taxis/documents-1k.json] ... [OK]
-    [INFO] Preparing file offset table for [/rally/.rally/benchmarks/data/nyc_taxis/documents-1k.json] ... [OK]
-    Running delete-index                                                           [100% done]
-    Running create-index                                                           [100% done]
-    Running check-cluster-health                                                   [100% done]
-    Running index                                                                  [100% done]
-    Running refresh-after-index                                                    [100% done]
-    Running default                                                                [100% done]
-    Running range                                                                  [100% done]
-    Running distance_amount_agg                                                    [100% done]
-    Running autohisto_agg                                                          [100% done]
-    Running date_histogram_agg                                                     [100% done]
-
-    ------------------------------------------------------
-        _______             __   _____
-       / ____(_)___  ____ _/ /  / ___/_________  ________
-      / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
-     / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
-    /_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
-    ------------------------------------------------------
-
-    |   Lap |                                                         Metric |                Task |       Value |   Unit |
-    |------:|---------------------------------------------------------------:|--------------------:|------------:|-------:|
-    |   All |                     Cumulative indexing time of primary shards |                     |     0.03845 |    min |
-    |   All |             Min cumulative indexing time across primary shards |                     |     0.03845 |    min |
-    |   All |          Median cumulative indexing time across primary shards |                     |     0.03845 |    min |
-    |   All |             Max cumulative indexing time across primary shards |                     |     0.03845 |    min |
-    |   All |            Cumulative indexing throttle time of primary shards |                     |           0 |    min |
-    |   All |    Min cumulative indexing throttle time across primary shards |                     |           0 |    min |
-    |   All | Median cumulative indexing throttle time across primary shards |                     |           0 |    min |
-    ...
-    |   All |                                                  Segment count |                     |           6 |        |
-    |   All |                                                 Min Throughput |               index |     1597.25 | docs/s |
-    |   All |                                              Median Throughput |               index |     1597.25 | docs/s |
-    |   All |                                                 Max Throughput |               index |     1597.25 | docs/s |
-    |   All |                                        50th percentile latency |               index |     545.075 |     ms |
-    |   All |                                       100th percentile latency |               index |     608.318 |     ms |
-    |   All |                                   50th percentile service time |               index |     545.075 |     ms |
-    |   All |                                  100th percentile service time |               index |     608.318 |     ms |
-    |   All |                                                     error rate |               index |           0 |      % |
-    ...
-    |   All |                                                 Min Throughput |  date_histogram_agg |       50.29 |  ops/s |
-    |   All |                                              Median Throughput |  date_histogram_agg |       50.29 |  ops/s |
-    |   All |                                                 Max Throughput |  date_histogram_agg |       50.29 |  ops/s |
-    |   All |                                       100th percentile latency |  date_histogram_agg |      9.0246 |     ms |
-    |   All |                                  100th percentile service time |  date_histogram_agg |      9.0246 |     ms |
-    |   All |                                                     error rate |  date_histogram_agg |           0 |      % |
-
-
-    --------------------------------
-    [INFO] SUCCESS (took 14 seconds)
-    --------------------------------
-
-
-:NOTE: We didn't need to explicitly specify ``esrally`` as we'd normally do in a normal CLI invocation; the entrypoint in the Docker image does this automatically for us.
-
-Now you should be able to use all regular :doc:`Rally commands <command_line_reference/>`, bearing in mind the aforementioned :ref:`limitations <docker_limitations>`.
+Now you are able to use all regular :doc:`Rally commands <command_line_reference/>`, bearing in mind the aforementioned :ref:`limitations <docker_limitations>`.
 
 Configuration
 -------------
@@ -137,8 +72,8 @@ Persistence
 -----------
 
 It is highly recommended to use a local bind mount (or a `named volume <https://success.docker.com/article/different-types-of-volumes>`_) for the directory ``/rally/.rally`` in the container.
-This will ensure you have persistence across invocations and any tracks downloaded and extracted won't need to be extracted again.
-You need to ensure the UID is ``1000`` (or GID is ``0`` especially in OpenShift) so that Rally can write to the directory.
+This will ensure you have persistence across invocations and any tracks downloaded and extracted can be reused, reducing the startup time.
+You need to ensure the UID is ``1000`` (or GID is ``0`` especially in OpenShift) so that Rally can write to the bind-mounted directory.
 
 If your local bind mount doesn't contain a ``rally.ini`` the container will create one for you during the first run.
 

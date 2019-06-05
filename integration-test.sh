@@ -398,7 +398,7 @@ function docker_compose {
     elif [[ "$1" == "down" ]]; then
         docker-compose -f docker/docker-compose-tests.yml down -v
     else
-        error "Unknown argument for docker-compose, exiting."
+        error "Unknown argument [$1] for docker-compose, exiting."
     fi
 }
 

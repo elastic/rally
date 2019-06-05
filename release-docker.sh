@@ -53,13 +53,13 @@ echo "Publishing Docker image elastic/rally:$RALLY_VERSION   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push elastic/rally:${RALLY_VERSION}
+#docker push elastic/rally:${RALLY_VERSION}
 
 echo "============================================"
 echo "Publishing Docker image elastic/rally:latest"
 echo "============================================"
 
-docker tag elastic/rally:${RALLY_VERSION} elastic/rally:latest
-docker push elastic/rally:latest
+#docker tag elastic/rally:${RALLY_VERSION} elastic/rally:latest
+#docker push elastic/rally:latest
 
 trap - ERR
