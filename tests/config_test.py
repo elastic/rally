@@ -292,7 +292,7 @@ class ConfigFactoryTests(TestCase):
         self.assertEqual("in-memory", config_store.config["reporting"]["datastore.type"])
         self.assertEqual("", config_store.config["reporting"]["datastore.host"])
         self.assertEqual("", config_store.config["reporting"]["datastore.port"])
-        self.assertEqual("", config_store.config["reporting"]["datastore.secure"])
+        self.assertEqual("False", config_store.config["reporting"]["datastore.secure"])
         self.assertEqual("", config_store.config["reporting"]["datastore.user"])
         self.assertEqual("", config_store.config["reporting"]["datastore.password"])
 
