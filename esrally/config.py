@@ -351,7 +351,7 @@ class ConfigFactory:
             if data_store_choice == "1":
                 env_name = "local"
                 data_store_type = "in-memory"
-                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
+                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "False", "", ""
             else:
                 data_store_type = "elasticsearch"
                 data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
@@ -365,7 +365,7 @@ class ConfigFactory:
             # Does not matter for an in-memory store
             env_name = "local"
             data_store_type = "in-memory"
-            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
+            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "False", "", ""
             preserve_install = False
 
         config = configparser.ConfigParser()
