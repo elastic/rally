@@ -37,6 +37,6 @@ LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vcs-url="https://github.com/elastic/rally" \
   license="${RALLY_LICENSE}"
 
-VOLUME ["/rally"]
+VOLUME ["/rally/.rally"]
 
 ENTRYPOINT ["/entrypoint.sh"]

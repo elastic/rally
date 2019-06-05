@@ -66,6 +66,11 @@ We recommend that you use `Homebrew <https://brew.sh/>`_::
 
     brew install python3
 
+**Docker**
+
+Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
+Refer to the section :doc:`Running Rally with Docker <docker/>` for detailed instructions.
+
 git
 ~~~
 
