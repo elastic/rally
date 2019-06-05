@@ -36,43 +36,64 @@ function test_docker_image {
     # First ensure any left overs have been cleaned up
     docker_compose down
 
-    printf "* Testing Rally docker image uses the right version\n"
+    echo "* Testing Rally docker image uses the right version"
     actual_version=$(docker run --rm elastic/rally:${RALLY_VERSION} esrally --version | cut -d ' ' -f 2,2)
     if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
-        printf "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
+        echo "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
+        exit 1
+    fi
+
+    echo "* Testing Rally docker image version label is correct"
+    actual_version=$(docker inspect --format '{{ index .Config.Labels "org.label-schema.version"}}' elastic/rally:${RALLY_VERSION})
+    if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
+        echo "org.label-schema.version label in Rally Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
+        exit 1
+    fi
+
+    echo "* Testing Rally docker image license label is correct"
+    actual_license=$(docker inspect --format '{{ index .Config.Labels "license"}}' elastic/rally:${RALLY_VERSION})
+    if [[ ${actual_license} != "Apache License" ]]; then
+        echo "license label in Rally Docker image: [${actual_license}] doesn't match the expected license [Apache License]"
         exit 1
     fi
 
     export TEST_COMMAND="--pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
-    printf "* Testing Rally docker image using parameters: ${TEST_COMMAND}\n"
+    echo "* Testing Rally docker image using parameters: ${TEST_COMMAND}"
     docker_compose up
     docker_compose down
 
     # --list should work
     export TEST_COMMAND="list tracks"
-    printf "* Testing Rally docker image using parameters: ${TEST_COMMAND}\n"
+    echo "* Testing Rally docker image using parameters: ${TEST_COMMAND}"
     docker_compose up
     docker_compose down
 
     # --help should work
     export TEST_COMMAND="--help"
-    printf "* Testing Rally docker image using parameters: ${TEST_COMMAND}\n"
+    echo "* Testing Rally docker image using parameters: ${TEST_COMMAND}"
     docker_compose up
     docker_compose down
 
     # allow overriding CMD too
     export TEST_COMMAND="esrally --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
-    printf "* Testing Rally docker image using parameters: ${TEST_COMMAND}\n"
+    echo "* Testing Rally docker image using parameters: ${TEST_COMMAND}"
     docker_compose up
     docker_compose down
+
+
     unset TEST_COMMAND
 }
 
 function push_failed {
-    printf "Error while pushing Docker image. Did you \`docker login\`?"
+    echo "Error while pushing Docker image. Did you \`docker login\`?"
 
 }
 
+if [[ $# -eq 0 ]] ; then
+    echo "ERROR: $0 requires the Rally version to push as a command line argument and you didn't supply it."
+    echo "For example: $0 1.1.0"
+    exit 1
+fi
 export RALLY_VERSION=$1
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
 
@@ -93,14 +114,14 @@ echo "Publishing Docker image elastic/rally:$RALLY_VERSION   "
 echo "======================================================="
 
 trap push_failed ERR
-# docker push elastic/rally:${RALLY_VERSION}
+docker push elastic/rally:${RALLY_VERSION}
 
 echo "============================================"
 echo "Publishing Docker image elastic/rally:latest"
 echo "============================================"
 
-# docker tag elastic/rally:${RALLY_VERSION} elastic/rally:latest
-# docker push elastic/rally:latest
+docker tag elastic/rally:${RALLY_VERSION} elastic/rally:latest
+docker push elastic/rally:latest
 
 trap - ERR
 
