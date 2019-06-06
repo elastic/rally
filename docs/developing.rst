@@ -11,6 +11,7 @@ Install the following software packages:
 * ``virtualenv`` available on the path (verify with ``virtualenv --version``)
 * Pyenv installed and ``eval "$(pyenv init -)"`` is added to the shell configuration file. For more details please refer to the PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/master/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
+* `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
 * git 1.9 or better
 
 Check the :doc:`installation guide </install>` for detailed installation instructions for these packages.

@@ -39,6 +39,8 @@ PROXY_CONTAINER_ID=-1
 PROXY_SERVER_AVAILABLE=0
 
 function check_prerequisites {
+    exit_if_docker_not_running
+
     local curl_major_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 1,1)
     local curl_minor_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 2,2)
     local curl_patch_release=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 3,3)
@@ -152,19 +154,18 @@ function set_up_metrics_store {
     popd > /dev/null
 }
 
-function docker_is_running {
-    docker ps > /dev/null
-    return $?
+function exit_if_docker_not_running {
+    if ! docker ps >/dev/null 2>&1; then
+        error "Docker is required to run integration tests. Install and run Docker and try again."
+        exit 1
+    fi
 }
 
 function set_up_proxy_server {
-    # we want to see output to stderr for diagnosing problems
-    if docker_is_running; then
-        info "Docker is available. Proxy-related tests will be run"
-        local config_dir="$PWD/.rally_it/proxy_tmp"
-        mkdir -p ${config_dir}
+    local config_dir="$PWD/.rally_it/proxy_tmp"
+    mkdir -p ${config_dir}
 
-        cat > ${config_dir}/squid.conf <<"EOF"
+    cat > ${config_dir}/squid.conf <<"EOF"
 auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/squidpasswords
 auth_param basic realm proxy
 acl authenticated proxy_auth REQUIRED
@@ -172,14 +173,11 @@ http_access allow authenticated
 http_port 3128
 EOF
 
-        cat > ${config_dir}/squidpasswords <<"EOF"
+    cat > ${config_dir}/squidpasswords <<"EOF"
 testuser:$apr1$GcQaaItl$lhi4JoDsWBpZbkXVbI51O/
 EOF
-        PROXY_CONTAINER_ID=$(docker run --rm --name squid -d -v ${config_dir}/squidpasswords:/etc/squid/squidpasswords -v ${config_dir}/squid.conf:/etc/squid/squid.conf -p 3128:3128 datadog/squid)
-        PROXY_SERVER_AVAILABLE=1
-    else
-        warn "Docker is not available. Skipping proxy-related tests."
-    fi
+    PROXY_CONTAINER_ID=$(docker run --rm --name squid -d -v ${config_dir}/squidpasswords:/etc/squid/squidpasswords -v ${config_dir}/squid.conf:/etc/squid/squid.conf -p 3128:3128 datadog/squid)
+    PROXY_SERVER_AVAILABLE=1
 }
 
 function set_up {
@@ -310,7 +308,7 @@ function test_distribution_fails_with_wrong_track_params {
         error "Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
         error ${err_msg}
         exit ${ret_code}
-    elif docker_is_running && [[ ${ret_code} -ne 0 ]]; then
+    elif exit_if_docker_not_running && [[ ${ret_code} -ne 0 ]]; then
         # need to use grep -P which is unavailable with macOS grep
         if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu:xenial grep -Pzoq '.*CRITICAL Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n- bulk_indexing_clients\n- bulk_size\n- cluster_health\n- conflict_probability\n- index_settings\n- ingest_percentage\n- number_of_replicas\n- number_of_shards\n- on_conflict\n- recency\n- source_enabled\n*' /rally.log; then
             error ${err_msg}
@@ -408,6 +406,89 @@ function test_proxy_connection {
     restore_rally_log
 }
 
+function docker_compose {
+    if [[ "$1" == "up" ]]; then
+        docker-compose -f docker/docker-compose-tests.yml up --abort-on-container-exit
+    elif [[ "$1" == "down" ]]; then
+        docker-compose -f docker/docker-compose-tests.yml down -v
+    else
+        error "Unknown argument [$1] for docker-compose, exiting."
+    fi
+}
+
+function tests_for_all_docker_images {
+    export TEST_COMMAND="--pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose up
+    docker_compose down
+
+    # list should work
+    export TEST_COMMAND="list tracks"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose up
+    docker_compose down
+
+    # --help should work
+    export TEST_COMMAND="--help"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose up
+    docker_compose down
+
+    # allow overriding CMD too
+    export TEST_COMMAND="esrally --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
+    docker_compose up
+    docker_compose down
+    unset TEST_COMMAND
+}
+
+function test_docker_dev_image {
+    # First ensure any left overs have been cleaned up
+    docker_compose down
+
+    export RALLY_VERSION=$(cat version.txt)
+    export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+
+    # Build the docker image
+    docker build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/Dockerfile-dev $PWD
+
+    tests_for_all_docker_images
+}
+
+# This function gets called by release-docker.sh and assumes the image has been already built
+function test_docker_release_image {
+    if [[ -z "${RALLY_VERSION}" ]]; then
+        error "Environment variable [RALLY_VERSION] needs to be set to test the release image; exiting."
+    elif [[ -z "${RALLY_LICENSE}" ]]; then
+        error "Environment variable [RALLY_LICENSE] needs to be set to test the release image; exiting."
+    fi
+
+    docker_compose down
+
+    info "Testing Rally docker image uses the right version"
+    actual_version=$(docker run --rm elastic/rally:${RALLY_VERSION} esrally --version | cut -d ' ' -f 2,2)
+    if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
+        echo "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
+        exit 1
+    fi
+
+    info "Testing Rally docker image version label is correct"
+    actual_version=$(docker inspect --format '{{ index .Config.Labels "org.label-schema.version"}}' elastic/rally:${RALLY_VERSION})
+    if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
+        echo "org.label-schema.version label in Rally Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
+        exit 1
+    fi
+
+    info "Testing Rally docker image license label is correct"
+    actual_license=$(docker inspect --format '{{ index .Config.Labels "license"}}' elastic/rally:${RALLY_VERSION})
+    if [[ ${actual_license} != ${RALLY_LICENSE} ]]; then
+        echo "license label in Rally Docker image: [${actual_license}] doesn't match the expected license [${RALLY_LICENSE}]"
+        exit 1
+    fi
+
+    tests_for_all_docker_images
+}
+
 function run_test {
     if [ "${PROXY_SERVER_AVAILABLE}" == "1" ]; then
         echo "**************************************** TESTING PROXY CONNECTIONS *********************************"
@@ -427,6 +508,8 @@ function run_test {
     test_distributions
     echo "**************************************** TESTING RALLY BENCHMARK-ONLY PIPELINE *********************************"
     test_benchmark_only
+    echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
+    test_docker_dev_image
 }
 
 function tear_down {
@@ -459,6 +542,12 @@ function main {
 }
 
 check_prerequisites
+
+# allow invocation from release-docker.sh
+if [[ $1 == "test-docker-release" ]]; then
+    test_docker_release_image
+    exit
+fi
 
 trap "tear_down" EXIT
 

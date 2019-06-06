@@ -149,6 +149,13 @@ Rally can be tested with different Python versions and it uses pyenv to manage t
 
 Please refer to PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
 
+Docker
+------
+
+Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
+
+Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
+
 .. _install_offline-install:
 
 Offline Install

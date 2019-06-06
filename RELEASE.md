@@ -11,8 +11,8 @@ It is recommended to run `make release-checks release_version=0.9.2 next_version
 * Close milestone on Github: https://github.com/elastic/rally/milestones.
 * Prepare offline installation package `source scripts/offline-install.sh "${RELEASE_VERSION}"`.
 * Upload offline install package to Github: https://github.com/elastic/rally/releases/edit/$RELEASE_VERSION.
+* Build and publish Docker image: ./release-docker.sh ${RELEASE_VERSION}.
 * Announce on Discuss: https://discuss.elastic.co/c/annoucements.
-
 
 ### Preconditions
 
