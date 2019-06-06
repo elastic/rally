@@ -25,7 +25,6 @@ from unittest import TestCase, mock
 
 from esrally import config, exceptions, metrics, paths
 from esrally.mechanic import launcher, provisioner, team
-from esrally.mechanic.launcher import StartupWatcher
 from esrally.utils import opts
 from esrally.utils.io import guess_java_home
 
@@ -172,45 +171,6 @@ class ProcessLauncherTests(TestCase):
         pid = nodes[0].pid
         self.assertTrue(psutil.pid_exists(pid))
         proc_launcher.stop(nodes)
-
-    def test_child_process_start_stop(self):
-        cfg = create_config()
-        car = create_default_car()
-        p = create_provisioner(car, "6.8.0")
-        ms = create_metrics_store(cfg, car)
-        cfg.add(config.Scope.application, "mechanic", "daemon", False)
-        proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
-        node_config = p.prepare({"elasticsearch": HOME_DIR + "/Downloads/elasticsearch-oss-6.8.0.tar.gz"})
-        nodes = proc_launcher.start([node_config])
-        pid = nodes[0].pid
-        self.assertTrue(psutil.pid_exists(pid))
-        proc_launcher.stop(nodes)
-
-    def test_startup_watcher(self):
-        s = BytesIO()
-        s.writelines([b"[2019-05-31T06:55:27,732] ohabljkfn\n",
-                      b"[2019-05-31T06:55:27,732] piunasnfj\n",
-                      b"[2019-05-31T06:55:27,732] started\n",
-                      b"[2019-05-31T06:56:27,732] oiulhbjkn.\n",
-                      b"[2019-05-31T06:57:27,732] stopped\n", ])
-
-        startup_event = threading.Event()
-        watcher = StartupWatcher(node_name="test",
-                                 console=s,
-                                 startup_event=startup_event,
-                                 startup_timestamp=datetime.datetime(2019, 5, 31, 7))
-        t = threading.Thread(target=watcher.watch)
-        t.setDaemon(True)
-        t.start()
-        startup_event.wait(timeout=0.1)
-        self.assertFalse(startup_event.is_set())
-        offset = s.tell()
-
-        s.writelines([b"[2019-05-31T07:01:40,111] started\n",
-                      b"[2019-05-31T07:02:40,111] extralogs\n"])
-        s.seek(offset, 0)
-        startup_event.wait(timeout=0.1)
-        self.assertTrue(startup_event.is_set())
 
 
 class ExternalLauncherTests(TestCase):
