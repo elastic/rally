@@ -41,6 +41,30 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 
 This subcommand is needed to :doc:`configure </configuration>` Rally. It is implicitly chosen if you start Rally for the first time but you can rerun this command at any time.
 
+``download``
+~~~~~~~~~~~~~
+
+This subcommand can be used to download Elasticsearch distributions. Example::
+
+    esrally download --distribution-version=6.8.0 --quiet
+
+This will download the OSS distribution of Elasticsearch 6.8.0. Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has downloaded it::
+
+    {
+      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-oss-6.8.0.tar.gz"
+    }
+
+To download the default distribution you need to specify a license (via ``--car``)::
+
+    esrally download --distribution-version=6.8.0 --car=basic-license --quiet
+
+This will show the path to the default distribution::
+
+    {
+      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-6.8.0.tar.gz"
+    }
+
+
 Command Line Flags
 ------------------
 

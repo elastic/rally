@@ -29,6 +29,16 @@ from esrally.mechanic import supplier, provisioner, launcher, team
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
 
+def download(cfg):
+    challenge_root_path = paths.race_root(cfg)
+    car, plugins = load_team(cfg, external=False)
+
+    s = supplier.create(cfg, sources=False, distribution=True, build=False,
+                        challenge_root_path=challenge_root_path, car=car, plugins=plugins)
+    binaries = s()
+    console.println(json.dumps(binaries, indent=2), force=True)
+
+
 ##############################
 # Public Messages
 ##############################
