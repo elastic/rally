@@ -155,8 +155,9 @@ function set_up_metrics_store {
 }
 
 function exit_if_docker_not_running {
-    if docker ps > /dev/null; then
+    if ! docker ps >/dev/null 2>&1; then
         error "Docker is required to run integration tests. Install and run Docker and try again."
+        exit 1
     fi
 }
 
