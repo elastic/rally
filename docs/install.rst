@@ -66,11 +66,6 @@ We recommend that you use `Homebrew <https://brew.sh/>`_::
 
     brew install python3
 
-**Docker**
-
-Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
-Refer to the section :doc:`Running Rally with Docker <docker/>` for detailed instructions.
-
 git
 ~~~
 
@@ -153,6 +148,13 @@ PyEnv Install
 Rally can be tested with different Python versions and it uses pyenv to manage them. 
 
 Please refer to PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
+
+Docker
+------
+
+Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
+
+Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
 
 .. _install_offline-install:
 

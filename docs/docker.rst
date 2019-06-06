@@ -8,7 +8,7 @@ Rally is also available as a `Docker image <https://hub.docker.com/r/elastic/ral
 Limitations
 -----------
 
-The following Rally functionality isn't supported or isn't recommended when using the Docker image:
+The following Rally functionality isn't supported when using the Docker image:
 
 * :ref:`Distributing the load test driver <recipe_distributed_load_driver>` to apply load from multiple machines.
 * Using other :doc:`pipelines <pipelines/>` apart from ``benchmark-only``.
@@ -56,7 +56,8 @@ Run the ``nyc_taxis`` track in ``test-mode`` using::
     $ docker run elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
 
-:NOTE: We didn't need to explicitly specify ``esrally`` as we'd normally do in a normal CLI invocation; the entrypoint in the Docker image does this automatically.
+.. note::
+    We didn't need to explicitly specify ``esrally`` as we'd normally do in a normal CLI invocation; the entrypoint in the Docker image does this automatically.
 
 Now you are able to use all regular :doc:`Rally commands <command_line_reference/>`, bearing in mind the aforementioned :ref:`limitations <docker_limitations>`.
 
@@ -83,7 +84,7 @@ Example::
     sudo chgrp 0 myrally
 
     # First run will generate the rally.ini
-    docker run --rm -v $PWD/tmpdir:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
+    docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -108,7 +109,7 @@ Example::
     * Ask a question on the forum at https://discuss.elastic.co/c/elasticsearch/rally
 
     # now run our benchmark
-    docker run --rm -v $PWD/tmpdir:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
+    docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
     ...
 
@@ -123,7 +124,7 @@ Example::
 
 In case you forgot to bind mount a directory, the Rally Docker image will create an `anonymous volume <https://success.docker.com/article/different-types-of-volumes>`_ for ``/rally/.rally`` to ensure logs and results get persisted even after the container has terminated.
 
-For example, after executing our earlier quickstart example ``docker run elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200``, ``docker volume ls`` shows a volume:::
+For example, after executing our earlier quickstart example ``docker run elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200``, ``docker volume ls`` shows a volume::
 
     $ docker volume ls
     DRIVER              VOLUME NAME
@@ -151,7 +152,8 @@ Rally runs as user ``1000`` and its files are installed with uid:gid ``1000:0`` 
 Extending the Docker image
 --------------------------
 
-Creating your own customized Docker image is simple. You can start with a ``Dockerfile`` as simple as::
+You can also create your own customized Docker image on top of the existing one.
+The example below shows how to get started::
 
     FROM elastic/rally:1.2.0
     COPY --chown=1000:0 rally.ini /rally/.rally/
