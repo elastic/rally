@@ -1,7 +1,7 @@
 Running Rally with Docker
 =========================
 
-Rally is also available as a `Docker image <https://hub.docker.com/r/elastic/rally>`_.
+Rally is available as a `Docker image <https://hub.docker.com/r/elastic/rally>`_.
 
 .. _docker_limitations:
 
