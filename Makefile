@@ -37,7 +37,7 @@ prereq: make-requirements.txt
 #	pyenv global system $(PY34) $(PY35) $(PY36) $(PY37)
 	pyenv global system $(PY35) $(PY36) $(PY37)
 	@# Ensure all Python versions are registered for this project
-	@awk -F'=' '{print $$2 > ".python-version"}' make-requirements.txt
+	@awk -F'=' '{print $$2}' make-requirements.txt > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
 
 venv-create:
