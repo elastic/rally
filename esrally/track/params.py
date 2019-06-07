@@ -343,7 +343,7 @@ class SearchParamSource(ParamSource):
 
         index_name = params.get("index", default_index)
         type_name = params.get("type")
-        request_cache = params.get("cache", False)
+        request_cache = params.get("cache", None)
         query_body = params.get("body", None)
         query_body_params = params.get("body-params", None)
         pages = params.get("pages", None)

@@ -670,8 +670,9 @@ class Query(Runner):
 
     def _default_request_params(self, params):
         request_params = params.get("request-params", {})
-        if "cache" in params:
-            request_params["request_cache"] = str(params["cache"]).lower()
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
         return request_params
 
     def __exit__(self, exc_type, exc_val, exc_tb):

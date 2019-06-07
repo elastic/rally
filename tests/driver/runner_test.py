@@ -844,6 +844,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "cache": True,
             "body": {
                 "query": {
                     "match_all": {}
@@ -861,6 +862,15 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            doc_type=None,
+            body=params["body"],
+            params={
+                "request_cache": "true"
+            }
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_query_match_all(self, es):
@@ -888,7 +898,7 @@ class QueryRunnerTests(TestCase):
         params = {
             "index": "unittest",
             "type": "type",
-            "cache": False,
+            "cache": None,
             "body": {
                 "query": {
                     "match_all": {}
@@ -906,6 +916,13 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(result["timed_out"])
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
+
+        es.search.assert_called_once_with(
+            index="unittest",
+            doc_type="type",
+            body=params["body"],
+            params={}
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_only_one_page(self, es):
