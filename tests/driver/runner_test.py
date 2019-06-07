@@ -795,7 +795,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
-            "cache": True,
+            "cache": False,
             "body": None,
             "request-params": {
                 "q": "user:kimchy"
@@ -818,7 +818,7 @@ class QueryRunnerTests(TestCase):
             doc_type=None,
             body=params["body"],
             params={
-                "request_cache": "true",
+                "request_cache": "false",
                 "q": "user:kimchy"
             }
         )
@@ -939,7 +939,7 @@ class QueryRunnerTests(TestCase):
             "results-per-page": 100,
             "index": "unittest",
             "type": "type",
-            "cache": False,
+            "cache": True,
             "body": {
                 "query": {
                     "match_all": {}
@@ -958,6 +958,79 @@ class QueryRunnerTests(TestCase):
         self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
+
+        es.search.assert_called_once_with(
+            index="unittest",
+            doc_type="type",
+            body=params["body"],
+            scroll="10s",
+            size=100,
+            sort='_doc',
+            params={
+                "request_cache": "true"
+            }
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_scroll_query_no_request_cache(self, es):
+        # page 1
+        es.search.return_value = {
+            "_scroll_id": "some-scroll-id",
+            "took": 4,
+            "timed_out": False,
+            "hits": {
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+                ]
+            }
+        }
+        es.transport.perform_request.side_effect = [
+            # delete scroll id response
+            {
+                "acknowledged": True
+            }
+        ]
+
+        query_runner = runner.Query()
+
+        params = {
+            "pages": 1,
+            "results-per-page": 100,
+            "index": "unittest",
+            "type": "type",
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            results = query_runner(es, params)
+
+        self.assertEqual(1, results["weight"])
+        self.assertEqual(1, results["pages"])
+        self.assertEqual(2, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
+        self.assertEqual(4, results["took"])
+        self.assertEqual("pages", results["unit"])
+        self.assertFalse(results["timed_out"])
+        self.assertFalse("error-type" in results)
+
+        es.search.assert_called_once_with(
+            index="unittest",
+            doc_type="type",
+            body=params["body"],
+            scroll="10s",
+            size=100,
+            sort='_doc',
+            params={}
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_scroll_query_only_one_page_only_request_body_defined(self, es):
