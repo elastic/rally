@@ -596,9 +596,7 @@ class Query(Runner):
             return self.request_body_query(es, params)
 
     def request_body_query(self, es, params):
-        request_params = params.get("request-params", {})
-        if "cache" in params:
-            request_params["request_cache"] = str(params["cache"]).lower()
+        request_params = self._default_request_params(params)
         r = es.search(
             index=params.get("index", "_all"),
             doc_type=params.get("type"),
@@ -621,8 +619,7 @@ class Query(Runner):
         }
 
     def scroll_query(self, es, params):
-        request_params = params.get("request-params", {})
-        cache = params.get("cache")
+        request_params = self._default_request_params(params)
         hits = 0
         retrieved_pages = 0
         timed_out = False
@@ -641,7 +638,6 @@ class Query(Runner):
                     sort="_doc",
                     scroll="10s",
                     size=size,
-                    request_cache=cache,
                     params=request_params
                 )
                 # This should only happen if we concurrently create an index and start searching
@@ -671,6 +667,12 @@ class Query(Runner):
             "timed_out": timed_out,
             "took": took
         }
+
+    def _default_request_params(self, params):
+        request_params = params.get("request-params", {})
+        if "cache" in params:
+            request_params["request_cache"] = str(params["cache"]).lower()
+        return request_params
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:
