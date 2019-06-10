@@ -166,8 +166,7 @@ class DockerLauncher:
 
     def _start_process(self, cmd):
         subprocess.Popen(shlex.split(cmd), close_fds=True)
-        #TODO:  wait_for_docker_pidfile?
-        return wait_for_pidfile("./pid")
+        return 0
 
     def stop(self, nodes):
         if self.keep_running:
@@ -219,11 +218,6 @@ class ExternalLauncher:
         # nothing to do here, externally provisioned clusters / nodes don't have any specific telemetry devices
         # attached.
         pass
-
-
-def _get_pid_from_file(filename):
-    with open(filename, "r") as f:
-        return int(f.read())
 
 
 def wait_for_pidfile(pidfilename, timeout=60):
