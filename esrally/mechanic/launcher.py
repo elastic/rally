@@ -226,7 +226,7 @@ def _get_pid_from_file(filename):
         return int(f.read())
 
 
-def wait_for_pidfile(pidfilename, timeout=10):
+def wait_for_pidfile(pidfilename, timeout=60):
     endtime = _time() + timeout
     while _time() < endtime:
         try:
