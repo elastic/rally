@@ -328,7 +328,7 @@ class ProcessLauncher:
         cmd = ["bin/elasticsearch"]
         cmd.extend(["-d", "-p", "pid"])
         proc = subprocess.Popen(cmd,
-                                env,
+                                env=env,
                                 close_fds=True)
         ret = proc.wait()
         if ret != 0:
