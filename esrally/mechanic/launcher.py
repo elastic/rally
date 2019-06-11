@@ -284,7 +284,7 @@ class ProcessLauncher:
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
         env = self._prepare_env(car, node_name, java_home, t)
         t.on_pre_node_start(node_name)
-        node_pid = self._start_process(env, node_name, binary_path)
+        node_pid = self._start_process(binary_path)
         node = cluster.Node(node_pid, host_name, node_name, t)
         self.logger.info("Attaching telemetry devices to node [%s].", node_name)
         t.attach_to_node(node)
