@@ -194,11 +194,12 @@ def create_arg_parser():
         default="")
     provision_parser.add_argument("--node-ids",
                                   help="ID(s) of nodes to provision",
-                                  nargs='+')
+                                  nargs='+',
+                                  default=[0])
     provision_parser.add_argument(
         "--node-ip",
         help="IP of node to provision",
-        default=None)
+        default="0.0.0.0")
     provision_parser.add_argument(
         "--node-name",
         help="name of node to provision",
@@ -699,7 +700,7 @@ def main():
         if args.node_ids:
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.ids", args.node_ids)
         if args.node_ip:
-            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ips", args.node_ip)
+            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ip", args.node_ip)
         if args.node_name:
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.name", args.node_name)
     if sub_command == "start":
