@@ -25,7 +25,7 @@ from esrally import actor, client, paths, config, metrics, exceptions
 from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.mechanic import telemetry
 from esrally.mechanic.team import Car
-from esrally.utils import net, console
+from esrally.utils import net, console, opts
 from esrally.mechanic import supplier, provisioner, launcher, team, cluster
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
@@ -52,7 +52,7 @@ def provision(cfg):
     cluster_settings = {}
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=True)
     if isinstance(node_ids, str):
-        node_ids = [int(n) for n in node_ids.split(' ,')]
+        node_ids = opts.csv_to_list(node_ids)
     elif isinstance(node_ids, list):
         node_ids = [int(n) for n in node_ids]
 
