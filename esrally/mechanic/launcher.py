@@ -244,7 +244,6 @@ class ProcessLauncher:
         self._clock = clock
         self.races_root_dir = races_root_dir
         self.keep_running = self.cfg.opts("mechanic", "keep.running")
-        self.daemon = self.cfg.opts("mechanic", "daemon", default_value=False, mandatory=False)
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
