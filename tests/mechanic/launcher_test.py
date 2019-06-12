@@ -17,11 +17,7 @@
 import datetime
 import logging
 import os
-import psutil
-import threading
-from io import BytesIO
 from unittest import TestCase, mock
-
 
 from esrally import config, exceptions, metrics, paths
 from esrally.mechanic import launcher, provisioner, team
@@ -155,22 +151,41 @@ def create_provisioner(car, ver):
     return p
 
 
+class MockPopen:
+    def __init__(self, *args, **kwargs):
+        self.returncode = 1
+
+    def communicate(self, input=None, timeout=None):
+        return [b"", b""]
+
+    def wait(self):
+        return 0
+
+
+MOCK_PID_VALUE = 1234
+
+
 class ProcessLauncherTests(TestCase):
-
-    def test_daemon_start_stop(self):
-        cfg = create_config()
-        car = create_default_car()
-        p = create_provisioner(car, "6.8.0")
-        ms = create_metrics_store(cfg, car)
-
-        cfg.add(config.Scope.application, "mechanic", "daemon", True)
+    @mock.patch('os.kill')
+    @mock.patch('subprocess.Popen',new=MockPopen)
+    @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
+    @mock.patch('esrally.utils.jvm.supports_option', return_value=True)
+    @mock.patch('os.chdir')
+    @mock.patch('esrally.config.Config')
+    @mock.patch('esrally.metrics.MetricsStore')
+    @mock.patch('esrally.mechanic.provisioner.NodeConfiguration')
+    @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
+    @mock.patch('psutil.Process')
+    def test_daemon_start_stop(self, process, wait_for_pidfile, node_config, ms, cfg, chdir, supports, java_home, kill):
         proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
 
-        node_config = p.prepare({"elasticsearch": HOME_DIR + "/Downloads/elasticsearch-oss-6.8.0.tar.gz"})
         nodes = proc_launcher.start([node_config])
-        pid = nodes[0].pid
-        self.assertTrue(psutil.pid_exists(pid))
+        self.assertEqual(len(nodes), 1)
+        self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
+
+        proc_launcher.keep_running = False
         proc_launcher.stop(nodes)
+        self.assertTrue(kill.called)
 
 
 class ExternalLauncherTests(TestCase):
