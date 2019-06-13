@@ -1555,6 +1555,30 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
 
 class SearchParamSourceTests(TestCase):
+    def test_passes_cache(self):
+        index1 = track.Index(name="index1", types=["type1"])
+
+        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            },
+            "cache": True
+        })
+        p = source.params()
+
+        self.assertEqual(5, len(p))
+        self.assertEqual("index1", p["index"])
+        self.assertIsNone(p["type"])
+        self.assertEqual({}, p["request-params"])
+        self.assertEquals(True, p["cache"])
+        self.assertEqual({
+            "query": {
+                "match_all": {}
+            }
+        }, p["body"])
+
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])
 
@@ -1576,7 +1600,7 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual({
             "_source_include": "some_field"
         }, p["request-params"])
-        self.assertFalse(p["cache"])
+        self.assertIsNone(p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -1589,6 +1613,7 @@ class SearchParamSourceTests(TestCase):
         source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
             "index": "_all",
             "type": "type1",
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1601,7 +1626,8 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
-        self.assertFalse(p["cache"])
+        # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
+        self.assertEquals(False, p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}
