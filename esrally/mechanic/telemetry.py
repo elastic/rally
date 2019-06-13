@@ -47,16 +47,12 @@ class Telemetry:
         self.devices = devices
 
     def instrument_candidate_env(self, car, candidate_id):
-        opts = {}
+        opts = []
         for device in self.devices:
             if self._enabled(device):
                 additional_opts = device.instrument_env(car, candidate_id)
                 # properly merge values with the same key
-                for k, v in additional_opts.items():
-                    if k in opts:
-                        opts[k] = "%s %s" % (opts[k], v)
-                    else:
-                        opts[k] = v
+                opts.extend(additional_opts)
         return opts
 
     def attach_to_cluster(self, cluster):
@@ -190,7 +186,7 @@ class FlightRecorder(TelemetryDevice):
         java_opts = self.java_opts(log_file)
 
         self.logger.info("jfr: Adding JVM arguments: [%s].", java_opts)
-        return {"ES_JAVA_OPTS": java_opts}
+        return java_opts.split()
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
@@ -232,8 +228,8 @@ class JitCompiler(TelemetryDevice):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
-        return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
-                                "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
+        return ["-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation",
+                                "-XX:LogFile=%s", "-XX:+PrintAssembly" % log_file ]
 
 
 class Gc(TelemetryDevice):
@@ -255,12 +251,12 @@ class Gc(TelemetryDevice):
 
     def java_opts(self, log_file):
         if self.java_major_version < 9:
-            return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
-                                    "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime "
-                                    "-XX:+PrintTenuringDistribution" % log_file}
+            return ["-Xloggc:%s", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
+                                    "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+                                    "-XX:+PrintTenuringDistribution" % log_file]
         else:
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
-            return {"ES_JAVA_OPTS": "-Xlog:gc*=info,safepoint=info,age*=trace:file=%s:utctime,uptimemillis,level,tags:filecount=0" % log_file}
+            return ["-Xlog:gc*=info,safepoint=info,age*=trace:file=%s:utctime,uptimemillis,level,tags:filecount=0" % log_file]
 
 
 class CcrStats(TelemetryDevice):

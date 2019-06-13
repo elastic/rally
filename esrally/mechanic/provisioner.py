@@ -23,7 +23,7 @@ import logging
 import jinja2
 
 from esrally import exceptions
-from esrally.mechanic import team, java_resolver
+from esrally.mechanic import team, java_resolver, telemetry
 from esrally.utils import io, process, versions
 
 
@@ -38,11 +38,22 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     node_root_dir = "%s/%s" % (target_root, node_name)
 
     _, java_home = java_resolver.java_home(car, cfg)
+    
+    node_telemetry_dir = "%s/telemetry" % node_root_dir
+    java_major_version, java_home = java_resolver.java_home(car, cfg)
+    enabled_devices = cfg.opts("mechanic", "telemetry.devices")
+    telemetry_params = cfg.opts("mechanic", "telemetry.params")
+    node_telemetry = [
+        telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
+        telemetry.JitCompiler(node_telemetry_dir),
+        telemetry.Gc(node_telemetry_dir, java_major_version)
+    ]
+    t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
 
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
-    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
+    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, t, distribution_version=distribution_version)
 
 
 def no_op_provisioner():
@@ -147,13 +158,14 @@ class BareProvisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, distribution_version=None, apply_config=_apply_config):
+    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, telemetry, distribution_version=None, apply_config=_apply_config):
         self.preserve = preserve
         self._cluster_settings = cluster_settings
         self.es_installer = es_installer
         self.plugin_installers = plugin_installers
         self.distribution_version = distribution_version
         self.apply_config = apply_config
+        self.telemetry = telemetry
 
     def prepare(self, binary):
         if not self.preserve:
@@ -165,6 +177,9 @@ class BareProvisioner:
         # determine after installation because some variables will depend on the install directory
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
+        
+        # add java options for telemetry devices
+        provisioner_vars.update({"additional_java_settings" : self.telemetry.instrument_candidate_env(self.es_installer.car, self.es_installer.node_name)})
 
         for p in self.es_installer.config_source_paths:
             self.apply_config(p, target_root_path, provisioner_vars)
