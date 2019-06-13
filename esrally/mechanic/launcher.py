@@ -352,7 +352,6 @@ class ProcessLauncher:
                 try:
                     os.kill(proc.pid, signal.SIGTERM)
                     proc.wait(10.0)
-                    self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
                 except ProcessLookupError:
                     self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
                 except psutil.TimeoutExpired:
