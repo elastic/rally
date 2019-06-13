@@ -1365,9 +1365,13 @@ class RaceStore:
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
         self.trial_timestamp = cfg.opts("system", "time.start")
+        self.trial_id = cfg.opts("system", "trial.id")
         self.current_race = None
 
     def find_by_timestamp(self, timestamp):
+        raise NotImplementedError("abstract method")
+
+    def find_by_trial_id(self, uid):
         raise NotImplementedError("abstract method")
 
     def list(self):
@@ -1434,8 +1438,8 @@ class FileRaceStore(RaceStore):
         all_races = self._to_races(results)
         return all_races[:self._max_results()]
 
-    def find_by_timestamp(self, timestamp):
-        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, start=time.from_is8601(timestamp))
+    def find_by_trial_id(self, trial_id):
+        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, trial_id=trial_id)
         if io.exists(race_file):
             races = self._to_races([race_file])
             if races:

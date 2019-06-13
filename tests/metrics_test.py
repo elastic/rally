@@ -142,8 +142,8 @@ class EsClientTests(TestCase):
     def test_config_opts_parsing(self, client_esclientfactory):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1,254)) for _ in range(4)])
-        _datastore_port = random.randint(1024,65535)
+        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
+        _datastore_port = random.randint(1024, 65535)
         _datastore_secure = random.choice(["True", "true"])
         _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
         _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
@@ -250,7 +250,7 @@ class EsClientTests(TestCase):
 
         # The sec to sleep for 10 transport errors is
         # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
-        sleep_slots = [float(2**i) for i in range(0, max_retry)]
+        sleep_slots = [float(2 ** i) for i in range(0, max_retry)]
         mocked_sleep_calls = [mock.call(sleep_slots[i]) for i in range(0, max_retry)]
 
         for rnd_err_idx, rnd_err_code in enumerate(rnd_err_codes):
@@ -258,7 +258,7 @@ class EsClientTests(TestCase):
             rnd_mocked_logger_calls.append(
                 mock.call("%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
                           all_err_codes[rnd_err_code], rnd_err_code,
-                          rnd_err_idx+1, max_retry+1, sleep_slots[rnd_err_idx])
+                          rnd_err_idx + 1, max_retry + 1, sleep_slots[rnd_err_idx])
             )
 
         test_transport_error_retries(rnd_side_effects,
@@ -809,6 +809,7 @@ class EsRaceStoreTests(TestCase):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.TRIAL_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "trial.id", FileRaceStoreTests.TRIAL_ID)
         self.race_store = metrics.EsRaceStore(self.cfg,
                                               client_factory_class=MockClientFactory,
                                               index_template_provider_class=DummyIndexTemplateProvider,
@@ -1286,10 +1287,10 @@ class FileRaceStoreTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
         self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.TRIAL_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "trial.id", FileRaceStoreTests.TRIAL_ID)
         self.race_store = metrics.FileRaceStore(self.cfg)
 
     def test_store_race(self):
-        from esrally import time
         schedule = [
             track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
@@ -1332,6 +1333,6 @@ class FileRaceStoreTests(TestCase):
 
         self.race_store.store_race(race)
 
-        retrieved_race = self.race_store.find_by_timestamp(timestamp=time.to_iso8601(FileRaceStoreTests.TRIAL_TIMESTAMP))
+        retrieved_race = self.race_store.find_by_trial_id(trial_id=FileRaceStoreTests.TRIAL_ID)
         self.assertEqual(race.trial_timestamp, retrieved_race.trial_timestamp)
         self.assertEqual(1, len(self.race_store.list()))
