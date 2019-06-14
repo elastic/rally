@@ -347,13 +347,6 @@ class InProcessLauncher:
         # Don't merge here!
         env["JAVA_HOME"] = java_home
 
-        exit_on_oome_flag = "-XX:+ExitOnOutOfMemoryError"
-        if jvm.supports_option(java_home, exit_on_oome_flag):
-            self.logger.info("Setting [%s] to detect out of memory errors during the benchmark.", exit_on_oome_flag)
-            self._set_env(env, "ES_JAVA_OPTS", exit_on_oome_flag)
-        else:
-            self.logger.info("JVM does not support [%s]. A JDK upgrade is recommended.", exit_on_oome_flag)
-
         self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
