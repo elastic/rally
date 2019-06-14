@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import datetime
 import logging
 import os
 import signal
@@ -24,7 +23,7 @@ import psutil
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster, java_resolver
-from esrally.utils import process, jvm, io
+from esrally.utils import process, jvm
 from time import monotonic as _time
 
 
@@ -125,6 +124,18 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
+def _wait_for_container(container_id, timeout=60):
+    import docker
+    cli = docker.api.APIClient()
+
+    endtime = _time() + timeout
+    while _time() < endtime:
+        containers = cli.containers(quiet=True, all=True, filters={"id": container_id, "health": "healthy", "status": "running"})
+        if len(containers > 0):
+            break
+        time.sleep(0.5)
+
+
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
@@ -145,7 +156,7 @@ class DockerLauncher:
             binary_path = node_configuration.binary_path
             self.binary_paths[node_name] = binary_path
 
-            p = self._start_process(cmd="docker-compose -f %s up" % binary_path)
+            self._start_process(cmd="docker-compose -d -f %s up" % binary_path)
             # only support a subset of telemetry for Docker hosts
             # (specifically, we do not allow users to enable any devices)
             node_telemetry = [
@@ -153,12 +164,18 @@ class DockerLauncher:
                 telemetry.NodeEnvironmentInfo(self.metrics_store)
             ]
             t = telemetry.Telemetry(devices=node_telemetry)
-            nodes.append(cluster.Node(p, host_name, node_name, t))
+            nodes.append(cluster.Node(0, host_name, node_name, t))
         return nodes
 
     def _start_process(self, cmd):
-        subprocess.Popen(shlex.split(cmd), close_fds=True)
-        return 0
+        completed_proc = subprocess.check_output(args=shlex.split(cmd), timeout=self.PROCESS_WAIT_TIMEOUT_SECONDS)
+
+        if completed_proc.returncode != 0:
+            msg = "Docker daemon startup failed with exit code[{}]".format(completed_proc.returncode)
+            logging.error(msg)
+            raise exceptions.LaunchError(msg)
+        container_id = completed_proc.stdout.decode("utf-8")
+        _wait_for_container(container_id)
 
     def stop(self, nodes):
         if self.keep_running:
