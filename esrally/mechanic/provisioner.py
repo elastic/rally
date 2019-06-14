@@ -247,7 +247,6 @@ class BareProvisioner:
         
         java_opts = self._prepare_java_opts()
         if java_opts:
-            print("here not empty")
             provisioner_vars["additional_java_settings"] = java_opts
         
 
