@@ -125,14 +125,6 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
-def _parse_log_ts(line):
-    col = line.split("]")[0]
-    try:
-        return datetime.datetime.strptime(col, "[%Y-%m-%dT%H:%M:%S,%f")
-    except ValueError:
-        return datetime.datetime.min
-
-
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
