@@ -39,7 +39,7 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
 
     _, java_home = java_resolver.java_home(car, cfg)
     
-    node_telemetry_dir = "%s/telemetry" % node_root_dir
+    node_telemetry_dir = os.path.join(node_root_dir, "telemetry")
     java_major_version, java_home = java_resolver.java_home(car, cfg)
     enabled_devices = cfg.opts("mechanic", "telemetry.devices")
     telemetry_params = cfg.opts("mechanic", "telemetry.params")
@@ -178,9 +178,6 @@ class BareProvisioner:
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
         
-        # add java options for telemetry devices
-        provisioner_vars.update({"additional_java_settings" : self.telemetry.instrument_candidate_env(self.es_installer.car, self.es_installer.node_name)})
-
         for p in self.es_installer.config_source_paths:
             self.apply_config(p, target_root_path, provisioner_vars)
 
@@ -232,6 +229,7 @@ class BareProvisioner:
         provisioner_vars.update(self.es_installer.variables)
         provisioner_vars.update(plugin_variables)
         provisioner_vars["cluster_settings"] = cluster_settings
+        provisioner_vars["additional_java_settings"] = self.telemetry.instrument_candidate_java_opts(self.es_installer.car, self.es_installer.node_name)
 
         return provisioner_vars
 
