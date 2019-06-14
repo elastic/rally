@@ -158,7 +158,7 @@ class BareProvisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, telemetry, distribution_version=None, apply_config=_apply_config):
+    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, telemetry=None, distribution_version=None, apply_config=_apply_config):
         self.preserve = preserve
         self._cluster_settings = cluster_settings
         self.es_installer = es_installer
@@ -229,7 +229,8 @@ class BareProvisioner:
         provisioner_vars.update(self.es_installer.variables)
         provisioner_vars.update(plugin_variables)
         provisioner_vars["cluster_settings"] = cluster_settings
-        provisioner_vars["additional_java_settings"] = self.telemetry.instrument_candidate_java_opts(self.es_installer.car, self.es_installer.node_name)
+        if self.telemetry is not None:
+            provisioner_vars["additional_java_settings"] = self.telemetry.instrument_candidate_java_opts(self.es_installer.car, self.es_installer.node_name)
 
         return provisioner_vars
 

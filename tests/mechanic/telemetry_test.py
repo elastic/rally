@@ -47,12 +47,12 @@ def create_config():
 
 
 class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
-    def __init__(self, mock_env):
+    def __init__(self, mock_java_opts):
         super().__init__()
-        self.mock_env = mock_env
+        self.mock_java_opts = mock_java_opts
 
-    def instrument_env(self, car, candidate_id):
-        return self.mock_env
+    def instrument_java_opts(self, car, candidate_id):
+        return self.mock_java_opts
 
 
 class TelemetryTests(TestCase):
@@ -63,20 +63,19 @@ class TelemetryTests(TestCase):
         cfg.add(config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
 
         devices = [
-            MockTelemetryDevice({"ES_JAVA_OPTS": "-Xms256M"}),
-            MockTelemetryDevice({"ES_JAVA_OPTS": "-Xmx512M"}),
-            MockTelemetryDevice({"ES_NET_HOST": "127.0.0.1"})
+            MockTelemetryDevice(["-Xms256M"]),
+            MockTelemetryDevice(["-Xmx512M"]),
+            MockTelemetryDevice(["-Des.network.host=127.0.0.1"])
         ]
 
         t = telemetry.Telemetry(enabled_devices=None, devices=devices)
 
         default_car = team.Car(names="default-car", root_path=None, config_paths=["/tmp/rally-config"])
-        opts = t.instrument_candidate_env(default_car, "default-node")
+        opts = t.instrument_candidate_java_opts(default_car, "default-node")
 
-        self.assertTrue(opts)
-        self.assertEqual(len(opts), 2)
-        self.assertEqual("-Xms256M -Xmx512M", opts["ES_JAVA_OPTS"])
-        self.assertEqual("127.0.0.1", opts["ES_NET_HOST"])
+        self.assertIsNotNone(opts)
+        self.assertEqual(len(opts), 3)
+        self.assertEqual(["-Xms256M", "-Xmx512M", "-Des.network.host=127.0.0.1"], opts)
 
 
 class StartupTimeTests(TestCase):
@@ -242,19 +241,19 @@ class JfrTests(TestCase):
 class GcTests(TestCase):
     def test_sets_options_for_pre_java_9(self):
         gc = telemetry.Gc("/var/log", java_major_version=random.randint(0, 8))
-        env = gc.java_opts("/var/log/defaults-node-0.gc.log")
-        self.assertEqual(1, len(env))
-        self.assertEqual("-Xloggc:/var/log/defaults-node-0.gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
-                         "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintTenuringDistribution",
-                         env["ES_JAVA_OPTS"])
+        gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
+        self.assertEqual(7, len(gc_java_opts))
+        self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
+                         "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime", "-XX:+PrintTenuringDistribution"],
+                         gc_java_opts)
 
     def test_sets_options_for_java_9_or_above(self):
         gc = telemetry.Gc("/var/log", java_major_version=random.randint(9, 999))
-        env = gc.java_opts("/var/log/defaults-node-0.gc.log")
-        self.assertEqual(1, len(env))
+        gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
+        self.assertEqual(1, len(gc_java_opts))
         self.assertEqual(
-            "-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0",
-            env["ES_JAVA_OPTS"])
+            ["-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
+            gc_java_opts)
 
 
 class CcrStatsTests(TestCase):
