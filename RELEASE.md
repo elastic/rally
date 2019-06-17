@@ -1,10 +1,10 @@
 ### How to release Rally?
 
-The release process in Rally is automated as much as possible. Suppose you want to release Rally 0.9.3. Then just run `make release release_version=0.9.2 next_version=0.9.3`. The parameter `release_version` refers to the release that is being released and the parameter `next_version` refers to the next development version. 
+The release process in Rally is automated as much as possible. Suppose you want to release Rally 1.2.0. Then just run `make release release_version=1.2.0 next_version=1.2.1`. The parameter `release_version` refers to the release that is being released and the parameter `next_version` refers to the next development version. 
 
 This will automatically run all tests (including integration tests), build and upload all artifacts and update the changelog and the list of contributors.
 
-It is recommended to run `make release-checks release_version=0.9.2 next_version=0.9.3` before the release. The script will check for the requirements mentioned in [Preconditions](#preconditions) and [the Initial setup](#initial_setup).
+It is recommended to run `make release-checks release_version=1.2.0 next_version=1.2.1` before the release. The script will check for the requirements mentioned in [Preconditions](#preconditions) and [the Initial setup](#initial_setup).
 
 ### Manual Tasks
 
