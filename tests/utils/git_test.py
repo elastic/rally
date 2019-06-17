@@ -75,7 +75,7 @@ class GitTests(TestCase):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.return_value = False
         git.fetch("/src", remote="my-origin")
-        run_subprocess.assert_called_with("git -C /src fetch --prune --prune-tags --tags --quiet my-origin")
+        run_subprocess.assert_called_with("git -C /src fetch --prune --tags --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -85,7 +85,7 @@ class GitTests(TestCase):
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.fetch("/src", remote="my-origin")
         self.assertEqual("Could not fetch source tree from [my-origin]", ctx.exception.args[0])
-        run_subprocess.assert_called_with("git -C /src fetch --prune --prune-tags --tags --quiet my-origin")
+        run_subprocess.assert_called_with("git -C /src fetch --prune --tags --quiet my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -124,7 +124,7 @@ class GitTests(TestCase):
         run_subprocess.return_value = False
         git.pull("/src", remote="my-origin", branch="feature-branch")
         calls = [
-            mock.call("git -C /src fetch --prune --prune-tags --tags --quiet my-origin"),
+            mock.call("git -C /src fetch --prune --tags --quiet my-origin"),
             mock.call("git -C /src checkout --quiet feature-branch"),
             mock.call("git -C /src rebase --quiet my-origin/feature-branch")
         ]
@@ -137,7 +137,7 @@ class GitTests(TestCase):
         run_subprocess.side_effect = [False, False]
         git.pull_ts("/src", "20160101T110000Z")
         run_subprocess.has_calls([
-            mock.call("git -C /src fetch --prune --prune-tags --tags --quiet origin"),
+            mock.call("git -C /src fetch --prune --tags --quiet origin"),
             mock.call("git -C /src checkout --quiet `git -C /src rev-list -n 1 --before=\"20160101T110000Z\" "
                       "--date=iso8601 origin/master`"),
         ])
@@ -149,7 +149,7 @@ class GitTests(TestCase):
         run_subprocess.side_effect = [False, False]
         git.pull_revision("/src", "3694a07")
         run_subprocess.has_calls([
-            mock.call("git -C /src fetch --prune --prune-tags --tags --quiet origin"),
+            mock.call("git -C /src fetch --prune --tags --quiet origin"),
             mock.call("git -C /src checkout --quiet 3694a07"),
         ])
 
