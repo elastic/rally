@@ -21,12 +21,6 @@ It is recommended to run `make release-checks release_version=0.9.2 next_version
 
 ### Initial Setup
 
-```
-pip3 install twine sphinx sphinx_rtd_theme
-# to automatically generate the changelog
-pip3 install --pre github3.py
-```
-
 In order to automatically generate the changelog, setup a personal Github access token with permission `public_repo` (see https://github.com/settings/tokens). Store the token in `~/.github/rally_release_changelog.token`.
 
 The release process requires a valid gpg key configured both locally and on GitHub. Please follow the [instructions](https://git-scm.com/book/id/v2/Git-Tools-Signing-Your-Work) to set your gpg for git.
