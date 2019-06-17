@@ -183,11 +183,40 @@ class RallyRepositoryTests(TestCase):
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
+    @mock.patch("esrally.utils.git.tags", autospec=True)
+    @mock.patch("esrally.utils.git.branches", autospec=True)
+    @mock.patch("esrally.utils.git.checkout", autospec=True)
+    @mock.patch("esrally.utils.git.rebase")
+    @mock.patch("esrally.utils.git.current_branch")
+    def test_fallback_to_tags(self, curr_branch, rebase, checkout, branches, tags, fetch, is_working_copy):
+        curr_branch.return_value = "master"
+        branches.return_value = ["5", "master"]
+        tags.return_value = ["v1", "v1.7", "v2"]
+        is_working_copy.return_value = True
+
+        r = repo.RallyRepository(
+            remote_url=None,
+            root_dir="/rally-resources",
+            repo_name="unit-test",
+            resource_name="unittest-resources",
+            offline=False)
+
+        r.update(distribution_version="1.7.4")
+
+        branches.assert_called_with("/rally-resources/unit-test", remote=False)
+        self.assertEqual(0, rebase.call_count)
+        tags.assert_called_with("/rally-resources/unit-test")
+        checkout.assert_called_with("/rally-resources/unit-test", branch="v1.7")
+
+    @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
+    @mock.patch("esrally.utils.git.fetch", autospec=True)
+    @mock.patch("esrally.utils.git.tags", autospec=True)
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout")
     @mock.patch("esrally.utils.git.rebase")
-    def test_does_not_update_unknown_branch_remotely(self, rebase, checkout, branches, fetch, is_working_copy):
+    def test_does_not_update_unknown_branch_remotely(self, rebase, checkout, branches, tags, fetch, is_working_copy):
         branches.return_value = ["1", "2", "5", "master"]
+        tags.return_value = []
         is_working_copy.return_value = True
 
         r = repo.RallyRepository(
@@ -212,19 +241,23 @@ class RallyRepositoryTests(TestCase):
         ]
 
         branches.assert_has_calls(calls)
+        tags.assert_called_with("/rally-resources/unit-test")
         self.assertEqual(0, checkout.call_count)
         self.assertEqual(0, rebase.call_count)
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
+    @mock.patch("esrally.utils.git.tags", autospec=True)
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase")
     @mock.patch("esrally.utils.git.current_branch")
-    def test_does_not_update_unknown_branch_remotely_local_fallback(self, curr_branch, rebase, checkout, branches, fetch, is_working_copy):
+    def test_does_not_update_unknown_branch_remotely_local_fallback(self, curr_branch, rebase, checkout, branches, tags,
+                                                                    fetch, is_working_copy):
         curr_branch.return_value = "master"
         # we have only "master" remotely but a few more branches locally
         branches.side_effect = ["5", ["1", "2", "5", "master"]]
+        tags.return_value = []
         is_working_copy.return_value = True
 
         r = repo.RallyRepository(
@@ -244,16 +277,19 @@ class RallyRepositoryTests(TestCase):
         ]
 
         branches.assert_has_calls(calls)
+        self.assertEqual(0, tags.call_count)
         checkout.assert_called_with("/rally-resources/unit-test", branch="1")
         self.assertEqual(0, rebase.call_count)
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
+    @mock.patch("esrally.utils.git.tags", autospec=True)
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout")
     @mock.patch("esrally.utils.git.rebase")
-    def test_does_not_update_unknown_branch_locally(self, rebase, checkout, branches, fetch, is_working_copy):
+    def test_does_not_update_unknown_branch_locally(self, rebase, checkout, branches, tags, fetch, is_working_copy):
         branches.return_value = ["1", "2", "5", "master"]
+        tags.return_value = []
         is_working_copy.return_value = True
 
         r = repo.RallyRepository(
