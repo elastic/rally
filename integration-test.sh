@@ -21,7 +21,7 @@ set -e
 
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
-readonly DISTRIBUTIONS=(1.7.6 2.4.6 5.6.9)
+readonly DISTRIBUTIONS=(2.4.6 5.6.16 6.8.0 7.1.1)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_JAVA_HOME="${JAVA8_HOME}"

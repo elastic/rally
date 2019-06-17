@@ -1116,7 +1116,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
+        es.scroll.side_effect = [
             # page 2
             {
                 "_scroll_id": "some-scroll-id",
@@ -1178,7 +1178,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
+        es.scroll.side_effect = [
             # page 2 has no results
             {
                 "_scroll_id": "some-scroll-id",
@@ -1236,7 +1236,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
+        es.scroll.side_effect = [
             # page 2 has no results
             {
                 "_scroll_id": "some-scroll-id",
@@ -1300,7 +1300,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
+        es.scroll.side_effect = [
             # page 2 has no results
             {
                 "_scroll_id": "some-scroll-id",
