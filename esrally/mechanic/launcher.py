@@ -19,7 +19,6 @@ import os
 import signal
 import subprocess
 import shlex
-import sys
 from time import monotonic as _time
 
 import psutil
@@ -27,7 +26,6 @@ import psutil
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster, java_resolver
 from esrally.utils import process, jvm
-from time import monotonic as _time
 
 
 def wait_for_rest_layer(es, max_attempts=20):
@@ -135,20 +133,17 @@ def _get_container_id(compose_config):
 
 
 def _wait_for_healthy_running_container(container_id, timeout=60):
-    import docker
-    cli = docker.api.APIClient()
-
+    cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
     endtime = _time() + timeout
     while _time() < endtime:
-        containers = cli.containers(quiet=True, all=True, filters={"id": container_id,
-                                                                   "health": "healthy",
-                                                                   "status": "running"})
+        output = subprocess.check_output(shlex.split(cmd))
+        containers = output.decode("utf-8").rstrip()
         if len(containers) > 0:
             return
         time.sleep(0.5)
     msg = "No healthy running container after {} seconds!".format(timeout)
     logging.error(msg)
-    raise TimeoutError(msg)
+    raise exceptions.LaunchError(msg)
 
 
 def _get_docker_compose_cmd(compose_config, cmd):
