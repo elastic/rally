@@ -19,6 +19,9 @@ import os
 import signal
 import subprocess
 import shlex
+import sys
+from time import monotonic as _time
+
 import psutil
 
 from esrally import config, time, exceptions, client
@@ -124,16 +127,32 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
-def _wait_for_container(container_id, timeout=60):
+def _get_container_id(compose_config):
+    compose_ps_cmd = _get_docker_compose_cmd(compose_config, "ps -q")
+
+    output = subprocess.check_output(args=shlex.split(compose_ps_cmd))
+    return output.decode("utf-8").rstrip()
+
+
+def _wait_for_healthy_running_container(container_id, timeout=60):
     import docker
     cli = docker.api.APIClient()
 
     endtime = _time() + timeout
     while _time() < endtime:
-        containers = cli.containers(quiet=True, all=True, filters={"id": container_id, "health": "healthy", "status": "running"})
-        if len(containers > 0):
-            break
+        containers = cli.containers(quiet=True, all=True, filters={"id": container_id,
+                                                                   "health": "healthy",
+                                                                   "status": "running"})
+        if len(containers) > 0:
+            return
         time.sleep(0.5)
+    msg = "No healthy running container after {} seconds!".format(timeout)
+    logging.error(msg)
+    raise TimeoutError(msg)
+
+
+def _get_docker_compose_cmd(compose_config, cmd):
+    return "docker-compose -f {} {}".format(compose_config, cmd)
 
 
 class DockerLauncher:
@@ -155,8 +174,7 @@ class DockerLauncher:
             host_name = node_configuration.ip
             binary_path = node_configuration.binary_path
             self.binary_paths[node_name] = binary_path
-
-            self._start_process(cmd="docker-compose -d -f %s up" % binary_path)
+            self._start_process(binary_path)
             # only support a subset of telemetry for Docker hosts
             # (specifically, we do not allow users to enable any devices)
             node_telemetry = [
@@ -167,15 +185,17 @@ class DockerLauncher:
             nodes.append(cluster.Node(0, host_name, node_name, t))
         return nodes
 
-    def _start_process(self, cmd):
-        completed_proc = subprocess.check_output(args=shlex.split(cmd), timeout=self.PROCESS_WAIT_TIMEOUT_SECONDS)
+    def _start_process(self, binary_path):
+        compose_cmd = _get_docker_compose_cmd(binary_path, "up -d")
 
-        if completed_proc.returncode != 0:
-            msg = "Docker daemon startup failed with exit code[{}]".format(completed_proc.returncode)
+        ret = process.run_subprocess_with_logging(compose_cmd)
+        if ret != 0:
+            msg = "Docker daemon startup failed with exit code[{}]".format(ret)
             logging.error(msg)
             raise exceptions.LaunchError(msg)
-        container_id = completed_proc.stdout.decode("utf-8")
-        _wait_for_container(container_id)
+
+        container_id = _get_container_id(binary_path)
+        _wait_for_healthy_running_container(container_id)
 
     def stop(self, nodes):
         if self.keep_running:
