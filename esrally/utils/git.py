@@ -57,7 +57,7 @@ def clone(src, remote):
 def fetch(src, remote="origin"):
     # Don't swallow output but silence git at least a bit... (--quiet)
     if process.run_subprocess(
-            "git -C {0} fetch --prune --quiet {1}".format(src, remote)):
+            "git -C {0} fetch --prune --tags --quiet {1}".format(src, remote)):
         raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
 
@@ -65,7 +65,7 @@ def fetch(src, remote="origin"):
 def checkout(src_dir, branch="master"):
     if process.run_subprocess(
             "git -C {0} checkout --quiet {1}".format(src_dir, branch)):
-        raise exceptions.SupplyError("Could not checkout branch [%s]. Do you have uncommitted changes?" % branch)
+        raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
@@ -83,17 +83,17 @@ def pull(src_dir, remote="origin", branch="master"):
 
 @probed
 def pull_ts(src_dir, ts):
-    if process.run_subprocess(
-            "git -C {0} fetch --prune --quiet origin && git -C {0} checkout --quiet `git -C {0} rev-list -n 1 --before=\"{1}\" "
-            "--date=iso8601 origin/master`".format(src_dir, ts)):
-        raise exceptions.SupplyError("Could not fetch source tree for timestamped revision [%s]" % ts)
+    fetch(src_dir)
+    if process.run_subprocess("git -C {0} checkout --quiet `git -C {0} rev-list -n 1 --before=\"{1}\" "
+                              "--date=iso8601 origin/master`".format(src_dir, ts)):
+        raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
 
 
 @probed
 def pull_revision(src_dir, revision):
-    if process.run_subprocess(
-                    "git -C {0} fetch --prune --quiet origin && git -C {0} checkout --quiet {1}".format(src_dir, revision)):
-        raise exceptions.SupplyError("Could not fetch source tree for revision [%s]" % revision)
+    fetch(src_dir)
+    if process.run_subprocess("git -C {0} checkout --quiet {1}".format(src_dir, revision)):
+        raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
 
 @probed
@@ -118,9 +118,18 @@ def branches(src_dir, remote=True):
                         "git -C {src} for-each-ref refs/heads/ --format='%(refname:short)'".format(src=src_dir)))
 
 
+@probed
+def tags(src_dir):
+    return _cleanup_tag_names(process.run_subprocess_with_output("git -C {0} tag".format(src_dir)))
+
+
 def _cleanup_remote_branch_names(branch_names):
     return [(b[b.index("/") + 1:]).strip() for b in branch_names if not b.endswith("/HEAD")]
 
 
 def _cleanup_local_branch_names(branch_names):
     return [b.strip() for b in branch_names if not b.endswith("HEAD")]
+
+
+def _cleanup_tag_names(tag_names):
+    return [t.strip() for t in tag_names]

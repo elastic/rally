@@ -79,13 +79,32 @@ class RallyRepository:
             branch = versions.best_match(git.branches(self.repo_dir, remote=False), distribution_version)
             if branch:
                 if git.current_branch(self.repo_dir) != branch:
-                    self.logger.info("Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
+                    self.logger.info("Checking out [%s] in [%s] for distribution version [%s].",
+                                     branch, self.repo_dir, distribution_version)
                     git.checkout(self.repo_dir, branch=branch)
             else:
-                raise exceptions.SystemSetupError("Cannot find %s for distribution version %s" % (self.resource_name, distribution_version))
+                self.logger.info("No local branch found for distribution version [%s] in [%s]. Checking tags.",
+                                 distribution_version, self.repo_dir)
+                tag = self._find_matching_tag(distribution_version)
+                if tag:
+                    self.logger.info("Checking out tag [%s] in [%s] for distribution version [%s].",
+                                     tag, self.repo_dir, distribution_version)
+                    git.checkout(self.repo_dir, branch=tag)
+                else:
+                    raise exceptions.SystemSetupError("Cannot find %s for distribution version %s"
+                                                      % (self.resource_name, distribution_version))
         except exceptions.SupplyError as e:
             tb = sys.exc_info()[2]
             raise exceptions.DataError("Cannot update %s in [%s] (%s)." % (self.resource_name, self.repo_dir, e.message)).with_traceback(tb)
+
+    def _find_matching_tag(self, distribution_version):
+        tags = git.tags(self.repo_dir)
+        for version in versions.versions(distribution_version):
+            # tags have a "v" prefix by convention.
+            tag_candidate = "v{}".format(version)
+            if tag_candidate in tags:
+                return tag_candidate
+        return None
 
     def checkout(self, revision):
         self.logger.info("Checking out revision [%s] in [%s].", revision, self.repo_dir)
