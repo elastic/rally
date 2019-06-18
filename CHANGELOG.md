@@ -1,3 +1,35 @@
+### 1.2.0
+
+#### Highlights
+
+* [#702](https://github.com/elastic/rally/pull/702): Add Rally Docker image to release process
+* [#688](https://github.com/elastic/rally/pull/688): Fail Rally early if there are unused variables in track-params
+
+#### Enhancements
+
+* [#713](https://github.com/elastic/rally/pull/713): Check tags in track and team repos
+* [#709](https://github.com/elastic/rally/pull/709) (Breaking): Drop support for Python 3.4
+* [#708](https://github.com/elastic/rally/pull/708): Align default request param extraction for queries
+* [#707](https://github.com/elastic/rally/pull/707): Upgrade pip for virtualenv
+* [#705](https://github.com/elastic/rally/pull/705): Provide default for datastore.secure in all cases
+* [#704](https://github.com/elastic/rally/pull/704): Add download subcommand
+* [#700](https://github.com/elastic/rally/pull/700): Allow stdout print when running in Docker
+* [#694](https://github.com/elastic/rally/pull/694): Measure execution time of bulk ingest pipeline
+* [#691](https://github.com/elastic/rally/pull/691): Remove node_count_per_host
+
+#### Bug Fixes
+
+* [#710](https://github.com/elastic/rally/pull/710) (Breaking): Don't pass request_cache by default
+* [#706](https://github.com/elastic/rally/pull/706): Register pyenv Python versions
+* [#699](https://github.com/elastic/rally/pull/699): Fix home directory paths in provisioner_test.
+* [#698](https://github.com/elastic/rally/pull/698): Enter degraded mode on bootstrap failure
+* [#693](https://github.com/elastic/rally/pull/693): Assume UTC timezone if not specified
+
+#### Doc Changes
+
+* [#714](https://github.com/elastic/rally/pull/714): Document which ES versions are supported by Rally
+* [#703](https://github.com/elastic/rally/pull/703): Document known issues in dev setup
+
 ### 1.1.0
 
 #### Enhancements
