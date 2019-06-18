@@ -199,7 +199,7 @@ class DockerLauncher:
             self.logger.info("Stopping Docker container")
             for node in nodes:
                 node.telemetry.detach_from_node(node, running=True)
-                process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_paths[node.node_name])
+                process.run_subprocess_with_logging(_get_docker_compose_cmd(self.binary_paths[self.node_name], "down"))
                 node.telemetry.detach_from_node(node, running=False)
 
 
