@@ -57,7 +57,7 @@ def provision(cfg):
         node_ids = [int(n) for n in node_ids]
 
     for node_id in node_ids:
-        if cfg.opts("provisioning", "docker"):
+        if cfg.opts("provisioning", "docker", default_value=False, mandatory=False):
             p = provisioner.docker_provisioner(cfg=cfg, car=car, cluster_settings=cluster_settings,
                                                target_root=challenge_root_path, node_id=node_id)
         else:
