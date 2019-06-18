@@ -20,7 +20,7 @@ import tempfile
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import exceptions
+from esrally import exceptions, config
 from esrally.mechanic import provisioner, team
 
 HOME_DIR = os.path.expanduser("~")
@@ -527,29 +527,32 @@ class PluginInstallerTests(TestCase):
 
 
 class DockerProvisionerTests(TestCase):
+    def setUp(self) -> None:
+        self.node_root_dir = tempfile.gettempdir()
+
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "provisioning", "node.ip", "0.0.0.0")
+        self.cfg.add(config.Scope.application, "provisioning", "node.name", "rally-node-0")
+        self.cfg.add(config.Scope.application, "mechanic", "distribution.version", "6.3.0")
+        self.cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
+        self.cfg.add(config.Scope.application, "node", "rally.root", self.node_root_dir)
+
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_defaults(self, uuid4):
         uuid4.return_value = "9dbc682e-d32a-4669-8fbe-56fb77120dd4"
-        node_root_dir = tempfile.gettempdir()
-        log_dir = os.path.join(node_root_dir, "logs", "server")
-        heap_dump_dir = os.path.join(node_root_dir, "heapdump")
-        data_dir = os.path.join(node_root_dir, "data", "9dbc682e-d32a-4669-8fbe-56fb77120dd4")
-
-        rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, "esrally"))
+        log_dir = os.path.join(self.node_root_dir, "logs", "server")
+        heap_dump_dir = os.path.join(self.node_root_dir, "heapdump")
+        data_dir = os.path.join(self.node_root_dir, "data", "9dbc682e-d32a-4669-8fbe-56fb77120dd4")
 
         c = team.Car("unit-test-car", None, "/tmp", variables={
             "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss"
         })
 
-        docker = provisioner.DockerProvisioner(car=c,
+        docker = provisioner.DockerProvisioner(cfg=self.cfg,
+                                               car=c,
                                                node_name="rally-node-0",
                                                cluster_settings={"indices.query.bool.max_clause_count": 5000},
-                                               ip="10.17.22.33",
-                                               http_port=39200,
-                                               node_root_dir=node_root_dir,
-                                               distribution_version="6.3.0",
-                                               rally_root=rally_root,
-                                               preserve=False)
+                                               node_root_dir=self.node_root_dir)
 
         self.assertDictEqual({
             "cluster_name": "rally-benchmark",
@@ -620,15 +623,11 @@ services:
             "docker_cpu_count": 2
         })
 
-        docker = provisioner.DockerProvisioner(car=c,
+        docker = provisioner.DockerProvisioner(cfg=self.cfg,
+                                               car=c,
                                                node_name="rally-node-0",
                                                cluster_settings=None,
-                                               ip="10.17.22.33",
-                                               http_port=39200,
-                                               node_root_dir=node_root_dir,
-                                               distribution_version="6.3.0",
-                                               rally_root=rally_root,
-                                               preserve=False)
+                                               node_root_dir=node_root_dir)
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 

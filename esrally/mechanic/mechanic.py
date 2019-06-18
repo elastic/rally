@@ -57,10 +57,14 @@ def provision(cfg):
         node_ids = [int(n) for n in node_ids]
 
     for node_id in node_ids:
-        p = provisioner.local_provisioner(cfg, car, plugins,
-                                          cluster_settings, all_node_ips,
-                                          challenge_root_path, node_id)
-        node_config = p.prepare(binary=s())
+        if cfg.opts("provisioning", "docker"):
+            p = provisioner.docker_provisioner(cfg=cfg, car=car, cluster_settings=cluster_settings,
+                                               target_root=challenge_root_path, node_id=node_id)
+        else:
+            p = provisioner.local_provisioner(cfg=cfg, car=car, plugins=plugins,
+                                              cluster_settings=cluster_settings, all_node_ips=all_node_ips,
+                                              target_root=challenge_root_path, node_id=node_id)
+        node_config = p.prepare(binaries=s())
         # TODO: implement node_config UUID, print here.
         console.println(node_config.toJSON())
 
@@ -84,11 +88,19 @@ def _load_node_cfg(cfg):
 
 def start(cfg):
     node_cfg = _load_node_cfg(cfg)
-    launch = launcher.ProcessLauncher(cfg,
-                                      metrics_store=None,
-                                      races_root_dir=paths.races_root(cfg))
+    docker = node_cfg.binary_path.endswith("docker-compose.yml")
+
+    if docker:
+        launch = launcher.DockerLauncher(cfg, metrics_store=None)
+    else:
+        launch = launcher.ProcessLauncher(cfg,
+                                          metrics_store=None,
+                                          races_root_dir=paths.races_root(cfg))
     node = launch.start(node_configurations=[node_cfg])[0]
-    console.println(node.pid)
+    if docker:
+        console.println(node.node_name)
+    else:
+        console.println(node.pid)
 
 
 def _load_node(cfg):
@@ -105,9 +117,16 @@ def _load_node(cfg):
 
 def stop(cfg):
     node = _load_node(cfg)
-    launch = launcher.ProcessLauncher(cfg,
-                                      metrics_store=None,
-                                      races_root_dir=paths.races_root(cfg))
+    docker = True
+
+    if docker:
+        binary_path = node_cfg['binary_path']
+        launch = launcher.DockerLauncher(cfg, metrics_store=None)
+        launch.binary_paths[node.node_name] = binary_path
+    else:
+        launch = launcher.ProcessLauncher(cfg,
+                                          metrics_store=None,
+                                          races_root_dir=paths.races_root(cfg))
     launch.stop(nodes=[node])
 
 

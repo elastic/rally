@@ -61,18 +61,13 @@ def no_op_provisioner():
 
 
 def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
-    distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    ip = cfg.opts("provisioning", "node.ip")
-    http_port = cfg.opts("provisioning", "node.http.port")
-    rally_root = cfg.opts("node", "rally.root")
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
-    preserve = cfg.opts("mechanic", "preserve.install")
 
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
-    return DockerProvisioner(car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version,
-                             rally_root, preserve)
+    return DockerProvisioner(cfg=cfg, car=car, node_name=node_name, cluster_settings=cluster_settings,
+                             node_root_dir=node_root_dir)
 
 
 class NodeConfiguration:
@@ -172,10 +167,10 @@ class BareProvisioner:
         self.telemetry = telemetry
         self.logger = logging.getLogger(__name__)
 
-    def prepare(self, binary):
+    def prepare(self, binaries):
         if not self.preserve:
-            self.logger.info("Rally will delete the benchmark candidate after the benchmark")
-        self.es_installer.install(binary["elasticsearch"])
+            logging.getLogger(__name__).info("Rally will delete the benchmark candidate after the benchmark")
+        self.es_installer.install(binaries["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
 
@@ -186,7 +181,7 @@ class BareProvisioner:
             self.apply_config(p, target_root_path, provisioner_vars)
 
         for installer in self.plugin_installers:
-            installer.install(target_root_path, binary.get(installer.plugin_name))
+            installer.install(target_root_path, binaries.get(installer.plugin_name))
             for plugin_config_path in installer.config_source_paths:
                 self.apply_config(plugin_config_path, target_root_path, provisioner_vars)
 
@@ -405,21 +400,21 @@ class NoOpProvisioner:
 
 
 class DockerProvisioner:
-    def __init__(self, car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version, rally_root, preserve):
+    def __init__(self, cfg, car, node_name, cluster_settings, node_root_dir):
         self.car = car
+        self.distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+        self.node_ip = cfg.opts("provisioning", "node.ip")
+        self.http_port = cfg.opts("provisioning", "node.http.port")
         self.node_name = node_name
-        self.node_ip = ip
-        self.http_port = http_port
+        self.preserve = cfg.opts("mechanic", "preserve.install")
         self.node_root_dir = node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
         self.heap_dump_dir = "%s/heapdump" % node_root_dir
-        self.distribution_version = distribution_version
-        self.rally_root = rally_root
+        self.rally_root = cfg.opts("node", "rally.root")
         self.install_dir = "%s/install" % node_root_dir
         # use a random subdirectory to isolate multiple runs because an external (non-root) user cannot clean it up.
         import uuid
         self.data_paths = ["%s/data/%s" % (node_root_dir, uuid.uuid4())]
-        self.preserve = preserve
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
         self.logger = logging.getLogger(__name__)
 

@@ -204,11 +204,20 @@ def create_arg_parser():
         "--node-name",
         help="name of node to provision",
         default=None)
+    provision_parser.add_argument(
+        "--docker",
+        help="provision as Docker container",
+        action="store_true",
+        default=False
+    )
     start_parser.add_argument("--node-cfg",
                               help="path to JSON config for node to start",
                               default=None)
     stop_parser.add_argument("pid",
                              help="pid of node to stop",
+                             default=0)
+    stop_parser.add_argument("node-name",
+                             help="name of node to stop",
                              default=None)
 
     for p in [parser, list_parser, race_parser, generate_parser]:
@@ -703,12 +712,16 @@ def main():
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.ip", args.node_ip)
         if args.node_name:
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.name", args.node_name)
+        if args.docker:
+            cfg.add(config.Scope.applicationOverride, "provisioning", "docker", args.docker)
     if sub_command == "start":
         if args.node_cfg:
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.cfg", args.node_cfg)
     if sub_command == "stop":
         if args.pid:
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.pid", args.pid)
+        if args.node_name:
+            cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
