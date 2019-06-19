@@ -253,7 +253,9 @@ def wait_for_pidfile(pidfilename, timeout=60):
         except FileNotFoundError:
             time.sleep(0.5)
 
-    raise TimeoutError("pid file not available after {} seconds!".format(timeout))
+    msg = "pid file not available after {} seconds!".format(timeout)
+    logging.error(msg)
+    raise exceptions.LaunchError(msg)
 
 
 class ProcessLauncher:
