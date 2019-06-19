@@ -213,12 +213,15 @@ def create_arg_parser():
     start_parser.add_argument("--node-cfg",
                               help="path to JSON config for node to start",
                               default=None)
-    stop_parser.add_argument("pid",
-                             help="pid of node to stop",
-                             default=0)
-    stop_parser.add_argument("node-name",
-                             help="name of node to stop",
+    stop_parser.add_argument("--node-cfg",
+                             help="path to JSON config for node to start",
                              default=None)
+    stop_parser.add_argument("--pid",
+                             help="pid of node to stop",
+                             default=0, required=False)
+    stop_parser.add_argument("--node-name",
+                             help="name of node to stop",
+                             default=None, required=False)
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -708,20 +711,18 @@ def main():
     if sub_command == "provision":
         if args.node_ids:
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.ids", args.node_ids)
-        if args.node_ip:
-            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ip", args.node_ip)
-        if args.node_name:
-            cfg.add(config.Scope.applicationOverride, "provisioning", "node.name", args.node_name)
         if args.docker:
             cfg.add(config.Scope.applicationOverride, "provisioning", "docker", args.docker)
     if sub_command == "start":
         if args.node_cfg:
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.cfg", args.node_cfg)
     if sub_command == "stop":
+        if args.node_cfg:
+            cfg.add(config.Scope.applicationOverride, "mechanic", "node.cfg", args.node_cfg)
         if args.pid:
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.pid", args.pid)
         if args.node_name:
-            cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "node.node_name", args.node_name)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)

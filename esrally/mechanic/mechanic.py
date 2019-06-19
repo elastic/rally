@@ -104,7 +104,7 @@ def start(cfg):
 
 
 def _load_node(cfg):
-    pid = int(cfg.opts("mechanic", "node.pid"))
+    pid = int(cfg.opts("mechanic", "node.pid", default_value=0, mandatory=False))
     host_name = cfg.opts("mechanic", "node.host_name", mandatory=False)
     node_name = cfg.opts("mechanic", "node.node_name", mandatory=False)
     t = telemetry.Telemetry(devices=[])
@@ -116,13 +116,13 @@ def _load_node(cfg):
 
 
 def stop(cfg):
+    node_cfg = _load_node_cfg(cfg)
     node = _load_node(cfg)
-    docker = True
+    docker = node_cfg.binary_path.endswith("docker-compose.yml")
 
     if docker:
-        binary_path = node_cfg['binary_path']
         launch = launcher.DockerLauncher(cfg, metrics_store=None)
-        launch.binary_paths[node.node_name] = binary_path
+        launch.binary_paths[node.node_name] = node_cfg.binary_path
     else:
         launch = launcher.ProcessLauncher(cfg,
                                           metrics_store=None,
