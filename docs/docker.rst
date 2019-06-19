@@ -140,7 +140,7 @@ To further examine the contents we can bind mount it from another image e.g.::
     benchmarks  logging.json  logs	rally.ini
     # head -4 benchmarks/races/2019-06-05-13-51-20/race.json
     {
-     "rally-version": "1.2.0.dev0",
+     "rally-version": "1.2.1.dev0",
      "environment": "local",
      "trial-id": "1d81930a-4ebe-4640-a09b-3055174bce43",
 
@@ -155,7 +155,7 @@ Extending the Docker image
 You can also create your own customized Docker image on top of the existing one.
 The example below shows how to get started::
 
-    FROM elastic/rally:1.2.0
+    FROM elastic/rally:1.2.1
     COPY --chown=1000:0 rally.ini /rally/.rally/
 
 You can then build and test the image with::
