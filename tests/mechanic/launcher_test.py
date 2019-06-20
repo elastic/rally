@@ -100,57 +100,6 @@ logging.basicConfig(level=logging.DEBUG)
 HOME_DIR = os.path.expanduser("~")
 
 
-def create_config():
-    cfg = config.Config()
-    # collect some mandatory config here
-    cfg.add(config.Scope.application, "node", "root.dir", os.path.join(HOME_DIR, ".rally", "benchmarks"))
-    cfg.add(config.Scope.application, 'reporting', 'datastore.type', None)
-    cfg.add(config.Scope.application, 'track', 'params', None)
-    cfg.add(config.Scope.application, 'system', 'env.name', "unittest")
-    cfg.add(config.Scope.application, 'mechanic', 'keep.running', False)
-    cfg.add(config.Scope.application, 'mechanic', 'runtime.jdk', 12)
-    cfg.add(config.Scope.application, 'mechanic', 'telemetry.devices', [])
-    cfg.add(config.Scope.application, 'mechanic', 'telemetry.params', None)
-
-    return cfg
-
-
-def create_metrics_store(cfg, car):
-    cls = metrics.metrics_store_class(cfg)
-    metrics_store = cls(cfg)
-    metrics_store.lap = 0
-
-    metrics_store.open(trial_id="test",
-                       track_name="test",
-                       trial_timestamp=datetime.datetime.now(),
-                       challenge_name="test",
-                       car_name=car.name)
-    return metrics_store
-
-
-def create_default_car():
-    return team.load_car(HOME_DIR + "/.rally/benchmarks/teams/default",
-                         ["defaults"],
-                         None)
-
-
-def create_provisioner(car, ver):
-    installer = provisioner.ElasticsearchInstaller(car=car,
-                                                   java_home=guess_java_home(),
-                                                   node_name="rally-node-0",
-                                                   node_root_dir= os.path.join(HOME_DIR, ".rally", "benchmarks",
-                                                                               "races", "unittest"),
-                                                   ip="0.0.0.0",
-                                                   all_node_ips=["0.0.0.0"],
-                                                   http_port=9200)
-    p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
-                                    es_installer=installer,
-                                    plugin_installers=[],
-                                    preserve=True,
-                                    distribution_version=ver)
-    return p
-
-
 class MockPopen:
     def __init__(self, *args, **kwargs):
         # Currently, the only code that checks returncode directly during
