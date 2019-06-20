@@ -153,6 +153,9 @@ def create_provisioner(car, ver):
 
 class MockPopen:
     def __init__(self, *args, **kwargs):
+        # Currently, the only code that checks returncode directly during
+        # ProcessLauncherTests are telemetry.  If we return 1 for them we can skip
+        # mocking them as their optional functionality is disabled.
         self.returncode = 1
 
     def communicate(self, input=None, timeout=None):
