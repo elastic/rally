@@ -178,7 +178,6 @@ class BareProvisioner:
         # determine after installation because some variables will depend on the install directory
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
-        
         for p in self.es_installer.config_source_paths:
             self.apply_config(p, target_root_path, provisioner_vars)
 
@@ -249,8 +248,6 @@ class BareProvisioner:
         if java_opts:
             provisioner_vars["additional_java_settings"] = java_opts
         
-
-
         return provisioner_vars
 
 

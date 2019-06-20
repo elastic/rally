@@ -230,7 +230,7 @@ class JitCompiler(TelemetryDevice):
         log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
         return ["-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation",
-                                "-XX:LogFile={}".format(log_file), "-XX:+PrintAssembly"]
+                "-XX:LogFile={}".format(log_file), "-XX:+PrintAssembly"]
 
 
 class Gc(TelemetryDevice):
@@ -253,8 +253,8 @@ class Gc(TelemetryDevice):
     def java_opts(self, log_file):
         if self.java_major_version < 9:
             return ["-Xloggc:{}".format(log_file), "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
-                                    "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
-                                    "-XX:+PrintTenuringDistribution"]
+                    "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+                    "-XX:+PrintTenuringDistribution"]
         else:
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
             return ["-Xlog:gc*=info,safepoint=info,age*=trace:file={}:utctime,uptimemillis,level,tags:filecount=0".format(log_file)]

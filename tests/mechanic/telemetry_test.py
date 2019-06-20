@@ -190,22 +190,22 @@ class JfrTests(TestCase):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
         self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
-                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
-                         "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"], java_opts)
+                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
+                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"], java_opts)
 
     def test_sets_options_for_java_9_or_10_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(9, 10))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
         self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
-                         "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=/var/log/test-recording.jfr"],
-                         java_opts)
+                          "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,"
+                          "dumponexit=true,filename=/var/log/test-recording.jfr"], java_opts)
 
     def test_sets_options_for_java_11_or_above_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(11, 999))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
         self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints",
-                         "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=/var/log/test-recording.jfr"],
-                         java_opts)
+                          "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,"
+                          "dumponexit=true,filename=/var/log/test-recording.jfr"], java_opts)
 
     def test_sets_options_for_pre_java_9_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
@@ -213,9 +213,8 @@ class JfrTests(TestCase):
                                        java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
         self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
-                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
-                         "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true,settings=profile"],
-                         java_opts)
+                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
+                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true,settings=profile"], java_opts)
 
     def test_sets_options_for_java_9_or_10_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
@@ -223,9 +222,8 @@ class JfrTests(TestCase):
                                        java_major_version=random.randint(9, 10))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
         self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
-                         "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
-                         "filename=/var/log/test-recording.jfr,settings=profile"],
-                         java_opts)
+                          "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+                          "filename=/var/log/test-recording.jfr,settings=profile"], java_opts)
 
     def test_sets_options_for_java_11_or_above_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
@@ -233,9 +231,8 @@ class JfrTests(TestCase):
                                        java_major_version=random.randint(11, 999))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
         self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints",
-                         "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
-                         "filename=/var/log/test-recording.jfr,settings=profile"],
-                         java_opts)
+                          "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+                          "filename=/var/log/test-recording.jfr,settings=profile"], java_opts)
 
 
 class GcTests(TestCase):
@@ -244,8 +241,8 @@ class GcTests(TestCase):
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(7, len(gc_java_opts))
         self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
-                         "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime", "-XX:+PrintTenuringDistribution"],
-                         gc_java_opts)
+                          "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+                          "-XX:+PrintTenuringDistribution"], gc_java_opts)
 
     def test_sets_options_for_java_9_or_above(self):
         gc = telemetry.Gc("/var/log", java_major_version=random.randint(9, 999))
