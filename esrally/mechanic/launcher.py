@@ -158,7 +158,6 @@ class DockerLauncher:
         self.cfg = cfg
         self.metrics_store = metrics_store
         self.binary_paths = {}
-        self.node_name = None
         self.keep_running = self.cfg.opts("mechanic", "keep.running")
         self.logger = logging.getLogger(__name__)
 
@@ -199,7 +198,7 @@ class DockerLauncher:
             self.logger.info("Stopping Docker container")
             for node in nodes:
                 node.telemetry.detach_from_node(node, running=True)
-                process.run_subprocess_with_logging(_get_docker_compose_cmd(self.binary_paths[self.node_name], "down"))
+                process.run_subprocess_with_logging(_get_docker_compose_cmd(self.binary_paths[node.node_name], "down"))
                 node.telemetry.detach_from_node(node, running=False)
 
 
