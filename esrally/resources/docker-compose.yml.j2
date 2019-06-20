@@ -24,3 +24,8 @@ services:
 {%- for host_path, docker_path in mounts.items() %}
       - {{host_path}}:{{docker_path}}
 {%- endfor %}
+    healthcheck:
+      test: nc -z 127.0.0.1 {{http_port}}
+      interval: 5s
+      timeout: 2s
+      retries: 10
