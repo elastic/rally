@@ -96,10 +96,6 @@ class SubClient:
         return self._info
 
 
-logging.basicConfig(level=logging.DEBUG)
-HOME_DIR = os.path.expanduser("~")
-
-
 class MockPopen:
     def __init__(self, *args, **kwargs):
         # Currently, the only code that checks returncode directly during
