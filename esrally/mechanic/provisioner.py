@@ -180,8 +180,8 @@ class BareProvisioner:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
-                                 self.es_installer.node_root_dir, self.es_installer.es_home_path,
-                                 self.es_installer.node_log_dir, self.es_installer.data_paths)
+                                 self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
+                                 self.es_installer.data_paths)
 
     def cleanup(self):
         self.es_installer.cleanup(self.preserve)
@@ -495,7 +495,7 @@ class DockerProvisioner:
             raise exceptions.SystemSetupError("%s in %s" % (str(e), template_name))
 
     def _render_template_from_file(self, variables):
-        compose_file = "%s/resources/docker-compose.yml.j2" % self.rally_root
+        compose_file = "%s/resources/docker-compose.yml" % self.rally_root
         return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
                                      template_name=io.basename(compose_file),
                                      variables=variables)

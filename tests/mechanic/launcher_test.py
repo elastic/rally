@@ -14,15 +14,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import datetime
-import logging
-import os
+
 from unittest import TestCase, mock
 
-from esrally import config, exceptions, metrics, paths
-from esrally.mechanic import launcher, provisioner, team
+from esrally import config, exceptions
 from esrally.utils import opts
-from esrally.utils.io import guess_java_home
+from esrally.mechanic import launcher
 
 
 class MockMetricsStore:
@@ -96,46 +93,6 @@ class SubClient:
         return self._info
 
 
-class MockPopen:
-    def __init__(self, *args, **kwargs):
-        # Currently, the only code that checks returncode directly during
-        # ProcessLauncherTests are telemetry.  If we return 1 for them we can skip
-        # mocking them as their optional functionality is disabled.
-        self.returncode = 1
-
-    def communicate(self, input=None, timeout=None):
-        return [b"", b""]
-
-    def wait(self):
-        return 0
-
-
-MOCK_PID_VALUE = 1234
-
-
-class ProcessLauncherTests(TestCase):
-    @mock.patch('os.kill')
-    @mock.patch('subprocess.Popen',new=MockPopen)
-    @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
-    @mock.patch('esrally.utils.jvm.supports_option', return_value=True)
-    @mock.patch('os.chdir')
-    @mock.patch('esrally.config.Config')
-    @mock.patch('esrally.metrics.MetricsStore')
-    @mock.patch('esrally.mechanic.provisioner.NodeConfiguration')
-    @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
-    @mock.patch('psutil.Process')
-    def test_daemon_start_stop(self, process, wait_for_pidfile, node_config, ms, cfg, chdir, supports, java_home, kill):
-        proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
-
-        nodes = proc_launcher.start([node_config])
-        self.assertEqual(len(nodes), 1)
-        self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
-
-        proc_launcher.keep_running = False
-        proc_launcher.stop(nodes)
-        self.assertTrue(kill.called)
-
-
 class ExternalLauncherTests(TestCase):
     test_host = opts.TargetHosts("127.0.0.1:9200,10.17.0.5:19200")
     client_options = opts.ClientOptions("timeout:60")
@@ -145,7 +102,7 @@ class ExternalLauncherTests(TestCase):
 
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options", self.client_options)
+        cfg.add(config.Scope.application, "client", "options",self.client_options)
 
         m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         m.start()
@@ -181,7 +138,7 @@ class ClusterLauncherTests(TestCase):
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         cluster = cluster_launcher.start()
 
-        self.assertEqual([{"host": "10.0.0.10", "port": 9200}, {"host": "10.0.0.11", "port": 9200}], cluster.hosts)
+        self.assertEqual([{"host": "10.0.0.10", "port":9200}, {"host": "10.0.0.11", "port":9200}], cluster.hosts)
         self.assertIsNotNone(cluster.telemetry)
 
     def test_launches_cluster_with_telemetry_client_timeout_enabled(self):

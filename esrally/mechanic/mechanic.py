@@ -667,7 +667,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         p = []
         for node_id in node_ids:
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
-        l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
+        l = launcher.InProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         if len(plugins) > 0:
             raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "

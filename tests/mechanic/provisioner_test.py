@@ -597,12 +597,7 @@ services:
     volumes:
       - %s:/usr/share/elasticsearch/data
       - %s:/var/log/elasticsearch
-      - %s:/usr/share/elasticsearch/heapdump
-    healthcheck:
-      test: nc -z 127.0.0.1 39200
-      interval: 5s
-      timeout: 2s
-      retries: 10""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
+      - %s:/usr/share/elasticsearch/heapdump""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
 
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_variables(self, uuid4):
@@ -651,9 +646,4 @@ services:
     volumes:
       - %s:/usr/share/elasticsearch/data
       - %s:/var/log/elasticsearch
-      - %s:/usr/share/elasticsearch/heapdump
-    healthcheck:
-      test: nc -z 127.0.0.1 39200
-      interval: 5s
-      timeout: 2s
-      retries: 10""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
+      - %s:/usr/share/elasticsearch/heapdump""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
