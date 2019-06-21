@@ -337,10 +337,7 @@ class ProcessLauncher:
         os.chdir(binary_path)
         cmd = ["bin/elasticsearch"]
         cmd.extend(["-d", "-p", "pid"])
-        proc = subprocess.Popen(cmd,
-                                env=env,
-                                close_fds=True)
-        ret = proc.wait()
+        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env)
         if ret != 0:
             msg = "Daemon startup failed with exit code[{}]".format(ret)
             logging.error(msg)
