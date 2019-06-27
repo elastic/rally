@@ -14,21 +14,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import os
-import shlex
-import subprocess
-import sys
 import json
+import os
+import sys
 from collections import defaultdict
 
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
-from esrally.mechanic.provisioner import NodeConfiguration
+from esrally.mechanic import supplier, provisioner, launcher, team, cluster
 from esrally.mechanic import telemetry
+from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.mechanic.team import Car
 from esrally.utils import net, console, opts
-from esrally.mechanic import supplier, provisioner, launcher, team, cluster
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
@@ -72,7 +70,7 @@ def provision(cfg):
         filename = os.path.join(paths.race_root(cfg, trial_id), "nodeconfig.json")
         write_node_config(filename, node_config)
 
-        console.println(trial_id)
+        console.println(trial_id, force=True)
 
 
 def write_node_config(filename, node_config):
@@ -114,7 +112,11 @@ def start(cfg):
                                           metrics_store=None,
                                           races_root_dir=paths.races_root(cfg))
     node = launch.start(node_configurations=[node_cfg])[0]
-    console.println(node)
+    if docker:
+        container_id = launcher.get_container_id(node_cfg.binary_path)
+        console.println(container_id, force=True)
+    else:
+        console.println(node.pid, force=True)
 
 
 def get_pid(binary_path):

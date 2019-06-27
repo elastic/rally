@@ -125,7 +125,7 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
-def _get_container_id(compose_config):
+def get_container_id(compose_config):
     compose_ps_cmd = _get_docker_compose_cmd(compose_config, "ps -q")
 
     output = subprocess.check_output(args=shlex.split(compose_ps_cmd))
@@ -188,7 +188,7 @@ class DockerLauncher:
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
-        container_id = _get_container_id(binary_path)
+        container_id = get_container_id(binary_path)
         _wait_for_healthy_running_container(container_id)
 
     def stop(self, nodes):

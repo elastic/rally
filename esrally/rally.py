@@ -397,7 +397,9 @@ def create_arg_parser():
             action="store_true",
             default=False)
 
-    for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser]:
+    for p in [parser, config_parser, list_parser, race_parser,
+              compare_parser, download_parser, provision_parser,
+              start_parser, stop_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
