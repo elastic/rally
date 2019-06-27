@@ -45,7 +45,11 @@ def cpu_model():
     """
     :return: The CPU model name.
     """
-    return cpuinfo.get_cpu_info()["brand"] if cpuinfo_available else "Unknown"
+    if cpuinfo_available:
+        cpu_info = cpuinfo.get_cpu_info()
+        if "brand" in cpu_info:
+            return cpu_info["brand"]
+    return "Unknown"
 
 
 def disks():

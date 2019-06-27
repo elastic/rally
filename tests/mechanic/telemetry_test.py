@@ -2052,7 +2052,7 @@ class ClusterMetaDataInfoTests(TestCase):
         t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
 
         c = cluster.Cluster(hosts=[{"host": "localhost", "port": 39200}],
-                            nodes=[cluster.Node(process=None, host_name="local", node_name="rally0", telemetry=None)],
+                            nodes=[cluster.Node(pid=None, host_name="local", node_name="rally0", telemetry=None)],
                             telemetry=t)
 
         t.attach_to_cluster(c)
@@ -2135,7 +2135,7 @@ class ClusterMetaDataInfoTests(TestCase):
         t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
 
         c = cluster.Cluster(hosts=[{"host": "localhost", "port": 39200}],
-                            nodes=[cluster.Node(process=None, host_name="local", node_name="rally0", telemetry=None)],
+                            nodes=[cluster.Node(pid=None, host_name="local", node_name="rally0", telemetry=None)],
                             telemetry=t)
 
         t.attach_to_cluster(c)
@@ -2821,7 +2821,7 @@ class IndexSizeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"], metrics_store)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
-        node = cluster.Node(process=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -2843,7 +2843,7 @@ class IndexSizeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexSize(data_paths=[], metrics_store=metrics_store)
         t = telemetry.Telemetry(devices=[device])
-        node = cluster.Node(process=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()

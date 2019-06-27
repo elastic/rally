@@ -15,21 +15,22 @@
 # specific language governing permissions and limitations
 # under the License.
 
+
 class Node:
     """
     Represents an Elasticsearch cluster node.
     """
 
-    def __init__(self, process, host_name, node_name, telemetry):
+    def __init__(self, pid, host_name, node_name, telemetry):
         """
         Creates a new node.
 
-        :param process: Process handle for this node.
+        :param pid: PID for this node.
         :param host_name: The name of the host where this node is running.
         :param node_name: The name of this node.
         :param telemetry: The attached telemetry.
         """
-        self.process = process
+        self.pid = pid
         self.host_name = host_name
         self.node_name = node_name
         self.ip = None
@@ -102,7 +103,7 @@ class Cluster:
         return self.node(name) is not None
 
     def add_node(self, host_name, node_name):
-        new_node = Node(process=None, host_name=host_name, node_name=node_name, telemetry=None)
+        new_node = Node(pid=None, host_name=host_name, node_name=node_name, telemetry=None)
         self.nodes.append(new_node)
         return new_node
 
