@@ -245,6 +245,30 @@ function test_download {
     done
 }
 
+function test_provision_start_stop {
+    local cfg
+    local dist
+    random_configuration cfg
+    random_distribution dist
+
+    info "test provision [--configuration-name=${cfg} --distribution-version=${dist}]"
+    kill_rally_processes
+    trial_id=$(esrally --configuration-name=${cfg} provision --distribution-version=${dist} --quiet)
+    info "test start [--configuration-name=${cfg} --trial-id=${trial_id}]"
+    esrally start --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+    info "test stop [--configuration-name=${cfg} --trial-id=${trial_id}]"
+    esrally stop --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+
+    dist="7.1.1"     # use a dist known to have a docker image
+    info "test docker provision [--configuration-name="${cfg}" --distribution-version=${dist} --docker]"
+    kill_rally_processes
+    trial_id=$(esrally provision --configuration-name="${cfg}" --distribution-version="${dist}" --docker)
+    info "test start [--configuration-name=${cfg} --trial-id=${trial_id}]"
+    esrally start --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+    info "test stop [--configuration-name=${cfg} --trial-id=${trial_id}"
+    esrally stop --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+}
+
 function test_sources {
     local cfg
     random_configuration cfg
@@ -502,6 +526,8 @@ function run_test {
     test_distribution_fails_with_wrong_track_params
     echo "**************************************** TESTING RALLY DOWNLOAD COMMAND ***********************************"
     test_download
+    echo "**************************************** TESTING RALLY PROVISION, START, STOP COMMANDS ***********************************"
+    test_provision_start_stop
     echo "**************************************** TESTING RALLY WITH ES FROM SOURCES ************************************"
     test_sources
     echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"
@@ -543,12 +569,20 @@ function main {
 
 check_prerequisites
 
-# allow invocation from release-docker.sh
+
 if [[ $1 == "test-docker-release" ]]; then
     test_docker_release_image
     exit
 fi
 
 trap "tear_down" EXIT
+
+# if argument is the name of a function, set up and call it
+if declare -f "$1" > /dev/null
+then
+    set_up
+    $1
+    exit
+fi
 
 main
