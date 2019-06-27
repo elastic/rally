@@ -14,7 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import os
+import shlex
+import subprocess
 import sys
 import json
 from collections import defaultdict
@@ -65,12 +67,23 @@ def provision(cfg):
                                               cluster_settings=cluster_settings, all_node_ips=all_node_ips,
                                               target_root=challenge_root_path, node_id=node_id)
         node_config = p.prepare(binaries=s())
-        # TODO: implement node_config UUID, print here.
-        console.println(node_config.toJSON())
+
+        trial_id = cfg.opts("system", "trial.id")
+        filename = os.path.join(paths.race_root(cfg, trial_id), "nodeconfig.json")
+        write_node_config(filename, node_config)
+
+        console.println(trial_id)
+
+
+def write_node_config(filename, node_config):
+    cfg_json = node_config.toJSON()
+    with open(filename, "w") as f:
+        f.write(cfg_json)
 
 
 def _load_node_cfg(cfg):
-    with open(cfg.opts("mechanic", "node.cfg"), "r") as f:
+    filename = os.path.join(paths.race_root(cfg), "nodeconfig.json")
+    with open(filename, "r") as f:
         node_cfg = json.load(f)
         car = Car(names=node_cfg['car']['names'],
                   root_path=node_cfg['car']['root_path'],
@@ -86,9 +99,13 @@ def _load_node_cfg(cfg):
                                  data_paths=node_cfg['data_paths'])
 
 
+def is_docker(node_cfg):
+    return node_cfg.binary_path.endswith("docker-compose.yml")
+
+
 def start(cfg):
     node_cfg = _load_node_cfg(cfg)
-    docker = node_cfg.binary_path.endswith("docker-compose.yml")
+    docker = is_docker(node_cfg)
 
     if docker:
         launch = launcher.DockerLauncher(cfg, metrics_store=None)
@@ -97,30 +114,38 @@ def start(cfg):
                                           metrics_store=None,
                                           races_root_dir=paths.races_root(cfg))
     node = launch.start(node_configurations=[node_cfg])[0]
-    if docker:
-        console.println(node.node_name)
+    console.println(node)
+
+
+def get_pid(binary_path):
+    pidfilename = os.path.join(binary_path, "pid")
+    try:
+        with open(pidfilename, "r") as f:
+            return int(f.read())
+    except FileNotFoundError:
+        return None
+
+
+def _load_node(node_cfg):
+    node_name = node_cfg.node_name
+    binary_path = node_cfg.binary_path
+    if not is_docker(node_cfg):
+        pid = get_pid(binary_path)
     else:
-        console.println(node.pid)
-
-
-def _load_node(cfg):
-    pid = int(cfg.opts("mechanic", "node.pid", default_value=0, mandatory=False))
-    host_name = cfg.opts("mechanic", "node.host_name", mandatory=False)
-    node_name = cfg.opts("mechanic", "node.node_name", mandatory=False)
+        pid = None
     t = telemetry.Telemetry(devices=[])
 
     return cluster.Node(pid=pid,
-                        host_name=host_name,
                         node_name=node_name,
+                        host_name=None,
                         telemetry=t)
 
 
 def stop(cfg):
     node_cfg = _load_node_cfg(cfg)
-    node = _load_node(cfg)
-    docker = node_cfg.binary_path.endswith("docker-compose.yml")
+    node = _load_node(node_cfg)
 
-    if docker:
+    if is_docker(node_cfg):
         launch = launcher.DockerLauncher(cfg, metrics_store=None)
         launch.binary_paths[node.node_name] = node_cfg.binary_path
     else:
