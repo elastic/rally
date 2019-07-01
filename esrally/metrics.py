@@ -1368,9 +1368,6 @@ class RaceStore:
         self.trial_id = cfg.opts("system", "trial.id")
         self.current_race = None
 
-    def find_by_timestamp(self, timestamp):
-        raise NotImplementedError("abstract method")
-
     def find_by_trial_id(self, uid):
         raise NotImplementedError("abstract method")
 
