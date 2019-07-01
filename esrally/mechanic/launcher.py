@@ -14,13 +14,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 import logging
 import os
 import signal
 import subprocess
-import threading
 import shlex
+
+import psutil
+from time import monotonic as _time
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster, java_resolver
@@ -48,6 +49,7 @@ class ClusterLauncher:
     The cluster launcher performs cluster-wide tasks that need to be done in the startup / shutdown phase.
 
     """
+
     def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
         """
 
@@ -110,7 +112,8 @@ class ClusterLauncher:
             # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
             self.logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
             self.stop(c)
-            raise exceptions.LaunchError("Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
+            raise exceptions.LaunchError(
+                "Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
 
     def stop(self, c):
@@ -122,83 +125,29 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
-class StartupWatcher:
-    def __init__(self, node_name, server, startup_event):
-        self.node_name = node_name
-        self.server = server
-        self.startup_event = startup_event
-        self.logger = logging.getLogger(__name__)
+def _get_container_id(compose_config):
+    compose_ps_cmd = _get_docker_compose_cmd(compose_config, "ps -q")
 
-    def watch(self):
-        """
-        Reads the output from the ES (node) subprocess.
-        """
-        lines_to_log = 0
-        while True:
-            line = self.server.stdout.readline().decode("utf-8")
-            if len(line) == 0:
-                self.logger.info("%s (stdout): No more output. Process has likely terminated.", self.node_name)
-                self.await_termination(self.server)
-                self.startup_event.set()
-                break
-            line = line.rstrip()
-
-            # if an error occurs, log the next few lines
-            if "error" in line.lower():
-                lines_to_log = 10
-            # don't log each output line as it is contained in the node's log files anyway and we just risk spamming our own log.
-            if not self.startup_event.isSet() or lines_to_log > 0:
-                self.logger.info("%s (stdout): %s", self.node_name, line)
-                lines_to_log -= 1
-
-            # no need to check as soon as we have detected node startup
-            if not self.startup_event.isSet():
-                if line.find("Initialization Failed") != -1 or line.find("A fatal exception has occurred") != -1:
-                    self.logger.error("[%s] encountered initialization errors.", self.node_name)
-                    # wait a moment to ensure the process has terminated before we signal that we detected a (failed) startup.
-                    self.await_termination(self.server)
-                    self.startup_event.set()
-                if line.endswith("started") and not self.startup_event.isSet():
-                    self.startup_event.set()
-                    self.logger.info("[%s] has successfully started.", self.node_name)
-
-    def await_termination(self, server, timeout=5):
-        # wait a moment to ensure the process has terminated
-        wait = timeout
-        while not server.returncode or wait == 0:
-            time.sleep(0.1)
-            server.poll()
-            wait -= 1
+    output = subprocess.check_output(args=shlex.split(compose_ps_cmd))
+    return output.decode("utf-8").rstrip()
 
 
-def _start(process, node_name):
-    log = logging.getLogger(__name__)
-    startup_event = threading.Event()
-    watcher = StartupWatcher(node_name, process, startup_event)
-    t = threading.Thread(target=watcher.watch)
-    t.setDaemon(True)
-    t.start()
-    if startup_event.wait(timeout=InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS):
-        process.poll()
-        # has the process terminated?
-        if process.returncode:
-            msg = "Node [%s] has terminated with exit code [%s]." % (node_name, str(process.returncode))
-            log.error(msg)
-            raise exceptions.LaunchError(msg)
-        else:
-            log.info("Started node [%s] with PID [%s].", node_name, process.pid)
-            return process
-    else:
-        msg = "Could not start node [%s] within timeout period of [%s] seconds." % (
-            node_name, InProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
-        # check if the process has terminated already
-        process.poll()
-        if process.returncode:
-            msg += " The process has already terminated with exit code [%s]." % str(process.returncode)
-        else:
-            msg += " The process seems to be still running with PID [%s]." % process.pid
-        log.error(msg)
-        raise exceptions.LaunchError(msg)
+def _wait_for_healthy_running_container(container_id, timeout=60):
+    cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
+    endtime = _time() + timeout
+    while _time() < endtime:
+        output = subprocess.check_output(shlex.split(cmd))
+        containers = output.decode("utf-8").rstrip()
+        if len(containers) > 0:
+            return
+        time.sleep(0.5)
+    msg = "No healthy running container after {} seconds!".format(timeout)
+    logging.error(msg)
+    raise exceptions.LaunchError(msg)
+
+
+def _get_docker_compose_cmd(compose_config, cmd):
+    return "docker-compose -f {} {}".format(compose_config, cmd)
 
 
 class DockerLauncher:
@@ -209,32 +158,38 @@ class DockerLauncher:
         self.cfg = cfg
         self.metrics_store = metrics_store
         self.binary_paths = {}
-        self.node_name = None
         self.keep_running = self.cfg.opts("mechanic", "keep.running")
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
         nodes = []
         for node_configuration in node_configurations:
-
             node_name = node_configuration.node_name
             host_name = node_configuration.ip
             binary_path = node_configuration.binary_path
             self.binary_paths[node_name] = binary_path
-
-            p = self._start_process(cmd="docker-compose -f %s up" % binary_path, node_name=node_name)
-            # only support a subset of telemetry for Docker hosts (specifically, we do not allow users to enable any devices)
+            self._start_process(binary_path)
+            # only support a subset of telemetry for Docker hosts
+            # (specifically, we do not allow users to enable any devices)
             node_telemetry = [
                 telemetry.DiskIo(self.metrics_store, len(node_configurations)),
                 telemetry.NodeEnvironmentInfo(self.metrics_store)
             ]
             t = telemetry.Telemetry(devices=node_telemetry)
-            nodes.append(cluster.Node(p, host_name, node_name, t))
+            nodes.append(cluster.Node(0, host_name, node_name, t))
         return nodes
 
-    def _start_process(self, cmd, node_name):
-        return _start(subprocess.Popen(shlex.split(cmd),
-                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL), node_name)
+    def _start_process(self, binary_path):
+        compose_cmd = _get_docker_compose_cmd(binary_path, "up -d")
+
+        ret = process.run_subprocess_with_logging(compose_cmd)
+        if ret != 0:
+            msg = "Docker daemon startup failed with exit code[{}]".format(ret)
+            logging.error(msg)
+            raise exceptions.LaunchError(msg)
+
+        container_id = _get_container_id(binary_path)
+        _wait_for_healthy_running_container(container_id)
 
     def stop(self, nodes):
         if self.keep_running:
@@ -243,7 +198,7 @@ class DockerLauncher:
             self.logger.info("Stopping Docker container")
             for node in nodes:
                 node.telemetry.detach_from_node(node, running=True)
-                process.run_subprocess_with_logging("docker-compose -f %s down" % self.binary_paths[node.node_name])
+                process.run_subprocess_with_logging(_get_docker_compose_cmd(self.binary_paths[node.node_name], "down"))
                 node.telemetry.detach_from_node(node, running=False)
 
 
@@ -267,12 +222,14 @@ class ExternalLauncher:
             telemetry.ExternalEnvironmentInfo(es, self.metrics_store),
         ])
         # We create a pseudo-cluster here to get information about all nodes.
-        # cluster nodes will be populated by the external environment info telemetry device. We cannot know this upfront.
+        # cluster nodes will be populated by the external environment info telemetry device. We cannot know this
+        # upfront.
         c = cluster.Cluster(hosts, [], t)
         user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
         distribution_version = es.info()["version"]["number"]
         if not user_defined_version or user_defined_version.strip() == "":
-            self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]", distribution_version)
+            self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]",
+                             distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         elif user_defined_version != distribution_version:
             self.logger.warning("Distribution version '%s' on command line differs from actual cluster version '%s'.",
@@ -281,11 +238,26 @@ class ExternalLauncher:
         return c.nodes
 
     def stop(self, nodes):
-        # nothing to do here, externally provisioned clusters / nodes don't have any specific telemetry devices attached.
+        # nothing to do here, externally provisioned clusters / nodes don't have any specific telemetry devices
+        # attached.
         pass
 
 
-class InProcessLauncher:
+def wait_for_pidfile(pidfilename, timeout=60):
+    endtime = _time() + timeout
+    while _time() < endtime:
+        try:
+            with open(pidfilename, "rb") as f:
+                return int(f.read())
+        except FileNotFoundError:
+            time.sleep(0.5)
+
+    msg = "pid file not available after {} seconds!".format(timeout)
+    logging.error(msg)
+    raise exceptions.LaunchError(msg)
+
+
+class ProcessLauncher:
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
     """
@@ -300,7 +272,8 @@ class InProcessLauncher:
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
-        # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store running on this machine
+        # we're very specific which nodes we kill as there is potentially also an Elasticsearch based metrics store
+        # running on this machine
         # The only specific trait of a Rally-related process is that is started "somewhere" in the races root directory.
         #
         # We also do this only once per host otherwise we would kill instances that we've just launched.
@@ -332,8 +305,8 @@ class InProcessLauncher:
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
         env = self._prepare_env(car, node_name, java_home, t)
         t.on_pre_node_start(node_name)
-        node_process = self._start_process(env, node_name, binary_path)
-        node = cluster.Node(node_process, host_name, node_name, t)
+        node_pid = self._start_process(binary_path, env)
+        node = cluster.Node(node_pid, host_name, node_name, t)
         self.logger.info("Attaching telemetry devices to node [%s].", node_name)
         t.attach_to_node(node)
 
@@ -357,12 +330,20 @@ class InProcessLauncher:
             else:  # merge
                 env[k] = v + separator + env[k]
 
-    def _start_process(self, env, node_name, binary_path):
+    @staticmethod
+    def _start_process(binary_path, env):
         if os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
         cmd = ["bin/elasticsearch"]
-        return _start(subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env), node_name)
+        cmd.extend(["-d", "-p", "pid"])
+        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env)
+        if ret != 0:
+            msg = "Daemon startup failed with exit code[{}]".format(ret)
+            logging.error(msg)
+            raise exceptions.LaunchError(msg)
+
+        return wait_for_pidfile("./pid")
 
     def stop(self, nodes):
         if self.keep_running:
@@ -370,35 +351,23 @@ class InProcessLauncher:
         else:
             self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         for node in nodes:
-            process = node.process
+            proc = psutil.Process(pid=node.pid)
             node_name = node.node_name
             node.telemetry.detach_from_node(node, running=True)
             if not self.keep_running:
                 stop_watch = self._clock.stop_watch()
                 stop_watch.start()
                 try:
-                    os.kill(process.pid, signal.SIGINT)
-                    process.wait(10.0)
-                    self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+                    os.kill(proc.pid, signal.SIGTERM)
+                    proc.wait(10.0)
                 except ProcessLookupError:
-                    self.logger.warning("No process found with PID [%s] for node [%s]", process.pid, node_name)
-                except subprocess.TimeoutExpired:
-                    # kill -9
-                    self.logger.warning("Node [%s] did not shut down after 10 seconds; now kill -QUIT node, to see threads:", node_name)
-                    try:
-                        os.kill(process.pid, signal.SIGQUIT)
-                    except OSError:
-                        self.logger.warning("No process found with PID [%s] for node [%s]", process.pid, node_name)
-                        break
-                    try:
-                        process.wait(120.0)
-                        self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
-                        break
-                    except subprocess.TimeoutExpired:
-                        pass
+                    self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
+                except psutil.TimeoutExpired:
                     self.logger.info("kill -KILL node [%s]", node_name)
                     try:
-                        process.kill()
+                        # kill -9
+                        proc.kill()
                     except ProcessLookupError:
-                        self.logger.warning("No process found with PID [%s] for node [%s]", process.pid, node_name)
+                        self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
                 node.telemetry.detach_from_node(node, running=False)
+                self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
