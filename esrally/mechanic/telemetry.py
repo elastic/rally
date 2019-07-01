@@ -46,17 +46,13 @@ class Telemetry:
         self.enabled_devices = enabled_devices
         self.devices = devices
 
-    def instrument_candidate_env(self, car, candidate_id):
-        opts = {}
+    def instrument_candidate_java_opts(self, car, candidate_id):
+        opts = []
         for device in self.devices:
             if self._enabled(device):
-                additional_opts = device.instrument_env(car, candidate_id)
+                additional_opts = device.instrument_java_opts(car, candidate_id)
                 # properly merge values with the same key
-                for k, v in additional_opts.items():
-                    if k in opts:
-                        opts[k] = "%s %s" % (opts[k], v)
-                    else:
-                        opts[k] = v
+                opts.extend(additional_opts)
         return opts
 
     def attach_to_cluster(self, cluster):
@@ -108,7 +104,7 @@ class TelemetryDevice:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         return {}
 
     def attach_to_cluster(self, cluster):
@@ -169,7 +165,7 @@ class FlightRecorder(TelemetryDevice):
         self.log_root = log_root
         self.java_major_version = java_major_version
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jfr" % (self.log_root, car.safe_name, candidate_id)
 
@@ -190,31 +186,32 @@ class FlightRecorder(TelemetryDevice):
         java_opts = self.java_opts(log_file)
 
         self.logger.info("jfr: Adding JVM arguments: [%s].", java_opts)
-        return {"ES_JAVA_OPTS": java_opts}
+        return java_opts
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
-        java_opts = "-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
-
+        java_opts = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints"]
+        jfr_cmd = ""
         if self.java_major_version < 11:
-            java_opts += "-XX:+UnlockCommercialFeatures "
+            java_opts.append("-XX:+UnlockCommercialFeatures")
 
         if self.java_major_version < 9:
-            java_opts += "-XX:+FlightRecorder "
-            java_opts += "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={} ".format(log_file)
-            java_opts += "-XX:StartFlightRecording=defaultrecording=true"
+            java_opts.append("-XX:+FlightRecorder")
+            java_opts.append("-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={}".format(log_file))
+            jfr_cmd = "-XX:StartFlightRecording=defaultrecording=true"
             if recording_template:
                 self.logger.info("jfr: Using recording template [%s].", recording_template)
-                java_opts += ",settings={}".format(recording_template)
+                jfr_cmd += ",settings={}".format(recording_template)
             else:
                 self.logger.info("jfr: Using default recording template.")
         else:
-            java_opts += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
+            jfr_cmd += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
             if recording_template:
                 self.logger.info("jfr: Using recording template [%s].", recording_template)
-                java_opts += ",settings={}".format(recording_template)
+                jfr_cmd += ",settings={}".format(recording_template)
             else:
                 self.logger.info("jfr: Using default recording template.")
+        java_opts.append(jfr_cmd)
         return java_opts
 
 
@@ -228,12 +225,12 @@ class JitCompiler(TelemetryDevice):
         super().__init__()
         self.log_root = log_root
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
-        return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
-                                "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
+        return ["-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation",
+                "-XX:LogFile={}".format(log_file), "-XX:+PrintAssembly"]
 
 
 class Gc(TelemetryDevice):
@@ -247,7 +244,7 @@ class Gc(TelemetryDevice):
         self.log_root = log_root
         self.java_major_version = java_major_version
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.gc.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=self.logger)
@@ -255,12 +252,12 @@ class Gc(TelemetryDevice):
 
     def java_opts(self, log_file):
         if self.java_major_version < 9:
-            return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
-                                    "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime "
-                                    "-XX:+PrintTenuringDistribution" % log_file}
+            return ["-Xloggc:{}".format(log_file), "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
+                    "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+                    "-XX:+PrintTenuringDistribution"]
         else:
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
-            return {"ES_JAVA_OPTS": "-Xlog:gc*=info,safepoint=info,age*=trace:file=%s:utctime,uptimemillis,level,tags:filecount=0" % log_file}
+            return ["-Xlog:gc*=info,safepoint=info,age*=trace:file={}:utctime,uptimemillis,level,tags:filecount=0".format(log_file)]
 
 
 class CcrStats(TelemetryDevice):

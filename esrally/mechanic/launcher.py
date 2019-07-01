@@ -295,9 +295,6 @@ class ProcessLauncher:
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         node_telemetry = [
-            telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
-            telemetry.JitCompiler(node_telemetry_dir),
-            telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.DiskIo(self.metrics_store, node_count_on_host),
             telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
@@ -323,17 +320,6 @@ class ProcessLauncher:
         # Don't merge here!
         env["JAVA_HOME"] = java_home
 
-        # we just blindly trust telemetry here...
-        for k, v in t.instrument_candidate_env(car, node_name).items():
-            self._set_env(env, k, v)
-
-        exit_on_oome_flag = "-XX:+ExitOnOutOfMemoryError"
-        if jvm.supports_option(java_home, exit_on_oome_flag):
-            self.logger.info("Setting [%s] to detect out of memory errors during the benchmark.", exit_on_oome_flag)
-            self._set_env(env, "ES_JAVA_OPTS", exit_on_oome_flag)
-        else:
-            self.logger.info("JVM does not support [%s]. A JDK upgrade is recommended.", exit_on_oome_flag)
-
         self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
@@ -351,10 +337,7 @@ class ProcessLauncher:
         os.chdir(binary_path)
         cmd = ["bin/elasticsearch"]
         cmd.extend(["-d", "-p", "pid"])
-        proc = subprocess.Popen(cmd,
-                                env=env,
-                                close_fds=True)
-        ret = proc.wait()
+        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env)
         if ret != 0:
             msg = "Daemon startup failed with exit code[{}]".format(ret)
             logging.error(msg)
