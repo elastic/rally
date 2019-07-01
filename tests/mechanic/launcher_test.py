@@ -14,15 +14,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import datetime
-import logging
-import os
+import io
 from unittest import TestCase, mock
 
-from esrally import config, exceptions, metrics, paths
-from esrally.mechanic import launcher, provisioner, team
+from esrally import config, exceptions, paths
+from esrally.mechanic import launcher
 from esrally.utils import opts
-from esrally.utils.io import guess_java_home
 
 
 class MockMetricsStore:
@@ -102,9 +99,17 @@ class MockPopen:
         # ProcessLauncherTests are telemetry.  If we return 1 for them we can skip
         # mocking them as their optional functionality is disabled.
         self.returncode = 1
+        self.stdout = io.StringIO()
 
     def communicate(self, input=None, timeout=None):
         return [b"", b""]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # process.run_subprocess_with_logging uses Popen context manager, so let its return be 0
+        self.returncode = 0
 
     def wait(self):
         return 0
