@@ -1396,8 +1396,8 @@ class CompositeRaceStore:
         self.es_results_store = es_results_store
         self.file_store = file_store
 
-    def find_by_timestamp(self, timestamp):
-        return self.es_store.find_by_timestamp(timestamp)
+    def find_by_trial_id(self, trial_id):
+        return self.es_store.find_by_trial_id(trial_id)
 
     def store_race(self, race):
         self.file_store.store_race(race)
@@ -1519,7 +1519,7 @@ class EsRaceStore(RaceStore):
         else:
             return []
 
-    def find_by_timestamp(self, timestamp):
+    def find_by_trial_id(self, trial_id):
         filters = [{
                 "term": {
                     "environment": self.environment_name
@@ -1527,7 +1527,7 @@ class EsRaceStore(RaceStore):
             },
             {
                 "term": {
-                    "trial-timestamp": timestamp
+                    "trial-id": trial_id
                 }
             }]
 
