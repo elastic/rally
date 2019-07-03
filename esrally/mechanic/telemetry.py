@@ -845,7 +845,7 @@ class DiskIo(InternalTelemetryDevice):
                                          "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node.node_name)
 
                     read_bytes = (disk_end.read_bytes - int(io_bytes[0])) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - int(io_bytes[0])) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - int(io_bytes[1])) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
 
