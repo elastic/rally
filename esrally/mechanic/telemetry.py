@@ -776,10 +776,11 @@ class MergeParts(InternalTelemetryDevice):
 
 
 class DiskIo(InternalTelemetryDevice):
+    human_name = "Disk IO"
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store, node_count_on_host):
+    def __init__(self, metrics_store, node_count_on_host, log_root, car, node_name):
         super().__init__()
         self.metrics_store = metrics_store
         self.node_count_on_host = node_count_on_host
@@ -787,6 +788,9 @@ class DiskIo(InternalTelemetryDevice):
         self.process = None
         self.disk_start = None
         self.process_start = None
+        self.car = car
+        self.node_name = node_name
+        self.log_root = log_root
 
     def attach_to_node(self, node):
         self.node = node
@@ -795,35 +799,53 @@ class DiskIo(InternalTelemetryDevice):
     def on_benchmark_start(self):
         if self.process is not None:
             self.process_start = sysstats.process_io_counters(self.process)
+            read_bytes = 0
+            write_bytes = 0
+            io.ensure_dir(self.log_root)
+            log_file = "%s/%s-%s.io" % (self.log_root, self.car.safe_name, self.node.node_name)
+            console.info("%s: Writing start I/O stats to [%s]" % (self.human_name, log_file), logger=self.logger)
             if self.process_start:
+                read_bytes = self.process_start.read_bytes
+                write_bytes = self.process_start.write_bytes
                 self.logger.info("Using more accurate process-based I/O counters.")
             else:
                 try:
                     self.disk_start = sysstats.disk_io_counters()
+                    read_bytes = self.disk_start.read_bytes
+                    write_bytes = self.disk_start.write_bytes
                     self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
                                         "I/O counters.")
                 except RuntimeError:
                     self.logger.exception("Could not determine I/O stats at benchmark start.")
+            with open(log_file, "wt", encoding="utf-8") as f:
+                diskio_str = "%d %d" % (read_bytes, write_bytes)
+                f.write(diskio_str)
 
     def on_benchmark_stop(self):
         if self.process is not None:
+            process_end = sysstats.process_io_counters(self.process)
+            disk_end = sysstats.disk_io_counters()
+            io.ensure_dir(self.log_root)
+            log_file = "%s/%s-%s.io" % (self.log_root, self.car.safe_name, self.node.node_name)
+            io_str = ""
+            with open(log_file, "rt", encoding="utf-8") as f:
+                io_str = f.read()
+            io_bytes = io_str.split()
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
                 # we have process-based disk counters, no need to worry how many nodes are on this host
-                if self.process_start:
-                    process_end = sysstats.process_io_counters(self.process)
-                    read_bytes = process_end.read_bytes - self.process_start.read_bytes
-                    write_bytes = process_end.write_bytes - self.process_start.write_bytes
-                elif self.disk_start:
+                if process_end:
+                    read_bytes = process_end.read_bytes - int(io_bytes[0])
+                    write_bytes = process_end.write_bytes - int(io_bytes[1])
+                elif disk_end:
                     if self.node_count_on_host > 1:
                         self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
                                          "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node.node_name)
 
-                    disk_end = sysstats.disk_io_counters()
-                    read_bytes = (disk_end.read_bytes - self.disk_start.read_bytes) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - self.disk_start.write_bytes) // self.node_count_on_host
+                    read_bytes = (disk_end.read_bytes - int(io_bytes[0])) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - int(io_bytes[0])) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
 
