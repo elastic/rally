@@ -23,6 +23,7 @@ import signal
 import subprocess
 import tabulate
 import threading
+import json
 
 from esrally import metrics, time, exceptions
 from esrally.utils import io, sysstats, console, versions, opts
@@ -817,9 +818,9 @@ class DiskIo(InternalTelemetryDevice):
                                         "I/O counters.")
                 except RuntimeError:
                     self.logger.exception("Could not determine I/O stats at benchmark start.")
+            diskio_str = {"read_bytes": read_bytes, "write_bytes": write_bytes}
             with open(log_file, "wt", encoding="utf-8") as f:
-                diskio_str = "%d %d" % (read_bytes, write_bytes)
-                f.write(diskio_str)
+                json.dump(diskio_str, f)
 
     def on_benchmark_stop(self):
         if self.process is not None:
@@ -829,23 +830,22 @@ class DiskIo(InternalTelemetryDevice):
             log_file = "%s/%s-%s.io" % (self.log_root, self.car.safe_name, self.node.node_name)
             io_str = ""
             with open(log_file, "rt", encoding="utf-8") as f:
-                io_str = f.read()
-            io_bytes = io_str.split()
+                io_bytes = json.load(f)
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
                 # we have process-based disk counters, no need to worry how many nodes are on this host
                 if process_end:
-                    read_bytes = process_end.read_bytes - int(io_bytes[0])
-                    write_bytes = process_end.write_bytes - int(io_bytes[1])
+                    read_bytes = process_end.read_bytes - io_bytes['read_bytes']
+                    write_bytes = process_end.write_bytes - io_bytes['write_bytes']
                 elif disk_end:
                     if self.node_count_on_host > 1:
                         self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
                                          "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node.node_name)
 
-                    read_bytes = (disk_end.read_bytes - int(io_bytes[0])) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - int(io_bytes[1])) // self.node_count_on_host
+                    read_bytes = (disk_end.read_bytes - io_bytes['read_bytes']) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - io_bytes['write_bytes']) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
 
