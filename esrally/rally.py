@@ -202,8 +202,7 @@ def create_arg_parser():
         default="0.0.0.0")
     provision_parser.add_argument(
         "--node-ips",
-        help="IPs of discovery nodes in cluster to join",
-        nargs='*')
+        help="IPs of discovery nodes in cluster to join")
     provision_parser.add_argument(
         "--node-name",
         help="name of node to provision",
@@ -712,7 +711,7 @@ def main():
         if args.node_ip:
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.ip", args.node_ip)
         if args.node_ips:
-            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ips", args.node_ips)
+            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ips", opts.csv_to_list(args.node_ips))
         if args.docker:
             cfg.add(config.Scope.applicationOverride, "provisioning", "docker", args.docker)
     if sub_command == "start" or sub_command == "stop":

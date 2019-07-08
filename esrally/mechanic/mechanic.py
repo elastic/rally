@@ -48,7 +48,7 @@ def provision(cfg):
     s = supplier.create(cfg, sources=False, distribution=True, build=False,
                         challenge_root_path=challenge_root_path, car=car, plugins=plugins)
 
-    all_node_ips = cfg.opts("provisioning", "node.ips", mandatory=True)
+    all_node_ips = cfg.opts("provisioning", "node.ips", mandatory=False, default_value=[])
     cluster_settings = {}
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=True)
     if isinstance(node_ids, str):
