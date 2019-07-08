@@ -68,12 +68,12 @@ def provision(cfg):
 
         trial_id = cfg.opts("system", "trial.id")
         filename = os.path.join(paths.race_root(cfg, trial_id), "nodeconfig.json")
-        write_node_config(filename, node_config)
+        _write_node_cfg(filename, node_config)
 
         console.println(trial_id, force=True)
 
 
-def write_node_config(filename, node_config):
+def _write_node_cfg(filename, node_config):
     cfg_json = node_config.toJSON()
     with open(filename, "w") as f:
         f.write(cfg_json)
@@ -97,13 +97,13 @@ def _load_node_cfg(cfg):
                                  data_paths=node_cfg['data_paths'])
 
 
-def is_docker(node_cfg):
+def _is_docker_node(node_cfg):
     return node_cfg.binary_path.endswith("docker-compose.yml")
 
 
 def start(cfg):
     node_cfg = _load_node_cfg(cfg)
-    docker = is_docker(node_cfg)
+    docker = _is_docker_node(node_cfg)
 
     if docker:
         launch = launcher.DockerLauncher(cfg, metrics_store=None)
@@ -119,7 +119,7 @@ def start(cfg):
         console.println(node.pid, force=True)
 
 
-def get_pid(binary_path):
+def _get_pid(binary_path):
     pidfilename = os.path.join(binary_path, "pid")
     try:
         with open(pidfilename, "r") as f:
@@ -131,8 +131,8 @@ def get_pid(binary_path):
 def _load_node(node_cfg):
     node_name = node_cfg.node_name
     binary_path = node_cfg.binary_path
-    if not is_docker(node_cfg):
-        pid = get_pid(binary_path)
+    if not _is_docker_node(node_cfg):
+        pid = _get_pid(binary_path)
     else:
         pid = None
     t = telemetry.Telemetry(devices=[])
@@ -147,7 +147,7 @@ def stop(cfg):
     node_cfg = _load_node_cfg(cfg)
     node = _load_node(node_cfg)
 
-    if is_docker(node_cfg):
+    if _is_docker_node(node_cfg):
         launch = launcher.DockerLauncher(cfg, metrics_store=None)
         launch.binary_paths[node.node_name] = node_cfg.binary_path
     else:
