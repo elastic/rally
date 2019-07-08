@@ -400,7 +400,7 @@ class NoOpProvisioner:
 
 
 class DockerProvisioner:
-    def __init__(self, cfg, car, node_name, cluster_settings, node_root_dir):
+    def __init__(self, cfg, car, node_name, cluster_settings, node_root_dir, rally_root):
         self.car = car
         self.distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         self.node_ip = cfg.opts("provisioning", "node.ip")
@@ -410,7 +410,7 @@ class DockerProvisioner:
         self.node_root_dir = node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
         self.heap_dump_dir = "%s/heapdump" % node_root_dir
-        self.rally_root = cfg.opts("node", "rally.root")
+        self.rally_root = rally_root
         self.install_dir = "%s/install" % node_root_dir
         # use a random subdirectory to isolate multiple runs because an external (non-root) user cannot clean it up.
         import uuid

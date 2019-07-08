@@ -535,7 +535,6 @@ class DockerProvisionerTests(TestCase):
         self.cfg.add(config.Scope.application, "provisioning", "node.name", "rally-node-0")
         self.cfg.add(config.Scope.application, "mechanic", "distribution.version", "6.3.0")
         self.cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
-        self.cfg.add(config.Scope.application, "node", "rally.root", self.node_root_dir)
 
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_defaults(self, uuid4):
@@ -543,6 +542,7 @@ class DockerProvisionerTests(TestCase):
         log_dir = os.path.join(self.node_root_dir, "logs", "server")
         heap_dump_dir = os.path.join(self.node_root_dir, "heapdump")
         data_dir = os.path.join(self.node_root_dir, "data", "9dbc682e-d32a-4669-8fbe-56fb77120dd4")
+        rally_root = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, "esrally"))
 
         c = team.Car("unit-test-car", None, "/tmp", variables={
             "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss"
@@ -552,7 +552,8 @@ class DockerProvisionerTests(TestCase):
                                                car=c,
                                                node_name="rally-node-0",
                                                cluster_settings={"indices.query.bool.max_clause_count": 5000},
-                                               node_root_dir=self.node_root_dir)
+                                               node_root_dir=self.node_root_dir,
+                                               rally_root=rally_root)
 
         self.assertDictEqual({
             "cluster_name": "rally-benchmark",
@@ -627,7 +628,8 @@ services:
                                                car=c,
                                                node_name="rally-node-0",
                                                cluster_settings=None,
-                                               node_root_dir=node_root_dir)
+                                               node_root_dir=node_root_dir,
+                                               rally_root=rally_root)
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
