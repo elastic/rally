@@ -22,7 +22,7 @@ import logging
 
 import jinja2
 
-from esrally import exceptions
+from esrally import exceptions, paths
 from esrally.mechanic import team, java_resolver, telemetry
 from esrally.utils import io, process, versions, jvm
 
@@ -66,8 +66,10 @@ def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
+    rally_root = cfg.opts("node", "rally.root", default_value=paths.rally_root(), mandatory=False)
+
     return DockerProvisioner(cfg=cfg, car=car, node_name=node_name, cluster_settings=cluster_settings,
-                             node_root_dir=node_root_dir)
+                             node_root_dir=node_root_dir, rally_root=rally_root)
 
 
 class NodeConfiguration:
