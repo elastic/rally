@@ -104,6 +104,7 @@ class BareProvisionerTests(TestCase):
         Mock XPackPlugin settings as found in rally-team repo:
         https://github.com/elastic/rally-teams/blob/6/plugins/x_pack/security.ini
         """
+
         def __init__(self):
             self.name = "x-pack"
             self.core_plugin = False
@@ -125,7 +126,6 @@ class BareProvisionerTests(TestCase):
             for prop, value in vars(self).items():
                 r.append("%s = [%s]" % (prop, repr(value)))
             return ", ".join(r)
-
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-5.0.0"])
@@ -531,7 +531,7 @@ class PluginInstallerTests(TestCase):
 
 
 class DockerProvisionerTests(TestCase):
-    def setUp(self) -> None:
+    def setUp(self):
         self.node_root_dir = tempfile.gettempdir()
 
         self.cfg = config.Config()
@@ -589,7 +589,7 @@ class DockerProvisionerTests(TestCase):
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-"""version: '2.2'
+            """version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -638,7 +638,7 @@ services:
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-"""version: '2.2'
+            """version: '2.2'
 services:
   elasticsearch1:
     cap_add:
