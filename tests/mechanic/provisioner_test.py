@@ -27,11 +27,12 @@ HOME_DIR = os.path.expanduser("~")
 
 
 class BareProvisionerTests(TestCase):
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-5.0.0"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.rmtree")
-    def test_prepare_without_plugins(self, mock_rm, mock_ensure_dir, mock_decompress):
+    def test_prepare_without_plugins(self, mock_rm, mock_ensure_dir, mock_decompress, mock_run_subprocess):
         apply_config_calls = []
 
         def null_apply_config(source_root_path, target_root_path, config_vars):
@@ -125,12 +126,14 @@ class BareProvisionerTests(TestCase):
                 r.append("%s = [%s]" % (prop, repr(value)))
             return ", ".join(r)
 
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-5.0.0"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("esrally.mechanic.provisioner.PluginInstaller.install")
     @mock.patch("shutil.rmtree")
-    def test_prepare_distribution_lt_63_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress):
+    def test_prepare_distribution_lt_63_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress, mock_run_subprocess):
         """
         Test that plugin.mandatory is set to the specific plugin name (e.g. `x-pack-security`) and not
         the meta plugin name (e.g. `x-pack`) for Elasticsearch <6.3
@@ -202,12 +205,13 @@ class BareProvisionerTests(TestCase):
 
         }, config_vars)
 
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-6.3.0"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("esrally.mechanic.provisioner.PluginInstaller.install")
     @mock.patch("shutil.rmtree")
-    def test_prepare_distribution_ge_63_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress):
+    def test_prepare_distribution_ge_63_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress, mock_run_subprocess):
         """
         Test that plugin.mandatory is set to the meta plugin name (e.g. `x-pack`) and not
         the specific plugin name (e.g. `x-pack-security`) for Elasticsearch >=6.3.0
