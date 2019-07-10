@@ -23,7 +23,7 @@ from collections import defaultdict
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
-from esrally.utils import net, console
+from esrally.utils import net, console, git
 from esrally.mechanic import supplier, provisioner, launcher, team
 
 
@@ -45,11 +45,12 @@ def download(cfg):
 ##############################
 
 class ClusterMetaInfo:
-    def __init__(self, nodes, revision, distribution_version, distribution_flavor):
+    def __init__(self, nodes, revision, distribution_version, distribution_flavor, team_revision):
         self.nodes = nodes
         self.revision = revision
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
+        self.team_revision = team_revision
 
     def as_dict(self):
         return {
@@ -57,7 +58,8 @@ class ClusterMetaInfo:
             "node-count": len(self.nodes),
             "revision": self.revision,
             "distribution-version": self.distribution_version,
-            "distribution-flavor": self.distribution_flavor
+            "distribution-flavor": self.distribution_flavor,
+            "team-revision": self.team_revision
         }
 
 
@@ -296,6 +298,10 @@ class MechanicActor(actor.RallyActor):
         cls = metrics.metrics_store_class(self.cfg)
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
+        name = self.cfg.opts("race", "pipeline")
+        team_path = self.cfg.opts("mechanic", "team.path", mandatory=False)
+        if not (name == "benchmark-only" or team_path):
+            self.team_revision = git.head_revision(team.team_path(self.cfg))
         self.car, _ = load_team(self.cfg, msg.external)
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
@@ -421,7 +427,8 @@ class MechanicActor(actor.RallyActor):
                   EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.cluster.nodes],
                                                 self.cluster.source_revision,
                                                 self.cluster.distribution_version,
-                                                self.cluster.distribution_flavor),
+                                                self.cluster.distribution_flavor,
+                                                self.team_revision),
                                 self.metrics_store.meta_info))
         self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
 
