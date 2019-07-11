@@ -106,6 +106,7 @@ class BenchmarkActor(actor.RallyActor):
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None
+        self.track_revision= None
 
     def receiveMsg_PoisonMessage(self, msg, sender):
         self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
@@ -209,7 +210,7 @@ class BenchmarkActor(actor.RallyActor):
         
         name = self.cfg.opts("race", "pipeline")
         if not (name == "benchmark-only" or track.is_simple_track_mode(self.cfg)):
-            track_revision = git.head_revision(track.track_path(self.cfg))
+            self.track_revision = git.head_revision(track.track_path(self.cfg))
         t = track.load_track(self.cfg)
         challenge_name = self.cfg.opts("track", "challenge.name")
         challenge = t.find_challenge_or_default(challenge_name)
@@ -218,7 +219,7 @@ class BenchmarkActor(actor.RallyActor):
                                               % (t.name, challenge_name, PROGRAM_NAME))
         if challenge.user_info:
             console.info(challenge.user_info)
-        self.race = metrics.create_race(self.cfg, t, challenge, track_revision)
+        self.race = metrics.create_race(self.cfg, t, challenge, self.track_revision)
 
         self.metrics_store = metrics.metrics_store(
             self.cfg,

@@ -53,14 +53,17 @@ class ClusterMetaInfo:
         self.team_revision = team_revision
 
     def as_dict(self):
-        return {
+        d = {
             "nodes": [n.as_dict() for n in self.nodes],
             "node-count": len(self.nodes),
             "revision": self.revision,
             "distribution-version": self.distribution_version,
             "distribution-flavor": self.distribution_flavor,
-            "team-revision": self.team_revision
+            
         }
+        if self.team_revision:
+            d["team-revision"] = self.team_revision
+        return d
 
 
 class NodeMetaInfo:
@@ -268,6 +271,7 @@ class MechanicActor(actor.RallyActor):
         self.cluster_launcher = None
         self.cluster = None
         self.car = None
+        self.team_revision = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))

@@ -1203,7 +1203,7 @@ def list_races(cfg):
         console.println("No recent races found.")
 
 
-def create_race(cfg, track, challenge, track_revision):
+def create_race(cfg, track, challenge, track_revision=None):
     car = cfg.opts("mechanic", "car.names")
     environment = cfg.opts("system", "env.name")
     trial_id = cfg.opts("system", "trial.id")
@@ -1222,7 +1222,7 @@ def create_race(cfg, track, challenge, track_revision):
 
 class Race:
     def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 car_params, plugin_params, total_laps, track_revision, cluster=None, lap_results=None, results=None):
+                 car_params, plugin_params, total_laps, track_revision=None, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
         if lap_results is None:
@@ -1285,12 +1285,13 @@ class Race:
             "pipeline": self.pipeline,
             "user-tags": self.user_tags,
             "track": self.track_name,
-            "track-revision": self.track_revision,
             "car": self.car,
             "total-laps": self.total_laps,
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
+        if self.track_revision:
+            d["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
             d["challenge"] = self.challenge_name
         if self.track_params:
@@ -1315,7 +1316,6 @@ class Race:
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
-            "track-revision": self.track_revision,
             "car": self.car_name,
             "node-count": len(self.cluster.nodes),
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
@@ -1328,6 +1328,8 @@ class Race:
         if plugins:
             result_template["plugins"] = list(plugins)
 
+        if self.track_revision:
+            result_template["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
             result_template["challenge"] = self.challenge_name
         if self.track_params:
