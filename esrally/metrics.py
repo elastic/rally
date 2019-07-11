@@ -1192,12 +1192,12 @@ def list_races(cfg):
 
     races = []
     for race in race_store(cfg).list():
-        races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
+        races.append([race.trial_id, time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
                       format_dict(race.user_tags)])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
+        console.println(tabulate.tabulate(races, headers=["Race ID", "Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
     else:
         console.println("")
         console.println("No recent races found.")
