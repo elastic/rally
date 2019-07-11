@@ -24,7 +24,7 @@ import thespian.actors
 import urllib
 
 from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, DOC_LINK, PROGRAM_NAME
-from esrally.utils import console, convert, opts
+from esrally.utils import console, convert, opts, git
 
 # benchmarks with external candidates are really scary and we should warn users.
 BOGUS_RESULTS_WARNING = """
@@ -206,7 +206,10 @@ class BenchmarkActor(actor.RallyActor):
                 raise exceptions.SystemSetupError("A distribution version is required. Please specify it with --distribution-version.")
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-
+        
+        name = self.cfg.opts("race", "pipeline")
+        if not (name == "benchmark-only" or track.is_simple_track_mode(self.cfg)):
+            track_revision = git.head_revision(track.track_path(self.cfg))
         t = track.load_track(self.cfg)
         challenge_name = self.cfg.opts("track", "challenge.name")
         challenge = t.find_challenge_or_default(challenge_name)
@@ -215,7 +218,7 @@ class BenchmarkActor(actor.RallyActor):
                                               % (t.name, challenge_name, PROGRAM_NAME))
         if challenge.user_info:
             console.info(challenge.user_info)
-        self.race = metrics.create_race(self.cfg, t, challenge)
+        self.race = metrics.create_race(self.cfg, t, challenge, track_revision)
 
         self.metrics_store = metrics.metrics_store(
             self.cfg,

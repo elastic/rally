@@ -1203,7 +1203,7 @@ def list_races(cfg):
         console.println("No recent races found.")
 
 
-def create_race(cfg, track, challenge):
+def create_race(cfg, track, challenge, track_revision):
     car = cfg.opts("mechanic", "car.names")
     environment = cfg.opts("system", "env.name")
     trial_id = cfg.opts("system", "trial.id")
@@ -1217,12 +1217,12 @@ def create_race(cfg, track, challenge):
     rally_version = version.version()
 
     return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                car_params, plugin_params, total_laps)
+                car_params, plugin_params, total_laps, track_revision)
 
 
 class Race:
     def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 car_params, plugin_params, total_laps, cluster=None, lap_results=None, results=None):
+                 car_params, plugin_params, total_laps, track_revision, cluster=None, lap_results=None, results=None):
         if results is None:
             results = {}
         if lap_results is None:
@@ -1244,6 +1244,7 @@ class Race:
         self.cluster = cluster
         self.lap_results = lap_results
         self.results = results
+        self.track_revision = track_revision
 
     @property
     def track_name(self):
@@ -1284,6 +1285,7 @@ class Race:
             "pipeline": self.pipeline,
             "user-tags": self.user_tags,
             "track": self.track_name,
+            "track-revision": self.track_revision,
             "car": self.car,
             "total-laps": self.total_laps,
             "cluster": self.cluster.as_dict(),
@@ -1313,6 +1315,7 @@ class Race:
             "distribution-major-version": versions.major_version(self.cluster.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
+            "track-revision": self.track_revision,
             "car": self.car_name,
             "node-count": len(self.cluster.nodes),
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs

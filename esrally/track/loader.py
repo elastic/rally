@@ -157,6 +157,13 @@ def is_simple_track_mode(cfg):
     return cfg.exists("track", "track.path")
 
 
+def track_path(cfg):
+    repo = track_repo(cfg)
+    track_name = repo.track_name
+    track_dir = repo.track_dir(track_name)
+    return track_dir
+
+
 def track_repo(cfg, fetch=True, update=True):
     if is_simple_track_mode(cfg):
         track_path = cfg.opts("track", "track.path")
