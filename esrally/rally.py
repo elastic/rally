@@ -122,11 +122,11 @@ def create_arg_parser():
     compare_parser.add_argument(
         "--baseline",
         required=True,
-        help="Race timestamp of the baseline (see %s list races)." % PROGRAM_NAME)
+        help="Race ID of the baseline (see %s list races)." % PROGRAM_NAME)
     compare_parser.add_argument(
         "--contender",
         required=True,
-        help="Race timestamp of the contender (see %s list races)." % PROGRAM_NAME)
+        help="Race ID of the contender (see %s list races)." % PROGRAM_NAME)
     compare_parser.add_argument(
         "--report-format",
         help="Define the output format for the command line report (default: markdown).",
@@ -691,8 +691,8 @@ def main():
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
     if sub_command == "compare":
-        cfg.add(config.Scope.applicationOverride, "reporting", "baseline.timestamp", args.baseline)
-        cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
+        cfg.add(config.Scope.applicationOverride, "reporting", "baseline.id", args.baseline)
+        cfg.add(config.Scope.applicationOverride, "reporting", "contender.id", args.contender)
     if sub_command == "generate":
         cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
         cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
