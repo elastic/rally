@@ -643,11 +643,7 @@ class Query(Runner):
                 # This should only happen if we concurrently create an index and start searching
                 self.scroll_id = r.get("_scroll_id", None)
             else:
-                # This does only work for ES 2.x and above
-                # r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
-                # This is the most compatible version to perform a scroll across all supported versions of Elasticsearch
-                # (1.x does not support a proper JSON body in search scroll requests).
-                r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
+                r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
             hit_count = len(r["hits"]["hits"])
             timed_out = timed_out or r["timed_out"]
             took += r["took"]
@@ -678,15 +674,10 @@ class Query(Runner):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:
             try:
-                # This does only work for ES 2.x and above
-                # self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
-
-                # This is the most compatible version to clear one scroll id across all supported versions of Elasticsearch
-                # (1.x does not support a proper JSON body in clear scroll requests).
-                self.es.transport.perform_request("DELETE", "/_search/scroll/%s" % self.scroll_id)
+                self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
             except BaseException:
-                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in Elasticsearch and will "
-                                      "skew your benchmark results.", self.scroll_id)
+                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in "
+                                      "Elasticsearch and will skew your benchmark results.", self.scroll_id)
         self.scroll_id = None
         self.es = None
         return False
@@ -703,7 +694,6 @@ class ClusterHealth(Runner):
     def __call__(self, es, params):
         from enum import Enum
         from functools import total_ordering
-        from elasticsearch.client import _make_path
 
         @total_ordering
         class ClusterHealthStatus(Enum):
