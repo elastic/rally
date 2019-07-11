@@ -310,7 +310,7 @@ function test_distribution_fails_with_wrong_track_params {
         exit ${ret_code}
     elif exit_if_docker_not_running && [[ ${ret_code} -ne 0 ]]; then
         # need to use grep -P which is unavailable with macOS grep
-        if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu:xenial grep -Pzoq '.*CRITICAL Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n- bulk_indexing_clients\n- bulk_size\n- cluster_health\n- conflict_probability\n- index_settings\n- ingest_percentage\n- number_of_replicas\n- number_of_shards\n- on_conflict\n- recency\n- source_enabled\n*' /rally.log; then
+        if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu:xenial grep -Pzoq '.*CRITICAL Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n*' /rally.log; then
             error ${err_msg}
             exit ${ret_code}
         fi
