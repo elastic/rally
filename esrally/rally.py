@@ -57,9 +57,9 @@ def create_arg_parser():
         help="")
 
     race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This sub-command should typically be used.")
-    provision_parser = subparsers.add_parser("provision", help="Provision node(s) and exit.")
-    start_parser = subparsers.add_parser("start", help="Start a previously provisioned node and exit.")
-    stop_parser = subparsers.add_parser("stop", help="Stop a running node and exit.")
+    provision_parser = subparsers.add_parser("provision", help="Provision node(s)")
+    start_parser = subparsers.add_parser("start", help="Start a previously provisioned node")
+    stop_parser = subparsers.add_parser("stop", help="Stop a running node.")
 
     # change in favor of "list telemetry", "list tracks", "list pipelines"
     list_parser = subparsers.add_parser("list", help="List configuration options")
