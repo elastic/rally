@@ -66,7 +66,7 @@ def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
-    rally_root = cfg.opts("node", "rally.root", default_value=paths.rally_root(), mandatory=False)
+    rally_root = cfg.opts("node", "rally.root")
 
     return DockerProvisioner(cfg=cfg, car=car, node_name=node_name, cluster_settings=cluster_settings,
                              node_root_dir=node_root_dir, rally_root=rally_root)
@@ -81,10 +81,6 @@ class NodeConfiguration:
         self.binary_path = binary_path
         self.log_path = log_path
         self.data_paths = data_paths
-
-    def toJSON(self):
-        return json.dumps(self, default=lambda o: o.__dict__,
-                          sort_keys=True, indent=4)
 
 
 class ConfigLoader:
@@ -171,7 +167,7 @@ class BareProvisioner:
 
     def prepare(self, binaries):
         if not self.preserve:
-            logging.getLogger(__name__).info("Rally will delete the benchmark candidate after the benchmark")
+            self.logger.info("Rally will delete the benchmark candidate after the benchmark")
         self.es_installer.install(binaries["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()

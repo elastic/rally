@@ -74,7 +74,8 @@ def provision(cfg):
 
 
 def _write_node_cfg(filename, node_config):
-    cfg_json = node_config.toJSON()
+    cfg_json = json.dumps(node_config, default=lambda o: o.__dict__,
+                          sort_keys=True, indent=4)
     with open(filename, "w") as f:
         f.write(cfg_json)
 

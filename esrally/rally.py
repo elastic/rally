@@ -569,10 +569,10 @@ SUB_COMMANDS = {
 
 def dispatch_sub_command(cfg, sub_command):
     try:
-        sub_command_fn = SUB_COMMANDS.get(sub_command)
-        if not sub_command_fn:
+        sub_command_handler = SUB_COMMANDS.get(sub_command)
+        if not sub_command_handler:
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
-        sub_command_fn(cfg)
+        sub_command_handler(cfg)
         return True
     except exceptions.RallyError as e:
         logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)

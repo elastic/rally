@@ -713,8 +713,7 @@ class StartupTime(InternalTelemetryDevice):
 
     def attach_to_node(self, node):
         self.timer.stop()
-        if self.metrics_store:
-            self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
+        self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
 
 
 class MergeParts(InternalTelemetryDevice):
@@ -924,8 +923,6 @@ class NodeEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store = metrics_store
 
     def attach_to_node(self, node):
-        if not self.metrics_store:
-            return
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_version", sysstats.os_version())
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
