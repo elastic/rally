@@ -25,16 +25,16 @@ After we've run both races, we want to know about the performance impact. With R
                     /____/
     Recent races:
 
-    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
-    ----------------  -------  ------------------ -------------------  --------  ------------------------------
-    20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:reduce_alloc_1234
-    20160518T112057Z  pmc                         append-no-conflicts  defaults  intention:baseline_github_1234
-    20160518T101957Z  pmc                         append-no-conflicts  defaults
+    Race ID                               Race Timestamp    Track    Track Parameters    Challenge            Car       User Tags
+    ------------------------------------  ----------------  -------  ------------------  ------------------   --------  ------------------------------
+    beb154e4-0a05-4f45-ad9f-e34f9a9e51f7  20160518T122341Z  pmc                          append-no-conflicts  defaults  intention:reduce_alloc_1234
+    0bfd4542-3821-4c79-81a2-0858636068ce  20160518T112057Z  pmc                          append-no-conflicts  defaults  intention:baseline_github_1234
+    0cfb3576-3025-4c17-b672-d6c9e811b93e  20160518T101957Z  pmc                          append-no-conflicts  defaults
 
 
 We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race timestamps in the next step::
 
-    dm@io:~ $ esrally compare --baseline=20160518T112057Z --contender=20160518T112341Z
+    dm@io:~ $ esrally compare --baseline=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7 --contender=0bfd4542-3821-4c79-81a2-0858636068ce
 
         ____        ____
        / __ \____ _/ / /_  __
