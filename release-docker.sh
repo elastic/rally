@@ -46,7 +46,7 @@ echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
 echo "======================================================="
 
-./integration-test.sh test-docker-release
+./integration-test.sh test_docker_release_image
 
 echo "======================================================="
 echo "Publishing Docker image elastic/rally:$RALLY_VERSION   "

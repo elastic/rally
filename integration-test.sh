@@ -543,12 +543,14 @@ function main {
 
 check_prerequisites
 
-# allow invocation from release-docker.sh
-if [[ $1 == "test-docker-release" ]]; then
-    test_docker_release_image
+trap "tear_down" EXIT
+
+# if argument is the name of a function, set up and call it
+if declare -f "$1" > /dev/null
+then
+    set_up
+    $1
     exit
 fi
-
-trap "tear_down" EXIT
 
 main
