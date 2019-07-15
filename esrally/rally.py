@@ -192,10 +192,10 @@ def create_arg_parser():
         help="Define the version of the Elasticsearch distribution to download. "
              "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
         default="")
-    provision_parser.add_argument("--node-ids",
-                                  help="ID(s) of nodes to provision",
-                                  nargs='+',
-                                  default=[0])
+    provision_parser.add_argument(
+        "--node-id",
+        help="ID of node to provision",
+        default=0)
     provision_parser.add_argument(
         "--node-ip",
         help="IP of node to provision",
@@ -707,8 +707,8 @@ def main():
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
     if sub_command == "provision":
-        if args.node_ids:
-            cfg.add(config.Scope.applicationOverride, "provisioning", "node.ids", args.node_ids)
+        if args.node_id is not None:
+            cfg.add(config.Scope.applicationOverride, "provisioning", "node.id", args.node_id)
         if args.node_ip:
             cfg.add(config.Scope.applicationOverride, "provisioning", "node.ip", args.node_ip)
         if args.node_ips:

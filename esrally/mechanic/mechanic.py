@@ -50,27 +50,22 @@ def provision(cfg):
 
     all_node_ips = cfg.opts("provisioning", "node.ips", mandatory=True)
     cluster_settings = {}
-    node_ids = cfg.opts("provisioning", "node.ids", mandatory=True)
-    if isinstance(node_ids, str):
-        node_ids = opts.csv_to_list(node_ids)
-    elif isinstance(node_ids, list):
-        node_ids = [int(n) for n in node_ids]
+    node_id = cfg.opts("provisioning", "node.id", mandatory=True)
 
-    for node_id in node_ids:
-        if cfg.opts("provisioning", "docker", default_value=False, mandatory=False):
-            p = provisioner.docker_provisioner(cfg=cfg, car=car, cluster_settings=cluster_settings,
-                                               target_root=challenge_root_path, node_id=node_id)
-        else:
-            p = provisioner.local_provisioner(cfg=cfg, car=car, plugins=plugins,
-                                              cluster_settings=cluster_settings, all_node_ips=all_node_ips,
-                                              target_root=challenge_root_path, node_id=node_id)
-        node_config = p.prepare(binaries=s())
+    if cfg.opts("provisioning", "docker", default_value=False, mandatory=False):
+        p = provisioner.docker_provisioner(cfg=cfg, car=car, cluster_settings=cluster_settings,
+                                           target_root=challenge_root_path, node_id=node_id)
+    else:
+        p = provisioner.local_provisioner(cfg=cfg, car=car, plugins=plugins,
+                                          cluster_settings=cluster_settings, all_node_ips=all_node_ips,
+                                          target_root=challenge_root_path, node_id=node_id)
+    node_config = p.prepare(binaries=s())
 
-        trial_id = cfg.opts("system", "trial.id")
-        filename = os.path.join(paths.race_root(cfg, trial_id), "nodeconfig.json")
-        _write_node_cfg(filename, node_config)
+    trial_id = cfg.opts("system", "trial.id")
+    filename = os.path.join(paths.race_root(cfg, trial_id), "nodeconfig.json")
+    _write_node_cfg(filename, node_config)
 
-        console.println(trial_id, force=True)
+    console.println(trial_id, force=True)
 
 
 def _write_node_cfg(filename, node_config):
