@@ -777,7 +777,6 @@ class MergeParts(InternalTelemetryDevice):
 
 
 class DiskIo(InternalTelemetryDevice):
-    human_name = "Disk IO"
     """
     Gathers disk I/O stats.
     """
@@ -803,8 +802,7 @@ class DiskIo(InternalTelemetryDevice):
             read_bytes = 0
             write_bytes = 0
             io.ensure_dir(self.log_root)
-            log_file = "%s/%s-%s.io" % (self.log_root, self.car.safe_name, self.node.node_name)
-            console.info("%s: Writing start I/O stats to [%s]" % (self.human_name, log_file), logger=self.logger)
+            tmp_io_file = os.path.join(self.log_root, "%s.io" % self.node.node_name)
             if self.process_start:
                 read_bytes = self.process_start.read_bytes
                 write_bytes = self.process_start.write_bytes
@@ -818,27 +816,26 @@ class DiskIo(InternalTelemetryDevice):
                                         "I/O counters.")
                 except RuntimeError:
                     self.logger.exception("Could not determine I/O stats at benchmark start.")
-            diskio_str = {"read_bytes": read_bytes, "write_bytes": write_bytes}
-            with open(log_file, "wt", encoding="utf-8") as f:
-                json.dump(diskio_str, f)
+            with open(tmp_io_file, "wt", encoding="utf-8") as f:
+                json.dump({"read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
     def on_benchmark_stop(self):
         if self.process is not None:
             process_end = sysstats.process_io_counters(self.process)
             disk_end = sysstats.disk_io_counters()
             io.ensure_dir(self.log_root)
-            log_file = "%s/%s-%s.io" % (self.log_root, self.car.safe_name, self.node.node_name)
-            io_str = ""
-            with open(log_file, "rt", encoding="utf-8") as f:
+            tmp_io_file = os.path.join(self.log_root, "%s.io" % self.node.node_name)
+            with open(tmp_io_file, "rt", encoding="utf-8") as f:
                 io_bytes = json.load(f)
+            os.remove(tmp_io_file)
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
                 # we have process-based disk counters, no need to worry how many nodes are on this host
                 if process_end:
-                    read_bytes = process_end.read_bytes - io_bytes['read_bytes']
-                    write_bytes = process_end.write_bytes - io_bytes['write_bytes']
+                    read_bytes = process_end.read_bytes - io_bytes["read_bytes"]
+                    write_bytes = process_end.write_bytes - io_bytes["write_bytes"]
                 elif disk_end:
                     if self.node_count_on_host > 1:
                         self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
