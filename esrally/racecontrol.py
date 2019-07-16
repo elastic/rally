@@ -396,14 +396,6 @@ def run(cfg):
         logger.info("User specified no pipeline. Automatically derived pipeline [%s].", name)
         cfg.add(config.Scope.applicationOverride, "race", "pipeline", name)
     else:
-        if (cfg.exists("mechanic", "distribution.version") and
-                name in ["from-sources-complete", "from-sources-skip-build", "benchmark-only"]):
-            raise exceptions.SystemSetupError(
-                "--distribution-version can only be used together with pipeline from-distribution, """
-                "but you specified {}.\n"
-                "If you intend to benchmark an externally provisioned cluster, don't specify --distribution-version otherwise\n"
-                "please read the docs for from-distribution pipeline at "
-                "{}/pipelines.html#from-distribution".format(name, DOC_LINK))
         logger.info("User specified pipeline [%s].", name)
 
     if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
