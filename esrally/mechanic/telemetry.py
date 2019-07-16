@@ -1012,7 +1012,7 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
             else:
                 host = node_stats.get("host", "unknown")
                 cluster_node = cluster.add_node(host, node_name)
-            self.add_node_stats(cluster, cluster_node, node_stats)
+            self.add_node_stats(cluster_node, node_stats)
 
         for node_info in self.client.nodes.info(node_id="_all")["nodes"].values():
             self.add_node_info(cluster, node_info)
@@ -1038,12 +1038,7 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
                 if "name" in plugin:
                     cluster_node.plugins.append(plugin["name"])
 
-            if versions.major_version(cluster.distribution_version) == 1:
-                cluster_node.memory = {
-                    "total_bytes": extract_value(node_info, ["os", "mem", "total_in_bytes"], fallback=None)
-                }
-
-    def add_node_stats(self, cluster, cluster_node, stats):
+    def add_node_stats(self, cluster_node, stats):
         if cluster_node:
             data_dirs = extract_value(stats, ["fs", "data"], fallback=[])
             for data_dir in data_dirs:
@@ -1053,10 +1048,9 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
                     "spins": data_dir.get("spins", "unknown")
                 }
                 cluster_node.fs.append(fs_meta_data)
-            if versions.major_version(cluster.distribution_version) > 1:
-                cluster_node.memory = {
-                    "total_bytes": extract_value(stats, ["os", "mem", "total_in_bytes"], fallback=None)
-                }
+            cluster_node.memory = {
+                "total_bytes": extract_value(stats, ["os", "mem", "total_in_bytes"], fallback=None)
+            }
 
 
 class JvmStatsSummary(InternalTelemetryDevice):
