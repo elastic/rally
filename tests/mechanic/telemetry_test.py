@@ -2093,7 +2093,6 @@ class DiskIoTests(TestCase):
         process_start = Diskio(10,10)
         process_stop = Diskio(11,11)
         process_io_counters.side_effect = [process_start, process_stop]
-
         tmp_dir = tempfile.mkdtemp()
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
