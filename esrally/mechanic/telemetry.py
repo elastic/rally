@@ -775,7 +775,7 @@ class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store, node_count_on_host, log_root, car, node_name):
+    def __init__(self, metrics_store, node_count_on_host, log_root, node_name):
         super().__init__()
         self.metrics_store = metrics_store
         self.node_count_on_host = node_count_on_host
@@ -783,7 +783,6 @@ class DiskIo(InternalTelemetryDevice):
         self.process = None
         self.disk_start = None
         self.process_start = None
-        self.car = car
         self.node_name = node_name
         self.log_root = log_root
 
