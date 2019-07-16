@@ -100,12 +100,13 @@ def _is_docker_node(node_cfg):
 def start(cfg):
     node_cfg = _load_node_cfg(cfg)
     docker = _is_docker_node(node_cfg)
+    metrics_store = metrics.metrics_store(cfg, read_only=False, lap=0)
 
     if docker:
-        launch = launcher.DockerLauncher(cfg, metrics_store=None)
+        launch = launcher.DockerLauncher(cfg, metrics_store=metrics_store)
     else:
         launch = launcher.ProcessLauncher(cfg,
-                                          metrics_store=None,
+                                          metrics_store=metrics_store,
                                           races_root_dir=paths.races_root(cfg))
     node = launch.start(node_configurations=[node_cfg])[0]
     if docker:
@@ -142,13 +143,14 @@ def _load_node(node_cfg):
 def stop(cfg):
     node_cfg = _load_node_cfg(cfg)
     node = _load_node(node_cfg)
+    metrics_store = metrics.metrics_store(cfg, read_only=False, lap=0)
 
     if _is_docker_node(node_cfg):
-        launch = launcher.DockerLauncher(cfg, metrics_store=None)
+        launch = launcher.DockerLauncher(cfg, metrics_store=metrics_store)
         launch.binary_paths[node.node_name] = node_cfg.binary_path
     else:
         launch = launcher.ProcessLauncher(cfg,
-                                          metrics_store=None,
+                                          metrics_store=metrics_store,
                                           races_root_dir=paths.races_root(cfg))
     launch.stop(nodes=[node])
 

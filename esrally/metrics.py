@@ -255,9 +255,11 @@ def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, met
 
     trial_id = cfg.opts("system", "trial.id")
     trial_timestamp = cfg.opts("system", "time.start")
+    t = cfg.opts("track", "track.name") if track is None else track
+    chal = cfg.opts("track", "challenge.name") if challenge is None else challenge
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
-    store.open(trial_id, trial_timestamp, track, challenge, selected_car, create=not read_only)
+    store.open(trial_id, trial_timestamp, t, chal, selected_car, create=not read_only)
     return store
 
 
