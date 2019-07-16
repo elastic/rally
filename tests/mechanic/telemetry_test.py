@@ -172,8 +172,10 @@ class SubClient:
     def recovery(self, *args, **kwargs):
         return self._recovery()
 
+
 def wrap(it):
     return it if callable(it) else ResponseSupplier(it)
+
 
 class ResponseSupplier:
     def __init__(self, response):
@@ -187,7 +189,9 @@ class TransportErrorSupplier:
     def __call__(self, *args, **kwargs):
         raise elasticsearch.TransportError
 
+
 raiseTransportError = TransportErrorSupplier()
+
 
 class TransportClient:
     def __init__(self, response=None, force_error=False):
