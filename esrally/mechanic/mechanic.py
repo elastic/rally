@@ -17,6 +17,7 @@
 
 import sys
 import json
+import logging
 from collections import defaultdict
 
 import thespian.actors
@@ -207,7 +208,12 @@ def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
     hosts = cfg.opts("client", "hosts").default
     client_options = cfg.opts("client", "options").default
     es = client_factory(hosts, client_options).create()
-    return es.info()["version"]["number"]
+    # noinspection PyBroadException
+    try:
+        return es.info()["version"]["number"]
+    except BaseException:
+        logging.getLogger(__name__).exception("Could not retrieve cluster distribution version")
+        return None
 
 
 def to_ip_port(hosts):

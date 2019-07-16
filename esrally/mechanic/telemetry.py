@@ -544,14 +544,9 @@ class NodeStats(TelemetryDevice):
         self.metrics_store = metrics_store
         self.samplers = []
 
-    def attach_to_cluster(self, cluster):
-        # This cluster parameter does not correspond to the cluster names passed in target.hosts, see on_benchmark_start()
-        super().attach_to_cluster(cluster)
-
     def on_benchmark_start(self):
         console.warn(NodeStats.warning, logger=self.logger)
 
-        recorder = []
         for cluster_name in self.specified_cluster_names:
             recorder = NodeStatsRecorder(self.telemetry_params, cluster_name, self.clients[cluster_name], self.metrics_store)
             sampler = SamplerThread(recorder)
@@ -892,7 +887,12 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         self.client = client
 
     def attach_to_cluster(self, cluster):
-        client_info = self.client.info()
+        # noinspection PyBroadException
+        try:
+            client_info = self.client.info()
+        except BaseException:
+            self.logger.exception("Could not retrieve cluster version info")
+            return
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
         # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
@@ -940,19 +940,26 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
-        self._t = None
 
+    # noinspection PyBroadException
     def attach_to_cluster(self, cluster):
-        stats = self.client.nodes.stats(metric="_all")
-        nodes = stats["nodes"]
-        for node in nodes.values():
+        try:
+            nodes_stats = self.client.nodes.stats(metric="_all")["nodes"].values()
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes stats")
+            nodes_stats = []
+        try:
+            nodes_info = self.client.nodes.info(node_id="_all")["nodes"].values()
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes info")
+            nodes_info = []
+
+        for node in nodes_stats:
             node_name = node["name"]
             host = node.get("host", "unknown")
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host)
 
-        info = self.client.nodes.info(node_id="_all")
-        nodes_info = info["nodes"].values()
         for node in nodes_info:
             node_name = node["name"]
             self.store_node_info(node_name, "os_name", node, ["os", "name"])
@@ -977,7 +984,16 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
         self.client = client
 
     def attach_to_cluster(self, cluster):
-        client_info = self.client.info()
+        self.cluster_metadata(cluster)
+        self.nodes_metadata(cluster)
+
+    def cluster_metadata(self, cluster):
+        # noinspection PyBroadException
+        try:
+            client_info = self.client.info()
+        except BaseException:
+            self.logger.exception("Could not retrieve cluster version info")
+            return
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
         # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
@@ -987,7 +1003,20 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
         cluster.distribution_flavor = distribution_flavor
         cluster.source_revision = revision
 
-        for node_stats in self.client.nodes.stats(metric="_all")["nodes"].values():
+    # noinspection PyBroadException
+    def nodes_metadata(self, cluster):
+        try:
+            nodes_stats = self.client.nodes.stats(metric="_all")["nodes"]
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes stats")
+            nodes_stats = {}
+        try:
+            nodes_info = self.client.nodes.info(node_id="_all")["nodes"]
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes info")
+            nodes_info = {}
+
+        for node_stats in nodes_stats.values():
             node_name = node_stats["name"]
             if cluster.has_node(node_name):
                 cluster_node = cluster.node(node_name)
@@ -996,7 +1025,7 @@ class ClusterMetaDataInfo(InternalTelemetryDevice):
                 cluster_node = cluster.add_node(host, node_name)
             self.add_node_stats(cluster_node, node_stats)
 
-        for node_info in self.client.nodes.info(node_id="_all")["nodes"].values():
+        for node_info in nodes_info.values():
             self.add_node_info(cluster, node_info)
 
     def add_node_info(self, cluster, node_info):

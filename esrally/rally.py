@@ -350,6 +350,12 @@ def create_arg_parser():
             help=argparse.SUPPRESS,
             action="store_true",
             default=False)
+        # skips checking that the REST API is available before proceeding with the benchmark
+        p.add_argument(
+            "--skip-rest-api-check",
+            help=argparse.SUPPRESS,
+            action="store_true",
+            default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -599,6 +605,7 @@ def main():
     else:
         cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
         cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+    cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
     cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.devices", opts.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", opts.to_dict(args.telemetry_params))
