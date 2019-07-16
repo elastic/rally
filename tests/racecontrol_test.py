@@ -92,30 +92,3 @@ class RaceControlTests(TestCase):
 
         # ensure we remove it again from the list of registered pipelines to avoid unwanted side effects
         del racecontrol.pipelines[test_pipeline_name]
-
-    def test_conflicting_pipeline_and_distribution_version(self):
-        mock_pipeline = mock.Mock()
-        test_pipeline_name = "unit-test-pipeline"
-        rnd_pipeline_name = False
-
-        while not rnd_pipeline_name or rnd_pipeline_name == "from-distribution":
-            rnd_pipeline_name = random.choice(racecontrol.available_pipelines())[0]
-
-        racecontrol.Pipeline(test_pipeline_name, "Pipeline intended for unit-testing", mock_pipeline)
-
-        cfg = config.Config()
-        cfg.add(config.Scope.benchmark, "race", "pipeline", rnd_pipeline_name)
-        cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "6.5.3")
-
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            racecontrol.run(cfg)
-        self.assertRegex(
-            ctx.exception.args[0],
-            r"--distribution-version can only be used together with pipeline from-distribution, "
-            "but you specified {}.\n"
-            "If you intend to benchmark an externally provisioned cluster, don't specify --distribution-version otherwise\n"
-            "please read the docs for from-distribution pipeline at "
-            "{}/pipelines.html#from-distribution".format(rnd_pipeline_name, DOC_LINK))
-
-        # ensure we remove it again from the list of registered pipelines to avoid unwanted side effects
-        del racecontrol.pipelines[test_pipeline_name]
