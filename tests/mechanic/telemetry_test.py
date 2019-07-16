@@ -17,6 +17,8 @@
 
 import random
 import collections
+import os
+import tempfile
 import unittest.mock as mock
 import elasticsearch
 
@@ -25,6 +27,7 @@ from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
+from collections import namedtuple
 
 
 def create_config():
@@ -2163,6 +2166,66 @@ class ClusterMetaDataInfoTests(TestCase):
         self.assertEqual("unknown", n.fs[1]["spins"])
 
 
+class DiskIoTests(TestCase):
+    
+    @mock.patch("esrally.utils.sysstats.process_io_counters")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    def test_diskio_process_io_counters(self, metrics_store_node_count, process_io_counters):
+        Diskio = namedtuple("Diskio", "read_bytes write_bytes")
+        process_start = Diskio(10,10)
+        process_stop = Diskio(11,11)
+        process_io_counters.side_effect = [process_start, process_stop]
+
+        tmp_dir = tempfile.mkdtemp()
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        
+        device = telemetry.DiskIo(metrics_store, 1, tmp_dir, "rally0")
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
+        node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        t.attach_to_node(node)
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
+
+        metrics_store_node_count.assert_has_calls([
+            mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
+            mock.call("rally0", "disk_io_read_bytes", 1, "byte")
+            
+        ])
+        
+    @mock.patch("esrally.utils.sysstats.disk_io_counters")
+    @mock.patch("esrally.utils.sysstats.process_io_counters")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    def test_diskio_disk_io_counters(self, metrics_store_node_count, process_io_counters, disk_io_counters):
+        Diskio = namedtuple("Diskio", "read_bytes write_bytes")
+        process_start = Diskio(10,10)
+        process_stop = Diskio(13,13)
+        disk_io_counters.side_effect = [process_start, process_stop]
+        process_io_counters.side_effect = [None, None]
+        
+
+        tmp_dir = tempfile.mkdtemp()
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        
+        device = telemetry.DiskIo(metrics_store, 2, tmp_dir, "rally0")
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
+        node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        t.attach_to_node(node)
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
+
+        metrics_store_node_count.assert_has_calls([
+            mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
+            mock.call("rally0", "disk_io_read_bytes", 1, "byte")
+            
+        ])
+
+
 class JvmStatsSummaryTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -2809,7 +2872,6 @@ class MlBucketProcessingTimeTests(TestCase):
                 "unit": "ms"
             }, level=metrics.MetaInfoScope.cluster)
         ])
-
 
 class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")

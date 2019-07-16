@@ -295,7 +295,7 @@ class ProcessLauncher:
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         node_telemetry = [
-            telemetry.DiskIo(self.metrics_store, node_count_on_host, node_telemetry_dir, car, node_name),
+            telemetry.DiskIo(self.metrics_store, node_count_on_host, node_telemetry_dir, node_name),
             telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.MergeParts(self.metrics_store, node_configuration.log_path),
