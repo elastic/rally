@@ -830,6 +830,7 @@ class EsRaceStoreTests(TestCase):
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="defaults", car_params={"heap_size": "512mb"}, plugin_params=None,
                             total_laps=12,
+                            track_revision="abc1",
                             cluster=EsRaceStoreTests.DictHolder(
                                 {
                                     "distribution-version": "5.0.0",
@@ -873,6 +874,7 @@ class EsRaceStoreTests(TestCase):
                 "shard-count": 3
             },
             "challenge": "index",
+            "track-revision": "abc1",
             "car": "defaults",
             "car-params": {
                 "heap_size": "512mb"
@@ -947,6 +949,7 @@ class EsResultsStoreTests(TestCase):
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
                             total_laps=12,
+                            track_revision="abc1",
                             cluster=c,
                             lap_results=[],
                             results=reporter.Stats(
@@ -989,6 +992,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
                 "plugin-params": {
@@ -1014,6 +1018,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
                 "plugin-params": {
@@ -1040,6 +1045,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
                 "plugin-params": {
@@ -1070,6 +1076,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
                 "plugin-params": {
@@ -1303,6 +1310,7 @@ class FileRaceStoreTests(TestCase):
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
                             total_laps=12,
+                            track_revision="abc1",
                             cluster=FileRaceStoreTests.DictHolder(
                                 {
                                     "distribution-version": "5.0.0",

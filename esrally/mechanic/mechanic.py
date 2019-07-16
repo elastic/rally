@@ -23,7 +23,7 @@ from collections import defaultdict
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
-from esrally.utils import net, console, git
+from esrally.utils import net, console
 from esrally.mechanic import supplier, provisioner, launcher, team
 
 
@@ -303,10 +303,8 @@ class MechanicActor(actor.RallyActor):
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
         name = self.cfg.opts("race", "pipeline")
-        team_path = self.cfg.opts("mechanic", "team.path", mandatory=False)
-        if not (name == "benchmark-only" or team_path):
-            self.team_revision = git.head_revision(team.team_path(self.cfg))
         self.car, _ = load_team(self.cfg, msg.external)
+        self.team_revision = self.cfg.opts("mechanic", "repository.revision")
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
         hosts = self.cfg.opts("client", "hosts").default

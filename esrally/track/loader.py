@@ -28,9 +28,9 @@ import jinja2.exceptions
 import jsonschema
 import tabulate
 
-from esrally import exceptions, time, PROGRAM_NAME
+from esrally import exceptions, time, PROGRAM_NAME, config
 from esrally.track import params, track
-from esrally.utils import io, convert, net, console, modules, opts, repo
+from esrally.utils import io, convert, net, console, modules, opts, repo, git
 from jinja2 import meta
 
 
@@ -211,6 +211,8 @@ class GitTrackRepository:
                 self.repo.checkout(repo_revision)
             else:
                 self.repo.update(distribution_version)
+                track_revision = git.head_revision(self.track_dir(self.track_name))
+                cfg.add(config.Scope.applicationOverride, "track", "repository.revision", track_revision)
 
     @property
     def track_names(self):

@@ -106,7 +106,7 @@ class BenchmarkActor(actor.RallyActor):
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None
-        self.track_revision= None
+        self.track_revision = None
 
     def receiveMsg_PoisonMessage(self, msg, sender):
         self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
@@ -208,10 +208,8 @@ class BenchmarkActor(actor.RallyActor):
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         
-        name = self.cfg.opts("race", "pipeline")
-        if not (name == "benchmark-only" or track.is_simple_track_mode(self.cfg)):
-            self.track_revision = git.head_revision(track.track_path(self.cfg))
         t = track.load_track(self.cfg)
+        self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
         challenge_name = self.cfg.opts("track", "challenge.name")
         challenge = t.find_challenge_or_default(challenge_name)
         if challenge is None:

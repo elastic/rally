@@ -22,8 +22,8 @@ from enum import Enum
 
 import tabulate
 
-from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import console, repo, io, modules
+from esrally import exceptions, PROGRAM_NAME, config
+from esrally.utils import console, repo, io, modules, git
 
 TEAM_FORMAT_VERSION = 1
 
@@ -144,6 +144,8 @@ def team_path(cfg):
             current_team_repo.checkout(repo_revision)
         else:
             current_team_repo.update(distribution_version)
+            team_revision = git.head_revision(current_team_repo.repo_dir)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", team_revision)
         return current_team_repo.repo_dir
 
 
