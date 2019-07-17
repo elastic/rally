@@ -170,6 +170,20 @@ class ExternalLauncherTests(TestCase):
         # did not change user defined value
         self.assertEqual(cfg.opts("mechanic", "distribution.version"), "2.3.3")
 
+    def test_setup_external_cluster_cannot_determine_version(self):
+        client_options = opts.ClientOptions("timeout:60,raise-error-on-info:true")
+        cfg = config.Config()
+
+        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
+        cfg.add(config.Scope.application, "client", "options", client_options)
+
+        m = launcher.ExternalLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
+        m.start()
+
+        # automatically determined by launcher on attach
+        self.assertIsNone(cfg.opts("mechanic", "distribution.version"))
+
 
 class ClusterLauncherTests(TestCase):
     test_host = opts.TargetHosts("10.0.0.10:9200,10.0.0.11:9200")
@@ -182,6 +196,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
+        cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         cluster = cluster_launcher.start()
@@ -196,6 +211,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
+        cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         cluster = cluster_launcher.start()
@@ -217,6 +233,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
+        cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
 
         cluster_launcher = launcher.ClusterLauncher(cfg, MockMetricsStore(), client_factory_class=MockClientFactory)
         with self.assertRaisesRegex(exceptions.LaunchError,

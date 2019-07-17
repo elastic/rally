@@ -78,6 +78,7 @@ class ClusterLauncher:
         all_hosts = self.cfg.opts("client", "hosts").all_hosts
         default_hosts = self.cfg.opts("client", "hosts").default
         preserve = self.cfg.opts("mechanic", "preserve.install")
+        skip_rest_api_check = self.cfg.opts("mechanic", "skip.rest.api.check")
 
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
@@ -103,17 +104,22 @@ class ClusterLauncher:
         # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
         c = cluster.Cluster(default_hosts, [], t, preserve)
 
-        self.logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-        if wait_for_rest_layer(es_default, max_attempts=40):
-            self.logger.info("REST API is available. Attaching telemetry devices to cluster.")
+        if skip_rest_api_check:
+            self.logger.info("Skipping REST API check and attaching telemetry devices to cluster.")
             t.attach_to_cluster(c)
             self.logger.info("Telemetry devices are now attached to the cluster.")
         else:
-            # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
-            self.logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
-            self.stop(c)
-            raise exceptions.LaunchError(
-                "Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
+            self.logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
+            if wait_for_rest_layer(es_default, max_attempts=40):
+                self.logger.info("REST API is available. Attaching telemetry devices to cluster.")
+                t.attach_to_cluster(c)
+                self.logger.info("Telemetry devices are now attached to the cluster.")
+            else:
+                # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
+                self.logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
+                self.stop(c)
+                raise exceptions.LaunchError(
+                    "Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
         return c
 
     def stop(self, c):
@@ -226,7 +232,12 @@ class ExternalLauncher:
         # upfront.
         c = cluster.Cluster(hosts, [], t)
         user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
-        distribution_version = es.info()["version"]["number"]
+        # noinspection PyBroadException
+        try:
+            distribution_version = es.info()["version"]["number"]
+        except BaseException:
+            self.logger.exception("Could not retrieve cluster distribution version")
+            distribution_version = None
         if not user_defined_version or user_defined_version.strip() == "":
             self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]",
                              distribution_version)
