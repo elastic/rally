@@ -32,9 +32,9 @@ After we've run both races, we want to know about the performance impact. With R
     0cfb3576-3025-4c17-b672-d6c9e811b93e  20160518T101957Z  pmc                          append-no-conflicts  defaults
 
 
-We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race timestamps in the next step::
+We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race IDs in the next step::
 
-    dm@io:~ $ esrally compare --baseline=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7 --contender=0bfd4542-3821-4c79-81a2-0858636068ce
+    dm@io:~ $ esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -44,11 +44,13 @@ We can see that the user tag helps us to recognize races. We want to compare the
                     /____/
 
     Comparing baseline
+      Race ID: 0bfd4542-3821-4c79-81a2-0858636068ce
       Race timestamp: 2016-05-18 11:20:57
       Challenge: append-no-conflicts
       Car: defaults
 
     with contender
+      Race ID: beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
       Race timestamp: 2016-05-18 12:23:41
       Challenge: append-no-conflicts
       Car: defaults
