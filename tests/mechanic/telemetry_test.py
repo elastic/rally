@@ -2161,12 +2161,11 @@ class DiskIoTests(TestCase):
         node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
+        device2 = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
+        t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
+        t2.on_benchmark_stop()
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
-        node2 = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
-        t.on_benchmark_stop()
-        t.detach_from_node(node2, running=True)
-        t.detach_from_node(node2, running=False)
 
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
@@ -2193,14 +2192,14 @@ class DiskIoTests(TestCase):
         node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
+        device2 = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
+        t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
+        t2.on_benchmark_stop()
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
-        node2 = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
-        t.on_benchmark_stop()
-        t.detach_from_node(node2, running=True)
-        t.detach_from_node(node2, running=False)
 
-        # expected result is 1 byte because there are two nodes on the machine. Result is calculated with total_bytes / node_count
+        # expected result is 1 byte because there are two nodes on the machine. Result is calculated 
+        # with total_bytes / node_count
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
             mock.call("rally0", "disk_io_read_bytes", 1, "byte")
