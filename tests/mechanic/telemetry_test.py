@@ -17,7 +17,6 @@
 
 import random
 import collections
-import os
 import tempfile
 import unittest.mock as mock
 import elasticsearch
@@ -2149,22 +2148,25 @@ class DiskIoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     def test_diskio_process_io_counters(self, metrics_store_node_count, process_io_counters):
         Diskio = namedtuple("Diskio", "read_bytes write_bytes")
-        process_start = Diskio(10,10)
-        process_stop = Diskio(11,11)
+        process_start = Diskio(10, 10)
+        process_stop = Diskio(11, 11)
         process_io_counters.side_effect = [process_start, process_stop]
 
         tmp_dir = tempfile.mkdtemp()
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         
-        device = telemetry.DiskIo(metrics_store, 1, tmp_dir, "rally0")
+        device = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
-        t.on_benchmark_stop()
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
+        node2 = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        t.on_benchmark_stop()
+        t.detach_from_node(node2, running=True)
+        t.detach_from_node(node2, running=False)
 
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
@@ -2177,25 +2179,28 @@ class DiskIoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     def test_diskio_disk_io_counters(self, metrics_store_node_count, process_io_counters, disk_io_counters):
         Diskio = namedtuple("Diskio", "read_bytes write_bytes")
-        process_start = Diskio(10,10)
-        process_stop = Diskio(13,13)
+        process_start = Diskio(10, 10)
+        process_stop = Diskio(13, 13)
         disk_io_counters.side_effect = [process_start, process_stop]
         process_io_counters.side_effect = [None, None]
         
-
         tmp_dir = tempfile.mkdtemp()
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         
-        device = telemetry.DiskIo(metrics_store, 2, tmp_dir, "rally0")
+        device = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
-        t.on_benchmark_stop()
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
+        node2 = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        t.on_benchmark_stop()
+        t.detach_from_node(node2, running=True)
+        t.detach_from_node(node2, running=False)
 
+        # expected result is 1 byte because there are two nodes on the machine. Result is calculated with total_bytes / node_count
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
             mock.call("rally0", "disk_io_read_bytes", 1, "byte")
