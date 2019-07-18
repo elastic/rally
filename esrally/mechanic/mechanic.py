@@ -15,9 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 import json
+import logging
 import os
 import sys
-import logging
 from collections import defaultdict
 
 import thespian.actors
@@ -27,7 +27,7 @@ from esrally.mechanic import supplier, provisioner, launcher, team, cluster
 from esrally.mechanic import telemetry
 from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.mechanic.team import Car
-from esrally.utils import net, console, opts
+from esrally.utils import net, console
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
