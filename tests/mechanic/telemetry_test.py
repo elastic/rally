@@ -148,29 +148,49 @@ class MergePartsDeviceTests(TestCase):
 class Client:
     def __init__(self, nodes=None, info=None, indices=None, transport_client=None):
         self.nodes = nodes
-        self._info = info
+        self._info = wrap(info)
         self.indices = indices
         if transport_client:
             self.transport = transport_client
 
     def info(self):
-        return self._info
+        return self._info()
 
 
 class SubClient:
     def __init__(self, stats=None, info=None, recovery=None):
-        self._stats = stats
-        self._info = info
-        self._recovery = recovery
+        self._stats = wrap(stats)
+        self._info = wrap(info)
+        self._recovery = wrap(recovery)
 
     def stats(self, *args, **kwargs):
-        return self._stats
+        return self._stats()
 
     def info(self, *args, **kwargs):
-        return self._info
+        return self._info()
 
     def recovery(self, *args, **kwargs):
-        return self._recovery
+        return self._recovery()
+
+
+def wrap(it):
+    return it if callable(it) else ResponseSupplier(it)
+
+
+class ResponseSupplier:
+    def __init__(self, response):
+        self.response = response
+
+    def __call__(self, *args, **kwargs):
+        return self.response
+
+
+class TransportErrorSupplier:
+    def __call__(self, *args, **kwargs):
+        raise elasticsearch.TransportError
+
+
+raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
@@ -1807,6 +1827,17 @@ class ClusterEnvironmentInfoTests(TestCase):
 
         metrics_store_add_meta_info.assert_has_calls(calls)
 
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_resilient_if_error_response(self, metrics_store_add_meta_info):
+        cfg = create_config()
+        client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.attach_to_cluster(cluster.Cluster([], [], t))
+
+        self.assertEqual(0, metrics_store_add_meta_info.call_count)
+
 
 class NodeEnvironmentInfoTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
@@ -1966,12 +1997,22 @@ class ExternalEnvironmentInfoTests(TestCase):
         ]
         metrics_store_add_meta_info.assert_has_calls(calls)
 
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_resilient_if_error_response(self, metrics_store_add_meta_info):
+        client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
+        metrics_store = metrics.EsMetricsStore(self.cfg)
+        env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
+        t = telemetry.Telemetry(self.cfg, devices=[env_device])
+        t.attach_to_cluster(cluster.Cluster([], [], t))
+
+        self.assertEqual(0, metrics_store_add_meta_info.call_count)
+
 
 class ClusterMetaDataInfoTests(TestCase):
     def setUp(self):
         self.cfg = create_config()
 
-    def test_enriches_cluster_nodes_for_elasticsearch_after_1_x(self):
+    def test_enriches_cluster_nodes(self):
         nodes_stats = {
             "nodes": {
                 "FCFjozkeTiOpN-SI88YEcg": {
@@ -2080,57 +2121,8 @@ class ClusterMetaDataInfoTests(TestCase):
         self.assertEqual("unknown", n.fs[1]["spins"])
         self.assertEqual(["analysis-icu", "ingest-geoip", "ingest-user-agent"], n.plugins)
 
-    def test_enriches_cluster_nodes_for_elasticsearch_1_x(self):
-        nodes_stats = {
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "rally0",
-                    "host": "127.0.0.1",
-                    "fs": {
-                        "data": [
-                            {
-                                "mount": "/usr/local/var/elasticsearch/data1",
-                                "type": "hfs"
-                            },
-                            {
-                                "mount": "/usr/local/var/elasticsearch/data2",
-                                "type": "ntfs"
-                            }
-                        ]
-                    }
-                }
-            }
-        }
-
-        nodes_info = {
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "rally0",
-                    "host": "127.0.0.1",
-                    "ip": "127.0.0.1",
-                    "os": {
-                        "name": "Mac OS X",
-                        "version": "10.11.4",
-                        "available_processors": 8,
-                        "mem": {
-                            "total_in_bytes": 17179869184
-                        }
-                    },
-                    "jvm": {
-                        "version": "1.8.0_74",
-                        "vm_vendor": "Oracle Corporation"
-                    }
-                }
-            }
-        }
-        cluster_info = {
-            "version":
-                {
-                    "build_hash": "c730b59357f8ebc555286794dcd90b3411f517c9",
-                    "number": "1.7.5"
-                }
-        }
-        client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
+    def test_resilient_if_error_response(self):
+        client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
 
         t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
 
@@ -2140,27 +2132,12 @@ class ClusterMetaDataInfoTests(TestCase):
 
         t.attach_to_cluster(c)
 
-        self.assertEqual("1.7.5", c.distribution_version)
-        self.assertEqual("oss", c.distribution_flavor)
-        self.assertEqual("c730b59357f8ebc555286794dcd90b3411f517c9", c.source_revision)
+        self.assertIsNone(c.distribution_version)
+        self.assertIsNone(c.distribution_flavor)
+        self.assertIsNone(c.source_revision)
         self.assertEqual(1, len(c.nodes))
         n = c.nodes[0]
-        self.assertEqual("127.0.0.1", n.ip)
-        self.assertEqual("Mac OS X", n.os["name"])
-        self.assertEqual("10.11.4", n.os["version"])
-        self.assertEqual("Oracle Corporation", n.jvm["vendor"])
-        self.assertEqual("1.8.0_74", n.jvm["version"])
-        self.assertEqual(8, n.cpu["available_processors"])
-        self.assertIsNone(n.cpu["allocated_processors"])
-        self.assertEqual(17179869184, n.memory["total_bytes"])
-
-        self.assertEqual(2, len(n.fs))
-        self.assertEqual("/usr/local/var/elasticsearch/data1", n.fs[0]["mount"])
-        self.assertEqual("hfs", n.fs[0]["type"])
-        self.assertEqual("unknown", n.fs[0]["spins"])
-        self.assertEqual("/usr/local/var/elasticsearch/data2", n.fs[1]["mount"])
-        self.assertEqual("ntfs", n.fs[1]["type"])
-        self.assertEqual("unknown", n.fs[1]["spins"])
+        self.assertIsNone(n.ip)
 
 
 class JvmStatsSummaryTests(TestCase):

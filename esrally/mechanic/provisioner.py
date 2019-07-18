@@ -196,17 +196,10 @@ class BareProvisioner:
         self.es_installer.cleanup(self.preserve)
         
     def _prepare_java_opts(self):
-        java_opts = []
+        # To detect out of memory errors during the benchmark
+        java_opts = ["-XX:+ExitOnOutOfMemoryError"]
         if self.telemetry is not None:
             java_opts.extend(self.telemetry.instrument_candidate_java_opts(self.es_installer.car, self.es_installer.node_name))
-        
-        exit_on_oome_flag = "-XX:+ExitOnOutOfMemoryError"
-        if jvm.supports_option(self.es_installer.java_home, exit_on_oome_flag):
-            self.logger.info("Setting [%s] to detect out of memory errors during the benchmark.", exit_on_oome_flag)
-            java_opts.append(exit_on_oome_flag)
-        else:
-            self.logger.info("JVM does not support [%s]. A JDK upgrade is recommended.", exit_on_oome_flag)
-        
         return java_opts
 
     def _provisioner_variables(self):
