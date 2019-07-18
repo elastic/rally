@@ -779,12 +779,12 @@ class DiskIo(InternalTelemetryDevice):
         super().__init__()
         self.metrics_store = metrics_store
         self.node_count_on_host = node_count_on_host
+        self.log_root = log_root
+        self.node_name = node_name
         self.node = None
         self.process = None
         self.disk_start = None
         self.process_start = None
-        self.node_name = node_name
-        self.log_root = log_root
 
     def attach_to_node(self, node):
         self.node = node
@@ -796,7 +796,7 @@ class DiskIo(InternalTelemetryDevice):
             read_bytes = 0
             write_bytes = 0
             io.ensure_dir(self.log_root)
-            tmp_io_file = os.path.join(self.log_root, "%s.io" % self.node_name)
+            tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
             if self.process_start:
                 read_bytes = self.process_start.read_bytes
                 write_bytes = self.process_start.write_bytes
@@ -814,29 +814,29 @@ class DiskIo(InternalTelemetryDevice):
                 json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
     def on_benchmark_stop(self):
-            io.ensure_dir(self.log_root)
-            tmp_io_file = os.path.join(self.log_root, "%s.io" % self.node_name)
-            with open(tmp_io_file, "rt", encoding="utf-8") as f:
-                io_bytes = json.load(f)
-            os.remove(tmp_io_file)
-            self.process = sysstats.setup_process_stats(io_bytes["pid"])
-            process_end = sysstats.process_io_counters(self.process)
-            disk_end = sysstats.disk_io_counters()
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
+                io.ensure_dir(self.log_root)
+                tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
+                with open(tmp_io_file, "rt", encoding="utf-8") as f:
+                    io_stats = json.load(f)
+                os.remove(tmp_io_file)
+                self.process = sysstats.setup_process_stats(io_stats["pid"])
+                process_end = sysstats.process_io_counters(self.process)
+                disk_end = sysstats.disk_io_counters()
                 # we have process-based disk counters, no need to worry how many nodes are on this host
                 if process_end:
-                    read_bytes = process_end.read_bytes - io_bytes["read_bytes"]
-                    write_bytes = process_end.write_bytes - io_bytes["write_bytes"]
+                    read_bytes = process_end.read_bytes - io_stats["read_bytes"]
+                    write_bytes = process_end.write_bytes - io_stats["write_bytes"]
                 elif disk_end:
                     if self.node_count_on_host > 1:
                         self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
                                          "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node_name)
 
-                    read_bytes = (disk_end.read_bytes - io_bytes['read_bytes']) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - io_bytes['write_bytes']) // self.node_count_on_host
+                    read_bytes = (disk_end.read_bytes - io_stats['read_bytes']) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - io_stats['write_bytes']) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
 

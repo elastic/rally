@@ -173,12 +173,13 @@ class DockerLauncher:
             node_name = node_configuration.node_name
             host_name = node_configuration.ip
             binary_path = node_configuration.binary_path
+            node_telemetry_dir = os.path.join(node_configuration.node_root_path, "telemetry")
             self.binary_paths[node_name] = binary_path
             self._start_process(binary_path)
             # only support a subset of telemetry for Docker hosts
             # (specifically, we do not allow users to enable any devices)
             node_telemetry = [
-                telemetry.DiskIo(self.metrics_store, len(node_configurations)),
+                telemetry.DiskIo(self.metrics_store, len(node_configurations), node_telemetry_dir, node_name),
                 telemetry.NodeEnvironmentInfo(self.metrics_store)
             ]
             t = telemetry.Telemetry(devices=node_telemetry)
