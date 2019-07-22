@@ -22,6 +22,7 @@ from unittest import TestCase
 from esrally import exceptions
 from esrally.utils import opts
 
+
 class ConfigHelperFunctionTests(TestCase):
     def test_csv_to_list(self):
         self.assertEqual([], opts.csv_to_list(""))
@@ -30,7 +31,11 @@ class ConfigHelperFunctionTests(TestCase):
 
     def test_kv_to_map(self):
         self.assertEqual({}, opts.kv_to_map([]))
-        self.assertEqual({"k": "v"}, opts.kv_to_map(["k:'v'"]))
+        # explicit treatment as string
+        self.assertEqual({"k": "3"}, opts.kv_to_map(["k:'3'"]))
+        self.assertEqual({"k": 3}, opts.kv_to_map(["k:3"]))
+        # implicit treatment as string
+        self.assertEqual({"k": "v"}, opts.kv_to_map(["k:v"]))
         self.assertEqual({"k": "v", "size": 4, "empty": False, "temperature": 0.5},
                          opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5"]))
 
