@@ -1192,12 +1192,12 @@ def list_races(cfg):
 
     races = []
     for race in race_store(cfg).list():
-        races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
+        races.append([race.trial_id, time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
                       format_dict(race.user_tags)])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
+        console.println(tabulate.tabulate(races, headers=["Race ID", "Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
     else:
         console.println("")
         console.println("No recent races found.")
@@ -1365,9 +1365,10 @@ class RaceStore:
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
         self.trial_timestamp = cfg.opts("system", "time.start")
+        self.trial_id = cfg.opts("system", "trial.id")
         self.current_race = None
 
-    def find_by_timestamp(self, timestamp):
+    def find_by_trial_id(self, uid):
         raise NotImplementedError("abstract method")
 
     def list(self):
@@ -1395,8 +1396,8 @@ class CompositeRaceStore:
         self.es_results_store = es_results_store
         self.file_store = file_store
 
-    def find_by_timestamp(self, timestamp):
-        return self.es_store.find_by_timestamp(timestamp)
+    def find_by_trial_id(self, trial_id):
+        return self.es_store.find_by_trial_id(trial_id)
 
     def store_race(self, race):
         self.file_store.store_race(race)
@@ -1434,8 +1435,8 @@ class FileRaceStore(RaceStore):
         all_races = self._to_races(results)
         return all_races[:self._max_results()]
 
-    def find_by_timestamp(self, timestamp):
-        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, start=time.from_is8601(timestamp))
+    def find_by_trial_id(self, trial_id):
+        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, trial_id=trial_id)
         if io.exists(race_file):
             races = self._to_races([race_file])
             if races:
@@ -1518,7 +1519,7 @@ class EsRaceStore(RaceStore):
         else:
             return []
 
-    def find_by_timestamp(self, timestamp):
+    def find_by_trial_id(self, trial_id):
         filters = [{
                 "term": {
                     "environment": self.environment_name
@@ -1526,7 +1527,7 @@ class EsRaceStore(RaceStore):
             },
             {
                 "term": {
-                    "trial-timestamp": timestamp
+                    "trial-id": trial_id
                 }
             }]
 

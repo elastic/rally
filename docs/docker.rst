@@ -116,7 +116,7 @@ Example::
     # inspect results
     $ tree myrally/benchmarks/races/
     myrally/benchmarks/races/
-    └── 2019-06-05-14-03-44
+    └── 1d81930a-4ebe-4640-a09b-3055174bce43
         └── race.json
 
     1 directory, 1 file
@@ -138,7 +138,7 @@ To further examine the contents we can bind mount it from another image e.g.::
     root@9a7dd7b3d8df:/rallyvolume# ls
     root@9a7dd7b3d8df:/rallyvolume/.rally# ls
     benchmarks  logging.json  logs	rally.ini
-    # head -4 benchmarks/races/2019-06-05-13-51-20/race.json
+    # head -4 benchmarks/races/1d81930a-4ebe-4640-a09b-3055174bce43/race.json
     {
      "rally-version": "1.2.1.dev0",
      "environment": "local",

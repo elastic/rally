@@ -1,6 +1,14 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.3.0
+------------------------
+Races now stored by ID instead of timestamp
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+With Rally 1.3.0, Races will be stored by their Trial ID instead of their timestamp.
+This means that on disk, a given race will be found at ``benchmarks/races/62d1e928-48b0-4d07-9899-07b45d031566/`` instead of ``benchmarks/races/2019-07-03-17-52-07``
+
+
 Migrating to Rally 1.2.1
 ------------------------
 

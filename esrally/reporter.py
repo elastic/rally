@@ -60,15 +60,15 @@ def summarize(race, cfg, lap=None):
 
 
 def compare(cfg):
-    baseline_ts = cfg.opts("reporting", "baseline.timestamp")
-    contender_ts = cfg.opts("reporting", "contender.timestamp")
+    baseline_id = cfg.opts("reporting", "baseline.id")
+    contender_id = cfg.opts("reporting", "contender.id")
 
-    if not baseline_ts or not contender_ts:
+    if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
     ComparisonReporter(cfg).report(
-        race_store.find_by_timestamp(baseline_ts),
-        race_store.find_by_timestamp(contender_ts))
+        race_store.find_by_trial_id(baseline_id),
+        race_store.find_by_trial_id(contender_id))
 
 
 def print_internal(message):
@@ -667,6 +667,7 @@ class ComparisonReporter:
 
         print_internal("")
         print_internal("Comparing baseline")
+        print_internal("  Race ID: %s" % r1.trial_id)
         print_internal("  Race timestamp: %s" % r1.trial_timestamp)
         if r1.challenge_name:
             print_internal("  Challenge: %s" % r1.challenge_name)
@@ -676,6 +677,7 @@ class ComparisonReporter:
             print_internal("  User tags: %s" % r1_user_tags)
         print_internal("")
         print_internal("with contender")
+        print_internal("  Race ID: %s" % r2.trial_id)
         print_internal("  Race timestamp: %s" % r2.trial_timestamp)
         if r2.challenge_name:
             print_internal("  Challenge: %s" % r2.challenge_name)
