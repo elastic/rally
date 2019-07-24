@@ -24,7 +24,7 @@ import thespian.actors
 import urllib
 
 from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, DOC_LINK, PROGRAM_NAME
-from esrally.utils import console, convert, opts, git
+from esrally.utils import console, convert, opts
 
 # benchmarks with external candidates are really scary and we should warn users.
 BOGUS_RESULTS_WARNING = """
