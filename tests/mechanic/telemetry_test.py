@@ -2164,8 +2164,8 @@ class DiskIoTests(TestCase):
         device2 = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
         t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
         t2.on_benchmark_stop()
-        t.detach_from_node(node, running=True)
-        t.detach_from_node(node, running=False)
+        t2.detach_from_node(node, running=True)
+        t2.detach_from_node(node, running=False)
 
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
@@ -2195,8 +2195,8 @@ class DiskIoTests(TestCase):
         device2 = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
         t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
         t2.on_benchmark_stop()
-        t.detach_from_node(node, running=True)
-        t.detach_from_node(node, running=False)
+        t2.detach_from_node(node, running=True)
+        t2.detach_from_node(node, running=False)
 
         # expected result is 1 byte because there are two nodes on the machine. Result is calculated 
         # with total_bytes / node_count
