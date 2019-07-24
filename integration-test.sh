@@ -254,19 +254,19 @@ function test_provision_start_stop {
     info "test provision [--configuration-name=${cfg} --distribution-version=${dist}]"
     kill_rally_processes
     trial_id=$(esrally --configuration-name=${cfg} provision --distribution-version=${dist} --quiet)
-    info "test start [--configuration-name=${cfg} --trial-id=${trial_id}]"
-    esrally start --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
-    info "test stop [--configuration-name=${cfg} --trial-id=${trial_id}]"
-    esrally stop --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+    info "test --challenge=unit_test start [--configuration-name=${cfg} --trial-id=${trial_id}]"
+    esrally --challenge=unit_test start --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+    info "test --challenge=unit_test stop [--configuration-name=${cfg} --trial-id=${trial_id}]"
+    esrally --challenge=unit_test stop --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
 
     dist="7.1.1"     # use a dist known to have a docker image
     info "test docker provision [--configuration-name="${cfg}" --distribution-version=${dist} --docker]"
     kill_rally_processes
     trial_id=$(esrally provision --configuration-name="${cfg}" --distribution-version="${dist}" --docker)
-    info "test start [--configuration-name=${cfg} --trial-id=${trial_id}]"
-    esrally start --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
-    info "test stop [--configuration-name=${cfg} --trial-id=${trial_id}"
-    esrally stop --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+    info "test --challenge=unit_test start [--configuration-name=${cfg} --trial-id=${trial_id}]"
+    esrally --challenge=unit_test start --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
+    info "test --challenge=unit_test stop [--configuration-name=${cfg} --trial-id=${trial_id}"
+    esrally --challenge=unit_test stop --configuration-name="${cfg}" --trial-id="${trial_id}" --quiet
 }
 
 function test_sources {
