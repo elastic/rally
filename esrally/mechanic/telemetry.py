@@ -19,13 +19,11 @@ import collections
 import logging
 import os
 import re
-import signal
-import subprocess
 import tabulate
 import threading
 
 from esrally import metrics, time, exceptions
-from esrally.utils import io, sysstats, console, versions, opts
+from esrally.utils import io, sysstats, console, opts
 from esrally.metrics import MetaInfoScope
 
 
@@ -159,11 +157,11 @@ class FlightRecorder(TelemetryDevice):
     human_name = "Flight Recorder"
     help = "Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)"
 
-    def __init__(self, telemetry_params, log_root, java_major_version):
+    def __init__(self, telemetry_params):
         super().__init__()
         self.telemetry_params = telemetry_params
-        self.log_root = log_root
-        self.java_major_version = java_major_version
+        self.log_root = telemetry_params.get('log_root')
+        self.java_major_version = telemetry_params.get('java_major_version')
 
     def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
@@ -221,9 +219,9 @@ class JitCompiler(TelemetryDevice):
     human_name = "JIT Compiler Profiler"
     help = "Enables JIT compiler logs."
 
-    def __init__(self, log_root):
+    def __init__(self, params):
         super().__init__()
-        self.log_root = log_root
+        self.log_root = params.get('log_root')
 
     def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
@@ -698,9 +696,9 @@ class NodeStatsRecorder:
 
 
 class StartupTime(InternalTelemetryDevice):
-    def __init__(self, metrics_store, stopwatch=time.StopWatch):
+    def __init__(self, params, stopwatch=time.StopWatch):
         super().__init__()
-        self.metrics_store = metrics_store
+        self.metrics_store = params['metrics_store']
         self.timer = stopwatch()
 
     def on_pre_node_start(self, node_name):
@@ -717,10 +715,11 @@ class MergeParts(InternalTelemetryDevice):
     """
     MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
 
-    def __init__(self, metrics_store, node_log_dir):
+    def __init__(self, params):
         super().__init__()
-        self.node_log_dir = node_log_dir
-        self.metrics_store = metrics_store
+        node_cfg = params['node_configuration']
+        self.node_log_dir = node_cfg.log_path
+        self.metrics_store = params['metrics_store']
         self._t = None
         self.node = None
 
@@ -774,10 +773,10 @@ class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store, node_count_on_host):
+    def __init__(self, params):
         super().__init__()
-        self.metrics_store = metrics_store
-        self.node_count_on_host = node_count_on_host
+        self.metrics_store = params['metrics_store']
+        self.node_count_on_host = params.get('node_count_on_host', 1)
         self.node = None
         self.process = None
         self.disk_start = None
@@ -918,9 +917,9 @@ class NodeEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned nodes.
     """
-    def __init__(self, metrics_store):
+    def __init__(self, params):
         super().__init__()
-        self.metrics_store = metrics_store
+        self.metrics_store = params['metrics_store']
 
     def attach_to_node(self, node):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
@@ -1330,10 +1329,11 @@ class IndexSize(InternalTelemetryDevice):
     """
     Measures the final size of the index
     """
-    def __init__(self, data_paths, metrics_store):
+    def __init__(self, params):
         super().__init__()
-        self.data_paths = data_paths
-        self.metrics_store = metrics_store
+        node_cfg = params['node_configuration']
+        self.data_paths = node_cfg.data_paths
+        self.metrics_store = params['metrics_store']
         self.attached = False
 
     def attach_to_node(self, node):

@@ -126,33 +126,40 @@ def _get_pid(binary_path):
         return None
 
 
-def _load_node(node_cfg):
+def _load_node(node_cfg, metrics_store):
     node_name = node_cfg.node_name
+    host_name = node_cfg.ip
     binary_path = node_cfg.binary_path
-    if not _is_docker_node(node_cfg):
-        pid = _get_pid(binary_path)
+    telem_params = {
+        'metrics_store': metrics_store,
+        'node_configuration': node_cfg,
+    }
+    if _is_docker_node(node_cfg):
+        pid = 0
+        t = telemetry.Telemetry(devices=launcher.get_telem(launcher.DockerLauncher.DEFAULT_TELEMETRY_DEVICES, telem_params))
     else:
-        pid = None
-    t = telemetry.Telemetry(devices=[])
+        pid = _get_pid(binary_path)
+        t = telemetry.Telemetry(devices=launcher.get_telem(launcher.ProcessLauncher.DEFAULT_TELEMETRY_DEVICES, telem_params))
 
     return cluster.Node(pid=pid,
                         node_name=node_name,
-                        host_name=None,
+                        host_name=host_name,
                         telemetry=t)
 
 
 def stop(cfg):
     node_cfg = _load_node_cfg(cfg)
-    node = _load_node(node_cfg)
     metrics_store = metrics.metrics_store(cfg, read_only=False, lap=0)
 
     if _is_docker_node(node_cfg):
         launch = launcher.DockerLauncher(cfg, metrics_store=metrics_store)
-        launch.binary_paths[node.node_name] = node_cfg.binary_path
+        launch.binary_paths[node_cfg.node_name] = node_cfg.binary_path
     else:
         launch = launcher.ProcessLauncher(cfg,
                                           metrics_store=metrics_store,
                                           races_root_dir=paths.races_root(cfg))
+
+    node = _load_node(node_cfg, metrics_store)
     launch.stop(nodes=[node])
 
 

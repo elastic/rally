@@ -159,6 +159,12 @@ def _get_docker_compose_cmd(compose_config, cmd):
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
+    # only support a subset of telemetry for Docker hosts
+    # (specifically, we do not allow users to enable any devices)
+    DEFAULT_TELEMETRY_DEVICES = [
+        telemetry.DiskIo,
+        telemetry.NodeEnvironmentInfo
+    ]
 
     def __init__(self, cfg, metrics_store):
         self.cfg = cfg
@@ -175,14 +181,16 @@ class DockerLauncher:
             binary_path = node_configuration.binary_path
             self.binary_paths[node_name] = binary_path
             self._start_process(binary_path)
-            # only support a subset of telemetry for Docker hosts
-            # (specifically, we do not allow users to enable any devices)
-            node_telemetry = [
-                telemetry.DiskIo(self.metrics_store, len(node_configurations)),
-                telemetry.NodeEnvironmentInfo(self.metrics_store)
-            ]
+            params = {
+                'metrics_store': self.metrics_store
+            }
+            node_telemetry = get_telem(DockerLauncher.DEFAULT_TELEMETRY_DEVICES, params)
             t = telemetry.Telemetry(devices=node_telemetry)
-            nodes.append(cluster.Node(0, host_name, node_name, t))
+            node = cluster.Node(0, host_name, node_name, t)
+            self.logger.info("Attaching telemetry devices to node [%s].", node_name)
+            t.attach_to_node(node)
+            nodes.append(node)
+
         return nodes
 
     def _start_process(self, binary_path):
@@ -268,11 +276,25 @@ def wait_for_pidfile(pidfilename, timeout=60):
     raise exceptions.LaunchError(msg)
 
 
+def get_telem(device_classes, params):
+    devices = []
+    for dev in device_classes:
+        devices.append(dev(params))
+    return devices
+
+
 class ProcessLauncher:
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
     """
-    PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
+    PROCESS_WAIT_TIMEOUT_SECONDS = 90
+    DEFAULT_TELEMETRY_DEVICES = [
+        telemetry.DiskIo,
+        telemetry.NodeEnvironmentInfo,
+        telemetry.IndexSize,
+        telemetry.MergeParts,
+        telemetry.StartupTime,
+    ]
 
     def __init__(self, cfg, metrics_store, races_root_dir, clock=time.Clock):
         self.cfg = cfg
@@ -297,22 +319,18 @@ class ProcessLauncher:
         node_name = node_configuration.node_name
         car = node_configuration.car
         binary_path = node_configuration.binary_path
-        data_paths = node_configuration.data_paths
-        node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
         java_major_version, java_home = java_resolver.java_home(car, self.cfg)
 
         self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
-        node_telemetry = [
-            telemetry.DiskIo(self.metrics_store, node_count_on_host),
-            telemetry.NodeEnvironmentInfo(self.metrics_store),
-            telemetry.IndexSize(data_paths, self.metrics_store),
-            telemetry.MergeParts(self.metrics_store, node_configuration.log_path),
-            telemetry.StartupTime(self.metrics_store),
-        ]
-
+        telemetry_params.update({
+            'metrics_store': self.metrics_store,
+            'node_configuration': node_configuration,
+            'node_count_on_host': node_count_on_host,
+        })
+        node_telemetry = get_telem(ProcessLauncher.DEFAULT_TELEMETRY_DEVICES, telemetry_params)
         t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
         env = self._prepare_env(car, node_name, java_home, t)
         t.on_pre_node_start(node_name)
@@ -354,7 +372,7 @@ class ProcessLauncher:
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
-        return wait_for_pidfile("./pid")
+        return wait_for_pidfile("./pid", timeout=ProcessLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
 
     def stop(self, nodes):
         if self.keep_running:

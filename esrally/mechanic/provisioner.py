@@ -43,10 +43,14 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     java_major_version, java_home = java_resolver.java_home(car, cfg)
     enabled_devices = cfg.opts("mechanic", "telemetry.devices")
     telemetry_params = cfg.opts("mechanic", "telemetry.params")
+    telemetry_params.update({
+        'node_telemetry_dir': node_telemetry_dir,
+        'java_major_version': java_major_version
+    })
     node_telemetry = [
-        telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
-        telemetry.JitCompiler(node_telemetry_dir),
-        telemetry.Gc(node_telemetry_dir, java_major_version)
+        telemetry.FlightRecorder(telemetry_params),
+        telemetry.JitCompiler(telemetry_params),
+        telemetry.Gc(telemetry_params)
     ]
     t = telemetry.Telemetry(enabled_devices, devices=node_telemetry)
 
@@ -73,7 +77,7 @@ def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
 
 
 class NodeConfiguration:
-    def __init__(self, car, ip, node_name, node_root_path, binary_path, log_path, data_paths):
+    def __init__(self, car=None, ip=None, node_name=None, node_root_path=None, binary_path=None, log_path=None, data_paths=None):
         self.car = car
         self.ip = ip
         self.node_name = node_name

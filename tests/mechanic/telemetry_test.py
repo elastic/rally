@@ -23,6 +23,7 @@ import elasticsearch
 from unittest import TestCase
 from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
+from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
 
@@ -85,7 +86,7 @@ class StartupTimeTests(TestCase):
         stop_watch.total_time.return_value = 2
         metrics_store = metrics.EsMetricsStore(create_config())
         node = cluster.Node(None, "io", "rally0", None)
-        startup_time = telemetry.StartupTime(metrics_store)
+        startup_time = telemetry.StartupTime({'metrics_store': metrics_store})
         # replace with mock
         startup_time.timer = stop_watch
 
@@ -112,7 +113,8 @@ class MergePartsDeviceTests(TestCase):
         ]
         metrics_store = metrics.EsMetricsStore(self.cfg)
         node = cluster.Node(None, "io", "rally0", None)
-        merge_parts_device = telemetry.MergeParts(self.cfg, metrics_store)
+        node_cfg = NodeConfiguration()
+        merge_parts_device = telemetry.MergeParts({'metrics_store': metrics_store, 'node_configuration': node_cfg})
         merge_parts_device.attach_to_node(node)
         merge_parts_device.on_benchmark_stop()
 
@@ -137,7 +139,8 @@ class MergePartsDeviceTests(TestCase):
         ]
         metrics_store = metrics.EsMetricsStore(self.cfg)
         node = cluster.Node(None, "io", "rally0", None)
-        merge_parts_device = telemetry.MergeParts(metrics_store, node_log_dir="/var/log")
+        node_cfg = NodeConfiguration(log_path="/var/log")
+        merge_parts_device = telemetry.MergeParts({'metrics_store': metrics_store, 'node_configuration': node_cfg})
         merge_parts_device.attach_to_node(node)
         merge_parts_device.on_benchmark_stop()
 
@@ -209,9 +212,10 @@ class JfrTests(TestCase):
     def test_sets_options_for_pre_java_9_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
-                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
-                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"], java_opts)
+        self.assertEqual(
+            ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
+             "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
+             "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"], java_opts)
 
     def test_sets_options_for_java_9_or_10_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(9, 10))
@@ -232,9 +236,10 @@ class JfrTests(TestCase):
                                        log_root="/var/log",
                                        java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
-                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
-                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true,settings=profile"], java_opts)
+        self.assertEqual(
+            ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
+             "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
+             "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true,settings=profile"], java_opts)
 
     def test_sets_options_for_java_9_or_10_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
@@ -260,9 +265,10 @@ class GcTests(TestCase):
         gc = telemetry.Gc("/var/log", java_major_version=random.randint(0, 8))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(7, len(gc_java_opts))
-        self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
-                          "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
-                          "-XX:+PrintTenuringDistribution"], gc_java_opts)
+        self.assertEqual(
+            ["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
+             "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+             "-XX:+PrintTenuringDistribution"], gc_java_opts)
 
     def test_sets_options_for_java_9_or_above(self):
         gc = telemetry.Gc("/var/log", java_major_version=random.randint(9, 999))
@@ -290,7 +296,7 @@ class CcrStatsTests(TestCase):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         telemetry_params = {
-            "ccr-stats-indices":{
+            "ccr-stats-indices": {
                 "default": ["leader"],
                 "wrong_cluster_name": ["follower"]
             }
@@ -304,7 +310,7 @@ class CcrStatsTests(TestCase):
 
 
 class CcrStatsRecorderTests(TestCase):
-    java_signed_maxlong = (2**63) - 1
+    java_signed_maxlong = (2 ** 63) - 1
 
     def test_raises_exception_on_transport_error(self):
         client = Client(transport_client=TransportClient(response={}, force_error=True))
@@ -522,7 +528,7 @@ class CcrStatsRecorderTests(TestCase):
                 },
                 level=MetaInfoScope.cluster,
                 meta_data=shard_metadata[1])
-            ],
+        ],
             any_order=True
         )
 
@@ -655,7 +661,7 @@ class CcrStatsRecorderTests(TestCase):
                 },
                 level=MetaInfoScope.cluster,
                 meta_data=shard_metadata)
-            ],
+        ],
             any_order=True
         )
 
@@ -768,7 +774,7 @@ class RecoveryStatsTests(TestCase):
                 "name": "recovery-stats",
                 "shard": response["index1"]["shards"][0]
             }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
-        ],  any_order=True)
+        ], any_order=True)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_multi_index_multi_shard_stats(self, metrics_store_put_doc):
@@ -870,7 +876,7 @@ class RecoveryStatsTests(TestCase):
                 "index": "index2",
                 "shard": 2
             }),
-        ],  any_order=True)
+        ], any_order=True)
 
 
 class NodeStatsTests(TestCase):
@@ -1856,7 +1862,7 @@ class NodeEnvironmentInfoTests(TestCase):
 
         metrics_store = metrics.EsMetricsStore(create_config())
         node = cluster.Node(None, "io", "rally0", None)
-        env_device = telemetry.NodeEnvironmentInfo(metrics_store)
+        env_device = telemetry.NodeEnvironmentInfo({'metrics_store': metrics_store})
         env_device.attach_to_node(node)
 
         calls = [
@@ -2796,7 +2802,8 @@ class IndexSizeTests(TestCase):
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"], metrics_store)
+        node_cfg = NodeConfiguration(data_paths=["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"])
+        device = telemetry.IndexSize({'metrics_store': metrics_store, 'node_configuration': node_cfg})
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
@@ -2818,7 +2825,8 @@ class IndexSizeTests(TestCase):
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(data_paths=[], metrics_store=metrics_store)
+        node_cfg = NodeConfiguration()
+        device = telemetry.IndexSize({'metrics_store': metrics_store, 'node_configuration': node_cfg})
         t = telemetry.Telemetry(devices=[device])
         node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
