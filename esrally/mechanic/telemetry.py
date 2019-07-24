@@ -237,10 +237,10 @@ class Gc(TelemetryDevice):
     human_name = "GC log"
     help = "Enables GC logs."
 
-    def __init__(self, log_root, java_major_version):
+    def __init__(self, telemetry_params):
         super().__init__()
-        self.log_root = log_root
-        self.java_major_version = java_major_version
+        self.log_root = telemetry_params.get('log_root')
+        self.java_major_version = telemetry_params.get('java_major_version')
 
     def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
