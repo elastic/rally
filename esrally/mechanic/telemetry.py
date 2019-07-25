@@ -23,6 +23,7 @@ import signal
 import subprocess
 import tabulate
 import threading
+import json
 
 from esrally import metrics, time, exceptions
 from esrally.utils import io, sysstats, console, versions, opts
@@ -774,10 +775,12 @@ class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store, node_count_on_host):
+    def __init__(self, metrics_store, node_count_on_host, log_root, node_name):
         super().__init__()
         self.metrics_store = metrics_store
         self.node_count_on_host = node_count_on_host
+        self.log_root = log_root
+        self.node_name = node_name
         self.node = None
         self.process = None
         self.disk_start = None
@@ -790,40 +793,55 @@ class DiskIo(InternalTelemetryDevice):
     def on_benchmark_start(self):
         if self.process is not None:
             self.process_start = sysstats.process_io_counters(self.process)
+            read_bytes = 0
+            write_bytes = 0
+            io.ensure_dir(self.log_root)
+            tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
             if self.process_start:
+                read_bytes = self.process_start.read_bytes
+                write_bytes = self.process_start.write_bytes
                 self.logger.info("Using more accurate process-based I/O counters.")
             else:
                 try:
                     self.disk_start = sysstats.disk_io_counters()
+                    read_bytes = self.disk_start.read_bytes
+                    write_bytes = self.disk_start.write_bytes
                     self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
                                         "I/O counters.")
                 except RuntimeError:
                     self.logger.exception("Could not determine I/O stats at benchmark start.")
+            with open(tmp_io_file, "wt", encoding="utf-8") as f:
+                json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
     def on_benchmark_stop(self):
-        if self.process is not None:
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
+                io.ensure_dir(self.log_root)
+                tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
+                with open(tmp_io_file, "rt", encoding="utf-8") as f:
+                    io_stats = json.load(f)
+                os.remove(tmp_io_file)
+                self.process = sysstats.setup_process_stats(io_stats["pid"])
+                process_end = sysstats.process_io_counters(self.process)
+                disk_end = sysstats.disk_io_counters()
                 # we have process-based disk counters, no need to worry how many nodes are on this host
-                if self.process_start:
-                    process_end = sysstats.process_io_counters(self.process)
-                    read_bytes = process_end.read_bytes - self.process_start.read_bytes
-                    write_bytes = process_end.write_bytes - self.process_start.write_bytes
-                elif self.disk_start:
+                if process_end:
+                    read_bytes = process_end.read_bytes - io_stats["read_bytes"]
+                    write_bytes = process_end.write_bytes - io_stats["write_bytes"]
+                elif disk_end:
                     if self.node_count_on_host > 1:
                         self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
-                                         "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node.node_name)
+                                         "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node_name)
 
-                    disk_end = sysstats.disk_io_counters()
-                    read_bytes = (disk_end.read_bytes - self.disk_start.read_bytes) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - self.disk_start.write_bytes) // self.node_count_on_host
+                    read_bytes = (disk_end.read_bytes - io_stats['read_bytes']) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - io_stats['write_bytes']) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
 
-                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes", write_bytes, "byte")
-                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes", read_bytes, "byte")
+                self.metrics_store.put_count_node_level(self.node_name, "disk_io_write_bytes", write_bytes, "byte")
+                self.metrics_store.put_count_node_level(self.node_name, "disk_io_read_bytes", read_bytes, "byte")
             # Catching RuntimeException is not sufficient as psutil might raise AccessDenied et.al. which is derived from Exception
             except BaseException:
                 self.logger.exception("Could not determine I/O stats at benchmark end.")
