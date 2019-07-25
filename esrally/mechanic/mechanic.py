@@ -111,7 +111,7 @@ def start(cfg):
                                           races_root_dir=paths.races_root(cfg))
     node = launch.start(node_configurations=[node_cfg])[0]
     if docker:
-        container_id = launcher.get_container_id(node_cfg.binary_path)
+        container_id = launcher.DockerLauncher.get_container_id(node_cfg.binary_path)
         console.println(container_id, force=True)
     else:
         console.println(node.pid, force=True)

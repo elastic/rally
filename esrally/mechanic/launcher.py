@@ -131,31 +131,6 @@ class ClusterLauncher:
         c.telemetry.detach_from_cluster(c)
 
 
-def get_container_id(compose_config):
-    compose_ps_cmd = _get_docker_compose_cmd(compose_config, "ps -q")
-
-    output = subprocess.check_output(args=shlex.split(compose_ps_cmd))
-    return output.decode("utf-8").rstrip()
-
-
-def _wait_for_healthy_running_container(container_id, timeout=60):
-    cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
-    endtime = _time() + timeout
-    while _time() < endtime:
-        output = subprocess.check_output(shlex.split(cmd))
-        containers = output.decode("utf-8").rstrip()
-        if len(containers) > 0:
-            return
-        time.sleep(0.5)
-    msg = "No healthy running container after {} seconds!".format(timeout)
-    logging.error(msg)
-    raise exceptions.LaunchError(msg)
-
-
-def _get_docker_compose_cmd(compose_config, cmd):
-    return "docker-compose -f {} {}".format(compose_config, cmd)
-
-
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
@@ -194,7 +169,7 @@ class DockerLauncher:
         return nodes
 
     def _start_process(self, binary_path):
-        compose_cmd = _get_docker_compose_cmd(binary_path, "up -d")
+        compose_cmd = DockerLauncher._get_docker_compose_cmd(binary_path, "up -d")
 
         ret = process.run_subprocess_with_logging(compose_cmd)
         if ret != 0:
@@ -202,8 +177,8 @@ class DockerLauncher:
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
-        container_id = get_container_id(binary_path)
-        _wait_for_healthy_running_container(container_id)
+        container_id = DockerLauncher.get_container_id(binary_path)
+        DockerLauncher._wait_for_healthy_running_container(container_id)
 
     def stop(self, nodes):
         if self.keep_running:
@@ -212,8 +187,33 @@ class DockerLauncher:
             self.logger.info("Stopping Docker container")
             for node in nodes:
                 node.telemetry.detach_from_node(node, running=True)
-                process.run_subprocess_with_logging(_get_docker_compose_cmd(self.binary_paths[node.node_name], "down"))
+                process.run_subprocess_with_logging(DockerLauncher._get_docker_compose_cmd(self.binary_paths[node.node_name], "down"))
                 node.telemetry.detach_from_node(node, running=False)
+
+    @staticmethod
+    def get_container_id(compose_config):
+        compose_ps_cmd = DockerLauncher._get_docker_compose_cmd(compose_config, "ps -q")
+
+        output = subprocess.check_output(args=shlex.split(compose_ps_cmd))
+        return output.decode("utf-8").rstrip()
+
+    @staticmethod
+    def _wait_for_healthy_running_container(container_id, timeout=60):
+        cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
+        endtime = _time() + timeout
+        while _time() < endtime:
+            output = subprocess.check_output(shlex.split(cmd))
+            containers = output.decode("utf-8").rstrip()
+            if len(containers) > 0:
+                return
+            time.sleep(0.5)
+        msg = "No healthy running container after {} seconds!".format(timeout)
+        logging.error(msg)
+        raise exceptions.LaunchError(msg)
+
+    @staticmethod
+    def _get_docker_compose_cmd(compose_config, cmd):
+        return "docker-compose -f {} {}".format(compose_config, cmd)
 
 
 class ExternalLauncher:
