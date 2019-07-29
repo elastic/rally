@@ -119,6 +119,7 @@ MOCK_PID_VALUE = 1234
 
 
 class ProcessLauncherTests(TestCase):
+    @mock.patch('os.path.join', return_value="/telemetry")
     @mock.patch('os.kill')
     @mock.patch('subprocess.Popen',new=MockPopen)
     @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
@@ -129,7 +130,7 @@ class ProcessLauncherTests(TestCase):
     @mock.patch('esrally.mechanic.provisioner.NodeConfiguration')
     @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
     @mock.patch('psutil.Process')
-    def test_daemon_start_stop(self, process, wait_for_pidfile, node_config, ms, cfg, chdir, supports, java_home, kill):
+    def test_daemon_start_stop(self, process, wait_for_pidfile, node_config, ms, cfg, chdir, supports, java_home, kill, path):
         proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
 
         nodes = proc_launcher.start([node_config])
