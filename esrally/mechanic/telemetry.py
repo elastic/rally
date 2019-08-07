@@ -1169,7 +1169,7 @@ class IndexStats(InternalTelemetryDevice):
         self.first_time = True
 
     def on_benchmark_start(self):
-        # we only determine this value at the start of the benchmark (in the first lap). This is actually only useful for
+        # we only determine this value at the start of the benchmark. This is actually only useful for
         # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
         # the cluster so we can at least tell them.
         if self.first_time:

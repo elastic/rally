@@ -2601,7 +2601,6 @@ class IndexStatsTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexStats(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
-        # lap 1
         t.on_benchmark_start()
 
         client.indices = SubClient({
@@ -2632,40 +2631,8 @@ class IndexStatsTests(TestCase):
         })
 
         t.on_benchmark_stop()
-        # lap 2
-        t.on_benchmark_start()
-
-        client.indices = SubClient({
-            "_all": {
-                "primaries": {
-                    "segments": {
-                        "count": 7,
-                        "memory_in_bytes": 2048,
-                        "stored_fields_memory_in_bytes": 1024,
-                        "doc_values_memory_in_bytes": 128,
-                        "terms_memory_in_bytes": 256
-                    },
-                    "merges": {
-                        "total_time_in_millis": 900,
-                        "total_throttled_time_in_millis": 120
-                    },
-                    "indexing": {
-                        "index_time_in_millis": 8000
-                    },
-                    "refresh": {
-                        "total_time_in_millis": 500
-                    },
-                    "flush": {
-                        "total_time_in_millis": 300
-                    }
-                }
-            }
-        })
-
-        t.on_benchmark_stop()
 
         metrics_store_put_doc.assert_has_calls([
-            # 1st lap
             mock.call(doc={
                 "name": "merges_total_time",
                 "value": 300,
@@ -2695,53 +2662,15 @@ class IndexStatsTests(TestCase):
                 "value": 100,
                 "unit": "ms",
                 "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            # 2nd lap
-            mock.call(doc={
-                "name": "merges_total_time",
-                "value": 900,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "merges_total_throttled_time",
-                "value": 120,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "indexing_total_time",
-                "value": 8000,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "refresh_total_time",
-                "value": 500,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "flush_total_time",
-                "value": 300,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
+            }, level=metrics.MetaInfoScope.cluster)
         ])
 
         metrics_store_cluster_value.assert_has_calls([
-            # 1st lap
             mock.call("segments_memory_in_bytes", 2048, "byte"),
             mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
             mock.call("segments_terms_memory_in_bytes", 256, "byte"),
             # we don't have norms or points, so nothing should have been called
-
-            # 2nd lap
-            mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
-            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
-            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
         ], any_order=True)
 
 

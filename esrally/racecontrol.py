@@ -131,7 +131,6 @@ class BenchmarkActor(actor.RallyActor):
         else:
             console.info("Racing on track [{}], challenge [{}] and car {} with version [{}].\n"
                          .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.cluster.distribution_version))
-        # start running we assume that each race has at least one lap
         self.run()
 
     @actor.no_retry("race control")
@@ -232,59 +231,15 @@ class BenchmarkActor(actor.RallyActor):
                                                       msg.distribution, msg.external, msg.docker))
 
     def run(self):
-        self.lap_counter.before_lap()
-        lap = self.lap_counter.current_lap
-        self.metrics_store.lap = lap
         self.logger.info("Telling mechanic of benchmark start.")
-        self.send(self.mechanic, mechanic.OnBenchmarkStart(lap))
+        self.send(self.mechanic, mechanic.OnBenchmarkStart())
         self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
         self.logger.info("Telling driver to start benchmark.")
-        self.send(self.main_driver, driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info, lap))
+        self.send(self.main_driver, driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info))
 
     def teardown(self):
         self.logger.info("Asking mechanic to stop the engine.")
         self.send(self.mechanic, mechanic.StopEngine())
-
-
-class LapCounter:
-    def __init__(self, current_race, metrics_store, cfg):
-        self.race = current_race
-        self.metrics_store = metrics_store
-        self.cfg = cfg
-        self.lap_timer = time.Clock.stop_watch()
-        self.lap_timer.start()
-        self.lap_times = 0
-        self.current_lap = 0
-        self.logger = logging.getLogger(__name__)
-
-    def has_more_laps(self):
-        return self.current_lap < self.race.total_laps
-
-    def before_lap(self):
-        self.current_lap += 1
-        self.logger.info("Starting lap [%d/%d]", self.current_lap, self.race.total_laps)
-        if self.race.total_laps > 1:
-            msg = "Lap [%d/%d]" % (self.current_lap, self.race.total_laps)
-            console.println(console.format.bold(msg))
-            console.println(console.format.underline_for(msg))
-
-    def after_lap(self):
-        self.logger.info("Finished lap [%d/%d]", self.current_lap, self.race.total_laps)
-        if self.race.total_laps > 1:
-            lap_time = self.lap_timer.split_time() - self.lap_times
-            self.lap_times += lap_time
-            hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
-            lap_results = reporter.calculate_results(self.metrics_store, self.race, self.current_lap)
-            self.race.add_lap_results(lap_results)
-            reporter.summarize(self.race, self.cfg, lap=self.current_lap)
-            console.println("")
-            if self.current_lap < self.race.total_laps:
-                remaining = (self.race.total_laps - self.current_lap) * self.lap_times / self.current_lap
-                hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
-                console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=self.logger)
-            else:
-                console.info("Lap time %02d:%02d:%02d" % (hl, ml, sl), logger=self.logger)
-            console.println("")
 
 
 def race(cfg, sources=False, build=False, distribution=False, external=False, docker=False):

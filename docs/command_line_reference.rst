@@ -251,11 +251,6 @@ Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources-complete``.
 
-``laps``
-~~~~~~~~
-
-Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted in between.
-
 .. _clr_enable_driver_profiling:
 
 ``enable-driver-profiling``

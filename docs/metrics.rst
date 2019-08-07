@@ -28,7 +28,6 @@ Here is a typical metrics record::
           "task": "index-append-no-conflicts",
           "operation": "index-append-no-conflicts",
           "operation-type": "Index",
-          "lap": 1,
           "meta": {
             "cpu_physical_cores": 36,
             "cpu_logical_cores": 72,
