@@ -267,11 +267,6 @@ def create_arg_parser():
             help="Define a comma-separated list of hosts which should generate load (default: localhost).",
             default="localhost")
         p.add_argument(
-            "--laps",
-            type=positive_number,
-            help="Number of laps that the benchmark should run (default: 1).",
-            default=1)
-        p.add_argument(
             "--client-options",
             help="Define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
                  "(default: {}).".format(opts.ClientOptions.DEFAULT_CLIENT_OPTIONS),
@@ -611,7 +606,6 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", opts.to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
-    cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
     cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
 
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to

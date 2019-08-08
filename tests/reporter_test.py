@@ -32,7 +32,6 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
-        cfg.add(config.Scope.application, "race", "laps", 1)
         cfg.add(config.Scope.application, "race", "user.tag", "")
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
         cfg.add(config.Scope.application, "track", "params", {})

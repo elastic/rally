@@ -800,7 +800,6 @@ class EsRaceStoreTests(TestCase):
                             trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="defaults", car_params={"heap_size": "512mb"}, plugin_params=None,
-                            total_laps=12,
                             cluster=EsRaceStoreTests.DictHolder(
                                 {
                                     "distribution-version": "5.0.0",
@@ -808,7 +807,6 @@ class EsRaceStoreTests(TestCase):
                                         {"node_name": "node0", "ip": "127.0.0.1", "plugins": ["analysis-icu", "x-pack"]}
                                     ]
                                 }),
-                            lap_results=[],
                             results=EsRaceStoreTests.DictHolder(
                                 {
                                     "young_gc_time": 100,
@@ -848,7 +846,6 @@ class EsRaceStoreTests(TestCase):
             "car-params": {
                 "heap_size": "512mb"
             },
-            "total-laps": 12,
             "cluster": {
                 "distribution-version": "5.0.0",
                 "nodes": [
@@ -917,9 +914,7 @@ class EsResultsStoreTests(TestCase):
                             trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
-                            total_laps=12,
                             cluster=c,
-                            lap_results=[],
                             results=reporter.Stats(
                                 {
                                     "young_gc_time": 100,
@@ -1264,7 +1259,6 @@ class FileRaceStoreTests(TestCase):
                             trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
-                            total_laps=12,
                             cluster=FileRaceStoreTests.DictHolder(
                                 {
                                     "distribution-version": "5.0.0",
@@ -1272,7 +1266,6 @@ class FileRaceStoreTests(TestCase):
                                         {"node_name": "node0", "ip": "127.0.0.1"}
                                     ]
                                 }),
-                            lap_results=[],
                             results=FileRaceStoreTests.DictHolder(
                                 {
                                     "young_gc_time": 100,

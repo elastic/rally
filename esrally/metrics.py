@@ -1175,7 +1175,6 @@ def create_race(cfg, track, challenge):
     environment = cfg.opts("system", "env.name")
     trial_id = cfg.opts("system", "trial.id")
     trial_timestamp = cfg.opts("system", "time.start")
-    total_laps = cfg.opts("race", "laps")
     user_tags = extract_user_tags_from_config(cfg)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
@@ -1184,16 +1183,14 @@ def create_race(cfg, track, challenge):
     rally_version = version.version()
 
     return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                car_params, plugin_params, total_laps)
+                car_params, plugin_params)
 
 
 class Race:
     def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 car_params, plugin_params, total_laps, cluster=None, lap_results=None, results=None):
+                 car_params, plugin_params, cluster=None, results=None):
         if results is None:
             results = {}
-        if lap_results is None:
-            lap_results = []
         self.rally_version = rally_version
         self.environment_name = environment_name
         self.trial_id = trial_id
@@ -1206,10 +1203,8 @@ class Race:
         self.car = car
         self.car_params = car_params
         self.plugin_params = plugin_params
-        self.total_laps = total_laps
         # will be set later - contains hosts, revision, distribution_version, ...
         self.cluster = cluster
-        self.lap_results = lap_results
         self.results = results
 
     @property
@@ -1229,9 +1224,6 @@ class Race:
         # minor simplification for reporter
         return self.cluster.revision
 
-    def add_lap_results(self, results):
-        self.lap_results.append(results)
-
     def add_final_results(self, results):
         self.results = results
 
@@ -1248,7 +1240,6 @@ class Race:
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car,
-            "total-laps": self.total_laps,
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
@@ -1320,7 +1311,7 @@ class Race:
         # and (b) it is not necessary for this use case.
         return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
                     d["track"], d.get("track-params"), d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
-                    d["total-laps"], results=d["results"])
+                    results=d["results"])
 
 
 class RaceStore:
