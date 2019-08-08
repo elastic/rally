@@ -100,7 +100,6 @@ class BenchmarkActor(actor.RallyActor):
         self.race = None
         self.metrics_store = None
         self.race_store = None
-        self.lap_counter = None
         self.cancelled = False
         self.error = False
         self.start_sender = None
@@ -171,11 +170,7 @@ class BenchmarkActor(actor.RallyActor):
         self.logger.debug("Flushing metrics data...")
         self.metrics_store.flush()
         self.logger.debug("Flushing done")
-        self.lap_counter.after_lap()
-        if self.lap_counter.has_more_laps():
-            self.run()
-        else:
-            self.teardown()
+        self.teardown()
 
     @actor.no_retry("race control")
     def receiveMsg_EngineStopped(self, msg, sender):
@@ -222,7 +217,6 @@ class BenchmarkActor(actor.RallyActor):
             challenge=self.race.challenge_name,
             read_only=False
         )
-        self.lap_counter = LapCounter(self.race, self.metrics_store, self.cfg)
         self.race_store = metrics.race_store(self.cfg)
         self.logger.info("Asking mechanic to start the engine.")
         cluster_settings = challenge.cluster_settings
