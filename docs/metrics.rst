@@ -97,12 +97,6 @@ task, operation, operation-type
 
 ``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different ``operation``s but they all have the same ``operation-type`` (Search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
 
-lap
-~~~
-
-The lap number in which this metric was gathered. Laps start at 1. See the :doc:`command line reference </command_line_reference>` for more info on laps.
-
-
 meta
 ~~~~
 
