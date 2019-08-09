@@ -1224,7 +1224,7 @@ class Race:
         # minor simplification for reporter
         return self.cluster.revision
 
-    def add_final_results(self, results):
+    def add_results(self, results):
         self.results = results
 
     def as_dict(self):
