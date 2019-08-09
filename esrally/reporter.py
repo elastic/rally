@@ -197,8 +197,8 @@ class StatsCalculator:
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         result.index_size = self.sum("final_index_size_bytes")
 
-        result.store_size = self.median("store_size_in_bytes")
-        result.translog_size = self.median("translog_size_in_bytes")
+        result.store_size = self.sum("store_size_in_bytes")
+        result.translog_size = self.sum("translog_size_in_bytes")
         result.bytes_written = self.sum("disk_io_write_bytes")
 
         # convert to int, fraction counts are senseless
