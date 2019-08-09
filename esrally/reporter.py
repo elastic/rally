@@ -679,7 +679,7 @@ class ComparisonReporter:
     def write_report(self, metrics_table, metrics_table_console):
         write_single_report(self.report_file, self.report_format, self.cwd,
                             headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
-                            data_plain=metrics_table, data_rich=metrics_table_console, write_header=True)
+                            data_plain=metrics_table, data_rich=metrics_table_console)
 
     def report_throughput(self, baseline_stats, contender_stats, task):
         b_min = baseline_stats.metrics(task)["throughput"]["min"]
