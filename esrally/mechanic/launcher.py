@@ -349,7 +349,7 @@ class ProcessLauncher:
             if k not in env:
                 env[k] = v
             else:  # merge
-                env[k] = env[k] + separator + v
+                env[k] = v + separator + env[k]
 
     @staticmethod
     def _start_process(binary_path, env):

@@ -191,7 +191,7 @@ class FlightRecorder(TelemetryDevice):
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
-        java_opts = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints"]
+        java_opts = ["-XX:+DebugNonSafepoints", "-XX:+UnlockDiagnosticVMOptions"]
         jfr_cmd = ""
         if self.java_major_version < 11:
             java_opts.append("-XX:+UnlockCommercialFeatures")
