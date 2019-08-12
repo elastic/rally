@@ -299,10 +299,7 @@ class ProcessLauncher:
         car = node_configuration.car
         binary_path = node_configuration.binary_path
         data_paths = node_configuration.data_paths
-        #node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
         node_telemetry_dir = os.path.join(node_configuration.node_root_path, "telemetry")
-
-        print("here in oy %s" % node_telemetry_dir)
 
         java_major_version, java_home = java_resolver.java_home(car, self.cfg)
 
