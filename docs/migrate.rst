@@ -10,18 +10,15 @@ This means that on disk, a given race will be found at ``benchmarks/races/62d1e9
 
 Laps feature removed
 ^^^^^^^^^^^^^^^^^^^^
-The --laps parameter and corresponding multi-run trial functionality has been removed from execution and reporting.
-If you need lap functionality, the following shell script can be used instead:
+The ```--laps``` parameter and corresponding multi-run trial functionality has been removed from execution and reporting.
+If you need lap functionality, the following shell script can be used instead::
 
-```bash
-RALLY_LAPS=3
+    RALLY_LAPS=3
 
-for lap in $(seq 1 ${RALLY_LAPS})
-do
-  esrally --pipeline=benchmark-only --user-tag lap:$lap
-done
-
-```
+    for lap in $(seq 1 ${RALLY_LAPS})
+    do
+      esrally --pipeline=benchmark-only --user-tag lap:$lap
+    done
 
 
 Migrating to Rally 1.2.1
