@@ -10,7 +10,7 @@ This means that on disk, a given race will be found at ``benchmarks/races/62d1e9
 
 Laps feature removed
 ^^^^^^^^^^^^^^^^^^^^
-The ```--laps``` parameter and corresponding multi-run trial functionality has been removed from execution and reporting.
+The ``--laps`` parameter and corresponding multi-run trial functionality has been removed from execution and reporting.
 If you need lap functionality, the following shell script can be used instead::
 
     RALLY_LAPS=3
