@@ -789,8 +789,6 @@ class DiskIo(InternalTelemetryDevice):
     def attach_to_node(self, node):
         self.node = node
         self.process = sysstats.setup_process_stats(node.pid)
-
-    def on_benchmark_start(self):
         if self.process is not None:
             self.process_start = sysstats.process_io_counters(self.process)
             read_bytes = 0
@@ -813,7 +811,8 @@ class DiskIo(InternalTelemetryDevice):
             with open(tmp_io_file, "wt", encoding="utf-8") as f:
                 json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
-    def on_benchmark_stop(self):
+    def detach_from_node(self, node, running):
+        if running:
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
