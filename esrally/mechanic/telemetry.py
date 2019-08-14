@@ -728,7 +728,9 @@ class MergeParts(InternalTelemetryDevice):
     def attach_to_node(self, node):
         self.node = node
 
-    def on_benchmark_stop(self):
+    def detach_from_node(self, node, running):
+        if running:
+            return
         self.logger.info("Analyzing merge times.")
         # first decompress all logs. They have unique names so it's safe to do that. It's easier to first decompress everything
         for log_file in os.listdir(self.node_log_dir):

@@ -116,7 +116,7 @@ class MergePartsDeviceTests(TestCase):
         node = cluster.Node(None, "io", "rally0", None)
         merge_parts_device = telemetry.MergeParts(self.cfg, metrics_store)
         merge_parts_device.attach_to_node(node)
-        merge_parts_device.on_benchmark_stop()
+        merge_parts_device.detach_from_node(node, running=False)
 
         self.assertEqual(0, metrics_store_put_value.call_count)
         self.assertEqual(0, metrics_store_put_count.call_count)
@@ -141,7 +141,7 @@ class MergePartsDeviceTests(TestCase):
         node = cluster.Node(None, "io", "rally0", None)
         merge_parts_device = telemetry.MergeParts(metrics_store, node_log_dir="/var/log")
         merge_parts_device.attach_to_node(node)
-        merge_parts_device.on_benchmark_stop()
+        merge_parts_device.detach_from_node(node, running=False)
 
         metrics_store_put_value.assert_called_with("rally0", "merge_parts_total_time_doc_values", 350, "ms")
         metrics_store_put_count.assert_called_with("rally0", "merge_parts_total_docs_doc_values", 1850)
