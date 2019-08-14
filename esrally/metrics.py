@@ -241,7 +241,7 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None, lap=None):
+def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -250,7 +250,7 @@ def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, met
     :return: A metrics store implementation.
     """
     cls = metrics_store_class(cfg)
-    store = cls(cfg=cfg, meta_info=meta_info, lap=lap)
+    store = cls(cfg=cfg, meta_info=meta_info)
     logging.getLogger(__name__).info("Creating %s", str(store))
 
     trial_id = cfg.opts("system", "trial.id")
@@ -309,14 +309,13 @@ class MetricsStore:
     Abstract metrics store
     """
 
-    def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
+    def __init__(self, cfg, clock=time.Clock, meta_info=None):
         """
         Creates a new metrics store.
 
         :param cfg: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
-        :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
         self._config = cfg
         self._trial_id = None
@@ -326,7 +325,6 @@ class MetricsStore:
         self._challenge = None
         self._car = None
         self._car_name = None
-        self._lap = lap
         self._environment_name = cfg.opts("system", "env.name")
         self.opened = False
         if meta_info is None:
@@ -391,14 +389,6 @@ class MetricsStore:
         """
         self._stop_watch.start()
 
-    @property
-    def lap(self):
-        return self._lap
-
-    @lap.setter
-    def lap(self, lap):
-        self._lap = lap
-
     def flush(self, refresh=True):
         """
         Explicitly flushes buffered metrics to the metric store. It is not required to flush before closing the metrics store.
@@ -413,7 +403,6 @@ class MetricsStore:
         """
         self.flush()
         self.clear_meta_info()
-        self.lap = None
         self.opened = False
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -589,7 +578,6 @@ class MetricsStore:
             "trial-timestamp": self._trial_timestamp,
             "environment": self._environment_name,
             "track": self._track,
-            "lap": self._lap,
             "challenge": self._challenge,
             "car": self._car_name,
             "name": name,
@@ -607,7 +595,6 @@ class MetricsStore:
         if self._track_params:
             doc["track-params"] = self._track_params
 
-        assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
         self._add(doc)
 
     def put_doc(self, doc, level=None, node_name=None, meta_data=None, absolute_time=None, relative_time=None):
@@ -649,7 +636,6 @@ class MetricsStore:
             "trial-timestamp": self._trial_timestamp,
             "environment": self._environment_name,
             "track": self._track,
-            "lap": self._lap,
             "challenge": self._challenge,
             "car": self._car_name,
 
@@ -659,7 +645,6 @@ class MetricsStore:
         if self._track_params:
             doc["track-params"] = self._track_params
 
-        assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
         self._add(doc)
 
     def bulk_add(self, memento):
@@ -684,21 +669,21 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, lap=None):
+    def get_one(self, name, sample_type=None):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
         :param name: The metric name to query.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, sample_type=sample_type, lap=lap))
+        return self._first_or_none(self.get(name=name, sample_type=sample_type))
 
-    def _first_or_none(self, values):
+    @staticmethod
+    def _first_or_none(values):
         return values[0] if values else None
 
-    def get(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get(self, name, task=None, operation_type=None, sample_type=None):
         """
         Gets all raw values for the given metric name.
 
@@ -706,12 +691,11 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A list of all values for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, lap, lambda doc: doc["value"])
+        return self._get(name, task, operation_type, sample_type, lambda doc: doc["value"])
 
-    def get_raw(self, name, task=None, operation_type=None, sample_type=None, lap=None, mapper=lambda doc: doc):
+    def get_raw(self, name, task=None, operation_type=None, sample_type=None, mapper=lambda doc: doc):
         """
         Gets all raw records for the given metric name.
 
@@ -719,11 +703,10 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :param mapper A record mapper. By default, the complete record is returned.
         :return: A list of all raw records for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, lap, mapper)
+        return self._get(name, task, operation_type, sample_type, mapper)
 
     def get_unit(self, name, task=None):
         """
@@ -734,40 +717,38 @@ class MetricsStore:
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, None, None, None, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, None, None, lambda doc: doc["unit"]))
 
-    def _get(self, name, task, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, mapper):
         raise NotImplementedError("abstract method")
 
-    def get_count(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_count(self, name, task=None, operation_type=None, sample_type=None):
         """
 
         :param name: The metric name to query.
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The number of samples for this metric.
         """
-        stats = self.get_stats(name, task, operation_type, sample_type, lap)
+        stats = self.get_stats(name, task, operation_type, sample_type)
         if stats:
             return stats["count"]
         else:
             return 0
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None):
         """
         Gets the error rate for a specific task.
 
         :param task The task name to query.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A float between 0.0 and 1.0 (inclusive) representing the error rate.
         """
         raise NotImplementedError("abstract method")
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
         """
         Gets standard statistics for the given metric.
 
@@ -775,12 +756,11 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A metric_stats structure.
         """
         raise NotImplementedError("abstract method")
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
         """
         Retrieves percentile metrics for the given metric.
 
@@ -788,7 +768,6 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :param percentiles: An optional list of percentiles to show. If None is provided, by default the 99th, 99.9th and 100th percentile
         are determined. Ensure that there are enough data points in the metrics store (e.g. it makes no sense to retrieve a 99.9999
         percentile when there are only 10 values).
@@ -797,7 +776,7 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_median(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_median(self, name, task=None, operation_type=None, sample_type=None):
         """
         Retrieves median value of the given metric.
 
@@ -805,14 +784,13 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The median value.
         """
         median = "50.0"
-        percentiles = self.get_percentiles(name, task, operation_type, sample_type, lap, percentiles=[median])
+        percentiles = self.get_percentiles(name, task, operation_type, sample_type, percentiles=[median])
         return percentiles[median] if percentiles else None
 
-    def get_mean(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_mean(self, name, task=None, operation_type=None, sample_type=None):
         """
         Retrieves mean of the given metric.
 
@@ -820,10 +798,9 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The mean.
         """
-        stats = self.get_stats(name, task, operation_type, sample_type, lap)
+        stats = self.get_stats(name, task, operation_type, sample_type)
         return stats["avg"] if stats else None
 
 
@@ -837,7 +814,7 @@ class EsMetricsStore(MetricsStore):
                  cfg,
                  client_factory_class=EsClientFactory,
                  index_template_provider_class=IndexTemplateProvider,
-                 clock=time.Clock, meta_info=None, lap=None):
+                 clock=time.Clock, meta_info=None):
         """
         Creates a new metrics store.
 
@@ -846,9 +823,8 @@ class EsMetricsStore(MetricsStore):
         :param index_template_provider_class: This parameter is optional and needed for testing.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
-        :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info, lap=lap)
+        MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info)
         self._index = None
         self._client = client_factory_class(cfg).create()
         self._index_template_provider = index_template_provider_class(cfg)
@@ -909,18 +885,18 @@ class EsMetricsStore(MetricsStore):
     def _add(self, doc):
         self._docs.append(doc)
 
-    def _get(self, name, task, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, mapper):
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, lap)
+            "query": self._query_by_name(name, task, operation_type, sample_type)
         }
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None):
         query = {
-            "query": self._query_by_name("service_time", task, operation_type, sample_type, lap),
+            "query": self._query_by_name("service_time", task, operation_type, sample_type),
             "size": 0,
             "aggs": {
                 "error_rate": {
@@ -954,7 +930,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return count_errors / (count_errors + count_success)
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
         """
         Gets standard statistics for the given metric name.
 
@@ -962,7 +938,7 @@ class EsMetricsStore(MetricsStore):
         https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
         """
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, lap),
+            "query": self._query_by_name(name, task, operation_type, sample_type),
             "size": 0,
             "aggs": {
                 "metric_stats": {
@@ -976,11 +952,11 @@ class EsMetricsStore(MetricsStore):
         result = self._client.search(index=self._index, body=query)
         return result["aggregations"]["metric_stats"]
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, lap),
+            "query": self._query_by_name(name, task, operation_type, sample_type),
             "size": 0,
             "aggs": {
                 "percentile_stats": {
@@ -1004,7 +980,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def _query_by_name(self, name, task, operation_type, sample_type, lap):
+    def _query_by_name(self, name, task, operation_type, sample_type):
         q = {
             "bool": {
                 "filter": [
@@ -1039,12 +1015,6 @@ class EsMetricsStore(MetricsStore):
                     "sample-type": sample_type.name.lower()
                 }
             })
-        if lap is not None:
-            q["bool"]["filter"].append({
-                "term": {
-                    "lap": lap
-                }
-            })
         return q
 
     def to_externalizable(self, clear=False):
@@ -1056,7 +1026,7 @@ class EsMetricsStore(MetricsStore):
 
 
 class InMemoryMetricsStore(MetricsStore):
-    def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
+    def __init__(self, cfg, clock=time.Clock, meta_info=None):
         """
 
         Creates a new metrics store.
@@ -1064,9 +1034,8 @@ class InMemoryMetricsStore(MetricsStore):
         :param cfg: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
-        :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        super().__init__(cfg=cfg, clock=clock, meta_info=meta_info, lap=lap)
+        super().__init__(cfg=cfg, clock=clock, meta_info=meta_info)
         self.docs = []
 
     def __del__(self):
@@ -1090,11 +1059,11 @@ class InMemoryMetricsStore(MetricsStore):
                          sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1))
         return compressed
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         result = collections.OrderedDict()
-        values = self.get(name, task, operation_type, sample_type, lap)
+        values = self.get(name, task, operation_type, sample_type)
         if len(values) > 0:
             sorted_values = sorted(values)
             for percentile in percentiles:
@@ -1123,15 +1092,14 @@ class InMemoryMetricsStore(MetricsStore):
             higher_score = sorted_values[lr_next]
             return lower_score + (higher_score - lower_score) * fr
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None):
         error = 0
         total_count = 0
         for doc in self.docs:
             # we can use any request metrics record (i.e. service time or latency)
             if doc["name"] == "service_time" and doc["task"] == task and \
                     (operation_type is None or doc["operation-type"] == operation_type.name) and \
-                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and \
-                    (lap is None or doc["lap"] == lap):
+                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()):
                 total_count += 1
                 if doc["meta"]["success"] is False:
                     error += 1
@@ -1140,8 +1108,8 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return 0.0
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal, lap=None):
-        values = self.get(name, task, operation_type, sample_type, lap)
+    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal):
+        values = self.get(name, task, operation_type, sample_type)
         sorted_values = sorted(values)
         if len(sorted_values) > 0:
             return {
@@ -1154,14 +1122,13 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return None
 
-    def _get(self, name, task, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, mapper):
         return [mapper(doc)
                 for doc in self.docs
                 if doc["name"] == name and
                 (task is None or doc["task"] == task) and
                 (operation_type is None or doc["operation-type"] == operation_type.name) and
-                (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
-                (lap is None or doc["lap"] == lap)
+                (sample_type is None or doc["sample-type"] == sample_type.name.lower())
                 ]
 
     def __str__(self):
@@ -1208,7 +1175,6 @@ def create_race(cfg, track, challenge):
     environment = cfg.opts("system", "env.name")
     trial_id = cfg.opts("system", "trial.id")
     trial_timestamp = cfg.opts("system", "time.start")
-    total_laps = cfg.opts("race", "laps")
     user_tags = extract_user_tags_from_config(cfg)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
@@ -1217,16 +1183,14 @@ def create_race(cfg, track, challenge):
     rally_version = version.version()
 
     return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                car_params, plugin_params, total_laps)
+                car_params, plugin_params)
 
 
 class Race:
     def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 car_params, plugin_params, total_laps, cluster=None, lap_results=None, results=None):
+                 car_params, plugin_params, cluster=None, results=None):
         if results is None:
             results = {}
-        if lap_results is None:
-            lap_results = []
         self.rally_version = rally_version
         self.environment_name = environment_name
         self.trial_id = trial_id
@@ -1239,10 +1203,8 @@ class Race:
         self.car = car
         self.car_params = car_params
         self.plugin_params = plugin_params
-        self.total_laps = total_laps
         # will be set later - contains hosts, revision, distribution_version, ...
         self.cluster = cluster
-        self.lap_results = lap_results
         self.results = results
 
     @property
@@ -1262,15 +1224,8 @@ class Race:
         # minor simplification for reporter
         return self.cluster.revision
 
-    def add_lap_results(self, results):
-        self.lap_results.append(results)
-
-    def add_final_results(self, results):
+    def add_results(self, results):
         self.results = results
-
-    def results_of_lap_number(self, lap):
-        # laps are 1 indexed but we store the data zero indexed
-        return self.lap_results[lap - 1]
 
     def as_dict(self):
         """
@@ -1285,7 +1240,6 @@ class Race:
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car,
-            "total-laps": self.total_laps,
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
@@ -1357,7 +1311,7 @@ class Race:
         # and (b) it is not necessary for this use case.
         return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
                     d["track"], d.get("track-params"), d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
-                    d["total-laps"], results=d["results"])
+                    results=d["results"])
 
 
 class RaceStore:

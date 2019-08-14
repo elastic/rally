@@ -109,7 +109,7 @@ class DriverTests(TestCase):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
-        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+        d.start_benchmark(t=self.track, metrics_meta_info={})
 
         target.create_track_preparator.assert_has_calls(calls=[
             mock.call("10.5.5.1"),
@@ -134,7 +134,7 @@ class DriverTests(TestCase):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
-        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+        d.start_benchmark(t=self.track, metrics_meta_info={})
 
         target.create_track_preparator.assert_called_once_with("localhost")
         target.on_prepare_track.assert_called_once_with(["track_preparator_marker"], self.cfg, self.track)
@@ -155,7 +155,7 @@ class DriverTests(TestCase):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
-        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+        d.start_benchmark(t=self.track, metrics_meta_info={})
         d.after_track_prepared()
 
         self.assertEqual(0, len(d.clients_completed_current_step))
@@ -171,7 +171,7 @@ class DriverTests(TestCase):
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg)
 
-        d.start_benchmark(t=self.track, lap=1, metrics_meta_info={})
+        d.start_benchmark(t=self.track, metrics_meta_info={})
         d.after_track_prepared()
 
         self.assertEqual(0, len(d.clients_completed_current_step))

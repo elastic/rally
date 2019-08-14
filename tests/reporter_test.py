@@ -32,7 +32,6 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
-        cfg.add(config.Scope.application, "race", "laps", 1)
         cfg.add(config.Scope.application, "race", "user.tag", "")
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
         cfg.add(config.Scope.application, "track", "params", {})
@@ -42,7 +41,6 @@ class StatsCalculatorTests(TestCase):
         t = track.Track("unittest", "unittest-track", challenges=[challenge])
 
         store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
-        store.lap = 1
 
         store.put_value_cluster_level("throughput", 500, unit="docs/s", task="index #1", operation_type=track.OperationType.Bulk)
         store.put_value_cluster_level("throughput", 1000, unit="docs/s", task="index #1", operation_type=track.OperationType.Bulk)
