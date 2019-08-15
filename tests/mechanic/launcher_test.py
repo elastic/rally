@@ -14,11 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import io
+import io, os
 from unittest import TestCase, mock
 
 from esrally import config, exceptions, paths
-from esrally.mechanic import launcher
+from esrally.mechanic import launcher, telemetry, team
 from esrally.utils import opts
 
 
@@ -140,6 +140,25 @@ class ProcessLauncherTests(TestCase):
         proc_launcher.keep_running = False
         proc_launcher.stop(nodes)
         self.assertTrue(kill.called)
+             
+    @mock.patch('os.path.join', return_value="/java_home/bin")
+    def test_env_options_order(self, path):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        proc_launcher = launcher.ProcessLauncher(cfg, MockMetricsStore(), races_root_dir="/home")
+        default_car = team.Car(names="default-car", root_path=None, config_paths=["/tmp/rally-config"])
+        
+        node_telemetry = [
+            telemetry.FlightRecorder(telemetry_params={}, log_root="/tmp/telemetry", java_major_version=8)
+            ]
+        t = telemetry.Telemetry(["jfr"], devices=node_telemetry)
+        env = proc_launcher._prepare_env(car=default_car, node_name="node0", java_home="/java_home", t=t)
+
+        self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
+        self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints " 
+                         "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
+                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/default-car-node0.jfr "
+                         "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
 
 
 class ExternalLauncherTests(TestCase):

@@ -332,7 +332,7 @@ class ProcessLauncher:
         env = {}
         env.update(os.environ)
         env.update(car.env)
-        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep)
+        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
         # Don't merge here!
         env["JAVA_HOME"] = java_home
         env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
@@ -344,12 +344,15 @@ class ProcessLauncher:
         self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
-    def _set_env(self, env, k, v, separator=' '):
+    def _set_env(self, env, k, v, separator=' ', prepend=False):
         if v is not None:
             if k not in env:
                 env[k] = v
             else:  # merge
-                env[k] = v + separator + env[k]
+                if (prepend == True):
+                    env[k] = v + separator + env[k]
+                else:
+                    env[k] = env[k] + separator + v
 
     @staticmethod
     def _start_process(binary_path, env):
