@@ -1328,6 +1328,8 @@ class Race:
         if plugins:
             result_template["plugins"] = list(plugins)
 
+        if self.cluster.team_revision:
+            result_template["team-revision"] = self.cluster.team_revision
         if self.track_revision:
             result_template["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:

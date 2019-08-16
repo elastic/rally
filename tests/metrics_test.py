@@ -941,6 +941,7 @@ class EsResultsStoreTests(TestCase):
         c = cluster.Cluster([], [], None)
         c.distribution_version = "5.0.0"
         c.distribution_flavor = "oss"
+        c.team_revision = "123ab"
         node = c.add_node("localhost", "rally-node-0")
         node.plugins.append("x-pack")
 
@@ -992,6 +993,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "team-revision": "123ab",
                 "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
@@ -1018,6 +1020,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "team-revision": "123ab",
                 "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
@@ -1045,6 +1048,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "team-revision": "123ab",
                 "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",
@@ -1076,6 +1080,7 @@ class EsResultsStoreTests(TestCase):
                     "os": "Linux"
                 },
                 "track": "unittest-track",
+                "team-revision": "123ab",
                 "track-revision": "abc1",
                 "challenge": "index",
                 "car": "4gheap",

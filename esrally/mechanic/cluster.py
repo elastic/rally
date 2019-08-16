@@ -81,6 +81,7 @@ class Cluster:
         self.distribution_version = None
         self.distribution_flavor = None
         self.source_revision = None
+        self.team_revision = None
         self.preserve = preserve
 
     def node(self, name):

@@ -425,6 +425,7 @@ class MechanicActor(actor.RallyActor):
     def on_cluster_started(self):
         # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
         # in ``on_all_nodes_started`` via the ``ClusterLauncher``.
+        self.cluster.team_revision = self.team_revision
         self.send(self.race_control,
                   EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.cluster.nodes],
                                                 self.cluster.source_revision,
