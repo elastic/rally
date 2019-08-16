@@ -348,7 +348,7 @@ class ProcessLauncher:
         if v is not None:
             if k not in env:
                 env[k] = v
-            elif (prepend == True):
+            elif prepend:
                     env[k] = v + separator + env[k]
             else:
                     env[k] = env[k] + separator + v
