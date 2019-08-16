@@ -14,10 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import tempfile
 from datetime import datetime
 import io
 import uuid
 from unittest import TestCase, mock
+
+import psutil
 
 from esrally import config, exceptions, paths
 from esrally.mechanic import launcher
@@ -115,6 +118,21 @@ class MockPopen:
         return 0
 
 
+class MockProcess:
+    def __init__(self, pid):
+        self.pid = pid
+        self.killed = False
+
+    def name(self):
+        return "p{pid}".format(pid=self.pid)
+
+    def wait(self, timeout=None):
+        raise psutil.TimeoutExpired(timeout)
+
+    def kill(self):
+        self.killed = True
+
+
 def get_metrics_store(cfg):
     cfg.add(config.Scope.application, "track", "params", None)
     cfg.add(config.Scope.application, "system", "env.name", None)
@@ -136,11 +154,11 @@ class ProcessLauncherTests(TestCase):
     @mock.patch('subprocess.Popen', new=MockPopen)
     @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
     @mock.patch('esrally.utils.jvm.supports_option', return_value=True)
-    @mock.patch('os.chdir')
     @mock.patch('esrally.utils.io.get_size')
+    @mock.patch('os.chdir')
     @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
-    @mock.patch('psutil.Process')
-    def test_daemon_start_stop(self, process, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
+    @mock.patch('psutil.Process', new=MockProcess)
+    def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
@@ -148,12 +166,11 @@ class ProcessLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", None)
 
         ms = get_metrics_store(cfg)
-
         proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
 
-        car = Car("default", root_path=None, config_paths=[])
-        node_config = NodeConfiguration(car=car, ip="127.0.0.1", node_name="testnode",
-                                        node_root_path="/tmp/", binary_path="/tmp/", log_path="/tmp/testlog", data_paths="/tmp/testdata")
+        tmpdir = tempfile.mkdtemp()
+        node_config = NodeConfiguration(car=Car("default", root_path=None, config_paths=[]), ip="127.0.0.1", node_name="testnode",
+                                        node_root_path=tmpdir, binary_path=tmpdir, log_path=tmpdir, data_paths=tmpdir)
 
         nodes = proc_launcher.start([node_config])
         self.assertEqual(len(nodes), 1)
