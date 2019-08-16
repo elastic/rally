@@ -141,8 +141,7 @@ class ProcessLauncherTests(TestCase):
         proc_launcher.stop(nodes)
         self.assertTrue(kill.called)
              
-    @mock.patch('os.path.join', return_value="/java_home/bin")
-    def test_env_options_order(self, path):
+    def test_env_options_order(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         proc_launcher = launcher.ProcessLauncher(cfg, MockMetricsStore(), races_root_dir="/home")

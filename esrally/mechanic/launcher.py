@@ -348,10 +348,9 @@ class ProcessLauncher:
         if v is not None:
             if k not in env:
                 env[k] = v
-            else:  # merge
-                if (prepend == True):
+            elif (prepend == True):
                     env[k] = v + separator + env[k]
-                else:
+            else:
                     env[k] = env[k] + separator + v
 
     @staticmethod
