@@ -21,6 +21,8 @@ from unittest import TestCase, mock
 
 from esrally import config, exceptions, paths
 from esrally.mechanic import launcher
+from esrally.mechanic.provisioner import NodeConfiguration
+from esrally.mechanic.team import Car
 from esrally.metrics import InMemoryMetricsStore
 from esrally.utils import opts
 
@@ -131,14 +133,14 @@ MOCK_PID_VALUE = 1234
 
 class ProcessLauncherTests(TestCase):
     @mock.patch('os.kill')
-    @mock.patch('subprocess.Popen',new=MockPopen)
+    @mock.patch('subprocess.Popen', new=MockPopen)
     @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
     @mock.patch('esrally.utils.jvm.supports_option', return_value=True)
     @mock.patch('os.chdir')
-    @mock.patch('esrally.mechanic.provisioner.NodeConfiguration')
+    @mock.patch('esrally.utils.io.get_size')
     @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
     @mock.patch('psutil.Process')
-    def test_daemon_start_stop(self, process, wait_for_pidfile, node_config, chdir, supports, java_home, kill):
+    def test_daemon_start_stop(self, process, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
@@ -148,6 +150,10 @@ class ProcessLauncherTests(TestCase):
         ms = get_metrics_store(cfg)
 
         proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
+
+        car = Car("default", root_path=None, config_paths=[])
+        node_config = NodeConfiguration(car=car, ip="127.0.0.1", node_name="testnode",
+                                        node_root_path="/tmp/", binary_path="/tmp/", log_path="/tmp/testlog", data_paths="/tmp/testdata")
 
         nodes = proc_launcher.start([node_config])
         self.assertEqual(len(nodes), 1)
