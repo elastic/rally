@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 import os
 
 
@@ -26,9 +25,8 @@ def races_root(cfg):
     return "%s/races" % cfg.opts("node", "root.dir")
 
 
-def race_root(cfg=None, start=None):
-    if not start:
-        start = cfg.opts("system", "time.start")
-    ts = "%04d-%02d-%02d-%02d-%02d-%02d" % (start.year, start.month, start.day, start.hour, start.minute, start.second)
-    return "%s/%s" % (races_root(cfg), ts)
+def race_root(cfg=None, trial_id=None):
+    if not trial_id:
+        trial_id = cfg.opts("system", "trial.id")
+    return "%s/%s" % (races_root(cfg), trial_id)
 

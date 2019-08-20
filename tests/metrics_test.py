@@ -142,8 +142,8 @@ class EsClientTests(TestCase):
     def test_config_opts_parsing(self, client_esclientfactory):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1,254)) for _ in range(4)])
-        _datastore_port = random.randint(1024,65535)
+        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
+        _datastore_port = random.randint(1024, 65535)
         _datastore_secure = random.choice(["True", "true"])
         _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
         _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
@@ -250,7 +250,7 @@ class EsClientTests(TestCase):
 
         # The sec to sleep for 10 transport errors is
         # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
-        sleep_slots = [float(2**i) for i in range(0, max_retry)]
+        sleep_slots = [float(2 ** i) for i in range(0, max_retry)]
         mocked_sleep_calls = [mock.call(sleep_slots[i]) for i in range(0, max_retry)]
 
         for rnd_err_idx, rnd_err_code in enumerate(rnd_err_codes):
@@ -258,7 +258,7 @@ class EsClientTests(TestCase):
             rnd_mocked_logger_calls.append(
                 mock.call("%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
                           all_err_codes[rnd_err_code], rnd_err_code,
-                          rnd_err_idx+1, max_retry+1, sleep_slots[rnd_err_idx])
+                          rnd_err_idx + 1, max_retry + 1, sleep_slots[rnd_err_idx])
             )
 
         test_transport_error_retries(rnd_side_effects,
@@ -301,7 +301,6 @@ class EsMetricsTests(TestCase):
     def test_put_value_without_meta_info(self):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
-        self.metrics_store.lap = 1
 
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
@@ -315,7 +314,6 @@ class EsMetricsTests(TestCase):
             "track-params": {
                 "shard-count": 3
             },
-            "lap": 1,
             "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -331,7 +329,6 @@ class EsMetricsTests(TestCase):
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
-        self.metrics_store.lap = 1
 
         self.metrics_store.put_count_cluster_level(name="indexing_throughput", count=throughput, unit="docs/s",
                                                    absolute_time=0, relative_time=10)
@@ -346,7 +343,6 @@ class EsMetricsTests(TestCase):
             "track-params": {
                 "shard-count": 3
             },
-            "lap": 1,
             "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -364,7 +360,6 @@ class EsMetricsTests(TestCase):
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
         self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
-        self.metrics_store.lap = 1
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -386,7 +381,6 @@ class EsMetricsTests(TestCase):
             "track-params": {
                 "shard-count": 3
             },
-            "lap": 1,
             "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -407,7 +401,6 @@ class EsMetricsTests(TestCase):
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
-        self.metrics_store.lap = 1
 
         self.metrics_store.put_doc(doc={
             "name": "custom_metric",
@@ -425,7 +418,6 @@ class EsMetricsTests(TestCase):
             "track-params": {
                 "shard-count": 3
             },
-            "lap": 1,
             "challenge": "append",
             "car": "defaults",
             "name": "custom_metric",
@@ -442,7 +434,6 @@ class EsMetricsTests(TestCase):
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
         self.metrics_store.open(EsMetricsTests.TRIAL_ID, EsMetricsTests.TRIAL_TIMESTAMP, "test", "append", "defaults", create=True)
-        self.metrics_store.lap = 1
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -472,7 +463,6 @@ class EsMetricsTests(TestCase):
             "track-params": {
                 "shard-count": 3
             },
-            "lap": 1,
             "challenge": "append",
             "car": "defaults",
             "name": "custom_metric",
@@ -525,18 +515,13 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "name": "indexing_throughput"
                             }
-                        },
-                        {
-                            "term": {
-                                "lap": 3
-                            }
                         }
                     ]
                 }
             }
         }
 
-        actual_throughput = self.metrics_store.get_one("indexing_throughput", lap=3)
+        actual_throughput = self.metrics_store.get_one("indexing_throughput")
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
@@ -575,11 +560,6 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "name": "indexing_throughput"
                             }
-                        },
-                        {
-                            "term": {
-                                "lap": 3
-                            }
                         }
                     ]
                 }
@@ -594,7 +574,7 @@ class EsMetricsTests(TestCase):
             }
         }
 
-        actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput", lap=3)
+        actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput")
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
@@ -631,11 +611,6 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "name": "indexing_throughput"
                             }
-                        },
-                        {
-                            "term": {
-                                "lap": 3
-                            }
                         }
                     ]
                 }
@@ -651,7 +626,7 @@ class EsMetricsTests(TestCase):
             }
         }
 
-        actual_median_throughput = self.metrics_store.get_median("indexing_throughput", lap=3)
+        actual_median_throughput = self.metrics_store.get_median("indexing_throughput")
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
@@ -770,11 +745,6 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "task": "scroll_query"
                             }
-                        },
-                        {
-                            "term": {
-                                "lap": 3
-                            }
                         }
                     ]
                 }
@@ -789,7 +759,7 @@ class EsMetricsTests(TestCase):
             }
         }
 
-        actual_error_rate = self.metrics_store.get_error_rate("scroll_query", lap=3)
+        actual_error_rate = self.metrics_store.get_error_rate("scroll_query")
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
         return actual_error_rate
 
@@ -809,6 +779,7 @@ class EsRaceStoreTests(TestCase):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.TRIAL_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "trial.id", FileRaceStoreTests.TRIAL_ID)
         self.race_store = metrics.EsRaceStore(self.cfg,
                                               client_factory_class=MockClientFactory,
                                               index_template_provider_class=DummyIndexTemplateProvider,
@@ -829,7 +800,6 @@ class EsRaceStoreTests(TestCase):
                             trial_timestamp=EsRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="defaults", car_params={"heap_size": "512mb"}, plugin_params=None,
-                            total_laps=12,
                             track_revision="abc1",
                             cluster=EsRaceStoreTests.DictHolder(
                                 {
@@ -838,7 +808,6 @@ class EsRaceStoreTests(TestCase):
                                         {"node_name": "node0", "ip": "127.0.0.1", "plugins": ["analysis-icu", "x-pack"]}
                                     ]
                                 }),
-                            lap_results=[],
                             results=EsRaceStoreTests.DictHolder(
                                 {
                                     "young_gc_time": 100,
@@ -879,7 +848,6 @@ class EsRaceStoreTests(TestCase):
             "car-params": {
                 "heap_size": "512mb"
             },
-            "total-laps": 12,
             "cluster": {
                 "distribution-version": "5.0.0",
                 "nodes": [
@@ -949,10 +917,8 @@ class EsResultsStoreTests(TestCase):
                             trial_timestamp=EsResultsStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
-                            total_laps=12,
                             track_revision="abc1",
                             cluster=c,
-                            lap_results=[],
                             results=reporter.Stats(
                                 {
                                     "young_gc_time": 100,
@@ -1117,7 +1083,6 @@ class InMemoryMetricsStoreTests(TestCase):
         throughput = 5000
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         self.metrics_store.put_count_cluster_level("indexing_throughput", 1, "docs/s", sample_type=metrics.SampleType.Warmup)
         self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
@@ -1133,7 +1098,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_percentile(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         for i in range(1, 1001):
             self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
 
@@ -1152,7 +1116,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_mean(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         for i in range(1, 100):
             self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
 
@@ -1161,12 +1124,11 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults")
 
-        self.assertAlmostEqual(50, self.metrics_store.get_mean("query_latency", lap=1))
+        self.assertAlmostEqual(50, self.metrics_store.get_mean("query_latency"))
 
     def test_get_median(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         for i in range(1, 1001):
             self.metrics_store.put_value_cluster_level("query_latency", float(i), "ms")
 
@@ -1175,7 +1137,7 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults")
 
-        self.assertAlmostEqual(500.5, self.metrics_store.get_median("query_latency", lap=1))
+        self.assertAlmostEqual(500.5, self.metrics_store.get_median("query_latency"))
 
     def assert_equal_percentiles(self, name, percentiles, expected_percentiles):
         actual_percentiles = self.metrics_store.get_percentiles(name, percentiles=percentiles)
@@ -1187,7 +1149,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_externalize_and_bulk_add(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
 
         self.assertEqual(1, len(self.metrics_store.docs))
@@ -1206,7 +1167,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_meta_data_per_document(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "cluster-name", "test")
 
         self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB", meta_data={
@@ -1230,7 +1190,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_zero_without_samples(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         self.metrics_store.close()
 
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
@@ -1241,7 +1200,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_by_sample_type(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Warmup,
                                                    meta_data={"success": False})
         self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
@@ -1258,7 +1216,6 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_get_error_rate_mixed(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.TRIAL_ID, InMemoryMetricsStoreTests.TRIAL_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.lap = 1
         self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
                                                    meta_data={"success": True})
         self.metrics_store.put_value_cluster_level("service_time", 3.0, "ms", task="term-query", sample_type=metrics.SampleType.Normal,
@@ -1298,10 +1255,10 @@ class FileRaceStoreTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
         self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.TRIAL_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "trial.id", FileRaceStoreTests.TRIAL_ID)
         self.race_store = metrics.FileRaceStore(self.cfg)
 
     def test_store_race(self):
-        from esrally import time
         schedule = [
             track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
         ]
@@ -1314,7 +1271,6 @@ class FileRaceStoreTests(TestCase):
                             trial_timestamp=FileRaceStoreTests.TRIAL_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
-                            total_laps=12,
                             track_revision="abc1",
                             cluster=FileRaceStoreTests.DictHolder(
                                 {
@@ -1323,7 +1279,6 @@ class FileRaceStoreTests(TestCase):
                                         {"node_name": "node0", "ip": "127.0.0.1"}
                                     ]
                                 }),
-                            lap_results=[],
                             results=FileRaceStoreTests.DictHolder(
                                 {
                                     "young_gc_time": 100,
@@ -1345,6 +1300,6 @@ class FileRaceStoreTests(TestCase):
 
         self.race_store.store_race(race)
 
-        retrieved_race = self.race_store.find_by_timestamp(timestamp=time.to_iso8601(FileRaceStoreTests.TRIAL_TIMESTAMP))
+        retrieved_race = self.race_store.find_by_trial_id(trial_id=FileRaceStoreTests.TRIAL_ID)
         self.assertEqual(race.trial_timestamp, retrieved_race.trial_timestamp)
         self.assertEqual(1, len(self.race_store.list()))

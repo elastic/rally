@@ -17,6 +17,7 @@
 
 import random
 import collections
+import tempfile
 import unittest.mock as mock
 import elasticsearch
 
@@ -25,6 +26,7 @@ from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
+from collections import namedtuple
 
 
 def create_config():
@@ -2140,6 +2142,71 @@ class ClusterMetaDataInfoTests(TestCase):
         self.assertIsNone(n.ip)
 
 
+class DiskIoTests(TestCase):
+    
+    @mock.patch("esrally.utils.sysstats.process_io_counters")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    def test_diskio_process_io_counters(self, metrics_store_node_count, process_io_counters):
+        Diskio = namedtuple("Diskio", "read_bytes write_bytes")
+        process_start = Diskio(10, 10)
+        process_stop = Diskio(11, 11)
+        process_io_counters.side_effect = [process_start, process_stop]
+
+        tmp_dir = tempfile.mkdtemp()
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        
+        device = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
+        node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        t.attach_to_node(node)
+        t.on_benchmark_start()
+        device2 = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
+        t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
+        t2.on_benchmark_stop()
+        t2.detach_from_node(node, running=True)
+        t2.detach_from_node(node, running=False)
+
+        metrics_store_node_count.assert_has_calls([
+            mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
+            mock.call("rally0", "disk_io_read_bytes", 1, "byte")
+            
+        ])
+        
+    @mock.patch("esrally.utils.sysstats.disk_io_counters")
+    @mock.patch("esrally.utils.sysstats.process_io_counters")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    def test_diskio_disk_io_counters(self, metrics_store_node_count, process_io_counters, disk_io_counters):
+        Diskio = namedtuple("Diskio", "read_bytes write_bytes")
+        process_start = Diskio(10, 10)
+        process_stop = Diskio(13, 13)
+        disk_io_counters.side_effect = [process_start, process_stop]
+        process_io_counters.side_effect = [None, None]
+        
+        tmp_dir = tempfile.mkdtemp()
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        
+        device = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
+        node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        t.attach_to_node(node)
+        t.on_benchmark_start()
+        device2 = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
+        t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
+        t2.on_benchmark_stop()
+        t2.detach_from_node(node, running=True)
+        t2.detach_from_node(node, running=False)
+
+        # expected result is 1 byte because there are two nodes on the machine. Result is calculated 
+        # with total_bytes / node_count
+        metrics_store_node_count.assert_has_calls([
+            mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
+            mock.call("rally0", "disk_io_read_bytes", 1, "byte")
+            
+        ])
+
+
 class JvmStatsSummaryTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -2503,180 +2570,6 @@ class IndexStatsTests(TestCase):
             mock.call("translog_size_in_bytes", 2647984713, "byte"),
         ], any_order=True)
 
-    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_index_stats_are_per_lap(self, metrics_store_cluster_count, metrics_store_cluster_value, metrics_store_put_doc):
-        client = Client(indices=SubClient({
-            "_all": {
-                "primaries": {
-                    "segments": {
-                        "count": 0
-                    },
-                    "merges": {
-                        "total_time_in_millis": 0,
-                        "total_throttled_time_in_millis": 0
-                    },
-                    "indexing": {
-                        "index_time_in_millis": 0
-                    },
-                    "refresh": {
-                        "total_time_in_millis": 0
-                    },
-                    "flush": {
-                        "total_time_in_millis": 0
-                    }
-                }
-            }
-        }))
-        cfg = create_config()
-
-        metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexStats(client, metrics_store)
-        t = telemetry.Telemetry(cfg, devices=[device])
-        # lap 1
-        t.on_benchmark_start()
-
-        client.indices = SubClient({
-            "_all": {
-                "primaries": {
-                    "segments": {
-                        "count": 5,
-                        "memory_in_bytes": 2048,
-                        "stored_fields_memory_in_bytes": 1024,
-                        "doc_values_memory_in_bytes": 128,
-                        "terms_memory_in_bytes": 256
-                    },
-                    "merges": {
-                        "total_time_in_millis": 300,
-                        "total_throttled_time_in_millis": 120
-                    },
-                    "indexing": {
-                        "index_time_in_millis": 2000
-                    },
-                    "refresh": {
-                        "total_time_in_millis": 200
-                    },
-                    "flush": {
-                        "total_time_in_millis": 100
-                    }
-                }
-            }
-        })
-
-        t.on_benchmark_stop()
-        # lap 2
-        t.on_benchmark_start()
-
-        client.indices = SubClient({
-            "_all": {
-                "primaries": {
-                    "segments": {
-                        "count": 7,
-                        "memory_in_bytes": 2048,
-                        "stored_fields_memory_in_bytes": 1024,
-                        "doc_values_memory_in_bytes": 128,
-                        "terms_memory_in_bytes": 256
-                    },
-                    "merges": {
-                        "total_time_in_millis": 900,
-                        "total_throttled_time_in_millis": 120
-                    },
-                    "indexing": {
-                        "index_time_in_millis": 8000
-                    },
-                    "refresh": {
-                        "total_time_in_millis": 500
-                    },
-                    "flush": {
-                        "total_time_in_millis": 300
-                    }
-                }
-            }
-        })
-
-        t.on_benchmark_stop()
-
-        metrics_store_put_doc.assert_has_calls([
-            # 1st lap
-            mock.call(doc={
-                "name": "merges_total_time",
-                "value": 300,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "merges_total_throttled_time",
-                "value": 120,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "indexing_total_time",
-                "value": 2000,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "refresh_total_time",
-                "value": 200,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "flush_total_time",
-                "value": 100,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            # 2nd lap
-            mock.call(doc={
-                "name": "merges_total_time",
-                "value": 900,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "merges_total_throttled_time",
-                "value": 120,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "indexing_total_time",
-                "value": 8000,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "refresh_total_time",
-                "value": 500,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-            mock.call(doc={
-                "name": "flush_total_time",
-                "value": 300,
-                "unit": "ms",
-                "per-shard": []
-            }, level=metrics.MetaInfoScope.cluster),
-        ])
-
-        metrics_store_cluster_value.assert_has_calls([
-            # 1st lap
-            mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
-            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
-            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
-            # we don't have norms or points, so nothing should have been called
-
-            # 2nd lap
-            mock.call("segments_memory_in_bytes", 2048, "byte"),
-            mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
-            mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
-            mock.call("segments_terms_memory_in_bytes", 256, "byte"),
-        ], any_order=True)
-
 
 class MlBucketProcessingTimeTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
@@ -2786,7 +2679,6 @@ class MlBucketProcessingTimeTests(TestCase):
                 "unit": "ms"
             }, level=metrics.MetaInfoScope.cluster)
         ])
-
 
 class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")

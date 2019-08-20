@@ -128,8 +128,8 @@ class EngineStopped:
 
 
 class OnBenchmarkStart:
-    def __init__(self, lap):
-        self.lap = lap
+    def __init__(self):
+        pass
 
 
 class BenchmarkStarted:
@@ -354,8 +354,7 @@ class MechanicActor(actor.RallyActor):
 
     @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStart(self, msg, sender):
-        self.metrics_store.lap = msg.lap
-        # in the first lap, we are in state "cluster_started", after that in "benchmark_stopped"
+        # we are in state "cluster_started", after that in "benchmark_stopped"
         self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
 
     @actor.no_retry("mechanic")
@@ -585,7 +584,6 @@ class NodeMechanicActor(actor.RallyActor):
             self.metrics_store = cls(self.config)
             self.metrics_store.open(ctx=msg.open_metrics_context)
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
-            self.metrics_store.lap = 0
 
             self.mechanic = create(self.config, self.metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
                                    msg.distribution, msg.external, msg.docker)
@@ -620,7 +618,6 @@ class NodeMechanicActor(actor.RallyActor):
                 self.logger.info("Resetting relative time of system metrics store on host [%s].", self.host)
                 self.metrics_store.reset_relative_time()
             elif isinstance(msg, OnBenchmarkStart):
-                self.metrics_store.lap = msg.lap
                 self.mechanic.on_benchmark_start()
                 self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
                 self.send(sender, BenchmarkStarted())

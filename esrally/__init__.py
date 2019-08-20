@@ -17,6 +17,7 @@
 
 import os
 import sys
+import urllib
 import pkg_resources
 
 __version__ = pkg_resources.require("esrally")[0].version
@@ -72,3 +73,7 @@ $$$$$$$$$$""""           ""$$$$$$$$$$$"
 def check_python_version():
     if sys.version_info.major != 3 or sys.version_info.minor < 5:
         raise RuntimeError("Rally requires at least Python 3.5 but you are using:\n\nPython %s" % str(sys.version))
+
+
+def doc_link(path=None):
+    return urllib.parse.urljoin(DOC_LINK, path) if path else DOC_LINK

@@ -42,7 +42,7 @@ def to_bool(v):
 
 def kv_to_map(kvs):
     def convert(v):
-        # string
+        # string (specified explicitly)
         if v.startswith("'"):
             return v[1:-1]
 
@@ -59,7 +59,12 @@ def kv_to_map(kvs):
             pass
 
         # boolean
-        return to_bool(v)
+        try:
+            return to_bool(v)
+        except ValueError:
+            pass
+        # treat it as string by default
+        return v
 
     result = {}
     for kv in kvs:

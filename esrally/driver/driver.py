@@ -38,14 +38,12 @@ class StartBenchmark:
     Starts a benchmark.
     """
 
-    def __init__(self, config, track, metrics_meta_info, lap):
+    def __init__(self, config, track, metrics_meta_info):
         """
         :param config: Rally internal configuration object.
         :param track: The track to use.
         :param metrics_meta_info: meta info for the metrics store.
-        :param lap: The current lap.
         """
-        self.lap = lap
         self.config = config
         self.track = track
         self.metrics_meta_info = metrics_meta_info
@@ -200,7 +198,7 @@ class DriverActor(actor.RallyActor):
     def receiveMsg_StartBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
-        self.coordinator.start_benchmark(msg.track, msg.lap, msg.metrics_meta_info)
+        self.coordinator.start_benchmark(msg.track, msg.metrics_meta_info)
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     @actor.no_retry("driver")
@@ -342,7 +340,7 @@ class Driver:
         self.tasks_per_join_point = None
         self.complete_current_task_sent = False
 
-    def start_benchmark(self, t, lap, metrics_meta_info):
+    def start_benchmark(self, t, metrics_meta_info):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
@@ -351,7 +349,6 @@ class Driver:
                                                    track=self.track.name,
                                                    challenge=self.challenge.name,
                                                    meta_info=metrics_meta_info,
-                                                   lap=lap,
                                                    read_only=False)
         for host in self.config.opts("driver", "load_driver_hosts"):
             if host != "localhost":

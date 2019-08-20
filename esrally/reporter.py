@@ -37,38 +37,27 @@ FINAL_SCORE = r"""
 ------------------------------------------------------
             """
 
-LAP_SCORE = r"""
---------------------------------------------------
-    __                   _____
-   / /   ____ _____     / ___/_________  ________
-  / /   / __ `/ __ \    \__ \/ ___/ __ \/ ___/ _ \
- / /___/ /_/ / /_/ /   ___/ / /__/ /_/ / /  /  __/
-/_____/\__,_/ .___/   /____/\___/\____/_/   \___/
-           /_/
---------------------------------------------------
-"""
 
-
-def calculate_results(metrics_store, race, lap=None):
-    calc = StatsCalculator(metrics_store, race.challenge, lap)
+def calculate_results(metrics_store, race):
+    calc = StatsCalculator(metrics_store, race.challenge)
     return calc()
 
 
-def summarize(race, cfg, lap=None):
-    results = race.results_of_lap_number(lap) if lap else race.results
-    SummaryReporter(results, cfg, race.revision, lap, race.total_laps).report()
+def summarize(race, cfg):
+    results = race.results
+    SummaryReporter(results, cfg, race.revision).report()
 
 
 def compare(cfg):
-    baseline_ts = cfg.opts("reporting", "baseline.timestamp")
-    contender_ts = cfg.opts("reporting", "contender.timestamp")
+    baseline_id = cfg.opts("reporting", "baseline.id")
+    contender_id = cfg.opts("reporting", "contender.id")
 
-    if not baseline_ts or not contender_ts:
+    if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
     ComparisonReporter(cfg).report(
-        race_store.find_by_timestamp(baseline_ts),
-        race_store.find_by_timestamp(contender_ts))
+        race_store.find_by_trial_id(baseline_id),
+        race_store.find_by_trial_id(contender_id))
 
 
 def print_internal(message):
@@ -79,7 +68,7 @@ def print_header(message):
     print_internal(console.format.bold(message))
 
 
-def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich, write_header=True):
+def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich):
     if report_format == "markdown":
         formatter = format_as_markdown
     elif report_format == "csv":
@@ -93,23 +82,18 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
         # ensure that the parent folder already exists when we try to write the file...
         rio.ensure_dir(rio.dirname(normalized_report_file))
         with open(normalized_report_file, mode="a+", encoding="utf-8") as f:
-            f.writelines(formatter(headers, data_plain, write_header))
+            f.writelines(formatter(headers, data_plain))
 
 
-def format_as_markdown(headers, data, write_header=True):
+def format_as_markdown(headers, data):
     rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
-    if write_header:
-        return rendered + "\n"
-    else:
-        # remove all header data (it's not possible to do so entirely with tabulate directly...)
-        return "\n".join(rendered.splitlines()[2:]) + "\n"
+    return rendered + "\n"
 
 
-def format_as_csv(headers, data, write_header=True):
+def format_as_csv(headers, data):
     with io.StringIO() as out:
         writer = csv.writer(out)
-        if write_header:
-            writer.writerow(headers)
+        writer.writerow(headers)
         for metric_record in data:
             writer.writerow(metric_record)
         return out.getvalue()
@@ -140,10 +124,9 @@ def percentiles_for_sample_size(sample_size):
 
 
 class StatsCalculator:
-    def __init__(self, store, challenge, lap=None):
+    def __init__(self, store, challenge):
         self.store = store
         self.challenge = challenge
-        self.lap = lap
         self.logger = logging.getLogger(__name__)
 
     def __call__(self):
@@ -213,10 +196,9 @@ class StatsCalculator:
         self.logger.debug("Gathering disk metrics.")
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         result.index_size = self.sum("final_index_size_bytes")
-        # we need to use the median here because these two are captured with the indices stats API and thus once per lap. If we'd
-        # sum up the values we'd get wrong results for benchmarks that ran for multiple laps.
-        result.store_size = self.median("store_size_in_bytes")
-        result.translog_size = self.median("translog_size_in_bytes")
+
+        result.store_size = self.sum("store_size_in_bytes")
+        result.translog_size = self.sum("translog_size_in_bytes")
         result.bytes_written = self.sum("disk_io_write_bytes")
 
         # convert to int, fraction counts are senseless
@@ -225,20 +207,20 @@ class StatsCalculator:
         return result
 
     def sum(self, metric_name):
-        values = self.store.get(metric_name, lap=self.lap)
+        values = self.store.get(metric_name)
         if values:
             return sum(values)
         else:
             return None
 
     def one(self, metric_name):
-        return self.store.get_one(metric_name, lap=self.lap)
+        return self.store.get_one(metric_name)
 
     def summary_stats(self, metric_name, task_name):
-        mean = self.store.get_mean(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
-        median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        mean = self.store.get_mean(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
+        median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
         unit = self.store.get_unit(metric_name, task=task_name)
-        stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
         if median and stats:
             return {
                 "min": stats["min"],
@@ -256,7 +238,7 @@ class StatsCalculator:
             }
 
     def shard_stats(self, metric_name):
-        values = self.store.get_raw(metric_name, lap=self.lap, mapper=lambda doc: doc["per-shard"])
+        values = self.store.get_raw(metric_name, mapper=lambda doc: doc["per-shard"])
         unit = self.store.get_unit(metric_name)
         if values:
             flat_values = [w for v in values for w in v]
@@ -285,25 +267,22 @@ class StatsCalculator:
         return result
 
     def error_rate(self, task_name):
-        return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal)
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type,
-                                     lap=self.lap)
+        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
 
     def single_latency(self, task, metric_name="latency"):
         sample_type = metrics.SampleType.Normal
-        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type, lap=self.lap)
+        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type)
         if sample_size > 0:
             percentiles = self.store.get_percentiles(metric_name,
                                                      task=task,
                                                      sample_type=sample_type,
-                                                     percentiles=percentiles_for_sample_size(sample_size),
-                                                     lap=self.lap)
+                                                     percentiles=percentiles_for_sample_size(sample_size))
             mean = self.store.get_mean(metric_name,
                                        task=task,
-                                       sample_type=sample_type,
-                                       lap=self.lap)
+                                       sample_type=sample_type)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
                 # safely encode so we don't have any dots in field names
@@ -442,7 +421,7 @@ class Stats:
 
 
 class SummaryReporter:
-    def __init__(self, results, config, revision, current_lap, total_laps):
+    def __init__(self, results, config, revision):
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
@@ -452,24 +431,9 @@ class SummaryReporter:
         self.cwd = config.opts("node", "rally.cwd")
 
         self.revision = revision
-        self.current_lap = current_lap
-        self.total_laps = total_laps
-
-    def is_final_report(self):
-        return self.current_lap is None
-
-    def needs_header(self):
-        return self.total_laps == 1 or self.current_lap == 1
-
-    @property
-    def lap(self):
-        return "All" if self.is_final_report() else str(self.current_lap)
 
     def report(self):
-        if self.is_final_report():
-            print_header(FINAL_SCORE)
-        else:
-            print_header(LAP_SCORE)
+        print_header(FINAL_SCORE)
 
         stats = self.results
 
@@ -510,9 +474,9 @@ class SummaryReporter:
 
     def write_report(self, metrics_table):
         write_single_report(self.report_file, self.report_format, self.cwd,
-                            headers=["Lap", "Metric", "Task", "Value", "Unit"],
+                            headers=["Metric", "Task", "Value", "Unit"],
                             data_plain=metrics_table,
-                            data_rich=metrics_table, write_header=self.needs_header())
+                            data_rich=metrics_table)
 
     def report_throughput(self, values, task):
         throughput = values["throughput"]
@@ -648,7 +612,7 @@ class SummaryReporter:
     def line(self, k, task, v, unit, converter=lambda x: x, force=False):
         if v is not None or force or self.report_all_values:
             u = unit if v is not None else None
-            return [self.lap, k, task, converter(v), u]
+            return [k, task, converter(v), u]
         else:
             return []
 
@@ -667,6 +631,7 @@ class ComparisonReporter:
 
         print_internal("")
         print_internal("Comparing baseline")
+        print_internal("  Race ID: %s" % r1.trial_id)
         print_internal("  Race timestamp: %s" % r1.trial_timestamp)
         if r1.challenge_name:
             print_internal("  Challenge: %s" % r1.challenge_name)
@@ -676,6 +641,7 @@ class ComparisonReporter:
             print_internal("  User tags: %s" % r1_user_tags)
         print_internal("")
         print_internal("with contender")
+        print_internal("  Race ID: %s" % r2.trial_id)
         print_internal("  Race timestamp: %s" % r2.trial_timestamp)
         if r2.challenge_name:
             print_internal("  Challenge: %s" % r2.challenge_name)
@@ -713,7 +679,7 @@ class ComparisonReporter:
     def write_report(self, metrics_table, metrics_table_console):
         write_single_report(self.report_file, self.report_format, self.cwd,
                             headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
-                            data_plain=metrics_table, data_rich=metrics_table_console, write_header=True)
+                            data_plain=metrics_table, data_rich=metrics_table_console)
 
     def report_throughput(self, baseline_stats, contender_stats, task):
         b_min = baseline_stats.metrics(task)["throughput"]["min"]

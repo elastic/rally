@@ -24,7 +24,7 @@ import time
 import uuid
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, log
-from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
+from esrally import PROGRAM_NAME, BANNER, SKULL, check_python_version, doc_link
 from esrally.mechanic import team, telemetry, mechanic
 from esrally.utils import io, convert, process, console, net, opts
 
@@ -46,7 +46,7 @@ def create_arg_parser():
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You Know, for Benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
+                                     epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 
@@ -117,11 +117,11 @@ def create_arg_parser():
     compare_parser.add_argument(
         "--baseline",
         required=True,
-        help="Race timestamp of the baseline (see %s list races)." % PROGRAM_NAME)
+        help="Race ID of the baseline (see %s list races)." % PROGRAM_NAME)
     compare_parser.add_argument(
         "--contender",
         required=True,
-        help="Race timestamp of the contender (see %s list races)." % PROGRAM_NAME)
+        help="Race ID of the contender (see %s list races)." % PROGRAM_NAME)
     compare_parser.add_argument(
         "--report-format",
         help="Define the output format for the command line report (default: markdown).",
@@ -266,11 +266,6 @@ def create_arg_parser():
             "--load-driver-hosts",
             help="Define a comma-separated list of hosts which should generate load (default: localhost).",
             default="localhost")
-        p.add_argument(
-            "--laps",
-            type=positive_number,
-            help="Number of laps that the benchmark should run (default: 1).",
-            default=1)
         p.add_argument(
             "--client-options",
             help="Define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
@@ -421,7 +416,7 @@ def print_help_on_errors():
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
     console.println("* Check the log files in {} for errors.".format(log.default_log_path()))
-    console.println("* Read the documentation at {}".format(console.format.link(DOC_LINK)))
+    console.println("* Read the documentation at {}".format(console.format.link(doc_link())))
     console.println("* Ask a question on the forum at {}".format(console.format.link("https://discuss.elastic.co/c/elasticsearch/rally")))
     console.println("* Raise an issue at {} and include the log files in {}."
                     .format(console.format.link("https://github.com/elastic/rally/issues"), log.default_log_path()))
@@ -611,7 +606,6 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "telemetry.params", opts.to_dict(args.telemetry_params))
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
-    cfg.add(config.Scope.applicationOverride, "race", "laps", args.laps)
     cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
 
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
@@ -641,8 +635,8 @@ def main():
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
     if sub_command == "compare":
-        cfg.add(config.Scope.applicationOverride, "reporting", "baseline.timestamp", args.baseline)
-        cfg.add(config.Scope.applicationOverride, "reporting", "contender.timestamp", args.contender)
+        cfg.add(config.Scope.applicationOverride, "reporting", "baseline.id", args.baseline)
+        cfg.add(config.Scope.applicationOverride, "reporting", "contender.id", args.contender)
     if sub_command == "generate":
         cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
         cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
