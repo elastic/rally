@@ -156,7 +156,7 @@ class ProcessLauncherTests(TestCase):
     @mock.patch('os.chdir')
     @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
     @mock.patch('psutil.Process', new=MockProcess)
-    def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
+    def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home, kill, join):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
@@ -180,7 +180,10 @@ class ProcessLauncherTests(TestCase):
     def test_env_options_order(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
-        proc_launcher = launcher.ProcessLauncher(cfg, MockMetricsStore(), races_root_dir="/home")
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+
+        ms = get_metrics_store(cfg)
+        proc_launcher = launcher.ProcessLauncher(cfg, ms, races_root_dir="/home")
         default_car = team.Car(names="default-car", root_path=None, config_paths=["/tmp/rally-config"])
         
         node_telemetry = [
