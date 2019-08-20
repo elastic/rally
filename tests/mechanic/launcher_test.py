@@ -134,9 +134,6 @@ class MockProcess:
 
 
 def get_metrics_store(cfg):
-    cfg.add(config.Scope.application, "track", "params", None)
-    cfg.add(config.Scope.application, "system", "env.name", None)
-
     ms = InMemoryMetricsStore(cfg)
     ms.open(trial_id=str(uuid.uuid4()),
             trial_timestamp=datetime.now(),
@@ -164,19 +161,18 @@ class ProcessLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", None)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
         proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
 
-        tmpdir = tempfile.mkdtemp()
         node_config = NodeConfiguration(car=Car("default", root_path=None, config_paths=[]), ip="127.0.0.1", node_name="testnode",
-                                        node_root_path=tmpdir, binary_path=tmpdir, log_path=tmpdir, data_paths=tmpdir)
+                                        node_root_path="/tmp", binary_path="/tmp", log_path="/tmp", data_paths="/tmp")
 
         nodes = proc_launcher.start([node_config])
         self.assertEqual(len(nodes), 1)
         self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
 
-        proc_launcher.keep_running = False
         proc_launcher.stop(nodes)
         self.assertTrue(kill.called)
 
@@ -191,6 +187,7 @@ class ExternalLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
         cfg.add(config.Scope.application, "client", "options", self.client_options)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
 
@@ -206,6 +203,7 @@ class ExternalLauncherTests(TestCase):
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
         cfg.add(config.Scope.application, "client", "options", self.client_options)
         cfg.add(config.Scope.application, "mechanic", "distribution.version", "2.3.3")
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
 
@@ -221,6 +219,7 @@ class ExternalLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
         cfg.add(config.Scope.application, "client", "hosts", self.test_host)
         cfg.add(config.Scope.application, "client", "options", client_options)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
 
@@ -243,6 +242,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
         cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
 
@@ -260,6 +260,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
         cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
 
@@ -284,6 +285,7 @@ class ClusterLauncherTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
         cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
         cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
 
