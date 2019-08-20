@@ -24,7 +24,7 @@ import time
 import uuid
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, log
-from esrally import PROGRAM_NAME, BANNER, SKULL, doc_link, check_python_version
+from esrally import PROGRAM_NAME, BANNER, SKULL, check_python_version, doc_link
 from esrally.mechanic import team, telemetry, mechanic
 from esrally.utils import io, convert, process, console, net, opts
 
@@ -46,7 +46,7 @@ def create_arg_parser():
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You Know, for Benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at %s" % console.format.link(doc_link()),
+                                     epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 

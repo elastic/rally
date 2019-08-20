@@ -19,7 +19,7 @@ import unittest.mock as mock
 import os
 from unittest import TestCase
 
-from esrally import racecontrol, config, exceptions
+from esrally import config, exceptions, racecontrol
 
 
 class RaceControlTests(TestCase):

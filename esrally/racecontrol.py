@@ -21,9 +21,8 @@ import os
 import sys
 import tabulate
 import thespian.actors
-import urllib
 
-from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, doc_link, PROGRAM_NAME
+from esrally import actor, config, doc_link, driver, exceptions, mechanic, metrics, reporter, track, PROGRAM_NAME
 from esrally.utils import console, opts
 
 # benchmarks with external candidates are really scary and we should warn users.
