@@ -21,10 +21,9 @@ import os
 import sys
 import tabulate
 import thespian.actors
-import urllib
 
-from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, DOC_LINK, PROGRAM_NAME
-from esrally.utils import console, convert, opts
+from esrally import actor, config, doc_link, driver, exceptions, mechanic, metrics, reporter, track, PROGRAM_NAME
+from esrally.utils import console, opts
 
 # benchmarks with external candidates are really scary and we should warn users.
 BOGUS_RESULTS_WARNING = """
@@ -354,7 +353,7 @@ def run(cfg):
                 "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
                 "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
                 "For more details read the docs for the benchmark-only pipeline in {}\n".format(
-                    urllib.parse.urljoin(DOC_LINK, "pipelines.html#benchmark-only")))
+                    doc_link("pipelines.html#benchmark-only")))
 
     try:
         pipeline = pipelines[name]

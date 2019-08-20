@@ -70,7 +70,6 @@ class BareProvisionerTests(TestCase):
             "cluster_settings": {
                 "indices.query.bool.max_clause_count": 50000,
             },
-            "additional_java_settings": ["-XX:+ExitOnOutOfMemoryError"],
             "heap": "4g",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
@@ -185,7 +184,6 @@ class BareProvisionerTests(TestCase):
                 "indices.query.bool.max_clause_count": 50000,
                 "plugin.mandatory": ["x-pack-security"]
             },
-            "additional_java_settings": ["-XX:+ExitOnOutOfMemoryError"],
             "heap": "4g",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
@@ -263,7 +261,6 @@ class BareProvisionerTests(TestCase):
                 "indices.query.bool.max_clause_count": 50000,
                 "plugin.mandatory": ["x-pack"]
             },
-            "additional_java_settings": ["-XX:+ExitOnOutOfMemoryError"],
             "heap": "4g",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
