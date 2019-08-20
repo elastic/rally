@@ -24,7 +24,7 @@ import time
 import uuid
 
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, log
-from esrally import PROGRAM_NAME, DOC_LINK, BANNER, SKULL, check_python_version
+from esrally import PROGRAM_NAME, BANNER, SKULL, doc_link, check_python_version
 from esrally.mechanic import team, telemetry, mechanic
 from esrally.utils import io, convert, process, console, net, opts
 
@@ -46,7 +46,7 @@ def create_arg_parser():
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n You Know, for Benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
+                                     epilog="Find out more about Rally at %s" % console.format.link(doc_link()),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 
@@ -416,7 +416,7 @@ def print_help_on_errors():
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
     console.println("* Check the log files in {} for errors.".format(log.default_log_path()))
-    console.println("* Read the documentation at {}".format(console.format.link(DOC_LINK)))
+    console.println("* Read the documentation at {}".format(console.format.link(doc_link())))
     console.println("* Ask a question on the forum at {}".format(console.format.link("https://discuss.elastic.co/c/elasticsearch/rally")))
     console.println("* Raise an issue at {} and include the log files in {}."
                     .format(console.format.link("https://github.com/elastic/rally/issues"), log.default_log_path()))

@@ -20,7 +20,7 @@ import time
 import logging
 import argparse
 
-from esrally import actor, version, exceptions, DOC_LINK, BANNER, PROGRAM_NAME, check_python_version, log
+from esrally import actor, version, exceptions, doc_link, BANNER, PROGRAM_NAME, check_python_version, log
 from esrally.utils import console
 
 
@@ -76,7 +76,7 @@ def main():
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n Rally daemon to support remote benchmarks",
-                                     epilog="Find out more about Rally at %s" % console.format.link(DOC_LINK),
+                                     epilog="Find out more about Rally at %s" % console.format.link(doc_link()),
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 

@@ -19,7 +19,7 @@ import logging
 import certifi
 import urllib3
 
-from esrally import exceptions, DOC_LINK
+from esrally import exceptions, doc_link
 from esrally.utils import console
 
 
@@ -82,16 +82,15 @@ class EsClientFactory:
                 console.println(
                     "'{}' is missing from client-options but '{}' has been specified.\n"
                     "If your Elasticsearch setup requires client certificate verification both need to be supplied.\n"
-                    "Read the documentation at {}/command_line_reference.html#client-options\n".format(
+                    "Read the documentation at {}\n".format(
                         missing_client_ssl_option,
                         defined_client_ssl_option,
-                        console.format.link(DOC_LINK))
+                        console.format.link(doc_link("command_line_reference.html#client-options")))
                 )
                 raise exceptions.SystemSetupError(
                     "Cannot specify '{}' without also specifying '{}' in client-options.".format(
                         defined_client_ssl_option,
-                        missing_client_ssl_option,
-                        DOC_LINK))
+                        missing_client_ssl_option))
             elif client_cert and client_key:
                 self.logger.info("SSL client authentication: on")
                 self.ssl_context.load_cert_chain(certfile=client_cert,

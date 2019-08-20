@@ -17,11 +17,9 @@
 
 import unittest.mock as mock
 import os
-import random
 from unittest import TestCase
 
-from esrally import racecontrol, config, exceptions, DOC_LINK
-from esrally.utils import console
+from esrally import racecontrol, config, exceptions
 
 
 class RaceControlTests(TestCase):
