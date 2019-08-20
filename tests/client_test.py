@@ -23,7 +23,7 @@ import ssl
 from copy import deepcopy
 from unittest import TestCase, mock
 
-from esrally import client, exceptions, DOC_LINK
+from esrally import client, exceptions, doc_link
 from esrally.utils import console
 
 
@@ -183,10 +183,10 @@ class EsClientFactoryTests(TestCase):
         mocked_console_println.assert_called_once_with(
             "'{}' is missing from client-options but '{}' has been specified.\n"
             "If your Elasticsearch setup requires client certificate verification both need to be supplied.\n"
-            "Read the documentation at {}/command_line_reference.html#client-options\n".format(
+            "Read the documentation at {}\n".format(
                 missing_client_ssl_option,
                 random_client_ssl_option,
-                console.format.link(DOC_LINK)
+                console.format.link(doc_link("command_line_reference.html#client-options"))
             )
         )
         self.assertEqual(
