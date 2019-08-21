@@ -129,15 +129,19 @@ class GitTests(TestCase):
         run_subprocess_with_logging.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull_ts(self, run_subprocess_with_logging, run_subprocess):
+    def test_pull_ts(self, run_subprocess_with_logging, run_subprocess_with_output, run_subprocess):
         run_subprocess_with_logging.return_value = 0
+        run_subprocess_with_output.return_value = ["3694a07"]
         run_subprocess.side_effect = [False, False]
         git.pull_ts("/src", "20160101T110000Z")
+
+        run_subprocess_with_output.assert_called_with(
+            "git -C /src rev-list -n 1 --before=\"20160101T110000Z\" --date=iso8601 origin/master")
         run_subprocess.has_calls([
             mock.call("git -C /src fetch --prune --tags --quiet origin"),
-            mock.call("git -C /src checkout --quiet `git -C /src rev-list -n 1 --before=\"20160101T110000Z\" "
-                      "--date=iso8601 origin/master`"),
+            mock.call("git -C /src checkout 3694a07")
         ])
 
     @mock.patch("esrally.utils.process.run_subprocess")
