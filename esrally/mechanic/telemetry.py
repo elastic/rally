@@ -743,7 +743,9 @@ class MergeParts(InternalTelemetryDevice):
         merge_times = {}
         for log_file in os.listdir(self.node_log_dir):
             log_path = "%s/%s" % (self.node_log_dir, log_file)
-            if io.is_archive(log_file):
+            if os.path.isdir(log_path):
+                self.logger.debug("Skipping directory [%s].", log_path)
+            elif io.is_archive(log_file):
                 self.logger.debug("Skipping archived logs in [%s].", log_path)
             elif io.has_extension(log_file, ".json"):
                 self.logger.debug("Skipping JSON-formatted logs in [%s].", log_path)
