@@ -55,23 +55,20 @@ def clone(src, remote):
 
 @probed
 def fetch(src, remote="origin"):
-    # Don't swallow output but silence git at least a bit... (--quiet)
-    if process.run_subprocess(
-            "git -C {0} fetch --prune --tags --quiet {1}".format(src, remote)):
+    if process.run_subprocess_with_logging("git -C {0} fetch --prune --tags {1}".format(src, remote)):
         raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
 
 @probed
 def checkout(src_dir, branch="master"):
-    if process.run_subprocess(
-            "git -C {0} checkout --quiet {1}".format(src_dir, branch)):
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(src_dir, branch)):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
 def rebase(src_dir, remote="origin", branch="master"):
     checkout(src_dir, branch)
-    if process.run_subprocess("git -C {0} rebase --quiet {1}/{2}".format(src_dir, remote, branch)):
+    if process.run_subprocess_with_logging("git -C {0} rebase {1}/{2}".format(src_dir, remote, branch)):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
@@ -84,15 +81,16 @@ def pull(src_dir, remote="origin", branch="master"):
 @probed
 def pull_ts(src_dir, ts):
     fetch(src_dir)
-    if process.run_subprocess("git -C {0} checkout --quiet `git -C {0} rev-list -n 1 --before=\"{1}\" "
-                              "--date=iso8601 origin/master`".format(src_dir, ts)):
+    revision = process.run_subprocess_with_output(
+        "git -C {0} rev-list -n 1 --before=\"{1}\" --date=iso8601 origin/master".format(src_dir, ts))[0].strip()
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(src_dir, revision)):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
 
 
 @probed
 def pull_revision(src_dir, revision):
     fetch(src_dir)
-    if process.run_subprocess("git -C {0} checkout --quiet {1}".format(src_dir, revision)):
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(src_dir, revision)):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
 

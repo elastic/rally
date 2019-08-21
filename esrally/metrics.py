@@ -321,7 +321,7 @@ class MetricsStore:
         self._trial_id = None
         self._trial_timestamp = None
         self._track = None
-        self._track_params = cfg.opts("track", "params")
+        self._track_params = cfg.opts("track", "params", default_value={}, mandatory=False)
         self._challenge = None
         self._car = None
         self._car_name = None

@@ -69,77 +69,79 @@ class GitTests(TestCase):
         ensure_dir.assert_called_with(src)
         run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
 
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_fetch_successful(self, run_subprocess_with_logging, run_subprocess):
+    def test_fetch_successful(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = False
         git.fetch("/src", remote="my-origin")
-        run_subprocess.assert_called_with("git -C /src fetch --prune --tags --quiet my-origin")
+        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
 
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_fetch_with_error(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = True
+    def test_fetch_with_error(self, run_subprocess_with_logging):
+        # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
+        run_subprocess_with_logging.side_effect = [0, 1]
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.fetch("/src", remote="my-origin")
         self.assertEqual("Could not fetch source tree from [my-origin]", ctx.exception.args[0])
-        run_subprocess.assert_called_with("git -C /src fetch --prune --tags --quiet my-origin")
+        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
 
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_checkout_successful(self, run_subprocess_with_logging, run_subprocess):
+    def test_checkout_successful(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = False
         git.checkout("/src", "feature-branch")
-        run_subprocess.assert_called_with("git -C /src checkout --quiet feature-branch")
+        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_checkout_with_error(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = True
+    def test_checkout_with_error(self, run_subprocess_with_logging):
+        # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
+        run_subprocess_with_logging.side_effect = [0, 1]
         with self.assertRaises(exceptions.SupplyError) as ctx:
             git.checkout("/src", "feature-branch")
         self.assertEqual("Could not checkout [feature-branch]. Do you have uncommitted changes?", ctx.exception.args[0])
-        run_subprocess.assert_called_with("git -C /src checkout --quiet feature-branch")
+        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_rebase(self, run_subprocess_with_logging, run_subprocess):
+    def test_rebase(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = False
         git.rebase("/src", remote="my-origin", branch="feature-branch")
         calls = [
-            mock.call("git -C /src checkout --quiet feature-branch"),
-            mock.call("git -C /src rebase --quiet my-origin/feature-branch")
+            mock.call("git -C /src checkout feature-branch"),
+            mock.call("git -C /src rebase my-origin/feature-branch")
         ]
-        run_subprocess.assert_has_calls(calls)
+        run_subprocess_with_logging.assert_has_calls(calls)
 
-    @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull(self, run_subprocess_with_logging, run_subprocess):
+    def test_pull(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = False
         git.pull("/src", remote="my-origin", branch="feature-branch")
         calls = [
-            mock.call("git -C /src fetch --prune --tags --quiet my-origin"),
-            mock.call("git -C /src checkout --quiet feature-branch"),
-            mock.call("git -C /src rebase --quiet my-origin/feature-branch")
+            # pull
+            mock.call('git -C /src --version', level=logging.DEBUG),
+            # fetch
+            mock.call('git -C /src --version', level=logging.DEBUG),
+            mock.call("git -C /src fetch --prune --tags my-origin"),
+            # rebase
+            mock.call('git -C /src --version', level=logging.DEBUG),
+            # checkout
+            mock.call('git -C /src --version', level=logging.DEBUG),
+            mock.call("git -C /src checkout feature-branch"),
+            mock.call("git -C /src rebase my-origin/feature-branch")
         ]
-        run_subprocess.assert_has_calls(calls)
+        run_subprocess_with_logging.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull_ts(self, run_subprocess_with_logging, run_subprocess):
+    def test_pull_ts(self, run_subprocess_with_logging, run_subprocess_with_output, run_subprocess):
         run_subprocess_with_logging.return_value = 0
+        run_subprocess_with_output.return_value = ["3694a07"]
         run_subprocess.side_effect = [False, False]
         git.pull_ts("/src", "20160101T110000Z")
+
+        run_subprocess_with_output.assert_called_with(
+            "git -C /src rev-list -n 1 --before=\"20160101T110000Z\" --date=iso8601 origin/master")
         run_subprocess.has_calls([
             mock.call("git -C /src fetch --prune --tags --quiet origin"),
-            mock.call("git -C /src checkout --quiet `git -C /src rev-list -n 1 --before=\"20160101T110000Z\" "
-                      "--date=iso8601 origin/master`"),
+            mock.call("git -C /src checkout 3694a07")
         ])
 
     @mock.patch("esrally.utils.process.run_subprocess")

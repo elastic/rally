@@ -299,7 +299,8 @@ class ProcessLauncher:
         car = node_configuration.car
         binary_path = node_configuration.binary_path
         data_paths = node_configuration.data_paths
-        node_telemetry_dir = "%s/telemetry" % node_configuration.node_root_path
+        node_telemetry_dir = os.path.join(node_configuration.node_root_path, "telemetry")
+
         java_major_version, java_home = java_resolver.java_home(car, self.cfg)
 
         self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
@@ -307,6 +308,9 @@ class ProcessLauncher:
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
         telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
         node_telemetry = [
+            telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
+            telemetry.JitCompiler(node_telemetry_dir),
+            telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.DiskIo(self.metrics_store, node_count_on_host, node_telemetry_dir, node_name),
             telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
@@ -328,19 +332,26 @@ class ProcessLauncher:
         env = {}
         env.update(os.environ)
         env.update(car.env)
-        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep)
+        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
         # Don't merge here!
         env["JAVA_HOME"] = java_home
+        env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
+        
+        # we just blindly trust telemetry here...
+        for v in t.instrument_candidate_java_opts(car, node_name):
+            self._set_env(env, "ES_JAVA_OPTS", v)
 
         self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
-    def _set_env(self, env, k, v, separator=' '):
+    def _set_env(self, env, k, v, separator=' ', prepend=False):
         if v is not None:
             if k not in env:
                 env[k] = v
-            else:  # merge
-                env[k] = v + separator + env[k]
+            elif prepend:
+                    env[k] = v + separator + env[k]
+            else:
+                    env[k] = env[k] + separator + v
 
     @staticmethod
     def _start_process(binary_path, env):
