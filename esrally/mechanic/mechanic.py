@@ -45,20 +45,25 @@ def download(cfg):
 ##############################
 
 class ClusterMetaInfo:
-    def __init__(self, nodes, revision, distribution_version, distribution_flavor):
+    def __init__(self, nodes, revision, distribution_version, distribution_flavor, team_revision):
         self.nodes = nodes
         self.revision = revision
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
+        self.team_revision = team_revision
 
     def as_dict(self):
-        return {
+        d = {
             "nodes": [n.as_dict() for n in self.nodes],
             "node-count": len(self.nodes),
             "revision": self.revision,
             "distribution-version": self.distribution_version,
-            "distribution-flavor": self.distribution_flavor
+            "distribution-flavor": self.distribution_flavor,
+            
         }
+        if self.team_revision:
+            d["team-revision"] = self.team_revision
+        return d
 
 
 class NodeMetaInfo:
@@ -266,6 +271,7 @@ class MechanicActor(actor.RallyActor):
         self.cluster_launcher = None
         self.cluster = None
         self.car = None
+        self.team_revision = None
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
@@ -296,7 +302,9 @@ class MechanicActor(actor.RallyActor):
         cls = metrics.metrics_store_class(self.cfg)
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
+        name = self.cfg.opts("race", "pipeline")
         self.car, _ = load_team(self.cfg, msg.external)
+        self.team_revision = self.cfg.opts("mechanic", "repository.revision")
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
         hosts = self.cfg.opts("client", "hosts").default
@@ -416,11 +424,13 @@ class MechanicActor(actor.RallyActor):
     def on_cluster_started(self):
         # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
         # in ``on_all_nodes_started`` via the ``ClusterLauncher``.
+        self.cluster.team_revision = self.team_revision
         self.send(self.race_control,
                   EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.cluster.nodes],
                                                 self.cluster.source_revision,
                                                 self.cluster.distribution_version,
-                                                self.cluster.distribution_flavor),
+                                                self.cluster.distribution_flavor,
+                                                self.team_revision),
                                 self.metrics_store.meta_info))
         self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
 

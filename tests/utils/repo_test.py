@@ -135,14 +135,16 @@ class RallyRepositoryTests(TestCase):
 
         fetch.assert_called_with(src="/rally-resources/unit-test")
 
+    @mock.patch("esrally.utils.git.head_revision")
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase", autospec=True)
-    def test_updates_from_remote(self, rebase, checkout, branches, fetch, is_working_copy):
+    def test_updates_from_remote(self, rebase, checkout, branches, fetch, is_working_copy, head_revision):
         branches.return_value = ["1", "2", "5", "master"]
         is_working_copy.return_value = True
+        head_revision.return_value = "123a"
 
         r = repo.RallyRepository(
             remote_url="git@gitrepos.example.org/rally-resources",
@@ -157,16 +159,18 @@ class RallyRepositoryTests(TestCase):
         rebase.assert_called_with("/rally-resources/unit-test", branch="1")
         checkout.assert_called_with("/rally-resources/unit-test", branch="1")
 
+    @mock.patch("esrally.utils.git.head_revision")
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
     @mock.patch("esrally.utils.git.branches", autospec=True)
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase")
     @mock.patch("esrally.utils.git.current_branch")
-    def test_updates_locally(self, curr_branch, rebase, checkout, branches, fetch, is_working_copy):
+    def test_updates_locally(self, curr_branch, rebase, checkout, branches, fetch, is_working_copy, head_revision):
         curr_branch.return_value = "5"
         branches.return_value = ["1", "2", "5", "master"]
         is_working_copy.return_value = True
+        head_revision.return_value = "123a"
 
         r = repo.RallyRepository(
             remote_url=None,
@@ -181,6 +185,7 @@ class RallyRepositoryTests(TestCase):
         self.assertEqual(0, rebase.call_count)
         checkout.assert_called_with("/rally-resources/unit-test", branch="master")
 
+    @mock.patch("esrally.utils.git.head_revision")
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
     @mock.patch("esrally.utils.git.tags", autospec=True)
@@ -188,11 +193,12 @@ class RallyRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase")
     @mock.patch("esrally.utils.git.current_branch")
-    def test_fallback_to_tags(self, curr_branch, rebase, checkout, branches, tags, fetch, is_working_copy):
+    def test_fallback_to_tags(self, curr_branch, rebase, checkout, branches, tags, fetch, is_working_copy, head_revision):
         curr_branch.return_value = "master"
         branches.return_value = ["5", "master"]
         tags.return_value = ["v1", "v1.7", "v2"]
         is_working_copy.return_value = True
+        head_revision.return_value = "123a"
 
         r = repo.RallyRepository(
             remote_url=None,
@@ -245,6 +251,7 @@ class RallyRepositoryTests(TestCase):
         self.assertEqual(0, checkout.call_count)
         self.assertEqual(0, rebase.call_count)
 
+    @mock.patch("esrally.utils.git.head_revision")
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
     @mock.patch("esrally.utils.git.tags", autospec=True)
@@ -253,12 +260,13 @@ class RallyRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.rebase")
     @mock.patch("esrally.utils.git.current_branch")
     def test_does_not_update_unknown_branch_remotely_local_fallback(self, curr_branch, rebase, checkout, branches, tags,
-                                                                    fetch, is_working_copy):
+                                                                    fetch, is_working_copy, head_revision):
         curr_branch.return_value = "master"
         # we have only "master" remotely but a few more branches locally
         branches.side_effect = ["5", ["1", "2", "5", "master"]]
         tags.return_value = []
         is_working_copy.return_value = True
+        head_revision.retun_value = "123a"
 
         r = repo.RallyRepository(
             remote_url="git@gitrepos.example.org/rally-resources",

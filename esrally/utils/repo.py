@@ -36,6 +36,7 @@ class RallyRepository:
         self.resource_name = resource_name
         self.offline = offline
         self.logger = logging.getLogger(__name__)
+        self.revision = None
         if self.remote and not self.offline and fetch:
             # a normal git repo with a remote
             if not git.is_working_copy(self.repo_dir):
@@ -66,6 +67,7 @@ class RallyRepository:
                     self.logger.info("Rebasing on [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
                     try:
                         git.rebase(self.repo_dir, branch=branch)
+                        self.revision = git.head_revision(self.repo_dir)
                     except exceptions.SupplyError:
                         self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
                         console.warn(
@@ -82,6 +84,7 @@ class RallyRepository:
                     self.logger.info("Checking out [%s] in [%s] for distribution version [%s].",
                                      branch, self.repo_dir, distribution_version)
                     git.checkout(self.repo_dir, branch=branch)
+                    self.revision = git.head_revision(self.repo_dir)
             else:
                 self.logger.info("No local branch found for distribution version [%s] in [%s]. Checking tags.",
                                  distribution_version, self.repo_dir)
@@ -90,6 +93,7 @@ class RallyRepository:
                     self.logger.info("Checking out tag [%s] in [%s] for distribution version [%s].",
                                      tag, self.repo_dir, distribution_version)
                     git.checkout(self.repo_dir, branch=tag)
+                    self.revision = git.head_revision(self.repo_dir)
                 else:
                     raise exceptions.SystemSetupError("Cannot find %s for distribution version %s"
                                                       % (self.resource_name, distribution_version))

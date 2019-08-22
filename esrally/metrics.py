@@ -1170,7 +1170,7 @@ def list_races(cfg):
         console.println("No recent races found.")
 
 
-def create_race(cfg, track, challenge):
+def create_race(cfg, track, challenge, track_revision=None):
     car = cfg.opts("mechanic", "car.names")
     environment = cfg.opts("system", "env.name")
     trial_id = cfg.opts("system", "trial.id")
@@ -1183,12 +1183,12 @@ def create_race(cfg, track, challenge):
     rally_version = version.version()
 
     return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                car_params, plugin_params)
+                car_params, plugin_params, track_revision)
 
 
 class Race:
     def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 car_params, plugin_params, cluster=None, results=None):
+                 car_params, plugin_params, track_revision=None, cluster=None, results=None):
         if results is None:
             results = {}
         self.rally_version = rally_version
@@ -1206,6 +1206,7 @@ class Race:
         # will be set later - contains hosts, revision, distribution_version, ...
         self.cluster = cluster
         self.results = results
+        self.track_revision = track_revision
 
     @property
     def track_name(self):
@@ -1243,6 +1244,8 @@ class Race:
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
+        if self.track_revision:
+            d["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
             d["challenge"] = self.challenge_name
         if self.track_params:
@@ -1279,6 +1282,10 @@ class Race:
         if plugins:
             result_template["plugins"] = list(plugins)
 
+        if self.cluster.team_revision:
+            result_template["team-revision"] = self.cluster.team_revision
+        if self.track_revision:
+            result_template["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
             result_template["challenge"] = self.challenge_name
         if self.track_params:
