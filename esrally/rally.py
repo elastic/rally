@@ -191,7 +191,7 @@ def create_arg_parser():
         track_source_group.add_argument(
             "--track-path",
             help="Define the path to a track.")
-        track_source_group.add_argument(
+        p.add_argument(
             "--track-revision",
             help="Define a specific revision in the track repository that Rally should use.",
             default=None)
@@ -607,13 +607,17 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
+    
+    cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
 
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
     # its default value)
     if args.track_path:
         cfg.add(config.Scope.applicationOverride, "track", "track.path", os.path.abspath(io.normalize_path(args.track_path)))
         cfg.add(config.Scope.applicationOverride, "track", "repository.name", None)
-        cfg.add(config.Scope.applicationOverride, "track", "repository.revision", None)
+        if args.track_revision:
+            # stay as close as possible to argparse errors although we have a custom validation.
+            arg_parser.error("argument --track-revision not allowed with argument --track-path")
         if args.track:
             # stay as close as possible to argparse errors although we have a custom validation.
             arg_parser.error("argument --track not allowed with argument --track-path")
@@ -621,7 +625,6 @@ def main():
     else:
         # cfg.add(config.Scope.applicationOverride, "track", "track.path", None)
         cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
-        cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
         # set the default programmatically because we need to determine whether the user has provided a value
         chosen_track = args.track if args.track else "geonames"
         cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
