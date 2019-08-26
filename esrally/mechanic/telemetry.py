@@ -789,31 +789,29 @@ class DiskIo(InternalTelemetryDevice):
     def attach_to_node(self, node):
         self.node = node
         self.process = sysstats.setup_process_stats(node.pid)
+        self.process_start = sysstats.process_io_counters(self.process)
+        read_bytes = 0
+        write_bytes = 0
+        io.ensure_dir(self.log_root)
+        tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
+        if self.process_start:
+            read_bytes = self.process_start.read_bytes
+            write_bytes = self.process_start.write_bytes
+            self.logger.info("Using more accurate process-based I/O counters.")
+        else:
+            try:
+                self.disk_start = sysstats.disk_io_counters()
+                read_bytes = self.disk_start.read_bytes
+                write_bytes = self.disk_start.write_bytes
+                self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
+                                    "I/O counters.")
+            except RuntimeError:
+                self.logger.exception("Could not determine I/O stats at benchmark start.")
+        with open(tmp_io_file, "wt", encoding="utf-8") as f:
+            json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
-    def on_benchmark_start(self):
-        if self.process is not None:
-            self.process_start = sysstats.process_io_counters(self.process)
-            read_bytes = 0
-            write_bytes = 0
-            io.ensure_dir(self.log_root)
-            tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
-            if self.process_start:
-                read_bytes = self.process_start.read_bytes
-                write_bytes = self.process_start.write_bytes
-                self.logger.info("Using more accurate process-based I/O counters.")
-            else:
-                try:
-                    self.disk_start = sysstats.disk_io_counters()
-                    read_bytes = self.disk_start.read_bytes
-                    write_bytes = self.disk_start.write_bytes
-                    self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
-                                        "I/O counters.")
-                except RuntimeError:
-                    self.logger.exception("Could not determine I/O stats at benchmark start.")
-            with open(tmp_io_file, "wt", encoding="utf-8") as f:
-                json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
-
-    def on_benchmark_stop(self):
+    def detach_from_node(self, node, running):
+        if running:
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
