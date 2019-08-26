@@ -228,6 +228,8 @@ function test_list {
     esrally list elasticsearch-plugins --configuration-name="${cfg}"
     info "test list tracks [${cfg}]"
     esrally list tracks --configuration-name="${cfg}"
+    info "test list can use track revision together with track repository"
+    esrally list tracks --configuration-name="${cfg}" --track-repository=default --track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d
     info "test list telemetry [${cfg}]"
     esrally list telemetry --configuration-name="${cfg}"
 }
