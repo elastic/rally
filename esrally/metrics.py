@@ -1160,11 +1160,11 @@ def list_races(cfg):
     races = []
     for race in race_store(cfg).list():
         races.append([race.trial_id, time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
-                      format_dict(race.user_tags)])
+                      format_dict(race.user_tags), race.track_revision, race.cluster.get("team-revision")])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race ID", "Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
+        console.println(tabulate.tabulate(races, headers=["Race ID", "Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags", "Track Revision", "Team Revision"]))
     else:
         console.println("")
         console.println("No recent races found.")
@@ -1244,6 +1244,7 @@ class Race:
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
+
         if self.track_revision:
             d["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
@@ -1314,11 +1315,13 @@ class Race:
         else:
             user_tags = {}
 
-        # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
+        team_revision = d.get("cluster").get("team-revision")
+
+        # Don't restore a few properties like some cluster properties because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
         return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
                     d["track"], d.get("track-params"), d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
-                    results=d["results"])
+                    track_revision=d.get("track-revision"), cluster={"team-revision": team_revision}, results=d["results"])
 
 
 class RaceStore:
