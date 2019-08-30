@@ -55,7 +55,7 @@ When using the advanced configuration, you can choose that Rally stores its metr
 Preparation
 ~~~~~~~~~~~
 
-First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 5.0 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of this cluster.
+First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 6.0 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of this cluster.
 
 .. note::
 
