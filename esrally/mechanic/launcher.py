@@ -25,7 +25,7 @@ from time import monotonic as _time
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster, java_resolver
-from esrally.utils import process, jvm
+from esrally.utils import process
 
 
 def wait_for_rest_layer(es, max_attempts=20):
@@ -34,8 +34,13 @@ def wait_for_rest_layer(es, max_attempts=20):
         try:
             es.info()
             return True
+        except elasticsearch.ConnectionError as e:
+            if "SSL: UNKNOWN_PROTOCOL" in str(e):
+                raise exceptions.LaunchError("Could not connect to cluster via https. Is this a https endpoint?", e)
+            else:
+                time.sleep(1)
         except elasticsearch.TransportError as e:
-            if e.status_code == 503 or isinstance(e, elasticsearch.ConnectionError):
+            if e.status_code == 503:
                 time.sleep(1)
             elif e.status_code == 401:
                 time.sleep(1)
