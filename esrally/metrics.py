@@ -1244,7 +1244,6 @@ class Race:
             "cluster": self.cluster.as_dict(),
             "results": self.results.as_dict()
         }
-
         if self.track_revision:
             d["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
