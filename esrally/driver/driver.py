@@ -1291,9 +1291,11 @@ def time_period_based(sched, warmup_time_period, time_period, runner, params):
     """
     next_scheduled = 0
     start = time.perf_counter()
+    logger = logging.getLogger(__name__)
     if time_period is None:
         iterations = params.size()
         if iterations:
+            logger.info("No time-period property specified. Will run for at most [%d] iterations.", iterations)
             for it in range(0, iterations):
                 try:
                     sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
@@ -1301,8 +1303,11 @@ def time_period_based(sched, warmup_time_period, time_period, runner, params):
                     yield (next_scheduled, sample_type, percent_completed, runner, params.params())
                     next_scheduled = sched.next(next_scheduled)
                 except StopIteration:
+                    logger.info("Time-period-based schedule stopped due to StopIteration.")
                     return
+            logger.info("Time-period-based schedule stopped after the specified number of [%d] iterations.", iterations)
         else:
+            logger.info("No time-period property specified. Will run as long as the parameter source provides values.")
             param_source_knows_progress = hasattr(params, "percent_completed")
             while True:
                 try:
@@ -1312,21 +1317,22 @@ def time_period_based(sched, warmup_time_period, time_period, runner, params):
                     yield (next_scheduled, sample_type, percent_completed, runner, params.params())
                     next_scheduled = sched.next(next_scheduled)
                 except StopIteration:
+                    logger.info("Time-period-based schedule stopped due to StopIteration.")
                     return
     else:
-        end = start + warmup_time_period + time_period
-        it = 0
-
+        duration = warmup_time_period + time_period
+        end = start + duration
+        logger.info("Time-period-based schedule will run for a total of [%d] seconds.", duration)
         while time.perf_counter() < end:
             try:
-                now = time.perf_counter()
-                sample_type = metrics.SampleType.Warmup if now - start < warmup_time_period else metrics.SampleType.Normal
-                percent_completed = (now - start) / (warmup_time_period + time_period)
+                elapsed = time.perf_counter() - start
+                sample_type = metrics.SampleType.Warmup if elapsed < warmup_time_period else metrics.SampleType.Normal
+                percent_completed = elapsed / duration
                 yield (next_scheduled, sample_type, percent_completed, runner, params.params())
                 next_scheduled = sched.next(next_scheduled)
-                it += 1
             except StopIteration:
                 return
+        logger.info("Time-period-based schedule stopped after the specified time period of [%d] seconds.", duration)
 
 
 def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
@@ -1342,6 +1348,7 @@ def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
     """
     next_scheduled = 0
     total_iterations = warmup_iterations + iterations
+    logger = logging.getLogger(__name__)
     if total_iterations == 0:
         raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
     for it in range(0, total_iterations):
@@ -1351,4 +1358,7 @@ def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
             yield (next_scheduled, sample_type, percent_completed, runner, params.params())
             next_scheduled = sched.next(next_scheduled)
         except StopIteration:
+            logger.info("Iteration-count-based schedule stopped due to StopIteration.")
             return
+    logger.info("Iteration-count-based schedule stopped after [%d] warmup iterations and [%d] iterations.",
+                warmup_iterations, iterations)
