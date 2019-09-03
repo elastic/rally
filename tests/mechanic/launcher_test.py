@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import tempfile
 from datetime import datetime
 import io, os
 import uuid
@@ -78,7 +77,7 @@ class MockClient:
     def info(self):
         if self.client_options.get("raise-error-on-info", False):
             import elasticsearch
-            raise elasticsearch.ConnectionError("Unittest error")
+            raise elasticsearch.TransportError(401, "Unauthorized")
         return self._info
 
     def search(self, *args, **kwargs):
@@ -314,3 +313,49 @@ class ClusterLauncherTests(TestCase):
         with self.assertRaisesRegex(exceptions.LaunchError,
                                     "Elasticsearch REST API layer is not available. Forcefully terminated cluster."):
             cluster_launcher.start()
+
+
+class RestLayerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    def test_successfully_waits_for_rest_layer(self, es):
+        self.assertTrue(launcher.wait_for_rest_layer(es, max_attempts=3))
+
+    # don't sleep in realtime
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    def test_retries_on_transport_errors(self, es, sleep):
+        import elasticsearch
+
+        es.info.side_effect = [
+            elasticsearch.TransportError(503, "Service Unavailable"),
+            elasticsearch.TransportError(401, "Unauthorized"),
+            {
+                "version": {
+                    "number": "5.0.0",
+                    "build_hash": "abc123"
+                }
+            }
+        ]
+        self.assertTrue(launcher.wait_for_rest_layer(es, max_attempts=3))
+
+    # don't sleep in realtime
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    def test_dont_retries_eternally_on_transport_errors(self, es, sleep):
+        import elasticsearch
+
+        es.info.side_effect = elasticsearch.TransportError(401, "Unauthorized")
+        self.assertFalse(launcher.wait_for_rest_layer(es, max_attempts=3))
+
+    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    def test_ssl_error(self, es):
+        import elasticsearch
+        import urllib3.exceptions
+
+        es.info.side_effect = elasticsearch.ConnectionError("N/A",
+                                                            "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
+                                                            urllib3.exceptions.SSLError(
+                                                                "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"))
+        with self.assertRaisesRegex(expected_exception=exceptions.LaunchError,
+                                    expected_regex="Could not connect to cluster via https. Is this a https endpoint?"):
+            launcher.wait_for_rest_layer(es, max_attempts=3)
