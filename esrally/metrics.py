@@ -1314,7 +1314,9 @@ class Race:
         else:
             user_tags = {}
 
-        team_revision = d.get("cluster").get("team-revision")
+        team_revision = None
+        if d.get("cluster"):
+            team_revision = d.get("cluster").get("team-revision")
 
         # Don't restore a few properties like some cluster properties because they (a) cannot be reconstructed easily without knowledge of other modules
         # and (b) it is not necessary for this use case.
