@@ -2319,3 +2319,27 @@ class RetryTests(TestCase):
         self.assertEqual((1, "ops"), result)
 
         delegate.assert_called_once_with(es, params)
+
+    def test_retries_until_success(self):
+        failure_count = 5
+
+        failed_return_value = {"weight": 1, "unit": "ops", "success": False}
+        success_return_value = {"weight": 1, "unit": "ops", "success": True}
+
+        responses = []
+        responses += failure_count * [failed_return_value]
+        responses += [success_return_value]
+
+        delegate = mock.Mock(side_effect=responses)
+        es = None
+        params = {
+            "retry-until-success": True,
+            "retry-wait-period": 0.01
+        }
+        retrier = runner.Retry(delegate)
+
+        result = retrier(es, params)
+
+        self.assertEqual(success_return_value, result)
+
+        delegate.assert_has_calls([mock.call(es, params) for _ in range(failure_count + 1)])
