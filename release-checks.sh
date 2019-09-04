@@ -51,7 +51,7 @@ then
 fi
 
 ORIGIN_URL=$(git remote get-url --push origin)
-if [[ $(echo ${ORIGIN_URL} | grep -c "elastic/rally") == "0" ]]
+if [[ ${ORIGIN_URL} != *"elastic/rally"* ]]
 then
     echo "Error: the git remote [origin] does not point to Rally's main repo at elastic/rally but to [${ORIGIN_URL}]."
     exit 1
