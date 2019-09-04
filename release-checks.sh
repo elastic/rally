@@ -50,6 +50,13 @@ then
     exit 1
 fi
 
+ORIGIN_URL=$(git remote get-url --push origin)
+if [[ ${ORIGIN_URL} != *"elastic/rally"* ]]
+then
+    echo "Error: the git remote [origin] does not point to Rally's main repo at elastic/rally but to [${ORIGIN_URL}]."
+    exit 1
+fi
+
 # Check if there will be any errors during CHANGELOG.md generation
 CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
 
