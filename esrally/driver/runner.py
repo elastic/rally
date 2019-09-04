@@ -1089,9 +1089,12 @@ class Retry(Runner):
     It defines the following parameters:
 
     * ``retries`` (optional, default 0): The number of times the operation is retried.
+    * ``retry-until-success`` (optional, default False): Retries until the delegate returns a success. This will also
+                              forcibly set ``retry-on-error`` to ``True``.
     * ``retry-wait-period`` (optional, default 0.5): The time in seconds to wait after an error.
     * ``retry-on-timeout`` (optional, default True): Whether to retry on connection timeout.
-    * ``retry-on-error`` (optional, default False): Whether to retry on failure (i.e. the delegate returns ``success == False``)
+    * ``retry-on-error`` (optional, default False): Whether to retry on failure (i.e. the delegate
+                         returns ``success == False``)
     """
 
     def __init__(self, delegate):
@@ -1106,10 +1109,15 @@ class Retry(Runner):
         import elasticsearch
         import socket
 
-        max_attempts = params.get("retries", 0) + 1
+        retry_until_success = params.get("retry-until-success", False)
+        if retry_until_success:
+            max_attempts = sys.maxsize
+            retry_on_error = True
+        else:
+            max_attempts = params.get("retries", 0) + 1
+            retry_on_error = params.get("retry-on-error", False)
         sleep_time = params.get("retry-wait-period", 0.5)
         retry_on_timeout = params.get("retry-on-timeout", True)
-        retry_on_error = params.get("retry-on-error", False)
 
         for attempt in range(max_attempts):
             last_attempt = attempt + 1 == max_attempts
