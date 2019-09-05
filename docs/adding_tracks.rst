@@ -772,12 +772,12 @@ If you need more control, you need to implement a class. Below is the implementa
             self._cache = params.get("cache", False)
             # ... but we need to resolve "profession" lazily on each invocation later
             self._params = params
+            # Determines whether this parameter source will be "exhausted" at some point or
+            # Rally can draw values infinitely from it.
+            self.infinite = True
 
         def partition(self, partition_index, total_partitions):
             return self
-
-        def size(self):
-            return 1
 
         def params(self):
             # you must provide all parameters that the runner expects
@@ -803,17 +803,17 @@ In ``register`` you bind the name in the track specification to your parameter s
 
 * The constructor needs to have the signature ``__init__(self, track, params, **kwargs)``.
 * ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self``. If each client needs to act differently then you can provide different parameter source instances here as well.
-* ``size(self)``: This method helps Rally to provide a proper progress indication to users if you use a warmup time period. For bulk indexing, return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
 * ``params(self)``: This method returns a dictionary with all parameters that the corresponding "runner" expects. This method will be invoked once for every iteration during the race. In the example, we parameterize the query by randomly selecting a profession from a list.
+* ``infinite``: This property helps Rally to determine whether to let the parameter source determine when a task should be finished (usually when ``infinite`` is ``False``) or whether the task properties (e.g. ``iterations`` or ``time-period``) determine when a task should be finished.
 
-For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it to indicate progress. However:
+For cases, where you want to provide a progress indication (this is typically the case when ``infinite`` is ``False``), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it to indicate progress. However:
 
 * Rally will not check ``percent_completed`` if it can derive progress in any other way.
 * The value of ``percent_completed`` is purely informational and does not influence when Rally considers an operation to be completed.
 
 .. note::
 
-    The method ``params(self)`` is called on a performance-critical path. Don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that your custom parameter source does not introduce a bottleneck.
+    The method ``params(self)`` as well as the property ``percent_completed`` are called on a performance-critical path. Don't do anything that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that your custom parameter source does not introduce a bottleneck.
 
 Custom parameter sources can use the Python standard API but using any additional libraries is not supported.
 

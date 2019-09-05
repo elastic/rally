@@ -100,6 +100,12 @@ class ParamSource:
         """
         return self
 
+    @property
+    def infinite(self):
+        # for bwc
+        return self.size() is None
+
+    # Deprecated
     def size(self):
         """
         Rally has two modes in which it can run:
@@ -520,9 +526,6 @@ class BulkIndexParamSource(ParamSource):
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
-    def size(self):
-        raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
-
 
 class PartitionBulkIndexParamSource:
     def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, ingest_percentage,
@@ -554,16 +557,21 @@ class PartitionBulkIndexParamSource:
         self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
                                                bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
                                                pipeline, original_params)
+        self.current_bulk = 0
+        all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
+        self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
+        self.infinite = False
 
     def partition(self, partition_index, total_partitions):
         raise exceptions.RallyError("Cannot partition a PartitionBulkIndexParamSource further")
 
     def params(self):
+        self.current_bulk += 1
         return next(self.internal_params)
 
-    def size(self):
-        all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
-        return math.ceil((all_bulks * self.ingest_percentage) / 100)
+    @property
+    def percent_completed(self):
+        return self.current_bulk / self.total_bulks
 
 
 def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):

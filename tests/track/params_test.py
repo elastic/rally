@@ -862,7 +862,7 @@ class BulkIndexParamSourceTests(TestCase):
 
         partition = source.partition(0, 1)
         # # no ingest-percentage specified, should issue all one hundred bulk requests
-        self.assertEqual(100, partition.size())
+        self.assertEqual(100, partition.total_bulks)
 
     def test_restricts_number_of_bulks_if_required(self):
         corpora = [
@@ -891,7 +891,7 @@ class BulkIndexParamSourceTests(TestCase):
 
         partition = source.partition(0, 1)
         # should issue three bulks of size 10.000
-        self.assertEqual(3, partition.size())
+        self.assertEqual(3, partition.total_bulks)
 
     def test_create_with_conflict_probability_zero(self):
         params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
