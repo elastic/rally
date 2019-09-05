@@ -98,55 +98,6 @@ class StartupTimeTests(TestCase):
         metrics_store_put_value.assert_called_with("rally0", "node_startup_time", 2, "s")
 
 
-class MergePartsDeviceTests(TestCase):
-    def setUp(self):
-        self.cfg = create_config()
-        self.cfg.add(config.Scope.application, "launcher", "candidate.log.dir", "/unittests/var/log/elasticsearch")
-
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
-    @mock.patch("builtins.open")
-    @mock.patch("os.listdir")
-    def test_store_nothing_if_no_metrics_present(self, listdir_mock, open_mock, metrics_store_put_value, metrics_store_put_count):
-        listdir_mock.return_value = [open_mock]
-        open_mock.side_effect = [
-            mock.mock_open(read_data="no data to parse").return_value
-        ]
-        metrics_store = metrics.EsMetricsStore(self.cfg)
-        node = cluster.Node(None, "io", "rally0", None)
-        merge_parts_device = telemetry.MergeParts(self.cfg, metrics_store)
-        merge_parts_device.attach_to_node(node)
-        merge_parts_device.on_benchmark_stop()
-
-        self.assertEqual(0, metrics_store_put_value.call_count)
-        self.assertEqual(0, metrics_store_put_count.call_count)
-
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
-    @mock.patch("builtins.open")
-    @mock.patch("os.listdir")
-    def test_store_calculated_metrics(self, listdir_mock, open_mock, metrics_store_put_value, metrics_store_put_count):
-        log_file = '''
-        INFO: System starting up
-        INFO: 100 msec to merge doc values [500 docs]
-        INFO: Something unrelated
-        INFO: 250 msec to merge doc values [1350 docs]
-        INFO: System shutting down
-        '''
-        listdir_mock.return_value = [open_mock]
-        open_mock.side_effect = [
-            mock.mock_open(read_data=log_file).return_value
-        ]
-        metrics_store = metrics.EsMetricsStore(self.cfg)
-        node = cluster.Node(None, "io", "rally0", None)
-        merge_parts_device = telemetry.MergeParts(metrics_store, node_log_dir="/var/log")
-        merge_parts_device.attach_to_node(node)
-        merge_parts_device.on_benchmark_stop()
-
-        metrics_store_put_value.assert_called_with("rally0", "merge_parts_total_time_doc_values", 350, "ms")
-        metrics_store_put_count.assert_called_with("rally0", "merge_parts_total_docs_doc_values", 1850)
-
-
 class Client:
     def __init__(self, nodes=None, info=None, indices=None, transport_client=None):
         self.nodes = nodes
