@@ -93,22 +93,6 @@ Cumulative merge throttle time across primary shards
 * **Definition**: Minimum, median and maximum cumulative time that merges have been throttled across primary shards as reported by the indices stats API.
 * **Corresponding metrics key**: ``merges_total_throttled_time`` (property: ``per-shard``)
 
-Merge time (``X``)
-------------------
-
-Where ``X`` is one of:
-
-* postings
-* stored fields
-* doc values
-* norms
-* vectors
-* points
-
-..
-
-* **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use ``--car-params="verbose_iw_logging_enabled:true"`` for that).
-* **Corresponding metrics keys**: ``merge_parts_total_time_*``
 
 ML processing time
 ------------------
