@@ -18,7 +18,6 @@
 import collections
 import logging
 import os
-import re
 import signal
 import subprocess
 import tabulate
@@ -710,65 +709,6 @@ class StartupTime(InternalTelemetryDevice):
     def attach_to_node(self, node):
         self.timer.stop()
         self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
-
-
-class MergeParts(InternalTelemetryDevice):
-    """
-    Gathers merge parts time statistics. Note that you need to run a track setup which logs these data.
-    """
-    MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
-
-    def __init__(self, metrics_store, node_log_dir):
-        super().__init__()
-        self.node_log_dir = node_log_dir
-        self.metrics_store = metrics_store
-        self._t = None
-        self.node = None
-
-    def attach_to_node(self, node):
-        self.node = node
-
-    def on_benchmark_stop(self):
-        self.logger.info("Analyzing merge times.")
-        # first decompress all logs. They have unique names so it's safe to do that. It's easier to first decompress everything
-        for log_file in os.listdir(self.node_log_dir):
-            log_path = "%s/%s" % (self.node_log_dir, log_file)
-            if io.is_archive(log_path):
-                self.logger.info("Decompressing [%s] to analyze merge times...", log_path)
-                io.decompress(log_path, self.node_log_dir)
-
-        # we need to add up times from all files
-        merge_times = {}
-        for log_file in os.listdir(self.node_log_dir):
-            log_path = "%s/%s" % (self.node_log_dir, log_file)
-            if io.is_archive(log_file):
-                self.logger.debug("Skipping archived logs in [%s].", log_path)
-            elif io.has_extension(log_file, ".json"):
-                self.logger.debug("Skipping JSON-formatted logs in [%s].", log_path)
-            else:
-                self.logger.debug("Analyzing merge times in [%s]", log_path)
-                with open(log_path, mode="rt", encoding="utf-8") as f:
-                    self._extract_merge_times(f, merge_times)
-        if merge_times:
-            self._store_merge_times(merge_times)
-        self.logger.info("Finished analyzing merge times. Extracted [%s] different merge time components.", len(merge_times))
-
-    def _extract_merge_times(self, file, merge_times):
-        for line in file.readlines():
-            match = MergeParts.MERGE_TIME_LINE.search(line)
-            if match is not None:
-                duration_ms, part, num_docs = match.groups()
-                if part not in merge_times:
-                    merge_times[part] = [0, 0]
-                l = merge_times[part]
-                l[0] += int(duration_ms)
-                l[1] += int(num_docs)
-
-    def _store_merge_times(self, merge_times):
-        for k, v in merge_times.items():
-            metric_suffix = k.replace(" ", "_")
-            self.metrics_store.put_value_node_level(self.node.node_name, "merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
-            self.metrics_store.put_count_node_level(self.node.node_name, "merge_parts_total_docs_%s" % metric_suffix, v[1])
 
 
 class DiskIo(InternalTelemetryDevice):

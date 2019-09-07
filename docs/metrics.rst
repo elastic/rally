@@ -121,8 +121,6 @@ Rally stores the following metrics:
 * ``latency``: Time period between submission of a request and receiving the complete response. It also includes wait time, i.e. the time the request spends waiting until it is ready to be serviced by Elasticsearch.
 * ``service_time`` Time period between start of request processing and receiving the complete response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
 * ``throughput``: Number of operations that Elasticsearch can perform within a certain time period, usually per second. See the :doc:`track reference </track>` for a definition of what is meant by one "operation" for each operation type.
-* ``merge_parts_total_time_*``: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled.
-* ``merge_parts_total_docs_*``: See ``merge_parts_total_time_*``
 * ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
 * ``disk_io_read_bytes``: number of bytes that have been read from disk during the benchmark. The same caveats apply on Mac OS X as for ``disk_io_write_bytes``.
 * ``node_startup_time``: The time in seconds it took from process start until the node is up.

@@ -170,14 +170,6 @@ class StatsCalculator:
         result.merge_throttle_time = self.sum("merges_total_throttled_time")
         result.merge_throttle_time_per_shard = self.shard_stats("merges_total_throttled_time")
 
-        self.logger.debug("Gathering merge part metrics.")
-        result.merge_part_time_postings = self.sum("merge_parts_total_time_postings")
-        result.merge_part_time_stored_fields = self.sum("merge_parts_total_time_stored_fields")
-        result.merge_part_time_doc_values = self.sum("merge_parts_total_time_doc_values")
-        result.merge_part_time_norms = self.sum("merge_parts_total_time_norms")
-        result.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
-        result.merge_part_time_points = self.sum("merge_parts_total_time_points")
-
         self.logger.debug("Gathering ML max processing times.")
         result.ml_processing_time = self.ml_processing_time_stats()
 
