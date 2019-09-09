@@ -43,7 +43,7 @@ function main {
     printf "The source code can be obtained at https://github.com/certifi/python-certifi\n" >> "${OUTPUT_FILE}"
     add_license "certifi" "https://raw.githubusercontent.com/certifi/python-certifi/master/LICENSE"
     add_license "elasticsearch" "https://raw.githubusercontent.com/elastic/elasticsearch-py/master/LICENSE"
-    add_license "jinja2" "https://raw.githubusercontent.com/pallets/jinja/master/LICENSE"
+    add_license "jinja2" "https://raw.githubusercontent.com/pallets/jinja/master/LICENSE.rst"
     add_license "jsonschema" "https://raw.githubusercontent.com/Julian/jsonschema/master/COPYING"
     add_license "psutil" "https://raw.githubusercontent.com/giampaolo/psutil/master/LICENSE"
     add_license "py-cpuinfo" "https://raw.githubusercontent.com/workhorsy/py-cpuinfo/master/LICENSE"
