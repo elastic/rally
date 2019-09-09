@@ -1,3 +1,40 @@
+### 1.3.0
+
+#### Enhancements
+
+* [#764](https://github.com/elastic/rally/pull/764) (Breaking): Remove MergeParts internal telemetry device
+* [#762](https://github.com/elastic/rally/pull/762): Check that origin points to main repo for release
+* [#761](https://github.com/elastic/rally/pull/761): Allow to retry until success
+* [#760](https://github.com/elastic/rally/pull/760): Improve logging of schedules
+* [#759](https://github.com/elastic/rally/pull/759): Show track and team revision when listing races
+* [#758](https://github.com/elastic/rally/pull/758): Improve error message on SSL errors
+* [#755](https://github.com/elastic/rally/pull/755): Add pull request template
+* [#748](https://github.com/elastic/rally/pull/748): Consistently render links to the documentation
+* [#746](https://github.com/elastic/rally/pull/746): Fixup ProcessLauncherTests issues
+* [#744](https://github.com/elastic/rally/pull/744): Change DiskIO callbacks to use attach/detach
+* [#739](https://github.com/elastic/rally/pull/739) (Breaking): Remove lap feature and all references.
+* [#737](https://github.com/elastic/rally/pull/737): Allow to attach telemetry devices without reprovisioning
+* [#735](https://github.com/elastic/rally/pull/735): Assume string type for params by default
+* [#731](https://github.com/elastic/rally/pull/731): Update DiskIo telemetry device to persist the counters
+* [#730](https://github.com/elastic/rally/pull/730): Be resilient upon startup
+* [#729](https://github.com/elastic/rally/pull/729) (Breaking): Drop 1.x support for cluster metadata
+* [#728](https://github.com/elastic/rally/pull/728): Allow to set distribution version as parameter
+* [#726](https://github.com/elastic/rally/pull/726): Don't check complete list of parameters in integration test
+* [#725](https://github.com/elastic/rally/pull/725): Capture team and track revisions in metrics metadata
+* [#723](https://github.com/elastic/rally/pull/723): Always exit on OOME
+* [#721](https://github.com/elastic/rally/pull/721): Update DiskIo telemetry device to persist the counters
+* [#720](https://github.com/elastic/rally/pull/720): Change filestore to be indexed by unique ID
+* [#719](https://github.com/elastic/rally/pull/719): ES as a Daemon (again)
+* [#716](https://github.com/elastic/rally/pull/716) (Breaking): Drop support for Elasticsearch 1.x
+* [#711](https://github.com/elastic/rally/pull/711): Change telemetry devices to rely on jvm.config instead of ES_JAVA_OPTS
+* [#701](https://github.com/elastic/rally/pull/701): Implement ES daemon-mode in process launcher
+
+#### Bug Fixes
+
+* [#751](https://github.com/elastic/rally/pull/751): Option track-revision should work with track-repository
+* [#750](https://github.com/elastic/rally/pull/750): Retrieve timestamped commit hash separately
+* [#747](https://github.com/elastic/rally/pull/747): Log git output
+
 ### 1.2.1
 
 #### Highlights
