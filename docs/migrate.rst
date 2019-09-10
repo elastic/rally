@@ -1,6 +1,67 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.4.0
+------------------------
+
+Custom Parameter Sources
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.4.0, we have changed the API for custom parameter sources. The ``size()`` method is now deprecated and is instead replaced with a new property called ``infinite``. If you have previously returned ``None`` in ``size()``, ``infinite`` should be set to ``True``, otherwise ``False``. Also, we recommend to implement the property ``percent_completed`` as Rally might not be able to determine progress in some cases. See below for some examples.
+
+Old::
+
+    class CustomFiniteParamSource:
+        # ...
+        def size():
+            return calculate_size()
+
+        def params():
+            return next_parameters()
+
+    class CustomInfiniteParamSource:
+        # ...
+        def size():
+            return None
+
+        # ...
+
+
+New::
+
+    class CustomFiniteParamSource:
+        def __init__(self, track, params, **kwargs):
+            self.infinite = False
+            # to track progress
+            self.current_invocation = 0
+
+        # ...
+        # Note that we have removed the size() method
+
+        def params():
+            self.current_invocation += 1
+            return next_parameters()
+
+        # Implementing this is optional but recommended for proper progress reports
+        @property
+        def percent_completed(self):
+            # for demonstration purposes we use calculate_size() here
+            # to determine the expected number of invocations. However, if
+            # it is possible to determine this value upfront, it is best
+            # to cache it in a field and just reuse the value
+            return self.current_invocation / calculate_size()
+
+
+    class CustomInfiniteParamSource:
+        def __init__(self, track, params, **kwargs):
+            self.infinite = True
+            # ...
+
+        # ...
+        # Note that we have removed the size() method
+        # ...
+
+
 Migrating to Rally 1.3.0
 ------------------------
 Races now stored by ID instead of timestamp
