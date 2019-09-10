@@ -15,10 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
 import glob
-import shutil
 import logging
+import os
+import shutil
 
 import jinja2
 

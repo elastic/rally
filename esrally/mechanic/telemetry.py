@@ -16,17 +16,16 @@
 # under the License.
 
 import collections
+import json
 import logging
 import os
-import signal
-import subprocess
-import tabulate
 import threading
-import json
+
+import tabulate
 
 from esrally import metrics, time, exceptions
-from esrally.utils import io, sysstats, console, versions, opts
 from esrally.metrics import MetaInfoScope
+from esrally.utils import io, sysstats, console, opts
 
 
 def list_telemetry():

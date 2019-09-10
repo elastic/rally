@@ -16,8 +16,9 @@
 # under the License.
 
 import logging
-import types
 import random
+import types
+
 from esrally import exceptions
 
 # Mapping from task to scheduler

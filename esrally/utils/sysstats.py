@@ -16,6 +16,7 @@
 # under the License.
 
 import platform
+
 import psutil
 
 # py-cpuinfo raises an Exception on unsupported systems. This is as specific as we can get.

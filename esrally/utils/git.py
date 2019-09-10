@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
 import logging
+import os
 
 from esrally import exceptions
 from esrally.utils import io, process

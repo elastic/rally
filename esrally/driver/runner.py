@@ -15,11 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import sys
-import types
-import time
-import random
 import logging
+import random
+import sys
+import time
+import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
 

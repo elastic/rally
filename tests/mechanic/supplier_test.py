@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from unittest import TestCase
 import unittest.mock as mock
+from unittest import TestCase
 
 from esrally import exceptions, config
 from esrally.mechanic import supplier, team

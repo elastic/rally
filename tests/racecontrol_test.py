@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import unittest.mock as mock
 import os
+import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import config, exceptions, racecontrol

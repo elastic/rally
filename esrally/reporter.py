@@ -18,14 +18,14 @@
 import collections
 import csv
 import io
-import sys
 import logging
 import statistics
+import sys
 
 import tabulate
+
 from esrally import metrics, exceptions
 from esrally.utils import convert, io as rio, console
-
 
 FINAL_SCORE = r"""
 ------------------------------------------------------

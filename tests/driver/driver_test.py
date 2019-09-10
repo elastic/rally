@@ -15,12 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import unittest.mock as mock
-import threading
 import collections
+import threading
 import time
-from unittest import TestCase
+import unittest.mock as mock
 from datetime import datetime
+from unittest import TestCase
 
 from esrally import metrics, track, exceptions, config
 from esrally.driver import driver, runner

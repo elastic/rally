@@ -17,12 +17,13 @@
 
 import io
 import random
-import elasticsearch
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally.driver import runner
+import elasticsearch
+
 from esrally import exceptions
+from esrally.driver import runner
 
 
 class BaseUnitTestContextManagerRunner:

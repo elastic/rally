@@ -16,12 +16,12 @@
 # under the License.
 
 import logging
+import math
+import numbers
+import operator
 import random
 import time
-import math
 import types
-import operator
-import numbers
 from enum import Enum
 
 from esrally import exceptions

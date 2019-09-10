@@ -15,15 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
-import re
 import glob
 import logging
+import os
+import re
 import urllib.error
 
 from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import git, io, process, net, jvm, convert
 from esrally.exceptions import BuildError, SystemSetupError
+from esrally.utils import git, io, process, net, jvm, convert
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"

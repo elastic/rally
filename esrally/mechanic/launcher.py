@@ -16,12 +16,12 @@
 # under the License.
 import logging
 import os
+import shlex
 import signal
 import subprocess
-import shlex
+from time import monotonic as _time
 
 import psutil
-from time import monotonic as _time
 
 from esrally import config, time, exceptions, client
 from esrally.mechanic import telemetry, cluster, java_resolver

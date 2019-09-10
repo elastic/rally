@@ -15,12 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import shlex
 import logging
-import subprocess
 import os
-import psutil
+import shlex
+import subprocess
 import time
+
+import psutil
 
 
 def run_subprocess(command_line):

@@ -25,11 +25,12 @@ import sys
 import time
 import zlib
 from enum import Enum, IntEnum
+from http.client import responses
 
 import tabulate
+
 from esrally import time, exceptions, config, version, paths
 from esrally.utils import convert, console, io, versions
-from http.client import responses
 
 
 class EsClient:

@@ -17,10 +17,11 @@
 
 import logging
 import os
+import urllib.error
 
 import certifi
 import urllib3
-import urllib.error
+
 from esrally import exceptions
 
 __HTTP = None

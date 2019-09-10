@@ -15,8 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import pkg_resources
 import re
+
+import pkg_resources
 
 from esrally import paths
 from esrally.utils import git, io

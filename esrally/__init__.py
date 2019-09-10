@@ -18,6 +18,7 @@
 import os
 import sys
 import urllib
+
 import pkg_resources
 
 __version__ = pkg_resources.require("esrally")[0].version

@@ -15,12 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import random
-import pytest
-import unittest.mock as mock
 import os
-
+import random
+import unittest.mock as mock
 from unittest import TestCase
+
+import pytest
+
 from esrally.utils import console
 
 

@@ -15,10 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import argparse
+import logging
 import sys
 import time
-import logging
-import argparse
 
 from esrally import actor, version, exceptions, doc_link, BANNER, PROGRAM_NAME, check_python_version, log
 from esrally.utils import console

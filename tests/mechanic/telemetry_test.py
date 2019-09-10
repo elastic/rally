@@ -15,18 +15,19 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import random
 import collections
+import random
 import tempfile
 import unittest.mock as mock
+from collections import namedtuple
+from unittest import TestCase
+
 import elasticsearch
 
-from unittest import TestCase
 from esrally import config, metrics, exceptions
 from esrally.mechanic import telemetry, team, cluster
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
-from collections import namedtuple
 
 
 def create_config():

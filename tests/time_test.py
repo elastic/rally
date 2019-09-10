@@ -15,9 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from unittest import TestCase
-
 import time
+from unittest import TestCase
 
 import esrally.time
 

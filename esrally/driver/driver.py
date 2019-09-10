@@ -16,13 +16,14 @@
 # under the License.
 
 import concurrent.futures
-import threading
 import datetime
 import logging
 import queue
+import threading
 import time
 
 import thespian.actors
+
 from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME
 from esrally.driver import runner, scheduler
 from esrally.utils import convert, console, net

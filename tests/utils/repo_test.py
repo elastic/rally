@@ -16,8 +16,8 @@
 # under the License.
 
 import random
-from unittest import TestCase
 import unittest.mock as mock
+from unittest import TestCase
 
 from esrally import exceptions
 from esrally.utils import repo

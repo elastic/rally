@@ -19,8 +19,9 @@ import logging
 
 import thespian.actors
 import thespian.system.messages.status
+
 from esrally import exceptions, log
-from esrally.utils import console, net
+from esrally.utils import net
 
 
 class BenchmarkFailure:

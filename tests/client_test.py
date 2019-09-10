@@ -19,7 +19,6 @@ import logging
 import os
 import random
 import ssl
-
 from copy import deepcopy
 from unittest import TestCase, mock
 

@@ -16,10 +16,8 @@
 # under the License.
 
 import os
-
 from unittest import TestCase
 
-from esrally import exceptions
 from esrally.utils import opts
 
 

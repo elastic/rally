@@ -19,8 +19,8 @@ import random
 from unittest import TestCase
 
 from esrally import exceptions
-from esrally.utils import io
 from esrally.track import params, track
+from esrally.utils import io
 
 
 class SliceTests(TestCase):

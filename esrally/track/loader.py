@@ -15,23 +15,23 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import glob
 import json
 import logging
 import os
 import re
-import glob
-import urllib.error
 import tempfile
+import urllib.error
 
 import jinja2
 import jinja2.exceptions
 import jsonschema
 import tabulate
+from jinja2 import meta
 
 from esrally import exceptions, time, PROGRAM_NAME, config
 from esrally.track import params, track
 from esrally.utils import io, convert, net, console, modules, opts, repo
-from jinja2 import meta
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):

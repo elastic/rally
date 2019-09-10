@@ -16,10 +16,10 @@
 # under the License.
 
 import os
+
 import pytest
 
 from esrally.track import params, track
-
 
 cwd = os.path.dirname(__file__)
 with open(os.path.join(cwd, "terms.txt"), "r") as ins:

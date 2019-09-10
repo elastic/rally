@@ -17,8 +17,8 @@
 
 from unittest import TestCase
 
-from esrally.track import track
 from esrally import exceptions
+from esrally.track import track
 
 
 class TrackTests(TestCase):

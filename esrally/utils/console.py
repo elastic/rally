@@ -16,8 +16,8 @@
 # under the License.
 
 import os
-import sys
 import shutil
+import sys
 
 PLAIN = False
 QUIET = False

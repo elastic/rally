@@ -15,12 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import hashlib
+import json
 import logging
 import logging.config
-import json
-import time
 import os
-import hashlib
+import time
 
 from esrally.utils import io
 

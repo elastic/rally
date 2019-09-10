@@ -29,9 +29,9 @@
 #
 
 
+import argparse
 import json
 import sys
-import argparse
 
 try:
     import matplotlib.pyplot as plt

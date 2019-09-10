@@ -14,9 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from datetime import datetime
-import io, os
+import io
+import os
 import uuid
+from datetime import datetime
 from unittest import TestCase, mock
 
 import psutil

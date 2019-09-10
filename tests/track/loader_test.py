@@ -15,17 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import json
 import os
 import re
 import textwrap
 import unittest.mock as mock
-
 from unittest import TestCase
 
 from esrally import exceptions, config
-from esrally.utils import io
 from esrally.track import loader, track
+from esrally.utils import io
 
 
 def strip_ws(s):

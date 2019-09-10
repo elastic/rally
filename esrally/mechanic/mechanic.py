@@ -15,17 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import sys
 import json
 import logging
+import sys
 from collections import defaultdict
 
 import thespian.actors
 
 from esrally import actor, client, paths, config, metrics, exceptions
-from esrally.utils import net, console
 from esrally.mechanic import supplier, provisioner, launcher, team
-
+from esrally.utils import net, console
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 

@@ -15,11 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from unittest import TestCase
 import unittest.mock as mock
+from unittest import TestCase
 
-from esrally.utils import jvm
 from esrally import exceptions
+from esrally.utils import jvm
 
 
 class JvmTests(TestCase):

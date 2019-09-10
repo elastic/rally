@@ -17,6 +17,7 @@
 
 import difflib
 import json
+
 from esrally.utils import io
 
 

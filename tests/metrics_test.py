@@ -15,13 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
 import datetime
 import logging
-import unittest.mock as mock
+import os
 import random
 import string
+import unittest.mock as mock
 from unittest import TestCase
+
 import elasticsearch.exceptions
 
 from esrally import config, metrics, track, exceptions

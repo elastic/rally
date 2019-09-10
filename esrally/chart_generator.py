@@ -16,9 +16,9 @@
 # under the License.
 
 import glob
-import uuid
 import json
 import logging
+import uuid
 
 from esrally import track, config, exceptions
 from esrally.utils import io, console

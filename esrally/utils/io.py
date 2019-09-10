@@ -15,14 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
-import errno
-import re
-import subprocess
 import bz2
 import gzip
-import zipfile
+import os
+import re
+import subprocess
 import tarfile
+import zipfile
 
 from esrally.utils import console
 

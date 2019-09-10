@@ -15,12 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
 import configparser
-from io import StringIO
-
-from unittest import TestCase
+import os
 import unittest.mock as mock
+from io import StringIO
+from unittest import TestCase
 
 from esrally import config
 from esrally.utils import io
