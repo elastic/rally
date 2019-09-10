@@ -81,26 +81,36 @@ python-caches-clean:
 	-@find . -name "__pycache__" -exec rm -rf -- \{\} \;
 	-@find . -name ".pyc" -exec rm -rf -- \{\} \;
 
+# Force recreation of the virtual environment used by tox.
+#
+# See https://tox.readthedocs.io/en/latest/#system-overview:
+#
+# > Note pip will not update project dependencies (specified either in the install_requires or the extras
+# >section of the setup.py) if any version already exists in the virtual environment; therefore we recommend
+# > to recreate your environments whenever your project dependencies change.
+tox-env-clean:
+	rm -rf .tox
+
 docs: check-venv
 	cd docs && $(MAKE) html
 
 test: check-venv
 	$(VEPYTHON) setup.py test
 
-it: check-venv python-caches-clean
+it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox
 
 # Temporarily disable Python 3.4 builds
 #it34: check-venv python-caches-clean
 #	. $(VENV_ACTIVATE_FILE); tox -e py34
 #
-it35: check-venv python-caches-clean
+it35: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py35
 
-it36: check-venv python-caches-clean
+it36: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py36
 
-it37: check-venv python-caches-clean
+it37: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py37
 
 benchmark: check-venv
@@ -117,4 +127,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean docs test it it34 it35 it36 benchmark coverage release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs test it it34 it35 it36 benchmark coverage release release-checks prereq venv-create check-env
