@@ -554,9 +554,11 @@ class PartitionBulkIndexParamSource:
         self.ingest_percentage = ingest_percentage
         self.id_conflicts = id_conflicts
         self.pipeline = pipeline
+        # this is only intended for unit-testing
+        create_reader = original_params.pop("__create_reader", create_default_reader)
         self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
                                                bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
-                                               pipeline, original_params)
+                                               pipeline, original_params, create_reader)
         self.current_bulk = 0
         all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
         self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
@@ -566,6 +568,10 @@ class PartitionBulkIndexParamSource:
         raise exceptions.RallyError("Cannot partition a PartitionBulkIndexParamSource further")
 
     def params(self):
+        # self.internal_params always reads all files. This is necessary to ensure we terminate early in case
+        # the user has specified ingest percentage.
+        if self.current_bulk == self.total_bulks:
+            raise StopIteration
         self.current_bulk += 1
         return next(self.internal_params)
 
