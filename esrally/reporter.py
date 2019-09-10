@@ -306,13 +306,6 @@ class Stats:
         self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
         self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
 
-        self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
-        self.merge_part_time_stored_fields = self.v(d, "merge_part_time_stored_fields")
-        self.merge_part_time_doc_values = self.v(d, "merge_part_time_doc_values")
-        self.merge_part_time_norms = self.v(d, "merge_part_time_norms")
-        self.merge_part_time_vectors = self.v(d, "merge_part_time_vectors")
-        self.merge_part_time_points = self.v(d, "merge_part_time_points")
-
         self.young_gc_time = self.v(d, "young_gc_time")
         self.old_gc_time = self.v(d, "old_gc_time")
 
@@ -432,7 +425,6 @@ class SummaryReporter:
         warnings = []
         metrics_table = []
         metrics_table.extend(self.report_totals(stats))
-        metrics_table.extend(self.report_merge_part_times(stats))
         metrics_table.extend(self.report_ml_processing_times(stats))
 
         metrics_table.extend(self.report_gc_times(stats))
@@ -538,18 +530,6 @@ class SummaryReporter:
             self.line("Cumulative {} of primary shards".format(name), "", total_count, ""),
         )
 
-    def report_merge_part_times(self, stats):
-        # note that these times are not(!) wall clock time results but total times summed up over multiple threads
-        unit = "min"
-        return self.join(
-            self.line("Merge time (postings)", "", stats.merge_part_time_postings, unit, convert.ms_to_minutes),
-            self.line("Merge time (stored fields)", "", stats.merge_part_time_stored_fields, unit, convert.ms_to_minutes),
-            self.line("Merge time (doc values)", "", stats.merge_part_time_doc_values, unit, convert.ms_to_minutes),
-            self.line("Merge time (norms)", "", stats.merge_part_time_norms, unit, convert.ms_to_minutes),
-            self.line("Merge time (vectors)", "", stats.merge_part_time_vectors, unit, convert.ms_to_minutes),
-            self.line("Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
-        )
-
     def report_ml_processing_times(self, stats):
         lines = []
         for processing_time in stats.ml_processing_time:
@@ -652,8 +632,6 @@ class ComparisonReporter:
         self.plain = plain
         metrics_table = []
         metrics_table.extend(self.report_total_times(baseline_stats, contender_stats))
-        metrics_table.extend(self.report_merge_part_times(baseline_stats, contender_stats))
-        metrics_table.extend(self.report_merge_part_times(baseline_stats, contender_stats))
         metrics_table.extend(self.report_ml_processing_times(baseline_stats, contender_stats))
         metrics_table.extend(self.report_gc_times(baseline_stats, contender_stats))
         metrics_table.extend(self.report_disk_usage(baseline_stats, contender_stats))
@@ -714,25 +692,6 @@ class ComparisonReporter:
         return self.join(
             self.line("error rate", baseline_error_rate, contender_error_rate, task, "%",
                       treat_increase_as_improvement=False, formatter=convert.factor(100.0))
-        )
-
-    def report_merge_part_times(self, baseline_stats, contender_stats):
-        return self.join(
-            self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
-                      contender_stats.merge_part_time_postings,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
-                      contender_stats.merge_part_time_stored_fields,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
-                      contender_stats.merge_part_time_doc_values,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
-                      contender_stats.merge_part_time_norms,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
-                      contender_stats.merge_part_time_vectors,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
         )
 
     def report_ml_processing_times(self, baseline_stats, contender_stats):
