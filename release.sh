@@ -27,10 +27,15 @@ set -eu
 
 RELEASE_VERSION=$1
 NEXT_RELEASE="$2.dev0"
+__NOTICE_OUTPUT_FILE="NOTICE.txt"
+
 
 echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
+
+echo "Preparing ${__NOTICE_OUTPUT_FILE}"
+source create-notice.sh
 
 echo "Updating author information"
 git log --format='%aN' | sort -u > AUTHORS
@@ -66,10 +71,6 @@ then
     echo "ERROR: Rally version string [$(esrally --version)] does not start with expected version string [esrally $RELEASE_VERSION]"
     exit 2
 fi
-
-__NOTICE_OUTPUT_FILE="NOTICE.txt"
-echo "Preparing ${__NOTICE_OUTPUT_FILE}"
-source create-notice.sh
 
 # Build new version
 python3 setup.py bdist_wheel
