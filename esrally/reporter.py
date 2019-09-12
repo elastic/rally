@@ -205,6 +205,7 @@ class StatsCalculator:
         return result
 
     def merge(self, *args):
+        # This is similar to dict(collections.ChainMap(args)) except that we skip `None` in our implementation.
         result = {}
         for arg in args:
             if arg is not None:
