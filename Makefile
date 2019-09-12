@@ -86,7 +86,7 @@ python-caches-clean:
 # See https://tox.readthedocs.io/en/latest/#system-overview:
 #
 # > Note pip will not update project dependencies (specified either in the install_requires or the extras
-# >section of the setup.py) if any version already exists in the virtual environment; therefore we recommend
+# > section of the setup.py) if any version already exists in the virtual environment; therefore we recommend
 # > to recreate your environments whenever your project dependencies change.
 tox-env-clean:
 	rm -rf .tox
