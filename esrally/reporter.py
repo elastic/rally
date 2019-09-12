@@ -39,7 +39,7 @@ FINAL_SCORE = r"""
 
 
 def calculate_results(metrics_store, race):
-    calc = StatsCalculator(metrics_store, race.challenge)
+    calc = StatsCalculator(metrics_store, race.track, race.challenge)
     return calc()
 
 
@@ -124,8 +124,9 @@ def percentiles_for_sample_size(sample_size):
 
 
 class StatsCalculator:
-    def __init__(self, store, challenge):
+    def __init__(self, store, track, challenge):
         self.store = store
+        self.track = track
         self.challenge = challenge
         self.logger = logging.getLogger(__name__)
 
@@ -143,7 +144,12 @@ class StatsCalculator:
                         self.summary_stats("throughput", t),
                         self.single_latency(t),
                         self.single_latency(t, metric_name="service_time"),
-                        self.error_rate(t)
+                        self.error_rate(t),
+                        self.merge(
+                                self.track.meta_data,
+                                self.challenge.meta_data,
+                                task.operation.meta_data,
+                                task.meta_data)
                     )
         self.logger.debug("Gathering node startup time metrics.")
         startup_times = self.store.get_raw("node_startup_time")
@@ -196,6 +202,14 @@ class StatsCalculator:
         # convert to int, fraction counts are senseless
         median_segment_count = self.median("segments_count")
         result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+        return result
+
+    def merge(self, *args):
+        # This is similar to dict(collections.ChainMap(args)) except that we skip `None` in our implementation.
+        result = {}
+        for arg in args:
+            if arg is not None:
+                result.update(arg)
         return result
 
     def sum(self, metric_name):
@@ -327,23 +341,32 @@ class Stats:
         return self.__dict__
 
     def as_flat_list(self):
+        def op_metrics(op_item, key, single_value=False):
+            doc = {
+                "task": op_item["task"],
+                "operation": op_item["operation"],
+                "name": key
+            }
+            if single_value:
+                doc["value"] = {"single":  op_item[key]}
+            else:
+                doc["value"] = op_item[key]
+            if "meta" in op_item:
+                doc["meta"] = op_item["meta"]
+            return doc
+
         all_results = []
         for metric, value in self.as_dict().items():
             if metric == "op_metrics":
                 for item in value:
                     if "throughput" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "throughput", "value": item["throughput"]})
+                        all_results.append(op_metrics(item, "throughput"))
                     if "latency" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "latency", "value": item["latency"]})
+                        all_results.append(op_metrics(item, "latency"))
                     if "service_time" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "service_time", "value": item["service_time"]})
+                        all_results.append(op_metrics(item, "service_time"))
                     if "error_rate" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "error_rate",
-                             "value": {"single": item["error_rate"]}})
+                        all_results.append(op_metrics(item, "error_rate", single_value=True))
             elif metric == "ml_processing_time":
                 for item in value:
                     all_results.append({
@@ -377,15 +400,18 @@ class Stats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate):
-        self.op_metrics.append({
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate, meta):
+        doc = {
             "task": task,
             "operation": operation,
             "throughput": throughput,
             "latency": latency,
             "service_time": service_time,
-            "error_rate": error_rate
-        })
+            "error_rate": error_rate,
+        }
+        if meta:
+            doc["meta"] = meta
+        self.op_metrics.append(doc)
 
     def add_node_metrics(self, node, startup_time):
         self.node_metrics.append({

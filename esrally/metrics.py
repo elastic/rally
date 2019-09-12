@@ -1226,6 +1226,14 @@ class Race:
         # minor simplification for reporter
         return self.cluster.revision
 
+    @property
+    def meta_data(self):
+        meta = {}
+        meta.update(self.track.meta_data)
+        if self.challenge:
+            meta.update(self.challenge.meta_data)
+        return meta
+
     def add_results(self, results):
         self.results = results
 
@@ -1295,6 +1303,8 @@ class Race:
             result_template["car-params"] = self.car_params
         if self.plugin_params:
             result_template["plugin-params"] = self.plugin_params
+        if self.meta_data:
+            result_template["meta"] = self.meta_data
 
         all_results = []
 

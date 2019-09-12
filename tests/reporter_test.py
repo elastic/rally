@@ -122,7 +122,30 @@ class StatsTests(TestCase):
                         "50": 341,
                         "100": 376
                     },
-                    "error_rate": 0.0
+                    "error_rate": 0.0,
+                    "meta": {
+                        "clients": 8,
+                        "phase": "idx"
+                    }
+                },
+                {
+                    "task": "search #2",
+                    "operation": "search",
+                    "throughput": {
+                        "min": 9,
+                        "median": 10,
+                        "max": 12,
+                        "unit": "ops/s"
+                    },
+                    "latency": {
+                        "50": 99,
+                        "100": 111,
+                    },
+                    "service_time": {
+                        "50": 98,
+                        "100": 110
+                    },
+                    "error_rate": 0.1
                 }
             ],
             "node_metrics": [
@@ -185,6 +208,10 @@ class StatsTests(TestCase):
                 "median": 450,
                 "max": 452,
                 "unit": "docs/s"
+            },
+            "meta": {
+                "clients": 8,
+                "phase": "idx"
             }
         }, select(metric_list, "throughput", operation="index"))
 
@@ -195,6 +222,10 @@ class StatsTests(TestCase):
             "value": {
                 "50": 341,
                 "100": 376
+            },
+            "meta": {
+                "clients": 8,
+                "phase": "idx"
             }
         }, select(metric_list, "service_time", operation="index"))
 
@@ -205,6 +236,10 @@ class StatsTests(TestCase):
             "value": {
                 "50": 340,
                 "100": 376
+            },
+            "meta": {
+                "clients": 8,
+                "phase": "idx"
             }
         }, select(metric_list, "latency", operation="index"))
 
@@ -214,8 +249,53 @@ class StatsTests(TestCase):
             "operation": "index",
             "value": {
                 "single": 0.0
+            },
+            "meta": {
+                "clients": 8,
+                "phase": "idx"
             }
         }, select(metric_list, "error_rate", operation="index"))
+
+        self.assertEqual({
+            "name": "throughput",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "min": 9,
+                "median": 10,
+                "max": 12,
+                "unit": "ops/s"
+            }
+        }, select(metric_list, "throughput", operation="search"))
+
+        self.assertEqual({
+            "name": "service_time",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "50": 98,
+                "100": 110
+            }
+        }, select(metric_list, "service_time", operation="search"))
+
+        self.assertEqual({
+            "name": "latency",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "50": 99,
+                "100": 111
+            }
+        }, select(metric_list, "latency", operation="search"))
+
+        self.assertEqual({
+            "name": "error_rate",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "single": 0.1
+            }
+        }, select(metric_list, "error_rate", operation="search"))
 
         self.assertEqual({
             "node": "rally-node-0",

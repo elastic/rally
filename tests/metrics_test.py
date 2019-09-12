@@ -905,7 +905,9 @@ class EsResultsStoreTests(TestCase):
 
         t = track.Track(name="unittest-track",
                         indices=[track.Index(name="tests", types=["_doc"])],
-                        challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
+                        challenges=[track.Challenge(
+                            name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
+                        meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"})
 
         c = cluster.Cluster([], [], None)
         c.distribution_version = "5.0.0"
@@ -928,6 +930,12 @@ class EsResultsStoreTests(TestCase):
                                         {
                                             "task": "index #1",
                                             "operation": "index",
+                                            # custom op-metric which will override the defaults provided by the race
+                                            "meta": {
+                                                "track-type": "saturation-degree",
+                                                "saturation": "70% saturated",
+                                                "op-type": "bulk"
+                                            },
                                             "throughput": {
                                                 "min": 1000,
                                                 "median": 1250,
@@ -973,6 +981,10 @@ class EsResultsStoreTests(TestCase):
                 "name": "old_gc_time",
                 "value": {
                     "single": 5
+                },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated"
                 }
             },
             {
@@ -1002,6 +1014,10 @@ class EsResultsStoreTests(TestCase):
                 "value": {
                     "single": 3.4
                 },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated"
+                }
             },
             {
                 "rally-version": "0.4.4",
@@ -1033,6 +1049,11 @@ class EsResultsStoreTests(TestCase):
                     "median": 1250,
                     "max": 1500,
                     "unit": "docs/s"
+                },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated",
+                    "op-type": "bulk"
                 }
             },
             {
@@ -1060,6 +1081,10 @@ class EsResultsStoreTests(TestCase):
                 "name": "young_gc_time",
                 "value": {
                     "single": 100
+                },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated"
                 }
             }
         ]
