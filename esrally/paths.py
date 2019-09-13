@@ -22,11 +22,11 @@ def rally_root():
 
 
 def races_root(cfg):
-    return "%s/races" % cfg.opts("node", "root.dir")
+    return os.path.join(cfg.opts("node", "root.dir"), "races")
 
 
 def race_root(cfg=None, trial_id=None):
     if not trial_id:
         trial_id = cfg.opts("system", "trial.id")
-    return "%s/%s" % (races_root(cfg), trial_id)
+    return os.path.join(races_root(cfg), trial_id)
 
