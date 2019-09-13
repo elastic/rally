@@ -76,3 +76,7 @@ class TrackConfigError(RallyError):
     that can't be set
     """
     pass
+
+
+class NotFound(RallyError):
+    pass

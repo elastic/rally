@@ -1417,7 +1417,7 @@ class FileRaceStore(RaceStore):
             races = self._to_races([race_file])
             if races:
                 return races[0]
-        return None
+        raise exceptions.NotFound("No race with trial id [{}]".format(trial_id))
 
     def _to_races(self, results):
         import json
@@ -1521,8 +1521,11 @@ class EsRaceStore(RaceStore):
             hits = hits["value"]
         if hits == 1:
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
+        elif hits > 1:
+            raise exceptions.RallyAssertionError(
+                "Expected exactly one race to match trial id [{}] but there were [{}] matches.".format(trial_id, hits))
         else:
-            return None
+            raise exceptions.NotFound("No race with trial id [{}]".format(trial_id))
 
 
 class EsResultsStore:
