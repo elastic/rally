@@ -788,6 +788,52 @@ class EsRaceStoreTests(TestCase):
         # get hold of the mocked client...
         self.es_mock = self.race_store.client
 
+    def test_find_existing_race_by_trial_id(self):
+        self.es_mock.search.return_value = {
+            "hits": {
+                "total": {
+                    "value": 1,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "_source": {
+                            "rally-version": "0.4.4",
+                            "environment": "unittest",
+                            "trial-id": EsRaceStoreTests.TRIAL_ID,
+                            "trial-timestamp": "20160131T000000Z",
+                            "pipeline": "from-sources",
+                            "track": "unittest",
+                            "challenge": "index",
+                            "track-revision": "abc1",
+                            "car": "defaults",
+                            "results": {
+                                "young_gc_time": 100,
+                                "old_gc_time": 5,
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+
+        race = self.race_store.find_by_trial_id(trial_id=EsRaceStoreTests.TRIAL_ID)
+        self.assertEqual(race.trial_id, EsRaceStoreTests.TRIAL_ID)
+
+    def test_does_not_find_missing_race_by_trial_id(self):
+        self.es_mock.search.return_value = {
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq"
+                },
+                "hits": []
+            }
+        }
+
+        with self.assertRaisesRegex(exceptions.NotFound, r"No race with trial id \[.*\]"):
+            self.race_store.find_by_trial_id(trial_id="some invalid trial id")
+
     def test_store_race(self):
         schedule = [
             track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
@@ -1283,6 +1329,11 @@ class FileRaceStoreTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.TRIAL_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "trial.id", FileRaceStoreTests.TRIAL_ID)
         self.race_store = metrics.FileRaceStore(self.cfg)
+
+    def test_race_not_found(self):
+        with self.assertRaisesRegex(exceptions.NotFound, r"No race with trial id \[.*\]"):
+            # did not store anything yet
+            self.race_store.find_by_trial_id(FileRaceStoreTests.TRIAL_ID)
 
     def test_store_race(self):
         schedule = [
