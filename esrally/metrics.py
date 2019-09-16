@@ -18,6 +18,7 @@
 import collections
 import logging
 import math
+import os
 import pickle
 import random
 import statistics
@@ -1387,32 +1388,26 @@ class CompositeRaceStore:
 class FileRaceStore(RaceStore):
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.user_provided_start_timestamp = self.cfg.opts("system", "time.start.user_provided", mandatory=False, default_value=False)
         self.races_path = paths.races_root(self.cfg)
         self.race_path = paths.race_root(self.cfg)
 
     def _store(self, doc):
         import json
         io.ensure_dir(self.race_path)
-        # if the user has overridden the effective start date we guarantee a unique file name but do not let them use them for tournaments.
-        with open(self._output_file_name(doc), mode="wt", encoding="utf-8") as f:
+        with open(self._race_file(), mode="wt", encoding="utf-8") as f:
             f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
-    def _output_file_name(self, doc):
-        if self.user_provided_start_timestamp:
-            suffix = "_{}".format(doc.get("user-tags", {}).get("name", doc["trial-id"]))
-        else:
-            suffix = ""
-        return "%s/race%s.json" % (self.race_path, suffix)
+    def _race_file(self, trial_id=None):
+        return os.path.join(paths.race_root(cfg=self.cfg, trial_id=trial_id), "race.json")
 
     def list(self):
         import glob
-        results = glob.glob("%s/*/race*.json" % self.races_path)
+        results = glob.glob(self._race_file(trial_id="*"))
         all_races = self._to_races(results)
         return all_races[:self._max_results()]
 
     def find_by_trial_id(self, trial_id):
-        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, trial_id=trial_id)
+        race_file = self._race_file(trial_id=trial_id)
         if io.exists(race_file):
             races = self._to_races([race_file])
             if races:

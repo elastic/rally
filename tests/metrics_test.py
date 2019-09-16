@@ -1378,5 +1378,6 @@ class FileRaceStoreTests(TestCase):
         self.race_store.store_race(race)
 
         retrieved_race = self.race_store.find_by_trial_id(trial_id=FileRaceStoreTests.TRIAL_ID)
+        self.assertEqual(race.trial_id, retrieved_race.trial_id)
         self.assertEqual(race.trial_timestamp, retrieved_race.trial_timestamp)
         self.assertEqual(1, len(self.race_store.list()))
