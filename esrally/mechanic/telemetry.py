@@ -869,22 +869,17 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         store_node_attribute_metadata(self.metrics_store, nodes_info)
 
 
-class NodeEnvironmentInfo(InternalTelemetryDevice):
+def add_metadata_for_node(metrics_store, node_name, host_name):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned nodes.
     """
-    def __init__(self, metrics_store):
-        super().__init__()
-        self.metrics_store = metrics_store
-
-    def attach_to_node(self, node):
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_version", sysstats.os_version())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_physical_cores", sysstats.physical_cpu_cores())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_model", sysstats.cpu_model())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "node_name", node.node_name)
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "host_name", node.host_name)
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_name", sysstats.os_name())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_version", sysstats.os_version())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_physical_cores", sysstats.physical_cpu_cores())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_model", sysstats.cpu_model())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host_name)
 
 
 class ExternalEnvironmentInfo(InternalTelemetryDevice):
