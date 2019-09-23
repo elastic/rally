@@ -185,9 +185,9 @@ class DockerLauncher:
             # (specifically, we do not allow users to enable any devices)
             node_telemetry = [
                 telemetry.DiskIo(self.metrics_store, len(node_configurations), node_telemetry_dir, node_name),
-                telemetry.NodeEnvironmentInfo(self.metrics_store)
             ]
             t = telemetry.Telemetry(devices=node_telemetry)
+            telemetry.add_metadata_for_node(self.metrics_store, node_name, host_name)
             nodes.append(cluster.Node(0, host_name, node_name, t))
         return nodes
 
@@ -308,6 +308,8 @@ class ProcessLauncher:
 
         java_major_version, java_home = java_resolver.java_home(car, self.cfg)
 
+        telemetry.add_metadata_for_node(self.metrics_store, node_name, host_name)
+
         self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
 
         enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
@@ -317,7 +319,6 @@ class ProcessLauncher:
             telemetry.JitCompiler(node_telemetry_dir),
             telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.DiskIo(self.metrics_store, node_count_on_host, node_telemetry_dir, node_name),
-            telemetry.NodeEnvironmentInfo(self.metrics_store),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.StartupTime(self.metrics_store),
         ]
@@ -327,6 +328,7 @@ class ProcessLauncher:
         t.on_pre_node_start(node_name)
         node_pid = self._start_process(binary_path, env)
         node = cluster.Node(node_pid, host_name, node_name, t)
+
         self.logger.info("Attaching telemetry devices to node [%s].", node_name)
         t.attach_to_node(node)
 

@@ -1800,18 +1800,18 @@ class NodeEnvironmentInfoTests(TestCase):
     @mock.patch("esrally.utils.sysstats.logical_cpu_cores")
     @mock.patch("esrally.utils.sysstats.physical_cpu_cores")
     @mock.patch("esrally.utils.sysstats.cpu_model")
-    def test_stores_node_level_metrics_on_attach(self, cpu_model, physical_cpu_cores, logical_cpu_cores,
-                                                 os_version, os_name, metrics_store_add_meta_info):
+    def test_stores_node_level_metrics(self, cpu_model, physical_cpu_cores, logical_cpu_cores,
+                                       os_version, os_name, metrics_store_add_meta_info):
         cpu_model.return_value = "Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz"
         physical_cpu_cores.return_value = 4
         logical_cpu_cores.return_value = 8
         os_version.return_value = "4.2.0-18-generic"
         os_name.return_value = "Linux"
+        node_name = "rally0"
+        host_name = "io"
 
         metrics_store = metrics.EsMetricsStore(create_config())
-        node = cluster.Node(None, "io", "rally0", None)
-        env_device = telemetry.NodeEnvironmentInfo(metrics_store)
-        env_device.attach_to_node(node)
+        telemetry.add_metadata_for_node(metrics_store, node_name, host_name)
 
         calls = [
             mock.call(metrics.MetaInfoScope.node, "rally0", "os_name", "Linux"),
@@ -1819,8 +1819,8 @@ class NodeEnvironmentInfoTests(TestCase):
             mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_logical_cores", 8),
             mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_physical_cores", 4),
             mock.call(metrics.MetaInfoScope.node, "rally0", "cpu_model", "Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", "io"),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", node_name),
+            mock.call(metrics.MetaInfoScope.node, "rally0", "host_name", host_name),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
