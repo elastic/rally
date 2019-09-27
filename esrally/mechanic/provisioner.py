@@ -45,10 +45,6 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
 
 
-def no_op_provisioner():
-    return NoOpProvisioner()
-
-
 def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     ip = cfg.opts("provisioning", "node.ip")
@@ -358,17 +354,6 @@ class PluginInstaller:
     def sub_plugin_name(self):
         # if a plugin consists of multiple plugins (e.g. x-pack) we're interested in that name
         return self.variables.get("plugin_name", self.plugin_name)
-
-
-class NoOpProvisioner:
-    def __init__(self, *args):
-        pass
-
-    def prepare(self, *args):
-        return None
-
-    def cleanup(self):
-        pass
 
 
 class DockerProvisioner:

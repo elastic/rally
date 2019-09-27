@@ -271,6 +271,7 @@ class MechanicActor(actor.RallyActor):
         self.cluster = None
         self.car = None
         self.team_revision = None
+        self.externally_provisioned = False
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
@@ -310,18 +311,20 @@ class MechanicActor(actor.RallyActor):
         if len(hosts) == 0:
             raise exceptions.LaunchError("No target hosts are configured.")
 
-        if msg.external:
+        self.externally_provisioned = msg.external
+        if self.externally_provisioned:
             self.logger.info("Cluster will not be provisioned by Rally.")
+            # TODO: This needs to be handled later - we should probably disallow this entirely
             if msg.cluster_settings:
                 pretty_settings = json.dumps(msg.cluster_settings, indent=2)
                 warning = "Ensure that these settings are defined in elasticsearch.yml:\n\n{}\n\nIf they are absent, running this track " \
                           "will fail or lead to unexpected results.".format(pretty_settings)
                 console.warn(warning, logger=self.logger)
-            # just create one actor for this special case and run it on the coordinator node (i.e. here)
-            m = self.createActor(NodeMechanicActor,
-                                 targetActorRequirements={"coordinator": True})
-            self.children.append(m)
-            self.send(m, msg.for_nodes(ip=hosts))
+            self.status = "nodes_started"
+            self.received_responses = []
+            self.on_all_nodes_started()
+            self.status = "cluster_started"
+            self.on_cluster_started()
         else:
             console.info("Preparing for race ...", flush=True)
             self.logger.info("Cluster consisting of %s will be provisioned by Rally.", hosts)
@@ -330,8 +333,8 @@ class MechanicActor(actor.RallyActor):
             # ensure waiting for all responses
             self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
             self.send(self.createActor(Dispatcher), msg)
-        self.status = "starting"
-        self.received_responses = []
+            self.status = "starting"
+            self.received_responses = []
 
     @actor.no_retry("mechanic")
     def receiveMsg_NodesStarted(self, msg, sender):
@@ -353,8 +356,12 @@ class MechanicActor(actor.RallyActor):
 
     @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStart(self, msg, sender):
-        # we are in state "cluster_started", after that in "benchmark_stopped"
-        self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
+        if self.externally_provisioned:
+            self.status = "benchmark_started"
+            self.on_benchmark_started()
+        else:
+            # we are in state "cluster_started", after that in "benchmark_stopped"
+            self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
 
     @actor.no_retry("mechanic")
     def receiveMsg_BenchmarkStarted(self, msg, sender):
@@ -383,7 +390,11 @@ class MechanicActor(actor.RallyActor):
 
     @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStop(self, msg, sender):
-        self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
+        if self.externally_provisioned:
+            self.status = "benchmark_stopped"
+            self.on_all_nodes_stopped()
+        else:
+            self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
 
     @actor.no_retry("mechanic")
     def receiveMsg_BenchmarkStopped(self, msg, sender):
@@ -399,7 +410,10 @@ class MechanicActor(actor.RallyActor):
         self.cluster_launcher.stop(self.cluster)
         # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
         # cluster from various states and we don't check here for a specific one.
-        self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
+        if self.externally_provisioned:
+            self.on_all_nodes_stopped()
+        else:
+            self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
 
     @actor.no_retry("mechanic")
     def receiveMsg_NodesStopped(self, msg, sender):
@@ -681,13 +695,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
         l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
     elif external:
-        if len(plugins) > 0:
-            raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "
-                                              "\"--elasticsearch-plugins\" and try again.")
-
-        s = lambda: None
-        p = [provisioner.no_op_provisioner()]
-        l = launcher.ExternalLauncher(cfg, metrics_store)
+        raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
     elif docker:
         if len(plugins) > 0:
             raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "

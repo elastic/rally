@@ -23,7 +23,7 @@ from time import monotonic as _time
 
 import psutil
 
-from esrally import config, time, exceptions, client
+from esrally import time, exceptions, client
 from esrally.mechanic import telemetry, cluster, java_resolver
 from esrally.utils import process
 
@@ -98,6 +98,8 @@ class ClusterLauncher:
         t = telemetry.Telemetry(enabled_devices, devices=[
             telemetry.NodeStats(telemetry_params, es, self.metrics_store),
             telemetry.ClusterMetaDataInfo(es_default),
+            # will gather node specific meta-data for all nodes
+            telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
             telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
             telemetry.JvmStatsSummary(es_default, self.metrics_store),
             telemetry.IndexStats(es_default, self.metrics_store),
@@ -212,52 +214,6 @@ class DockerLauncher:
                 node.telemetry.detach_from_node(node, running=True)
                 process.run_subprocess_with_logging(_get_docker_compose_cmd(self.binary_paths[node.node_name], "down"))
                 node.telemetry.detach_from_node(node, running=False)
-
-
-class ExternalLauncher:
-    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
-        self.cfg = cfg
-        self.metrics_store = metrics_store
-        self.client_factory = client_factory_class
-        self.logger = logging.getLogger(__name__)
-
-    def start(self, node_configurations=None):
-        hosts = self.cfg.opts("client", "hosts").default
-        client_options = self.cfg.opts("client", "options").default
-        es = self.client_factory(hosts, client_options).create()
-
-        # cannot enable custom telemetry devices here
-        t = telemetry.Telemetry(devices=[
-            # This is needed to actually populate the nodes
-            telemetry.ClusterMetaDataInfo(es),
-            # will gather node specific meta-data for all nodes
-            telemetry.ExternalEnvironmentInfo(es, self.metrics_store),
-        ])
-        # We create a pseudo-cluster here to get information about all nodes.
-        # cluster nodes will be populated by the external environment info telemetry device. We cannot know this
-        # upfront.
-        c = cluster.Cluster(hosts, [], t)
-        user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
-        # noinspection PyBroadException
-        try:
-            distribution_version = es.info()["version"]["number"]
-        except BaseException:
-            self.logger.exception("Could not retrieve cluster distribution version")
-            distribution_version = None
-        if not user_defined_version or user_defined_version.strip() == "":
-            self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]",
-                             distribution_version)
-            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-        elif user_defined_version != distribution_version:
-            self.logger.warning("Distribution version '%s' on command line differs from actual cluster version '%s'.",
-                                user_defined_version, distribution_version)
-        t.attach_to_cluster(c)
-        return c.nodes
-
-    def stop(self, nodes):
-        # nothing to do here, externally provisioned clusters / nodes don't have any specific telemetry devices
-        # attached.
-        pass
 
 
 def wait_for_pidfile(pidfilename, timeout=60):

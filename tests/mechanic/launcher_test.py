@@ -198,59 +198,6 @@ class ProcessLauncherTests(TestCase):
                          "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
 
 
-class ExternalLauncherTests(TestCase):
-    test_host = opts.TargetHosts("127.0.0.1:9200,10.17.0.5:19200")
-    client_options = opts.ClientOptions("timeout:60")
-
-    def test_setup_external_cluster_single_node(self):
-        cfg = config.Config()
-
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options", self.client_options)
-        cfg.add(config.Scope.application, "system", "env.name", "test")
-
-        ms = get_metrics_store(cfg)
-
-        m = launcher.ExternalLauncher(cfg, ms, client_factory_class=MockClientFactory)
-        m.start()
-
-        # automatically determined by launcher on attach
-        self.assertEqual(cfg.opts("mechanic", "distribution.version"), "5.0.0")
-
-    def test_setup_external_cluster_multiple_nodes(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options", self.client_options)
-        cfg.add(config.Scope.application, "mechanic", "distribution.version", "2.3.3")
-        cfg.add(config.Scope.application, "system", "env.name", "test")
-
-        ms = get_metrics_store(cfg)
-
-        m = launcher.ExternalLauncher(cfg, ms, client_factory_class=MockClientFactory)
-        m.start()
-        # did not change user defined value
-        self.assertEqual(cfg.opts("mechanic", "distribution.version"), "2.3.3")
-
-    def test_setup_external_cluster_cannot_determine_version(self):
-        client_options = opts.ClientOptions("timeout:60,raise-error-on-info:true")
-        cfg = config.Config()
-
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options", client_options)
-        cfg.add(config.Scope.application, "system", "env.name", "test")
-
-        ms = get_metrics_store(cfg)
-
-        m = launcher.ExternalLauncher(cfg, ms, client_factory_class=MockClientFactory)
-        m.start()
-
-        # automatically determined by launcher on attach
-        self.assertIsNone(cfg.opts("mechanic", "distribution.version"))
-
-
 class ClusterLauncherTests(TestCase):
     test_host = opts.TargetHosts("10.0.0.10:9200,10.0.0.11:9200")
     client_options = opts.ClientOptions('timeout:60')
