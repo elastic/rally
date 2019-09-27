@@ -359,7 +359,7 @@ class ConfigFactory:
                 env_name = self._ask_env_name()
 
             preserve_install = convert.to_bool(self._ask_property("Do you want Rally to keep the Elasticsearch benchmark candidate "
-                                                                  "installation including the index (will use several GB per trial run)?",
+                                                                  "installation including the index (will use several GB per race)?",
                                                                   default_value=False))
         else:
             # Does not matter for an in-memory store

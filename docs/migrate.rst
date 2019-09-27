@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 1.4.0
 ------------------------
 
+``trial-id`` and ``trial-timestamp`` are deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.4.0, Rally will use the properties ``race-id`` and ``race-timestamp`` when writing data to the Elasticsearch metrics store. The properties ``trial-id`` and ``trial-timestamp`` are still populated but will be removed in a future release. Any visualizations that rely on these properties should be changed to the new ones.
+
 Custom Parameter Sources
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

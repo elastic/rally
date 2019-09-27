@@ -876,7 +876,7 @@ class TimeSeriesCharts:
                 "show_legend": 1,
                 "show_grid": 1,
                 "drop_last_bucket": 0,
-                "time_field": "trial-timestamp",
+                "time_field": "race-timestamp",
                 "type": "timeseries",
                 "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
@@ -888,7 +888,7 @@ class TimeSeriesCharts:
                                         "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
-                        "time_field": "trial-timestamp",
+                        "time_field": "race-timestamp",
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
@@ -968,7 +968,7 @@ class TimeSeriesCharts:
                 "show_legend": 1,
                 "show_grid": 1,
                 "drop_last_bucket": 0,
-                "time_field": "trial-timestamp",
+                "time_field": "race-timestamp",
                 "type": "timeseries",
                 "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
@@ -980,7 +980,7 @@ class TimeSeriesCharts:
                                         "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
-                        "time_field": "trial-timestamp",
+                        "time_field": "race-timestamp",
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
@@ -1082,7 +1082,7 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_legend": 1,
-                "time_field": "trial-timestamp",
+                "time_field": "race-timestamp",
                 "type": "timeseries",
                 "filter": TimeSeriesCharts.filter_string(environment, race_config),
                 "annotations": [
@@ -1094,7 +1094,7 @@ class TimeSeriesCharts:
                                         "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
-                        "time_field": "trial-timestamp",
+                        "time_field": "race-timestamp",
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
@@ -1226,7 +1226,7 @@ class TimeSeriesCharts:
                         "series_drop_last_bucket": 0
                     }
                 ],
-                "time_field": "trial-timestamp",
+                "time_field": "race-timestamp",
                 "index_pattern": "rally-results-*",
                 "interval": "1d",
                 "axis_position": "left",
@@ -1250,7 +1250,7 @@ class TimeSeriesCharts:
                                         "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
-                        "time_field": "trial-timestamp",
+                        "time_field": "race-timestamp",
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
@@ -1332,7 +1332,7 @@ class TimeSeriesCharts:
                 "show_legend": 1,
                 "show_grid": 1,
                 "drop_last_bucket": 0,
-                "time_field": "trial-timestamp",
+                "time_field": "race-timestamp",
                 "type": "timeseries",
                 "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true" % (environment, t),
                 "annotations": [
@@ -1344,7 +1344,7 @@ class TimeSeriesCharts:
                                         "AND environment:\"%s\"" % (t, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
-                        "time_field": "trial-timestamp",
+                        "time_field": "race-timestamp",
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
