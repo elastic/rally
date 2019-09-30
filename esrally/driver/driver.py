@@ -36,7 +36,7 @@ from esrally.utils import convert, console, net
 ##################################
 class PrepareBenchmark:
     """
-    Initiates preparation steps a benchmark. The benchmark should only be started after StartBenchmark is sent.
+    Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
     """
 
     def __init__(self, config, track, metrics_meta_info):

@@ -98,7 +98,7 @@ def plain_text(file):
 def cleanup(preserve, install_dir, data_paths):
     logger = logging.getLogger(__name__)
     if preserve:
-        console.info("Preserving benchmark candidate installation at [%s].", install_dir)
+        console.info("Preserving benchmark candidate installation at [{}].".format(install_dir), logger=logger)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
