@@ -24,7 +24,7 @@ import time
 
 import thespian.actors
 
-from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME
+from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME, telemetry
 from esrally.driver import runner, scheduler
 from esrally.utils import convert, console, net
 
@@ -34,9 +34,9 @@ from esrally.utils import convert, console, net
 # Messages sent between drivers
 #
 ##################################
-class StartBenchmark:
+class PrepareBenchmark:
     """
-    Starts a benchmark.
+    Initiates preparation steps a benchmark. The benchmark should only be started after StartBenchmark is sent.
     """
 
     def __init__(self, config, track, metrics_meta_info):
@@ -48,6 +48,10 @@ class StartBenchmark:
         self.config = config
         self.track = track
         self.metrics_meta_info = metrics_meta_info
+
+
+class StartBenchmark:
+    pass
 
 
 class PrepareTrack:
@@ -66,6 +70,13 @@ class PrepareTrack:
 
 class TrackPrepared:
     pass
+
+
+class PreparationComplete:
+    def __init__(self, distribution_flavor, distribution_version, revision):
+        self.distribution_flavor = distribution_flavor
+        self.distribution_version = distribution_version
+        self.revision = revision
 
 
 class StartLoadGenerator:
@@ -160,6 +171,7 @@ class DriverActor(actor.RallyActor):
         self.coordinator = None
         self.status = "init"
         self.post_process_timer = 0
+        self.cluster_details = None
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -196,10 +208,15 @@ class DriverActor(actor.RallyActor):
         self.logger.info("Main driver received unknown message [%s] (ignoring).", str(msg))
 
     @actor.no_retry("driver")
-    def receiveMsg_StartBenchmark(self, msg, sender):
+    def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
-        self.coordinator.start_benchmark(msg.track, msg.metrics_meta_info)
+        self.coordinator.prepare_benchmark(msg.track, msg.metrics_meta_info)
+
+    @actor.no_retry("driver")
+    def receiveMsg_StartBenchmark(self, msg, sender):
+        self.start_sender = sender
+        self.coordinator.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     @actor.no_retry("driver")
@@ -257,6 +274,9 @@ class DriverActor(actor.RallyActor):
         else:
             return {"ip": host}
 
+    def on_cluster_details_retrieved(self, cluster_details):
+        self.cluster_details = cluster_details
+
     def on_prepare_track(self, preparators, cfg, track):
         self.children = preparators
         msg = PrepareTrack(cfg, track)
@@ -264,10 +284,16 @@ class DriverActor(actor.RallyActor):
             self.send(child, msg)
 
     def after_track_prepared(self):
+        cluster_version = self.cluster_details["version"] if self.cluster_details else {}
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
-        self.coordinator.after_track_prepared()
+        self.send(self.start_sender, PreparationComplete(
+            # older versions (pre 6.3.0) don't expose build_flavor because the only (implicit) flavor was "oss"
+            cluster_version.get("build_flavor", "oss"),
+            cluster_version.get("number", "Unknown"),
+            cluster_version.get("build_hash", "Unknown")
+        ))
 
     def on_benchmark_complete(self, metrics):
         self.send(self.start_sender, BenchmarkComplete(metrics))
@@ -278,7 +304,8 @@ def load_local_config(coordinator_config):
         # only copy the relevant bits
         "track", "driver", "client",
         # due to distribution version...
-        "mechanic"
+        "mechanic",
+        "telemetry"
     ])
     # set root path (normally done by the main entry point)
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
@@ -307,8 +334,29 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(sender, TrackPrepared())
 
 
+def wait_for_rest_layer(es, max_attempts=20):
+    for attempt in range(max_attempts):
+        import elasticsearch
+        try:
+            es.info()
+            return True
+        except elasticsearch.ConnectionError as e:
+            if "SSL: UNKNOWN_PROTOCOL" in str(e):
+                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this a https endpoint?", e)
+            else:
+                time.sleep(1)
+        except elasticsearch.TransportError as e:
+            if e.status_code == 503:
+                time.sleep(1)
+            elif e.status_code == 401:
+                time.sleep(1)
+            else:
+                raise e
+    return False
+
+
 class Driver:
-    def __init__(self, target, config):
+    def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
@@ -320,6 +368,7 @@ class Driver:
         self.logger = logging.getLogger(__name__)
         self.target = target
         self.config = config
+        self.es_client_factory = es_client_factory_class
         self.track = None
         self.challenge = None
         self.metrics_store = None
@@ -341,7 +390,56 @@ class Driver:
         self.tasks_per_join_point = None
         self.complete_current_task_sent = False
 
-    def start_benchmark(self, t, metrics_meta_info):
+        self.telemetry = None
+
+    def create_es_clients(self):
+        all_hosts = self.config.opts("client", "hosts").all_hosts
+        es = {}
+        for cluster_name, cluster_hosts in all_hosts.items():
+            all_client_options = self.config.opts("client", "options").all_client_options
+            cluster_client_options = dict(all_client_options[cluster_name])
+            # Use retries to avoid aborts on long living connections for telemetry devices
+            cluster_client_options["retry-on-timeout"] = True
+            es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
+        return es
+
+    def prepare_telemetry(self, es):
+        enabled_devices = self.config.opts("telemetry", "devices")
+        telemetry_params = self.config.opts("telemetry", "params")
+
+        es_default = es["default"]
+        self.telemetry = telemetry.Telemetry(enabled_devices, devices=[
+            telemetry.NodeStats(telemetry_params, es, self.metrics_store),
+            telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
+            telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+            telemetry.JvmStatsSummary(es_default, self.metrics_store),
+            telemetry.IndexStats(es_default, self.metrics_store),
+            telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
+            telemetry.CcrStats(telemetry_params, es, self.metrics_store),
+            telemetry.RecoveryStats(telemetry_params, es, self.metrics_store)
+        ])
+
+    def wait_for_rest_api(self, es):
+        skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
+        if skip_rest_api_check:
+            self.logger.info("Skipping REST API check.")
+        else:
+            es_default = es["default"]
+            self.logger.info("Checking if REST API is available.")
+            if wait_for_rest_layer(es_default, max_attempts=40):
+                self.logger.info("REST API is available.")
+            else:
+                self.logger.error("REST API layer is not yet available. Stopping benchmark.")
+                raise exceptions.SystemSetupError("Elasticsearch REST API layer is not available.")
+
+    def retrieve_cluster_info(self, es):
+        try:
+            return es["default"].info()
+        except BaseException:
+            self.logger.exception("Could not retrieve cluster info on benchmark start")
+            return None
+
+    def prepare_benchmark(self, t, metrics_meta_info):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
@@ -351,6 +449,10 @@ class Driver:
                                                    challenge=self.challenge.name,
                                                    meta_info=metrics_meta_info,
                                                    read_only=False)
+        es_clients = self.create_es_clients()
+        self.wait_for_rest_api(es_clients)
+        self.prepare_telemetry(es_clients)
+        self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
         for host in self.config.opts("driver", "load_driver_hosts"):
             if host != "localhost":
                 self.load_driver_hosts.append(net.resolve(host))
@@ -360,10 +462,13 @@ class Driver:
         preps = [self.target.create_track_preparator(h) for h in self.load_driver_hosts]
         self.target.on_prepare_track(preps, self.config, self.track)
 
-    def after_track_prepared(self):
+    def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")
         # ensure relative time starts when the benchmark starts.
         self.reset_relative_time()
+        self.logger.info("Attaching cluster-level telemetry devices.")
+        self.telemetry.on_benchmark_start()
+        self.logger.info("Cluster-level telemetry devices are now attached.")
 
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
@@ -404,10 +509,10 @@ class Driver:
 
             self.logger.debug("Postprocessing samples...")
             self.post_process_samples()
-            m = self.metrics_store.to_externalizable(clear=True)
-
             if self.finished():
+                self.telemetry.on_benchmark_stop()
                 self.logger.info("All steps completed.")
+                m = self.metrics_store.to_externalizable(clear=True)
                 self.logger.debug("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
@@ -424,6 +529,7 @@ class Driver:
                     # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
                     #             (it doesn't matter too much if we're a few ms off).
                     waiting_period = 1.0
+                m = self.metrics_store.to_externalizable(clear=True)
                 self.target.on_task_finished(m, waiting_period)
                 # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
                 # a relative instead of an absolute value.

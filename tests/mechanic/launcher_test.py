@@ -22,12 +22,11 @@ from unittest import TestCase, mock
 
 import psutil
 
-from esrally import config, exceptions, paths
-from esrally.mechanic import launcher, telemetry, team
+from esrally import config, paths, telemetry
+from esrally.mechanic import launcher, team
 from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.mechanic.team import Car
 from esrally.metrics import InMemoryMetricsStore
-from esrally.utils import opts
 
 
 class MockClientFactory:
@@ -159,8 +158,8 @@ class ProcessLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "mechanic", "telemetry.params", None)
+        cfg.add(config.Scope.application, "telemetry", "devices", [])
+        cfg.add(config.Scope.application, "telemetry", "params", None)
         cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
@@ -196,114 +195,3 @@ class ProcessLauncherTests(TestCase):
                          "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/default-car-node0.jfr "
                          "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
-
-
-class ClusterLauncherTests(TestCase):
-    test_host = opts.TargetHosts("10.0.0.10:9200,10.0.0.11:9200")
-    client_options = opts.ClientOptions('timeout:60')
-
-    def test_launches_cluster(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options", self.client_options)
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
-        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
-        cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
-        cfg.add(config.Scope.application, "system", "env.name", "test")
-
-        ms = get_metrics_store(cfg)
-
-        cluster_launcher = launcher.ClusterLauncher(cfg, ms, client_factory_class=MockClientFactory)
-        cluster = cluster_launcher.start()
-
-        self.assertEqual([{"host": "10.0.0.10", "port": 9200}, {"host": "10.0.0.11", "port": 9200}], cluster.hosts)
-        self.assertIsNotNone(cluster.telemetry)
-
-    def test_launches_cluster_with_telemetry_client_timeout_enabled(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        cfg.add(config.Scope.application, "client", "options", self.client_options)
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
-        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
-        cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
-        cfg.add(config.Scope.application, "system", "env.name", "test")
-
-        ms = get_metrics_store(cfg)
-
-        cluster_launcher = launcher.ClusterLauncher(cfg, ms, client_factory_class=MockClientFactory)
-        cluster = cluster_launcher.start()
-
-        for telemetry_device in cluster.telemetry.devices:
-            if hasattr(telemetry_device, "clients"):
-                # Process all clients options for multi cluster aware telemetry devices, like CcrStats
-                for _, client in telemetry_device.clients.items():
-                    self.assertDictEqual({"retry-on-timeout": True, "timeout": 60}, client.client_options)
-            else:
-                self.assertDictEqual({"retry-on-timeout": True, "timeout": 60}, telemetry_device.client.client_options)
-
-    @mock.patch("time.sleep")
-    def test_error_on_cluster_launch(self, sleep):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "client", "hosts", self.test_host)
-        # Simulate that the client will raise an error upon startup
-        cfg.add(config.Scope.application, "client", "options", opts.ClientOptions("raise-error-on-info:true"))
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
-        cfg.add(config.Scope.application, "mechanic", "telemetry.params", {})
-        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
-        cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
-        cfg.add(config.Scope.application, "system", "env.name", "test")
-
-        ms = get_metrics_store(cfg)
-
-        cluster_launcher = launcher.ClusterLauncher(cfg, ms, client_factory_class=MockClientFactory)
-        with self.assertRaisesRegex(exceptions.LaunchError,
-                                    "Elasticsearch REST API layer is not available. Forcefully terminated cluster."):
-            cluster_launcher.start()
-
-
-class RestLayerTests(TestCase):
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
-    def test_successfully_waits_for_rest_layer(self, es):
-        self.assertTrue(launcher.wait_for_rest_layer(es, max_attempts=3))
-
-    # don't sleep in realtime
-    @mock.patch("time.sleep")
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
-    def test_retries_on_transport_errors(self, es, sleep):
-        import elasticsearch
-
-        es.info.side_effect = [
-            elasticsearch.TransportError(503, "Service Unavailable"),
-            elasticsearch.TransportError(401, "Unauthorized"),
-            {
-                "version": {
-                    "number": "5.0.0",
-                    "build_hash": "abc123"
-                }
-            }
-        ]
-        self.assertTrue(launcher.wait_for_rest_layer(es, max_attempts=3))
-
-    # don't sleep in realtime
-    @mock.patch("time.sleep")
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
-    def test_dont_retries_eternally_on_transport_errors(self, es, sleep):
-        import elasticsearch
-
-        es.info.side_effect = elasticsearch.TransportError(401, "Unauthorized")
-        self.assertFalse(launcher.wait_for_rest_layer(es, max_attempts=3))
-
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
-    def test_ssl_error(self, es):
-        import elasticsearch
-        import urllib3.exceptions
-
-        es.info.side_effect = elasticsearch.ConnectionError("N/A",
-                                                            "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
-                                                            urllib3.exceptions.SSLError(
-                                                                "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"))
-        with self.assertRaisesRegex(expected_exception=exceptions.LaunchError,
-                                    expected_regex="Could not connect to cluster via https. Is this a https endpoint?"):
-            launcher.wait_for_rest_layer(es, max_attempts=3)

@@ -16,4 +16,4 @@
 # under the License.
 
 # expose only the minimum API
-from .driver import DriverActor, StartBenchmark, BenchmarkComplete, TaskFinished
+from .driver import DriverActor, PrepareBenchmark, PreparationComplete, StartBenchmark, BenchmarkComplete, TaskFinished

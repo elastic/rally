@@ -24,7 +24,7 @@ import jinja2
 
 from esrally import exceptions
 from esrally.mechanic import team, java_resolver
-from esrally.utils import io, process, versions
+from esrally.utils import console, io, process, versions
 
 
 def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
@@ -98,7 +98,7 @@ def plain_text(file):
 def cleanup(preserve, install_dir, data_paths):
     logger = logging.getLogger(__name__)
     if preserve:
-        logger.info("Preserving benchmark candidate installation at [%s].", install_dir)
+        console.info("Preserving benchmark candidate installation at [%s].", install_dir)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
