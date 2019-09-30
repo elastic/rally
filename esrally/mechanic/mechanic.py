@@ -502,6 +502,8 @@ class NodeMechanicActor(actor.RallyActor):
                 self.send(sender, NodesStopped(self.metrics_store.to_externalizable(clear=True)))
                 # clear all state as the mechanic might get reused later
                 self.metrics_store.close()
+                # TODO: Run the reporter (StatsCalculator) here to calculate summary stats and safe them to the
+                #  metrics store (no command line output though!)
                 self.running = False
                 self.config = None
                 self.mechanic = None
