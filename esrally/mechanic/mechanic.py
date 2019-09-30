@@ -113,15 +113,6 @@ class BenchmarkStarted:
     pass
 
 
-class OnBenchmarkStop:
-    pass
-
-
-class BenchmarkStopped:
-    def __init__(self, system_metrics):
-        self.system_metrics = system_metrics
-
-
 class ResetRelativeTime:
     def __init__(self, reset_in_seconds):
         self.reset_in_seconds = reset_in_seconds
@@ -317,6 +308,7 @@ class MechanicActor(actor.RallyActor):
 
         self.transition_when_all_children_responded(sender, msg, "starting", "cluster_started", self.on_all_nodes_started)
 
+    # TODO: Can we eliminate this?
     @actor.no_retry("mechanic")
     def receiveMsg_OnBenchmarkStart(self, msg, sender):
         if self.externally_provisioned:
@@ -326,6 +318,7 @@ class MechanicActor(actor.RallyActor):
             # we are in state "cluster_started", after that in "benchmark_stopped"
             self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
 
+    # TODO: Can we eliminate this?
     @actor.no_retry("mechanic")
     def receiveMsg_BenchmarkStarted(self, msg, sender):
         self.transition_when_all_children_responded(
@@ -350,20 +343,6 @@ class MechanicActor(actor.RallyActor):
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.send(self.race_control, msg)
-
-    @actor.no_retry("mechanic")
-    def receiveMsg_OnBenchmarkStop(self, msg, sender):
-        if self.externally_provisioned:
-            self.status = "benchmark_stopped"
-            self.on_all_nodes_stopped()
-        else:
-            self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
-
-    @actor.no_retry("mechanic")
-    def receiveMsg_BenchmarkStopped(self, msg, sender):
-        self.metrics_store.bulk_add(msg.system_metrics)
-        self.transition_when_all_children_responded(
-            sender, msg, "benchmark_stopping", "benchmark_stopped", self.on_benchmark_stopped)
 
     @actor.no_retry("mechanic")
     def receiveMsg_StopEngine(self, msg, sender):
@@ -394,14 +373,9 @@ class MechanicActor(actor.RallyActor):
         for m in self.children:
             self.send(m, ResetRelativeTime(0))
 
-    # TODO: Can we eliminate this callback?
-    def on_benchmark_stopped(self):
-        self.metrics_store.flush(refresh=False)
-        self.send(self.race_control, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
-
     def on_all_nodes_stopped(self):
         self.metrics_store.flush(refresh=False)
-        self.send(self.race_control, EngineStopped(self.metrics_store.to_externalizable()))
+        self.send(self.race_control, EngineStopped(self.metrics_store.to_externalizable(clear=True)))
         # clear all state as the mechanic might get reused later
         for m in self.children:
             self.send(m, thespian.actors.ActorExitRequest())
@@ -572,15 +546,11 @@ class NodeMechanicActor(actor.RallyActor):
                     self.logger.debug("Flushing system metrics store on host [%s].", self.host)
                     self.metrics_store.flush(refresh=False)
                     self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-            elif isinstance(msg, OnBenchmarkStop):
-                self.mechanic.on_benchmark_stop()
-                self.metrics_store.flush(refresh=False)
-                # clear metrics store data to not send duplicate system metrics data
-                self.send(sender, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
             elif isinstance(msg, StopNodes):
                 self.logger.info("Stopping nodes %s.", self.mechanic.nodes)
                 self.mechanic.stop_engine()
-                self.send(sender, NodesStopped(self.metrics_store.to_externalizable()))
+                self.metrics_store.flush(refresh=False)
+                self.send(sender, NodesStopped(self.metrics_store.to_externalizable(clear=True)))
                 # clear all state as the mechanic might get reused later
                 self.metrics_store.close()
                 self.running = False
@@ -668,10 +638,6 @@ class Mechanic:
     def on_benchmark_start(self):
         for node in self.nodes:
             node.on_benchmark_start()
-
-    def on_benchmark_stop(self):
-        for node in self.nodes:
-            node.on_benchmark_stop()
 
     def stop_engine(self):
         self.launcher.stop(self.nodes)

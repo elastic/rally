@@ -51,12 +51,5 @@ class Node:
         if self.telemetry:
             self.telemetry.on_benchmark_start()
 
-    def on_benchmark_stop(self):
-        """
-        Callback method when a benchmark is about to stop.
-        """
-        if self.telemetry:
-            self.telemetry.on_benchmark_stop()
-
     def __repr__(self):
         return self.node_name

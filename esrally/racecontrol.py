@@ -170,15 +170,6 @@ class BenchmarkActor(actor.RallyActor):
         self.metrics_store.bulk_add(msg.metrics)
         self.send(self.main_driver, thespian.actors.ActorExitRequest())
         self.main_driver = None
-        self.send(self.mechanic, mechanic.OnBenchmarkStop())
-
-    @actor.no_retry("race control")
-    def receiveMsg_BenchmarkStopped(self, msg, sender):
-        self.logger.info("Bulk adding system metrics to metrics store.")
-        self.metrics_store.bulk_add(msg.system_metrics)
-        self.logger.debug("Flushing metrics data...")
-        self.metrics_store.flush()
-        self.logger.debug("Flushing done")
         self.teardown()
 
     @actor.no_retry("race control")
