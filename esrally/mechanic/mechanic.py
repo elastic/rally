@@ -104,15 +104,6 @@ class EngineStopped:
         self.system_metrics = system_metrics
 
 
-class OnBenchmarkStart:
-    def __init__(self):
-        pass
-
-
-class BenchmarkStarted:
-    pass
-
-
 class ResetRelativeTime:
     def __init__(self, reset_in_seconds):
         self.reset_in_seconds = reset_in_seconds
@@ -308,22 +299,6 @@ class MechanicActor(actor.RallyActor):
 
         self.transition_when_all_children_responded(sender, msg, "starting", "cluster_started", self.on_all_nodes_started)
 
-    # TODO: Can we eliminate this?
-    @actor.no_retry("mechanic")
-    def receiveMsg_OnBenchmarkStart(self, msg, sender):
-        if self.externally_provisioned:
-            self.status = "benchmark_started"
-            self.on_benchmark_started()
-        else:
-            # we are in state "cluster_started", after that in "benchmark_stopped"
-            self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
-
-    # TODO: Can we eliminate this?
-    @actor.no_retry("mechanic")
-    def receiveMsg_BenchmarkStarted(self, msg, sender):
-        self.transition_when_all_children_responded(
-            sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
-
     @actor.no_retry("mechanic")
     def receiveMsg_ResetRelativeTime(self, msg, sender):
         if msg.reset_in_seconds > 0:
@@ -361,11 +336,6 @@ class MechanicActor(actor.RallyActor):
     def on_all_nodes_started(self):
         self.send(self.race_control, EngineStarted(self.metrics_store.meta_info, self.team_revision))
         self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
-
-    # TODO: Eliminate this callback
-    def on_benchmark_started(self):
-        #self.cluster.on_benchmark_start()
-        self.send(self.race_control, BenchmarkStarted())
 
     def reset_relative_time(self):
         self.logger.info("Resetting relative time of cluster system metrics store.")
@@ -513,6 +483,7 @@ class NodeMechanicActor(actor.RallyActor):
                                    msg.distribution, msg.external, msg.docker)
             nodes = self.mechanic.start_engine()
             self.running = True
+            self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             self.send(getattr(msg, "reply_to", sender), NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
         except Exception:
             self.logger.exception("Cannot process message [%s]", msg)
@@ -537,10 +508,6 @@ class NodeMechanicActor(actor.RallyActor):
             if isinstance(msg, ResetRelativeTime):
                 self.logger.info("Resetting relative time of system metrics store on host [%s].", self.host)
                 self.metrics_store.reset_relative_time()
-            elif isinstance(msg, OnBenchmarkStart):
-                self.mechanic.on_benchmark_start()
-                self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-                self.send(sender, BenchmarkStarted())
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 if self.running:
                     self.logger.debug("Flushing system metrics store on host [%s].", self.host)
@@ -634,10 +601,6 @@ class Mechanic:
             node_configs.append(p.prepare(binaries))
         self.nodes = self.launcher.start(node_configs)
         return self.nodes
-
-    def on_benchmark_start(self):
-        for node in self.nodes:
-            node.on_benchmark_start()
 
     def stop_engine(self):
         self.launcher.stop(self.nodes)

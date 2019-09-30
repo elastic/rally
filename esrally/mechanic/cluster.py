@@ -43,13 +43,5 @@ class Node:
         self.fs = []
         self.plugins = []
 
-    # TODO: Uncertain whether we need this callback
-    def on_benchmark_start(self):
-        """
-        Callback method when a benchmark is about to start.
-        """
-        if self.telemetry:
-            self.telemetry.on_benchmark_start()
-
     def __repr__(self):
         return self.node_name

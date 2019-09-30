@@ -17,5 +17,4 @@
 
 # expose only the minimum API
 from .mechanic import NodeMetaInfo, StartEngine, EngineStarted, StopEngine, EngineStopped, \
-    OnBenchmarkStart, BenchmarkStarted, ResetRelativeTime, MechanicActor, \
-    cluster_distribution_version, download
+    ResetRelativeTime, MechanicActor, cluster_distribution_version, download

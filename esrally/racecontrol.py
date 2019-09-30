@@ -226,8 +226,6 @@ class BenchmarkActor(actor.RallyActor):
                                                       msg.distribution, msg.external, msg.docker))
 
     def run(self):
-        self.logger.info("Telling mechanic of benchmark start.")
-        self.send(self.mechanic, mechanic.OnBenchmarkStart())
         self.logger.info("Telling driver to start benchmark.")
         self.send(self.main_driver, driver.StartBenchmark())
 
