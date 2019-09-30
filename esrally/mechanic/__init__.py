@@ -16,5 +16,5 @@
 # under the License.
 
 # expose only the minimum API
-from .mechanic import NodeMetaInfo, StartEngine, EngineStarted, StopEngine, EngineStopped, \
-    ResetRelativeTime, MechanicActor, cluster_distribution_version, download
+from .mechanic import StartEngine, EngineStarted, StopEngine, EngineStopped, ResetRelativeTime, MechanicActor, \
+    cluster_distribution_version, download

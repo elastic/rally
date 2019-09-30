@@ -43,22 +43,6 @@ def download(cfg):
 # Public Messages
 ##############################
 
-class NodeMetaInfo:
-    def __init__(self, n):
-        self.host_name = n.host_name
-        self.node_name = n.node_name
-        self.ip = n.ip
-        self.os = n.os
-        self.jvm = n.jvm
-        self.cpu = n.cpu
-        self.memory = n.memory
-        self.fs = n.fs
-        self.plugins = n.plugins
-
-    def as_dict(self):
-        return self.__dict__
-
-
 class StartEngine:
     def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, ip=None, port=None,
                  node_id=None):
@@ -131,14 +115,12 @@ class StartNodes:
 
 
 class NodesStarted:
-    def __init__(self, node_meta_infos, system_meta_info):
+    def __init__(self, system_meta_info):
         """
-        Creates a new NodeStarted message.
+        Creates a new NodesStarted message.
 
-        :param node_meta_infos: A list of ``NodeMetaInfo`` instances.
         :param system_meta_info:
         """
-        self.node_meta_infos = node_meta_infos
         self.system_meta_info = system_meta_info
 
 
@@ -484,7 +466,7 @@ class NodeMechanicActor(actor.RallyActor):
             nodes = self.mechanic.start_engine()
             self.running = True
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-            self.send(getattr(msg, "reply_to", sender), NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
+            self.send(getattr(msg, "reply_to", sender), NodesStarted(self.metrics_store.meta_info))
         except Exception:
             self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
