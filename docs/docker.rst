@@ -142,7 +142,7 @@ To further examine the contents we can bind mount it from another image e.g.::
     {
      "rally-version": "1.2.1.dev0",
      "environment": "local",
-     "trial-id": "1d81930a-4ebe-4640-a09b-3055174bce43",
+     "race-id": "1d81930a-4ebe-4640-a09b-3055174bce43",
 
 Specifics about the image
 -------------------------

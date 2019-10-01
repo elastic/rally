@@ -135,8 +135,8 @@ class MockProcess:
 
 def get_metrics_store(cfg):
     ms = InMemoryMetricsStore(cfg)
-    ms.open(trial_id=str(uuid.uuid4()),
-            trial_timestamp=datetime.now(),
+    ms.open(race_id=str(uuid.uuid4()),
+            race_timestamp=datetime.now(),
             track_name="test",
             challenge_name="test",
             car_name="test")
