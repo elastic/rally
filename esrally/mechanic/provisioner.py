@@ -444,7 +444,7 @@ class DockerProvisioner:
         # do not attempt to cleanup data paths. It does not work due to different permissions. As:
         #
         # (a) Docker is unsupported and not meant to be used by everybody, and
-        # (b) the volume is recreated before each trial run
+        # (b) the volume is recreated before each race
         #
         # this is not a major problem.
         cleanup(self.preserve, self.install_dir, [])

@@ -9,6 +9,11 @@ Node details are omitted from race metadata
 
 Before Rally 1.4.0, the file ``race.json`` has contained node details (such as the number of cluster nodes or details about the nodes' operating system version) if Rally has provisioned the cluster. With this release, this information is now omitted. This change also applies to the indices ``rally-races*`` in case you have setup an Elasticsearch metrics store. We recommend to use user tags in case such information is important, e.g. for visualising results.
 
+``trial-id`` and ``trial-timestamp`` are deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.4.0, Rally will use the properties ``race-id`` and ``race-timestamp`` when writing data to the Elasticsearch metrics store. The properties ``trial-id`` and ``trial-timestamp`` are still populated but will be removed in a future release. Any visualizations that rely on these properties should be changed to the new ones.
+
 Custom Parameter Sources
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

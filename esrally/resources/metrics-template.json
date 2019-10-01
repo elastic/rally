@@ -42,6 +42,18 @@
             }
           }
         },
+        "race-id": {
+          "type": "keyword"
+        },
+        "race-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
         "environment": {
           "type": "keyword"
         },

@@ -27,7 +27,7 @@ class StatsCalculatorTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now())
-        cfg.add(config.Scope.application, "system", "trial.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
+        cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
         cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
         cfg.add(config.Scope.application, "mechanic", "car.params", {})

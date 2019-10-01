@@ -212,6 +212,10 @@ def create_arg_parser():
 
     for p in [parser, race_parser]:
         p.add_argument(
+            "--race-id",
+            help="Define a unique id for this race.",
+            default=str(uuid.uuid4()))
+        p.add_argument(
             "--pipeline",
             help="Select the pipeline to run.",
             # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
@@ -571,7 +575,7 @@ def main():
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
         cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
 
-    cfg.add(config.Scope.applicationOverride, "system", "trial.id", str(uuid.uuid4()))
+    cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
 
