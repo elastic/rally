@@ -23,7 +23,7 @@ import urllib.error
 
 from esrally import exceptions, PROGRAM_NAME
 from esrally.exceptions import BuildError, SystemSetupError
-from esrally.utils import git, io, process, net, jvm, convert
+from esrally.utils import git, io, process, net, jvm, convert, sysstats
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
@@ -525,7 +525,20 @@ class DistributionRepository:
                 raise exceptions.SystemSetupError("Neither config key [{}] nor [{}] is defined.".format(user_defined_key, default_key))
             else:
                 return None
-        return url_template.replace("{{VERSION}}", self.version)
+        return self._substitute_vars(url_template)
+
+    def _substitute_vars(self, s):
+
+        substitutions = {
+            "{{VERSION}}": self.version,
+            "{{OSNAME}}": sysstats.os_name().lower(),
+            "{{ARCH}}": sysstats.cpu_arch().lower()
+        }
+        r = s
+        for k in substitutions.keys():
+            r = r.replace(k, substitutions[k])
+        return r
+
 
     @property
     def cache(self):
