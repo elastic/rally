@@ -57,10 +57,7 @@ def cpu_arch():
     """
     :return: The CPU architecture name.
     """
-    if cpuinfo_available:
-        cpu_info = cpuinfo.get_cpu_info()
-        return cpu_info["arch"]
-    return "Unknown"
+    return platform.uname().machine
 
 
 def disks():

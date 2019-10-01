@@ -528,15 +528,14 @@ class DistributionRepository:
         return self._substitute_vars(url_template)
 
     def _substitute_vars(self, s):
-
         substitutions = {
             "{{VERSION}}": self.version,
             "{{OSNAME}}": sysstats.os_name().lower(),
             "{{ARCH}}": sysstats.cpu_arch().lower()
         }
         r = s
-        for k in substitutions.keys():
-            r = r.replace(k, substitutions[k])
+        for key, replacement in substitutions.items():
+            r = r.replace(key, replacement)
         return r
 
 
