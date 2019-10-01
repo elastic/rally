@@ -342,7 +342,7 @@ def wait_for_rest_layer(es, max_attempts=20):
             return True
         except elasticsearch.ConnectionError as e:
             if "SSL: UNKNOWN_PROTOCOL" in str(e):
-                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this a https endpoint?", e)
+                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
             else:
                 time.sleep(1)
         except elasticsearch.TransportError as e:
