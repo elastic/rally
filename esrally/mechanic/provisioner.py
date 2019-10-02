@@ -24,7 +24,7 @@ import jinja2
 
 from esrally import exceptions
 from esrally.mechanic import team, java_resolver
-from esrally.utils import io, process, versions
+from esrally.utils import console, io, process, versions
 
 
 def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
@@ -43,10 +43,6 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
-
-
-def no_op_provisioner():
-    return NoOpProvisioner()
 
 
 def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
@@ -102,7 +98,7 @@ def plain_text(file):
 def cleanup(preserve, install_dir, data_paths):
     logger = logging.getLogger(__name__)
     if preserve:
-        logger.info("Preserving benchmark candidate installation at [%s].", install_dir)
+        console.info("Preserving benchmark candidate installation at [{}].".format(install_dir), logger=logger)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
@@ -358,17 +354,6 @@ class PluginInstaller:
     def sub_plugin_name(self):
         # if a plugin consists of multiple plugins (e.g. x-pack) we're interested in that name
         return self.variables.get("plugin_name", self.plugin_name)
-
-
-class NoOpProvisioner:
-    def __init__(self, *args):
-        pass
-
-    def prepare(self, *args):
-        return None
-
-    def cleanup(self):
-        pass
 
 
 class DockerProvisioner:

@@ -859,14 +859,8 @@ class EsRaceStoreTests(TestCase):
                             race_timestamp=EsRaceStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="defaults", car_params={"heap_size": "512mb"}, plugin_params=None,
-                            track_revision="abc1",
-                            cluster=EsRaceStoreTests.DictHolder(
-                                {
-                                    "distribution-version": "5.0.0",
-                                    "nodes": [
-                                        {"node_name": "node0", "ip": "127.0.0.1", "plugins": ["analysis-icu", "x-pack"]}
-                                    ]
-                                }),
+                            track_revision="abc1", team_revision="abc12333", distribution_version="5.0.0",
+                            distribution_flavor="default", revision="aaaeeef",
                             results=EsRaceStoreTests.DictHolder(
                                 {
                                     "young_gc_time": 100,
@@ -910,14 +904,10 @@ class EsRaceStoreTests(TestCase):
                 "heap_size": "512mb"
             },
             "cluster": {
+                "revision": "aaaeeef",
                 "distribution-version": "5.0.0",
-                "nodes": [
-                    {
-                        "node_name": "node0",
-                        "ip": "127.0.0.1",
-                        "plugins": ["analysis-icu", "x-pack"]
-                    }
-                ]
+                "distribution-flavor": "default",
+                "team-revision": "abc12333",
             },
             "results": {
                 "young_gc_time": 100,
@@ -969,20 +959,12 @@ class EsResultsStoreTests(TestCase):
                             name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
                         meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"})
 
-        c = cluster.Cluster([], [], None)
-        c.distribution_version = "5.0.0"
-        c.distribution_flavor = "oss"
-        c.team_revision = "123ab"
-        node = c.add_node("localhost", "rally-node-0")
-        node.plugins.append("x-pack")
-
         race = metrics.Race(rally_version="0.4.4", environment_name="unittest", race_id=EsResultsStoreTests.RACE_ID,
                             race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
-                            track_revision="abc1",
-                            cluster=c,
-                            results=reporter.Stats(
+                            track_revision="abc1", team_revision="123ab", distribution_version="5.0.0",
+                            distribution_flavor="oss", results=reporter.Stats(
                                 {
                                     "young_gc_time": 100,
                                     "old_gc_time": 5,
@@ -1037,8 +1019,6 @@ class EsResultsStoreTests(TestCase):
                 "plugin-params": {
                     "some-param": True
                 },
-                "node-count": 1,
-                "plugins": ["x-pack"],
                 "active": True,
                 "name": "old_gc_time",
                 "value": {
@@ -1070,8 +1050,6 @@ class EsResultsStoreTests(TestCase):
                 "plugin-params": {
                     "some-param": True
                 },
-                "node-count": 1,
-                "plugins": ["x-pack"],
                 "active": True,
                 "node": "rally-node-0",
                 "name": "startup_time",
@@ -1104,8 +1082,6 @@ class EsResultsStoreTests(TestCase):
                 "plugin-params": {
                     "some-param": True
                 },
-                "node-count": 1,
-                "plugins": ["x-pack"],
                 "active": True,
                 "name": "throughput",
                 "task": "index #1",
@@ -1143,8 +1119,6 @@ class EsResultsStoreTests(TestCase):
                 "plugin-params": {
                     "some-param": True
                 },
-                "node-count": 1,
-                "plugins": ["x-pack"],
                 "active": True,
                 "name": "young_gc_time",
                 "value": {
@@ -1370,14 +1344,8 @@ class FileRaceStoreTests(TestCase):
                             race_timestamp=FileRaceStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
-                            track_revision="abc1",
-                            cluster=FileRaceStoreTests.DictHolder(
-                                {
-                                    "distribution-version": "5.0.0",
-                                    "nodes": [
-                                        {"node_name": "node0", "ip": "127.0.0.1"}
-                                    ]
-                                }),
+                            track_revision="abc1", team_revision="abc12333", distribution_version="5.0.0",
+                            distribution_flavor="default", revision="aaaeeef",
                             results=FileRaceStoreTests.DictHolder(
                                 {
                                     "young_gc_time": 100,

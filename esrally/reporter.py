@@ -191,6 +191,7 @@ class StatsCalculator:
         result.memory_points = self.median("segments_points_memory_in_bytes")
         result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
 
+        # TODO: This cannot be done in the reporter anymore!
         self.logger.debug("Gathering disk metrics.")
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         result.index_size = self.sum("final_index_size_bytes")

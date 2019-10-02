@@ -330,12 +330,14 @@ class MetricsStore:
         self._environment_name = cfg.opts("system", "env.name")
         self.opened = False
         if meta_info is None:
-            self._meta_info = {
-                MetaInfoScope.cluster: {},
-                MetaInfoScope.node: {}
-            }
+            self._meta_info = {}
         else:
             self._meta_info = meta_info
+        # ensure mandatory keys are always present
+        if MetaInfoScope.cluster not in self._meta_info:
+            self._meta_info[MetaInfoScope.cluster] = {}
+        if MetaInfoScope.node not in self._meta_info:
+            self._meta_info[MetaInfoScope.node] = {}
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
         self.logger = logging.getLogger(__name__)
@@ -599,7 +601,6 @@ class MetricsStore:
             doc["operation-type"] = operation_type
         if self._track_params:
             doc["track-params"] = self._track_params
-
         self._add(doc)
 
     def put_doc(self, doc, level=None, node_name=None, meta_data=None, absolute_time=None, relative_time=None):
@@ -1169,7 +1170,7 @@ def list_races(cfg):
     races = []
     for race in race_store(cfg).list():
         races.append([race.race_id, time.to_iso8601(race.race_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
-                      format_dict(race.user_tags), race.track_revision, race.cluster.get("team-revision")])
+                      format_dict(race.user_tags), race.track_revision, race.team_revision])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
@@ -1197,8 +1198,8 @@ def create_race(cfg, track, challenge, track_revision=None):
 
 class Race:
     def __init__(self, rally_version, environment_name, race_id, race_timestamp, pipeline, user_tags, track,
-                 track_params, challenge, car, car_params, plugin_params, track_revision=None, cluster=None,
-                 results=None):
+                 track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
+                 distribution_version=None, distribution_flavor=None, revision=None, results=None):
         if results is None:
             results = {}
         self.rally_version = rally_version
@@ -1213,10 +1214,12 @@ class Race:
         self.car = car
         self.car_params = car_params
         self.plugin_params = plugin_params
-        # will be set later - contains hosts, revision, distribution_version, ...
-        self.cluster = cluster
-        self.results = results
         self.track_revision = track_revision
+        self.team_revision = team_revision
+        self.distribution_version = distribution_version
+        self.distribution_flavor = distribution_flavor
+        self.revision = revision
+        self.results = results
 
     @property
     def track_name(self):
@@ -1229,11 +1232,6 @@ class Race:
     @property
     def car_name(self):
         return "+".join(self.car) if isinstance(self.car, list) else self.car
-
-    @property
-    def revision(self):
-        # minor simplification for reporter
-        return self.cluster.revision
 
     @property
     def meta_data(self):
@@ -1262,7 +1260,12 @@ class Race:
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car,
-            "cluster": self.cluster.as_dict(),
+            "cluster": {
+                "revision": self.revision,
+                "distribution-version": self.distribution_version,
+                "distribution-flavor": self.distribution_flavor,
+                "team-revision": self.team_revision,
+            },
             "results": self.results.as_dict()
         }
         if self.track_revision:
@@ -1289,25 +1292,17 @@ class Race:
             "trial-timestamp": time.to_iso8601(self.race_timestamp),
             "race-id": self.race_id,
             "race-timestamp": time.to_iso8601(self.race_timestamp),
-            "distribution-version": self.cluster.distribution_version,
-            "distribution-flavor": self.cluster.distribution_flavor,
-            "distribution-major-version": versions.major_version(self.cluster.distribution_version),
+            "distribution-version": self.distribution_version,
+            "distribution-flavor": self.distribution_flavor,
+            "distribution-major-version": versions.major_version(self.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car_name,
-            "node-count": len(self.cluster.nodes),
-            # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
+            # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
             "active": True
         }
-        plugins = set()
-        for node in self.cluster.nodes:
-            plugins.update(node.plugins)
-
-        if plugins:
-            result_template["plugins"] = list(plugins)
-
-        if self.cluster.team_revision:
-            result_template["team-revision"] = self.cluster.team_revision
+        if self.team_revision:
+            result_template["team-revision"] = self.team_revision
         if self.track_revision:
             result_template["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
@@ -1339,19 +1334,17 @@ class Race:
             user_tags = d["user-tags"]
         else:
             user_tags = {}
-
-        team_revision = None
-        if "cluster" in d:
-            team_revision = d.get("cluster").get("team-revision")
-
-        # Don't restore a few properties like some cluster properties because they (a) cannot be reconstructed easily without knowledge of other modules
-        # and (b) it is not necessary for this use case.
+        # TODO: cluster is optional for BWC. This can be removed after some grace period.
         # TODO #777: Remove the backwards-compatibility layer with trial*
+        cluster = d.get("cluster", {})
         return Race(d["rally-version"], d["environment"], d.get("race-id", d.get("trial-id")),
-                    time.from_is8601(d.get("race-timestamp", d.get("trial-timestamp"))), d["pipeline"], user_tags,
-                    d["track"], d.get("track-params"), d.get("challenge"), d["car"], d.get("car-params"),
-                    d.get("plugin-params"), track_revision=d.get("track-revision"),
-                    cluster={"team-revision": team_revision}, results=d["results"])
+                    time.from_is8601(d.get("race-timestamp", d.get("trial-timestamp"))),
+                    d["pipeline"], user_tags, d["track"], d.get("track-params"), d.get("challenge"), d["car"],
+                    d.get("car-params"), d.get("plugin-params"), track_revision=d.get("track-revision"),
+                    team_revision=cluster.get("team-revision"),
+                    distribution_version=cluster.get("distribution-version"),
+                    distribution_flavor=cluster.get("distribution-flavor"),
+                    revision=cluster.get("revision"), results=d["results"])
 
 
 class RaceStore:

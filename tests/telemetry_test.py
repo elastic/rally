@@ -24,8 +24,8 @@ from unittest import TestCase
 
 import elasticsearch
 
-from esrally import config, metrics, exceptions
-from esrally.mechanic import telemetry, team, cluster
+from esrally import config, metrics, exceptions, telemetry
+from esrally.mechanic import team, cluster
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
 
@@ -45,7 +45,7 @@ def create_config():
     # disable version probing to avoid any network calls in tests
     cfg.add(config.Scope.application, "reporting", "datastore.probe.cluster_version", False)
     # only internal devices are active
-    cfg.add(config.Scope.application, "mechanic", "telemetry.devices", [])
+    cfg.add(config.Scope.application, "telemetry", "devices", [])
     return cfg
 
 
@@ -61,7 +61,7 @@ class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
 class TelemetryTests(TestCase):
     def test_merges_options_set_by_different_devices(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "telemetry.devices", "jfr")
+        cfg.add(config.Scope.application, "telemetry", "devices", "jfr")
         cfg.add(config.Scope.application, "system", "challenge.root.dir", "challenge-root")
         cfg.add(config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
 
@@ -832,8 +832,8 @@ class NodeStatsTests(TestCase):
           trigger additional refreshes and WILL SKEW results.
     """
 
-    @mock.patch("esrally.mechanic.telemetry.NodeStatsRecorder", mock.Mock())
-    @mock.patch("esrally.mechanic.telemetry.SamplerThread", mock.Mock())
+    @mock.patch("esrally.telemetry.NodeStatsRecorder", mock.Mock())
+    @mock.patch("esrally.telemetry.SamplerThread", mock.Mock())
     def test_prints_warning_using_node_stats(self):
         clients = {"default": Client()}
         cfg = create_config()
@@ -1762,7 +1762,7 @@ class ClusterEnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], [], t))
+        t.on_benchmark_start()
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
@@ -1788,7 +1788,7 @@ class ClusterEnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], [], t))
+        t.on_benchmark_start()
 
         self.assertEqual(0, metrics_store_add_meta_info.call_count)
 
@@ -1882,7 +1882,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], [], t))
+        t.on_benchmark_start()
 
         calls = [
             mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
@@ -1938,7 +1938,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], [], t))
+        t.on_benchmark_start()
 
         calls = [
             mock.call(metrics.MetaInfoScope.node, "rally0", "node_name", "rally0"),
@@ -1957,141 +1957,9 @@ class ExternalEnvironmentInfoTests(TestCase):
         metrics_store = metrics.EsMetricsStore(self.cfg)
         env_device = telemetry.ExternalEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
-        t.attach_to_cluster(cluster.Cluster([], [], t))
+        t.on_benchmark_start()
 
         self.assertEqual(0, metrics_store_add_meta_info.call_count)
-
-
-class ClusterMetaDataInfoTests(TestCase):
-    def setUp(self):
-        self.cfg = create_config()
-
-    def test_enriches_cluster_nodes(self):
-        nodes_stats = {
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "rally0",
-                    "host": "127.0.0.1",
-                    "os": {
-                        "mem": {
-                            "total_in_bytes": 17179869184
-                        }
-                    },
-                    "fs": {
-                        "data": [
-                            {
-                                "mount": "/usr/local/var/elasticsearch/data1",
-                                "type": "hfs"
-                            },
-                            {
-                                "mount": "/usr/local/var/elasticsearch/data2",
-                                "type": "ntfs"
-                            }
-                        ]
-                    }
-                }
-            }
-        }
-
-        nodes_info = {
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "rally0",
-                    "host": "127.0.0.1",
-                    "ip": "127.0.0.1",
-                    "os": {
-                        "name": "Mac OS X",
-                        "version": "10.11.4",
-                        "available_processors": 8,
-                        "allocated_processors": 4
-                    },
-                    "jvm": {
-                        "version": "1.8.0_74",
-                        "vm_vendor": "Oracle Corporation"
-                    },
-                    "plugins": [
-                        {
-                            "name": "analysis-icu",
-                            "version": "6.5.1",
-                            "description": "The ICU Analysis plugin integrates Lucene ICU module ...",
-                            "classname": "org.elasticsearch.plugin.analysis.icu.AnalysisICUPlugin",
-                            "has_native_controller": False
-                        },
-                        {
-                            "name": "ingest-geoip",
-                            "version": "6.5.1",
-                            "description": "Ingest processor that uses looksup geo data ...",
-                            "classname": "org.elasticsearch.ingest.geoip.IngestGeoIpPlugin",
-                            "has_native_controller": False
-                        },
-                        {
-                            "name": "ingest-user-agent",
-                            "version": "6.5.1",
-                            "description": "Ingest processor that extracts information from a user agent",
-                            "classname": "org.elasticsearch.ingest.useragent.IngestUserAgentPlugin",
-                            "has_native_controller": False
-                        }
-                    ]
-                }
-            }
-        }
-        cluster_info = {
-            "version": {
-                "number": "6.5.1",
-                "build_flavor": "default",
-                "build_hash": "8c58350",
-            }
-        }
-        client = Client(nodes=SubClient(stats=nodes_stats, info=nodes_info), info=cluster_info)
-
-        t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
-
-        c = cluster.Cluster(hosts=[{"host": "localhost", "port": 39200}],
-                            nodes=[cluster.Node(pid=None, host_name="local", node_name="rally0", telemetry=None)],
-                            telemetry=t)
-
-        t.attach_to_cluster(c)
-
-        self.assertEqual("6.5.1", c.distribution_version)
-        self.assertEqual("default", c.distribution_flavor)
-        self.assertEqual("8c58350", c.source_revision)
-        self.assertEqual(1, len(c.nodes))
-        n = c.nodes[0]
-        self.assertEqual("127.0.0.1", n.ip)
-        self.assertEqual("Mac OS X", n.os["name"])
-        self.assertEqual("10.11.4", n.os["version"])
-        self.assertEqual("Oracle Corporation", n.jvm["vendor"])
-        self.assertEqual("1.8.0_74", n.jvm["version"])
-        self.assertEqual(8, n.cpu["available_processors"])
-        self.assertEqual(4, n.cpu["allocated_processors"])
-        self.assertEqual(17179869184, n.memory["total_bytes"])
-
-        self.assertEqual(2, len(n.fs))
-        self.assertEqual("/usr/local/var/elasticsearch/data1", n.fs[0]["mount"])
-        self.assertEqual("hfs", n.fs[0]["type"])
-        self.assertEqual("unknown", n.fs[0]["spins"])
-        self.assertEqual("/usr/local/var/elasticsearch/data2", n.fs[1]["mount"])
-        self.assertEqual("ntfs", n.fs[1]["type"])
-        self.assertEqual("unknown", n.fs[1]["spins"])
-        self.assertEqual(["analysis-icu", "ingest-geoip", "ingest-user-agent"], n.plugins)
-
-    def test_resilient_if_error_response(self):
-        client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
-
-        t = telemetry.Telemetry(devices=[telemetry.ClusterMetaDataInfo(client)])
-
-        c = cluster.Cluster(hosts=[{"host": "localhost", "port": 39200}],
-                            nodes=[cluster.Node(pid=None, host_name="local", node_name="rally0", telemetry=None)],
-                            telemetry=t)
-
-        t.attach_to_cluster(c)
-
-        self.assertIsNone(c.distribution_version)
-        self.assertIsNone(c.distribution_flavor)
-        self.assertIsNone(c.source_revision)
-        self.assertEqual(1, len(c.nodes))
-        n = c.nodes[0]
-        self.assertIsNone(n.ip)
 
 
 class DiskIoTests(TestCase):
@@ -2532,8 +2400,7 @@ class MlBucketProcessingTimeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.MlBucketProcessingTime(es, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
-        # cluster is not used by this device
-        t.detach_from_cluster(cluster=None)
+        t.on_benchmark_stop()
 
         self.assertEqual(0, metrics_store_put_doc.call_count)
 
@@ -2551,8 +2418,7 @@ class MlBucketProcessingTimeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.MlBucketProcessingTime(es, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
-        # cluster is not used by this device
-        t.detach_from_cluster(cluster=None)
+        t.on_benchmark_stop()
 
         self.assertEqual(0, metrics_store_put_doc.call_count)
 
@@ -2608,8 +2474,7 @@ class MlBucketProcessingTimeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.MlBucketProcessingTime(es, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
-        # cluster is not used by this device
-        t.detach_from_cluster(cluster=None)
+        t.on_benchmark_stop()
 
         metrics_store_put_doc.assert_has_calls([
             mock.call(doc={
@@ -2631,6 +2496,7 @@ class MlBucketProcessingTimeTests(TestCase):
                 "unit": "ms"
             }, level=metrics.MetaInfoScope.cluster)
         ])
+
 
 class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")

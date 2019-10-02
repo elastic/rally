@@ -123,14 +123,22 @@ class BenchmarkActor(actor.RallyActor):
     def receiveMsg_EngineStarted(self, msg, sender):
         self.logger.info("Mechanic has started engine successfully.")
         self.metrics_store.meta_info = msg.system_meta_info
-        cluster = msg.cluster_meta_info
-        self.race.cluster = cluster
+        self.race.team_revision = msg.team_revision
+        self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
+        self.logger.info("Telling driver to prepare for benchmarking.")
+        self.send(self.main_driver, driver.PrepareBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info))
+
+    @actor.no_retry("race control")
+    def receiveMsg_PreparationComplete(self, msg, sender):
+        self.race.distribution_flavor = msg.distribution_flavor
+        self.race.distribution_version = msg.distribution_version
+        self.race.revision = msg.revision
         if self.race.challenge.auto_generated:
             console.info("Racing on track [{}] and car {} with version [{}].\n"
-                         .format(self.race.track_name, self.race.car, self.race.cluster.distribution_version))
+                         .format(self.race.track_name, self.race.car, self.race.distribution_version))
         else:
             console.info("Racing on track [{}], challenge [{}] and car {} with version [{}].\n"
-                         .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.cluster.distribution_version))
+                         .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version))
         self.run()
 
     @actor.no_retry("race control")
@@ -162,15 +170,6 @@ class BenchmarkActor(actor.RallyActor):
         self.metrics_store.bulk_add(msg.metrics)
         self.send(self.main_driver, thespian.actors.ActorExitRequest())
         self.main_driver = None
-        self.send(self.mechanic, mechanic.OnBenchmarkStop())
-
-    @actor.no_retry("race control")
-    def receiveMsg_BenchmarkStopped(self, msg, sender):
-        self.logger.info("Bulk adding system metrics to metrics store.")
-        self.metrics_store.bulk_add(msg.system_metrics)
-        self.logger.debug("Flushing metrics data...")
-        self.metrics_store.flush()
-        self.logger.debug("Flushing done")
         self.teardown()
 
     @actor.no_retry("race control")
@@ -227,11 +226,8 @@ class BenchmarkActor(actor.RallyActor):
                                                       msg.distribution, msg.external, msg.docker))
 
     def run(self):
-        self.logger.info("Telling mechanic of benchmark start.")
-        self.send(self.mechanic, mechanic.OnBenchmarkStart())
-        self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
         self.logger.info("Telling driver to start benchmark.")
-        self.send(self.main_driver, driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info))
+        self.send(self.main_driver, driver.StartBenchmark())
 
     def teardown(self):
         self.logger.info("Asking mechanic to stop the engine.")

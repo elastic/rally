@@ -23,117 +23,9 @@ from time import monotonic as _time
 
 import psutil
 
-from esrally import config, time, exceptions, client
-from esrally.mechanic import telemetry, cluster, java_resolver
+from esrally import time, exceptions, telemetry
+from esrally.mechanic import cluster, java_resolver
 from esrally.utils import process
-
-
-def wait_for_rest_layer(es, max_attempts=20):
-    for attempt in range(max_attempts):
-        import elasticsearch
-        try:
-            es.info()
-            return True
-        except elasticsearch.ConnectionError as e:
-            if "SSL: UNKNOWN_PROTOCOL" in str(e):
-                raise exceptions.LaunchError("Could not connect to cluster via https. Is this a https endpoint?", e)
-            else:
-                time.sleep(1)
-        except elasticsearch.TransportError as e:
-            if e.status_code == 503:
-                time.sleep(1)
-            elif e.status_code == 401:
-                time.sleep(1)
-            else:
-                raise e
-    return False
-
-
-class ClusterLauncher:
-    """
-    The cluster launcher performs cluster-wide tasks that need to be done in the startup / shutdown phase.
-
-    """
-
-    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
-        """
-
-        Creates a new ClusterLauncher.
-
-        :param cfg: The config object.
-        :param metrics_store: A metrics store that is configured to receive system metrics.
-        :param client_factory_class: A factory class that can create an Elasticsearch client.
-        """
-        self.cfg = cfg
-        self.metrics_store = metrics_store
-        self.client_factory = client_factory_class
-        self.logger = logging.getLogger(__name__)
-
-    def start(self):
-        """
-        Performs final startup tasks.
-
-        Precondition: All cluster nodes have been started.
-        Postcondition: The cluster is ready to receive HTTP requests or a ``LaunchError`` is raised.
-
-        :return: A representation of the launched cluster.
-        """
-        enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
-        telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
-        all_hosts = self.cfg.opts("client", "hosts").all_hosts
-        default_hosts = self.cfg.opts("client", "hosts").default
-        preserve = self.cfg.opts("mechanic", "preserve.install")
-        skip_rest_api_check = self.cfg.opts("mechanic", "skip.rest.api.check")
-
-        es = {}
-        for cluster_name, cluster_hosts in all_hosts.items():
-            all_client_options = self.cfg.opts("client", "options").all_client_options
-            cluster_client_options = dict(all_client_options[cluster_name])
-            # Use retries to avoid aborts on long living connections for telemetry devices
-            cluster_client_options["retry-on-timeout"] = True
-            es[cluster_name] = self.client_factory(cluster_hosts, cluster_client_options).create()
-
-        es_default = es["default"]
-
-        t = telemetry.Telemetry(enabled_devices, devices=[
-            telemetry.NodeStats(telemetry_params, es, self.metrics_store),
-            telemetry.ClusterMetaDataInfo(es_default),
-            telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
-            telemetry.JvmStatsSummary(es_default, self.metrics_store),
-            telemetry.IndexStats(es_default, self.metrics_store),
-            telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
-            telemetry.CcrStats(telemetry_params, es, self.metrics_store),
-            telemetry.RecoveryStats(telemetry_params, es, self.metrics_store)
-        ])
-
-        # The list of nodes will be populated by ClusterMetaDataInfo, so no need to do it here
-        c = cluster.Cluster(default_hosts, [], t, preserve)
-
-        if skip_rest_api_check:
-            self.logger.info("Skipping REST API check and attaching telemetry devices to cluster.")
-            t.attach_to_cluster(c)
-            self.logger.info("Telemetry devices are now attached to the cluster.")
-        else:
-            self.logger.info("All cluster nodes have successfully started. Checking if REST API is available.")
-            if wait_for_rest_layer(es_default, max_attempts=40):
-                self.logger.info("REST API is available. Attaching telemetry devices to cluster.")
-                t.attach_to_cluster(c)
-                self.logger.info("Telemetry devices are now attached to the cluster.")
-            else:
-                # Just stop the cluster here and raise. The caller is responsible for terminating individual nodes.
-                self.logger.error("REST API layer is not yet available. Forcefully terminating cluster.")
-                self.stop(c)
-                raise exceptions.LaunchError(
-                    "Elasticsearch REST API layer is not available. Forcefully terminated cluster.")
-        return c
-
-    def stop(self, c):
-        """
-        Performs cleanup tasks. This method should be called before nodes are shut down.
-
-        :param c: The cluster that is about to be stopped.
-        """
-        c.telemetry.detach_from_cluster(c)
 
 
 def _get_container_id(compose_config):
@@ -214,52 +106,6 @@ class DockerLauncher:
                 node.telemetry.detach_from_node(node, running=False)
 
 
-class ExternalLauncher:
-    def __init__(self, cfg, metrics_store, client_factory_class=client.EsClientFactory):
-        self.cfg = cfg
-        self.metrics_store = metrics_store
-        self.client_factory = client_factory_class
-        self.logger = logging.getLogger(__name__)
-
-    def start(self, node_configurations=None):
-        hosts = self.cfg.opts("client", "hosts").default
-        client_options = self.cfg.opts("client", "options").default
-        es = self.client_factory(hosts, client_options).create()
-
-        # cannot enable custom telemetry devices here
-        t = telemetry.Telemetry(devices=[
-            # This is needed to actually populate the nodes
-            telemetry.ClusterMetaDataInfo(es),
-            # will gather node specific meta-data for all nodes
-            telemetry.ExternalEnvironmentInfo(es, self.metrics_store),
-        ])
-        # We create a pseudo-cluster here to get information about all nodes.
-        # cluster nodes will be populated by the external environment info telemetry device. We cannot know this
-        # upfront.
-        c = cluster.Cluster(hosts, [], t)
-        user_defined_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
-        # noinspection PyBroadException
-        try:
-            distribution_version = es.info()["version"]["number"]
-        except BaseException:
-            self.logger.exception("Could not retrieve cluster distribution version")
-            distribution_version = None
-        if not user_defined_version or user_defined_version.strip() == "":
-            self.logger.info("Distribution version was not specified by user. Rally-determined version is [%s]",
-                             distribution_version)
-            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-        elif user_defined_version != distribution_version:
-            self.logger.warning("Distribution version '%s' on command line differs from actual cluster version '%s'.",
-                                user_defined_version, distribution_version)
-        t.attach_to_cluster(c)
-        return c.nodes
-
-    def stop(self, nodes):
-        # nothing to do here, externally provisioned clusters / nodes don't have any specific telemetry devices
-        # attached.
-        pass
-
-
 def wait_for_pidfile(pidfilename, timeout=60):
     endtime = _time() + timeout
     while _time() < endtime:
@@ -312,8 +158,8 @@ class ProcessLauncher:
 
         self.logger.info("Starting node [%s] based on car [%s].", node_name, car)
 
-        enabled_devices = self.cfg.opts("mechanic", "telemetry.devices")
-        telemetry_params = self.cfg.opts("mechanic", "telemetry.params")
+        enabled_devices = self.cfg.opts("telemetry", "devices")
+        telemetry_params = self.cfg.opts("telemetry", "params")
         node_telemetry = [
             telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
             telemetry.JitCompiler(node_telemetry_dir),
