@@ -1597,7 +1597,7 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual({}, p["request-params"])
-        self.assertEquals(True, p["cache"])
+        self.assertEqual(True, p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -1652,7 +1652,7 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
-        self.assertEquals(False, p["cache"])
+        self.assertEqual(False, p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}

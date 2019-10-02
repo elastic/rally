@@ -65,7 +65,7 @@ es = ElasticsearchMock(bulk_size=BULK_SIZE)
 )
 def test_bulk_runner_without_errors_no_detailed_results(benchmark):
     benchmark(bulk_index, es, {
-        "action_metadata_present": True,
+        "action-metadata-present": True,
         "body": "bulk API body",
         "bulk-size": BULK_SIZE
     })
@@ -79,7 +79,7 @@ def test_bulk_runner_without_errors_no_detailed_results(benchmark):
 )
 def test_bulk_runner_without_errors_with_detailed_results(benchmark):
     benchmark(bulk_index, es, {
-        "action_metadata_present": True,
+        "action-metadata-present": True,
         "body": "bulk API body",
         "bulk-size": BULK_SIZE,
         "detailed-results": True
