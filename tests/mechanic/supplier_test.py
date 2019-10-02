@@ -523,13 +523,15 @@ class CreateSupplierTests(TestCase):
 
 
 class DistributionRepositoryTests(TestCase):
-    def test_release_repo_config_with_default_url(self):
+    @mock.patch("esrally.utils.sysstats.os_name", return_value="Linux")
+    @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="X86_64")
+    def test_release_repo_config_with_default_url(self, os_name, cpu_arch):
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
             "release.cache": "true"
-        }, version="5.5.0")
-        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.5.0.tar.gz", repo.download_url)
-        self.assertEqual("elasticsearch-5.5.0.tar.gz", repo.file_name)
+        }, version="7.3.2")
+        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.download_url)
+        self.assertEqual("elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.file_name)
         self.assertTrue(repo.cache)
 
     def test_release_repo_config_with_user_url(self):
