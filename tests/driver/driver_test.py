@@ -938,5 +938,5 @@ class RestLayerTests(TestCase):
                                                             urllib3.exceptions.SSLError(
                                                                 "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"))
         with self.assertRaisesRegex(expected_exception=exceptions.SystemSetupError,
-                                    expected_regex="Could not connect to cluster via https. Is this a https endpoint?"):
+                                    expected_regex="Could not connect to cluster via https. Is this an https endpoint?"):
             driver.wait_for_rest_layer(es, max_attempts=3)
