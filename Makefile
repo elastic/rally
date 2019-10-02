@@ -57,7 +57,7 @@ check-venv:
 	fi
 
 install: venv-create
-	. $(VENV_ACTIVATE_FILE); pip install --upgrade pip
+	. $(VENV_ACTIVATE_FILE); pip install --upgrade pip setuptools
 	. $(VENV_ACTIVATE_FILE); pip3 install -e .
 	# install tox for it tests
 	. $(VENV_ACTIVATE_FILE); pip3 install tox
