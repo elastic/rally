@@ -74,6 +74,12 @@ install_requires = [
 ]
 
 tests_require = [
+    # transitive dependency of pytest but pinned to that version to avoid:
+    #
+    # TypeError: attrib() got an unexpected keyword argument 'convert'
+    #
+    # see also https://stackoverflow.com/questions/58189683/typeerror-attrib-got-an-unexpected-keyword-argument-convert
+    "attrs==19.1.0",
     "pytest==3.4.2",
     "pytest-benchmark==3.1.1"
 ]
