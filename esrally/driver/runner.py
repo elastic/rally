@@ -641,7 +641,6 @@ class Query(Runner):
         request_params = self._default_request_params(params)
         r = es.search(
             index=params.get("index", "_all"),
-            doc_type=params.get("type"),
             body=mandatory(params, "body", self),
             params=request_params)
         hits = r["hits"]["total"]
@@ -675,7 +674,6 @@ class Query(Runner):
             if page == 0:
                 r = es.search(
                     index=params.get("index", "_all"),
-                    doc_type=params.get("type"),
                     body=mandatory(params, "body", self),
                     sort="_doc",
                     scroll="10s",

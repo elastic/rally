@@ -774,7 +774,6 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="_all",
-            doc_type=None,
             body=params["body"],
             params={"request_cache": "true"}
         )
@@ -823,7 +822,6 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="_all",
-            doc_type=None,
             body=params["body"],
             params={
                 "request_cache": "false",
@@ -873,7 +871,6 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="_all",
-            doc_type=None,
             body=params["body"],
             params={
                 "request_cache": "true"
@@ -927,7 +924,6 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="unittest",
-            doc_type="type",
             body=params["body"],
             params={}
         )
@@ -986,7 +982,6 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="unittest",
-            doc_type="type",
             body=params["body"],
             scroll="10s",
             size=100,
@@ -1049,7 +1044,6 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="unittest",
-            doc_type="type",
             body=params["body"],
             scroll="10s",
             size=100,
