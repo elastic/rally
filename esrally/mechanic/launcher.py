@@ -80,7 +80,9 @@ class DockerLauncher:
             ]
             t = telemetry.Telemetry(devices=node_telemetry)
             telemetry.add_metadata_for_node(self.metrics_store, node_name, host_name)
-            nodes.append(cluster.Node(0, host_name, node_name, t))
+            node = cluster.Node(0, host_name, node_name, t)
+            t.attach_to_node(node)
+            nodes.append(node)
         return nodes
 
     def _start_process(self, binary_path):
