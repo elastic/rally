@@ -280,7 +280,7 @@ function test_docker {
     # only test the most recent Docker distribution
     local dist="${DISTRIBUTIONS[${#DISTRIBUTIONS[@]}-1]}"
     random_configuration cfg
-    info "test docker [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=4gheap]"
+    info "test docker [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=geonames], [--car=4gheap]"
     kill_rally_processes
     esrally --configuration-name="${cfg}" --on-error=abort --pipeline="docker" --distribution-version="${dist}" --track="geonames" --challenge="append-no-conflicts-index-only" --test-mode --car=4gheap
 }
