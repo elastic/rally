@@ -78,6 +78,17 @@ tests_require = [
     "pytest-benchmark==3.2.2"
 ]
 
+# These packages are only required when developing Rally
+develop_require = [
+    "tox==3.14.0",
+    "coverage==4.5.4",
+    "sphinx==2.2.0",
+    "sphinx_rtd_theme==0.4.3",
+    "twine==1.15.0",
+    "wheel==0.33.6",
+    "github3.py==1.3.0"
+]
+
 # we call the tool rally, but it will be published as esrally on pypi
 setup(name="esrally",
       maintainer="Daniel Mitterdorfer",
@@ -96,6 +107,9 @@ setup(name="esrally",
       install_requires=install_requires,
       test_suite="tests",
       tests_require=tests_require,
+      extras_require={
+          "develop": tests_require + develop_require
+      },
       setup_requires=[
           "pytest-runner==5.1",
       ],
