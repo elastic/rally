@@ -1,4 +1,23 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+import difflib
 import json
+
 from esrally.utils import io
 
 
@@ -24,7 +43,7 @@ def to_bool(v):
 
 def kv_to_map(kvs):
     def convert(v):
-        # string
+        # string (specified explicitly)
         if v.startswith("'"):
             return v[1:-1]
 
@@ -41,7 +60,12 @@ def kv_to_map(kvs):
             pass
 
         # boolean
-        return to_bool(v)
+        try:
+            return to_bool(v)
+        except ValueError:
+            pass
+        # treat it as string by default
+        return v
 
     result = {}
     for kv in kvs:
@@ -59,6 +83,32 @@ def to_dict(arg, default_parser=kv_to_map):
         return json.loads(arg)
     else:
         return default_parser(csv_to_list(arg))
+
+
+def bulleted_list_of(src_list):
+    return ["- {}".format(param) for param in src_list]
+
+
+def double_quoted_list_of(src_list):
+    return ["\"{}\"".format(param) for param in src_list]
+
+
+def make_list_of_close_matches(word_list, all_possibilities):
+    """
+    Returns list of closest matches for `word_list` from `all_possibilities`.
+    e.g. [num_of-shards] will return [num_of_shards] when all_possibilities=["num_of_shards", "num_of_replicas"]
+
+    :param word_list: A list of strings that we want to find closest matches for.
+    :param all_possibilities: List of strings that the algorithm will calculate the closest match from.
+    :return:
+    """
+    close_matches = []
+    for param in word_list:
+        matched_word = difflib.get_close_matches(param, all_possibilities, n=1)
+        if matched_word:
+            close_matches.append(matched_word[0])
+
+    return close_matches
 
 
 class ConnectOptions:
@@ -85,6 +135,8 @@ class ConnectOptions:
 
 
 class TargetHosts(ConnectOptions):
+    DEFAULT = "default"
+
     def __init__(self, argvalue):
         self.argname = "--target-hosts"
         self.argvalue = argvalue
@@ -101,7 +153,7 @@ class TargetHosts(ConnectOptions):
             defined as a json string or file.
             """
 
-            return {"default": _normalize_hosts(arg)}
+            return {TargetHosts.DEFAULT: _normalize_hosts(arg)}
 
         self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
 
@@ -137,7 +189,7 @@ class ClientOptions(ConnectOptions):
             defined as a json string or file.
             """
 
-            return {"default": kv_to_map(arg)}
+            return {TargetHosts.DEFAULT: kv_to_map(arg)}
 
         if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts != None:
             # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.

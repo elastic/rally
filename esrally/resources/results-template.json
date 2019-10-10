@@ -1,5 +1,5 @@
 {
-  "template": "rally-results-*",
+  "index_patterns": ["rally-results-*"],
   "settings": {
     "index": {
       "refresh_interval": "5s",
@@ -7,7 +7,7 @@
     }
   },
   "mappings": {
-    "_default_": {
+    "_doc": {
       "dynamic_templates": [
         {
           "strings": {
@@ -19,9 +19,6 @@
           }
         }
       ],
-      "_all": {
-        "enabled": false
-      },
       "_source": {
         "enabled": true
       },
@@ -30,6 +27,18 @@
           "type": "keyword"
         },
         "trial-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "race-id": {
+          "type": "keyword"
+        },
+        "race-timestamp": {
           "type": "date",
           "format": "basic_date_time_no_millis",
           "fields": {
@@ -62,6 +71,9 @@
         "plugins": {
           "type": "keyword"
         },
+        "distribution-flavor": {
+          "type": "keyword"
+        },
         "distribution-version": {
           "type": "keyword"
         },
@@ -74,6 +86,9 @@
         "operation": {
           "type": "keyword"
         },
+        "job": {
+          "type": "keyword"
+        },
         "name": {
           "type": "keyword"
         },
@@ -84,6 +99,9 @@
               "type": "double"
             },
             "min": {
+              "type": "double"
+            },
+            "mean": {
               "type": "double"
             },
             "median": {

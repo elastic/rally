@@ -1,3 +1,20 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import configparser
 import getpass
 import logging
@@ -6,7 +23,7 @@ import re
 import shutil
 from enum import Enum
 
-from esrally import PROGRAM_NAME, DOC_LINK, exceptions
+from esrally import PROGRAM_NAME, doc_link, exceptions
 from esrally.utils import io, git, console, convert
 
 
@@ -285,7 +302,7 @@ class ConfigFactory:
         if advanced_config:
             self.o("Running advanced configuration. You can get additional help at:")
             self.o("")
-            self.o("  %s" % console.format.link("%sconfiguration.html" % DOC_LINK))
+            self.o("  %s" % console.format.link(doc_link("configuration.html")))
             self.o("")
         else:
             self.o("Running simple configuration. Run the advanced configuration with:")
@@ -301,9 +318,9 @@ class ConfigFactory:
 
         root_dir = io.normalize_path(os.path.abspath(os.path.join(config_file.config_dir, "benchmarks")))
         if advanced_config:
-            root_dir = io.normalize_path(self._ask_property("Enter the benchmark data directory", default_value=root_dir))
+            root_dir = io.normalize_path(self._ask_property("Enter the benchmark root directory", default_value=root_dir))
         else:
-            self.o("* Setting up benchmark data directory in %s" % root_dir)
+            self.o("* Setting up benchmark root directory in %s" % root_dir)
 
         # We try to autodetect an existing ES source directory
         guess = self._guess_es_src_dir()
@@ -334,7 +351,7 @@ class ConfigFactory:
             if data_store_choice == "1":
                 env_name = "local"
                 data_store_type = "in-memory"
-                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
+                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "False", "", ""
             else:
                 data_store_type = "elasticsearch"
                 data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
@@ -342,13 +359,13 @@ class ConfigFactory:
                 env_name = self._ask_env_name()
 
             preserve_install = convert.to_bool(self._ask_property("Do you want Rally to keep the Elasticsearch benchmark candidate "
-                                                                  "installation including the index (will use several GB per trial run)?",
+                                                                  "installation including the index (will use several GB per race)?",
                                                                   default_value=False))
         else:
             # Does not matter for an in-memory store
             env_name = "local"
             data_store_type = "in-memory"
-            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "", "", ""
+            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "False", "", ""
             preserve_install = False
 
         config = configparser.ConfigParser()
@@ -399,7 +416,7 @@ class ConfigFactory:
         self.o("More info about Rally:")
         self.o("")
         self.o("* Type %s --help" % PROGRAM_NAME)
-        self.o("* Read the documentation at %s" % console.format.link(DOC_LINK))
+        self.o("* Read the documentation at %s" % console.format.link(doc_link()))
         self.o("* Ask a question on the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
@@ -601,7 +618,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
             if "source" not in config:
                 return
             for k, v in config["source"].items():
-                plugin_match = re.match('^plugin\.([^.]+)\.build\.task$',k)
+                plugin_match = re.match(r"^plugin\.([^.]+)\.build\.task$",k)
                 if plugin_match != None and len(plugin_match.groups()) > 0 :
                     plugin_name = plugin_match.group(1)
                     new_key = "plugin.{}.build.command".format(plugin_name)
@@ -612,7 +629,7 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
                         "  [{} = {}] to [{} = <the full command>]."
                         "  Please refer to the documentation for more details:"
                         "  {}.\n".format(plugin_match.group(1), config_file.location, k, v, new_key,
-                                         console.format.link("%selasticsearch_plugins.html#running-a-benchmark-with-plugins" % DOC_LINK)))
+                                         console.format.link(doc_link("elasticsearch_plugins.html#running-a-benchmark-with-plugins"))))
 
         if "build" in config:
             logger.info("Removing Gradle configuration as Rally now uses the Gradle Wrapper to build Elasticsearch.")

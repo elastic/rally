@@ -1,12 +1,30 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import concurrent.futures
-import threading
 import datetime
 import logging
 import queue
+import threading
 import time
 
 import thespian.actors
-from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME
+
+from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME, telemetry
 from esrally.driver import runner, scheduler
 from esrally.utils import convert, console, net
 
@@ -16,22 +34,24 @@ from esrally.utils import convert, console, net
 # Messages sent between drivers
 #
 ##################################
-class StartBenchmark:
+class PrepareBenchmark:
     """
-    Starts a benchmark.
+    Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
     """
 
-    def __init__(self, config, track, metrics_meta_info, lap):
+    def __init__(self, config, track, metrics_meta_info):
         """
         :param config: Rally internal configuration object.
         :param track: The track to use.
         :param metrics_meta_info: meta info for the metrics store.
-        :param lap: The current lap.
         """
-        self.lap = lap
         self.config = config
         self.track = track
         self.metrics_meta_info = metrics_meta_info
+
+
+class StartBenchmark:
+    pass
 
 
 class PrepareTrack:
@@ -50,6 +70,13 @@ class PrepareTrack:
 
 class TrackPrepared:
     pass
+
+
+class PreparationComplete:
+    def __init__(self, distribution_flavor, distribution_version, revision):
+        self.distribution_flavor = distribution_flavor
+        self.distribution_version = distribution_version
+        self.revision = revision
 
 
 class StartLoadGenerator:
@@ -144,6 +171,7 @@ class DriverActor(actor.RallyActor):
         self.coordinator = None
         self.status = "init"
         self.post_process_timer = 0
+        self.cluster_details = None
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -172,7 +200,7 @@ class DriverActor(actor.RallyActor):
                 self.logger.info("Load generator [%d] has exited.", driver_index)
             else:
                 self.logger.error("Load generator [%d] has exited prematurely. Aborting benchmark.", driver_index)
-                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [%d] has exited prematurely.".format(driver_index)))
+                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [{}] has exited prematurely.".format(driver_index)))
         else:
             self.logger.info("A track preparator has exited.")
 
@@ -180,10 +208,15 @@ class DriverActor(actor.RallyActor):
         self.logger.info("Main driver received unknown message [%s] (ignoring).", str(msg))
 
     @actor.no_retry("driver")
-    def receiveMsg_StartBenchmark(self, msg, sender):
+    def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
-        self.coordinator.start_benchmark(msg.track, msg.lap, msg.metrics_meta_info)
+        self.coordinator.prepare_benchmark(msg.track, msg.metrics_meta_info)
+
+    @actor.no_retry("driver")
+    def receiveMsg_StartBenchmark(self, msg, sender):
+        self.start_sender = sender
+        self.coordinator.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     @actor.no_retry("driver")
@@ -241,6 +274,9 @@ class DriverActor(actor.RallyActor):
         else:
             return {"ip": host}
 
+    def on_cluster_details_retrieved(self, cluster_details):
+        self.cluster_details = cluster_details
+
     def on_prepare_track(self, preparators, cfg, track):
         self.children = preparators
         msg = PrepareTrack(cfg, track)
@@ -248,10 +284,16 @@ class DriverActor(actor.RallyActor):
             self.send(child, msg)
 
     def after_track_prepared(self):
+        cluster_version = self.cluster_details["version"] if self.cluster_details else {}
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
-        self.coordinator.after_track_prepared()
+        self.send(self.start_sender, PreparationComplete(
+            # older versions (pre 6.3.0) don't expose build_flavor because the only (implicit) flavor was "oss"
+            cluster_version.get("build_flavor", "oss"),
+            cluster_version.get("number", "Unknown"),
+            cluster_version.get("build_hash", "Unknown")
+        ))
 
     def on_benchmark_complete(self, metrics):
         self.send(self.start_sender, BenchmarkComplete(metrics))
@@ -262,7 +304,8 @@ def load_local_config(coordinator_config):
         # only copy the relevant bits
         "track", "driver", "client",
         # due to distribution version...
-        "mechanic"
+        "mechanic",
+        "telemetry"
     ])
     # set root path (normally done by the main entry point)
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
@@ -283,14 +326,37 @@ class TrackPreparationActor(actor.RallyActor):
         # is present on all machines.
         if msg.track.has_plugins:
             track.track_repo(cfg, fetch=True, update=True)
+            # we also need to load track plugins eagerly as the respective parameter sources could require
+            track.load_track_plugins(cfg, runner.register_runner, scheduler.register_scheduler)
         # Beware: This is a potentially long-running operation and we're completely blocking our actor here. We should do this
         # maybe in a background thread.
         track.prepare_track(msg.track, cfg)
         self.send(sender, TrackPrepared())
 
 
+def wait_for_rest_layer(es, max_attempts=20):
+    for attempt in range(max_attempts):
+        import elasticsearch
+        try:
+            es.info()
+            return True
+        except elasticsearch.ConnectionError as e:
+            if "SSL: UNKNOWN_PROTOCOL" in str(e):
+                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
+            else:
+                time.sleep(1)
+        except elasticsearch.TransportError as e:
+            if e.status_code == 503:
+                time.sleep(1)
+            elif e.status_code == 401:
+                time.sleep(1)
+            else:
+                raise e
+    return False
+
+
 class Driver:
-    def __init__(self, target, config):
+    def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
@@ -302,6 +368,7 @@ class Driver:
         self.logger = logging.getLogger(__name__)
         self.target = target
         self.config = config
+        self.es_client_factory = es_client_factory_class
         self.track = None
         self.challenge = None
         self.metrics_store = None
@@ -323,7 +390,56 @@ class Driver:
         self.tasks_per_join_point = None
         self.complete_current_task_sent = False
 
-    def start_benchmark(self, t, lap, metrics_meta_info):
+        self.telemetry = None
+
+    def create_es_clients(self):
+        all_hosts = self.config.opts("client", "hosts").all_hosts
+        es = {}
+        for cluster_name, cluster_hosts in all_hosts.items():
+            all_client_options = self.config.opts("client", "options").all_client_options
+            cluster_client_options = dict(all_client_options[cluster_name])
+            # Use retries to avoid aborts on long living connections for telemetry devices
+            cluster_client_options["retry-on-timeout"] = True
+            es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
+        return es
+
+    def prepare_telemetry(self, es):
+        enabled_devices = self.config.opts("telemetry", "devices")
+        telemetry_params = self.config.opts("telemetry", "params")
+
+        es_default = es["default"]
+        self.telemetry = telemetry.Telemetry(enabled_devices, devices=[
+            telemetry.NodeStats(telemetry_params, es, self.metrics_store),
+            telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
+            telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+            telemetry.JvmStatsSummary(es_default, self.metrics_store),
+            telemetry.IndexStats(es_default, self.metrics_store),
+            telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
+            telemetry.CcrStats(telemetry_params, es, self.metrics_store),
+            telemetry.RecoveryStats(telemetry_params, es, self.metrics_store)
+        ])
+
+    def wait_for_rest_api(self, es):
+        skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
+        if skip_rest_api_check:
+            self.logger.info("Skipping REST API check.")
+        else:
+            es_default = es["default"]
+            self.logger.info("Checking if REST API is available.")
+            if wait_for_rest_layer(es_default, max_attempts=40):
+                self.logger.info("REST API is available.")
+            else:
+                self.logger.error("REST API layer is not yet available. Stopping benchmark.")
+                raise exceptions.SystemSetupError("Elasticsearch REST API layer is not available.")
+
+    def retrieve_cluster_info(self, es):
+        try:
+            return es["default"].info()
+        except BaseException:
+            self.logger.exception("Could not retrieve cluster info on benchmark start")
+            return None
+
+    def prepare_benchmark(self, t, metrics_meta_info):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
@@ -332,8 +448,11 @@ class Driver:
                                                    track=self.track.name,
                                                    challenge=self.challenge.name,
                                                    meta_info=metrics_meta_info,
-                                                   lap=lap,
                                                    read_only=False)
+        es_clients = self.create_es_clients()
+        self.wait_for_rest_api(es_clients)
+        self.prepare_telemetry(es_clients)
+        self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
         for host in self.config.opts("driver", "load_driver_hosts"):
             if host != "localhost":
                 self.load_driver_hosts.append(net.resolve(host))
@@ -343,10 +462,13 @@ class Driver:
         preps = [self.target.create_track_preparator(h) for h in self.load_driver_hosts]
         self.target.on_prepare_track(preps, self.config, self.track)
 
-    def after_track_prepared(self):
+    def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")
         # ensure relative time starts when the benchmark starts.
         self.reset_relative_time()
+        self.logger.info("Attaching cluster-level telemetry devices.")
+        self.telemetry.on_benchmark_start()
+        self.logger.info("Cluster-level telemetry devices are now attached.")
 
         allocator = Allocator(self.challenge.schedule)
         self.allocations = allocator.allocations
@@ -387,10 +509,10 @@ class Driver:
 
             self.logger.debug("Postprocessing samples...")
             self.post_process_samples()
-            m = self.metrics_store.to_externalizable(clear=True)
-
             if self.finished():
+                self.telemetry.on_benchmark_stop()
                 self.logger.info("All steps completed.")
+                m = self.metrics_store.to_externalizable(clear=True)
                 self.logger.debug("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
@@ -407,6 +529,7 @@ class Driver:
                     # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
                     #             (it doesn't matter too much if we're a few ms off).
                     waiting_period = 1.0
+                m = self.metrics_store.to_externalizable(clear=True)
                 self.target.on_task_finished(m, waiting_period)
                 # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
                 # a relative instead of an absolute value.
@@ -1251,83 +1374,159 @@ def schedule_for(current_track, task, client_index):
     runner_for_op = runner.runner_for(op.type)
     params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
 
-    if task.warmup_time_period is not None or task.time_period is not None:
+    if requires_time_period_schedule(task, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
-        logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] seconds and a "
-                    "time period of [%s] seconds.", task.schedule, task, str(warmup_time_period), str(task.time_period))
-        return time_period_based(sched, warmup_time_period, task.time_period, runner_for_op, params_for_op)
+        logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] "
+                    "seconds and a time period of [%s] seconds.", task.schedule, task.name,
+                    str(warmup_time_period), str(task.time_period))
+        loop_control = TimePeriodBased(warmup_time_period, task.time_period)
     else:
         warmup_iterations = task.warmup_iterations if task.warmup_iterations else 0
         if task.iterations:
             iterations = task.iterations
-        elif params_for_op.size():
-            iterations = params_for_op.size() - warmup_iterations
-        else:
+        elif params_for_op.infinite:
+            # this is usually the case if the parameter source provides a constant
             iterations = 1
-        logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%d] warmup iterations and "
-                    "[%d] iterations." % (task.schedule, op, warmup_iterations, iterations))
-        return iteration_count_based(sched, warmup_iterations, iterations, runner_for_op, params_for_op)
+        else:
+            iterations = None
+        logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
+                    "iterations and [%s] iterations.", task.schedule, task.name, str(warmup_iterations), str(iterations))
+        loop_control = IterationBased(warmup_iterations, iterations)
+
+    return generator_for_schedule(task.name, sched, loop_control, runner_for_op, params_for_op)
 
 
-def time_period_based(sched, warmup_time_period, time_period, runner, params):
+def requires_time_period_schedule(task, params):
+    if task.warmup_time_period is not None or task.time_period is not None:
+        return True
+    # user has explicitly requested iterations
+    if task.warmup_iterations is not None or task.iterations is not None:
+        return False
+    # If the parameter source ends after a finite amount of iterations, we will run with a time-based schedule
+    return not params.infinite
+
+
+def generator_for_schedule(task_name, sched, task_progress_control, runner, params):
     """
-    Calculates the necessary schedule for time period based operations.
+    Creates a generator that will yield individual task invocations for the provided schedule.
 
-    :param sched: The scheduler for this task. Must not be None.
-    :param warmup_time_period: The time period in seconds that is considered for warmup. Must not be None; provide zero instead.
-    :param time_period: The time period in seconds that is considered for measurement. May be None.
+    :param task_name: The name of the task for which the schedule is generated.
+    :param sched: The scheduler for this task.
+    :param task_progress_control: Controls how and how often this generator will loop.
     :param runner: The runner for a given operation.
     :param params: The parameter source for a given operation.
     :return: A generator for the corresponding parameters.
     """
     next_scheduled = 0
-    start = time.perf_counter()
-    if time_period is None:
-        iterations = params.size()
-        if iterations:
-            for it in range(0, iterations):
-                sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
-                percent_completed = (it + 1) / iterations
-                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-                next_scheduled = sched.next(next_scheduled)
-        else:
-            param_source_knows_progress = hasattr(params, "percent_completed")
-            while True:
-                sample_type = metrics.SampleType.Warmup if time.perf_counter() - start < warmup_time_period else metrics.SampleType.Normal
+    logger = logging.getLogger(__name__)
+    if task_progress_control.infinite:
+        logger.info("Parameter source will determine when the schedule for [%s] terminates.", task_name)
+        param_source_knows_progress = hasattr(params, "percent_completed")
+        task_progress_control.start()
+        while True:
+            try:
                 # does not contribute at all to completion. Hence, we cannot define completion.
                 percent_completed = params.percent_completed if param_source_knows_progress else None
-                yield (next_scheduled, sample_type, percent_completed, runner, params.params())
+                yield (next_scheduled, task_progress_control.sample_type, percent_completed, runner, params.params())
                 next_scheduled = sched.next(next_scheduled)
+                task_progress_control.next()
+            except StopIteration:
+                logger.info("%s schedule for [%s] stopped due to StopIteration.", str(task_progress_control), task_name)
+                return
     else:
-        end = start + warmup_time_period + time_period
-        it = 0
+        task_progress_control.start()
+        logger.info("%s schedule will determine when the schedule for [%s] terminates.",
+                    str(task_progress_control), task_name)
+        while not task_progress_control.completed:
+            try:
+                yield (next_scheduled,
+                       task_progress_control.sample_type,
+                       task_progress_control.percent_completed,
+                       runner,
+                       params.params())
+                next_scheduled = sched.next(next_scheduled)
+                task_progress_control.next()
+            except StopIteration:
+                logger.info("%s schedule for [%s] stopped due to StopIteration.", str(task_progress_control), task_name)
+                return
+        logger.info("%s schedule for [%s] stopped regularly.", str(task_progress_control), task_name)
 
-        while time.perf_counter() < end:
-            now = time.perf_counter()
-            sample_type = metrics.SampleType.Warmup if now - start < warmup_time_period else metrics.SampleType.Normal
-            percent_completed = (now - start) / (warmup_time_period + time_period)
-            yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-            next_scheduled = sched.next(next_scheduled)
-            it += 1
+
+class TimePeriodBased:
+    def __init__(self, warmup_time_period, time_period):
+        self._warmup_time_period = warmup_time_period
+        self._time_period = time_period
+        if warmup_time_period is not None and time_period is not None:
+            self._duration = self._warmup_time_period + self._time_period
+        else:
+            self._duration = None
+        self._start = None
+        self._now = None
+
+    def start(self):
+        self._now = time.perf_counter()
+        self._start = self._now
+
+    @property
+    def _elapsed(self):
+        return self._now - self._start
+
+    @property
+    def sample_type(self):
+        return metrics.SampleType.Warmup if self._elapsed < self._warmup_time_period else metrics.SampleType.Normal
+
+    @property
+    def infinite(self):
+        return self._time_period is None
+
+    @property
+    def percent_completed(self):
+        return self._elapsed / self._duration
+
+    @property
+    def completed(self):
+        return self._now >= (self._start + self._duration)
+
+    def next(self):
+        self._now = time.perf_counter()
+
+    def __str__(self):
+        return "time-period-based"
 
 
-def iteration_count_based(sched, warmup_iterations, iterations, runner, params):
-    """
-    Calculates the necessary schedule based on a given number of iterations.
+class IterationBased:
+    def __init__(self, warmup_iterations, iterations):
+        self._warmup_iterations = warmup_iterations
+        self._iterations = iterations
+        if warmup_iterations is not None and iterations is not None:
+            self._total_iterations = self._warmup_iterations + self._iterations
+            if self._total_iterations == 0:
+                raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
+        else:
+            self._total_iterations = None
+        self._it = None
 
-    :param sched: The scheduler for this task. Must not be None.
-    :param warmup_iterations: The number of warmup iterations to run. 0 if no warmup should be performed.
-    :param iterations: The number of measurement iterations to run.
-    :param runner: The runner for a given operation.
-    :param params: The parameter source for a given operation.
-    :return: A generator for the corresponding parameters.
-    """
-    next_scheduled = 0
-    total_iterations = warmup_iterations + iterations
-    if total_iterations == 0:
-        raise exceptions.RallyAssertionError("Operation must run at least for one iteration.")
-    for it in range(0, total_iterations):
-        sample_type = metrics.SampleType.Warmup if it < warmup_iterations else metrics.SampleType.Normal
-        percent_completed = (it + 1) / total_iterations
-        yield (next_scheduled, sample_type, percent_completed, runner, params.params())
-        next_scheduled = sched.next(next_scheduled)
+    def start(self):
+        self._it = 0
+
+    @property
+    def sample_type(self):
+        return metrics.SampleType.Warmup if self._it < self._warmup_iterations else metrics.SampleType.Normal
+
+    @property
+    def infinite(self):
+        return self._iterations is None
+
+    @property
+    def percent_completed(self):
+        return (self._it + 1) / self._total_iterations
+
+    @property
+    def completed(self):
+        return self._it >= self._total_iterations
+
+    def next(self):
+        self._it += 1
+
+    def __str__(self):
+        return "iteration-count-based"

@@ -1,3 +1,249 @@
+### 1.3.0
+
+#### Enhancements
+
+* [#764](https://github.com/elastic/rally/pull/764) (Breaking): Remove MergeParts internal telemetry device
+* [#762](https://github.com/elastic/rally/pull/762): Check that origin points to main repo for release
+* [#761](https://github.com/elastic/rally/pull/761): Allow to retry until success
+* [#760](https://github.com/elastic/rally/pull/760): Improve logging of schedules
+* [#759](https://github.com/elastic/rally/pull/759): Show track and team revision when listing races
+* [#758](https://github.com/elastic/rally/pull/758): Improve error message on SSL errors
+* [#755](https://github.com/elastic/rally/pull/755): Add pull request template
+* [#748](https://github.com/elastic/rally/pull/748): Consistently render links to the documentation
+* [#746](https://github.com/elastic/rally/pull/746): Fixup ProcessLauncherTests issues
+* [#744](https://github.com/elastic/rally/pull/744): Change DiskIO callbacks to use attach/detach
+* [#739](https://github.com/elastic/rally/pull/739) (Breaking): Remove lap feature and all references.
+* [#737](https://github.com/elastic/rally/pull/737): Allow to attach telemetry devices without reprovisioning
+* [#735](https://github.com/elastic/rally/pull/735): Assume string type for params by default
+* [#731](https://github.com/elastic/rally/pull/731): Update DiskIo telemetry device to persist the counters
+* [#730](https://github.com/elastic/rally/pull/730): Be resilient upon startup
+* [#729](https://github.com/elastic/rally/pull/729) (Breaking): Drop 1.x support for cluster metadata
+* [#728](https://github.com/elastic/rally/pull/728): Allow to set distribution version as parameter
+* [#726](https://github.com/elastic/rally/pull/726): Don't check complete list of parameters in integration test
+* [#725](https://github.com/elastic/rally/pull/725): Capture team and track revisions in metrics metadata
+* [#723](https://github.com/elastic/rally/pull/723): Always exit on OOME
+* [#721](https://github.com/elastic/rally/pull/721): Update DiskIo telemetry device to persist the counters
+* [#720](https://github.com/elastic/rally/pull/720): Change filestore to be indexed by unique ID
+* [#719](https://github.com/elastic/rally/pull/719): ES as a Daemon (again)
+* [#716](https://github.com/elastic/rally/pull/716) (Breaking): Drop support for Elasticsearch 1.x
+* [#711](https://github.com/elastic/rally/pull/711): Change telemetry devices to rely on jvm.config instead of ES_JAVA_OPTS
+* [#701](https://github.com/elastic/rally/pull/701): Implement ES daemon-mode in process launcher
+
+#### Bug Fixes
+
+* [#751](https://github.com/elastic/rally/pull/751): Option track-revision should work with track-repository
+* [#750](https://github.com/elastic/rally/pull/750): Retrieve timestamped commit hash separately
+* [#747](https://github.com/elastic/rally/pull/747): Log git output
+
+### 1.2.1
+
+#### Highlights
+
+* [#702](https://github.com/elastic/rally/pull/702): Add Rally Docker image to release process
+* [#688](https://github.com/elastic/rally/pull/688): Fail Rally early if there are unused variables in track-params
+
+#### Enhancements
+
+* [#713](https://github.com/elastic/rally/pull/713): Check tags in track and team repos
+* [#709](https://github.com/elastic/rally/pull/709) (Breaking): Drop support for Python 3.4
+* [#708](https://github.com/elastic/rally/pull/708): Align default request param extraction for queries
+* [#707](https://github.com/elastic/rally/pull/707): Upgrade pip for virtualenv
+* [#705](https://github.com/elastic/rally/pull/705): Provide default for datastore.secure in all cases
+* [#704](https://github.com/elastic/rally/pull/704): Add download subcommand
+* [#700](https://github.com/elastic/rally/pull/700): Allow stdout print when running in Docker
+* [#694](https://github.com/elastic/rally/pull/694): Measure execution time of bulk ingest pipeline
+* [#691](https://github.com/elastic/rally/pull/691): Remove node_count_per_host
+
+#### Bug Fixes
+
+* [#710](https://github.com/elastic/rally/pull/710) (Breaking): Don't pass request_cache by default
+* [#706](https://github.com/elastic/rally/pull/706): Register pyenv Python versions
+* [#699](https://github.com/elastic/rally/pull/699): Fix home directory paths in provisioner_test.
+* [#698](https://github.com/elastic/rally/pull/698): Enter degraded mode on bootstrap failure
+* [#693](https://github.com/elastic/rally/pull/693): Assume UTC timezone if not specified
+
+#### Doc Changes
+
+* [#714](https://github.com/elastic/rally/pull/714): Document which ES versions are supported by Rally
+* [#703](https://github.com/elastic/rally/pull/703): Document known issues in dev setup
+
+### 1.1.0
+
+#### Enhancements
+
+* [#683](https://github.com/elastic/rally/pull/683): Store mean for response-related metrics
+* [#681](https://github.com/elastic/rally/pull/681): Use single node discovery type if suitable
+* [#679](https://github.com/elastic/rally/pull/679): Skip Python install if already existing
+* [#678](https://github.com/elastic/rally/pull/678): Upgrade Jinja to 2.10.1
+* [#674](https://github.com/elastic/rally/pull/674): [Experimental] Capture peak usage of JVM mem pools
+* [#671](https://github.com/elastic/rally/pull/671): Add ability to download from S3 buckets
+* [#670](https://github.com/elastic/rally/pull/670): Pass JAVA12_HOME in integration tests
+* [#669](https://github.com/elastic/rally/pull/669): Allow to override request timeout for force-merge
+* [#668](https://github.com/elastic/rally/pull/668): Chart generator segment memory and new track combinations
+* [#667](https://github.com/elastic/rally/pull/667): Add sleep operation
+* [#666](https://github.com/elastic/rally/pull/666): Introduce new command line parameter --track-revision
+* [#662](https://github.com/elastic/rally/pull/662): Add distribution flavor to metrics metadata
+* [#660](https://github.com/elastic/rally/pull/660): Add user tags when comparing races
+* [#659](https://github.com/elastic/rally/pull/659): Sort the track parameters / user tags when listing races
+* [#654](https://github.com/elastic/rally/pull/654): Allow to use ES 7.x as metrics store
+* [#649](https://github.com/elastic/rally/pull/649) (Breaking): Pass request-params as is in supported operations
+* [#648](https://github.com/elastic/rally/pull/648): Updates to support 7.x APIs
+
+#### Bug Fixes
+
+* [#687](https://github.com/elastic/rally/pull/687): Fix release charts after #684
+* [#686](https://github.com/elastic/rally/pull/686): Honor track-params in chart-generator
+* [#684](https://github.com/elastic/rally/pull/684): Use license instead of dist flavor in charts
+* [#682](https://github.com/elastic/rally/pull/682): Provide a platform-independent Rally binary
+* [#675](https://github.com/elastic/rally/pull/675): Fix chart generator segment memory bug
+* [#673](https://github.com/elastic/rally/pull/673): Honor runtime JDK in provisioner
+* [#661](https://github.com/elastic/rally/pull/661): Small change in the venv-create
+* [#655](https://github.com/elastic/rally/pull/655): Add compatibility layer for existing metrics store
+* [#652](https://github.com/elastic/rally/pull/652): Properly authenticate at proxy server
+
+#### Doc Changes
+
+* [#676](https://github.com/elastic/rally/pull/676): Document ccr-stats telemetry device
+* [#651](https://github.com/elastic/rally/pull/651): fix typo in custom_scheduler example
+
+### 1.0.4
+
+#### Enhancements
+
+* [#650](https://github.com/elastic/rally/pull/650): Use --prune for all git fetch operations
+* [#647](https://github.com/elastic/rally/pull/647): Make types optional
+* [#646](https://github.com/elastic/rally/pull/646): Add node_name in node-stats docs for ...
+* [#644](https://github.com/elastic/rally/pull/644): Allow collection of jvm gc section in node-stats telemetry device
+* [#642](https://github.com/elastic/rally/pull/642): Allow passing any request parameter to the create index API
+* [#641](https://github.com/elastic/rally/pull/641): Temporarily disable Python 3.4 in build
+* [#639](https://github.com/elastic/rally/pull/639): Add recovery-stats telemetry device
+* [#637](https://github.com/elastic/rally/pull/637): Ignore JSON logs for merge parts analysis
+* [#633](https://github.com/elastic/rally/pull/633): Ensure Makefile install target includes all release dependencies
+
+#### Bug Fixes
+
+* [#638](https://github.com/elastic/rally/pull/638): Correct recorder-based sampling interval
+
+#### Doc Changes
+
+* [#640](https://github.com/elastic/rally/pull/640): docs: Clarify that path should start with / for raw-request
+* [#634](https://github.com/elastic/rally/pull/634): Fix typo
+
+### 1.0.3
+
+#### Enhancements
+
+* [#630](https://github.com/elastic/rally/pull/630): Improve error message on missing repo directory
+* [#627](https://github.com/elastic/rally/pull/627): Warn about skewed results when using node-stats telemetry device
+* [#625](https://github.com/elastic/rally/pull/625): Allow to specify a team revision
+* [#622](https://github.com/elastic/rally/pull/622): Include NOTICE.txt in release
+* [#620](https://github.com/elastic/rally/pull/620): Add license headers
+* [#617](https://github.com/elastic/rally/pull/617): Fix conflicting pipelines and distribution version
+* [#615](https://github.com/elastic/rally/pull/615): Add refresh/merge/flush totals in summary
+* [#612](https://github.com/elastic/rally/pull/612): Extract hits either as number or structured object
+* [#606](https://github.com/elastic/rally/pull/606): Improve release.sh script and prerequisites
+* [#604](https://github.com/elastic/rally/pull/604): Change logging level for esrally command line to DEBUG
+
+#### Bug Fixes
+
+* [#613](https://github.com/elastic/rally/pull/613): Error can be a string, and shards not always present in response.
+
+#### Doc Changes
+
+* [#632](https://github.com/elastic/rally/pull/632): Update Release documentation for Rally
+* [#623](https://github.com/elastic/rally/pull/623): Update Developing Rally docs sections
+* [#621](https://github.com/elastic/rally/pull/621): Minor typo
+* [#610](https://github.com/elastic/rally/pull/610): Command fails with "=", ":" is needed.
+
+### 1.0.2
+
+#### Enhancements
+
+* [#599](https://github.com/elastic/rally/pull/599): Simplify development setup
+* [#594](https://github.com/elastic/rally/pull/594): Add make install as default target
+* [#587](https://github.com/elastic/rally/pull/587): Fix typos and inconsistencies in help documentation
+* [#576](https://github.com/elastic/rally/pull/576): Improved formatting of document count in list tracks output
+* [#574](https://github.com/elastic/rally/pull/574): Rename benchmark data directory to root directory
+* [#572](https://github.com/elastic/rally/pull/572): More fine-grained ML metrics
+* [#571](https://github.com/elastic/rally/pull/571): Reduce logging when loading tracks
+* [#570](https://github.com/elastic/rally/pull/570): Add ML API runners
+* [#563](https://github.com/elastic/rally/pull/563): Make Rally compatible with Python 3.7
+
+#### Bug Fixes
+
+* [#586](https://github.com/elastic/rally/pull/586): Don't fail git clone is tty is not attached
+* [#579](https://github.com/elastic/rally/pull/579): Switch to official approach for HTTP compression
+* [#575](https://github.com/elastic/rally/pull/575): Always use remote branch for updates
+
+#### Doc Changes
+
+* [#598](https://github.com/elastic/rally/pull/598): Document --limit
+
+
+
+### 1.0.1
+
+#### Enhancements
+
+* [#569](https://github.com/elastic/rally/pull/569): Add shrink index runner
+* [#559](https://github.com/elastic/rally/pull/559): Write rendered track to a temporary file
+* [#558](https://github.com/elastic/rally/pull/558): Avoid throughput throttling in test mode
+* [#557](https://github.com/elastic/rally/pull/557): Adjust flight recorder flags for JDK 11
+* [#556](https://github.com/elastic/rally/pull/556): Upgrade to Thespian 3.9.3
+* [#555](https://github.com/elastic/rally/pull/555): Load only required corpora
+* [#549](https://github.com/elastic/rally/pull/549): Exponential back-off for retrying transport errors to metrics store
+* [#546](https://github.com/elastic/rally/pull/546): Update ccr stats endpoint
+* [#545](https://github.com/elastic/rally/pull/545): Use non-standard port for metrics store in tests
+* [#540](https://github.com/elastic/rally/pull/540): Simplify filtering node-stats-related documents
+* [#538](https://github.com/elastic/rally/pull/538): Retry metric store for more transport errors
+
+#### Bug Fixes
+
+* [#565](https://github.com/elastic/rally/pull/565): Improve compatibility when loading invalid JSON
+* [#562](https://github.com/elastic/rally/pull/562): Defer startup of mechanic actor
+* [#560](https://github.com/elastic/rally/pull/560): Disable automatic log rotation
+* [#551](https://github.com/elastic/rally/pull/551): Fix HTTP TLS client certificate verification
+* [#544](https://github.com/elastic/rally/pull/544): Fix parsing of boolean values datastore.secure
+* [#542](https://github.com/elastic/rally/pull/542): Warn when cluster settings cannot be applied
+* [#537](https://github.com/elastic/rally/pull/537): make --test-mode work with uncompressed data #536
+
+#### Doc Changes
+
+* [#533](https://github.com/elastic/rally/pull/533): State clearly that only Unix is supported
+
+### 1.0.0
+
+#### Enhancements
+
+* [#529](https://github.com/elastic/rally/pull/529): Allow to control recency of ids in conflicts
+* [#523](https://github.com/elastic/rally/pull/523): Use a single shard for metrics indices
+* [#522](https://github.com/elastic/rally/pull/522): Fine-tune logging
+* [#521](https://github.com/elastic/rally/pull/521): Remove deprecated usage of parameter source
+* [#518](https://github.com/elastic/rally/pull/518): Derive JDK version at runtime
+* [#516](https://github.com/elastic/rally/pull/516): Add multi-cluster support for NodeStats telemetry device
+* [#515](https://github.com/elastic/rally/pull/515): Fold all stats per shard in the same doc for CCR
+* [#514](https://github.com/elastic/rally/pull/514): Report indexing times per shard
+* [#513](https://github.com/elastic/rally/pull/513): Allow to store custom metric document format
+* [#512](https://github.com/elastic/rally/pull/512): Make challenges optional
+* [#509](https://github.com/elastic/rally/pull/509): Remove post_launch bootstrap phase
+* [#508](https://github.com/elastic/rally/pull/508): Add node-stats-include-mem option to record jvm heap stats
+* [#507](https://github.com/elastic/rally/pull/507): Set retry-on-timeout=true for ES clients used by Telemetry devices
+* [#503](https://github.com/elastic/rally/pull/503): Use file-based logging configuration
+* [#497](https://github.com/elastic/rally/pull/497): Add record_process_stats() for process.* stats
+
+#### Bug Fixes
+
+* [#526](https://github.com/elastic/rally/pull/526): Resolve artefact name based on download URL
+* [#524](https://github.com/elastic/rally/pull/524): Disable interpolation for config file
+* [#511](https://github.com/elastic/rally/pull/511): Don't fail if conflict-probability is zero
+* [#510](https://github.com/elastic/rally/pull/510): Allow conflict-probability value of 0
+* [#500](https://github.com/elastic/rally/pull/500): Convert exception to string in driver
+
+#### Doc Changes
+
+* [#499](https://github.com/elastic/rally/pull/499): Omit needless words in track tutorial
+* [#494](https://github.com/elastic/rally/pull/494): Remove usage of "please" in docs
+
 ### 0.11.0
 
 #### Enhancements
@@ -397,7 +643,7 @@ For details please refer to the updated [JSON schema for Rally tracks](https://g
 
 Hint: This is just relevant for you, if you have defined your own tracks. We already took care of updating the [official Rally tracks](https://github.com/elastic/rally-tracks).
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.4.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.4.0+is0X0P+0closed)
 
 ### 0.3.0
 
@@ -416,7 +662,7 @@ This influences the command line interface in a couple of ways:
 
 We have also [moved tracks](https://github.com/elastic/rally/issues/69) to a [dedicated repository](https://github.com/elastic/rally-tracks). This allows you to support tracks for multiple versions of Elasticsearch but also requires that all users have `git` installed.
  
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.3.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.3.0+is0X0P+0closed)
 
 #### Simplified configuration in 0.3
 
@@ -435,7 +681,7 @@ Please raise a ticket in case of problems.
 * [Support for perf profiler](https://github.com/elastic/rally/issues/28)
 * [Add a fulltext benchmark](https://github.com/elastic/rally/issues/38)
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.1+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.2.1+is0X0P+0closed)
 
 ### 0.2.0
 
@@ -446,7 +692,7 @@ Major changes:
 * We store [benchmark environment data](elastic/rally#54) alongside metrics.
 * A new percolator track](elastic/rally#74) contributed by [Martijn van Groningen](https://github.com/martijnvg). Thanks!
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.2.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.2.0+is0X0P+0closed)
 
 ### 0.1.0
 
@@ -460,7 +706,7 @@ disassembled JIT compiler output which can be used for low-level analysis. We re
 during a benchmark. One of the use-cases for this is to run a benchmark based on a released build of Elasticsearch rather than building it
 ourselves.
 
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.1.0+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.1.0+is0X0P+0closed)
 
 ### 0.0.3
 
@@ -472,4 +718,4 @@ Major changes:
   
   Related issues: #8, #21, #46, 
   
-[All changes](https://github.com/elastic/rally/issues?q=milestone%3A0.0.3+is%3Aclosed)
+[All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.0.3+is0X0P+0closed)

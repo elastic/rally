@@ -1,11 +1,28 @@
-import os
-import logging
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import configparser
+import logging
+import os
 from enum import Enum
 
 import tabulate
 
-from esrally import exceptions, PROGRAM_NAME
+from esrally import exceptions, PROGRAM_NAME, config
 from esrally.utils import console, repo, io, modules
 
 TEAM_FORMAT_VERSION = 1
@@ -115,6 +132,7 @@ def team_path(cfg):
     else:
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("mechanic", "repository.name")
+        repo_revision = cfg.opts("mechanic", "repository.revision")
         offline = cfg.opts("system", "offline.mode")
         remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
         root = cfg.opts("node", "root.dir")
@@ -122,7 +140,11 @@ def team_path(cfg):
         teams_dir = os.path.join(root, team_repositories)
 
         current_team_repo = repo.RallyRepository(remote_url, teams_dir, repo_name, "teams", offline)
-        current_team_repo.update(distribution_version)
+        if repo_revision:
+            current_team_repo.checkout(repo_revision)
+        else:
+            current_team_repo.update(distribution_version)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", current_team_repo.revision)
         return current_team_repo.repo_dir
 
 

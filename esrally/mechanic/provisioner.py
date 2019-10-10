@@ -1,13 +1,30 @@
-import os
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import glob
-import shutil
 import logging
+import os
+import shutil
 
 import jinja2
 
 from esrally import exceptions
-from esrally.mechanic import team
-from esrally.utils import io, process, versions
+from esrally.mechanic import team, java_resolver
+from esrally.utils import console, io, process, versions
 
 
 def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
@@ -20,14 +37,12 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
 
-    es_installer = ElasticsearchInstaller(car, node_name, node_root_dir, all_node_ips, ip, http_port)
-    plugin_installers = [PluginInstaller(plugin) for plugin in plugins]
+    _, java_home = java_resolver.java_home(car, cfg)
+    
+    es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port)
+    plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
-
-
-def no_op_provisioner():
-    return NoOpProvisioner()
 
 
 def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
@@ -83,7 +98,7 @@ def plain_text(file):
 def cleanup(preserve, install_dir, data_paths):
     logger = logging.getLogger(__name__)
     if preserve:
-        logger.info("Preserving benchmark candidate installation at [%s].", install_dir)
+        console.info("Preserving benchmark candidate installation at [{}].".format(install_dir), logger=logger)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
@@ -135,10 +150,11 @@ class BareProvisioner:
         self.plugin_installers = plugin_installers
         self.distribution_version = distribution_version
         self.apply_config = apply_config
+        self.logger = logging.getLogger(__name__)
 
     def prepare(self, binary):
         if not self.preserve:
-            logging.getLogger(__name__).info("Rally will delete the benchmark candidate after the benchmark")
+            self.logger.info("Rally will delete the benchmark candidate after the benchmark")
         self.es_installer.install(binary["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
@@ -146,7 +162,6 @@ class BareProvisioner:
         # determine after installation because some variables will depend on the install directory
         target_root_path = self.es_installer.es_home_path
         provisioner_vars = self._provisioner_variables()
-
         for p in self.es_installer.config_source_paths:
             self.apply_config(p, target_root_path, provisioner_vars)
 
@@ -161,11 +176,12 @@ class BareProvisioner:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
-                                 self.es_installer.node_root_dir, self.es_installer.es_home_path, self.es_installer.node_log_dir,
-                                 self.es_installer.data_paths)
+                                 self.es_installer.node_root_dir, self.es_installer.es_home_path,
+                                 self.es_installer.node_log_dir, self.es_installer.data_paths)
 
     def cleanup(self):
         self.es_installer.cleanup(self.preserve)
+
 
     def _provisioner_variables(self):
         plugin_variables = {}
@@ -198,13 +214,14 @@ class BareProvisioner:
         provisioner_vars.update(self.es_installer.variables)
         provisioner_vars.update(plugin_variables)
         provisioner_vars["cluster_settings"] = cluster_settings
-
+        
         return provisioner_vars
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, node_name, node_root_dir, all_node_ips, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
+    def __init__(self, car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
         self.car = car
+        self.java_home = java_home
         self.node_name = node_name
         self.node_root_dir = node_root_dir
         self.install_dir = "%s/install" % node_root_dir
@@ -237,7 +254,7 @@ class ElasticsearchInstaller:
         shutil.rmtree(config_path)
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables=variables)
+        self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
 
     def cleanup(self, preserve):
         cleanup(preserve, self.install_dir, self.data_paths)
@@ -263,8 +280,6 @@ class ElasticsearchInstaller:
             "all_node_ips": "[\"%s\"]" % "\",\"".join(self.all_node_ips),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
             "minimum_master_nodes": len(self.all_node_ips),
-            # We allow multiple nodes per host but we do not allow that they share their data directories
-            "node_count_per_host": 1,
             "install_root_path": self.es_home_path
         }
         variables = {}
@@ -290,8 +305,9 @@ class ElasticsearchInstaller:
 
 
 class PluginInstaller:
-    def __init__(self, plugin, hook_handler_class=team.BootstrapHookHandler):
+    def __init__(self, plugin, java_home, hook_handler_class=team.BootstrapHookHandler):
         self.plugin = plugin
+        self.java_home = java_home
         self.hook_handler = hook_handler_class(self.plugin)
         if self.hook_handler.can_load():
             self.hook_handler.load()
@@ -306,7 +322,7 @@ class PluginInstaller:
             self.logger.info("Installing [%s] into [%s]", self.plugin_name, es_home_path)
             install_cmd = '%s install --batch "%s"' % (installer_binary_path, self.plugin_name)
 
-        return_code = process.run_subprocess_with_logging(install_cmd)
+        return_code = process.run_subprocess_with_logging(install_cmd, env={"JAVA_HOME": self.java_home})
         # see: https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html
         if return_code == 0:
             self.logger.info("Successfully installed [%s].", self.plugin_name)
@@ -320,7 +336,7 @@ class PluginInstaller:
                                         (self.plugin_name, str(return_code)))
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables=variables)
+        self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
 
     @property
     def variables(self):
@@ -340,17 +356,6 @@ class PluginInstaller:
         return self.variables.get("plugin_name", self.plugin_name)
 
 
-class NoOpProvisioner:
-    def __init__(self, *args):
-        pass
-
-    def prepare(self, *args):
-        return None
-
-    def cleanup(self):
-        pass
-
-
 class DockerProvisioner:
     def __init__(self, car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version, rally_root, preserve):
         self.car = car
@@ -359,6 +364,7 @@ class DockerProvisioner:
         self.http_port = http_port
         self.node_root_dir = node_root_dir
         self.node_log_dir = "%s/logs/server" % node_root_dir
+        self.heap_dump_dir = "%s/heapdump" % node_root_dir
         self.distribution_version = distribution_version
         self.rally_root = rally_root
         self.install_dir = "%s/install" % node_root_dir
@@ -369,26 +375,20 @@ class DockerProvisioner:
         self.binary_path = "%s/docker-compose.yml" % self.install_dir
         self.logger = logging.getLogger(__name__)
 
-        # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
-        merged_cluster_settings = cluster_settings.copy()
-        # disable x-pack features as we don't use them and want to compare with plain vanilla ES
-        merged_cluster_settings["xpack.security.enabled"] = "false"
-        merged_cluster_settings["xpack.ml.enabled"] = "false"
-        merged_cluster_settings["xpack.monitoring.enabled"] = "false"
-        merged_cluster_settings["xpack.watcher.enabled"] = "false"
-
         provisioner_defaults = {
             "cluster_name": "rally-benchmark",
             "node_name": self.node_name,
             # we bind-mount the directories below on the host to these ones.
+            "install_root_path": "/usr/share/elasticsearch",
             "data_paths": ["/usr/share/elasticsearch/data"],
             "log_path": "/var/log/elasticsearch",
+            "heap_dump_path": "/usr/share/elasticsearch/heapdump",
             # Docker container needs to expose service on external interfaces
             "network_host": "0.0.0.0",
+            "discovery_type": "single-node",
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
-            "node_count_per_host": 1,
-            "cluster_settings": merged_cluster_settings
+            "cluster_settings": cluster_settings
         }
 
         self.config_vars = {}
@@ -404,6 +404,7 @@ class DockerProvisioner:
         try:
             io.ensure_dir(self.install_dir)
             io.ensure_dir(self.node_log_dir)
+            io.ensure_dir(self.heap_dump_dir)
             io.ensure_dir(self.data_paths[0])
         finally:
             os.umask(previous_umask)
@@ -443,19 +444,28 @@ class DockerProvisioner:
         # do not attempt to cleanup data paths. It does not work due to different permissions. As:
         #
         # (a) Docker is unsupported and not meant to be used by everybody, and
-        # (b) the volume is recreated before each trial run
+        # (b) the volume is recreated before each race
         #
         # this is not a major problem.
         cleanup(self.preserve, self.install_dir, [])
 
     def docker_vars(self, mounts):
-        return {
+        v = {
             "es_version": self.distribution_version,
+            "docker_image": self.car.mandatory_var("docker_image"),
             "http_port": self.http_port,
             "es_data_dir": self.data_paths[0],
             "es_log_dir": self.node_log_dir,
+            "es_heap_dump_dir": self.heap_dump_dir,
             "mounts": mounts
         }
+        self._add_if_defined_for_car(v, "docker_mem_limit")
+        self._add_if_defined_for_car(v, "docker_cpu_count")
+        return v
+
+    def _add_if_defined_for_car(self, variables, key):
+        if key in self.car.variables:
+            variables[key] = self.car.variables[key]
 
     def _render_template(self, loader, template_name, variables):
         try:
@@ -471,7 +481,7 @@ class DockerProvisioner:
             raise exceptions.SystemSetupError("%s in %s" % (str(e), template_name))
 
     def _render_template_from_file(self, variables):
-        compose_file = "%s/resources/docker-compose.yml" % self.rally_root
+        compose_file = "%s/resources/docker-compose.yml.j2" % self.rally_root
         return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
                                      template_name=io.basename(compose_file),
                                      variables=variables)

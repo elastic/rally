@@ -1,9 +1,48 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import random
 from unittest import TestCase
 
 from esrally import exceptions
-from esrally.utils import io
 from esrally.track import params, track
+from esrally.utils import io
+
+
+class StaticBulkReader:
+    def __init__(self, index_name, type_name, bulks):
+        self.index_name = index_name
+        self.type_name = type_name
+        self.bulks = iter(bulks)
+
+    def __enter__(self):
+        return self
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        batch = []
+        bulk = next(self.bulks)
+        batch.append((len(bulk), bulk))
+        return self.index_name, self.type_name, batch
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
 
 
 class SliceTests(TestCase):
@@ -106,6 +145,10 @@ class ActionMetaDataTests(TestCase):
         self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}'),
                          next(params.GenerateActionMetaData("test_index", "test_type")))
 
+    def test_generate_action_meta_data_typeless(self):
+        self.assertEqual(("index", '{"index": {"_index": "test_index"}}'),
+                         next(params.GenerateActionMetaData("test_index", type_name=None)))
+
     def test_generate_action_meta_data_with_id_conflicts(self):
         def idx(id):
             return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
@@ -150,6 +193,80 @@ class ActionMetaDataTests(TestCase):
         self.assertEqual(idx("200"), next(generator))
         # and we're back to random
         self.assertEqual(conflict(conflict_action, "100"), next(generator))
+
+    def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
+        def idx(type_name, id):
+            if type_name:
+                return "index", '{"index": {"_index": "test_index", "_type": "%s", "_id": "%s"}}' % (type_name, id)
+            else:
+                return "index", '{"index": {"_index": "test_index", "_id": "%s"}}' % id
+
+        def conflict(action, type_name, id):
+            if type_name:
+                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}' % (action, type_name, id)
+            else:
+                return action, '{"%s": {"_index": "test_index", "_id": "%s"}}' % (action, id)
+
+        pseudo_random_conflicts = iter([
+            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+            0.2,
+            0.25,
+            0.2,
+            # no conflict
+            0.3,
+            0.4,
+            0.35,
+            # conflict again
+            0.0,
+            0.2,
+            0.15
+        ])
+
+        # we use this value as `idx_range` in the calculation: idx = round((self.id_up_to - 1) * (1 - idx_range))
+        pseudo_exponential_distribution = iter([
+            # id_up_to = 1 -> idx = 0
+            0.013375248172714948,
+            # id_up_to = 1 -> idx = 0
+            0.042495604491024914,
+            # id_up_to = 1 -> idx = 0
+            0.005491072642023834,
+            # no conflict: id_up_to = 2
+            # no conflict: id_up_to = 3
+            # no conflict: id_up_to = 4
+            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.028557879547255083)) = 3
+            0.028557879547255083,
+            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.209771474243926352)) = 2
+            0.209771474243926352
+        ])
+
+        conflict_action = random.choice(["index", "update"])
+        type_name = random.choice([None, "test_type"])
+
+        generator = params.GenerateActionMetaData("test_index", type_name=type_name,
+                                                  conflicting_ids=[100, 200, 300, 400, 500, 600],
+                                                  conflict_probability=25,
+                                                  # heavily biased towards recent ids
+                                                  recency=1.0,
+                                                  on_conflict=conflict_action,
+                                                  rand=lambda: next(pseudo_random_conflicts),
+                                                  # we don't use this one here because recency is > 0.
+                                                  # randint=lambda x, y: next(chosen_index_of_conflicting_ids),
+                                                  randexp=lambda lmbda: next(pseudo_exponential_distribution)
+                                                  )
+
+        # first one is always *not* drawn from a random index
+        self.assertEqual(idx(type_name, "100"), next(generator))
+        # now we start using random ids
+        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
+        # no conflict
+        self.assertEqual(idx(type_name, "200"), next(generator))
+        self.assertEqual(idx(type_name, "300"), next(generator))
+        self.assertEqual(idx(type_name, "400"), next(generator))
+        # conflict
+        self.assertEqual(conflict(conflict_action, type_name, "400"), next(generator))
+        self.assertEqual(conflict(conflict_action, type_name, "300"), next(generator))
 
     def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
         def idx(id):
@@ -767,9 +884,30 @@ class BulkIndexParamSourceTests(TestCase):
 
         partition = source.partition(0, 1)
         # # no ingest-percentage specified, should issue all one hundred bulk requests
-        self.assertEqual(100, partition.size())
+        self.assertEqual(100, partition.total_bulks)
 
     def test_restricts_number_of_bulks_if_required(self):
+        def create_unit_test_reader(*args):
+            return StaticBulkReader("idx", "doc", bulks=[
+                ['{"location" : [-0.1485188, 51.5250666]}'],
+                ['{"location" : [-0.1479949, 51.5252071]}'],
+                ['{"location" : [-0.1458559, 51.5289059]}'],
+                ['{"location" : [-0.1498551, 51.5282564]}'],
+                ['{"location" : [-0.1487043, 51.5254843]}'],
+                ['{"location" : [-0.1533367, 51.5261779]}'],
+                ['{"location" : [-0.1543018, 51.5262398]}'],
+                ['{"location" : [-0.1522118, 51.5266564]}'],
+                ['{"location" : [-0.1529092, 51.5263360]}'],
+                ['{"location" : [-0.1537008, 51.5265365]}'],
+            ])
+
+        def schedule(param_source):
+            while True:
+                try:
+                    yield param_source.params()
+                except StopIteration:
+                    return
+
         corpora = [
             track.DocumentCorpus(name="default", documents=[
                 track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -791,12 +929,14 @@ class BulkIndexParamSourceTests(TestCase):
             track=track.Track(name="unit-test", corpora=corpora),
             params={
                 "bulk-size": 10000,
-                "ingest-percentage": 2.5
+                "ingest-percentage": 2.5,
+                "__create_reader": create_unit_test_reader
             })
 
         partition = source.partition(0, 1)
         # should issue three bulks of size 10.000
-        self.assertEqual(3, partition.size())
+        self.assertEqual(3, partition.total_bulks)
+        self.assertEqual(3, len(list(schedule(partition))))
 
     def test_create_with_conflict_probability_zero(self):
         params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
@@ -837,31 +977,11 @@ class BulkIndexParamSourceTests(TestCase):
 
 
 class BulkDataGeneratorTests(TestCase):
-    class TestBulkReader:
-        def __init__(self, index_name, type_name, bulks):
-            self.index_name = index_name
-            self.type_name = type_name
-            self.bulks = iter(bulks)
-
-        def __enter__(self):
-            return self
-
-        def __iter__(self):
-            return self
-
-        def __next__(self):
-            batch = []
-            bulk = next(self.bulks)
-            batch.append((len(bulk), bulk))
-            return self.index_name, self.type_name, batch
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            return False
 
     @classmethod
     def create_test_reader(cls, batches):
         def inner_create_test_reader(docs, *args):
-            return BulkDataGeneratorTests.TestBulkReader(docs.target_index, docs.target_type, batches)
+            return StaticBulkReader(docs.target_index, docs.target_type, batches)
 
         return inner_create_test_reader
 
@@ -877,7 +997,7 @@ class BulkDataGeneratorTests(TestCase):
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus],
                                        batch_size=5, bulk_size=5,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       pipeline=None,
+                                       recency=None, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -935,7 +1055,7 @@ class BulkDataGeneratorTests(TestCase):
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=corpora,
                                        batch_size=5, bulk_size=5,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       pipeline=None,
+                                       recency=None, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
                                            "my-custom-parameter-2": True
@@ -987,7 +1107,7 @@ class BulkDataGeneratorTests(TestCase):
 
         bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus], batch_size=3, bulk_size=3,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       pipeline=None,
+                                       recency=None, pipeline=None,
                                        original_params={
                                            "body": "foo",
                                            "custom-param": "bar"
@@ -1087,6 +1207,26 @@ class ParamsRegistrationTests(TestCase):
         self.assertEqual({"class-key": 42}, source.params())
 
         params._unregister_param_source_for_name(source_name)
+
+
+class SleepParamSourceTests(TestCase):
+    def test_missing_duration_parameter(self):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax, "parameter 'duration' is mandatory for sleep operation"):
+            params.SleepParamSource(track.Track(name="unit-test"), params={})
+
+    def test_duration_parameter_wrong_type(self):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax,
+                                    "parameter 'duration' for sleep operation must be a number"):
+            params.SleepParamSource(track.Track(name="unit-test"), params={"duration": "this is a string"})
+
+    def test_duration_parameter_negative_number(self):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax,
+                                    "parameter 'duration' must be non-negative but was -1.0"):
+            params.SleepParamSource(track.Track(name="unit-test"), params={"duration": -1.0})
+
+    def test_param_source_passes_all_parameters(self):
+        p = params.SleepParamSource(track.Track(name="unit-test"), params={"duration": 3.4, "additional": True})
+        self.assertDictEqual({"duration": 3.4, "additional": True}, p.params())
 
 
 class CreateIndexParamSourceTests(TestCase):
@@ -1440,6 +1580,30 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
 
 class SearchParamSourceTests(TestCase):
+    def test_passes_cache(self):
+        index1 = track.Index(name="index1", types=["type1"])
+
+        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            },
+            "cache": True
+        })
+        p = source.params()
+
+        self.assertEqual(5, len(p))
+        self.assertEqual("index1", p["index"])
+        self.assertIsNone(p["type"])
+        self.assertEqual({}, p["request-params"])
+        self.assertEqual(True, p["cache"])
+        self.assertEqual({
+            "query": {
+                "match_all": {}
+            }
+        }, p["body"])
+
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])
 
@@ -1461,7 +1625,7 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual({
             "_source_include": "some_field"
         }, p["request-params"])
-        self.assertFalse(p["cache"])
+        self.assertIsNone(p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -1474,6 +1638,7 @@ class SearchParamSourceTests(TestCase):
         source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
             "index": "_all",
             "type": "type1",
+            "cache": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1486,7 +1651,8 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
-        self.assertFalse(p["cache"])
+        # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
+        self.assertEqual(False, p["cache"])
         self.assertEqual({
             "query": {
                 "match_all": {}

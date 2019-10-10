@@ -1,9 +1,25 @@
-import os
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 
+import os
 from unittest import TestCase
 
-from esrally import exceptions
 from esrally.utils import opts
+
 
 class ConfigHelperFunctionTests(TestCase):
     def test_csv_to_list(self):
@@ -13,9 +29,111 @@ class ConfigHelperFunctionTests(TestCase):
 
     def test_kv_to_map(self):
         self.assertEqual({}, opts.kv_to_map([]))
-        self.assertEqual({"k": "v"}, opts.kv_to_map(["k:'v'"]))
+        # explicit treatment as string
+        self.assertEqual({"k": "3"}, opts.kv_to_map(["k:'3'"]))
+        self.assertEqual({"k": 3}, opts.kv_to_map(["k:3"]))
+        # implicit treatment as string
+        self.assertEqual({"k": "v"}, opts.kv_to_map(["k:v"]))
         self.assertEqual({"k": "v", "size": 4, "empty": False, "temperature": 0.5},
                          opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5"]))
+
+
+class GenericHelperFunctionTests(TestCase):
+    def test_list_as_bulleted_list(self):
+        src_list = ["param-1", "param-2", "a_longer-parameter"]
+
+        self.assertEqual(
+            ["- param-1", "- param-2", "- a_longer-parameter"],
+            opts.bulleted_list_of(src_list)
+        )
+
+    def test_list_as_double_quoted_list(self):
+        src_list = ["oneitem", "_another-weird_item", "param-3"]
+
+        self.assertEqual(
+            opts.double_quoted_list_of(src_list),
+            ['"oneitem"', '"_another-weird_item"', '"param-3"']
+        )
+
+    def test_make_list_of_close_matches(self):
+        word_list = [
+            "bulk_indexing_clients",
+            "bulk_indexing_iterations",
+            "target_throughput",
+            "bulk_size",
+            "number_of-shards",
+            "number_of_replicas",
+            "index_refresh_interval"]
+
+        available_word_list = [
+            "bulk_indexing_clients",
+            "bulk_indexing_iterations",
+            "bulk_size",
+            "cluster_health",
+            "disk_type",
+            "duration",
+            "forcemerge",
+            "index_alias",
+            "index_refresh_interval",
+            "indices_delete_pattern",
+            "joiner",
+            "max_rolledover_indices",
+            "number_of_replicas",
+            "number_of_shards",
+            "ops_per_25_gb",
+            "p1_bulk_indexing_clients",
+            "p1_bulk_size",
+            "p1_duration_secs",
+            "p2_bulk_indexing_clients",
+            "p2_bulk_size",
+            "p2_duration_secs",
+            "p2_ops",
+            "p2_query1_target_interval",
+            "p2_query2_target_interval",
+            "p2_query3_target_interval",
+            "p2_query4_target_interval",
+            "phase_duration_secs",
+            "pre_filter_shard_size",
+            "query_iterations",
+            "range",
+            "rate_limit_duration_secs",
+            "rate_limit_max",
+            "rate_limit_step",
+            "rolledover_indices_suffix_separator",
+            "rollover_max_age",
+            "rollover_max_size",
+            "shard_count",
+            "shard_sizing_iterations",
+            "shard_sizing_queries",
+            "source_enabled",
+            "target_throughput",
+            "translog_sync"]
+
+        self.assertEqual(
+            ['bulk_indexing_clients',
+             'bulk_indexing_iterations',
+             'target_throughput',
+             'bulk_size',
+             # number_of-shards had a typo
+             'number_of_shards',
+             'number_of_replicas',
+             'index_refresh_interval'],
+            opts.make_list_of_close_matches(word_list, available_word_list)
+        )
+
+    def test_make_list_of_close_matches_returns_with_empty_word_list(self):
+        self.assertEqual(
+            [],
+            opts.make_list_of_close_matches([], ["number_of_shards"])
+        )
+
+    def test_make_list_of_close_matches_returns_empty_list_with_no_close_matches(self):
+        self.assertEqual(
+            [],
+            opts.make_list_of_close_matches(
+                ["number_of_shards", "number_of-replicas"],
+                [])
+        )
 
 
 class TestTargetHosts(TestCase):

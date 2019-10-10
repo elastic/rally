@@ -1,12 +1,30 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import collections
 import logging
+import os
 import sys
 
 import tabulate
 import thespian.actors
 
-from esrally import actor, config, exceptions, track, driver, mechanic, reporter, metrics, time, PROGRAM_NAME
-from esrally.utils import console, convert, opts
+from esrally import actor, config, doc_link, driver, exceptions, mechanic, metrics, reporter, track, PROGRAM_NAME
+from esrally.utils import console, opts
 
 # benchmarks with external candidates are really scary and we should warn users.
 BOGUS_RESULTS_WARNING = """
@@ -82,12 +100,12 @@ class BenchmarkActor(actor.RallyActor):
         self.race = None
         self.metrics_store = None
         self.race_store = None
-        self.lap_counter = None
         self.cancelled = False
         self.error = False
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None
+        self.track_revision = None
 
     def receiveMsg_PoisonMessage(self, msg, sender):
         self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
@@ -97,23 +115,33 @@ class BenchmarkActor(actor.RallyActor):
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
 
+    @actor.no_retry("race control")
     def receiveMsg_Setup(self, msg, sender):
         self.setup(msg, sender)
 
+    @actor.no_retry("race control")
     def receiveMsg_EngineStarted(self, msg, sender):
         self.logger.info("Mechanic has started engine successfully.")
         self.metrics_store.meta_info = msg.system_meta_info
-        cluster = msg.cluster_meta_info
-        self.race.cluster = cluster
+        self.race.team_revision = msg.team_revision
+        self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
+        self.logger.info("Telling driver to prepare for benchmarking.")
+        self.send(self.main_driver, driver.PrepareBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info))
+
+    @actor.no_retry("race control")
+    def receiveMsg_PreparationComplete(self, msg, sender):
+        self.race.distribution_flavor = msg.distribution_flavor
+        self.race.distribution_version = msg.distribution_version
+        self.race.revision = msg.revision
         if self.race.challenge.auto_generated:
             console.info("Racing on track [{}] and car {} with version [{}].\n"
-                         .format(self.race.track_name, self.race.car, self.race.cluster.distribution_version))
+                         .format(self.race.track_name, self.race.car, self.race.distribution_version))
         else:
             console.info("Racing on track [{}], challenge [{}] and car {} with version [{}].\n"
-                         .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.cluster.distribution_version))
-        # start running we assume that each race has at least one lap
+                         .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version))
         self.run()
 
+    @actor.no_retry("race control")
     def receiveMsg_TaskFinished(self, msg, sender):
         self.logger.info("Task has finished.")
         self.logger.info("Bulk adding request metrics to metrics store.")
@@ -122,37 +150,29 @@ class BenchmarkActor(actor.RallyActor):
         # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
         self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
         self.cancelled = True
         # even notify the start sender if it is the originator. The reason is that we call #ask() which waits for a reply.
         # We also need to ask in order to avoid races between this notification and the following ActorExitRequest.
         self.send(self.start_sender, msg)
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.logger.info("Received a benchmark failure from [%s] and will forward it now.", sender)
         self.error = True
         self.send(self.start_sender, msg)
 
+    @actor.no_retry("race control")
     def receiveMsg_BenchmarkComplete(self, msg, sender):
         self.logger.info("Benchmark is complete.")
         self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(msg.metrics)
         self.send(self.main_driver, thespian.actors.ActorExitRequest())
         self.main_driver = None
-        self.send(self.mechanic, mechanic.OnBenchmarkStop())
+        self.teardown()
 
-    def receiveMsg_BenchmarkStopped(self, msg, sender):
-        self.logger.info("Bulk adding system metrics to metrics store.")
-        self.metrics_store.bulk_add(msg.system_metrics)
-        self.logger.debug("Flushing metrics data...")
-        self.metrics_store.flush()
-        self.logger.debug("Flushing done")
-        self.lap_counter.after_lap()
-        if self.lap_counter.has_more_laps():
-            self.run()
-        else:
-            self.teardown()
-
+    @actor.no_retry("race control")
     def receiveMsg_EngineStopped(self, msg, sender):
         self.logger.info("Mechanic has stopped engine successfully.")
         self.logger.info("Bulk adding system metrics to metrics store.")
@@ -160,7 +180,7 @@ class BenchmarkActor(actor.RallyActor):
         self.metrics_store.flush()
         if not self.cancelled and not self.error:
             final_results = reporter.calculate_results(self.metrics_store, self.race)
-            self.race.add_final_results(final_results)
+            self.race.add_results(final_results)
             reporter.summarize(self.race, self.cfg)
             self.race_store.store_race(self.race)
         else:
@@ -170,8 +190,6 @@ class BenchmarkActor(actor.RallyActor):
 
     def setup(self, msg, sender):
         self.start_sender = sender
-        self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
-
         self.cfg = msg.cfg
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set but there are rare
         # cases (external pipeline and user did not specify the distribution version) where we need to derive it ourselves. For source
@@ -182,8 +200,9 @@ class BenchmarkActor(actor.RallyActor):
                 raise exceptions.SystemSetupError("A distribution version is required. Please specify it with --distribution-version.")
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-
+        
         t = track.load_track(self.cfg)
+        self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
         challenge_name = self.cfg.opts("track", "challenge.name")
         challenge = t.find_challenge_or_default(challenge_name)
         if challenge is None:
@@ -191,7 +210,7 @@ class BenchmarkActor(actor.RallyActor):
                                               % (t.name, challenge_name, PROGRAM_NAME))
         if challenge.user_info:
             console.info(challenge.user_info)
-        self.race = metrics.create_race(self.cfg, t, challenge)
+        self.race = metrics.create_race(self.cfg, t, challenge, self.track_revision)
 
         self.metrics_store = metrics.metrics_store(
             self.cfg,
@@ -199,67 +218,20 @@ class BenchmarkActor(actor.RallyActor):
             challenge=self.race.challenge_name,
             read_only=False
         )
-        self.lap_counter = LapCounter(self.race, self.metrics_store, self.cfg)
         self.race_store = metrics.race_store(self.cfg)
         self.logger.info("Asking mechanic to start the engine.")
         cluster_settings = challenge.cluster_settings
+        self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(self.mechanic, mechanic.StartEngine(self.cfg, self.metrics_store.open_context, cluster_settings, msg.sources, msg.build,
                                                       msg.distribution, msg.external, msg.docker))
 
     def run(self):
-        self.lap_counter.before_lap()
-        lap = self.lap_counter.current_lap
-        self.metrics_store.lap = lap
-        self.logger.info("Telling mechanic of benchmark start.")
-        self.send(self.mechanic, mechanic.OnBenchmarkStart(lap))
-        self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
         self.logger.info("Telling driver to start benchmark.")
-        self.send(self.main_driver, driver.StartBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info, lap))
+        self.send(self.main_driver, driver.StartBenchmark())
 
     def teardown(self):
         self.logger.info("Asking mechanic to stop the engine.")
         self.send(self.mechanic, mechanic.StopEngine())
-
-
-class LapCounter:
-    def __init__(self, current_race, metrics_store, cfg):
-        self.race = current_race
-        self.metrics_store = metrics_store
-        self.cfg = cfg
-        self.lap_timer = time.Clock.stop_watch()
-        self.lap_timer.start()
-        self.lap_times = 0
-        self.current_lap = 0
-        self.logger = logging.getLogger(__name__)
-
-    def has_more_laps(self):
-        return self.current_lap < self.race.total_laps
-
-    def before_lap(self):
-        self.current_lap += 1
-        self.logger.info("Starting lap [%d/%d]", self.current_lap, self.race.total_laps)
-        if self.race.total_laps > 1:
-            msg = "Lap [%d/%d]" % (self.current_lap, self.race.total_laps)
-            console.println(console.format.bold(msg))
-            console.println(console.format.underline_for(msg))
-
-    def after_lap(self):
-        self.logger.info("Finished lap [%d/%d]", self.current_lap, self.race.total_laps)
-        if self.race.total_laps > 1:
-            lap_time = self.lap_timer.split_time() - self.lap_times
-            self.lap_times += lap_time
-            hl, ml, sl = convert.seconds_to_hour_minute_seconds(lap_time)
-            lap_results = reporter.calculate_results(self.metrics_store, self.race, self.current_lap)
-            self.race.add_lap_results(lap_results)
-            reporter.summarize(self.race, self.cfg, lap=self.current_lap)
-            console.println("")
-            if self.current_lap < self.race.total_laps:
-                remaining = (self.race.total_laps - self.current_lap) * self.lap_times / self.current_lap
-                hr, mr, sr = convert.seconds_to_hour_minute_seconds(remaining)
-                console.info("Lap time %02d:%02d:%02d (ETA: %02d:%02d:%02d)" % (hl, ml, sl, hr, mr, sr), logger=self.logger)
-            else:
-                console.info("Lap time %02d:%02d:%02d" % (hl, ml, sl), logger=self.logger)
-            console.println("")
 
 
 def race(cfg, sources=False, build=False, distribution=False, external=False, docker=False):
@@ -320,7 +292,7 @@ def from_distribution(cfg):
 
 
 def benchmark_only(cfg):
-    console.println(BOGUS_RESULTS_WARNING)
+    console.println(BOGUS_RESULTS_WARNING, flush=True)
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
@@ -361,7 +333,9 @@ def list_pipelines():
 def run(cfg):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
+
     if len(name) == 0:
+        # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set
         if cfg.exists("mechanic", "distribution.version"):
             name = "from-distribution"
         else:
@@ -370,6 +344,15 @@ def run(cfg):
         cfg.add(config.Scope.applicationOverride, "race", "pipeline", name)
     else:
         logger.info("User specified pipeline [%s].", name)
+
+    if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
+        # in this case only benchmarking remote Elasticsearch clusters makes sense
+        if name != "benchmark-only":
+            raise exceptions.SystemSetupError(
+                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+                "For more details read the docs for the benchmark-only pipeline in {}\n".format(
+                    doc_link("pipelines.html#benchmark-only")))
 
     try:
         pipeline = pipelines[name]

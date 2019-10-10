@@ -1,15 +1,37 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import collections
 import logging
 import math
+import os
 import pickle
+import random
 import statistics
 import sys
+import time
 import zlib
 from enum import Enum, IntEnum
+from http.client import responses
 
 import tabulate
+
 from esrally import time, exceptions, config, version, paths
-from esrally.utils import console, io, versions
+from esrally.utils import convert, console, io, versions
 
 
 class EsClient:
@@ -17,18 +39,39 @@ class EsClient:
     Provides a stripped-down client interface that is easier to exchange for testing
     """
 
-    def __init__(self, client):
+    def __init__(self, client, cluster_version=None):
         self._client = client
         self.logger = logging.getLogger(__name__)
+        self._cluster_version = cluster_version
+
+    # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
+    def probe_version(self):
+        info = self.guarded(self._client.info)
+        try:
+            self._cluster_version = versions.components(info["version"]["number"])
+        except BaseException:
+            msg = "Could not determine version of metrics cluster"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
 
     def put_template(self, name, template):
-        return self.guarded(self._client.indices.put_template, name, template)
+        # TODO #653: Remove version-specific support for metrics stores before 7.0.0 (also adjust template)
+        if self._cluster_version[0] > 6:
+            return self.guarded(self._client.indices.put_template, name=name, body=template, params={
+                # allows to include the type name although it is not allowed anymore by default
+                "include_type_name": "true"
+            })
+        else:
+            return self.guarded(self._client.indices.put_template, name=name, body=template)
 
     def template_exists(self, name):
         return self.guarded(self._client.indices.exists_template, name)
 
     def delete_template(self,  name):
         self.guarded(self._client.indices.delete_template, name)
+
+    def get_index(self, name):
+        return self.guarded(self._client.indices.get,  name)
 
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
@@ -41,22 +84,28 @@ class EsClient:
         return self.guarded(self._client.indices.refresh, index=index)
 
     def bulk_index(self, index, doc_type, items):
+        # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         import elasticsearch.helpers
-        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
+        if self._cluster_version[0] > 6:
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index)
+        else:
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
     def index(self, index, doc_type, item):
-        self.guarded(self._client.index, index=index, doc_type=doc_type, body=item)
+        self.bulk_index(index, doc_type, [{"_source": item}])
 
-    def search(self, index, doc_type, body):
-        return self.guarded(self._client.search, index=index, doc_type=doc_type, body=body)
+    def search(self, index, body):
+        return self.guarded(self._client.search, index=index, body=body)
 
     def guarded(self, target, *args, **kwargs):
         import elasticsearch
-        max_execution_count = 3
+        max_execution_count = 11
         execution_count = 0
 
         while execution_count < max_execution_count:
+            time_to_sleep = 2 ** execution_count + random.random()
             execution_count += 1
+
             try:
                 return target(*args, **kwargs)
             except elasticsearch.exceptions.AuthenticationException:
@@ -78,7 +127,7 @@ class EsClient:
             except elasticsearch.exceptions.ConnectionTimeout:
                 if execution_count < max_execution_count:
                     self.logger.debug("Connection timeout in attempt [%d/%d].", execution_count, max_execution_count)
-                    time.sleep(1)
+                    time.sleep(time_to_sleep)
                 else:
                     operation = target.__name__
                     self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
@@ -93,13 +142,10 @@ class EsClient:
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
-                # gateway timeout - let's wait a bit and retry
-                if e.status_code == 504 and execution_count < max_execution_count:
-                    self.logger.debug("Gateway timeout in attempt [%d/%d].", execution_count, max_execution_count)
-                    time.sleep(1)
-                elif e.status_code == 429 and execution_count < max_execution_count:
-                    self.logger.debug("Execution rejected in attempt [%d/%d].", execution_count, max_execution_count)
-                    time.sleep(3)
+                if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
+                    self.logger.debug("%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                                      responses[e.status_code], e.status_code, execution_count, max_execution_count, time_to_sleep)
+                    time.sleep(time_to_sleep)
                 else:
                     node = self._client.transport.hosts[0]
                     msg = "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on " \
@@ -125,12 +171,12 @@ class EsClientFactory:
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
-        # poor man's boolean conversion
-        secure = self._config.opts("reporting", "datastore.secure") == "True"
+        secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
         user = self._config.opts("reporting", "datastore.user")
         password = self._config.opts("reporting", "datastore.password")
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
+        self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
 
         from esrally import client
 
@@ -150,7 +196,10 @@ class EsClientFactory:
         self._client = factory.create()
 
     def create(self):
-        return EsClient(self._client)
+        c = EsClient(self._client)
+        if self.probe_version:
+            c.probe_version()
+        return c
 
 
 class IndexTemplateProvider:
@@ -194,7 +243,7 @@ class MetaInfoScope(Enum):
     """
 
 
-def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None, lap=None):
+def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -203,14 +252,14 @@ def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, met
     :return: A metrics store implementation.
     """
     cls = metrics_store_class(cfg)
-    store = cls(cfg=cfg, meta_info=meta_info, lap=lap)
+    store = cls(cfg=cfg, meta_info=meta_info)
     logging.getLogger(__name__).info("Creating %s", str(store))
 
-    trial_id = cfg.opts("system", "trial.id")
-    trial_timestamp = cfg.opts("system", "time.start")
+    race_id = cfg.opts("system", "race.id")
+    race_timestamp = cfg.opts("system", "time.start")
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
-    store.open(trial_id, trial_timestamp, track, challenge, selected_car, create=not read_only)
+    store.open(race_id, race_timestamp, track, challenge, selected_car, create=not read_only)
     return store
 
 
@@ -262,43 +311,43 @@ class MetricsStore:
     Abstract metrics store
     """
 
-    def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
+    def __init__(self, cfg, clock=time.Clock, meta_info=None):
         """
         Creates a new metrics store.
 
         :param cfg: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
-        :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
         self._config = cfg
-        self._trial_id = None
-        self._trial_timestamp = None
+        self._race_id = None
+        self._race_timestamp = None
         self._track = None
-        self._track_params = cfg.opts("track", "params")
+        self._track_params = cfg.opts("track", "params", default_value={}, mandatory=False)
         self._challenge = None
         self._car = None
         self._car_name = None
-        self._lap = lap
         self._environment_name = cfg.opts("system", "env.name")
         self.opened = False
         if meta_info is None:
-            self._meta_info = {
-                MetaInfoScope.cluster: {},
-                MetaInfoScope.node: {}
-            }
+            self._meta_info = {}
         else:
             self._meta_info = meta_info
+        # ensure mandatory keys are always present
+        if MetaInfoScope.cluster not in self._meta_info:
+            self._meta_info[MetaInfoScope.cluster] = {}
+        if MetaInfoScope.node not in self._meta_info:
+            self._meta_info[MetaInfoScope.node] = {}
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
         self.logger = logging.getLogger(__name__)
 
-    def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
-        Opens a metrics store for a specific trial, track, challenge and car.
+        Opens a metrics store for a specific race, track, challenge and car.
 
-        :param trial_id: The trial id. This attribute is sufficient to uniquely identify a race.
-        :param trial_timestamp: The trial timestamp as a datetime.
+        :param race_id: The race id. This attribute is sufficient to uniquely identify a race.
+        :param race_timestamp: The race timestamp as a datetime.
         :param track_name: Track name.
         :param challenge_name: Challenge name.
         :param car_name: Car name.
@@ -307,27 +356,27 @@ class MetricsStore:
         False when it is just opened for reading (as we can assume all necessary indices exist at this point).
         """
         if ctx:
-            self._trial_id = ctx["trial-id"]
-            self._trial_timestamp = ctx["trial-timestamp"]
+            self._race_id = ctx["race-id"]
+            self._race_timestamp = ctx["race-timestamp"]
             self._track = ctx["track"]
             self._challenge = ctx["challenge"]
             self._car = ctx["car"]
         else:
-            self._trial_id = trial_id
-            self._trial_timestamp = time.to_iso8601(trial_timestamp)
+            self._race_id = race_id
+            self._race_timestamp = time.to_iso8601(race_timestamp)
             self._track = track_name
             self._challenge = challenge_name
             self._car = car_name
-        assert self._trial_id is not None, "Attempting to open metrics store without a trial id"
-        assert self._trial_timestamp is not None, "Attempting to open metrics store without a trial timestamp"
+        assert self._race_id is not None, "Attempting to open metrics store without a race id"
+        assert self._race_timestamp is not None, "Attempting to open metrics store without a race timestamp"
         assert self._track is not None, "Attempting to open metrics store without a track"
         assert self._challenge is not None, "Attempting to open metrics store without a challenge"
         assert self._car is not None, "Attempting to open metrics store without a car"
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
-        self.logger.info("Opening metrics store for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s]",
-                         self._trial_timestamp, self._track, self._challenge, self._car)
+        self.logger.info("Opening metrics store for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s]",
+                         self._race_timestamp, self._track, self._challenge, self._car)
 
         user_tags = extract_user_tags_from_config(self._config)
         for k, v in user_tags.items():
@@ -344,14 +393,6 @@ class MetricsStore:
         """
         self._stop_watch.start()
 
-    @property
-    def lap(self):
-        return self._lap
-
-    @lap.setter
-    def lap(self, lap):
-        self._lap = lap
-
     def flush(self, refresh=True):
         """
         Explicitly flushes buffered metrics to the metric store. It is not required to flush before closing the metrics store.
@@ -366,7 +407,6 @@ class MetricsStore:
         """
         self.flush()
         self.clear_meta_info()
-        self.lap = None
         self.opened = False
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -423,8 +463,8 @@ class MetricsStore:
     @property
     def open_context(self):
         return {
-            "trial-id": self._trial_id,
-            "trial-timestamp": self._trial_timestamp,
+            "race-id": self._race_id,
+            "race-timestamp": self._race_timestamp,
             "track": self._track,
             "challenge": self._challenge,
             "car": self._car
@@ -538,11 +578,13 @@ class MetricsStore:
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            "trial-id": self._trial_id,
-            "trial-timestamp": self._trial_timestamp,
+            # TODO #777: Remove trial-* with a later release. They are only here for BWC
+            "trial-id": self._race_id,
+            "trial-timestamp": self._race_timestamp,
+            "race-id": self._race_id,
+            "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
             "track": self._track,
-            "lap": self._lap,
             "challenge": self._challenge,
             "car": self._car_name,
             "name": name,
@@ -559,8 +601,6 @@ class MetricsStore:
             doc["operation-type"] = operation_type
         if self._track_params:
             doc["track-params"] = self._track_params
-
-        assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
         self._add(doc)
 
     def put_doc(self, doc, level=None, node_name=None, meta_data=None, absolute_time=None, relative_time=None):
@@ -598,11 +638,13 @@ class MetricsStore:
         doc.update({
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            "trial-id": self._trial_id,
-            "trial-timestamp": self._trial_timestamp,
+            # TODO #777: Remove trial-* with a later release. They are only here for BWC
+            "trial-id": self._race_id,
+            "trial-timestamp": self._race_timestamp,
+            "race-id": self._race_id,
+            "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
             "track": self._track,
-            "lap": self._lap,
             "challenge": self._challenge,
             "car": self._car_name,
 
@@ -612,7 +654,6 @@ class MetricsStore:
         if self._track_params:
             doc["track-params"] = self._track_params
 
-        assert self.lap is not None, "Attempting to store [%s] without a lap." % doc
         self._add(doc)
 
     def bulk_add(self, memento):
@@ -637,21 +678,21 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, lap=None):
+    def get_one(self, name, sample_type=None):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
         :param name: The metric name to query.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, sample_type=sample_type, lap=lap))
+        return self._first_or_none(self.get(name=name, sample_type=sample_type))
 
-    def _first_or_none(self, values):
+    @staticmethod
+    def _first_or_none(values):
         return values[0] if values else None
 
-    def get(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get(self, name, task=None, operation_type=None, sample_type=None):
         """
         Gets all raw values for the given metric name.
 
@@ -659,12 +700,11 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A list of all values for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, lap, lambda doc: doc["value"])
+        return self._get(name, task, operation_type, sample_type, lambda doc: doc["value"])
 
-    def get_raw(self, name, task=None, operation_type=None, sample_type=None, lap=None, mapper=lambda doc: doc):
+    def get_raw(self, name, task=None, operation_type=None, sample_type=None, mapper=lambda doc: doc):
         """
         Gets all raw records for the given metric name.
 
@@ -672,11 +712,10 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :param mapper A record mapper. By default, the complete record is returned.
         :return: A list of all raw records for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, lap, mapper)
+        return self._get(name, task, operation_type, sample_type, mapper)
 
     def get_unit(self, name, task=None):
         """
@@ -687,40 +726,38 @@ class MetricsStore:
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, None, None, None, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, None, None, lambda doc: doc["unit"]))
 
-    def _get(self, name, task, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, mapper):
         raise NotImplementedError("abstract method")
 
-    def get_count(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_count(self, name, task=None, operation_type=None, sample_type=None):
         """
 
         :param name: The metric name to query.
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The number of samples for this metric.
         """
-        stats = self.get_stats(name, task, operation_type, sample_type, lap)
+        stats = self.get_stats(name, task, operation_type, sample_type)
         if stats:
             return stats["count"]
         else:
             return 0
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None):
         """
         Gets the error rate for a specific task.
 
         :param task The task name to query.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A float between 0.0 and 1.0 (inclusive) representing the error rate.
         """
         raise NotImplementedError("abstract method")
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
         """
         Gets standard statistics for the given metric.
 
@@ -728,12 +765,11 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: A metric_stats structure.
         """
         raise NotImplementedError("abstract method")
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
         """
         Retrieves percentile metrics for the given metric.
 
@@ -741,7 +777,6 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :param percentiles: An optional list of percentiles to show. If None is provided, by default the 99th, 99.9th and 100th percentile
         are determined. Ensure that there are enough data points in the metrics store (e.g. it makes no sense to retrieve a 99.9999
         percentile when there are only 10 values).
@@ -750,7 +785,7 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_median(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_median(self, name, task=None, operation_type=None, sample_type=None):
         """
         Retrieves median value of the given metric.
 
@@ -758,25 +793,37 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :param lap The lap to query. Optional. By default, all laps are considered.
         :return: The median value.
         """
         median = "50.0"
-        percentiles = self.get_percentiles(name, task, operation_type, sample_type, lap, percentiles=[median])
+        percentiles = self.get_percentiles(name, task, operation_type, sample_type, percentiles=[median])
         return percentiles[median] if percentiles else None
+
+    def get_mean(self, name, task=None, operation_type=None, sample_type=None):
+        """
+        Retrieves mean of the given metric.
+
+        :param name: The metric name to query.
+        :param task The task name to query. Optional.
+        :param operation_type The operation type to query. Optional.
+        :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :return: The mean.
+        """
+        stats = self.get_stats(name, task, operation_type, sample_type)
+        return stats["avg"] if stats else None
 
 
 class EsMetricsStore(MetricsStore):
     """
     A metrics store backed by Elasticsearch.
     """
-    METRICS_DOC_TYPE = "metrics"
+    METRICS_DOC_TYPE = "_doc"
 
     def __init__(self,
                  cfg,
                  client_factory_class=EsClientFactory,
                  index_template_provider_class=IndexTemplateProvider,
-                 clock=time.Clock, meta_info=None, lap=None):
+                 clock=time.Clock, meta_info=None):
         """
         Creates a new metrics store.
 
@@ -785,17 +832,16 @@ class EsMetricsStore(MetricsStore):
         :param index_template_provider_class: This parameter is optional and needed for testing.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
-        :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info, lap=lap)
+        MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info)
         self._index = None
         self._client = client_factory_class(cfg).create()
         self._index_template_provider = index_template_provider_class(cfg)
         self._docs = None
 
-    def open(self, trial_id=None, trial_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
+    def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
-        MetricsStore.open(self, trial_id, trial_timestamp, track_name, challenge_name, car_name, ctx, create)
+        MetricsStore.open(self, race_id, race_timestamp, track_name, challenge_name, car_name, ctx, create)
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
@@ -803,12 +849,34 @@ class EsMetricsStore(MetricsStore):
             self._client.put_template("rally-metrics", self._get_template())
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
+            else:
+                # TODO: Remove this compatibility layer with Rally 1.1.1
+                # this could be an old index with a different document type, inspect and change accordingly
+                index_info = self._client.get_index(self._index)
+                # metrics is the old type name -> we have an old index, don't touch it
+                if "metrics" in index_info[self._index]["mappings"]:
+                    old_index_name = self._index
+                    self._index = self._migrated_index_name(old_index_name)
+                    self.logger.info("[%s] already exists with an old mapping. Creating [%s] to avoid mapping issues.",
+                                     old_index_name, self._index)
+                    self._client.create_index(index=self._index)
+                else:
+                    self.logger.info("[%s] already exists with proper mapping.", self._index)
+        else:
+            # we still need to check for the correct index name - prefer the one with the suffix
+            new_name = self._migrated_index_name(self._index)
+            if self._client.exists(index=new_name):
+                self._index = new_name
+
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._trial_timestamp)
+        ts = time.from_is8601(self._race_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
+
+    def _migrated_index_name(self, original_name):
+        return "{}.new".format(original_name)
 
     def _get_template(self):
         return self._index_template_provider.metrics_template()
@@ -816,8 +884,8 @@ class EsMetricsStore(MetricsStore):
     def flush(self, refresh=True):
         if self._docs:
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            self.logger.info("Successfully added %d metrics documents for trial timestamp=[%s], track=[%s], challenge=[%s], car=[%s].",
-                             len(self._docs), self._trial_timestamp, self._track, self._challenge, self._car)
+            self.logger.info("Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s].",
+                             len(self._docs), self._race_timestamp, self._track, self._challenge, self._car)
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
@@ -826,18 +894,18 @@ class EsMetricsStore(MetricsStore):
     def _add(self, doc):
         self._docs.append(doc)
 
-    def _get(self, name, task, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, mapper):
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, lap)
+            "query": self._query_by_name(name, task, operation_type, sample_type)
         }
-        self.logger.debug("Issuing get against index=[%s], doc_type=[%s], query=[%s].", self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None):
         query = {
-            "query": self._query_by_name("service_time", task, operation_type, sample_type, lap),
+            "query": self._query_by_name("service_time", task, operation_type, sample_type),
             "size": 0,
             "aggs": {
                 "error_rate": {
@@ -847,9 +915,8 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        self.logger.debug("Issuing get_error_rate against index=[%s], doc_type=[%s], query=[%s]",
-                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get_error_rate against index=[%s], query=[%s]", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         buckets = result["aggregations"]["error_rate"]["buckets"]
         self.logger.debug("Query returned [%d] buckets.", len(buckets))
         count_success = 0
@@ -872,7 +939,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return count_errors / (count_errors + count_success)
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None, lap=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
         """
         Gets standard statistics for the given metric name.
 
@@ -880,7 +947,7 @@ class EsMetricsStore(MetricsStore):
         https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
         """
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, lap),
+            "query": self._query_by_name(name, task, operation_type, sample_type),
             "size": 0,
             "aggs": {
                 "metric_stats": {
@@ -890,16 +957,15 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        self.logger.debug("Issuing get_stats against index=[%s], doc_type=[%s], query=[%s]",
-                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         return result["aggregations"]["metric_stats"]
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, lap),
+            "query": self._query_by_name(name, task, operation_type, sample_type),
             "size": 0,
             "aggs": {
                 "percentile_stats": {
@@ -910,10 +976,12 @@ class EsMetricsStore(MetricsStore):
                 }
             }
         }
-        self.logger.debug("Issuing get_percentiles against index=[%s], doc_type=[%s], query=[%s]",
-                          self._index, EsMetricsStore.METRICS_DOC_TYPE, query)
-        result = self._client.search(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, body=query)
+        self.logger.debug("Issuing get_percentiles against index=[%s], query=[%s]", self._index, query)
+        result = self._client.search(index=self._index, body=query)
         hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
         self.logger.debug("get_percentiles produced %d hits", hits)
         if hits > 0:
             raw = result["aggregations"]["percentile_stats"]["values"]
@@ -921,13 +989,14 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def _query_by_name(self, name, task, operation_type, sample_type, lap):
+    def _query_by_name(self, name, task, operation_type, sample_type):
         q = {
             "bool": {
                 "filter": [
                     {
                         "term": {
-                            "trial-id": self._trial_id
+                            # TODO #777: Switch to "race-id" once we remove the trial-id parameter
+                            "trial-id": self._race_id
                         }
                     },
                     {
@@ -956,12 +1025,6 @@ class EsMetricsStore(MetricsStore):
                     "sample-type": sample_type.name.lower()
                 }
             })
-        if lap is not None:
-            q["bool"]["filter"].append({
-                "term": {
-                    "lap": lap
-                }
-            })
         return q
 
     def to_externalizable(self, clear=False):
@@ -973,7 +1036,7 @@ class EsMetricsStore(MetricsStore):
 
 
 class InMemoryMetricsStore(MetricsStore):
-    def __init__(self, cfg, clock=time.Clock, meta_info=None, lap=None):
+    def __init__(self, cfg, clock=time.Clock, meta_info=None):
         """
 
         Creates a new metrics store.
@@ -981,9 +1044,8 @@ class InMemoryMetricsStore(MetricsStore):
         :param cfg: The config object. Mandatory.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
-        :param lap: This parameter is optional and intended for creating a metrics store with a previously serialized lap.
         """
-        super().__init__(cfg=cfg, clock=clock, meta_info=meta_info, lap=lap)
+        super().__init__(cfg=cfg, clock=clock, meta_info=meta_info)
         self.docs = []
 
     def __del__(self):
@@ -1007,11 +1069,11 @@ class InMemoryMetricsStore(MetricsStore):
                          sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1))
         return compressed
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, lap=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         result = collections.OrderedDict()
-        values = self.get(name, task, operation_type, sample_type, lap)
+        values = self.get(name, task, operation_type, sample_type)
         if len(values) > 0:
             sorted_values = sorted(values)
             for percentile in percentiles:
@@ -1040,15 +1102,14 @@ class InMemoryMetricsStore(MetricsStore):
             higher_score = sorted_values[lr_next]
             return lower_score + (higher_score - lower_score) * fr
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None, lap=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None):
         error = 0
         total_count = 0
         for doc in self.docs:
             # we can use any request metrics record (i.e. service time or latency)
             if doc["name"] == "service_time" and doc["task"] == task and \
                     (operation_type is None or doc["operation-type"] == operation_type.name) and \
-                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and \
-                    (lap is None or doc["lap"] == lap):
+                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()):
                 total_count += 1
                 if doc["meta"]["success"] is False:
                     error += 1
@@ -1057,8 +1118,8 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return 0.0
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal, lap=None):
-        values = self.get(name, task, operation_type, sample_type, lap)
+    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal):
+        values = self.get(name, task, operation_type, sample_type)
         sorted_values = sorted(values)
         if len(sorted_values) > 0:
             return {
@@ -1071,14 +1132,13 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return None
 
-    def _get(self, name, task, operation_type, sample_type, lap, mapper):
+    def _get(self, name, task, operation_type, sample_type, mapper):
         return [mapper(doc)
                 for doc in self.docs
                 if doc["name"] == name and
                 (task is None or doc["task"] == task) and
                 (operation_type is None or doc["operation-type"] == operation_type.name) and
-                (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
-                (lap is None or doc["lap"] == lap)
+                (sample_type is None or doc["sample-type"] == sample_type.name.lower())
                 ]
 
     def __str__(self):
@@ -1102,29 +1162,29 @@ def race_store(cfg):
 def list_races(cfg):
     def format_dict(d):
         if d:
-            return ", ".join(["%s=%s" % (k, v) for k, v in d.items()])
+            items=sorted(d.items())
+            return ", ".join(["%s=%s" % (k, v) for k, v in items])
         else:
             return None
 
     races = []
     for race in race_store(cfg).list():
-        races.append([time.to_iso8601(race.trial_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
-                      format_dict(race.user_tags)])
+        races.append([race.race_id, time.to_iso8601(race.race_timestamp), race.track, format_dict(race.track_params), race.challenge_name, race.car_name,
+                      format_dict(race.user_tags), race.track_revision, race.team_revision])
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags"]))
+        console.println(tabulate.tabulate(races, headers=["Race ID", "Race Timestamp", "Track", "Track Parameters", "Challenge", "Car", "User Tags", "Track Revision", "Team Revision"]))
     else:
         console.println("")
         console.println("No recent races found.")
 
 
-def create_race(cfg, track, challenge):
+def create_race(cfg, track, challenge, track_revision=None):
     car = cfg.opts("mechanic", "car.names")
     environment = cfg.opts("system", "env.name")
-    trial_id = cfg.opts("system", "trial.id")
-    trial_timestamp = cfg.opts("system", "time.start")
-    total_laps = cfg.opts("race", "laps")
+    race_id = cfg.opts("system", "race.id")
+    race_timestamp = cfg.opts("system", "time.start")
     user_tags = extract_user_tags_from_config(cfg)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
@@ -1132,21 +1192,20 @@ def create_race(cfg, track, challenge):
     plugin_params = cfg.opts("mechanic", "plugin.params")
     rally_version = version.version()
 
-    return Race(rally_version, environment, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                car_params, plugin_params, total_laps)
+    return Race(rally_version, environment, race_id, race_timestamp, pipeline, user_tags, track, track_params,
+                challenge, car, car_params, plugin_params, track_revision)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, trial_id, trial_timestamp, pipeline, user_tags, track, track_params, challenge, car,
-                 car_params, plugin_params, total_laps, cluster=None, lap_results=None, results=None):
+    def __init__(self, rally_version, environment_name, race_id, race_timestamp, pipeline, user_tags, track,
+                 track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
+                 distribution_version=None, distribution_flavor=None, revision=None, results=None):
         if results is None:
             results = {}
-        if lap_results is None:
-            lap_results = []
         self.rally_version = rally_version
         self.environment_name = environment_name
-        self.trial_id = trial_id
-        self.trial_timestamp = trial_timestamp
+        self.race_id = race_id
+        self.race_timestamp = race_timestamp
         self.pipeline = pipeline
         self.user_tags = user_tags
         self.track = track
@@ -1155,10 +1214,11 @@ class Race:
         self.car = car
         self.car_params = car_params
         self.plugin_params = plugin_params
-        self.total_laps = total_laps
-        # will be set later - contains hosts, revision, distribution_version, ...
-        self.cluster = cluster
-        self.lap_results = lap_results
+        self.track_revision = track_revision
+        self.team_revision = team_revision
+        self.distribution_version = distribution_version
+        self.distribution_flavor = distribution_flavor
+        self.revision = revision
         self.results = results
 
     @property
@@ -1174,19 +1234,15 @@ class Race:
         return "+".join(self.car) if isinstance(self.car, list) else self.car
 
     @property
-    def revision(self):
-        # minor simplification for reporter
-        return self.cluster.revision
+    def meta_data(self):
+        meta = {}
+        meta.update(self.track.meta_data)
+        if self.challenge:
+            meta.update(self.challenge.meta_data)
+        return meta
 
-    def add_lap_results(self, results):
-        self.lap_results.append(results)
-
-    def add_final_results(self, results):
+    def add_results(self, results):
         self.results = results
-
-    def results_of_lap_number(self, lap):
-        # laps are 1 indexed but we store the data zero indexed
-        return self.lap_results[lap - 1]
 
     def as_dict(self):
         """
@@ -1195,16 +1251,25 @@ class Race:
         d = {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
-            "trial-id": self.trial_id,
-            "trial-timestamp": time.to_iso8601(self.trial_timestamp),
+            # TODO #777: Remove trial-* with a later release. They are only here for BWC
+            "trial-id": self.race_id,
+            "trial-timestamp": time.to_iso8601(self.race_timestamp),
+            "race-id": self.race_id,
+            "race-timestamp": time.to_iso8601(self.race_timestamp),
             "pipeline": self.pipeline,
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car,
-            "total-laps": self.total_laps,
-            "cluster": self.cluster.as_dict(),
+            "cluster": {
+                "revision": self.revision,
+                "distribution-version": self.distribution_version,
+                "distribution-flavor": self.distribution_flavor,
+                "team-revision": self.team_revision,
+            },
             "results": self.results.as_dict()
         }
+        if self.track_revision:
+            d["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
             d["challenge"] = self.challenge_name
         if self.track_params:
@@ -1222,24 +1287,24 @@ class Race:
         result_template = {
             "rally-version": self.rally_version,
             "environment": self.environment_name,
-            "trial-id": self.trial_id,
-            "trial-timestamp": time.to_iso8601(self.trial_timestamp),
-            "distribution-version": self.cluster.distribution_version,
-            "distribution-major-version": versions.major_version(self.cluster.distribution_version),
+            # TODO #777: Remove trial-* with a later release. They are only here for BWC
+            "trial-id": self.race_id,
+            "trial-timestamp": time.to_iso8601(self.race_timestamp),
+            "race-id": self.race_id,
+            "race-timestamp": time.to_iso8601(self.race_timestamp),
+            "distribution-version": self.distribution_version,
+            "distribution-flavor": self.distribution_flavor,
+            "distribution-major-version": versions.major_version(self.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car_name,
-            "node-count": len(self.cluster.nodes),
-            # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result on graphs
+            # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
             "active": True
         }
-        plugins = set()
-        for node in self.cluster.nodes:
-            plugins.update(node.plugins)
-
-        if plugins:
-            result_template["plugins"] = list(plugins)
-
+        if self.team_revision:
+            result_template["team-revision"] = self.team_revision
+        if self.track_revision:
+            result_template["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
             result_template["challenge"] = self.challenge_name
         if self.track_params:
@@ -1248,6 +1313,8 @@ class Race:
             result_template["car-params"] = self.car_params
         if self.plugin_params:
             result_template["plugin-params"] = self.plugin_params
+        if self.meta_data:
+            result_template["meta"] = self.meta_data
 
         all_results = []
 
@@ -1267,22 +1334,28 @@ class Race:
             user_tags = d["user-tags"]
         else:
             user_tags = {}
-
-        # Don't restore a few properties like cluster because they (a) cannot be reconstructed easily without knowledge of other modules
-        # and (b) it is not necessary for this use case.
-        return Race(d["rally-version"], d["environment"], d["trial-id"], time.from_is8601(d["trial-timestamp"]), d["pipeline"], user_tags,
-                    d["track"], d.get("track-params"), d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
-                    d["total-laps"], results=d["results"])
+        # TODO: cluster is optional for BWC. This can be removed after some grace period.
+        # TODO #777: Remove the backwards-compatibility layer with trial*
+        cluster = d.get("cluster", {})
+        return Race(d["rally-version"], d["environment"], d.get("race-id", d.get("trial-id")),
+                    time.from_is8601(d.get("race-timestamp", d.get("trial-timestamp"))),
+                    d["pipeline"], user_tags, d["track"], d.get("track-params"), d.get("challenge"), d["car"],
+                    d.get("car-params"), d.get("plugin-params"), track_revision=d.get("track-revision"),
+                    team_revision=cluster.get("team-revision"),
+                    distribution_version=cluster.get("distribution-version"),
+                    distribution_flavor=cluster.get("distribution-flavor"),
+                    revision=cluster.get("revision"), results=d["results"])
 
 
 class RaceStore:
     def __init__(self, cfg):
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
-        self.trial_timestamp = cfg.opts("system", "time.start")
+        self.race_timestamp = cfg.opts("system", "time.start")
+        self.race_id = cfg.opts("system", "race.id")
         self.current_race = None
 
-    def find_by_timestamp(self, timestamp):
+    def find_by_race_id(self, race_id):
         raise NotImplementedError("abstract method")
 
     def list(self):
@@ -1310,8 +1383,8 @@ class CompositeRaceStore:
         self.es_results_store = es_results_store
         self.file_store = file_store
 
-    def find_by_timestamp(self, timestamp):
-        return self.es_store.find_by_timestamp(timestamp)
+    def find_by_race_id(self, race_id):
+        return self.es_store.find_by_race_id(race_id)
 
     def store_race(self, race):
         self.file_store.store_race(race)
@@ -1325,37 +1398,31 @@ class CompositeRaceStore:
 class FileRaceStore(RaceStore):
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.user_provided_start_timestamp = self.cfg.opts("system", "time.start.user_provided", mandatory=False, default_value=False)
         self.races_path = paths.races_root(self.cfg)
         self.race_path = paths.race_root(self.cfg)
 
     def _store(self, doc):
         import json
         io.ensure_dir(self.race_path)
-        # if the user has overridden the effective start date we guarantee a unique file name but do not let them use them for tournaments.
-        with open(self._output_file_name(doc), mode="wt", encoding="utf-8") as f:
+        with open(self._race_file(), mode="wt", encoding="utf-8") as f:
             f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
-    def _output_file_name(self, doc):
-        if self.user_provided_start_timestamp:
-            suffix = "_{}".format(doc.get("user-tags", {}).get("name", doc["trial-id"]))
-        else:
-            suffix = ""
-        return "%s/race%s.json" % (self.race_path, suffix)
+    def _race_file(self, race_id=None):
+        return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
 
     def list(self):
         import glob
-        results = glob.glob("%s/*/race*.json" % self.races_path)
+        results = glob.glob(self._race_file(race_id="*"))
         all_races = self._to_races(results)
         return all_races[:self._max_results()]
 
-    def find_by_timestamp(self, timestamp):
-        race_file = "%s/race.json" % paths.race_root(cfg=self.cfg, start=time.from_is8601(timestamp))
+    def find_by_race_id(self, race_id):
+        race_file = self._race_file(race_id=race_id)
         if io.exists(race_file):
             races = self._to_races([race_file])
             if races:
                 return races[0]
-        return None
+        raise exceptions.NotFound("No race with race id [{}]".format(race_id))
 
     def _to_races(self, results):
         import json
@@ -1367,12 +1434,12 @@ class FileRaceStore(RaceStore):
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
-        return sorted(races, key=lambda r: r.trial_timestamp, reverse=True)
+        return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
 
 class EsRaceStore(RaceStore):
     INDEX_PREFIX = "rally-races-"
-    RACE_DOC_TYPE = "races"
+    RACE_DOC_TYPE = "_doc"
 
     def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1389,10 +1456,17 @@ class EsRaceStore(RaceStore):
     def _store(self, doc):
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
+        # TODO: Remove this compatibility layer with Rally 1.1.1
+        idx = self.index_name()
+        if self.client.exists(idx):
+            index_info = self.client.get_index(idx)
+            # races is the old type name -> we have an old index, don't touch it
+            if "races" in index_info[idx]["mappings"]:
+                idx = "{}.new".format(idx)
+        self.client.index(index=idx, doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
 
     def index_name(self):
-        return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.trial_timestamp.year, self.trial_timestamp.month)
+        return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
 
     def list(self):
         filters = [{
@@ -1410,19 +1484,24 @@ class EsRaceStore(RaceStore):
             "size": self._max_results(),
             "sort": [
                 {
+                    # TODO #777: Switch to "race-timestamp" once we remove the trial-timestamp parameter
                     "trial-timestamp": {
                         "order": "desc"
                     }
                 }
             ]
         }
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
-        if result["hits"]["total"] > 0:
+        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
+        if hits > 0:
             return [Race.from_dict(v["_source"]) for v in result["hits"]["hits"]]
         else:
             return []
 
-    def find_by_timestamp(self, timestamp):
+    def find_by_race_id(self, race_id):
         filters = [{
                 "term": {
                     "environment": self.environment_name
@@ -1430,7 +1509,8 @@ class EsRaceStore(RaceStore):
             },
             {
                 "term": {
-                    "trial-timestamp": timestamp
+                    # TODO #777: Switch to "race-id" once we remove the trial-id parameter
+                    "trial-id": race_id
                 }
             }]
 
@@ -1441,11 +1521,18 @@ class EsRaceStore(RaceStore):
                 }
             }
         }
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, doc_type=EsRaceStore.RACE_DOC_TYPE, body=query)
-        if result["hits"]["total"] == 1:
+        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
+        if hits == 1:
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
+        elif hits > 1:
+            raise exceptions.RallyAssertionError(
+                "Expected exactly one race to match race id [{}] but there were [{}] matches.".format(race_id, hits))
         else:
-            return None
+            raise exceptions.NotFound("No race with race id [{}]".format(race_id))
 
 
 class EsResultsStore:
@@ -1453,7 +1540,7 @@ class EsResultsStore:
     Stores the results of a race in a format that is better suited for reporting with Kibana.
     """
     INDEX_PREFIX = "rally-results-"
-    RESULTS_DOC_TYPE = "results"
+    RESULTS_DOC_TYPE = "_doc"
 
     def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1464,14 +1551,21 @@ class EsResultsStore:
         :param index_template_provider_class: This parameter is optional and needed for testing.
         """
         self.cfg = cfg
-        self.trial_timestamp = cfg.opts("system", "time.start")
+        self.race_timestamp = cfg.opts("system", "time.start")
         self.client = client_factory_class(cfg).create()
         self.index_template_provider = index_template_provider_class(cfg)
 
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
+        # TODO: Remove this compatibility layer with Rally 1.1.1
+        idx = self.index_name()
+        if self.client.exists(idx):
+            index_info = self.client.get_index(idx)
+            # results is the old type name -> we have an old index, don't touch it
+            if "results" in index_info[idx]["mappings"]:
+                idx = "{}.new".format(idx)
+        self.client.bulk_index(index=idx, doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
 
     def index_name(self):
-        return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.trial_timestamp.year, self.trial_timestamp.month)
+        return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)

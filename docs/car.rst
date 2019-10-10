@@ -103,7 +103,6 @@ If you open ``vanilla/templates/config/elasticsearch.yml`` you will see a few va
 
 * ``network_host``
 * ``http_port``
-* ``node_count_per_host``
 
 These values are derived by Rally internally based on command line flags and you cannot override them in your car definition. You also cannot use these names as names for variables because Rally would simply override them.
 

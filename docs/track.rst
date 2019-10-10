@@ -177,7 +177,7 @@ Each index in this list consists of the following properties:
 
 * ``name`` (mandatory): The name of the index.
 * ``body`` (optional): File name of the corresponding index definition that will be used as body in the create index API call.
-* ``types`` (optional): A list of type names in this index.
+* ``types`` (optional): A list of type names in this index. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 
 Example::
 
@@ -220,7 +220,7 @@ The ``corpora`` section contains all document corpora that are used by this trac
 
 Each entry in the ``documents`` list consists of the following properties:
 
-* ``base-url`` (optional): A http or https URL that points to the root path where Rally can obtain the corresponding source file.
+* ``base-url`` (optional): A http(s) or S3 URL that points to the root path where Rally can obtain the corresponding source file. Rally can also download data from private S3 buckets if access is properly `configured <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration>`_.
 * ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
 * ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
 * ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
@@ -228,7 +228,7 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
-* ``target-type``: Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 
 To avoid repetition, you can specify default values on document corpus level for the following properties:
 
@@ -317,7 +317,15 @@ With the operation type ``bulk`` you can execute `bulk requests <http://www.elas
 * ``conflicts`` (optional): Type of index conflicts to simulate. If not specified, no conflicts will be simulated (also read below on how to use external index ids with no conflicts). Valid values are: 'sequential' (A document id is replaced with a document id with a sequentially increasing id), 'random' (A document id is replaced with a document id with a random other id).
 * ``conflict-probability`` (optional, defaults to 25 percent): A number between [0, 100] that defines how many of the documents will get replaced. Combining ``conflicts=sequential`` and ``conflict-probability=0`` makes Rally generate index ids by itself, instead of relying on Elasticsearch's `automatic id generation <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#_automatic_id_generation>`_.
 * ``on-conflict`` (optional, defaults to ``index``): Determines whether Rally should use the action ``index`` or ``update`` on id conflicts.
+* ``recency`` (optional, defaults to 0): A number between [0,1] indicating whether to bias conflicting ids towards more recent ids (``recency`` towards 1) or whether to consider all ids for id conflicts (``recency`` towards 0). See the diagram below for details.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results.
+
+The image below shows how Rally behaves with a ``recency`` set to 0.5. Internally, Rally uses the blue function for its calculations but to understand the behavior we will focus on red function (which is just the inverse). Suppose we have already generated ids from 1 to 100 and we are about to simulate an id conflict. Rally will randomly choose a value on the y-axis, e.g. 0.8 which is mapped to 0.1 on the x-axis. This means that in 80% of all cases, Rally will choose an id within the most recent 10%, i.e. between 90 and 100. With 20% probability the id will be between 1 and 89. The closer ``recency`` gets to zero, the "flatter" the red curve gets and the more likely Rally will choose less recent ids.
+
+.. image:: recency.png
+    :alt: Recency Function
+
+You can also `explore the recency calculation interactively <https://www.desmos.com/calculator/zlzieypanv>`_.
 
 Example::
 
@@ -359,9 +367,14 @@ search
 With the operation type ``search`` you can execute `request body searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_. It supports the following properties:
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this query. Only needed if the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use. If you have defined multiple indices and want to query all of them, just specify ``"index": "_all"``.
-* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index.
+* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
-* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Python ES client API docs <http://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.Elasticsearch.search>`_. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+    .. note::
+        1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
 * ``body`` (mandatory): The query body.
 * ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
@@ -378,7 +391,7 @@ Example::
       },
       "request-params": {
         "_source_include": "some_field",
-        "analyze_wildcard": false
+        "analyze_wildcard": "false"
       }
     }
 
@@ -427,7 +440,7 @@ cluster-health
 
 With the operation ``cluster-health`` you can execute the `cluster health API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html>`_. It supports the following properties:
 
-* ``request-params`` (optional): A structure containing any request parameters that are allowed by the cluster health API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the cluster health API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 * ``index`` (optional): The name of the index that should be used to check.
 
 The ``cluster-health`` operation will check whether the expected cluster health and will report a failure if this is not the case. Use ``--on-error`` on the command line to control Rally's behavior in case of such failures.
@@ -463,13 +476,13 @@ With the operation ``create-index`` you can execute the `create index API <https
 If you want it to create all indices that have been declared in the ``indices`` section you can specify the following properties:
 
 * ``settings`` (optional): Allows to specify additional index settings that will be merged with the index settings specified in the body of the index in the ``indices`` section.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to create one specific index instead, you can specify the following properties:
 
 * ``index`` (mandatory): One or more names of the indices that should be created. If only one index should be created, you can use a string otherwise this needs to be a list of strings.
 * ``body`` (optional): The body for the create index API call.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.create>`__ that are allowed by the create index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -482,7 +495,7 @@ The following snippet will create all indices that have been defined in the ``in
         "index.number_of_shards": 1
       },
       "request-params": {
-        "wait_for_active_shards": true
+        "wait_for_active_shards": "true"
       }
     }
 
@@ -508,6 +521,9 @@ With the following snippet we will create a new index that is not defined in the
       }
     }
 
+.. note::
+   Types have been removed in Elasticsearch 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
+
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 delete-index
@@ -518,13 +534,13 @@ With the operation ``delete-index`` you can execute the `delete index API <https
 If you want it to delete all indices that have been declared in the ``indices`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to delete one specific index (pattern) instead, you can specify the following properties:
 
 * ``index`` (mandatory): One or more names of the indices that should be deleted. If only one index should be deleted, you can use a string otherwise this needs to be a list of strings.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete>`__ that are allowed by the delete index API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -544,8 +560,8 @@ With the following snippet we will delete all ``logs-*`` indices::
       "only-if-exists": false,
       "request-params": {
         "expand_wildcards": "all",
-        "allow_no_indices": true,
-        "ignore_unavailable": true
+        "allow_no_indices": "true",
+        "ignore_unavailable": "true"
       }
     }
 
@@ -560,13 +576,13 @@ If you want it to create index templates that have been declared in the ``templa
 
 * ``template`` (optional): If you specify a template name, only the template with this name will be created.
 * ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the index template in the ``templates`` section.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`__ that are allowed by the create index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to create one specific index instead, you can specify the following properties:
 
 * ``template`` (mandatory): The name of the index template that should be created.
 * ``body`` (mandatory): The body for the create index template API call.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template>`__ that are allowed by the create index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -576,7 +592,7 @@ The following snippet will create all index templates that have been defined in 
       "name": "create-all-templates",
       "operation-type": "create-index-template",
       "request-params": {
-        "create": true
+        "create": "true"
       }
     }
 
@@ -601,6 +617,9 @@ With the following snippet we will create a new index template that is not defin
       }
     }
 
+.. note::
+   Types have been removed in Elasticsearch 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
+
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 delete-index-template
@@ -611,7 +630,7 @@ With the operation ``delete-index-template`` you can execute the `delete index t
 If you want it to delete all index templates that have been declared in the ``templates`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index template should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`__ that are allowed by the delete index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 If you want it to delete one specific index template instead, you can specify the following properties:
 
@@ -619,7 +638,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
 * ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
-* ``request-params`` (optional): A structure containing any `request parameters <https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template>`__ that are allowed by the delete index template API.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
 
@@ -646,17 +665,145 @@ With the following snippet we will delete the `default`` index template::
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+shrink-index
+~~~~~~~~~~~~
+
+With the operation ``shrink-index`` you can execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_. Note that this does not correspond directly to the shrink index API call in Elasticsearch but it is a high-level operation that executes all the necessary low-level operations under the hood to shrink an index. It supports the following parameters:
+
+* ``source-index`` (mandatory): The name of the index that should be shrinked.
+* ``target-index`` (mandatory): The name of the index that contains the shrinked shards.
+* ``target-body`` (mandatory): The body containing settings and aliases for ``target-index``.
+* ``shrink-node`` (optional, defaults to a random data node): As a first step, the source index needs to be fully relocated to a single node. Rally will automatically choose a random data node in the cluster but you can choose one explicitly if needed.
+
+Example::
+
+    {
+      "operation-type": "shrink-index",
+      "shrink-node": "rally-node-0",
+      "source-index": "src",
+      "target-index": "target",
+      "target-body": {
+        "settings": {
+          "index.number_of_replicas": 1,
+          "index.number_of_shards": 1,
+          "index.codec": "best_compression"
+        }
+      }
+    }
+
+This will shrink the index ``src`` to ``target``. The target index will consist of one shard and have one replica. With ``shrink-node`` we also explicitly specify the name of the node where we want the source index to be relocated to.
+
+delete-ml-datafeed
+~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-ml-datafeed`` you can execute the `delete datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_. The ``delete-ml-datafeed`` operation supports the following parameters:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to delete.
+* ``force`` (optional, defaults to ``false``): Whether to force deletion of a datafeed that has already been started.
+
+This runner will intentionally ignore 404s from Elasticsearch so it is safe to execute this runner regardless whether a corresponding machine learning datafeed exists.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-ml-datafeed
+~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-ml-datafeed`` you can execute the `create datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__. The ``create-ml-datafeed`` operation supports the following parameters:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to create.
+* ``body`` (mandatory): Request body containing the definition of the datafeed. Please see the `create datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__ documentation for more details.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+start-ml-datafeed
+~~~~~~~~~~~~~~~~~
+
+With the operation ``start-ml-datafeed`` you can execute the `start datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__. The ``start-ml-datafeed`` operation supports the following parameters which are documented in the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
+* ``body`` (optional, defaults to empty): Request body with start parameters.
+* ``start`` (optional, defaults to empty): Start timestamp of the datafeed.
+* ``end`` (optional, defaults to empty): End timestamp of the datafeed.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed starts.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+stop-ml-datafeed
+~~~~~~~~~~~~~~~~
+
+With the operation ``stop-ml-datafeed`` you can execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_. The ``stop-ml-datafeed`` operation supports the following parameters:
+
+* ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
+* ``force`` (optional, defaults to ``false``): Whether to forcefully stop an already started datafeed.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed stops.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+delete-ml-job
+~~~~~~~~~~~~~
+
+With the operation ``delete-ml-job`` you can execute the `delete jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_. The ``delete-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to delete.
+* ``force`` (optional, defaults to ``false``): Whether to force deletion of a job that has already been opened.
+
+This runner will intentionally ignore 404s from Elasticsearch so it is safe to execute this runner regardless whether a corresponding machine learning job exists.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-ml-job
+~~~~~~~~~~~~~
+
+With the operation ``create-ml-job`` you can execute the `create jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__. The ``create-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to create.
+* ``body`` (mandatory): Request body containing the definition of the job. Please see the `create job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__ documentation for more details.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+open-ml-job
+~~~~~~~~~~~
+
+With the operation ``open-ml-job`` you can execute the `open jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_. The ``open-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to open.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+close-ml-job
+~~~~~~~~~~~~
+
+With the operation ``close-ml-job`` you can execute the `close jobs API. The ``close-ml-job`` operation supports the following parameters:
+
+* ``job-id`` (mandatory): The name of the machine learning job to start.
+* ``force`` (optional, defaults to ``false``): Whether to forcefully stop an already opened job.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a job stops.
+
+This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 raw-request
 ~~~~~~~~~~~
 
 With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`. The ``raw-request`` operation supports the following parameters:
 
 * ``method`` (optional, defaults to ``GET``): The HTTP request method to use
-* ``path`` (mandatory): Path for the API call (excluding host and port)
+* ``path`` (mandatory): Path for the API call (excluding host and port). The path must begin with a ``/``. Example: ``/myindex/_flush``.
 * ``header`` (optional): A structure containing any request headers as key-value pairs.
 * ``body`` (optional): The document body.
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 * ``ignore`` (optional): An array of HTTP response status codes to ignore (i.e. consider as successful).
+
+sleep
+~~~~~
+
+With the operation ``sleep`` you can sleep for a certain duration to ensure no requests are executed by the corresponding clients. The ``sleep`` operation supports the following parameter:
+
+* ``duration`` (mandatory): A non-negative number that defines the sleep duration in seconds.
+
+.. note::
+    The ``sleep`` operation is only useful in very limited circumstances. To throttle throughput, specify a ``target-throughput`` on the corresponding task instead.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 schedule
 ~~~~~~~~
@@ -1061,7 +1208,7 @@ Be aware of the following case where we explicitly define that we want to run on
 
 Rally will *not* run all three tasks in parallel because you specified that you want only two clients in total. Hence, Rally will first run "match-all" and "term" concurrently (with one client each). After they have finished, Rally will run "phrase" with one client. You could also specify more clients than there are tasks but these will then just idle.
 
-You can also specify a number of clients on sub tasks explicitly (by default, one client is assumed per subtask). This allows to define a weight for each client operation. Note that you need to define the number of clients also on the ``parallel`` parent element, otherwise Rally would determine the number of totally needed clients again on its own::
+You can also specify a number of clients on sub tasks explicitly (by default, one client is assumed per subtask). This allows to define a weight for each client operation. Note that you need to define the number of clients also on the ``parallel`` parent element, otherwise Rally would determine the number of total needed clients again on its own::
 
         {
           "parallel": {

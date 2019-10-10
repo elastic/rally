@@ -1,3 +1,20 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 from enum import Enum, unique
 
 from esrally import exceptions
@@ -214,6 +231,14 @@ class DocumentCorpus:
             filtered.append(d)
         return DocumentCorpus(self.name, filtered)
 
+    def union(self, other):
+        if self.name != other.name:
+            raise exceptions.RallyAssertionError("Both document corpora must have the same name")
+        if self is other:
+            return self
+        else:
+            return DocumentCorpus(self.name, list(set(self.documents).union(other.documents)))
+
     def __str__(self):
         return self.name
 
@@ -402,6 +427,16 @@ class OperationType(Enum):
     DeleteIndex = 1006
     CreateIndexTemplate = 1007
     DeleteIndexTemplate = 1008
+    ShrinkIndex = 1009
+    CreateMlDatafeed = 1010
+    DeleteMlDatafeed = 1011
+    StartMlDatafeed = 1012
+    StopMlDatafeed = 1013
+    CreateMlJob = 1014
+    DeleteMlJob = 1015
+    OpenMlJob = 1016
+    CloseMlJob = 1017
+    Sleep = 1018
 
     @property
     def admin_op(self):
@@ -435,6 +470,26 @@ class OperationType(Enum):
             return OperationType.CreateIndexTemplate
         elif v == "delete-index-template":
             return OperationType.DeleteIndexTemplate
+        elif v == "shrink-index":
+            return OperationType.ShrinkIndex
+        elif v == "create-ml-datafeed":
+            return OperationType.CreateMlDatafeed
+        elif v == "delete-ml-datafeed":
+            return OperationType.DeleteMlDatafeed
+        elif v == "start-ml-datafeed":
+            return OperationType.StartMlDatafeed
+        elif v == "stop-ml-datafeed":
+            return OperationType.StopMlDatafeed
+        elif v == "create-ml-job":
+            return OperationType.CreateMlJob
+        elif v == "delete-ml-job":
+            return OperationType.DeleteMlJob
+        elif v == "open-ml-job":
+            return OperationType.OpenMlJob
+        elif v == "close-ml-job":
+            return OperationType.CloseMlJob
+        elif v == "sleep":
+            return OperationType.Sleep
         else:
             raise KeyError("No enum value for [%s]" % v)
 

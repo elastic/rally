@@ -1,0 +1,2 @@
+export ES_VERSION=${ES_VERSION:-7.3.2}
+

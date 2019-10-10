@@ -1,5 +1,22 @@
-from unittest import TestCase
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import unittest.mock as mock
+from unittest import TestCase
 
 from esrally import exceptions, config
 from esrally.mechanic import supplier, team
@@ -506,13 +523,15 @@ class CreateSupplierTests(TestCase):
 
 
 class DistributionRepositoryTests(TestCase):
-    def test_release_repo_config_with_default_url(self):
+    @mock.patch("esrally.utils.sysstats.os_name", return_value="Linux")
+    @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="X86_64")
+    def test_release_repo_config_with_default_url(self, os_name, cpu_arch):
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
             "release.cache": "true"
-        }, version="5.5.0")
-        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.5.0.tar.gz", repo.download_url)
-        self.assertEqual("elasticsearch-5.5.0.tar.gz", repo.file_name)
+        }, version="7.3.2")
+        self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.download_url)
+        self.assertEqual("elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.file_name)
         self.assertTrue(repo.cache)
 
     def test_release_repo_config_with_user_url(self):

@@ -1,6 +1,165 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.4.0
+------------------------
+
+Node details are omitted from race metadata
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Before Rally 1.4.0, the file ``race.json`` contained node details (such as the number of cluster nodes or details about the nodes' operating system version) if Rally provisioned the cluster. With this release, this information is now omitted. This change also applies to the indices ``rally-races*`` in case you have setup an Elasticsearch metrics store. We recommend to use user tags in case such information is important, e.g. for visualising results.
+
+``trial-id`` and ``trial-timestamp`` are deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.4.0, Rally will use the properties ``race-id`` and ``race-timestamp`` when writing data to the Elasticsearch metrics store. The properties ``trial-id`` and ``trial-timestamp`` are still populated but will be removed in a future release. Any visualizations that rely on these properties should be changed to the new ones.
+
+Custom Parameter Sources
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.4.0, we have changed the API for custom parameter sources. The ``size()`` method is now deprecated and is instead replaced with a new property called ``infinite``. If you have previously returned ``None`` in ``size()``, ``infinite`` should be set to ``True``, otherwise ``False``. Also, we recommend to implement the property ``percent_completed`` as Rally might not be able to determine progress in some cases. See below for some examples.
+
+Old::
+
+    class CustomFiniteParamSource:
+        # ...
+        def size():
+            return calculate_size()
+
+        def params():
+            return next_parameters()
+
+    class CustomInfiniteParamSource:
+        # ...
+        def size():
+            return None
+
+        # ...
+
+
+New::
+
+    class CustomFiniteParamSource:
+        def __init__(self, track, params, **kwargs):
+            self.infinite = False
+            # to track progress
+            self.current_invocation = 0
+
+        # ...
+        # Note that we have removed the size() method
+
+        def params():
+            self.current_invocation += 1
+            return next_parameters()
+
+        # Implementing this is optional but recommended for proper progress reports
+        @property
+        def percent_completed(self):
+            # for demonstration purposes we use calculate_size() here
+            # to determine the expected number of invocations. However, if
+            # it is possible to determine this value upfront, it is best
+            # to cache it in a field and just reuse the value
+            return self.current_invocation / calculate_size()
+
+
+    class CustomInfiniteParamSource:
+        def __init__(self, track, params, **kwargs):
+            self.infinite = True
+            # ...
+
+        # ...
+        # Note that we have removed the size() method
+        # ...
+
+
+Migrating to Rally 1.3.0
+------------------------
+Races now stored by ID instead of timestamp
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+With Rally 1.3.0, Races will be stored by their Trial ID instead of their timestamp.
+This means that on disk, a given race will be found at ``benchmarks/races/62d1e928-48b0-4d07-9899-07b45d031566/`` instead of ``benchmarks/races/2019-07-03-17-52-07``
+
+Laps feature removed
+^^^^^^^^^^^^^^^^^^^^
+The ``--laps`` parameter and corresponding multi-run trial functionality has been removed from execution and reporting.
+If you need lap functionality, the following shell script can be used instead::
+
+    RALLY_LAPS=3
+
+    for lap in $(seq 1 ${RALLY_LAPS})
+    do
+      esrally --pipeline=benchmark-only --user-tag lap:$lap
+    done
+
+
+Migrating to Rally 1.2.1
+------------------------
+
+CPU usage is not measured anymore
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.2.1, CPU usage will neither be measured nor reported. We suggest to use system monitoring tools like ``mpstat``, ``sar`` or `Metricbeat <https://www.elastic.co/downloads/beats/metricbeat>`_ to measure CPU usage instead.
+
+
+Migrating to Rally 1.1.0
+------------------------
+
+``request-params`` in operations are passed as is and not serialized
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.1.0 any operations supporting the optional ``request-params`` property will pass the structure as is without attempting to serialize values.
+Until now, ``request-params`` relied on parameters being supported by the Elasticsearch Python client API calls. This means that for example boolean type parameters
+should be specified as strings i.e. ``"true"`` or ``"false"`` rather than ``true/false``.
+
+**Example**
+
+Using ``create-index`` before ``1.1.0``::
+
+    {
+      "name": "create-all-indices",
+      "operation-type": "create-index",
+      "settings": {
+        "index.number_of_shards": 1
+      },
+      "request-params": {
+        "wait_for_active_shards": true
+      }
+    }
+
+Using ``create-index`` starting with ``1.1.0``::
+
+    {
+      "name": "create-all-indices",
+      "operation-type": "create-index",
+      "settings": {
+        "index.number_of_shards": 1
+      },
+      "request-params": {
+        "wait_for_active_shards": "true"
+      }
+    }
+
+
+Migrating to Rally 1.0.1
+------------------------
+
+Logs are not rotated
+^^^^^^^^^^^^^^^^^^^^
+
+With Rally 1.0.1 we have disabled automatic rotation of logs by default because it can lead to race conditions due to Rally's multi-process architecture. If you did not change the default out-of-the-box logging configuration, Rally will automatically fix your configuration. Otherwise, you need to replace all instances of ``logging.handlers.TimedRotatingFileHandler`` with ``logging.handlers.WatchedFileHandler`` to disable log rotation.
+
+To rotate logs we recommend to use external tools like `logrotate <https://linux.die.net/man/8/logrotate>`_. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
+
+    /home/user/.rally/logs/rally.log {
+            daily                   # rotate daily
+            rotate 7                # keep the last seven log files
+            maxage 14               # remove logs older than 14 days
+            compress                # compress old logs ...
+            delaycompress           # ... after moving them
+            missingok               # ignore missing log files
+            notifempty              # don't attempt to rotate empty ones
+    }
+
 Migrating to Rally 1.0.0
 ------------------------
 

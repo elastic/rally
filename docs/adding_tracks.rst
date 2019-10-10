@@ -92,6 +92,10 @@ Then store the following mapping file as ``index.json`` in the tutorial director
       }
     }
 
+.. note::
+   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
+
+
 For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
 
 Finally, store the track as ``track.json`` in the tutorial directory::
@@ -170,6 +174,9 @@ Finally, store the track as ``track.json`` in the tutorial directory::
 
 
 The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json`` and the size in bytes with ``stat -f "%z" documents.json``.
+
+.. note::
+   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the ``types`` property above.
 
 .. note::
 
@@ -765,12 +772,12 @@ If you need more control, you need to implement a class. Below is the implementa
             self._cache = params.get("cache", False)
             # ... but we need to resolve "profession" lazily on each invocation later
             self._params = params
+            # Determines whether this parameter source will be "exhausted" at some point or
+            # Rally can draw values infinitely from it.
+            self.infinite = True
 
         def partition(self, partition_index, total_partitions):
             return self
-
-        def size(self):
-            return 1
 
         def params(self):
             # you must provide all parameters that the runner expects
@@ -796,17 +803,17 @@ In ``register`` you bind the name in the track specification to your parameter s
 
 * The constructor needs to have the signature ``__init__(self, track, params, **kwargs)``.
 * ``partition(self, partition_index, total_partitions)`` is called by Rally to "assign" the parameter source across multiple clients. Typically you can just return ``self``. If each client needs to act differently then you can provide different parameter source instances here as well.
-* ``size(self)``: This method helps Rally to provide a proper progress indication to users if you use a warmup time period. For bulk indexing, return the number of bulks (for a given client). As searches are typically executed with a pre-determined amount of iterations, just return ``1`` in this case.
 * ``params(self)``: This method returns a dictionary with all parameters that the corresponding "runner" expects. This method will be invoked once for every iteration during the race. In the example, we parameterize the query by randomly selecting a profession from a list.
+* ``infinite``: This property helps Rally to determine whether to let the parameter source determine when a task should be finished (when ``infinite`` is ``False``) or whether the task properties (e.g. ``iterations`` or ``time-period``) determine when a task should be finished. In the former case, the parameter source needs to raise ``StopIteration`` to indicate when it is finished.
 
-For cases, where you want to provide a progress indication but cannot calculate ``size`` up-front (e.g. when you generate bulk requests on-the fly up to a certain total size), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it to indicate progress. However:
+For cases, where you want to provide a progress indication (this is typically the case when ``infinite`` is ``False``), you can implement a property ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0``. Rally will query this value before each call to ``params()`` and uses it to indicate progress. However:
 
 * Rally will not check ``percent_completed`` if it can derive progress in any other way.
 * The value of ``percent_completed`` is purely informational and does not influence when Rally considers an operation to be completed.
 
 .. note::
 
-    The method ``params(self)`` is called on a performance-critical path. Don't do anything in this method that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that your custom parameter source does not introduce a bottleneck.
+    The method ``params(self)`` as well as the property ``percent_completed`` are called on a performance-critical path. Don't do anything that takes a lot of time (avoid any I/O). For searches, you should usually throttle throughput anyway and there it does not matter that much but if the corresponding operation is run without throughput throttling, double-check that your custom parameter source does not introduce a bottleneck.
 
 Custom parameter sources can use the Python standard API but using any additional libraries is not supported.
 
@@ -964,10 +971,10 @@ This implementation is usually not sufficient as it does not take into account t
     class RandomScheduler:
         def __init__(self, params):
             # assume one client by default
-            clients = self.params.get("clients", 1)
+            clients = params.get("clients", 1)
             # scale accordingly with the number of clients!
-            self.lower_bound = clients * self.params.get("lower-bound-millis", 10)
-            self.upper_bound = clients * self.params.get("upper-bound-millis", 900)
+            self.lower_bound = clients * params.get("lower-bound-millis", 10)
+            self.upper_bound = clients * params.get("upper-bound-millis", 900)
 
         def next(self, current):
             return current + random.randint(self.lower_bound, self.upper_bound) / 1000.0

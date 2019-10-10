@@ -41,6 +41,30 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 
 This subcommand is needed to :doc:`configure </configuration>` Rally. It is implicitly chosen if you start Rally for the first time but you can rerun this command at any time.
 
+``download``
+~~~~~~~~~~~~~
+
+This subcommand can be used to download Elasticsearch distributions. Example::
+
+    esrally download --distribution-version=6.8.0 --quiet
+
+This will download the OSS distribution of Elasticsearch 6.8.0. Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has downloaded it::
+
+    {
+      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-oss-6.8.0.tar.gz"
+    }
+
+To download the default distribution you need to specify a license (via ``--car``)::
+
+    esrally download --distribution-version=6.8.0 --car=basic-license --quiet
+
+This will show the path to the default distribution::
+
+    {
+      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-6.8.0.tar.gz"
+    }
+
+
 Command Line Flags
 ------------------
 
@@ -63,6 +87,11 @@ Examples::
 ~~~~~~~~~~~~~~~~~~~~
 
 Selects the track repository that Rally should use to resolve tracks. By default the ``default`` track repository is used, which is available in the Github project `rally-tracks <https://github.com/elastic/rally-tracks>`_. See the :doc:`track reference </track>` on how to add your own track repositories. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
+
+``track-revision``
+~~~~~~~~~~~~~~~~~~
+
+Selects a specific revision in the track repository. By default, Rally will choose the most appropriate branch on its own but in some cases it is necessary to specify a certain commit. This is mostly needed when testing whether a change in performance has occurred due to a change in the workload. 
 
 ``track``
 ~~~~~~~~~
@@ -130,6 +159,11 @@ Note that the default values are not recorded or shown (Rally does not know abou
 
 A track consists of one or more challenges. With this flag you can specify which challenge should be run. If you don't specify a challenge, Rally derives the default challenge itself. To see the default challenge of a track, run ``esrally list tracks``.
 
+``race-id``
+~~~~~~~~~~~
+
+A unique identifier for this race. By default a random UUID is automatically chosen by Rally.
+
 .. _clr_include_tasks:
 
 ``include-tasks``
@@ -149,6 +183,12 @@ You can use ``--include-tasks`` to specify a comma-separated list of tasks that 
 ~~~~~~~~~~~~~~~~~~~
 
 Selects the team repository that Rally should use to resolve cars. By default the ``default`` team repository is used, which is available in the Github project `rally-teams <https://github.com/elastic/rally-teams>`__. See the documentation about :doc:`cars </car>` on how to add your own team repositories.
+
+``team-revision``
+~~~~~~~~~~~~~~~~~
+
+Selects a specific revision in the team repository. By default, Rally will choose the most appropriate branch on its own (see the :doc:`car reference </car>` for more details) but in some cases it is necessary to specify a certain commit. This is mostly needed when benchmarking specific historic commits of Elasticsearch which are incompatible with the current master branch of the team repository.
+
 
 ``team-path``
 ~~~~~~~~~~~~~
@@ -216,11 +256,6 @@ Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources-complete``.
 
-``laps``
-~~~~~~~~
-
-Allows to run the benchmark for multiple laps (defaults to 1 lap). Each lap corresponds to one full execution of a track but note that the benchmark candidate is not restarted in between.
-
 .. _clr_enable_driver_profiling:
 
 ``enable-driver-profiling``
@@ -273,6 +308,8 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 
 This activates Java flight recorder and the JIT compiler telemetry devices.
 
+.. _clr_telemetry_params:
+
 ``telemetry-params``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -283,6 +320,18 @@ Example::
     esrally --telemetry=jfr --telemetry-params="recording-template:'profile'"
 
 This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
+
+For more complex cases specify a JSON file. Store the following as ``telemetry-params.json``::
+
+   {
+     "node-stats-sample-interval": 10,
+     "node-stats-include-indices-metrics": "completion,docs,fielddata"
+   }
+
+and reference it when running Rally::
+
+   esrally --telemetry="node-stats" --telemetry-params="telemetry-params.json"
+
 
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
@@ -335,16 +384,7 @@ If you want to benchmark a binary distribution, you can specify the version here
    esrally --distribution-version=2.3.3
 
 
-Rally will then benchmark the official Elasticsearch 2.3.3 distribution.
-
-Rally works with all releases of Elasticsearch that are `supported by Elastic <https://www.elastic.co/support/matrix#show_compatibility>`_.
-
-The following versions are already end-of-life:
-
-* ``0.x``: Rally is not tested, and not expected to work for this version; we will make no effort to make Rally work.
-* ``1.x``: Rally works on a best-effort basis with this version but support may be removed at any time.
-
-Additionally, Rally will always work with the current development version of Elasticsearch (by using either a snapshot repository or by building Elasticsearch from sources).
+Rally will then benchmark the official Elasticsearch 2.3.3 distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
 
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -405,8 +445,6 @@ We support the following data types:
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
 * Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
 
-In addition to the options, supported by the Elasticsearch client, it is also possible to enable HTTP compression by specifying ``compressed:true``
-
 Default value: ``timeout:60``
 
 .. warning::
@@ -416,10 +454,27 @@ Default value: ``timeout:60``
 
 Here are a few common examples:
 
-* Enable HTTP compression: ``--client-options="compressed:true"``
-* Enable SSL (e.g. if you have X-Pack Security installed): ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
-* Enable SSL with a client key and certificate: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key='/path/to/client_key.pem"`` (see also the `Elasticsearch Python client docs <http://elasticsearch-py.readthedocs.io/en/master/index.html#ssl-and-authentication>`_)
+* Enable HTTP compression: ``--client-options="http_compress:true"``
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
+
+**TLS/SSL**
+
+This is applicable e.g. if you have X-Pack Security installed.
+Enable it with ``use_ssl:true``.
+
+**TLS/SSL Certificate Verification**
+
+Server certificate verification is controlled with the ``verify_certs`` boolean. The default value is `true`. To disable use ``verify_certs:false``.
+If ``verify_certs:true``, Rally will attempt to verify the certificate provided by Elasticsearch. If they are private certificates, you will also need to supply the private CA certificate using ``ca_certs:'/path/to/cacert.pem'``.
+
+You can also optionally present client certificates, e.g. if Elasticsearch has been configured with ``xpack.security.http.ssl.client_authentication: required`` (see also `Elasticsearch HTTP TLS/SSL settings <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-settings.html#http-tls-ssl-settings>`_).
+Client certificates can be presented regardless of the ``verify_certs`` setting, but it's strongly recommended to always verify the server certificates.
+
+**TLS/SSL Examples**
+
+* Enable SSL, verify server certificates using public CA: ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
+* Enable SSL, verify server certificates using private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"``
+* Enable SSL, verify server certificates using private CA, present client certificates: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key:'/path/to/client_key.pem'"``
 
 ``on-error``
 ~~~~~~~~~~~~
@@ -453,6 +508,18 @@ If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
 You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
+
+``limit``
+~~~~~~~~~
+
+Allows to control the number of races returned by ``esrally list races`` The default value is 10.
+
+**Example**
+
+The following invocation will list the 50 most recent races::
+
+   esrally list races --limit=50
+
 
 ``quiet``
 ~~~~~~~~~

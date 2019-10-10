@@ -1,12 +1,29 @@
-import os
-import re
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import glob
 import logging
+import os
+import re
 import urllib.error
 
 from esrally import exceptions, PROGRAM_NAME
-from esrally.utils import git, io, process, net, jvm, convert
 from esrally.exceptions import BuildError, SystemSetupError
+from esrally.utils import git, io, process, net, jvm, convert, sysstats
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
@@ -508,7 +525,19 @@ class DistributionRepository:
                 raise exceptions.SystemSetupError("Neither config key [{}] nor [{}] is defined.".format(user_defined_key, default_key))
             else:
                 return None
-        return url_template.replace("{{VERSION}}", self.version)
+        return self._substitute_vars(url_template)
+
+    def _substitute_vars(self, s):
+        substitutions = {
+            "{{VERSION}}": self.version,
+            "{{OSNAME}}": sysstats.os_name().lower(),
+            "{{ARCH}}": sysstats.cpu_arch().lower()
+        }
+        r = s
+        for key, replacement in substitutions.items():
+            r = r.replace(key, replacement)
+        return r
+
 
     @property
     def cache(self):

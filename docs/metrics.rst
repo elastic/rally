@@ -11,8 +11,8 @@ Here is a typical metrics record::
 
     {
           "environment": "nightly",
-          "trial-timestamp": "20160421T042749Z",
-          "trial-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
+          "race-timestamp": "20160421T042749Z",
+          "race-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
           "@timestamp": 1461213093093,
           "relative-time": 10507328,
           "track": "geonames",
@@ -28,7 +28,6 @@ Here is a typical metrics record::
           "task": "index-append-no-conflicts",
           "operation": "index-append-no-conflicts",
           "operation-type": "Index",
-          "lap": 1,
           "meta": {
             "cpu_physical_cores": 36,
             "cpu_logical_cores": 72,
@@ -62,17 +61,17 @@ If you specify a car with mixins, it will be stored as one string separated with
 sample-type
 ~~~~~~~~~~~
 
-Rally runs warmup trials but records all samples. Normally, we are just interested in "normal" samples but for a full picture we might want to look also at "warmup" samples.
+Rally can be configured to run for a certain period in warmup mode. In this mode samples will be collected with the ``sample-type`` "warmup" but only "normal" samples are considered for the results that reported.
 
-trial-timestamp
-~~~~~~~~~~~~~~~
+race-timestamp
+~~~~~~~~~~~~~~
 
 A constant timestamp (always in UTC) that is determined when Rally is invoked.
 
-trial-id
-~~~~~~~~
+race-id
+~~~~~~~
 
-A UUID that changes on every invocation of Rally. It is intended to group all samples of a benchmark trial.
+A UUID that changes on every invocation of Rally. It is intended to group all samples of a benchmarking run.
 
 @timestamp
 ~~~~~~~~~~
@@ -82,7 +81,7 @@ The timestamp in milliseconds since epoch determined when the sample was taken.
 relative-time
 ~~~~~~~~~~~~~
 
-The relative time in microseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple trials, e.g. you might want to compare the indexing throughput over time across multiple benchmark trials. Obviously, they should always start at the same (relative) point in time and absolute timestamps are useless for that.
+The relative time in microseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. Obviously, they should always start at the same (relative) point in time and absolute timestamps are useless for that.
 
 name, value, unit
 ~~~~~~~~~~~~~~~~~
@@ -97,12 +96,6 @@ task, operation, operation-type
 ``operation`` is the name of the operation (as specified in the track file) that ran when this metric has been gathered. It will only be set for metrics with name ``latency`` and ``throughput``.
 
 ``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different ``operation``s but they all have the same ``operation-type`` (Search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
-
-lap
-~~~
-
-The lap number in which this metric was gathered. Laps start at 1. See the :doc:`command line reference </command_line_reference>` for more info on laps.
-
 
 meta
 ~~~~
@@ -128,11 +121,8 @@ Rally stores the following metrics:
 * ``latency``: Time period between submission of a request and receiving the complete response. It also includes wait time, i.e. the time the request spends waiting until it is ready to be serviced by Elasticsearch.
 * ``service_time`` Time period between start of request processing and receiving the complete response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
 * ``throughput``: Number of operations that Elasticsearch can perform within a certain time period, usually per second. See the :doc:`track reference </track>` for a definition of what is meant by one "operation" for each operation type.
-* ``merge_parts_total_time_*``: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled.
-* ``merge_parts_total_docs_*``: See ``merge_parts_total_time_*``
 * ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
 * ``disk_io_read_bytes``: number of bytes that have been read from disk during the benchmark. The same caveats apply on Mac OS X as for ``disk_io_write_bytes``.
-* ``cpu_utilization_1s``: CPU usage in percent of the Elasticsearch process based on a one second sample period. The maximum value is N * 100% where N is the number of CPU cores available.
 * ``node_startup_time``: The time in seconds it took from process start until the node is up.
 * ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * ``node_total_young_gen_gc_time``: The total runtime of the young generation garbage collector across the whole cluster as reported by the node stats API.
@@ -143,12 +133,16 @@ Rally stores the following metrics:
 * ``segments_terms_memory_in_bytes``: Number of bytes used for terms as reported by the indices stats API.
 * ``segments_norms_memory_in_bytes``: Number of bytes used for norms as reported by the indices stats API.
 * ``segments_points_memory_in_bytes``: Number of bytes used for points as reported by the indices stats API.
-* ``merges_total_time``: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes). These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
-* ``merges_total_throttled_time``: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
-* ``indexing_total_time``: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
-* ``indexing_throttle_time``: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
-* ``refresh_total_time``: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
-* ``flush_total_time``: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times per primary shard in an array.
+* ``merges_total_time``: Cumulative runtime of merges of primary shards, as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes). These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``merges_total_count``: Cumulative number of merges of primary shards, as reported by indices stats API under ``_all/primaries``.
+* ``merges_total_throttled_time``: Cumulative time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``indexing_total_time``: Cumulative time used for indexing of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``indexing_throttle_time``: Cumulative time that indexing has been throttled, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``refresh_total_time``: Cumulative time used for index refresh of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``refresh_total_count``: Cumulative number of refreshes of primary shards, as reported by indices stats API under ``_all/primaries``.
+* ``flush_total_time``: Cumulative time used for index flush of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``flush_total_count``: Cumulative number of flushes of primary shards, as reported by indices stats API under ``_all/primaries``.
 * ``final_index_size_bytes``: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
-* ``store_size_in_bytes``: The size in bytes of the index (excluding the translog) as reported by the indices stats API.
-* ``translog_size_in_bytes``: The size in bytes of the translog as reported by the indices stats API.
+* ``store_size_in_bytes``: The size in bytes of the index (excluding the translog), as reported by the indices stats API.
+* ``translog_size_in_bytes``: The size in bytes of the translog, as reported by the indices stats API.
+* ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.

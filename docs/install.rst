@@ -16,7 +16,7 @@ Rally does not support Windows and is only actively tested on MacOS and Linux. I
 Python
 ~~~~~~
 
-* Python 3.4 or better available as `python3` on the path. Verify with: ``python3 --version``.
+* Python 3.5 or better available as `python3` on the path. Verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
@@ -27,32 +27,9 @@ Python
     sudo apt-get install gcc python3-pip python3-dev
 
 
-**RHEL 6/ CentOS 6**
+**RHEL / CentOS 6 and 7**
 
-*Tested on CentOS release 6.9 (Final).*
-
-.. note::
-
-    You will need to enable `EPEL <https://fedoraproject.org/wiki/EPEL>`_ before.
-
-::
-
-    sudo yum install -y gcc python34.x86_64 python34-devel.x86_64 python34-setuptools.noarch
-    # installs pip as it is not available as an OS package
-    sudo python3 /usr/lib/python3.4/site-packages/easy_install.py pip
-
-
-**RHEL 7 / CentOS 7**
-
-.. note::
-
-    You will need to enable `EPEL <https://fedoraproject.org/wiki/EPEL>`_ before.
-
-*Tested on CentOS Linux release 7.4.1708 (Core).*
-
-::
-
-    sudo yum install -y gcc python34.x86_64 python34-devel.x86_64 python34-pip.noarch
+Please refer to the `installation instructions for Python 3.5 in the Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/rh-python35/>`_.
 
 **Amazon Linux**
 
@@ -101,9 +78,7 @@ In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --ve
 JDK
 ~~~
 
-A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator to :doc:`benchmark remote clusters </recipes>`, no JDK is required.
-
-We recommend to use Oracle JDK but you are free to use OpenJDK as well. For details on how to install a JDK check your operating system's documentation pages.
+A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator to :doc:`benchmark remote clusters </recipes>`, no JDK is required. For details on how to install a JDK check your operating system's documentation pages.
 
 To find the JDK, Rally expects the environment variable ``JAVA_HOME`` to be set on all targeted machines. To have more specific control, for example when you want to benchmark across a wide range of Elasticsearch releases, you can also set ``JAVAx_HOME`` where ``x``  is the major version of a JDK (e.g. ``JAVA8_HOME`` would point to a JDK 8 installation). Rally will then choose the highest supported JDK per version of Elasticsearch that is available.
 
@@ -143,6 +118,20 @@ You can also use Virtualenv to install Rally into an isolated Python environment
 3. Install Rally with ``pip install esrally``
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
+
+PyEnv Install
+------------------
+
+Rally can be tested with different Python versions and it uses pyenv to manage them. 
+
+Please refer to PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
+
+Docker
+------
+
+Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
+
+Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
 
 .. _install_offline-install:
 

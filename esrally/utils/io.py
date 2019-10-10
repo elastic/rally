@@ -1,11 +1,27 @@
-import os
-import errno
-import re
-import subprocess
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import bz2
 import gzip
-import zipfile
+import os
+import re
+import subprocess
 import tarfile
+import zipfile
 
 from esrally.utils import console
 
@@ -59,8 +75,8 @@ class DictStringFileSourceFactory:
     def __init__(self, name_to_contents):
         self.name_to_contents = name_to_contents
 
-    def __call__(self, name, mode):
-        return StringAsFileSource(self.name_to_contents[name], mode)
+    def __call__(self, name, mode, encoding="utf-8"):
+        return StringAsFileSource(self.name_to_contents[name], mode, encoding)
 
 
 class StringAsFileSource:
@@ -68,10 +84,11 @@ class StringAsFileSource:
     Implementation of ``FileSource`` intended for tests. It's kept close to ``FileSource`` to simplify maintenance but it is not meant to
      be used in production code.
     """
-    def __init__(self, contents, mode):
+    def __init__(self, contents, mode, encoding="utf-8"):
         """
         :param contents: The file contents as an array of strings. Each item in the array should correspond to one line.
         :param mode: The file mode. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
+        :param encoding: The file encoding. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
         """
         self.contents = contents
         self.current_index = 0
@@ -127,13 +144,7 @@ def ensure_dir(directory, mode=0o777):
     :param mode: The permission flags to use (if it does not exist).
     """
     if directory:
-        # TODO Python 3.7 compatibility: Set umask first. See https://docs.python.org/3.7/whatsnew/3.7.html#changes-in-the-python-api
-        try:
-            # avoid a race condition by trying to create the checkout directory
-            os.makedirs(directory, mode)
-        except OSError as exception:
-            if exception.errno != errno.EEXIST:
-                raise
+        os.makedirs(directory, mode, exist_ok=True)
 
 
 def _zipdir(source_directory, archive):

@@ -1,5 +1,5 @@
 {
-  "template": "rally-races-*",
+  "index_patterns": ["rally-races-*"],
   "settings": {
     "index": {
       "refresh_interval": "5s",
@@ -7,7 +7,7 @@
     }
   },
   "mappings": {
-    "_default_": {
+    "_doc": {
       "dynamic_templates": [
         {
           "strings": {
@@ -19,9 +19,6 @@
           }
         }
       ],
-      "_all": {
-        "enabled": false
-      },
       "_source": {
         "enabled": true
       },
@@ -30,6 +27,18 @@
           "type": "keyword"
         },
         "trial-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "race-id": {
+          "type": "keyword"
+        },
+        "race-timestamp": {
           "type": "date",
           "format": "basic_date_time_no_millis",
           "fields": {
@@ -61,9 +70,6 @@
         },
         "plugins": {
           "type": "keyword"
-        },
-        "total-laps": {
-          "type": "short"
         },
         "results": {
           "properties": {

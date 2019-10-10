@@ -16,13 +16,14 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Available telemetry devices:
 
-   Command     Name                   Description
-   ----------  ---------------------  -----------------------------------------------------
-   jit         JIT Compiler Profiler  Enables JIT compiler logs.
-   gc          GC log                 Enables GC logs.
-   jfr         Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK)
-   perf        perf stat              Reads CPU PMU counters (requires Linux and perf)
-   node-stats  Node Stats             Regularly samples node stats
+   Command         Name                   Description
+   --------------  ---------------------  --------------------------------------------------------------------
+   jit             JIT Compiler Profiler  Enables JIT compiler logs.
+   gc              GC log                 Enables GC logs.
+   jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+   node-stats      Node Stats             Regularly samples node stats
+   recovery-stats  Recovery Stats         Regularly samples shard recovery stats
+   ccr-stats       CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -31,7 +32,7 @@ You can attach one or more of these telemetry devices to the benchmarked cluster
 jfr
 ---
 
-The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Java Flight Recorder ships only with Oracle JDK, so Rally assumes that Oracle JDK is used for benchmarking.
+The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Up to JDK 11, Java flight recorder ships only with Oracle JDK, so Rally assumes that Oracle JDK is used for benchmarking. If you run benchmarks on JDK 11 or later, Java flight recorder is also available on OpenJDK.
 
 To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will then write a flight recording file which can be opened in `Java Mission Control <http://www.oracle.com/technetwork/java/javaseproducts/mission-control/java-mission-control-1998576.html>`_. Rally prints the location of the flight recording file on the command line.
 
@@ -44,7 +45,7 @@ Supported telemetry parameters:
 
 .. note::
 
-   The licensing terms of Java flight recorder do not allow you to run it in production environments without a valid license (for details, refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
+   Up to JDK 11 Java flight recorder ship only with Oracle JDK and the licensing terms do not allow you to run it in production environments without a valid license (for details, refer to the `Oracle Java SE Advanced & Suite Products page <http://www.oracle.com/technetwork/java/javaseproducts/overview/index.html>`_). However, running in a QA environment is fine.
 
 jit
 ---
@@ -65,23 +66,21 @@ gc
 
 The ``gc`` telemetry device enables GC logs for the benchmark candidate. You can use tools like `GCViewer <https://github.com/chewiebug/GCViewer>`_ to analyze the GC logs.
 
-perf
-----
-
-The ``perf`` telemetry device runs ``perf stat`` on each benchmarked node and writes the output to a log file. It can be used to capture low-level CPU statistics. Note that the perf tool, which is only available on Linux, must be installed before using this telemetry device.
-
 node-stats
 ----------
 
 .. warning::
 
-    This telemetry device will record a lot of metrics and likely skew your measurement results.
+    Using this telemetry device will skew your results because the node-stats API triggers additional refreshes.
+    Additionally a lot of metrics get recorded impacting the measurement results even further.
 
-The node-stats telemetry devices regularly calls the node-stats API and records metrics from the following sections:
+The node-stats telemetry device regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
 
 * Indices stats (key ``indices`` in the node-stats API)
 * Thread pool stats (key ``jvm.thread_pool`` in the node-stats API)
 * JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
+* JVM gc stats (key ``jvm.gc`` in the node-stats API)
+* JVM mem stats (key ``jvm.mem`` in the node-stats API)
 * Circuit breaker stats (key ``breakers`` in the node-stats API)
 * Network-related stats (key ``transport`` in the node-stats API)
 * Process cpu stats (key ``process.cpu`` in the node-stats API)
@@ -90,9 +89,33 @@ Supported telemetry parameters:
 
 * ``node-stats-sample-interval`` (default: 1): A positive number greater than zero denoting the sampling interval in seconds.
 * ``node-stats-include-indices`` (default: ``false``): A boolean indicating whether indices stats should be included.
+* ``node-stats-include-indices-metrics`` (default: ``docs,store,indexing,search,merges,query_cache,fielddata,segments,translog,request_cache``): A comma-separated string specifying the Indices stats metrics to include. This is useful, for example, to restrict the collected Indices stats metrics. Specifying this parameter implicitly enables collection of Indices stats, so you don't also need to specify ``node-stats-include-indices: true``.
+
+  Example: ``--telemetry-params="node-stats-include-indices-metrics:'docs'"`` will **only** collect the ``docs`` metrics from Indices stats. If you want to use multiple fields, pass a JSON file to ``telemetry-params`` (see the :ref:`command line reference <clr_telemetry_params>` for details).
 * ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
+* ``node-stats-include-gc`` (default: ``true``): A boolean indicating whether JVM gc stats should be included.
 * ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether JVM heap stats should be included.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
+
+recovery-stats
+--------------
+
+The recovery-stats telemetry device regularly calls the `indices recovery API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-recovery.html>`_ and records one metrics document per shard.
+
+Supported telemetry parameters:
+
+* ``recovery-stats-indices`` (default: all indices): An index pattern for which recovery stats should be checked.
+* ``recovery-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+ccr-stats
+---------
+
+The ccr-stats telemetry device regularly calls the `cross-cluster replication stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-get-stats.html>`_ and records one metrics document per shard.
+
+Supported telemetry parameters:
+
+* ``ccr-stats-indices`` (default: all indices): An index pattern for which ccr stats should be checked.
+* ``ccr-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.

@@ -1,20 +1,37 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import collections
+import json
 import logging
 import os
-import re
-import signal
-import subprocess
-import tabulate
 import threading
 
+import tabulate
+
 from esrally import metrics, time, exceptions
-from esrally.utils import io, sysstats, console, versions
 from esrally.metrics import MetaInfoScope
+from esrally.utils import io, sysstats, console, opts
 
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
-    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder, PerfStat, NodeStats]]
+    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
+                                                                               NodeStats, RecoveryStats, CcrStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -28,23 +45,14 @@ class Telemetry:
         self.enabled_devices = enabled_devices
         self.devices = devices
 
-    def instrument_candidate_env(self, car, candidate_id):
-        opts = {}
+    def instrument_candidate_java_opts(self, car, candidate_id):
+        opts = []
         for device in self.devices:
             if self._enabled(device):
-                additional_opts = device.instrument_env(car, candidate_id)
+                additional_opts = device.instrument_java_opts(car, candidate_id)
                 # properly merge values with the same key
-                for k, v in additional_opts.items():
-                    if k in opts:
-                        opts[k] = "%s %s" % (opts[k], v)
-                    else:
-                        opts[k] = v
+                opts.extend(additional_opts)
         return opts
-
-    def attach_to_cluster(self, cluster):
-        for device in self.devices:
-            if self._enabled(device):
-                device.attach_to_cluster(cluster)
 
     def on_pre_node_start(self, node_name):
         for device in self.devices:
@@ -71,11 +79,6 @@ class Telemetry:
             if self._enabled(device):
                 device.on_benchmark_stop()
 
-    def detach_from_cluster(self, cluster):
-        for device in self.devices:
-            if self._enabled(device):
-                device.detach_from_cluster(cluster)
-
     def _enabled(self, device):
         return device.internal or device.command in self.enabled_devices
 
@@ -90,11 +93,8 @@ class TelemetryDevice:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         return {}
-
-    def attach_to_cluster(self, cluster):
-        pass
 
     def on_pre_node_start(self, node_name):
         pass
@@ -103,9 +103,6 @@ class TelemetryDevice:
         pass
 
     def detach_from_node(self, node, running):
-        pass
-
-    def detach_from_cluster(self, cluster):
         pass
 
     def on_benchmark_start(self):
@@ -143,7 +140,7 @@ class FlightRecorder(TelemetryDevice):
     internal = False
     command = "jfr"
     human_name = "Flight Recorder"
-    help = "Enables Java Flight Recorder (requires an Oracle JDK)"
+    help = "Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)"
 
     def __init__(self, telemetry_params, log_root, java_major_version):
         super().__init__()
@@ -151,47 +148,53 @@ class FlightRecorder(TelemetryDevice):
         self.log_root = log_root
         self.java_major_version = java_major_version
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jfr" % (self.log_root, car.safe_name, candidate_id)
 
-        console.println("\n***************************************************************************\n")
-        console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
-        console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
-        console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
-        console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
-        console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
-        console.println("\n***************************************************************************\n")
+        # JFR was integrated into OpenJDK 11 and is not a commercial feature anymore.
+        if self.java_major_version < 11:
+            console.println("\n***************************************************************************\n")
+            console.println("[WARNING] Java flight recorder is a commercial feature of the Oracle JDK.\n")
+            console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
+            console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
+            console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
+            console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
+            console.println("\n***************************************************************************\n")
 
-        time.sleep(3)
+            time.sleep(3)
 
         console.info("%s: Writing flight recording to [%s]" % (self.human_name, log_file), logger=self.logger)
 
         java_opts = self.java_opts(log_file)
 
         self.logger.info("jfr: Adding JVM arguments: [%s].", java_opts)
-        return {"ES_JAVA_OPTS": java_opts}
+        return java_opts
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
-        java_opts = "-XX:+UnlockDiagnosticVMOptions -XX:+UnlockCommercialFeatures -XX:+DebugNonSafepoints "
+        java_opts = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints"]
+        jfr_cmd = ""
+        if self.java_major_version < 11:
+            java_opts.append("-XX:+UnlockCommercialFeatures")
 
         if self.java_major_version < 9:
-            java_opts += "-XX:+FlightRecorder "
-            java_opts += "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={} ".format(log_file)
-            java_opts += "-XX:StartFlightRecording=defaultrecording=true"
+            java_opts.append("-XX:+FlightRecorder")
+            java_opts.append("-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={}".format(log_file))
+            jfr_cmd = "-XX:StartFlightRecording=defaultrecording=true"
             if recording_template:
                 self.logger.info("jfr: Using recording template [%s].", recording_template)
-                java_opts += ",settings={}".format(recording_template)
+                jfr_cmd += ",settings={}".format(recording_template)
             else:
                 self.logger.info("jfr: Using default recording template.")
         else:
-            java_opts += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
+            jfr_cmd += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
             if recording_template:
                 self.logger.info("jfr: Using recording template [%s].", recording_template)
-                java_opts += ",settings={}".format(recording_template)
+                jfr_cmd += ",settings={}".format(recording_template)
             else:
                 self.logger.info("jfr: Using default recording template.")
+        java_opts.append(jfr_cmd)
         return java_opts
 
 
@@ -205,12 +208,12 @@ class JitCompiler(TelemetryDevice):
         super().__init__()
         self.log_root = log_root
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
-        return {"ES_JAVA_OPTS": "-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading -XX:+LogCompilation "
-                                "-XX:LogFile=%s -XX:+PrintAssembly" % log_file}
+        return ["-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation",
+                "-XX:LogFile={}".format(log_file), "-XX:+PrintAssembly"]
 
 
 class Gc(TelemetryDevice):
@@ -224,7 +227,7 @@ class Gc(TelemetryDevice):
         self.log_root = log_root
         self.java_major_version = java_major_version
 
-    def instrument_env(self, car, candidate_id):
+    def instrument_java_opts(self, car, candidate_id):
         io.ensure_dir(self.log_root)
         log_file = "%s/%s-%s.gc.log" % (self.log_root, car.safe_name, candidate_id)
         console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=self.logger)
@@ -232,51 +235,12 @@ class Gc(TelemetryDevice):
 
     def java_opts(self, log_file):
         if self.java_major_version < 9:
-            return {"ES_JAVA_OPTS": "-Xloggc:%s -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
-                                    "-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime "
-                                    "-XX:+PrintTenuringDistribution" % log_file}
+            return ["-Xloggc:{}".format(log_file), "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
+                    "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+                    "-XX:+PrintTenuringDistribution"]
         else:
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
-            return {"ES_JAVA_OPTS": "-Xlog:gc*=info,safepoint=info,age*=trace:file=%s:utctime,uptimemillis,level,tags:filecount=0" % log_file}
-
-
-class PerfStat(TelemetryDevice):
-    internal = False
-    command = "perf"
-    human_name = "perf stat"
-    help = "Reads CPU PMU counters (requires Linux and perf)"
-
-    def __init__(self, log_root):
-        super().__init__()
-        self.log_root = log_root
-        self.process = None
-        self.node = None
-        self.log = None
-        self.attached = False
-
-    def attach_to_node(self, node):
-        io.ensure_dir(self.log_root)
-        log_file = "%s/%s.perf.log" % (self.log_root, node.node_name)
-
-        console.info("%s: Writing perf logs to [%s]" % (self.human_name, log_file), logger=self.logger)
-
-        self.log = open(log_file, "wb")
-
-        self.process = subprocess.Popen(["perf", "stat", "-p %s" % node.process.pid],
-                                        stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        self.node = node
-        self.attached = True
-
-    def detach_from_node(self, node, running):
-        if self.attached and running:
-            self.logger.info("Dumping PMU counters for node [%s]", node.node_name)
-            os.kill(self.process.pid, signal.SIGINT)
-            try:
-                self.process.wait(10.0)
-            except subprocess.TimeoutExpired:
-                self.logger.warning("perf stat did not terminate")
-            self.log.close()
-            self.attached = False
+            return ["-Xlog:gc*=info,safepoint=info,age*=trace:file={}:utctime,uptimemillis,level,tags:filecount=0".format(log_file)]
 
 
 class CcrStats(TelemetryDevice):
@@ -322,10 +286,6 @@ class CcrStats(TelemetryDevice):
 
         self.metrics_store = metrics_store
         self.samplers = []
-
-    def attach_to_cluster(self, cluster):
-        # This cluster parameter does not correspond to the cluster names passed in target.hosts, see on_benchmark_start()
-        super().attach_to_cluster(cluster)
 
     def on_benchmark_start(self):
         recorder = []
@@ -378,31 +338,28 @@ class CcrStatsRecorder:
         import elasticsearch
 
         try:
-            ccr_stats_api_endpoint = "/_xpack/ccr/_stats"
-            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false"})
+            ccr_stats_api_endpoint = "/_ccr/stats"
+            filter_path = "follow_stats"
+            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false",
+                                                                                                 "filter_path": filter_path})
         except elasticsearch.TransportError as e:
-            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}] on " \
-                  "cluster [{}]".format(ccr_stats_api_endpoint, self.cluster_name)
+            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on " \
+                  "cluster [{}]".format(ccr_stats_api_endpoint, filter_path, self.cluster_name)
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        if self.indices:
-            # Record metrics only for indices specified with telemetry-params.
-            for index in self.indices:
+        if filter_path in stats and "indices" in stats[filter_path]:
+            for indices in stats[filter_path]["indices"]:
                 try:
-                    if stats[index]:
-                        self.record_stats_per_index(index, stats[index])
+                    if self.indices and indices["index"] not in self.indices:
+                        # Skip metrics for indices not part of user supplied whitelist (ccr-stats-indices) in telemetry params.
+                        continue
+                    self.record_stats_per_index(indices["index"], indices["shards"])
                 except KeyError:
-                    self.logger.warning("The telemetry parameter 'ccr-stats-indices' specified the index [%s] for cluster [%s] but there "
-                                        "are no stats available. Maybe the index hasn't been created yet, ignoring.",
-                                        index, self.cluster_name)
-        else:
-            # Record metrics for every index returned by the CCR stats API.
-            if stats:
-                for index_name, stats in stats.items():
-                    self.record_stats_per_index(index_name, stats)
-            pass
-        time.sleep(self.sample_interval)
+                    self.logger.warning(
+                        "The 'indices' key in {0} does not contain an 'index' or 'shards' key "
+                        "Maybe the output format of the {0} endpoint has changed. Skipping.".format(ccr_stats_api_endpoint)
+                    )
 
     def record_stats_per_index(self, name, stats):
         """
@@ -410,25 +367,154 @@ class CcrStatsRecorder:
         :param stats: A dict with returned CCR stats for the index.
         """
 
-        for shard_num, shard_stats in stats.items():
-            shard_metadata = {
-                "cluster": self.cluster_name,
-                "index": name,
-                "shard": shard_num
-            }
+        for shard_stats in stats:
+            if "shard_id" in shard_stats:
+                doc = {
+                    "name": "ccr-stats",
+                    "shard": shard_stats
+                }
+                shard_metadata = {
+                    "cluster": self.cluster_name,
+                    "index": name
+                }
 
-            self.metrics_store.put_doc(shard_stats, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+                self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+
+
+class RecoveryStats(TelemetryDevice):
+    internal = False
+    command = "recovery-stats"
+    human_name = "Recovery Stats"
+    help = "Regularly samples shard recovery stats"
+
+    """
+    Gathers recovery stats on a cluster level
+    """
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``recovery-stats-indices``: JSON structure specifying the index pattern per cluster to publish stats from.
+            Not all clusters need to be specified, but any name used must be be present in target.hosts. Alternatively,
+            the index pattern can be specified as a string can be specified in case only one cluster is involved.
+            Example:
+            {"recovery-stats-indices": {"cluster_a": ["follower"],"default": ["leader"]}
+
+            ``recovery-stats-sample-interval``: positive integer controlling the sampling interval. Default: 1 second.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("recovery-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                "The telemetry parameter 'recovery-stats-sample-interval' must be greater than zero but was {}."
+                    .format(self.sample_interval))
+        self.specified_cluster_names = self.clients.keys()
+        indices_per_cluster = self.telemetry_params.get("recovery-stats-indices", False)
+        # allow the user to specify either an index pattern as string or as a JSON object
+        if isinstance(indices_per_cluster, str):
+            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
+        else:
+            self.indices_per_cluster = indices_per_cluster
+
+        if self.indices_per_cluster:
+            for cluster_name in self.indices_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        "The telemetry parameter 'recovery-stats-indices' must be a JSON Object with keys matching "
+                        "the cluster names [{}] specified in --target-hosts "
+                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+            self.specified_cluster_names = self.indices_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = RecoveryStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
+                                             self.sample_interval,
+                                             self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class RecoveryStatsRecorder:
+    """
+    Collects and pushes recovery stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param indices: optional list of indices to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.indices = indices
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "recovery stats"
+
+    def record(self):
+        """
+        Collect recovery stats for indexes (optionally) specified in telemetry parameters and push to metrics store.
+        """
+        import elasticsearch
+
+        try:
+            stats = self.client.indices.recovery(index=self.indices, active_only=True, detailed=False)
+        except elasticsearch.TransportError:
+            msg = "A transport error occurred while collecting recovery stats on cluster [{}]".format(self.cluster_name)
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        for idx, idx_stats in stats.items():
+            for shard in idx_stats["shards"]:
+                doc = {
+                    "name": "recovery-stats",
+                    "shard": shard
+                }
+                shard_metadata = {
+                    "cluster": self.cluster_name,
+                    "index": idx,
+                    "shard": shard["id"]
+                }
+                self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):
+    """
+    Gathers different node stats.
+    """
+
     internal = False
     command = "node-stats"
     human_name = "Node Stats"
     help = "Regularly samples node stats"
+    warning = """You have enabled the node-stats telemetry device, but requests to the _nodes/stats Elasticsearch endpoint
+          trigger additional refreshes and WILL SKEW results.
+    """
 
-    """
-    Gathers different node stats.
-    """
     def __init__(self, telemetry_params, clients, metrics_store):
         super().__init__()
         self.telemetry_params = telemetry_params
@@ -437,12 +523,9 @@ class NodeStats(TelemetryDevice):
         self.metrics_store = metrics_store
         self.samplers = []
 
-    def attach_to_cluster(self, cluster):
-        # This cluster parameter does not correspond to the cluster names passed in target.hosts, see on_benchmark_start()
-        super().attach_to_cluster(cluster)
-
     def on_benchmark_start(self):
-        recorder = []
+        console.warn(NodeStats.warning, logger=self.logger)
+
         for cluster_name in self.specified_cluster_names:
             recorder = NodeStatsRecorder(self.telemetry_params, cluster_name, self.clients[cluster_name], self.metrics_store)
             sampler = SamplerThread(recorder)
@@ -465,15 +548,31 @@ class NodeStatsRecorder:
                 "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval))
 
         self.include_indices = telemetry_params.get("node-stats-include-indices", False)
+        self.include_indices_metrics = telemetry_params.get("node-stats-include-indices-metrics", False)
+
+        if self.include_indices_metrics:
+            if isinstance(self.include_indices_metrics, str):
+                self.include_indices_metrics_list = opts.csv_to_list(self.include_indices_metrics)
+            else:
+                # we don't validate the allowable metrics as they may change across ES versions
+                raise exceptions.SystemSetupError(
+                    "The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was {}".format(
+                        type(self.include_indices_metrics))
+                    )
+        else:
+            self.include_indices_metrics_list = ["docs", "store", "indexing", "search", "merges", "query_cache",
+                                                 "fielddata", "segments", "translog", "request_cache"]
+
         self.include_thread_pools = telemetry_params.get("node-stats-include-thread-pools", True)
         self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
         self.include_breakers = telemetry_params.get("node-stats-include-breakers", True)
         self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.include_process = telemetry_params.get("node-stats-include-process", True)
         self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
+        self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.client = client
         self.metrics_store = metrics_store
-        self.metrics_store_meta_data = {"cluster": cluster_name}
+        self.cluster_name = cluster_name
 
     def __str__(self):
         return "node stats"
@@ -482,13 +581,16 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
+            metrics_store_meta_data = {
+                "cluster": self.cluster_name,
+                "node_name": node_name
+            }
             collected_node_stats = collections.OrderedDict()
+            collected_node_stats["name"] = "node-stats"
 
-            if self.include_indices:
+            if self.include_indices or self.include_indices_metrics:
                 collected_node_stats.update(
-                    self.indices_stats(node_name, node_stats,
-                                       include=["docs", "store", "indexing", "search", "merges", "query_cache", "fielddata",
-                                                        "segments", "translog", "request_cache"]))
+                    self.indices_stats(node_name, node_stats, include=self.include_indices_metrics_list))
             if self.include_thread_pools:
                 collected_node_stats.update(self.thread_pool_stats(node_name, node_stats))
             if self.include_breakers:
@@ -497,6 +599,8 @@ class NodeStatsRecorder:
                 collected_node_stats.update(self.jvm_buffer_pool_stats(node_name, node_stats))
             if self.include_mem_stats:
                 collected_node_stats.update(self.jvm_mem_stats(node_name, node_stats))
+            if self.include_gc_stats:
+                collected_node_stats.update(self.jvm_gc_stats(node_name, node_stats))
             if self.include_network:
                 collected_node_stats.update(self.network_stats(node_name, node_stats))
             if self.include_process:
@@ -505,9 +609,7 @@ class NodeStatsRecorder:
             self.metrics_store.put_doc(dict(collected_node_stats),
                                        level=MetaInfoScope.node,
                                        node_name=node_name,
-                                       meta_data=self.metrics_store_meta_data)
-
-        time.sleep(self.sample_interval)
+                                       meta_data=metrics_store_meta_data)
 
     def flatten_stats_fields(self, prefix=None, stats=None):
         """
@@ -555,6 +657,9 @@ class NodeStatsRecorder:
     def jvm_mem_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
 
+    def jvm_gc_stats(self, node_name, node_stats):
+        return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
+
     def network_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="transport", stats=node_stats.get("transport"))
 
@@ -585,71 +690,16 @@ class StartupTime(InternalTelemetryDevice):
         self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
 
 
-class MergeParts(InternalTelemetryDevice):
-    """
-    Gathers merge parts time statistics. Note that you need to run a track setup which logs these data.
-    """
-    MERGE_TIME_LINE = re.compile(r": (\d+) msec to merge ([a-z ]+) \[(\d+) docs\]")
-
-    def __init__(self, metrics_store, node_log_dir):
-        super().__init__()
-        self.node_log_dir = node_log_dir
-        self.metrics_store = metrics_store
-        self._t = None
-        self.node = None
-
-    def attach_to_node(self, node):
-        self.node = node
-
-    def on_benchmark_stop(self):
-        self.logger.info("Analyzing merge times.")
-        # first decompress all logs. They have unique names so it's safe to do that. It's easier to first decompress everything
-        for log_file in os.listdir(self.node_log_dir):
-            log_path = "%s/%s" % (self.node_log_dir, log_file)
-            if io.is_archive(log_path):
-                self.logger.info("Decompressing [%s] to analyze merge times...", log_path)
-                io.decompress(log_path, self.node_log_dir)
-
-        # we need to add up times from all files
-        merge_times = {}
-        for log_file in os.listdir(self.node_log_dir):
-            log_path = "%s/%s" % (self.node_log_dir, log_file)
-            if not io.is_archive(log_file):
-                self.logger.debug("Analyzing merge times in [%s]", log_path)
-                with open(log_path, mode="rt", encoding="utf-8") as f:
-                    self._extract_merge_times(f, merge_times)
-            else:
-                self.logger.debug("Skipping archived logs in [%s].", log_path)
-        if merge_times:
-            self._store_merge_times(merge_times)
-        self.logger.info("Finished analyzing merge times. Extracted [%s] different merge time components.", len(merge_times))
-
-    def _extract_merge_times(self, file, merge_times):
-        for line in file.readlines():
-            match = MergeParts.MERGE_TIME_LINE.search(line)
-            if match is not None:
-                duration_ms, part, num_docs = match.groups()
-                if part not in merge_times:
-                    merge_times[part] = [0, 0]
-                l = merge_times[part]
-                l[0] += int(duration_ms)
-                l[1] += int(num_docs)
-
-    def _store_merge_times(self, merge_times):
-        for k, v in merge_times.items():
-            metric_suffix = k.replace(" ", "_")
-            self.metrics_store.put_value_node_level(self.node.node_name, "merge_parts_total_time_%s" % metric_suffix, v[0], "ms")
-            self.metrics_store.put_count_node_level(self.node.node_name, "merge_parts_total_docs_%s" % metric_suffix, v[1])
-
-
 class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store, node_count_on_host):
+    def __init__(self, metrics_store, node_count_on_host, log_root, node_name):
         super().__init__()
         self.metrics_store = metrics_store
         self.node_count_on_host = node_count_on_host
+        self.log_root = log_root
+        self.node_name = node_name
         self.node = None
         self.process = None
         self.disk_start = None
@@ -657,93 +707,61 @@ class DiskIo(InternalTelemetryDevice):
 
     def attach_to_node(self, node):
         self.node = node
-        self.process = sysstats.setup_process_stats(node.process.pid)
+        self.process = sysstats.setup_process_stats(node.pid)
+        self.process_start = sysstats.process_io_counters(self.process)
+        read_bytes = 0
+        write_bytes = 0
+        io.ensure_dir(self.log_root)
+        tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
+        if self.process_start:
+            read_bytes = self.process_start.read_bytes
+            write_bytes = self.process_start.write_bytes
+            self.logger.info("Using more accurate process-based I/O counters.")
+        else:
+            try:
+                self.disk_start = sysstats.disk_io_counters()
+                read_bytes = self.disk_start.read_bytes
+                write_bytes = self.disk_start.write_bytes
+                self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
+                                    "I/O counters.")
+            except RuntimeError:
+                self.logger.exception("Could not determine I/O stats at benchmark start.")
+        with open(tmp_io_file, "wt", encoding="utf-8") as f:
+            json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
-    def on_benchmark_start(self):
-        if self.process is not None:
-            self.process_start = sysstats.process_io_counters(self.process)
-            if self.process_start:
-                self.logger.info("Using more accurate process-based I/O counters.")
-            else:
-                try:
-                    self.disk_start = sysstats.disk_io_counters()
-                    self.logger.warning("Process I/O counters are unsupported on this platform. Falling back to less accurate disk I/O counters.")
-                except RuntimeError:
-                    self.logger.exception("Could not determine I/O stats at benchmark start.")
-
-    def on_benchmark_stop(self):
-        if self.process is not None:
+    def detach_from_node(self, node, running):
+        if running:
             # Be aware the semantics of write counts etc. are different for disk and process statistics.
             # Thus we're conservative and only report I/O bytes now.
             # noinspection PyBroadException
             try:
+                io.ensure_dir(self.log_root)
+                tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
+                with open(tmp_io_file, "rt", encoding="utf-8") as f:
+                    io_stats = json.load(f)
+                os.remove(tmp_io_file)
+                self.process = sysstats.setup_process_stats(io_stats["pid"])
+                process_end = sysstats.process_io_counters(self.process)
+                disk_end = sysstats.disk_io_counters()
                 # we have process-based disk counters, no need to worry how many nodes are on this host
-                if self.process_start:
-                    process_end = sysstats.process_io_counters(self.process)
-                    read_bytes = process_end.read_bytes - self.process_start.read_bytes
-                    write_bytes = process_end.write_bytes - self.process_start.write_bytes
-                elif self.disk_start:
+                if process_end:
+                    read_bytes = process_end.read_bytes - io_stats["read_bytes"]
+                    write_bytes = process_end.write_bytes - io_stats["write_bytes"]
+                elif disk_end:
                     if self.node_count_on_host > 1:
                         self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
-                                         "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node.node_name)
+                                         "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node_name)
 
-                    disk_end = sysstats.disk_io_counters()
-                    read_bytes = (disk_end.read_bytes - self.disk_start.read_bytes) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - self.disk_start.write_bytes) // self.node_count_on_host
+                    read_bytes = (disk_end.read_bytes - io_stats['read_bytes']) // self.node_count_on_host
+                    write_bytes = (disk_end.write_bytes - io_stats['write_bytes']) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
 
-                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_write_bytes", write_bytes, "byte")
-                self.metrics_store.put_count_node_level(self.node.node_name, "disk_io_read_bytes", read_bytes, "byte")
+                self.metrics_store.put_count_node_level(self.node_name, "disk_io_write_bytes", write_bytes, "byte")
+                self.metrics_store.put_count_node_level(self.node_name, "disk_io_read_bytes", read_bytes, "byte")
             # Catching RuntimeException is not sufficient as psutil might raise AccessDenied et.al. which is derived from Exception
             except BaseException:
                 self.logger.exception("Could not determine I/O stats at benchmark end.")
-
-
-class CpuUsage(InternalTelemetryDevice):
-    """
-    Gathers CPU usage statistics.
-    """
-    def __init__(self, metrics_store):
-        super().__init__()
-        self.metrics_store = metrics_store
-        self.sampler = None
-        self.node = None
-
-    def attach_to_node(self, node):
-        self.node = node
-
-    def on_benchmark_start(self):
-        if self.node:
-            recorder = CpuUsageRecorder(self.node, self.metrics_store)
-            self.sampler = SamplerThread(recorder)
-            self.sampler.setDaemon(True)
-            self.sampler.start()
-
-    def on_benchmark_stop(self):
-        if self.sampler:
-            self.sampler.finish()
-
-
-class CpuUsageRecorder:
-    def __init__(self, node, metrics_store):
-        self.node = node
-        self.process = sysstats.setup_process_stats(node.process.pid)
-        self.metrics_store = metrics_store
-        # the call is blocking already; there is no need for additional waiting in the sampler thread.
-        self.sample_interval = 0
-
-    def record(self):
-        import psutil
-        try:
-            self.metrics_store.put_value_node_level(node_name=self.node.node_name, name="cpu_utilization_1s",
-                                                    value=sysstats.cpu_utilization(self.process), unit="%")
-        # this can happen when the Elasticsearch process has been terminated already and we were not quick enough to stop.
-        except psutil.NoSuchProcess:
-            pass
-
-    def __str__(self):
-        return "cpu utilization"
 
 
 def store_node_attribute_metadata(metrics_store, nodes_info):
@@ -803,12 +821,20 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store = metrics_store
         self.client = client
 
-    def attach_to_cluster(self, cluster):
-        client_info = self.client.info()
+    def on_benchmark_start(self):
+        # noinspection PyBroadException
+        try:
+            client_info = self.client.info()
+        except BaseException:
+            self.logger.exception("Could not retrieve cluster version info")
+            return
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
+        # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
+        distribution_flavor = client_info["version"].get("build_flavor", "oss")
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
 
         info = self.client.nodes.info(node_id="_all")
         nodes_info = info["nodes"].values()
@@ -823,22 +849,17 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         store_node_attribute_metadata(self.metrics_store, nodes_info)
 
 
-class NodeEnvironmentInfo(InternalTelemetryDevice):
+def add_metadata_for_node(metrics_store, node_name, host_name):
     """
     Gathers static environment information like OS or CPU details for Rally-provisioned nodes.
     """
-    def __init__(self, metrics_store):
-        super().__init__()
-        self.metrics_store = metrics_store
-
-    def attach_to_node(self, node):
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_name", sysstats.os_name())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "os_version", sysstats.os_version())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_physical_cores", sysstats.physical_cpu_cores())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "cpu_model", sysstats.cpu_model())
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "node_name", node.node_name)
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node.node_name, "host_name", node.host_name)
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_name", sysstats.os_name())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "os_version", sysstats.os_version())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_logical_cores", sysstats.logical_cpu_cores())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_physical_cores", sysstats.physical_cpu_cores())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "cpu_model", sysstats.cpu_model())
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
+    metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host_name)
 
 
 class ExternalEnvironmentInfo(InternalTelemetryDevice):
@@ -849,19 +870,26 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
-        self._t = None
 
-    def attach_to_cluster(self, cluster):
-        stats = self.client.nodes.stats(metric="_all")
-        nodes = stats["nodes"]
-        for node in nodes.values():
+    # noinspection PyBroadException
+    def on_benchmark_start(self):
+        try:
+            nodes_stats = self.client.nodes.stats(metric="_all")["nodes"].values()
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes stats")
+            nodes_stats = []
+        try:
+            nodes_info = self.client.nodes.info(node_id="_all")["nodes"].values()
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes info")
+            nodes_info = []
+
+        for node in nodes_stats:
             node_name = node["name"]
             host = node.get("host", "unknown")
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "node_name", node_name)
             self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "host_name", host)
 
-        info = self.client.nodes.info(node_id="_all")
-        nodes_info = info["nodes"].values()
         for node in nodes_info:
             node_name = node["name"]
             self.store_node_info(node_name, "os_name", node, ["os", "name"])
@@ -877,130 +905,81 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, metric_key, extract_value(node, path))
 
 
-class ClusterMetaDataInfo(InternalTelemetryDevice):
+class JvmStatsSummary(InternalTelemetryDevice):
     """
-    Enriches the cluster with meta-data about it and its nodes.
-    """
-    def __init__(self, client):
-        super().__init__()
-        self.client = client
-
-    def attach_to_cluster(self, cluster):
-        client_info = self.client.info()
-        revision = client_info["version"]["build_hash"]
-        distribution_version = client_info["version"]["number"]
-
-        cluster.distribution_version = distribution_version
-        cluster.source_revision = revision
-
-        for node_stats in self.client.nodes.stats(metric="_all")["nodes"].values():
-            node_name = node_stats["name"]
-            if cluster.has_node(node_name):
-                cluster_node = cluster.node(node_name)
-            else:
-                host = node_stats.get("host", "unknown")
-                cluster_node = cluster.add_node(host, node_name)
-            self.add_node_stats(cluster, cluster_node, node_stats)
-
-        for node_info in self.client.nodes.info(node_id="_all")["nodes"].values():
-            self.add_node_info(cluster, node_info)
-
-    def add_node_info(self, cluster, node_info):
-        node_name = node_info["name"]
-        cluster_node = cluster.node(node_name)
-        if cluster_node:
-            cluster_node.ip = extract_value(node_info, ["ip"])
-            cluster_node.os = {
-                "name": extract_value(node_info, ["os", "name"]),
-                "version": extract_value(node_info, ["os", "version"])
-            }
-            cluster_node.jvm = {
-                "vendor": extract_value(node_info, ["jvm", "vm_vendor"]),
-                "version": extract_value(node_info, ["jvm", "version"])
-            }
-            cluster_node.cpu = {
-                "available_processors": extract_value(node_info, ["os", "available_processors"]),
-                "allocated_processors": extract_value(node_info, ["os", "allocated_processors"], fallback=None),
-            }
-            for plugin in extract_value(node_info, ["plugins"], fallback=[]):
-                if "name" in plugin:
-                    cluster_node.plugins.append(plugin["name"])
-
-            if versions.major_version(cluster.distribution_version) == 1:
-                cluster_node.memory = {
-                    "total_bytes": extract_value(node_info, ["os", "mem", "total_in_bytes"], fallback=None)
-                }
-
-    def add_node_stats(self, cluster, cluster_node, stats):
-        if cluster_node:
-            data_dirs = extract_value(stats, ["fs", "data"], fallback=[])
-            for data_dir in data_dirs:
-                fs_meta_data = {
-                    "mount": data_dir.get("mount", "unknown"),
-                    "type": data_dir.get("type", "unknown"),
-                    "spins": data_dir.get("spins", "unknown")
-                }
-                cluster_node.fs.append(fs_meta_data)
-            if versions.major_version(cluster.distribution_version) > 1:
-                cluster_node.memory = {
-                    "total_bytes": extract_value(stats, ["os", "mem", "total_in_bytes"], fallback=None)
-                }
-
-
-class GcTimesSummary(InternalTelemetryDevice):
-    """
-    Gathers a summary of the total young gen/old gen GC runtime during the whole race.
+    Gathers a summary of various JVM statistics during the whole race.
     """
     def __init__(self, client, metrics_store):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
-        self.gc_times_per_node = {}
+        self.jvm_stats_per_node = {}
 
     def on_benchmark_start(self):
-        self.gc_times_per_node = self.gc_times()
+        self.logger.info("JvmStatsSummary on benchmark start")
+        self.jvm_stats_per_node = self.jvm_stats()
 
     def on_benchmark_stop(self):
-        gc_times_at_end = self.gc_times()
+        jvm_stats_at_end = self.jvm_stats()
         total_old_gen_collection_time = 0
         total_young_gen_collection_time = 0
 
-        for node_name, gc_times_end in gc_times_at_end.items():
-            if node_name in self.gc_times_per_node:
-                gc_times_start = self.gc_times_per_node[node_name]
-                young_gc_time = max(gc_times_end[0] - gc_times_start[0], 0)
-                old_gc_time = max(gc_times_end[1] - gc_times_start[1], 0)
+        for node_name, jvm_stats_end in jvm_stats_at_end.items():
+            if node_name in self.jvm_stats_per_node:
+                jvm_stats_start = self.jvm_stats_per_node[node_name]
+                young_gc_time = max(jvm_stats_end["young_gc"] - jvm_stats_start["young_gc"], 0)
+                old_gc_time = max(jvm_stats_end["old_gc"] - jvm_stats_start["old_gc"], 0)
 
                 total_young_gen_collection_time += young_gc_time
                 total_old_gen_collection_time += old_gc_time
 
                 self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
+
+                all_pool_stats = {
+                    "name": "jvm_memory_pool_stats"
+                }
+                for pool_name, pool_stats in jvm_stats_end["pools"].items():
+                    all_pool_stats[pool_name] = {
+                        "peak_usage": pool_stats["peak"],
+                        "unit": "byte"
+                    }
+                self.metrics_store.put_doc(all_pool_stats, level=MetaInfoScope.node, node_name=node_name)
+
             else:
-                self.logger.warning("Cannot determine GC times for [%s] (not in the cluster at the start of the benchmark).", node_name)
+                self.logger.warning("Cannot determine JVM stats for [%s] (not in the cluster at the start of the benchmark).", node_name)
 
         self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
         self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
 
-        self.gc_times_per_node = None
+        self.jvm_stats_per_node = None
 
-    def gc_times(self):
-        self.logger.debug("Gathering GC times")
-        gc_times = {}
+    def jvm_stats(self):
+        self.logger.debug("Gathering JVM stats")
+        jvm_stats = {}
         import elasticsearch
         try:
             stats = self.client.nodes.stats(metric="_all")
         except elasticsearch.TransportError:
             self.logger.exception("Could not retrieve GC times.")
-            return gc_times
+            return jvm_stats
         nodes = stats["nodes"]
         for node in nodes.values():
             node_name = node["name"]
             gc = node["jvm"]["gc"]["collectors"]
             old_gen_collection_time = gc["old"]["collection_time_in_millis"]
             young_gen_collection_time = gc["young"]["collection_time_in_millis"]
-            gc_times[node_name] = (young_gen_collection_time, old_gen_collection_time)
-        return gc_times
+            jvm_stats[node_name] = {
+                "young_gc": young_gen_collection_time,
+                "old_gc": old_gen_collection_time,
+                "pools": {}
+            }
+            pool_usage = node["jvm"]["mem"]["pools"]
+            for pool_name, pool_stats in pool_usage.items():
+                jvm_stats[node_name]["pools"][pool_name] = {
+                    "peak": pool_stats["peak_used_in_bytes"]
+                }
+        return jvm_stats
 
 
 class IndexStats(InternalTelemetryDevice):
@@ -1014,7 +993,7 @@ class IndexStats(InternalTelemetryDevice):
         self.first_time = True
 
     def on_benchmark_start(self):
-        # we only determine this value at the start of the benchmark (in the first lap). This is actually only useful for
+        # we only determine this value at the start of the benchmark. This is actually only useful for
         # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
         # the cluster so we can at least tell them.
         if self.first_time:
@@ -1040,6 +1019,9 @@ class IndexStats(InternalTelemetryDevice):
 
         for t in self.index_times(index_stats):
             self.metrics_store.put_doc(doc=t, level=metrics.MetaInfoScope.cluster)
+
+        for ct in self.index_counts(index_stats):
+            self.metrics_store.put_doc(doc=ct, level=metrics.MetaInfoScope.cluster)
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte")
@@ -1070,7 +1052,7 @@ class IndexStats(InternalTelemetryDevice):
     def index_time(self, values, stats, name, path, per_shard_stats):
         primary_total_stats = self.extract_value(stats, ["_all", "primaries"], default_value={})
         value = self.extract_value(primary_total_stats, path)
-        if value:
+        if value is not None:
             doc = {
                 "name": name,
                 "value": value,
@@ -1078,6 +1060,23 @@ class IndexStats(InternalTelemetryDevice):
             }
             if per_shard_stats:
                 doc["per-shard"] = self.primary_shard_stats(stats, path)
+            values.append(doc)
+
+    def index_counts(self, stats):
+        counts = []
+        self.index_count(counts, stats, "merges_total_count", ["merges", "total"])
+        self.index_count(counts, stats, "refresh_total_count", ["refresh", "total"])
+        self.index_count(counts, stats, "flush_total_count", ["flush", "total"])
+        return counts
+
+    def index_count(self, values, stats, name, path):
+        primary_total_stats = self.extract_value(stats, ["_all", "primaries"], default_value={})
+        value = self.extract_value(primary_total_stats, path)
+        if value is not None:
+            doc = {
+                "name": name,
+                "value": value
+            }
             values.append(doc)
 
     def primary_shard_stats(self, stats, path):
@@ -1116,7 +1115,7 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
         self.client = client
         self.metrics_store = metrics_store
 
-    def detach_from_cluster(self, cluster):
+    def on_benchmark_stop(self):
         import elasticsearch
         try:
             results = self.client.search(index=".ml-anomalies-*", body={
@@ -1124,15 +1123,29 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
                 "query": {
                     "bool": {
                         "must": [
-                            {"term": {"result_type": "bucket"}},
-                            # TODO: We could restrict this by job id if we need to measure multiple jobs...
-                            # {"term": {"job_id": "job_id"}}
+                            {"term": {"result_type": "bucket"}}
                         ]
                     }
                 },
                 "aggs": {
-                    "max_bucket_processing_time": {
-                        "max": {"field": "processing_time_ms"}
+                    "jobs": {
+                        "terms": {
+                            "field": "job_id"
+                        },
+                        "aggs": {
+                            "min_pt": {
+                                "min": {"field": "processing_time_ms"}
+                            },
+                            "max_pt": {
+                                "max": {"field": "processing_time_ms"}
+                            },
+                            "mean_pt": {
+                                "avg": {"field": "processing_time_ms"}
+                            },
+                            "median_pt": {
+                                "percentiles": {"field": "processing_time_ms", "percents": [50]}
+                            }
+                        }
                     }
                 }
             })
@@ -1140,9 +1153,16 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
             self.logger.exception("Could not retrieve ML bucket processing time.")
             return
         try:
-            value = results["aggregations"]["max_bucket_processing_time"]["value"]
-            if value:
-                self.metrics_store.put_value_cluster_level("ml_max_processing_time_millis", value, "ms")
+            for job in results["aggregations"]["jobs"]["buckets"]:
+                ml_job_stats = collections.OrderedDict()
+                ml_job_stats["name"] = "ml_processing_time"
+                ml_job_stats["job"] = job["key"]
+                ml_job_stats["min"] = job["min_pt"]["value"]
+                ml_job_stats["mean"] = job["mean_pt"]["value"]
+                ml_job_stats["median"] = job["median_pt"]["values"]["50.0"]
+                ml_job_stats["max"] = job["max_pt"]["value"]
+                ml_job_stats["unit"] = "ms"
+                self.metrics_store.put_doc(doc=dict(ml_job_stats), level=MetaInfoScope.cluster)
         except KeyError:
             # no ML running
             pass

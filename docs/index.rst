@@ -19,8 +19,6 @@ You want to benchmark Elasticsearch? Then Rally is for you. It can help you with
 
 We have also put considerable effort in Rally to ensure that benchmarking data are reproducible.
 
-In general, Rally works with all versions of Elasticsearch starting from 1.x. :doc:`Benchmarking with plugins </elasticsearch_plugins>` and :ref:`benchmarking source builds <pipelines_from-sources-complete>` will only work from Elasticsearch 5.0 onwards.
-
 Getting Help or Contributing to Rally
 -------------------------------------
 
@@ -38,6 +36,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
 
    quickstart
    install
+   docker
    configuration
    race
    tournament
@@ -54,6 +53,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :caption: Reference Documentation
    :maxdepth: 2
 
+   versions
    command_line_reference
    offline
    track

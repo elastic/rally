@@ -1,9 +1,27 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import logging
 
 import thespian.actors
 import thespian.system.messages.status
+
 from esrally import exceptions, log
-from esrally.utils import console, net
+from esrally.utils import net
 
 
 class BenchmarkFailure:
@@ -69,7 +87,9 @@ def no_retry(f, actor_name):
             msg = "Error in {}".format(actor_name)
             # log here as the full trace might get lost.
             logging.getLogger(__name__).exception(msg)
-            self.send(sender, BenchmarkFailure(msg, e))
+            # don't forward the exception as is because the main process might not have this class available on the load path
+            # and will fail then while deserializing the cause.
+            self.send(sender, BenchmarkFailure("{} ({})".format(msg, str(e))))
     return guard
 
 
@@ -228,8 +248,5 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
                                            logDefs=log.load_configuration(),
                                            capabilities=capabilities)
     except thespian.actors.ActorSystemException:
-        logger.exception("Could not initialize internal actor system. Terminating.")
-        console.error("Could not initialize successfully.\n")
-        console.error("Are there are still processes from a previous race?")
-        console.error("Please check and terminate related Python processes before running Rally again.\n")
+        logger.exception("Could not initialize internal actor system.")
         raise

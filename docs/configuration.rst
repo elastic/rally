@@ -26,7 +26,7 @@ Let's go through an example step by step: First run ``esrally``::
 
       esrally configure --advanced-config
 
-    * Setting up benchmark data directory in /Users/dm/.rally/benchmarks
+    * Setting up benchmark root directory in /Users/dm/.rally/benchmarks
     * Setting up benchmark source directory in /Users/dm/.rally/benchmarks/src/elasticsearch
 
     Configuration successfully written to /Users/dm/.rally/rally.ini. Happy benchmarking!
@@ -55,7 +55,7 @@ When using the advanced configuration, you can choose that Rally stores its metr
 Preparation
 ~~~~~~~~~~~
 
-First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 5.0 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of this cluster.
+First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 6.0 or higher. A simple out-of-the-box installation with a single node will suffice. Rally uses this instance to store metrics data. It will setup the necessary indices by itself. The configuration procedure of Rally will you ask for host and port of this cluster.
 
 .. note::
 
@@ -63,12 +63,14 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
 
 Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. However, note that Kibana will not be auto-configured by Rally.
 
+.. _configuration_options:
+
 Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~
 
 Rally will ask you a few more things in the advanced setup:
 
-* **Benchmark data directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different data directory here.
+* **Benchmark root directory**: Rally stores all benchmark related data in this directory which can take up to several tens of GB. If you want to use a dedicated partition, you can specify a different root directory here.
 * **Elasticsearch project directory**: This is the directory where the Elasticsearch sources are located. If you don't actively develop on Elasticsearch you can just leave the default but if you want to benchmark local changes you should point Rally to your project directory. Note that Rally will run builds with the Gradle Wrapper in this directory (it runs ``./gradlew clean`` and ``./gradlew :distribution:tar:assemble``).
 * **Metrics store type**: You can choose between ``in-memory`` which requires no additional setup or ``elasticsearch`` which requires that you start a dedicated Elasticsearch instance to store metrics but gives you much more flexibility to analyse results.
 * **Metrics store settings** (only for metrics store type ``elasticsearch``): Provide the connection details to the Elasticsearch metrics store. This should be an instance that you use just for Rally but it can be a rather small one. A single node cluster with default setting should do it. When using self-signed certificates on the Elasticsearch metrics store, certificate verification can be turned off by setting the ``datastore.ssl.verification_mode`` setting to ``none``. Alternatively you can enter the path to the certificate authority's signing certificate in ``datastore.ssl.certificate_authorities``. Both settings are optional.
@@ -119,7 +121,19 @@ Logging in Rally is configured in ``~/.rally/logging.json``. For more informatio
 * The Python reference documentation on the `logging configuration schema <https://docs.python.org/3/library/logging.config.html#logging-config-dictschema>`_ explains the file format.
 * The `logging handler documentation <https://docs.python.org/3/library/logging.handlers.html>`_ describes how to customize where log output is written to.
 
-By default, Rally will log all output to ``~/.rally/logs/rally.log`` and rotate this file daily.
+By default, Rally will log all output to ``~/.rally/logs/rally.log``.
+
+The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
+
+    /home/user/.rally/logs/rally.log {
+            daily                   # rotate daily
+            rotate 7                # keep the last seven log files
+            maxage 14               # remove logs older than 14 days
+            compress                # compress old logs ...
+            delaycompress           # ... after moving them
+            missingok               # ignore missing log files
+            notifempty              # don't attempt to rotate empty ones
+    }
 
 Example
 ~~~~~~~

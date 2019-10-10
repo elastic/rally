@@ -1,5 +1,22 @@
 #!/usr/bin/env bash
 
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # Prerequisites for releasing:
 
 # pip3 install twine sphinx sphinx_rtd_theme
@@ -10,10 +27,15 @@ set -eu
 
 RELEASE_VERSION=$1
 NEXT_RELEASE="$2.dev0"
+__NOTICE_OUTPUT_FILE="NOTICE.txt"
+
 
 echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
+
+echo "Preparing ${__NOTICE_OUTPUT_FILE}"
+source create-notice.sh
 
 echo "Updating author information"
 git log --format='%aN' | sort -u > AUTHORS
@@ -29,7 +51,10 @@ then
 fi
 
 echo "Updating changelog"
-echo -e "$(python3 changelog.py ${RELEASE_VERSION})\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+# For exit on error to work we have to separate 
+#  CHANGELOG.md generation into two steps.
+CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
+printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
 git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
 
 # * Update version in `setup.py` and `docs/conf.py`
@@ -50,6 +75,7 @@ fi
 # Build new version
 python3 setup.py bdist_wheel
 # Upload to PyPI
+printf "\033[0;31mUploading to PyPI. Please enter your credentials ...\033[0m\n"
 twine upload dist/esrally-${RELEASE_VERSION}-*.whl
 
 # Create (signed) release tag
@@ -66,7 +92,7 @@ git commit -a -m "Continue in $NEXT_RELEASE"
 git push origin master
 
 # Prepare offline installation package
-source scripts/offline-install.sh "${RELEASE_VERSION}"
+# source scripts/offline-install.sh "${RELEASE_VERSION}"
 
 echo ""
 echo "===================="
@@ -77,4 +103,5 @@ echo "Manual tasks:"
 echo ""
 echo "* Close milestone on Github: https://github.com/elastic/rally/milestones"
 echo "* Upload offline install package to Github: https://github.com/elastic/rally/releases/edit/$RELEASE_VERSION"
+echo "* Build and publish Docker image using: https://elasticsearch-ci.elastic.co/view/All/job/elastic+rally-release-docker+master specifying $RELEASE_VERSION"
 echo "* Announce on Discuss: https://discuss.elastic.co/c/annoucements"

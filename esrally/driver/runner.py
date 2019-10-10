@@ -1,8 +1,27 @@
-import sys
-import types
-import time
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import logging
+import random
+import sys
+import time
+import types
 from collections import Counter, OrderedDict
+from copy import deepcopy
 
 from esrally import exceptions, track
 
@@ -17,6 +36,8 @@ def register_default_runners():
     register_runner(track.OperationType.NodesStats.name, NodeStats())
     register_runner(track.OperationType.Search.name, Query())
     register_runner(track.OperationType.RawRequest.name, RawRequest())
+    # This is an administrative operation but there is no need for a retry here as we don't issue a request
+    register_runner(track.OperationType.Sleep.name, Sleep())
 
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
@@ -26,6 +47,15 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()))
     register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()))
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()))
+    register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()))
+    register_runner(track.OperationType.CreateMlDatafeed.name, Retry(CreateMlDatafeed()))
+    register_runner(track.OperationType.DeleteMlDatafeed.name, Retry(DeleteMlDatafeed()))
+    register_runner(track.OperationType.StartMlDatafeed.name, Retry(StartMlDatafeed()))
+    register_runner(track.OperationType.StopMlDatafeed.name, Retry(StopMlDatafeed()))
+    register_runner(track.OperationType.CreateMlJob.name, Retry(CreateMlJob()))
+    register_runner(track.OperationType.DeleteMlJob.name, Retry(DeleteMlJob()))
+    register_runner(track.OperationType.OpenMlJob.name, Retry(OpenMlJob()))
+    register_runner(track.OperationType.CloseMlJob.name, Retry(CloseMlJob()))
 
 
 def runner_for(operation_type):
@@ -39,20 +69,25 @@ def register_runner(operation_type, runner):
     logger = logging.getLogger(__name__)
     if hasattr(runner, "multi_cluster") and runner.multi_cluster:
         if "__enter__" in dir(runner) and "__exit__" in dir(runner):
-            logger.info("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
             __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
         else:
-            logger.info("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
             __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
-        logger.info("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = _single_cluster_runner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
-        logger.info("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
     else:
-        logger.info("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
         __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner))
 
 
@@ -65,6 +100,7 @@ class Runner:
     """
     Base class for all operations against Elasticsearch.
     """
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
@@ -383,7 +419,7 @@ class BulkIndex(Runner):
             # only half of the lines are documents
             response = es.bulk(body=params["body"], params=bulk_params)
         else:
-            response = es.bulk(body=params["body"], index=index, doc_type=params["type"], params=bulk_params)
+            response = es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params)
 
         stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
@@ -451,6 +487,9 @@ class BulkIndex(Runner):
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
+        if "ingest_took" in response:
+            stats["ingest_took"] = response["ingest_took"]
+
         return stats
 
     def simple_stats(self, bulk_size, response):
@@ -459,7 +498,7 @@ class BulkIndex(Runner):
         if response["errors"]:
             for idx, item in enumerate(response["items"]):
                 data = next(iter(item.values()))
-                if data["status"] > 299 or data["_shards"]["failed"] > 0:
+                if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
         stats = {
@@ -468,14 +507,18 @@ class BulkIndex(Runner):
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
         }
+        if "ingest_took" in response:
+            stats["ingest_took"] = response["ingest_took"]
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
         return stats
 
     def extract_error_details(self, error_details, data):
-        if data.get("error") and data["error"].get("reason"):
-            error_details.add((data["status"], data["error"]["reason"]))
+        error_data = data.get("error", {})
+        error_reason = error_data.get("reason") if isinstance(error_data, dict) else str(error_data)
+        if error_data:
+            error_details.add((data["status"], error_reason))
         else:
             error_details.add((data["status"], None))
 
@@ -499,27 +542,25 @@ class ForceMerge(Runner):
 
     def __call__(self, es, params):
         import elasticsearch
+        max_num_segments = params.get("max-num-segments")
+        # preliminary support for overriding the global request timeout (see #567). As force-merge falls back to
+        # the raw transport API (where the keyword argument is called `timeout`) in some cases we will always need
+        # a special handling for the force-merge API.
+        request_timeout = params.get("request-timeout")
         try:
-            if "max-num-segments" in params:
-                max_num_segments = params["max-num-segments"]
-            elif "max_num_segments" in params:
-                self.logger.warning("Your parameter source uses the deprecated name [max_num_segments]. "
-                                    "Please change it to [max-num-segments].")
-                max_num_segments = params["max_num_segments"]
-            else:
-                max_num_segments = None
-
             if max_num_segments:
-                es.indices.forcemerge(index="_all", max_num_segments=max_num_segments)
+                es.indices.forcemerge(index="_all", max_num_segments=max_num_segments, request_timeout=request_timeout)
             else:
-                es.indices.forcemerge(index="_all")
+                es.indices.forcemerge(index="_all", request_timeout=request_timeout)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
+                params = {"request_timeout": request_timeout}
                 if max_num_segments:
-                    es.transport.perform_request("POST", "/_optimize?max_num_segments={}".format(max_num_segments))
+                    es.transport.perform_request("POST", "/_optimize?max_num_segments={}".format(max_num_segments),
+                                                 params=params)
                 else:
-                    es.transport.perform_request("POST", "/_optimize")
+                    es.transport.perform_request("POST", "/_optimize", params=params)
             else:
                 raise e
 
@@ -576,6 +617,7 @@ class Query(Runner):
                   Always 1 for normal queries and the number of retrieved pages for scroll queries.
     * ``unit``: The unit in which to interpret ``weight``. Always "ops".
     * ``hits``: Total number of hits for this operation.
+    * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
     * ``timed_out``: Whether the search has timed out. For scroll queries, this flag is ``True`` if the flag was ``True`` for any of the
                      queries issued.
 
@@ -596,26 +638,30 @@ class Query(Runner):
             return self.request_body_query(es, params)
 
     def request_body_query(self, es, params):
-        request_params = params.get("request-params", {})
-        if "cache" in params:
-            request_params["request_cache"] = params["cache"]
+        request_params = self._default_request_params(params)
         r = es.search(
             index=params.get("index", "_all"),
             doc_type=params.get("type"),
             body=mandatory(params, "body", self),
-            **request_params)
+            params=request_params)
         hits = r["hits"]["total"]
+        if isinstance(hits, dict):
+            hits_total = hits["value"]
+            hits_relation = hits["relation"]
+        else:
+            hits_total = hits
+            hits_relation = "eq"
         return {
             "weight": 1,
             "unit": "ops",
-            "hits": hits,
+            "hits": hits_total,
+            "hits_relation": hits_relation,
             "timed_out": r["timed_out"],
             "took": r["took"]
         }
 
     def scroll_query(self, es, params):
-        request_params = params.get("request-params", {})
-        cache = params.get("cache")
+        request_params = self._default_request_params(params)
         hits = 0
         retrieved_pages = 0
         timed_out = False
@@ -634,17 +680,12 @@ class Query(Runner):
                     sort="_doc",
                     scroll="10s",
                     size=size,
-                    request_cache=cache,
-                    **request_params
+                    params=request_params
                 )
                 # This should only happen if we concurrently create an index and start searching
                 self.scroll_id = r.get("_scroll_id", None)
             else:
-                # This does only work for ES 2.x and above
-                # r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
-                # This is the most compatible version to perform a scroll across all supported versions of Elasticsearch
-                # (1.x does not support a proper JSON body in search scroll requests).
-                r = self.es.transport.perform_request("GET", "/_search/scroll", params={"scroll_id": self.scroll_id, "scroll": "10s"})
+                r = es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
             hit_count = len(r["hits"]["hits"])
             timed_out = timed_out or r["timed_out"]
             took += r["took"]
@@ -658,23 +699,27 @@ class Query(Runner):
             "weight": retrieved_pages,
             "pages": retrieved_pages,
             "hits": hits,
+            # as Rally determines the number of hits in a scroll, the result is always accurate.
+            "hits_relation": "eq",
             "unit": "pages",
             "timed_out": timed_out,
             "took": took
         }
 
+    def _default_request_params(self, params):
+        request_params = params.get("request-params", {})
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        return request_params
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.scroll_id and self.es:
             try:
-                # This does only work for ES 2.x and above
-                # self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
-
-                # This is the most compatible version to clear one scroll id across all supported versions of Elasticsearch
-                # (1.x does not support a proper JSON body in clear scroll requests).
-                self.es.transport.perform_request("DELETE", "/_search/scroll/%s" % self.scroll_id)
+                self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
             except BaseException:
-                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in Elasticsearch and will "
-                                      "skew your benchmark results.", self.scroll_id)
+                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in "
+                                      "Elasticsearch and will skew your benchmark results.", self.scroll_id)
         self.scroll_id = None
         self.es = None
         return False
@@ -691,7 +736,6 @@ class ClusterHealth(Runner):
     def __call__(self, es, params):
         from enum import Enum
         from functools import total_ordering
-        from elasticsearch.client import _make_path
 
         @total_ordering
         class ClusterHealthStatus(Enum):
@@ -723,9 +767,7 @@ class ClusterHealth(Runner):
             # either the user has defined something or we're good with any count of relocating shards.
             expected_relocating_shards = int(request_params.get("wait_for_relocating_shards", sys.maxsize))
 
-        # This would not work if the request parameter is not a proper method parameter for the ES client...
-        # result = es.cluster.health(**request_params)
-        result = es.transport.perform_request("GET", _make_path("_cluster", "health", index), params=request_params)
+        result = es.cluster.health(index=index, params=request_params)
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
@@ -779,7 +821,7 @@ class CreateIndex(Runner):
         indices = mandatory(params, "indices", self)
         request_params = params.get("request-params", {})
         for index, body in indices:
-            es.indices.create(index=index, body=body, **request_params)
+            es.indices.create(index=index, body=body, params=request_params)
         return len(indices), "ops"
 
     def __repr__(self, *args, **kwargs):
@@ -800,11 +842,11 @@ class DeleteIndex(Runner):
 
         for index_name in indices:
             if not only_if_exists:
-                es.indices.delete(index=index_name, **request_params)
+                es.indices.delete(index=index_name, params=request_params)
                 ops += 1
             elif only_if_exists and es.indices.exists(index=index_name):
                 self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                es.indices.delete(index=index_name, **request_params)
+                es.indices.delete(index=index_name, params=request_params)
                 ops += 1
 
         return ops, "ops"
@@ -824,7 +866,7 @@ class CreateIndexTemplate(Runner):
         for template, body in templates:
             es.indices.put_template(name=template,
                                     body=body,
-                                    **request_params)
+                                    params=request_params)
         return len(templates), "ops"
 
     def __repr__(self, *args, **kwargs):
@@ -844,11 +886,11 @@ class DeleteIndexTemplate(Runner):
 
         for template_name, delete_matching_indices, index_pattern in template_names:
             if not only_if_exists:
-                es.indices.delete_template(name=template_name, **request_params)
+                es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
             elif only_if_exists and es.indices.exists_template(template_name):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
-                es.indices.delete_template(name=template_name, **request_params)
+                es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
             if delete_matching_indices and index_pattern:
@@ -859,6 +901,196 @@ class DeleteIndexTemplate(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-index-template"
+
+
+class ShrinkIndex(Runner):
+    """
+    Execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_.
+
+    This is a high-level runner that actually executes multiple low-level operations under the hood.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.cluster_health = Retry(ClusterHealth())
+
+    def _wait_for(self, es, idx, description):
+        # wait a little bit before the first check
+        time.sleep(3)
+        result = self.cluster_health(es, params={
+            "index": idx,
+            "retries": sys.maxsize,
+            "request-params": {
+                "wait_for_no_relocating_shards": "true"
+            }
+        })
+        if not result["success"]:
+            raise exceptions.RallyAssertionError("Failed to wait for [{}].".format(description))
+
+    def __call__(self, es, params):
+        source_index = mandatory(params, "source-index", self)
+        target_index = mandatory(params, "target-index", self)
+        # we need to inject additional settings so we better copy the body
+        target_body = deepcopy(mandatory(params, "target-body", self))
+        shrink_node = params.get("shrink-node")
+        # Choose a random data node if none is specified
+        if not shrink_node:
+            node_names = []
+            # choose a random data node
+            for node in es.nodes.info()["nodes"].values():
+                if "data" in node["roles"]:
+                    node_names.append(node["name"])
+            if not node_names:
+                raise exceptions.RallyAssertionError("Could not choose a suitable shrink-node automatically. Please specify it explicitly.")
+            shrink_node = random.choice(node_names)
+        self.logger.info("Using [%s] as shrink node.", shrink_node)
+        self.logger.info("Preparing [%s] for shrinking.", source_index)
+        # prepare index for shrinking
+        es.indices.put_settings(index=source_index,
+                                body={
+                                    "settings": {
+                                        "index.routing.allocation.require._name": shrink_node,
+                                        "index.blocks.write": "true"
+                                    }
+                                },
+                                preserve_existing=True)
+
+        self.logger.info("Waiting for relocation to finish for index [%s]...", source_index)
+        self._wait_for(es, source_index, "shard relocation for index [{}]".format(source_index))
+        self.logger.info("Shrinking [%s] to [%s].", source_index, target_index)
+        if "settings" not in target_body:
+            target_body["settings"] = {}
+        target_body["settings"]["index.routing.allocation.require._name"] = None
+        target_body["settings"]["index.blocks.write"] = None
+        # kick off the shrink operation
+        es.indices.shrink(index=source_index, target=target_index, body=target_body)
+
+        self.logger.info("Waiting for shrink to finish for index [%s]...", source_index)
+        self._wait_for(es, target_index, "shrink for index [{}]".format(target_index))
+        self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, target_index)
+        # ops_count is not really important for this operation...
+        return 1, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "shrink-index"
+
+
+class CreateMlDatafeed(Runner):
+    """
+    Execute the `create datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        body = mandatory(params, "body", self)
+        es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-ml-datafeed"
+
+
+class DeleteMlDatafeed(Runner):
+    """
+    Execute the `delete datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        force = params.get("force", False)
+        # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
+        es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-ml-datafeed"
+
+
+class StartMlDatafeed(Runner):
+    """
+    Execute the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        body = params.get("body")
+        start = params.get("start")
+        end = params.get("end")
+        timeout = params.get("timeout")
+        es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "start-ml-datafeed"
+
+
+class StopMlDatafeed(Runner):
+    """
+    Execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_.
+    """
+
+    def __call__(self, es, params):
+        datafeed_id = mandatory(params, "datafeed-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "stop-ml-datafeed"
+
+
+class CreateMlJob(Runner):
+    """
+    Execute the `create job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        body = mandatory(params, "body", self)
+        es.xpack.ml.put_job(job_id=job_id, body=body)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-ml-job"
+
+
+class DeleteMlJob(Runner):
+    """
+    Execute the `delete job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        force = params.get("force", False)
+        # we don't want to fail if a job does not exist, thus we ignore 404s.
+        es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-ml-job"
+
+
+class OpenMlJob(Runner):
+    """
+    Execute the `open job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        es.xpack.ml.open_job(job_id=job_id)
+
+    def __repr__(self, *args, **kwargs):
+        return "open-ml-job"
+
+
+class CloseMlJob(Runner):
+    """
+    Execute the `close job API <http://www.elastic.co/guide/en/elasticsearch/reference/current/ml-close-job.html>`_.
+    """
+
+    def __call__(self, es, params):
+        job_id = mandatory(params, "job-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "close-ml-job"
 
 
 class RawRequest(Runner):
@@ -878,6 +1110,18 @@ class RawRequest(Runner):
         return "raw-request"
 
 
+class Sleep(Runner):
+    """
+    Sleeps for the specified duration not issuing any request.
+    """
+
+    def __call__(self, es, params):
+        time.sleep(mandatory(params, "duration", "sleep"))
+
+    def __repr__(self, *args, **kwargs):
+        return "sleep"
+
+
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
 class Retry(Runner):
@@ -887,9 +1131,12 @@ class Retry(Runner):
     It defines the following parameters:
 
     * ``retries`` (optional, default 0): The number of times the operation is retried.
+    * ``retry-until-success`` (optional, default False): Retries until the delegate returns a success. This will also
+                              forcibly set ``retry-on-error`` to ``True``.
     * ``retry-wait-period`` (optional, default 0.5): The time in seconds to wait after an error.
     * ``retry-on-timeout`` (optional, default True): Whether to retry on connection timeout.
-    * ``retry-on-error`` (optional, default False): Whether to retry on failure (i.e. the delegate returns ``success == False``)
+    * ``retry-on-error`` (optional, default False): Whether to retry on failure (i.e. the delegate
+                         returns ``success == False``)
     """
 
     def __init__(self, delegate):
@@ -904,10 +1151,15 @@ class Retry(Runner):
         import elasticsearch
         import socket
 
-        max_attempts = params.get("retries", 0) + 1
+        retry_until_success = params.get("retry-until-success", False)
+        if retry_until_success:
+            max_attempts = sys.maxsize
+            retry_on_error = True
+        else:
+            max_attempts = params.get("retries", 0) + 1
+            retry_on_error = params.get("retry-on-error", False)
         sleep_time = params.get("retry-wait-period", 0.5)
         retry_on_timeout = params.get("retry-on-timeout", True)
-        retry_on_error = params.get("retry-on-error", False)
 
         for attempt in range(max_attempts):
             last_attempt = attempt + 1 == max_attempts

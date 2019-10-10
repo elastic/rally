@@ -1,35 +1,63 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import collections
 import csv
 import io
-import sys
 import logging
 import statistics
+import sys
 
 import tabulate
+
 from esrally import metrics, exceptions
 from esrally.utils import convert, io as rio, console
 
+FINAL_SCORE = r"""
+------------------------------------------------------
+    _______             __   _____
+   / ____(_)___  ____ _/ /  / ___/_________  ________
+  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \
+ / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/
+/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/
+------------------------------------------------------
+            """
 
-def calculate_results(metrics_store, race, lap=None):
-    calc = StatsCalculator(metrics_store, race.challenge, lap)
+
+def calculate_results(metrics_store, race):
+    calc = StatsCalculator(metrics_store, race.track, race.challenge)
     return calc()
 
 
-def summarize(race, cfg, lap=None):
-    results = race.results_of_lap_number(lap) if lap else race.results
-    SummaryReporter(results, cfg, race.revision, lap, race.total_laps).report()
+def summarize(race, cfg):
+    results = race.results
+    SummaryReporter(results, cfg, race.revision).report()
 
 
 def compare(cfg):
-    baseline_ts = cfg.opts("reporting", "baseline.timestamp")
-    contender_ts = cfg.opts("reporting", "contender.timestamp")
+    baseline_id = cfg.opts("reporting", "baseline.id")
+    contender_id = cfg.opts("reporting", "contender.id")
 
-    if not baseline_ts or not contender_ts:
+    if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
     ComparisonReporter(cfg).report(
-        race_store.find_by_timestamp(baseline_ts),
-        race_store.find_by_timestamp(contender_ts))
+        race_store.find_by_race_id(baseline_id),
+        race_store.find_by_race_id(contender_id))
 
 
 def print_internal(message):
@@ -40,7 +68,7 @@ def print_header(message):
     print_internal(console.format.bold(message))
 
 
-def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich, write_header=True):
+def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich):
     if report_format == "markdown":
         formatter = format_as_markdown
     elif report_format == "csv":
@@ -54,23 +82,18 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
         # ensure that the parent folder already exists when we try to write the file...
         rio.ensure_dir(rio.dirname(normalized_report_file))
         with open(normalized_report_file, mode="a+", encoding="utf-8") as f:
-            f.writelines(formatter(headers, data_plain, write_header))
+            f.writelines(formatter(headers, data_plain))
 
 
-def format_as_markdown(headers, data, write_header=True):
+def format_as_markdown(headers, data):
     rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
-    if write_header:
-        return rendered + "\n"
-    else:
-        # remove all header data (it's not possible to do so entirely with tabulate directly...)
-        return "\n".join(rendered.splitlines()[2:]) + "\n"
+    return rendered + "\n"
 
 
-def format_as_csv(headers, data, write_header=True):
+def format_as_csv(headers, data):
     with io.StringIO() as out:
         writer = csv.writer(out)
-        if write_header:
-            writer.writerow(headers)
+        writer.writerow(headers)
         for metric_record in data:
             writer.writerow(metric_record)
         return out.getvalue()
@@ -101,10 +124,10 @@ def percentiles_for_sample_size(sample_size):
 
 
 class StatsCalculator:
-    def __init__(self, store, challenge, lap=None):
+    def __init__(self, store, track, challenge):
         self.store = store
+        self.track = track
         self.challenge = challenge
-        self.lap = lap
         self.logger = logging.getLogger(__name__)
 
     def __call__(self):
@@ -121,7 +144,12 @@ class StatsCalculator:
                         self.summary_stats("throughput", t),
                         self.single_latency(t),
                         self.single_latency(t, metric_name="service_time"),
-                        self.error_rate(t)
+                        self.error_rate(t),
+                        self.merge(
+                                self.track.meta_data,
+                                self.challenge.meta_data,
+                                task.operation.meta_data,
+                                task.meta_data)
                     )
         self.logger.debug("Gathering node startup time metrics.")
         startup_times = self.store.get_raw("node_startup_time")
@@ -138,26 +166,18 @@ class StatsCalculator:
         result.indexing_throttle_time_per_shard = self.shard_stats("indexing_throttle_time")
         result.merge_time = self.sum("merges_total_time")
         result.merge_time_per_shard = self.shard_stats("merges_total_time")
+        result.merge_count = self.sum("merges_total_count")
         result.refresh_time = self.sum("refresh_total_time")
         result.refresh_time_per_shard = self.shard_stats("refresh_total_time")
+        result.refresh_count = self.sum("refresh_total_count")
         result.flush_time = self.sum("flush_total_time")
         result.flush_time_per_shard = self.shard_stats("flush_total_time")
+        result.flush_count = self.sum("flush_total_count")
         result.merge_throttle_time = self.sum("merges_total_throttled_time")
         result.merge_throttle_time_per_shard = self.shard_stats("merges_total_throttled_time")
 
-        self.logger.debug("Gathering merge part metrics.")
-        result.merge_part_time_postings = self.sum("merge_parts_total_time_postings")
-        result.merge_part_time_stored_fields = self.sum("merge_parts_total_time_stored_fields")
-        result.merge_part_time_doc_values = self.sum("merge_parts_total_time_doc_values")
-        result.merge_part_time_norms = self.sum("merge_parts_total_time_norms")
-        result.merge_part_time_vectors = self.sum("merge_parts_total_time_vectors")
-        result.merge_part_time_points = self.sum("merge_parts_total_time_points")
-
-        self.logger.debug("Gathering ML max processing time.")
-        result.ml_max_processing_time = self.one("ml_max_processing_time_millis")
-
-        self.logger.debug("Gathering CPU usage metrics.")
-        result.median_cpu_usage = self.median("cpu_utilization_1s", sample_type=metrics.SampleType.Normal)
+        self.logger.debug("Gathering ML max processing times.")
+        result.ml_processing_time = self.ml_processing_time_stats()
 
         self.logger.debug("Gathering garbage collection metrics.")
         result.young_gc_time = self.sum("node_total_young_gen_gc_time")
@@ -171,13 +191,13 @@ class StatsCalculator:
         result.memory_points = self.median("segments_points_memory_in_bytes")
         result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
 
+        # TODO: This cannot be done in the reporter anymore!
         self.logger.debug("Gathering disk metrics.")
         # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
         result.index_size = self.sum("final_index_size_bytes")
-        # we need to use the median here because these two are captured with the indices stats API and thus once per lap. If we'd
-        # sum up the values we'd get wrong results for benchmarks that ran for multiple laps.
-        result.store_size = self.median("store_size_in_bytes")
-        result.translog_size = self.median("translog_size_in_bytes")
+
+        result.store_size = self.sum("store_size_in_bytes")
+        result.translog_size = self.sum("translog_size_in_bytes")
         result.bytes_written = self.sum("disk_io_write_bytes")
 
         # convert to int, fraction counts are senseless
@@ -185,23 +205,33 @@ class StatsCalculator:
         result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
         return result
 
+    def merge(self, *args):
+        # This is similar to dict(collections.ChainMap(args)) except that we skip `None` in our implementation.
+        result = {}
+        for arg in args:
+            if arg is not None:
+                result.update(arg)
+        return result
+
     def sum(self, metric_name):
-        values = self.store.get(metric_name, lap=self.lap)
+        values = self.store.get(metric_name)
         if values:
             return sum(values)
         else:
             return None
 
     def one(self, metric_name):
-        return self.store.get_one(metric_name, lap=self.lap)
+        return self.store.get_one(metric_name)
 
     def summary_stats(self, metric_name, task_name):
-        median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        mean = self.store.get_mean(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
+        median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
         unit = self.store.get_unit(metric_name, task=task_name)
-        stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
         if median and stats:
             return {
                 "min": stats["min"],
+                "mean": mean,
                 "median": median,
                 "max": stats["max"],
                 "unit": unit
@@ -215,7 +245,7 @@ class StatsCalculator:
             }
 
     def shard_stats(self, metric_name):
-        values = self.store.get_raw(metric_name, lap=self.lap, mapper=lambda doc: doc["per-shard"])
+        values = self.store.get_raw(metric_name, mapper=lambda doc: doc["per-shard"])
         unit = self.store.get_unit(metric_name)
         if values:
             flat_values = [w for v in values for w in v]
@@ -228,27 +258,44 @@ class StatsCalculator:
         else:
             return {}
 
+    def ml_processing_time_stats(self):
+        values = self.store.get_raw("ml_processing_time")
+        result = []
+        if values:
+            for v in values:
+                result.append({
+                    "job": v["job"],
+                    "min": v["min"],
+                    "mean": v["mean"],
+                    "median": v["median"],
+                    "max": v["max"],
+                    "unit": v["unit"]
+                })
+        return result
+
     def error_rate(self, task_name):
-        return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal, lap=self.lap)
+        return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal)
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type,
-                                     lap=self.lap)
+        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
 
     def single_latency(self, task, metric_name="latency"):
         sample_type = metrics.SampleType.Normal
-        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type, lap=self.lap)
+        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type)
         if sample_size > 0:
             percentiles = self.store.get_percentiles(metric_name,
                                                      task=task,
                                                      sample_type=sample_type,
-                                                     percentiles=percentiles_for_sample_size(sample_size),
-                                                     lap=self.lap)
-            # safely encode so we don't have any dots in field names
-            safe_percentiles = collections.OrderedDict()
+                                                     percentiles=percentiles_for_sample_size(sample_size))
+            mean = self.store.get_mean(metric_name,
+                                       task=task,
+                                       sample_type=sample_type)
+            stats = collections.OrderedDict()
             for k, v in percentiles.items():
-                safe_percentiles[encode_float_key(k)] = v
-            return safe_percentiles
+                # safely encode so we don't have any dots in field names
+                stats[encode_float_key(k)] = v
+            stats["mean"] = mean
+            return stats
         else:
             return {}
 
@@ -263,22 +310,16 @@ class Stats:
         self.indexing_throttle_time_per_shard = self.v(d, "indexing_throttle_time_per_shard", default={})
         self.merge_time = self.v(d, "merge_time")
         self.merge_time_per_shard = self.v(d, "merge_time_per_shard", default={})
+        self.merge_count = self.v(d, "merge_count")
         self.refresh_time = self.v(d, "refresh_time")
         self.refresh_time_per_shard = self.v(d, "refresh_time_per_shard", default={})
+        self.refresh_count = self.v(d, "refresh_count")
         self.flush_time = self.v(d, "flush_time")
         self.flush_time_per_shard = self.v(d, "flush_time_per_shard", default={})
+        self.flush_count = self.v(d, "flush_count")
         self.merge_throttle_time = self.v(d, "merge_throttle_time")
         self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
-        self.ml_max_processing_time = self.v(d, "ml_max_processing_time")
-
-        self.merge_part_time_postings = self.v(d, "merge_part_time_postings")
-        self.merge_part_time_stored_fields = self.v(d, "merge_part_time_stored_fields")
-        self.merge_part_time_doc_values = self.v(d, "merge_part_time_doc_values")
-        self.merge_part_time_norms = self.v(d, "merge_part_time_norms")
-        self.merge_part_time_vectors = self.v(d, "merge_part_time_vectors")
-        self.merge_part_time_points = self.v(d, "merge_part_time_points")
-
-        self.median_cpu_usage = self.v(d, "median_cpu_usage")
+        self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
 
         self.young_gc_time = self.v(d, "young_gc_time")
         self.old_gc_time = self.v(d, "old_gc_time")
@@ -301,23 +342,44 @@ class Stats:
         return self.__dict__
 
     def as_flat_list(self):
+        def op_metrics(op_item, key, single_value=False):
+            doc = {
+                "task": op_item["task"],
+                "operation": op_item["operation"],
+                "name": key
+            }
+            if single_value:
+                doc["value"] = {"single":  op_item[key]}
+            else:
+                doc["value"] = op_item[key]
+            if "meta" in op_item:
+                doc["meta"] = op_item["meta"]
+            return doc
+
         all_results = []
         for metric, value in self.as_dict().items():
             if metric == "op_metrics":
                 for item in value:
                     if "throughput" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "throughput", "value": item["throughput"]})
+                        all_results.append(op_metrics(item, "throughput"))
                     if "latency" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "latency", "value": item["latency"]})
+                        all_results.append(op_metrics(item, "latency"))
                     if "service_time" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "service_time", "value": item["service_time"]})
+                        all_results.append(op_metrics(item, "service_time"))
                     if "error_rate" in item:
-                        all_results.append(
-                            {"task": item["task"], "operation": item["operation"], "name": "error_rate",
-                             "value": {"single": item["error_rate"]}})
+                        all_results.append(op_metrics(item, "error_rate", single_value=True))
+            elif metric == "ml_processing_time":
+                for item in value:
+                    all_results.append({
+                        "job": item["job"],
+                        "name": "ml_processing_time",
+                        "value": {
+                            "min": item["min"],
+                            "mean": item["mean"],
+                            "median": item["median"],
+                            "max": item["max"]
+                        }
+                    })
             elif metric == "node_metrics":
                 for item in value:
                     if "startup_time" in item:
@@ -339,15 +401,18 @@ class Stats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate):
-        self.op_metrics.append({
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate, meta):
+        doc = {
             "task": task,
             "operation": operation,
             "throughput": throughput,
             "latency": latency,
             "service_time": service_time,
-            "error_rate": error_rate
-        })
+            "error_rate": error_rate,
+        }
+        if meta:
+            doc["meta"] = meta
+        self.op_metrics.append(doc)
 
     def add_node_metrics(self, node, startup_time):
         self.node_metrics.append({
@@ -368,7 +433,7 @@ class Stats:
 
 
 class SummaryReporter:
-    def __init__(self, results, config, revision, current_lap, total_laps):
+    def __init__(self, results, config, revision):
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
@@ -378,51 +443,17 @@ class SummaryReporter:
         self.cwd = config.opts("node", "rally.cwd")
 
         self.revision = revision
-        self.current_lap = current_lap
-        self.total_laps = total_laps
-
-    def is_final_report(self):
-        return self.current_lap is None
-
-    def needs_header(self):
-        return self.total_laps == 1 or self.current_lap == 1
-
-    @property
-    def lap(self):
-        return "All" if self.is_final_report() else str(self.current_lap)
 
     def report(self):
-        if self.is_final_report():
-            print_internal("")
-            print_header("------------------------------------------------------")
-            print_header("    _______             __   _____                    ")
-            print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
-            print_header("  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \\")
-            print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
-            print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
-            print_header("------------------------------------------------------")
-            print_internal("")
-        else:
-            print_internal("")
-            print_header("--------------------------------------------------")
-            print_header("    __                   _____                    ")
-            print_header("   / /   ____ _____     / ___/_________  ________ ")
-            print_header("  / /   / __ `/ __ \    \__ \/ ___/ __ \/ ___/ _ \\")
-            print_header(" / /___/ /_/ / /_/ /   ___/ / /__/ /_/ / /  /  __/")
-            print_header("/_____/\__,_/ .___/   /____/\___/\____/_/   \___/ ")
-            print_header("           /_/                                    ")
-            print_header("--------------------------------------------------")
-            print_internal("")
+        print_header(FINAL_SCORE)
 
         stats = self.results
 
         warnings = []
         metrics_table = []
-        metrics_table.extend(self.report_total_times(stats))
-        metrics_table.extend(self.report_merge_part_times(stats))
-        metrics_table.extend(self.report_ml_max_processing_time(stats))
+        metrics_table.extend(self.report_totals(stats))
+        metrics_table.extend(self.report_ml_processing_times(stats))
 
-        metrics_table.extend(self.report_cpu_usage(stats))
         metrics_table.extend(self.report_gc_times(stats))
 
         metrics_table.extend(self.report_disk_usage(stats))
@@ -454,9 +485,9 @@ class SummaryReporter:
 
     def write_report(self, metrics_table):
         write_single_report(self.report_file, self.report_format, self.cwd,
-                            headers=["Lap", "Metric", "Task", "Value", "Unit"],
+                            headers=["Metric", "Task", "Value", "Unit"],
                             data_plain=metrics_table,
-                            data_rich=metrics_table, write_header=self.needs_header())
+                            data_rich=metrics_table)
 
     def report_throughput(self, values, task):
         throughput = values["throughput"]
@@ -488,46 +519,54 @@ class SummaryReporter:
             self.line("error rate", task, values["error_rate"], "%", lambda v: "%.2f" % (v * 100.0))
         )
 
-    def report_total_times(self, stats):
+    def report_totals(self, stats):
         lines = []
-        lines.extend(self.report_total_time("indexing time", stats.total_time, stats.total_time_per_shard))
-        lines.extend(self.report_total_time("indexing throttle time", stats.indexing_throttle_time, stats.indexing_throttle_time_per_shard))
-        lines.extend(self.report_total_time("merge time", stats.merge_time, stats.merge_time_per_shard))
-        lines.extend(self.report_total_time("merge throttle time", stats.merge_throttle_time, stats.merge_throttle_time_per_shard))
-        lines.extend(self.report_total_time("refresh time", stats.refresh_time, stats.refresh_time_per_shard))
-        lines.extend(self.report_total_time("flush time", stats.flush_time, stats.flush_time_per_shard))
+        lines.extend(self.report_total_time("indexing time", stats.total_time))
+        lines.extend(self.report_total_time_per_shard("indexing time", stats.total_time_per_shard))
+        lines.extend(self.report_total_time("indexing throttle time", stats.indexing_throttle_time))
+        lines.extend(self.report_total_time_per_shard("indexing throttle time", stats.indexing_throttle_time_per_shard))
+        lines.extend(self.report_total_time("merge time", stats.merge_time))
+        lines.extend(self.report_total_count("merge count", stats.merge_count))
+        lines.extend(self.report_total_time_per_shard("merge time", stats.merge_time_per_shard))
+        lines.extend(self.report_total_time("merge throttle time", stats.merge_throttle_time))
+        lines.extend(self.report_total_time_per_shard("merge throttle time", stats.merge_throttle_time_per_shard))
+        lines.extend(self.report_total_time("refresh time", stats.refresh_time))
+        lines.extend(self.report_total_count("refresh count", stats.refresh_count))
+        lines.extend(self.report_total_time_per_shard("refresh time", stats.refresh_time_per_shard))
+        lines.extend(self.report_total_time("flush time", stats.flush_time))
+        lines.extend(self.report_total_count("flush count", stats.flush_count))
+        lines.extend(self.report_total_time_per_shard("flush time", stats.flush_time_per_shard))
         return lines
 
-    def report_total_time(self, name, total_time, total_time_per_shard):
+    def report_total_time(self, name, total_time):
         unit = "min"
         return self.join(
-            self.line("Total {}".format(name), "", total_time, unit, convert.ms_to_minutes),
-            self.line("Min {} per shard".format(name), "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes),
-            self.line("Median {} per shard".format(name), "", total_time_per_shard.get("median"), unit, convert.ms_to_minutes),
-            self.line("Max {} per shard".format(name), "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes),
+            self.line("Cumulative {} of primary shards".format(name), "", total_time, unit, convert.ms_to_minutes),
         )
 
-    def report_merge_part_times(self, stats):
-        # note that these times are not(!) wall clock time results but total times summed up over multiple threads
+    def report_total_time_per_shard(self, name, total_time_per_shard):
         unit = "min"
         return self.join(
-            self.line("Merge time (postings)", "", stats.merge_part_time_postings, unit, convert.ms_to_minutes),
-            self.line("Merge time (stored fields)", "", stats.merge_part_time_stored_fields, unit, convert.ms_to_minutes),
-            self.line("Merge time (doc values)", "", stats.merge_part_time_doc_values, unit, convert.ms_to_minutes),
-            self.line("Merge time (norms)", "", stats.merge_part_time_norms, unit, convert.ms_to_minutes),
-            self.line("Merge time (vectors)", "", stats.merge_part_time_vectors, unit, convert.ms_to_minutes),
-            self.line("Merge time (points)", "", stats.merge_part_time_points, unit, convert.ms_to_minutes)
+            self.line("Min cumulative {} across primary shards".format(name), "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes),
+            self.line("Median cumulative {} across primary shards".format(name), "", total_time_per_shard.get("median"), unit, convert.ms_to_minutes),
+            self.line("Max cumulative {} across primary shards".format(name), "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes),
         )
 
-    def report_ml_max_processing_time(self, stats):
+    def report_total_count(self, name, total_count):
         return self.join(
-            self.line("Max Processing Time (ML)", "", convert.ms_to_seconds(stats.ml_max_processing_time), "s")
+            self.line("Cumulative {} of primary shards".format(name), "", total_count, ""),
         )
 
-    def report_cpu_usage(self, stats):
-        return self.join(
-            self.line("Median CPU usage", "", stats.median_cpu_usage, "%")
-        )
+    def report_ml_processing_times(self, stats):
+        lines = []
+        for processing_time in stats.ml_processing_time:
+            job_name = processing_time["job"]
+            unit = processing_time["unit"]
+            lines.append(self.line("Min ML processing time", job_name, processing_time["min"], unit)),
+            lines.append(self.line("Mean ML processing time", job_name, processing_time["mean"], unit)),
+            lines.append(self.line("Median ML processing time", job_name, processing_time["median"], unit)),
+            lines.append(self.line("Max ML processing time", job_name, processing_time["max"], unit))
+        return lines
 
     def report_gc_times(self, stats):
         return self.join(
@@ -540,7 +579,7 @@ class SummaryReporter:
             self.line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
             self.line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
             self.line("Index size", "", stats.index_size, "GB", convert.bytes_to_gb),
-            self.line("Totally written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
+            self.line("Total written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
         )
 
     def report_segment_memory(self, stats):
@@ -572,7 +611,7 @@ class SummaryReporter:
     def line(self, k, task, v, unit, converter=lambda x: x, force=False):
         if v is not None or force or self.report_all_values:
             u = unit if v is not None else None
-            return [self.lap, k, task, converter(v), u]
+            return [k, task, converter(v), u]
         else:
             return []
 
@@ -591,25 +630,25 @@ class ComparisonReporter:
 
         print_internal("")
         print_internal("Comparing baseline")
-        print_internal("  Race timestamp: %s" % r1.trial_timestamp)
+        print_internal("  Race ID: %s" % r1.race_id)
+        print_internal("  Race timestamp: %s" % r1.race_timestamp)
         if r1.challenge_name:
             print_internal("  Challenge: %s" % r1.challenge_name)
         print_internal("  Car: %s" % r1.car_name)
+        if r1.user_tags:
+            r1_user_tags = ", ".join(["%s=%s" % (k, v) for k, v in sorted(r1.user_tags.items())])
+            print_internal("  User tags: %s" % r1_user_tags)
         print_internal("")
         print_internal("with contender")
-        print_internal("  Race timestamp: %s" % r2.trial_timestamp)
+        print_internal("  Race ID: %s" % r2.race_id)
+        print_internal("  Race timestamp: %s" % r2.race_timestamp)
         if r2.challenge_name:
             print_internal("  Challenge: %s" % r2.challenge_name)
         print_internal("  Car: %s" % r2.car_name)
-        print_internal("")
-        print_header("------------------------------------------------------")
-        print_header("    _______             __   _____                    ")
-        print_header("   / ____(_)___  ____ _/ /  / ___/_________  ________ ")
-        print_header("  / /_  / / __ \/ __ `/ /   \__ \/ ___/ __ \/ ___/ _ \\")
-        print_header(" / __/ / / / / / /_/ / /   ___/ / /__/ /_/ / /  /  __/")
-        print_header("/_/   /_/_/ /_/\__,_/_/   /____/\___/\____/_/   \___/ ")
-        print_header("------------------------------------------------------")
-        print_internal("")
+        if r2.user_tags:
+            r2_user_tags = ", ".join(["%s=%s" % (k, v) for k, v in sorted(r2.user_tags.items())])
+            print_internal("  User tags: %s" % r2_user_tags)
+        print_header(FINAL_SCORE)
 
         metric_table_plain = self.metrics_table(baseline_stats, contender_stats, plain=True)
         metric_table_rich = self.metrics_table(baseline_stats, contender_stats, plain=False)
@@ -620,7 +659,7 @@ class ComparisonReporter:
         self.plain = plain
         metrics_table = []
         metrics_table.extend(self.report_total_times(baseline_stats, contender_stats))
-        metrics_table.extend(self.report_merge_part_times(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_ml_processing_times(baseline_stats, contender_stats))
         metrics_table.extend(self.report_gc_times(baseline_stats, contender_stats))
         metrics_table.extend(self.report_disk_usage(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_memory(baseline_stats, contender_stats))
@@ -637,7 +676,7 @@ class ComparisonReporter:
     def write_report(self, metrics_table, metrics_table_console):
         write_single_report(self.report_file, self.report_format, self.cwd,
                             headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
-                            data_plain=metrics_table, data_rich=metrics_table_console, write_header=True)
+                            data_plain=metrics_table, data_rich=metrics_table_console)
 
     def report_throughput(self, baseline_stats, contender_stats, task):
         b_min = baseline_stats.metrics(task)["throughput"]["min"]
@@ -682,58 +721,115 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.factor(100.0))
         )
 
-    def report_merge_part_times(self, baseline_stats, contender_stats):
-        return self.join(
-            self.line("Merge time (postings)", baseline_stats.merge_part_time_postings,
-                      contender_stats.merge_part_time_postings,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (stored fields)", baseline_stats.merge_part_time_stored_fields,
-                      contender_stats.merge_part_time_stored_fields,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (doc values)", baseline_stats.merge_part_time_doc_values,
-                      contender_stats.merge_part_time_doc_values,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (norms)", baseline_stats.merge_part_time_norms,
-                      contender_stats.merge_part_time_norms,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Merge time (vectors)", baseline_stats.merge_part_time_vectors,
-                      contender_stats.merge_part_time_vectors,
-                      "", "min", treat_increase_as_improvement=False, formatter=convert.ms_to_minutes)
-        )
+    def report_ml_processing_times(self, baseline_stats, contender_stats):
+        lines = []
+        for baseline in baseline_stats.ml_processing_time:
+            job_name = baseline["job"]
+            unit = baseline["unit"]
+            # O(n^2) but we assume here only a *very* limited number of jobs (usually just one)
+            for contender in contender_stats.ml_processing_time:
+                if contender["job"] == job_name:
+                    lines.append(self.line("Min ML processing time", baseline["min"], contender["min"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(self.line("Mean ML processing time", baseline["mean"], contender["mean"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(self.line("Median ML processing time", baseline["median"], contender["median"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(self.line("Max ML processing time", baseline["max"], contender["max"],
+                                           job_name, unit, treat_increase_as_improvement=False))
+        return lines
 
     def report_total_times(self, baseline_stats, contender_stats):
         lines = []
-        lines.extend(self.report_total_time("indexing time",
-                                            baseline_stats.total_time, baseline_stats.total_time_per_shard,
-                                            contender_stats.total_time, contender_stats.total_time_per_shard))
-        lines.extend(self.report_total_time("indexing throttle time",
-                                            baseline_stats.indexing_throttle_time, baseline_stats.indexing_throttle_time_per_shard,
-                                            contender_stats.indexing_throttle_time, contender_stats.indexing_throttle_time_per_shard))
-        lines.extend(self.report_total_time("merge time",
-                                            baseline_stats.merge_time, baseline_stats.merge_time_per_shard,
-                                            contender_stats.merge_time, contender_stats.merge_time_per_shard))
-        lines.extend(self.report_total_time("merge throttle time",
-                                            baseline_stats.merge_throttle_time, baseline_stats.merge_throttle_time_per_shard,
-                                            contender_stats.merge_throttle_time, contender_stats.merge_throttle_time_per_shard))
-        lines.extend(self.report_total_time("refresh time",
-                                            baseline_stats.refresh_time, baseline_stats.refresh_time_per_shard,
-                                            contender_stats.refresh_time, contender_stats.refresh_time_per_shard))
-        lines.extend(self.report_total_time("flush time",
-                                            baseline_stats.flush_time, baseline_stats.flush_time_per_shard,
-                                            contender_stats.flush_time, contender_stats.flush_time_per_shard))
+        lines.extend(self.report_total_time(
+            "indexing time",
+            baseline_stats.total_time, contender_stats.total_time
+        ))
+        lines.extend(self.report_total_time_per_shard(
+            "indexing time",
+            baseline_stats.total_time_per_shard, contender_stats.total_time_per_shard
+        ))
+        lines.extend(self.report_total_time(
+            "indexing throttle time",
+            baseline_stats.indexing_throttle_time, contender_stats.indexing_throttle_time
+        ))
+        lines.extend(self.report_total_time_per_shard(
+            "indexing throttle time",
+            baseline_stats.indexing_throttle_time_per_shard,
+            contender_stats.indexing_throttle_time_per_shard
+        ))
+        lines.extend(self.report_total_time(
+            "merge time",
+            baseline_stats.merge_time, contender_stats.merge_time,
+        ))
+        lines.extend(self.report_total_count(
+            "merge count",
+            baseline_stats.merge_count, contender_stats.merge_count
+        ))
+        lines.extend(self.report_total_time_per_shard(
+            "merge time",
+            baseline_stats.merge_time_per_shard,
+            contender_stats.merge_time_per_shard
+        ))
+        lines.extend(self.report_total_time(
+            "merge throttle time",
+            baseline_stats.merge_throttle_time,
+            contender_stats.merge_throttle_time
+        ))
+        lines.extend(self.report_total_time_per_shard(
+            "merge throttle time",
+            baseline_stats.merge_throttle_time_per_shard,
+            contender_stats.merge_throttle_time_per_shard
+        ))
+        lines.extend(self.report_total_time(
+            "refresh time",
+            baseline_stats.refresh_time, contender_stats.refresh_time
+        ))
+        lines.extend(self.report_total_count(
+            "refresh count",
+            baseline_stats.refresh_count, contender_stats.refresh_count
+        ))
+        lines.extend(self.report_total_time_per_shard(
+            "refresh time",
+            baseline_stats.refresh_time_per_shard,
+            contender_stats.refresh_time_per_shard
+        ))
+        lines.extend(self.report_total_time(
+            "flush time",
+            baseline_stats.flush_time, contender_stats.flush_time
+        ))
+        lines.extend(self.report_total_count(
+            "flush count",
+            baseline_stats.flush_count, contender_stats.flush_count
+        ))
+        lines.extend(self.report_total_time_per_shard(
+            "flush time",
+            baseline_stats.flush_time_per_shard, contender_stats.flush_time_per_shard
+        ))
         return lines
 
-    def report_total_time(self, name, baseline_total, baseline_per_shard, contender_total, contender_per_shard):
+    def report_total_time(self, name, baseline_total, contender_total):
         unit = "min"
         return self.join(
-            self.line("Total {}".format(name), baseline_total, contender_total, "", unit,
+            self.line("Cumulative {} of primary shards".format(name), baseline_total, contender_total, "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Min {} per shard".format(name), baseline_per_shard.get("min"), contender_per_shard.get("min"), "", unit,
+        )
+
+    def report_total_time_per_shard(self, name, baseline_per_shard, contender_per_shard):
+        unit = "min"
+        return self.join(
+            self.line("Min cumulative {} across primary shard".format(name), baseline_per_shard.get("min"), contender_per_shard.get("min"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Median {} per shard".format(name), baseline_per_shard.get("median"), contender_per_shard.get("median"), "", unit,
+            self.line("Median cumulative {} across primary shard".format(name), baseline_per_shard.get("median"), contender_per_shard.get("median"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self.line("Max {} per shard".format(name), baseline_per_shard.get("max"), contender_per_shard.get("max"), "", unit,
+            self.line("Max cumulative {} across primary shard".format(name), baseline_per_shard.get("max"), contender_per_shard.get("max"), "", unit,
                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+        )
+
+    def report_total_count(self, name, baseline_total, contender_total):
+        return self.join(
+            self.line("Cumulative {} of primary shards".format(name), baseline_total, contender_total, "", "",
+                      treat_increase_as_improvement=False)
         )
 
     def report_gc_times(self, baseline_stats, contender_stats):
@@ -752,7 +848,7 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self.line("Totally written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
+            self.line("Total written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
         )
 

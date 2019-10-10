@@ -25,16 +25,16 @@ After we've run both races, we want to know about the performance impact. With R
                     /____/
     Recent races:
 
-    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
-    ----------------  -------  ------------------ -------------------  --------  ------------------------------
-    20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:reduce_alloc_1234
-    20160518T112057Z  pmc                         append-no-conflicts  defaults  intention:baseline_github_1234
-    20160518T101957Z  pmc                         append-no-conflicts  defaults
+    Race ID                               Race Timestamp    Track    Track Parameters    Challenge            Car       User Tags
+    ------------------------------------  ----------------  -------  ------------------  ------------------   --------  ------------------------------
+    beb154e4-0a05-4f45-ad9f-e34f9a9e51f7  20160518T122341Z  pmc                          append-no-conflicts  defaults  intention:reduce_alloc_1234
+    0bfd4542-3821-4c79-81a2-0858636068ce  20160518T112057Z  pmc                          append-no-conflicts  defaults  intention:baseline_github_1234
+    0cfb3576-3025-4c17-b672-d6c9e811b93e  20160518T101957Z  pmc                          append-no-conflicts  defaults
 
 
-We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race timestamps in the next step::
+We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race IDs in the next step::
 
-    dm@io:~ $ esrally compare --baseline=20160518T112057Z --contender=20160518T112341Z
+    dm@io:~ $ esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -44,11 +44,13 @@ We can see that the user tag helps us to recognize races. We want to compare the
                     /____/
 
     Comparing baseline
+      Race ID: 0bfd4542-3821-4c79-81a2-0858636068ce
       Race timestamp: 2016-05-18 11:20:57
       Challenge: append-no-conflicts
       Car: defaults
 
     with contender
+      Race ID: beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
       Race timestamp: 2016-05-18 12:23:41
       Challenge: append-no-conflicts
       Car: defaults
@@ -94,7 +96,7 @@ We can see that the user tag helps us to recognize races. We want to compare the
                                       Total Young Gen GC [s]      39.447       40.456    +1.00900
                                         Total Old Gen GC [s]       7.108        7.703    +0.59500
                                              Index size [GB]     3.25475      3.25098    -0.00377
-                                        Totally written [GB]     17.8434      18.3143    +0.47083
+                                          Total written [GB]     17.8434      18.3143    +0.47083
                                  Heap used for segments [MB]     21.7504      21.5901    -0.16037
                                Heap used for doc values [MB]     0.16436      0.13905    -0.02531
                                     Heap used for terms [MB]     20.0293      19.9159    -0.11345

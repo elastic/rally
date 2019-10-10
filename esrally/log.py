@@ -1,8 +1,26 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+import hashlib
+import json
 import logging
 import logging.config
-import json
-import time
 import os
+import time
 
 from esrally.utils import io
 
@@ -29,6 +47,26 @@ def default_log_path():
     :return: The absolute path to the directory that contains Rally's log file.
     """
     return os.path.join(os.path.expanduser("~"), ".rally", "logs")
+
+
+def remove_obsolete_default_log_config():
+    """
+    Log rotation is problematic because Rally uses multiple processes and there is a lurking race condition when
+    rolling log files. Hence, we do not rotate logs from within Rally and leverage established tools like logrotate for that.
+
+    Checks whether the user has a problematic out-of-the-box logging configuration delivered with Rally 1.0.0 which
+    used log rotation and removes it so it can be replaced by a new one in a later step.
+    """
+    log_config = log_config_path()
+    if io.exists(log_config):
+        source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging_1_0_0.json"))
+        with open(source_path, "r", encoding="UTF-8") as src:
+            contents = src.read().replace("${LOG_PATH}", default_log_path())
+            source_hash = hashlib.sha512(contents.encode()).hexdigest()
+        with open(log_config, "r", encoding="UTF-8") as target:
+            target_hash = hashlib.sha512(target.read().encode()).hexdigest()
+        if source_hash == target_hash:
+            os.rename(log_config, "{}.bak".format(log_config))
 
 
 def install_default_log_config():

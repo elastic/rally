@@ -3,101 +3,102 @@ Summary Report
 
 At the end of each :doc:`race </race>`, Rally shows a summary report. Below we'll explain the meaning of each line including a reference to its corresponding :doc:`metrics key </metrics>` which can be helpful if you want to build your own reports in Kibana. Note that not every summary report will show all lines.
 
-Total indexing time
--------------------
+Cumulative indexing time of primary shards
+------------------------------------------
 
-* **Definition**: Total time used for indexing as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
+* **Definition**: Cumulative time used for indexing as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_total_time``
 
-Indexing time per shard
------------------------
+Cumulative indexing time across primary shards
+----------------------------------------------
 
-* **Definition**: Minimum, median and maximum time used for indexing per primary shard as reported by the indices stats API.
+* **Definition**: Minimum, median and maximum cumulative time used for indexing across primary shards as reported by the indices stats API.
 * **Corresponding metrics key**: ``indexing_total_time`` (property: ``per-shard``)
 
-Total indexing throttle time
-----------------------------
+Cumulative indexing throttle time of primary shards
+---------------------------------------------------
 
-* **Definition**: Total time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
+* **Definition**: Cumulative time that indexing has been throttled as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M indexing threads ran for N minutes, we will report M * N minutes, not N minutes).
 * **Corresponding metrics key**: ``indexing_throttle_time``
 
-Indexing throttle time per shard
---------------------------------
+Cumulative indexing throttle time across primary shards
+-------------------------------------------------------
 
-* **Definition**: Minimum, median and maximum time used that indexing has been throttled per primary shard as reported by the indices stats API.
+* **Definition**: Minimum, median and maximum cumulative time used that indexing has been throttled across primary shards as reported by the indices stats API.
 * **Corresponding metrics key**: ``indexing_throttle_time`` (property: ``per-shard``)
 
-Total merge time
-----------------
+Cumulative merge time of primary shards
+---------------------------------------
 
-* **Definition**: Total runtime of merges as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Cumulative runtime of merges of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_time``
 
-Merge time per shard
---------------------
+Cumulative merge count of primary shards
+----------------------------------------
 
-* **Definition**: Minimum, median and maximum time of merges per primary shard as reported by the indices stats API.
+* **Definition**: Cumulative number of merges of primary shards, as reported by indices stats API under ``_all/primaries``.
+* **Corresponding metrics key**: ``merges_total_count``
+
+Cumulative merge time across primary shards
+-------------------------------------------
+
+* **Definition**: Minimum, median and maximum cumulative time of merges across primary shards, as reported by the indices stats API.
 * **Corresponding metrics key**: ``merges_total_time`` (property: ``per-shard``)
 
-Total refresh time
-------------------
+Cumulative refresh time of primary shards
+-----------------------------------------
 
-* **Definition**: Total time used for index refresh as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Cumulative time used for index refresh of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``refresh_total_time``
 
-Refresh time per shard
-----------------------
+Cumulative refresh count of primary shards
+------------------------------------------
 
-* **Definition**: Minimum, median and maximum time for index refresh per primary shard as reported by the indices stats API.
+* **Definition**: Cumulative number of refreshes of primary shards, as reported by indices stats API under ``_all/primaries``.
+* **Corresponding metrics key**: ``refresh_total_count``
+
+Cumulative refresh time across primary shards
+---------------------------------------------
+
+* **Definition**: Minimum, median and maximum cumulative time for index refresh across primary shards, as reported by the indices stats API.
 * **Corresponding metrics key**: ``refresh_total_time`` (property: ``per-shard``)
 
-Total flush time
-----------------
+Cumulative flush time of primary shards
+---------------------------------------
 
-* **Definition**: Total time used for index flush as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Cumulative time used for index flush of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``flush_total_time``
 
-Flush time per shard
---------------------
+Cumulative flush count of primary shards
+----------------------------------------
 
-* **Definition**: Minimum, median and maximum time for index flush per primary shard as reported by the indices stats API.
+* **Definition**: Cumulative number of flushes of primary shards, as reported by indices stats API under ``_all/primaries``.
+* **Corresponding metrics key**: ``flush_total_count``
+
+Cumulative flush time across primary shards
+-------------------------------------------
+
+* **Definition**: Minimum, median and maximum time for index flush across primary shards as reported by the indices stats API.
 * **Corresponding metrics key**: ``flush_total_time`` (property: ``per-shard``)
 
-Total merge throttle time
--------------------------
+Cumulative merge throttle time of primary shards
+------------------------------------------------
 
-* **Definition**: Total time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.
+* **Definition**: Cumulative time within merges that have been throttled, as reported by the indices stats API. Note that this is not Wall clock time.
 * **Corresponding metrics key**: ``merges_total_throttled_time``
 
-Merge throttle time per shard
------------------------------
+Cumulative merge throttle time across primary shards
+----------------------------------------------------
 
-* **Definition**: Minimum, median and maximum time that merges have been throttled per primary shard as reported by the indices stats API.
+* **Definition**: Minimum, median and maximum cumulative time that merges have been throttled across primary shards as reported by the indices stats API.
 * **Corresponding metrics key**: ``merges_total_throttled_time`` (property: ``per-shard``)
 
-Merge time (``X``)
+
+ML processing time
 ------------------
 
-Where ``X`` is one of:
-
-* postings
-* stored fields
-* doc values
-* norms
-* vectors
-* points
-
-..
-
-* **Definition**: Different merge times as reported by Lucene. Only available if Lucene index writer trace logging is enabled (use ``--car-params="verbose_iw_logging_enabled:true"`` for that).
-* **Corresponding metrics keys**: ``merge_parts_total_time_*``
-
-
-Median CPU usage
-----------------
-
-* **Definition**: Median CPU usage in percent of the Elasticsearch process during the whole race based on a one second sample period. The maximum value is N * 100% where N is the number of CPU cores available
-* **Corresponding metrics key**: ``cpu_utilization_1s``
+* **Definition**: Minimum, mean, median and maximum time in milliseconds that a machine learning job has spent processing a single bucket.
+* **Corresponding metrics key**: ``ml_processing_time``
 
 
 Total Young Gen GC
@@ -131,7 +132,7 @@ Translog size
 * **Definition**: The size in bytes of the translog as reported by the indices stats API.
 * **Corresponding metrics key**: ``translog_size_in_bytes``
 
-Totally written
+Total written
 ---------------
 
 * **Definition**: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.

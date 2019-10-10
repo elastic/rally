@@ -1,3 +1,20 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 from unittest import TestCase
 
 from esrally import exceptions
@@ -38,7 +55,7 @@ class VersionsTests(TestCase):
     def test_components_ignores_invalid_versions(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             versions.components("5.0.0a")
-        self.assertEqual("version string '5.0.0a' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'", ctx.exception.args[0])
+        self.assertEqual(r"version string '5.0.0a' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'", ctx.exception.args[0])
 
     def test_versions_parses_correct_version_string(self):
         self.assertEqual(["5.0.3", "5.0", "5"], versions.versions("5.0.3"))
@@ -48,7 +65,7 @@ class VersionsTests(TestCase):
     def test_versions_rejects_invalid_version_strings(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             versions.versions("5.0.0a-SNAPSHOT")
-        self.assertEqual("version string '5.0.0a-SNAPSHOT' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"
+        self.assertEqual(r"version string '5.0.0a-SNAPSHOT' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"
                          , ctx.exception.args[0])
 
     def test_find_best_match(self):
