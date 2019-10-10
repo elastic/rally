@@ -621,11 +621,33 @@ class ExecutorTests(TestCase):
         def __str__(self):
             return str(self.mock)
 
+    class RunnerWithProgress:
+        def __init__(self, iterations=5):
+            self.iterations_left = iterations
+            self.iterations = iterations
+
+        @property
+        def completed(self):
+            return self.iterations_left <= 0
+
+        @property
+        def percent_completed(self):
+            return (self.iterations - self.iterations_left) / self.iterations
+
+        def __call__(self, es, params):
+            self.iterations_left -= 1
+
+    def __init__(self, methodName):
+        super().__init__(methodName)
+        self.runner_with_progress = None
+
     def context_managed(self, mock):
         return ExecutorTests.NoopContextManager(mock)
 
     def setUp(self):
         runner.register_default_runners()
+        self.runner_with_progress = ExecutorTests.RunnerWithProgress()
+        runner.register_runner("unit-test-recovery", self.runner_with_progress)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_execute_schedule_in_throughput_mode(self, es):
@@ -676,6 +698,55 @@ class ExecutorTests(TestCase):
             self.assertEqual(1, sample.total_ops)
             self.assertEqual("docs", sample.total_ops_unit)
             self.assertEqual(1, sample.request_meta_data["bulk-size"])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_execute_schedule_with_progress_determined_by_runner(self, es):
+        es.bulk.return_value = {
+            "errors": False
+        }
+
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        test_track = track.Track(name="unittest", description="unittest track",
+                                 indices=None,
+                                 challenges=None)
+
+        task = track.Task("time-based", track.Operation("time-based", operation_type="unit-test-recovery", params={
+            "indices-to-restore": "*",
+            # The runner will determine progress
+            "size": None
+        },
+                                                        param_source="driver-test-param-source"),
+                          warmup_time_period=0, clients=4)
+        schedule = driver.schedule_for(test_track, task, 0)
+
+        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
+        cancel = threading.Event()
+        complete = threading.Event()
+
+        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+        execute_schedule()
+
+        samples = sampler.samples
+
+        self.assertEqual(5, len(samples))
+        self.assertTrue(self.runner_with_progress.completed)
+        self.assertEqual(1.0, self.runner_with_progress.percent_completed)
+        self.assertFalse(complete.is_set(), "Executor should not auto-complete a normal task")
+        previous_absolute_time = -1.0
+        previous_relative_time = -1.0
+        for sample in samples:
+            self.assertEqual(2, sample.client_id)
+            self.assertEqual(task, sample.task)
+            self.assertLess(previous_absolute_time, sample.absolute_time)
+            previous_absolute_time = sample.absolute_time
+            self.assertLess(previous_relative_time, sample.relative_time)
+            previous_relative_time = sample.relative_time
+            # we don't have any warmup time period
+            self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
+            # latency equals service time in throughput mode
+            self.assertEqual(sample.latency_ms, sample.service_time_ms)
+            self.assertEqual(1, sample.total_ops)
+            self.assertEqual("ops", sample.total_ops_unit)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_execute_schedule_throughput_throttled(self, es):

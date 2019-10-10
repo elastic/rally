@@ -1128,7 +1128,6 @@ class Executor:
                     progress = runner.percent_completed
                 else:
                     progress = percent_completed
-                # progress = percent_completed if not completed else 1.0
                 self.sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
                                  total_ops, total_ops_unit, (stop - total_start), progress)
 

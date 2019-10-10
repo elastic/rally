@@ -920,6 +920,8 @@ Example (assuming Rally has been invoked specifying ``default`` and ``remote`` i
 
     You need to implement ``register`` just once and register all parameter sources and runners there.
 
+For cases, where you want to provide a progress indication, you can implement the two properties ``percent_completed`` which returns a floating point value between ``0.0`` and ``1.0`` and the property ``completed`` which needs to return ``True`` if the runner has completed. This can be useful in cases when it is only possible to determine progress by calling an API, for example when waiting for a recovery to finish.
+
 Custom schedulers
 ^^^^^^^^^^^^^^^^^
 
