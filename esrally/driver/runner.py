@@ -67,7 +67,7 @@ def runner_for(operation_type):
 
 def register_runner(operation_type, runner):
     logger = logging.getLogger(__name__)
-    if hasattr(runner, "multi_cluster") and runner.multi_cluster:
+    if getattr(runner, "multi_cluster", False) == True:
         if "__enter__" in dir(runner) and "__exit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
