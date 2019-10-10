@@ -159,6 +159,11 @@ Note that the default values are not recorded or shown (Rally does not know abou
 
 A track consists of one or more challenges. With this flag you can specify which challenge should be run. If you don't specify a challenge, Rally derives the default challenge itself. To see the default challenge of a track, run ``esrally list tracks``.
 
+``race-id``
+~~~~~~~~~~~
+
+A unique identifier for this race. By default a random UUID is automatically chosen by Rally.
+
 .. _clr_include_tasks:
 
 ``include-tasks``

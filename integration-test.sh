@@ -275,6 +275,16 @@ function test_distributions {
     done
 }
 
+function test_docker {
+    local cfg
+    # only test the most recent Docker distribution
+    local dist="${DISTRIBUTIONS[${#DISTRIBUTIONS[@]}-1]}"
+    random_configuration cfg
+    info "test docker [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=geonames], [--car=4gheap]"
+    kill_rally_processes
+    esrally --configuration-name="${cfg}" --on-error=abort --pipeline="docker" --distribution-version="${dist}" --track="geonames" --challenge="append-no-conflicts-index-only" --test-mode --car=4gheap
+}
+
 function test_distribution_fails_with_wrong_track_params {
     local cfg
     local distribution
@@ -508,6 +518,8 @@ function run_test {
     test_sources
     echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"
     test_distributions
+    echo "**************************************** TESTING RALLY WITH ES DOCKER IMAGE ***********************************"
+    test_docker
     echo "**************************************** TESTING RALLY BENCHMARK-ONLY PIPELINE *********************************"
     test_benchmark_only
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"

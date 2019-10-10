@@ -53,6 +53,13 @@ def cpu_model():
     return "Unknown"
 
 
+def cpu_arch():
+    """
+    :return: The CPU architecture name.
+    """
+    return platform.uname().machine
+
+
 def disks():
     # only physical partitions (no memory partitions etc)
     return psutil.disk_partitions(all=False)

@@ -74,8 +74,8 @@ install_requires = [
 ]
 
 tests_require = [
-    "pytest==3.4.2",
-    "pytest-benchmark==3.1.1"
+    "pytest==5.2.0",
+    "pytest-benchmark==3.2.2"
 ]
 
 # we call the tool rally, but it will be published as esrally on pypi
@@ -97,7 +97,7 @@ setup(name="esrally",
       test_suite="tests",
       tests_require=tests_require,
       setup_requires=[
-          "pytest-runner==2.10.1",
+          "pytest-runner==5.1",
       ],
       entry_points={
           "console_scripts": [

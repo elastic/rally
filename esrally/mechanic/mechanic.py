@@ -43,44 +43,6 @@ def download(cfg):
 # Public Messages
 ##############################
 
-class ClusterMetaInfo:
-    def __init__(self, nodes, revision, distribution_version, distribution_flavor, team_revision):
-        self.nodes = nodes
-        self.revision = revision
-        self.distribution_version = distribution_version
-        self.distribution_flavor = distribution_flavor
-        self.team_revision = team_revision
-
-    def as_dict(self):
-        d = {
-            "nodes": [n.as_dict() for n in self.nodes],
-            "node-count": len(self.nodes),
-            "revision": self.revision,
-            "distribution-version": self.distribution_version,
-            "distribution-flavor": self.distribution_flavor,
-            
-        }
-        if self.team_revision:
-            d["team-revision"] = self.team_revision
-        return d
-
-
-class NodeMetaInfo:
-    def __init__(self, n):
-        self.host_name = n.host_name
-        self.node_name = n.node_name
-        self.ip = n.ip
-        self.os = n.os
-        self.jvm = n.jvm
-        self.cpu = n.cpu
-        self.memory = n.memory
-        self.fs = n.fs
-        self.plugins = n.plugins
-
-    def as_dict(self):
-        return self.__dict__
-
-
 class StartEngine:
     def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, ip=None, port=None,
                  node_id=None):
@@ -112,9 +74,9 @@ class StartEngine:
 
 
 class EngineStarted:
-    def __init__(self, cluster_meta_info, system_meta_info):
-        self.cluster_meta_info = cluster_meta_info
+    def __init__(self, system_meta_info, team_revision):
         self.system_meta_info = system_meta_info
+        self.team_revision = team_revision
 
 
 class StopEngine:
@@ -122,24 +84,6 @@ class StopEngine:
 
 
 class EngineStopped:
-    def __init__(self, system_metrics):
-        self.system_metrics = system_metrics
-
-
-class OnBenchmarkStart:
-    def __init__(self):
-        pass
-
-
-class BenchmarkStarted:
-    pass
-
-
-class OnBenchmarkStop:
-    pass
-
-
-class BenchmarkStopped:
     def __init__(self, system_metrics):
         self.system_metrics = system_metrics
 
@@ -171,14 +115,12 @@ class StartNodes:
 
 
 class NodesStarted:
-    def __init__(self, node_meta_infos, system_meta_info):
+    def __init__(self, system_meta_info):
         """
-        Creates a new NodeStarted message.
+        Creates a new NodesStarted message.
 
-        :param node_meta_infos: A list of ``NodeMetaInfo`` instances.
         :param system_meta_info:
         """
-        self.node_meta_infos = node_meta_infos
         self.system_meta_info = system_meta_info
 
 
@@ -189,15 +131,6 @@ class StopNodes:
 class NodesStopped:
     def __init__(self, system_metrics):
         self.system_metrics = system_metrics
-
-
-class ApplyMetricsMetaInfo:
-    def __init__(self, meta_info):
-        self.meta_info = meta_info
-
-
-class MetricsMetaInfoApplied:
-    pass
 
 
 def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
@@ -271,6 +204,7 @@ class MechanicActor(actor.RallyActor):
         self.cluster = None
         self.car = None
         self.team_revision = None
+        self.externally_provisioned = False
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
@@ -301,7 +235,6 @@ class MechanicActor(actor.RallyActor):
         cls = metrics.metrics_store_class(self.cfg)
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
-        name = self.cfg.opts("race", "pipeline")
         self.car, _ = load_team(self.cfg, msg.external)
         self.team_revision = self.cfg.opts("mechanic", "repository.revision")
 
@@ -310,18 +243,19 @@ class MechanicActor(actor.RallyActor):
         if len(hosts) == 0:
             raise exceptions.LaunchError("No target hosts are configured.")
 
-        if msg.external:
+        self.externally_provisioned = msg.external
+        if self.externally_provisioned:
             self.logger.info("Cluster will not be provisioned by Rally.")
+            # TODO: This needs to be handled later - we should probably disallow this entirely
             if msg.cluster_settings:
                 pretty_settings = json.dumps(msg.cluster_settings, indent=2)
                 warning = "Ensure that these settings are defined in elasticsearch.yml:\n\n{}\n\nIf they are absent, running this track " \
                           "will fail or lead to unexpected results.".format(pretty_settings)
                 console.warn(warning, logger=self.logger)
-            # just create one actor for this special case and run it on the coordinator node (i.e. here)
-            m = self.createActor(NodeMechanicActor,
-                                 targetActorRequirements={"coordinator": True})
-            self.children.append(m)
-            self.send(m, msg.for_nodes(ip=hosts))
+            self.status = "nodes_started"
+            self.received_responses = []
+            self.on_all_nodes_started()
+            self.status = "cluster_started"
         else:
             console.info("Preparing for race ...", flush=True)
             self.logger.info("Cluster consisting of %s will be provisioned by Rally.", hosts)
@@ -330,8 +264,8 @@ class MechanicActor(actor.RallyActor):
             # ensure waiting for all responses
             self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
             self.send(self.createActor(Dispatcher), msg)
-        self.status = "starting"
-        self.received_responses = []
+            self.status = "starting"
+            self.received_responses = []
 
     @actor.no_retry("mechanic")
     def receiveMsg_NodesStarted(self, msg, sender):
@@ -345,21 +279,7 @@ class MechanicActor(actor.RallyActor):
             self.children.insert(0, sender)
             self.children.pop()
 
-        self.transition_when_all_children_responded(sender, msg, "starting", "nodes_started", self.on_all_nodes_started)
-
-    @actor.no_retry("mechanic")
-    def receiveMsg_MetricsMetaInfoApplied(self, msg, sender):
-        self.transition_when_all_children_responded(sender, msg, "apply_meta_info", "cluster_started", self.on_cluster_started)
-
-    @actor.no_retry("mechanic")
-    def receiveMsg_OnBenchmarkStart(self, msg, sender):
-        # we are in state "cluster_started", after that in "benchmark_stopped"
-        self.send_to_children_and_transition(sender, msg, ["cluster_started", "benchmark_stopped"], "benchmark_starting")
-
-    @actor.no_retry("mechanic")
-    def receiveMsg_BenchmarkStarted(self, msg, sender):
-        self.transition_when_all_children_responded(
-            sender, msg, "benchmark_starting", "benchmark_started", self.on_benchmark_started)
+        self.transition_when_all_children_responded(sender, msg, "starting", "cluster_started", self.on_all_nodes_started)
 
     @actor.no_retry("mechanic")
     def receiveMsg_ResetRelativeTime(self, msg, sender):
@@ -382,24 +302,13 @@ class MechanicActor(actor.RallyActor):
         self.send(self.race_control, msg)
 
     @actor.no_retry("mechanic")
-    def receiveMsg_OnBenchmarkStop(self, msg, sender):
-        self.send_to_children_and_transition(sender, msg, "benchmark_started", "benchmark_stopping")
-
-    @actor.no_retry("mechanic")
-    def receiveMsg_BenchmarkStopped(self, msg, sender):
-        self.metrics_store.bulk_add(msg.system_metrics)
-        self.transition_when_all_children_responded(
-            sender, msg, "benchmark_stopping", "benchmark_stopped", self.on_benchmark_stopped)
-
-    @actor.no_retry("mechanic")
     def receiveMsg_StopEngine(self, msg, sender):
-        if self.cluster.preserve:
-            console.info("Keeping benchmark candidate including index at (may need several GB).")
-        # detach from cluster and gather all system metrics
-        self.cluster_launcher.stop(self.cluster)
         # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
         # cluster from various states and we don't check here for a specific one.
-        self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
+        if self.externally_provisioned:
+            self.on_all_nodes_stopped()
+        else:
+            self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
 
     @actor.no_retry("mechanic")
     def receiveMsg_NodesStopped(self, msg, sender):
@@ -407,35 +316,8 @@ class MechanicActor(actor.RallyActor):
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
-        self.cluster_launcher = launcher.ClusterLauncher(self.cfg, self.metrics_store)
-        # Workaround because we could raise a LaunchError here and thespian will attempt to retry a failed message.
-        # In that case, we will get a followup RallyAssertionError because on the second attempt, Rally will check
-        # the status which is now "nodes_started" but we expected the status to be "nodes_starting" previously.
-        try:
-            self.cluster = self.cluster_launcher.start()
-        except BaseException as e:
-            self.send(self.race_control, actor.BenchmarkFailure("Could not launch cluster", e))
-        else:
-            # push down all meta data again
-            self.send_to_children_and_transition(self.myAddress,
-                                                 ApplyMetricsMetaInfo(self.metrics_store.meta_info), "nodes_started", "apply_meta_info")
-
-    def on_cluster_started(self):
-        # We don't need to store the original node meta info when the node started up (NodeStarted message) because we actually gather it
-        # in ``on_all_nodes_started`` via the ``ClusterLauncher``.
-        self.cluster.team_revision = self.team_revision
-        self.send(self.race_control,
-                  EngineStarted(ClusterMetaInfo([NodeMetaInfo(n) for n in self.cluster.nodes],
-                                                self.cluster.source_revision,
-                                                self.cluster.distribution_version,
-                                                self.cluster.distribution_flavor,
-                                                self.team_revision),
-                                self.metrics_store.meta_info))
+        self.send(self.race_control, EngineStarted(self.metrics_store.meta_info, self.team_revision))
         self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS, payload=MechanicActor.WAKEUP_FLUSH_METRICS)
-
-    def on_benchmark_started(self):
-        self.cluster.on_benchmark_start()
-        self.send(self.race_control, BenchmarkStarted())
 
     def reset_relative_time(self):
         self.logger.info("Resetting relative time of cluster system metrics store.")
@@ -443,14 +325,9 @@ class MechanicActor(actor.RallyActor):
         for m in self.children:
             self.send(m, ResetRelativeTime(0))
 
-    def on_benchmark_stopped(self):
-        self.cluster.on_benchmark_stop()
-        self.metrics_store.flush(refresh=False)
-        self.send(self.race_control, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
-
     def on_all_nodes_stopped(self):
         self.metrics_store.flush(refresh=False)
-        self.send(self.race_control, EngineStopped(self.metrics_store.to_externalizable()))
+        self.send(self.race_control, EngineStopped(self.metrics_store.to_externalizable(clear=True)))
         # clear all state as the mechanic might get reused later
         for m in self.children:
             self.send(m, thespian.actors.ActorExitRequest())
@@ -566,7 +443,7 @@ class NodeMechanicActor(actor.RallyActor):
             # Load node-specific configuration
             self.config = config.auto_load_local_config(msg.cfg, additional_sections=[
                 # only copy the relevant bits
-                "track", "mechanic", "client",
+                "track", "mechanic", "client", "telemetry",
                 # allow metrics store to extract race meta-data
                 "race",
                 "source"
@@ -588,17 +465,14 @@ class NodeMechanicActor(actor.RallyActor):
                                    msg.distribution, msg.external, msg.docker)
             nodes = self.mechanic.start_engine()
             self.running = True
-            self.send(getattr(msg, "reply_to", sender), NodesStarted([NodeMetaInfo(node) for node in nodes], self.metrics_store.meta_info))
+            self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
+            self.send(getattr(msg, "reply_to", sender), NodesStarted(self.metrics_store.meta_info))
         except Exception:
             self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
             import traceback
             ex_type, ex_value, ex_traceback = sys.exc_info()
             self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure(ex_value, traceback.format_exc()))
-
-    def receiveMsg_ApplyMetricsMetaInfo(self, msg, sender):
-        self.metrics_store.merge_meta_info(msg.meta_info)
-        self.send(sender, MetricsMetaInfoApplied())
 
     def receiveMsg_PoisonMessage(self, msg, sender):
         if sender != self.myAddress:
@@ -616,26 +490,20 @@ class NodeMechanicActor(actor.RallyActor):
             if isinstance(msg, ResetRelativeTime):
                 self.logger.info("Resetting relative time of system metrics store on host [%s].", self.host)
                 self.metrics_store.reset_relative_time()
-            elif isinstance(msg, OnBenchmarkStart):
-                self.mechanic.on_benchmark_start()
-                self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-                self.send(sender, BenchmarkStarted())
             elif isinstance(msg, thespian.actors.WakeupMessage):
                 if self.running:
                     self.logger.debug("Flushing system metrics store on host [%s].", self.host)
                     self.metrics_store.flush(refresh=False)
                     self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-            elif isinstance(msg, OnBenchmarkStop):
-                self.mechanic.on_benchmark_stop()
-                self.metrics_store.flush(refresh=False)
-                # clear metrics store data to not send duplicate system metrics data
-                self.send(sender, BenchmarkStopped(self.metrics_store.to_externalizable(clear=True)))
             elif isinstance(msg, StopNodes):
                 self.logger.info("Stopping nodes %s.", self.mechanic.nodes)
                 self.mechanic.stop_engine()
-                self.send(sender, NodesStopped(self.metrics_store.to_externalizable()))
+                self.metrics_store.flush(refresh=False)
+                self.send(sender, NodesStopped(self.metrics_store.to_externalizable(clear=True)))
                 # clear all state as the mechanic might get reused later
                 self.metrics_store.close()
+                # TODO: Run the reporter (StatsCalculator) here to calculate summary stats and save them to the
+                #  metrics store (no command line output though!)
                 self.running = False
                 self.config = None
                 self.mechanic = None
@@ -681,13 +549,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
             p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
         l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
     elif external:
-        if len(plugins) > 0:
-            raise exceptions.SystemSetupError("You cannot specify any plugins for externally provisioned clusters. Please remove "
-                                              "\"--elasticsearch-plugins\" and try again.")
-
-        s = lambda: None
-        p = [provisioner.no_op_provisioner()]
-        l = launcher.ExternalLauncher(cfg, metrics_store)
+        raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
     elif docker:
         if len(plugins) > 0:
             raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
@@ -723,14 +585,6 @@ class Mechanic:
             node_configs.append(p.prepare(binaries))
         self.nodes = self.launcher.start(node_configs)
         return self.nodes
-
-    def on_benchmark_start(self):
-        for node in self.nodes:
-            node.on_benchmark_start()
-
-    def on_benchmark_stop(self):
-        for node in self.nodes:
-            node.on_benchmark_stop()
 
     def stop_engine(self):
         self.launcher.stop(self.nodes)

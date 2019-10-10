@@ -161,11 +161,11 @@ Running the ``start.sh`` script requires Docker locally installed and performs t
 
 1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :ref:`metrics store <configuration_options>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
 2. Creates a new configuration file for Rally under ``~/.rally/rally-metricstore.ini`` referencing Elasticsearch from step 1.
-3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``7.0.0`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
+3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``7.3.2`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
 4. Accepts the trial license.
 5. Configures ``leader`` on the ``follower`` as a `remote cluster <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-remote-clusters.html#configuring-remote-clusters>`_.
 6. Sets an `auto-follow pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-put-auto-follow-pattern.html#ccr-put-auto-follow-pattern>`_ on the follower for every index on the leader to be replicated as ``<leader-index-name>-copy``.
-7. Runs the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_, `append-no-conflicts-index-only challenge <https://github.com/elastic/rally-tracks/blob/d4814aa7bf54a9dafd4c77be076d54500c3f2dd4/geonames/challenges/default.json#L188-L222>`_ challenge, ingesting only 20% of the corpus. It also enables the ``ccr-stats`` :doc:`telemetry device </telemetry>` with a sample rate interval of ``1s``.
+7. Runs the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_, `append-no-conflicts-index-only challenge <https://github.com/elastic/rally-tracks/blob/d4814aa7bf54a9dafd4c77be076d54500c3f2dd4/geonames/challenges/default.json#L188-L222>`_ challenge, ingesting only 20% of the corpus using 3 primary shards. It also enables the ``ccr-stats`` :doc:`telemetry device </telemetry>` with a sample rate interval of ``1s``.
 
 Rally will push metrics to the metric store configured in 1. and they can be visualized by accessing Kibana at `http://locahost:5601 <http://localhost:5601>`_.
 

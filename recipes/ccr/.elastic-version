@@ -1,2 +1,2 @@
-export ES_VERSION=${ES_VERSION:-7.0.0}
+export ES_VERSION=${ES_VERSION:-7.3.2}
 
