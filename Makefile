@@ -59,14 +59,8 @@ check-venv:
 install: venv-create
 	. $(VENV_ACTIVATE_FILE); pip install --upgrade pip setuptools
 	. $(VENV_ACTIVATE_FILE); pip3 install -e .
-	# install tox for it tests
-	. $(VENV_ACTIVATE_FILE); pip3 install tox
-	# install coverage
-	. $(VENV_ACTIVATE_FILE); pip3 install coverage
-	# also install development/release dependencies
-	# workaround for https://github.com/elastic/rally/issues/439
-	. $(VENV_ACTIVATE_FILE); pip3 install -q sphinx sphinx_rtd_theme twine wheel
-	. $(VENV_ACTIVATE_FILE); pip3 install --pre github3.py
+	# Also install development dependencies
+	. $(VENV_ACTIVATE_FILE); pip3 install -e .[develop]
 
 clean: nondocs-clean docs-clean
 
@@ -100,10 +94,6 @@ test: check-venv
 it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox
 
-# Temporarily disable Python 3.4 builds
-#it34: check-venv python-caches-clean
-#	. $(VENV_ACTIVATE_FILE); tox -e py34
-#
 it35: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py35
 
