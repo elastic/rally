@@ -1969,6 +1969,140 @@ class SleepTests(TestCase):
         sleep.assert_called_once_with(4.3)
 
 
+class DeleteSnapshotRepositoryTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_delete_snapshot_repository(self, es):
+        params = {
+            "repository": "backups"
+        }
+
+        r = runner.DeleteSnapshotRepository()
+        r(es, params)
+
+        es.snapshot.delete_repository.assert_called_once_with(repository="backups")
+
+
+class CreateSnapshotRepositoryTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_snapshot_repository(self, es):
+        params = {
+            "repository": "backups",
+            "body": {
+                "type": "fs",
+                "settings": {
+                    "location": "/var/backups"
+                }
+            }
+        }
+
+        r = runner.CreateSnapshotRepository()
+        r(es, params)
+
+        es.snapshot.create_repository.assert_called_once_with(repository="backups",
+                                                              body={
+                                                                  "type": "fs",
+                                                                  "settings": {
+                                                                      "location": "/var/backups"
+                                                                  }
+                                                              },
+                                                              params={})
+
+
+class RestoreSnapshotTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_restore_snapshot(self, es):
+        params = {
+            "repository": "backups",
+            "snapshot": "snapshot-001",
+            "wait-for-completion": True,
+            "request-params": {
+                "request_timeout": 7200
+            }
+        }
+
+        r = runner.RestoreSnapshot()
+        r(es, params)
+
+        es.snapshot.restore.assert_called_once_with(repository="backups",
+                                                    snapshot="snapshot-001",
+                                                    wait_for_completion=True,
+                                                    params={
+                                                        "request_timeout": 7200,
+                                                        "retries": 0
+                                                    })
+
+
+class IndicesRecoveryTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_indices_recovery_already_finished(self, es):
+        # empty response
+        es.indices.recovery.return_value = {}
+
+        r = runner.IndicesRecovery()
+        self.assertFalse(r.completed)
+        self.assertEqual(r.percent_completed, 0.0)
+
+        r(es, {})
+
+        self.assertTrue(r.completed)
+        self.assertEqual(r.percent_completed, 1.0)
+
+        es.indices.recovery.assert_called_once_with(active_only=True)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_waits_for_ongoing_indices_recovery(self, es):
+        # empty response
+        es.indices.recovery.side_effect = [
+            # active recovery
+            {
+                "index1": {
+                    "shards": [
+                        {
+                            "id": 0,
+                            "index": {
+                                "size": {
+                                    "total": "75.4mb",
+                                    "total_in_bytes": 79063092,
+                                    "recovered": "65.7mb",
+                                    "recovered_in_bytes": 68891939,
+                                },
+                            }
+                        },
+                        {
+                            "id": 1,
+                            "index": {
+                                "size": {
+                                    "total": "175.4mb",
+                                    "total_in_bytes": 179063092,
+                                    "recovered": "165.7mb",
+                                    "recovered_in_bytes": 168891939,
+                                },
+                            }
+                        }
+
+                    ]
+                }
+            },
+            # completed
+            {}
+        ]
+
+        r = runner.IndicesRecovery()
+        self.assertFalse(r.completed)
+        self.assertEqual(r.percent_completed, 0.0)
+
+        while not r.completed:
+            recovered_bytes, unit = r(es, {})
+            if r.completed:
+                # no additional bytes recovered since the last call
+                self.assertEqual(recovered_bytes, 0)
+                self.assertEqual(r.percent_completed, 1.0)
+            else:
+                # sum of both shards
+                self.assertEqual(recovered_bytes, 237783878)
+                self.assertAlmostEqual(r.percent_completed, 0.9211, places=3)
+            self.assertEqual(unit, "bytes")
+
 class ShrinkIndexTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests

@@ -38,7 +38,8 @@ def register_default_runners():
     register_runner(track.OperationType.RawRequest.name, RawRequest())
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep.name, Sleep())
-
+    # these requests should not be retried as they are not idempotent
+    register_runner(track.OperationType.RestoreSnapshot.name, RestoreSnapshot())
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()))
     register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()))
@@ -56,6 +57,9 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteMlJob.name, Retry(DeleteMlJob()))
     register_runner(track.OperationType.OpenMlJob.name, Retry(OpenMlJob()))
     register_runner(track.OperationType.CloseMlJob.name, Retry(CloseMlJob()))
+    register_runner(track.OperationType.DeleteSnapshotRepository.name, Retry(DeleteSnapshotRepository()))
+    register_runner(track.OperationType.CreateSnapshotRepository.name, Retry(CreateSnapshotRepository()))
+    register_runner(track.OperationType.WaitForRecovery.name, Retry(IndicesRecovery()))
 
 
 def runner_for(operation_type):
@@ -1078,6 +1082,104 @@ class Sleep(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "sleep"
+
+
+class DeleteSnapshotRepository(Runner):
+    """
+    Deletes a snapshot repository
+    """
+    def __call__(self, es, params):
+        es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)))
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-snapshot-repository"
+
+
+class CreateSnapshotRepository(Runner):
+    """
+    Creates a new snapshot repository
+    """
+    def __call__(self, es, params):
+        request_params = params.get("request-params", {})
+        es.snapshot.create_repository(
+            repository=mandatory(params, "repository", repr(self)),
+            body=mandatory(params, "body", repr(self)),
+            params=request_params)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-snapshot-repository"
+
+
+class RestoreSnapshot(Runner):
+    """
+    Restores a snapshot from an already registered repository
+    """
+    def __call__(self, es, params):
+        request_params = params.get("request-params", {})
+        if "retries" not in request_params:
+            # It is possible that there is a proxy in between the cluster and our client which has a shorter timeout
+            # configured. In that case, the proxy would return 504, the client would retry the operation and hit an
+            # error about an index that is already existing. This error message is confusing and thus we explicitly
+            # disallow the client to ever retry.
+            #
+            # see also the docs for ``retries`` in the ``urllib3.connectionpool.urlopen``.
+            request_params["retries"] = 0
+
+        es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
+                            snapshot=mandatory(params, "snapshot", repr(self)),
+                            wait_for_completion=params.get("wait-for-completion", False),
+                            params=request_params)
+
+    def __repr__(self, *args, **kwargs):
+        return "restore-snapshot"
+
+
+class IndicesRecovery(Runner):
+    def __init__(self):
+        super().__init__()
+        self._completed = False
+        self._percent_completed = 0.0
+        self._last_recovered = None
+
+    @property
+    def completed(self):
+        return self._completed
+
+    @property
+    def percent_completed(self):
+        return self._percent_completed
+
+    def __call__(self, es, params):
+        response = es.indices.recovery(active_only=True)
+        if not response:
+            self._completed = True
+            self._percent_completed = 1.0
+            self._last_recovered = None
+            return 0, "bytes"
+        else:
+            recovered = 0
+            total_size = 0
+            for _, idx_data in response.items():
+                for _, shard_data in idx_data.items():
+                    for shard in shard_data:
+                        idx_size = shard["index"]["size"]
+                        recovered += idx_size["recovered_in_bytes"]
+                        total_size += idx_size["total_in_bytes"]
+                        # translog is not in size but rather in absolute numbers. Ignore it for progress reporting.
+                        # translog = shard_data["translog"]
+            # we only consider it completed if we get an empty response
+            self._completed = False
+            self._percent_completed = recovered / total_size
+            # this is cumulative so we need to consider the data from last time
+            if self._last_recovered:
+                newly_recovered = max(recovered - self._last_recovered, 0)
+            else:
+                newly_recovered = recovered
+            self._last_recovered = recovered
+            return newly_recovered, "bytes"
+
+    def __repr__(self, *args, **kwargs):
+        return "wait-for-recovery"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
