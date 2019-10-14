@@ -75,24 +75,24 @@ def register_runner(operation_type, runner):
         if "__enter__" in dir(runner) and "__exit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-            __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
+            __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
         else:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-            __RUNNERS[operation_type] = MultiClusterDelegatingRunner(runner, str(runner))
+            __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, runner.__name__)
+        __RUNNERS[operation_type] = _single_cluster_runner(runner, runner.__name__)
     elif "__enter__" in dir(runner) and "__exit__" in dir(runner):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner), context_manager_enabled=True)
+        __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
     else:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = SingleClusterDelegatingRunner(runner, str(runner))
+        __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner))
 
 
 # Only intended for unit-testing!
@@ -127,54 +127,96 @@ class Runner:
         return False
 
 
-class SingleClusterDelegatingRunner(Runner):
-    def __init__(self, runnable, name, context_manager_enabled=False):
+def _single_cluster_runner(runnable, name, context_manager_enabled=False):
+    # only pass the default ES client
+    delegate = DelegatingRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
+    return _with_completion(delegate, runnable)
+
+
+def _multi_cluster_runner(runnable, name, context_manager_enabled=False):
+    # pass all ES clients
+    delegate = DelegatingRunner(runnable, name, lambda es: es, context_manager_enabled)
+    return _with_completion(delegate, runnable)
+
+
+def _with_completion(delegate, runnable):
+    if hasattr(runnable, "completed") and hasattr(runnable, "percent_completed"):
+        return WithCompletion(delegate, runnable)
+    else:
+        return NoCompletion(delegate)
+
+
+class NoCompletion(Runner):
+    def __init__(self, delegate):
+        super().__init__()
+        self.delegate = delegate
+
+    @property
+    def completed(self):
+        return None
+
+    @property
+    def percent_completed(self):
+        return None
+
+    def __call__(self, *args):
+        return self.delegate(*args)
+
+    def __repr__(self, *args, **kwargs):
+        return repr(self.delegate)
+
+    def __enter__(self):
+        self.delegate.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self.delegate.__exit__(exc_type, exc_val, exc_tb)
+
+
+class WithCompletion(Runner):
+    def __init__(self, delegate, progressable):
+        super().__init__()
+        self.delegate = delegate
+        self.progressable = progressable
+
+    @property
+    def completed(self):
+        return self.progressable.completed
+
+    @property
+    def percent_completed(self):
+        return self.progressable.percent_completed
+
+    def __call__(self, *args):
+        return self.delegate(*args)
+
+    def __repr__(self, *args, **kwargs):
+        return repr(self.delegate)
+
+    def __enter__(self):
+        self.delegate.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self.delegate.__exit__(exc_type, exc_val, exc_tb)
+
+
+class DelegatingRunner(Runner):
+    def __init__(self, runnable, name, client_extractor, context_manager_enabled=False):
         super().__init__()
         self.runnable = runnable
         self.name = name
+        self.client_extractor = client_extractor
         self.context_manager_enabled = context_manager_enabled
 
     def __call__(self, *args):
-        # Single cluster mode: es parameter passed in runner is a client object for the "default" cluster
-        es = args[0]
-        return self.runnable(es['default'], *args[1:])
+        return self.runnable(self.client_extractor(args[0]), *args[1:])
 
     def __repr__(self, *args, **kwargs):
         if self.context_manager_enabled:
             return "user-defined context-manager enabled runner for [%s]" % self.name
         else:
             return "user-defined runner for [%s]" % self.name
-
-    def __enter__(self):
-        if self.context_manager_enabled:
-            self.runnable.__enter__()
-            return self
-        else:
-            return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.context_manager_enabled:
-            return self.runnable.__exit__(exc_type, exc_val, exc_tb)
-        else:
-            return False
-
-
-class MultiClusterDelegatingRunner(Runner):
-    def __init__(self, runnable, name, context_manager_enabled=False):
-        super().__init__()
-        self.runnable = runnable
-        self.name = name
-        self.context_manager_enabled = context_manager_enabled
-
-    def __call__(self, *args):
-        # Multi cluster mode: pass the entire es dict and let runner code handle connections to different clusters
-        return self.runnable(*args)
-
-    def __repr__(self, *args, **kwargs):
-        if self.context_manager_enabled:
-            return "user-defined multi-cluster context-manager enabled runner for [%s]" % self.name
-        else:
-            return "user-defined multi-cluster enabled runner for [%s]" % self.name
 
     def __enter__(self):
         if self.context_manager_enabled:
