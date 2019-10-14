@@ -714,9 +714,7 @@ class ExecutorTests(TestCase):
             "indices-to-restore": "*",
             # The runner will determine progress
             "size": None
-        },
-                                                        param_source="driver-test-param-source"),
-                          warmup_time_period=0, clients=4)
+        }, param_source="driver-test-param-source"), warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
         sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
