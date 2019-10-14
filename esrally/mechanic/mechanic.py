@@ -82,7 +82,7 @@ class EngineStarted:
 class StopEngine:
     pass
 
-
+# TODO #792: Don't pass system metrics here
 class EngineStopped:
     def __init__(self, system_metrics):
         self.system_metrics = system_metrics
@@ -233,6 +233,7 @@ class MechanicActor(actor.RallyActor):
         self.race_control = sender
         self.cfg = msg.cfg
         cls = metrics.metrics_store_class(self.cfg)
+        # TODO #792: This should only be needed by the individual nodes
         self.metrics_store = cls(self.cfg)
         self.metrics_store.open(ctx=msg.open_metrics_context)
         self.car, _ = load_team(self.cfg, msg.external)
@@ -502,7 +503,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.send(sender, NodesStopped(self.metrics_store.to_externalizable(clear=True)))
                 # clear all state as the mechanic might get reused later
                 self.metrics_store.close()
-                # TODO: Run the reporter (StatsCalculator) here to calculate summary stats and save them to the
+                # TODO #792: Run the reporter (StatsCalculator) here to calculate summary stats and save them to the
                 #  metrics store (no command line output though!)
                 self.running = False
                 self.config = None
