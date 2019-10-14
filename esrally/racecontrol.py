@@ -122,11 +122,10 @@ class BenchmarkActor(actor.RallyActor):
     @actor.no_retry("race control")
     def receiveMsg_EngineStarted(self, msg, sender):
         self.logger.info("Mechanic has started engine successfully.")
-        self.metrics_store.meta_info = msg.system_meta_info
         self.race.team_revision = msg.team_revision
         self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
         self.logger.info("Telling driver to prepare for benchmarking.")
-        self.send(self.main_driver, driver.PrepareBenchmark(self.cfg, self.race.track, self.metrics_store.meta_info))
+        self.send(self.main_driver, driver.PrepareBenchmark(self.cfg, self.race.track))
 
     @actor.no_retry("race control")
     def receiveMsg_PreparationComplete(self, msg, sender):
@@ -175,8 +174,6 @@ class BenchmarkActor(actor.RallyActor):
     @actor.no_retry("race control")
     def receiveMsg_EngineStopped(self, msg, sender):
         self.logger.info("Mechanic has stopped engine successfully.")
-        self.logger.info("Bulk adding system metrics to metrics store.")
-        self.metrics_store.bulk_add(msg.system_metrics)
         self.metrics_store.flush()
         if not self.cancelled and not self.error:
             final_results = metrics.calculate_results(self.metrics_store, self.race)

@@ -39,15 +39,13 @@ class PrepareBenchmark:
     Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
     """
 
-    def __init__(self, config, track, metrics_meta_info):
+    def __init__(self, config, track):
         """
         :param config: Rally internal configuration object.
         :param track: The track to use.
-        :param metrics_meta_info: meta info for the metrics store.
         """
         self.config = config
         self.track = track
-        self.metrics_meta_info = metrics_meta_info
 
 
 class StartBenchmark:
@@ -211,7 +209,7 @@ class DriverActor(actor.RallyActor):
     def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
-        self.coordinator.prepare_benchmark(msg.track, msg.metrics_meta_info)
+        self.coordinator.prepare_benchmark(msg.track)
 
     @actor.no_retry("driver")
     def receiveMsg_StartBenchmark(self, msg, sender):
@@ -439,7 +437,7 @@ class Driver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
-    def prepare_benchmark(self, t, metrics_meta_info):
+    def prepare_benchmark(self, t):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
@@ -447,7 +445,6 @@ class Driver:
         self.metrics_store = metrics.metrics_store(cfg=self.config,
                                                    track=self.track.name,
                                                    challenge=self.challenge.name,
-                                                   meta_info=metrics_meta_info,
                                                    read_only=False)
         es_clients = self.create_es_clients()
         self.wait_for_rest_api(es_clients)
