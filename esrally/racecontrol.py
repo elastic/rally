@@ -181,7 +181,7 @@ class BenchmarkActor(actor.RallyActor):
         if not self.cancelled and not self.error:
             final_results = metrics.calculate_results(self.metrics_store, self.race)
             self.race.add_results(final_results)
-            reporter.summarize(self.race, self.cfg)
+            reporter.summarize(final_results, self.cfg)
             self.race_store.store_race(self.race)
         else:
             self.logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r].", self.cancelled, self.error)

@@ -36,9 +36,8 @@ FINAL_SCORE = r"""
             """
 
 
-def summarize(race, cfg):
-    results = race.results
-    SummaryReporter(results, cfg, race.revision).report()
+def summarize(results, cfg):
+    SummaryReporter(results, cfg).report()
 
 
 def compare(cfg):
@@ -119,7 +118,7 @@ def percentiles_for_sample_size(sample_size):
 
 
 class SummaryReporter:
-    def __init__(self, results, config, revision):
+    def __init__(self, results, config):
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
@@ -127,8 +126,6 @@ class SummaryReporter:
         self.report_all_values = reporting_values == "all"
         self.report_all_percentile_values = reporting_values == "all-percentiles"
         self.cwd = config.opts("node", "rally.cwd")
-
-        self.revision = revision
 
     def report(self):
         print_header(FINAL_SCORE)
