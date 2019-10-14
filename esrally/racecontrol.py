@@ -179,7 +179,7 @@ class BenchmarkActor(actor.RallyActor):
         self.metrics_store.bulk_add(msg.system_metrics)
         self.metrics_store.flush()
         if not self.cancelled and not self.error:
-            final_results = reporter.calculate_results(self.metrics_store, self.race)
+            final_results = metrics.calculate_results(self.metrics_store, self.race)
             self.race.add_results(final_results)
             reporter.summarize(self.race, self.cfg)
             self.race_store.store_race(self.race)
