@@ -850,18 +850,7 @@ class EsMetricsStore(MetricsStore):
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
             else:
-                # TODO: Remove this compatibility layer with Rally 1.1.1
-                # this could be an old index with a different document type, inspect and change accordingly
-                index_info = self._client.get_index(self._index)
-                # metrics is the old type name -> we have an old index, don't touch it
-                if "metrics" in index_info[self._index]["mappings"]:
-                    old_index_name = self._index
-                    self._index = self._migrated_index_name(old_index_name)
-                    self.logger.info("[%s] already exists with an old mapping. Creating [%s] to avoid mapping issues.",
-                                     old_index_name, self._index)
-                    self._client.create_index(index=self._index)
-                else:
-                    self.logger.info("[%s] already exists with proper mapping.", self._index)
+                self.logger.info("[%s] already exists.", self._index)
         else:
             # we still need to check for the correct index name - prefer the one with the suffix
             new_name = self._migrated_index_name(self._index)
@@ -1456,14 +1445,7 @@ class EsRaceStore(RaceStore):
     def _store(self, doc):
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        # TODO: Remove this compatibility layer with Rally 1.1.1
-        idx = self.index_name()
-        if self.client.exists(idx):
-            index_info = self.client.get_index(idx)
-            # races is the old type name -> we have an old index, don't touch it
-            if "races" in index_info[idx]["mappings"]:
-                idx = "{}.new".format(idx)
-        self.client.index(index=idx, doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
+        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
 
     def index_name(self):
         return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
@@ -1558,14 +1540,7 @@ class EsResultsStore:
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        # TODO: Remove this compatibility layer with Rally 1.1.1
-        idx = self.index_name()
-        if self.client.exists(idx):
-            index_info = self.client.get_index(idx)
-            # results is the old type name -> we have an old index, don't touch it
-            if "results" in index_info[idx]["mappings"]:
-                idx = "{}.new".format(idx)
-        self.client.bulk_index(index=idx, doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
+        self.client.bulk_index(index=self.index_name(), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
 
     def index_name(self):
         return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
