@@ -805,6 +805,54 @@ With the operation ``sleep`` you can sleep for a certain duration to ensure no r
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+delete-snapshot-repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-snapshot-repository`` you can delete an existing snapshot repository. The ``delete-snapshot-repository`` operation supports the following parameter:
+
+* ``repository`` (mandatory): The name of the snapshot repository to delete.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+create-snapshot-repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-snapshot-repository`` you can create a new snapshot repository. The ``create-snapshot-repository`` operation supports the following parameters:
+
+* ``repository`` (mandatory): The name of the snapshot repository to create.
+* ``body`` (mandatory): The body of the create snapshot repository request.
+* ``request-params`` (optional): A structure containing HTTP request parameters.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+restore-snapshot
+~~~~~~~~~~~~~~~~
+
+With the operation ``restore-snapshot`` you can restore a snapshot from an already created snapshot repository. The ``restore-snapshot`` operation supports the following parameters:
+
+* ``repository`` (mandatory): The name of the snapshot repository to use. This snapshot repository must exist prior to calling ``restore-snapshot``.
+* ``snapshot`` (mandatory): The name of the snapshot to restore.
+* ``wait-for-completion`` (optional, defaults to ``False``): Whether this call should return immediately or block until the snapshot is restored.
+* ``request-params`` (optional): A structure containing HTTP request parameters.
+
+.. note::
+    In order to ensure that the track execution only continues after a snapshot has been restored, set ``wait-for-completion`` to ``true`` **and** increase the request timeout. In the example below we set it to 7200 seconds (or 2 hours)::
+
+        "request-params": {
+            "request_timeout": 7200
+        }
+
+    However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step. This has the additional advantage that you'll get a progress report while the snapshot is being restored.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+wait-for-recovery
+~~~~~~~~~~~~~~~~~
+
+With the operation ``wait-for-recovery`` you can wait until an ongoing index recovery finishes. The ``wait-for-recovery`` operation does not support any parameters.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 schedule
 ~~~~~~~~
 

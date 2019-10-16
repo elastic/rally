@@ -437,6 +437,10 @@ class OperationType(Enum):
     OpenMlJob = 1016
     CloseMlJob = 1017
     Sleep = 1018
+    DeleteSnapshotRepository = 1019
+    CreateSnapshotRepository = 1020
+    RestoreSnapshot = 1021
+    WaitForRecovery = 1022
 
     @property
     def admin_op(self):
@@ -490,6 +494,14 @@ class OperationType(Enum):
             return OperationType.CloseMlJob
         elif v == "sleep":
             return OperationType.Sleep
+        elif v == "delete-snapshot-repository":
+            return OperationType.DeleteSnapshotRepository
+        elif v == "create-snapshot-repository":
+            return OperationType.CreateSnapshotRepository
+        elif v == "restore-snapshot":
+            return OperationType.RestoreSnapshot
+        elif v == "wait-for-recovery":
+            return OperationType.WaitForRecovery
         else:
             raise KeyError("No enum value for [%s]" % v)
 
