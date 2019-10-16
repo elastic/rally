@@ -836,13 +836,13 @@ With the operation ``restore-snapshot`` you can restore a snapshot from an alrea
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 
 .. note::
-    In order to ensure that the track execution only continues after a snapshot has been restored, set ``wait-for-completion`` to ``true``. In that case you should also increase the request timeout. In the example below we set it to 7200 seconds (or 2 hours)::
+    In order to ensure that the track execution only continues after a snapshot has been restored, set ``wait-for-completion`` to ``true`` **and** increase the request timeout. In the example below we set it to 7200 seconds (or 2 hours)::
 
         "request-params": {
             "request_timeout": 7200
         }
 
-    However, this might not work if a proxy is in between the client and Elasticsearch and that proxy has a shorter request timeout configured than the client. In that case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step. This has the additional advantage that you'll get a progress report while the snapshot is being restored.
+    However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step. This has the additional advantage that you'll get a progress report while the snapshot is being restored.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
