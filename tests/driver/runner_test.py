@@ -2072,7 +2072,7 @@ class IndicesRecoveryTests(TestCase):
                                     "total_in_bytes": 79063092,
                                     "recovered": "65.7mb",
                                     "recovered_in_bytes": 68891939,
-                                },
+                                }
                             }
                         },
                         {
@@ -2083,10 +2083,9 @@ class IndicesRecoveryTests(TestCase):
                                     "total_in_bytes": 179063092,
                                     "recovered": "165.7mb",
                                     "recovered_in_bytes": 168891939,
-                                },
+                                }
                             }
                         }
-
                     ]
                 }
             },
@@ -2109,6 +2108,7 @@ class IndicesRecoveryTests(TestCase):
                 self.assertEqual(recovered_bytes, 237783878)
                 self.assertAlmostEqual(r.percent_completed, 0.9211, places=3)
             self.assertEqual(unit, "bytes")
+
 
 class ShrinkIndexTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
