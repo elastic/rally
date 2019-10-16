@@ -2032,6 +2032,43 @@ class RestoreSnapshotTests(TestCase):
 
         es.snapshot.restore.assert_called_once_with(repository="backups",
                                                     snapshot="snapshot-001",
+                                                    body=None,
+                                                    wait_for_completion=True,
+                                                    params={
+                                                        "request_timeout": 7200,
+                                                        "retries": 0
+                                                    })
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_restore_snapshot_with_body(self, es):
+        params = {
+            "repository": "backups",
+            "snapshot": "snapshot-001",
+            "body": {
+                "indices": "index1,index2",
+                "include_global_state": False,
+                "index_settings": {
+                    "index.number_of_replicas": 0
+                }
+            },
+            "wait-for-completion": True,
+            "request-params": {
+                "request_timeout": 7200
+            }
+        }
+
+        r = runner.RestoreSnapshot()
+        r(es, params)
+
+        es.snapshot.restore.assert_called_once_with(repository="backups",
+                                                    snapshot="snapshot-001",
+                                                    body={
+                                                        "indices": "index1,index2",
+                                                        "include_global_state": False,
+                                                        "index_settings": {
+                                                            "index.number_of_replicas": 0
+                                                        }
+                                                    },
                                                     wait_for_completion=True,
                                                     params={
                                                         "request_timeout": 7200,
