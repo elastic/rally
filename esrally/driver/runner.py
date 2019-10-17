@@ -1158,15 +1158,6 @@ class RestoreSnapshot(Runner):
     """
     def __call__(self, es, params):
         request_params = params.get("request-params", {})
-        if "retries" not in request_params:
-            # It is possible that there is a proxy in between the cluster and our client which has a shorter timeout
-            # configured. In that case, the proxy would return 504, the client would retry the operation and hit an
-            # error about an index that is already existing. This error message is confusing and thus we explicitly
-            # disallow the client to ever retry.
-            #
-            # see also the docs for ``retries`` in the ``urllib3.connectionpool.urlopen``.
-            request_params["retries"] = 0
-
         es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
                             snapshot=mandatory(params, "snapshot", repr(self)),
                             wait_for_completion=params.get("wait-for-completion", False),

@@ -2033,10 +2033,7 @@ class RestoreSnapshotTests(TestCase):
         es.snapshot.restore.assert_called_once_with(repository="backups",
                                                     snapshot="snapshot-001",
                                                     wait_for_completion=True,
-                                                    params={
-                                                        "request_timeout": 7200,
-                                                        "retries": 0
-                                                    })
+                                                    params={"request_timeout": 7200})
 
 
 class IndicesRecoveryTests(TestCase):
