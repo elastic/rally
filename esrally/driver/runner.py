@@ -1169,6 +1169,7 @@ class RestoreSnapshot(Runner):
 
         es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
                             snapshot=mandatory(params, "snapshot", repr(self)),
+                            body=params.get("body"),
                             wait_for_completion=params.get("wait-for-completion", False),
                             params=request_params)
 
