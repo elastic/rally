@@ -1373,7 +1373,7 @@ def schedule_for(current_track, task, client_index):
     runner_for_op = runner.runner_for(op.type)
     params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
 
-    if requires_time_period_schedule(task, params_for_op):
+    if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
         logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] "
                     "seconds and a time period of [%s] seconds.", task.schedule, task.name,
@@ -1395,12 +1395,15 @@ def schedule_for(current_track, task, client_index):
     return generator_for_schedule(task.name, sched, loop_control, runner_for_op, params_for_op)
 
 
-def requires_time_period_schedule(task, params):
+def requires_time_period_schedule(task, task_runner, params):
     if task.warmup_time_period is not None or task.time_period is not None:
         return True
     # user has explicitly requested iterations
     if task.warmup_iterations is not None or task.iterations is not None:
         return False
+    # the runner determines completion
+    if task_runner.completed is not None:
+        return True
     # If the parameter source ends after a finite amount of iterations, we will run with a time-based schedule
     return not params.infinite
 

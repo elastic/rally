@@ -2049,12 +2049,16 @@ class IndicesRecoveryTests(TestCase):
         self.assertFalse(r.completed)
         self.assertEqual(r.percent_completed, 0.0)
 
-        r(es, {})
+        r(es, {
+            "completion-recheck-wait-period": 0
+        })
 
         self.assertTrue(r.completed)
         self.assertEqual(r.percent_completed, 1.0)
 
-        es.indices.recovery.assert_called_once_with(active_only=True)
+        es.indices.recovery.assert_called_with(active_only=True)
+        # retries three times
+        self.assertEqual(3, es.indices.recovery.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_waits_for_ongoing_indices_recovery(self, es):
@@ -2089,8 +2093,10 @@ class IndicesRecoveryTests(TestCase):
                     ]
                 }
             },
-            # completed
-            {}
+            # completed - will be called three times
+            {},
+            {},
+            {},
         ]
 
         r = runner.IndicesRecovery()
@@ -2098,7 +2104,9 @@ class IndicesRecoveryTests(TestCase):
         self.assertEqual(r.percent_completed, 0.0)
 
         while not r.completed:
-            recovered_bytes, unit = r(es, {})
+            recovered_bytes, unit = r(es, {
+                "completion-recheck-wait-period": 0
+            })
             if r.completed:
                 # no additional bytes recovered since the last call
                 self.assertEqual(recovered_bytes, 0)

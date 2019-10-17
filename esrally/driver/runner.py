@@ -105,7 +105,8 @@ class Runner:
     Base class for all operations against Elasticsearch.
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super(Runner, self).__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
 
     def __enter__(self):
@@ -127,29 +128,52 @@ class Runner:
         return False
 
 
+class Delegator:
+    """
+    Mixin to unify delegate handling
+    """
+    def __init__(self, delegate, *args, **kwargs):
+        super(Delegator, self).__init__(*args, **kwargs)
+        self.delegate = delegate
+
+
+def unwrap(runner):
+    """
+    Unwraps all delegators until the actual runner.
+
+    :param runner: An arbitrarily nested chain of delegators around a runner.
+    :return: The innermost runner.
+    """
+    delegate = getattr(runner, "delegate", None)
+    if delegate:
+        return unwrap(delegate)
+    else:
+        return runner
+
+
 def _single_cluster_runner(runnable, name, context_manager_enabled=False):
     # only pass the default ES client
-    delegate = DelegatingRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
-    return _with_completion(delegate, runnable)
+    delegate = MultiClientRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
+    return _with_completion(delegate)
 
 
 def _multi_cluster_runner(runnable, name, context_manager_enabled=False):
     # pass all ES clients
-    delegate = DelegatingRunner(runnable, name, lambda es: es, context_manager_enabled)
-    return _with_completion(delegate, runnable)
+    delegate = MultiClientRunner(runnable, name, lambda es: es, context_manager_enabled)
+    return _with_completion(delegate)
 
 
-def _with_completion(delegate, runnable):
-    if hasattr(runnable, "completed") and hasattr(runnable, "percent_completed"):
-        return WithCompletion(delegate, runnable)
+def _with_completion(delegate):
+    unwrapped_runner = unwrap(delegate)
+    if hasattr(unwrapped_runner, "completed") and hasattr(unwrapped_runner, "percent_completed"):
+        return WithCompletion(delegate, unwrapped_runner)
     else:
         return NoCompletion(delegate)
 
 
-class NoCompletion(Runner):
+class NoCompletion(Runner, Delegator):
     def __init__(self, delegate):
-        super().__init__()
-        self.delegate = delegate
+        super().__init__(delegate=delegate)
 
     @property
     def completed(self):
@@ -173,10 +197,9 @@ class NoCompletion(Runner):
         return self.delegate.__exit__(exc_type, exc_val, exc_tb)
 
 
-class WithCompletion(Runner):
+class WithCompletion(Runner, Delegator):
     def __init__(self, delegate, progressable):
-        super().__init__()
-        self.delegate = delegate
+        super().__init__(delegate=delegate)
         self.progressable = progressable
 
     @property
@@ -201,16 +224,15 @@ class WithCompletion(Runner):
         return self.delegate.__exit__(exc_type, exc_val, exc_tb)
 
 
-class DelegatingRunner(Runner):
+class MultiClientRunner(Runner, Delegator):
     def __init__(self, runnable, name, client_extractor, context_manager_enabled=False):
-        super().__init__()
-        self.runnable = runnable
+        super().__init__(delegate=runnable)
         self.name = name
         self.client_extractor = client_extractor
         self.context_manager_enabled = context_manager_enabled
 
     def __call__(self, *args):
-        return self.runnable(self.client_extractor(args[0]), *args[1:])
+        return self.delegate(self.client_extractor(args[0]), *args[1:])
 
     def __repr__(self, *args, **kwargs):
         if self.context_manager_enabled:
@@ -220,12 +242,12 @@ class DelegatingRunner(Runner):
 
     def __enter__(self):
         if self.context_manager_enabled:
-            self.runnable.__enter__()
+            self.delegate.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.context_manager_enabled:
-            return self.runnable.__exit__(exc_type, exc_val, exc_tb)
+            return self.delegate.__exit__(exc_type, exc_val, exc_tb)
         else:
             return False
 
@@ -1192,7 +1214,17 @@ class IndicesRecovery(Runner):
         return self._percent_completed
 
     def __call__(self, es, params):
-        response = es.indices.recovery(active_only=True)
+        remaining_attempts = params.get("completion-recheck-attempts", 3)
+        wait_period = params.get("completion-recheck-wait-period", 2)
+        response = None
+        while not response and remaining_attempts > 0:
+            response = es.indices.recovery(active_only=True)
+            remaining_attempts -= 1
+            # This might also happen if all recoveries have just finished and we happen to call the API
+            # before the next recovery is scheduled.
+            if not response:
+                time.sleep(wait_period)
+
         if not response:
             self._completed = True
             self._percent_completed = 1.0
@@ -1226,7 +1258,7 @@ class IndicesRecovery(Runner):
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
-class Retry(Runner):
+class Retry(Runner, Delegator):
     """
     This runner can be used as a wrapper around regular runners to retry operations.
 
@@ -1242,8 +1274,7 @@ class Retry(Runner):
     """
 
     def __init__(self, delegate):
-        super().__init__()
-        self.delegate = delegate
+        super().__init__(delegate=delegate)
 
     def __enter__(self):
         self.delegate.__enter__()

@@ -849,7 +849,25 @@ This is an administrative operation. Metrics are not reported by default. Report
 wait-for-recovery
 ~~~~~~~~~~~~~~~~~
 
-With the operation ``wait-for-recovery`` you can wait until an ongoing index recovery finishes. The ``wait-for-recovery`` operation does not support any parameters.
+With the operation ``wait-for-recovery`` you can wait until an ongoing shard recovery finishes. The ``wait-for-recovery`` operation supports the following parameters:
+
+* ``completion-recheck-attempts`` (optional, defaults to 3): It might be possible that the `index recovery API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-recovery.html>`_ reports that there are no active shard recoveries when a new one might be scheduled shortly afterwards. Therefore, this operation will check several times whether there are still no active recoveries. In between those attempts, it will wait for a time period specified by ``completion-recheck-wait-period``.
+* ``completion-recheck-wait-period`` (optional, defaults to 2 seconds): Time in seconds to wait in between consecutive attempts.
+
+.. warning::
+
+    By default this operation will run unthrottled (like any other) but you should limit the number of calls by specifying the ``target-throughput`` property on the corresponding task::
+
+        {
+          "operation": {
+            "operation-type": "wait-for-recovery",
+            "completion-recheck-attempts": 2,
+            "completion-recheck-wait-period": 5
+          },
+          "target-throughput": 10
+        }
+
+    In this example, Rally will check the progress of shard recovery every ten seconds (as specified by ``target-throughput``). When the index recovery API reports that there are no active recoveries, it will still check this twice (``completion-recheck-attempts``), waiting for five seconds in between those calls (``completion-recheck-wait-period``).
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 

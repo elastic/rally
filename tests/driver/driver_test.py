@@ -449,10 +449,30 @@ class MetricsAggregationTests(TestCase):
 
 
 class SchedulerTests(ScheduleTestCase):
+    class RunnerWithProgress:
+        def __init__(self, complete_after=3):
+            self.completed = False
+            self.percent_completed = 0.0
+            self.calls = 0
+            self.complete_after = complete_after
+
+        def __call__(self, *args, **kwargs):
+            self.calls += 1
+            if not self.completed:
+                self.percent_completed = self.calls / self.complete_after
+                self.completed = self.calls == self.complete_after
+            else:
+                self.percent_completed = 1.0
+
     def setUp(self):
+        self.test_track = track.Track(name="unittest")
+        self.runner_with_progress = SchedulerTests.RunnerWithProgress()
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         runner.register_default_runners()
-        self.test_track = track.Track(name="unittest")
+        runner.register_runner("driver-test-runner-with-completion", self.runner_with_progress)
+
+    def tearDown(self):
+        runner.remove_runner("driver-test-runner-with-completion")
 
     def test_search_task_one_client(self):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
@@ -577,6 +597,23 @@ class SchedulerTests(ScheduleTestCase):
             (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
             (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
         ], list(invocations), infinite_schedule=False)
+
+    def test_schedule_with_progress_determined_by_runner(self):
+        task = track.Task("time-based", track.Operation("time-based", "driver-test-runner-with-completion",
+                                                        params={"body": ["a"]},
+                                                        param_source="driver-test-param-source"),
+                          clients=1,
+                          params={"target-throughput": 1, "clients": 1})
+
+        invocations = driver.schedule_for(self.test_track, task, 0)
+
+        self.assert_schedule([
+            (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (1.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+            (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+        ], invocations, infinite_schedule=True)
 
     def test_schedule_for_time_based(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
