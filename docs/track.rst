@@ -832,6 +832,7 @@ With the operation ``restore-snapshot`` you can restore a snapshot from an alrea
 
 * ``repository`` (mandatory): The name of the snapshot repository to use. This snapshot repository must exist prior to calling ``restore-snapshot``.
 * ``snapshot`` (mandatory): The name of the snapshot to restore.
+* ``body`` (optional): The body of the `snapshot restore request <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-snapshots.html#restore-snapshot>`_.
 * ``wait-for-completion`` (optional, defaults to ``False``): Whether this call should return immediately or block until the snapshot is restored.
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 

@@ -477,7 +477,8 @@ class SchedulerTests(ScheduleTestCase):
     def test_search_task_one_client(self):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, params={"target-throughput": 10, "clients": 1})
-        schedule = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 8, {}),
@@ -494,7 +495,8 @@ class SchedulerTests(ScheduleTestCase):
     def test_search_task_two_clients(self):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=1, iterations=5, clients=2, params={"target-throughput": 10, "clients": 2})
-        schedule = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 6, {}),
@@ -512,20 +514,22 @@ class SchedulerTests(ScheduleTestCase):
                                                         param_source="driver-test-param-source"),
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "size": 3}),
             (1.0, metrics.SampleType.Normal, 2 / 3, {"body": ["a"], "size": 3}),
             (2.0, metrics.SampleType.Normal, 3 / 3, {"body": ["a"], "size": 3}),
-        ], list(invocations))
+        ], list(schedule))
 
     def test_schedule_param_source_determines_iterations_including_warmup(self):
         task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
                                                         param_source="driver-test-param-source"),
                           warmup_iterations=2, clients=1, params={"target-throughput": 4, "clients": 4})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "size": 5}),
@@ -533,7 +537,7 @@ class SchedulerTests(ScheduleTestCase):
             (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
             (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
             (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
-        ], list(invocations))
+        ], list(schedule))
 
     def test_schedule_defaults_to_iteration_based(self):
         # no time-period and no iterations specified on the task. Also, the parameter source does not define a size.
@@ -541,18 +545,20 @@ class SchedulerTests(ScheduleTestCase):
                                                         param_source="driver-test-param-source"),
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"]}),
-        ], list(invocations))
+        ], list(schedule))
 
     def test_schedule_for_warmup_time_based(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "size": 11}),
@@ -566,14 +572,15 @@ class SchedulerTests(ScheduleTestCase):
             (8.0, metrics.SampleType.Normal, 9 / 11, {"body": ["a"], "size": 11}),
             (9.0, metrics.SampleType.Normal, 10 / 11, {"body": ["a"], "size": 11}),
             (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "size": 11}),
-        ], list(invocations))
+        ], list(schedule))
 
     def test_infinite_schedule_without_progress_indication(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
@@ -581,14 +588,15 @@ class SchedulerTests(ScheduleTestCase):
             (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-        ], invocations, infinite_schedule=True)
+        ], schedule, infinite_schedule=True)
 
     def test_finite_schedule_with_progress_indication(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 5, {"body": ["a"], "size": 5}),
@@ -596,7 +604,7 @@ class SchedulerTests(ScheduleTestCase):
             (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
             (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
             (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
-        ], list(invocations), infinite_schedule=False)
+        ], list(schedule), infinite_schedule=False)
 
     def test_schedule_with_progress_determined_by_runner(self):
         task = track.Task("time-based", track.Operation("time-based", "driver-test-runner-with-completion",
@@ -620,13 +628,14 @@ class SchedulerTests(ScheduleTestCase):
                                                         param_source="driver-test-param-source"), warmup_time_period=0.1, time_period=0.1,
                           clients=1)
 
-        invocations = list(driver.schedule_for(self.test_track, task, 0))
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = list(schedule_handle())
 
-        self.assertTrue(len(invocations) > 0)
+        self.assertTrue(len(schedule) > 0)
 
         last_progress = -1
 
-        for invocation_time, sample_type, progress_percent, runner, params in invocations:
+        for invocation_time, sample_type, progress_percent, runner, params in schedule:
             # we're not throughput throttled
             self.assertEqual(0, invocation_time)
             if progress_percent <= 0.5:
@@ -867,16 +876,18 @@ class ExecutorTests(TestCase):
         def run(*args, **kwargs):
             raise ExpectedUnitTestException()
 
+        def schedule_handle():
+            return [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
+
         task = track.Task("no-op", track.Operation("no-op", track.OperationType.Bulk.name, params={},
                                                    param_source="driver-test-param-source"),
                           warmup_time_period=0.5, time_period=0.5, clients=4,
                           params={"clients": 4})
 
-        schedule = [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
         sampler = driver.Sampler(client_id=0, task=None, start_timestamp=0)
         cancel = threading.Event()
         complete = threading.Event()
-        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+        execute_schedule = driver.Executor(task, schedule_handle, es, sampler, cancel, complete)
 
         with self.assertRaises(ExpectedUnitTestException):
             execute_schedule()
