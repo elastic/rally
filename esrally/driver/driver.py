@@ -1091,7 +1091,7 @@ class Executor:
         """
         self.task = task
         self.op = task.operation
-        self.schedule = schedule
+        self.schedule_handle = schedule
         self.es = es
         self.sampler = sampler
         self.cancel = cancel
@@ -1101,9 +1101,11 @@ class Executor:
 
     def __call__(self, *args, **kwargs):
         total_start = time.perf_counter()
+        # lazily initialize the schedule
+        schedule = self.schedule_handle()
         # noinspection PyBroadException
         try:
-            for expected_scheduled_time, sample_type, percent_completed, runner, params in self.schedule:
+            for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
                 if self.cancel.is_set():
                     self.logger.info("User cancelled execution.")
                     break
@@ -1392,7 +1394,7 @@ def schedule_for(current_track, task, client_index):
                     "iterations and [%s] iterations.", task.schedule, task.name, str(warmup_iterations), str(iterations))
         loop_control = IterationBased(warmup_iterations, iterations)
 
-    return generator_for_schedule(task.name, sched, loop_control, runner_for_op, params_for_op)
+    return ScheduleHandle(task.name, sched, loop_control, runner_for_op, params_for_op)
 
 
 def requires_time_period_schedule(task, params):
@@ -1405,50 +1407,62 @@ def requires_time_period_schedule(task, params):
     return not params.infinite
 
 
-def generator_for_schedule(task_name, sched, task_progress_control, runner, params):
-    """
-    Creates a generator that will yield individual task invocations for the provided schedule.
+class ScheduleHandle:
+    def __init__(self, task_name, sched, task_progress_control, runner, params):
+        """
+        Creates a generator that will yield individual task invocations for the provided schedule.
 
-    :param task_name: The name of the task for which the schedule is generated.
-    :param sched: The scheduler for this task.
-    :param task_progress_control: Controls how and how often this generator will loop.
-    :param runner: The runner for a given operation.
-    :param params: The parameter source for a given operation.
-    :return: A generator for the corresponding parameters.
-    """
-    next_scheduled = 0
-    logger = logging.getLogger(__name__)
-    if task_progress_control.infinite:
-        logger.info("Parameter source will determine when the schedule for [%s] terminates.", task_name)
-        param_source_knows_progress = hasattr(params, "percent_completed")
-        task_progress_control.start()
-        while True:
-            try:
-                # does not contribute at all to completion. Hence, we cannot define completion.
-                percent_completed = params.percent_completed if param_source_knows_progress else None
-                yield (next_scheduled, task_progress_control.sample_type, percent_completed, runner, params.params())
-                next_scheduled = sched.next(next_scheduled)
-                task_progress_control.next()
-            except StopIteration:
-                logger.info("%s schedule for [%s] stopped due to StopIteration.", str(task_progress_control), task_name)
-                return
-    else:
-        task_progress_control.start()
-        logger.info("%s schedule will determine when the schedule for [%s] terminates.",
-                    str(task_progress_control), task_name)
-        while not task_progress_control.completed:
-            try:
-                yield (next_scheduled,
-                       task_progress_control.sample_type,
-                       task_progress_control.percent_completed,
-                       runner,
-                       params.params())
-                next_scheduled = sched.next(next_scheduled)
-                task_progress_control.next()
-            except StopIteration:
-                logger.info("%s schedule for [%s] stopped due to StopIteration.", str(task_progress_control), task_name)
-                return
-        logger.info("%s schedule for [%s] stopped regularly.", str(task_progress_control), task_name)
+        :param task_name: The name of the task for which the schedule is generated.
+        :param sched: The scheduler for this task.
+        :param task_progress_control: Controls how and how often this generator will loop.
+        :param runner: The runner for a given operation.
+        :param params: The parameter source for a given operation.
+        :return: A generator for the corresponding parameters.
+        """
+        self.task_name = task_name
+        self.sched = sched
+        self.task_progress_control = task_progress_control
+        self.runner = runner
+        self.params = params
+        self.logger = logging.getLogger(__name__)
+
+    def __call__(self):
+        next_scheduled = 0
+
+        if self.task_progress_control.infinite:
+            self.logger.info("Parameter source will determine when the schedule for [%s] terminates.", self.task_name)
+            param_source_knows_progress = hasattr(self.params, "percent_completed")
+            self.task_progress_control.start()
+            while True:
+                try:
+                    # does not contribute at all to completion. Hence, we cannot define completion.
+                    percent_completed = self.params.percent_completed if param_source_knows_progress else None
+                    yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner,
+                           self.params.params())
+                    next_scheduled = self.sched.next(next_scheduled)
+                    self.task_progress_control.next()
+                except StopIteration:
+                    self.logger.info("%s schedule for [%s] stopped due to StopIteration.",
+                                     str(self.task_progress_control), self.task_name)
+                    return
+        else:
+            self.task_progress_control.start()
+            self.logger.info("%s schedule will determine when the schedule for [%s] terminates.",
+                             str(self.task_progress_control), self.task_name)
+            while not self.task_progress_control.completed:
+                try:
+                    yield (next_scheduled,
+                           self.task_progress_control.sample_type,
+                           self.task_progress_control.percent_completed,
+                           self.runner,
+                           self.params.params())
+                    next_scheduled = self.sched.next(next_scheduled)
+                    self.task_progress_control.next()
+                except StopIteration:
+                    self.logger.info("%s schedule for [%s] stopped due to StopIteration.",
+                                     str(self.task_progress_control), self.task_name)
+                    return
+            self.logger.info("%s schedule for [%s] stopped regularly.", str(self.task_progress_control), self.task_name)
 
 
 class TimePeriodBased:
