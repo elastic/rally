@@ -2034,10 +2034,7 @@ class RestoreSnapshotTests(TestCase):
                                                     snapshot="snapshot-001",
                                                     body=None,
                                                     wait_for_completion=True,
-                                                    params={
-                                                        "request_timeout": 7200,
-                                                        "retries": 0
-                                                    })
+                                                    params={"request_timeout": 7200})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_restore_snapshot_with_body(self, es):
