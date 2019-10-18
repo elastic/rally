@@ -613,7 +613,8 @@ class SchedulerTests(ScheduleTestCase):
                           clients=1,
                           params={"target-throughput": 1, "clients": 1})
 
-        invocations = driver.schedule_for(self.test_track, task, 0)
+        schedule_handle = driver.schedule_for(self.test_track, task, 0)
+        schedule = schedule_handle()
 
         self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
@@ -621,7 +622,7 @@ class SchedulerTests(ScheduleTestCase):
             (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-        ], invocations, infinite_schedule=True)
+        ], schedule, infinite_schedule=True)
 
     def test_schedule_for_time_based(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
