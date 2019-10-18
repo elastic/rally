@@ -2070,10 +2070,7 @@ class RestoreSnapshotTests(TestCase):
                                                         }
                                                     },
                                                     wait_for_completion=True,
-                                                    params={
-                                                        "request_timeout": 7200,
-                                                        "retries": 0
-                                                    })
+                                                    params={"request_timeout": 7200})
 
 
 class IndicesRecoveryTests(TestCase):
