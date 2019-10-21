@@ -595,7 +595,7 @@ class NodeStats(Runner):
 def search_type_fallback(es, doc_type, index, body, params):
     if doc_type and not index:
         index = "_all"
-    path = "/" + "/".join([index, doc_type, "_search"])
+    path = "/%s/%s/_search" % (index, doc_type)
     return es.transport.perform_request(
         "GET", path, params=params, body=body
     )
@@ -650,9 +650,9 @@ class Query(Runner):
         request_params = self._default_request_params(params)
         index = params.get("index", "_all")
         body = mandatory(params, "body", self)
+        doc_type = params.get("type")
         params = request_params
 
-        doc_type = params.get("type")
         if doc_type is not None:
             r = search_type_fallback(es, doc_type, index, body, params)
         else:
@@ -691,8 +691,8 @@ class Query(Runner):
                 sort = "_doc"
                 scroll = "10s"
                 size = size
-                params = request_params
                 doc_type = params.get("type")
+                params = request_params
                 if doc_type is not None:
                     params["sort"] = sort
                     params["scroll"] = scroll

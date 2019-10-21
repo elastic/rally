@@ -902,7 +902,6 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "index": "unittest",
-            "type": "type",
             "cache": None,
             "body": {
                 "query": {
@@ -924,6 +923,57 @@ class QueryRunnerTests(TestCase):
 
         es.search.assert_called_once_with(
             index="unittest",
+            body=params["body"],
+            params={}
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_query_match_all_doc_type_fallback(self, es):
+        es.transport.perform_request.return_value = {
+            "timed_out": False,
+            "took": 5,
+            "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "some-doc-1"
+                    },
+                    {
+                        "some-doc-2"
+                    }
+                ]
+            }
+        }
+
+        query_runner = runner.Query()
+
+        params = {
+            "index": "unittest",
+            "type": "type",
+            "cache": None,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+
+        with query_runner:
+            result = query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertEqual(2, result["hits"])
+        self.assertEqual("eq", result["hits_relation"])
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(5, result["took"])
+        self.assertFalse("error-type" in result)
+
+        es.transport.perform_request.assert_called_once_with(
+            'GET', '/unittest/type/_search',
             body=params["body"],
             params={}
         )
@@ -959,7 +1009,6 @@ class QueryRunnerTests(TestCase):
             "pages": 1,
             "results-per-page": 100,
             "index": "unittest",
-            "type": "type",
             "cache": True,
             "body": {
                 "query": {
@@ -1022,7 +1071,6 @@ class QueryRunnerTests(TestCase):
             "pages": 1,
             "results-per-page": 100,
             "index": "unittest",
-            "type": "type",
             "body": {
                 "query": {
                     "match_all": {}
@@ -1144,7 +1192,6 @@ class QueryRunnerTests(TestCase):
             "pages": 2,
             "results-per-page": 100,
             "index": "unittest",
-            "type": "type",
             "cache": False,
             "body": {
                 "query": {
@@ -1202,7 +1249,6 @@ class QueryRunnerTests(TestCase):
             "pages": 5,
             "results-per-page": 100,
             "index": "unittest",
-            "type": "type",
             "cache": False,
             "body": {
                 "query": {
@@ -1258,7 +1304,6 @@ class QueryRunnerTests(TestCase):
             "pages": 5,
             "results-per-page": 100,
             "index": "unittest",
-            "type": "type",
             "cache": False,
             "body": {
                 "query": {
@@ -1324,7 +1369,6 @@ class QueryRunnerTests(TestCase):
             "pages": "all",
             "results-per-page": 100,
             "index": "unittest",
-            "type": "type",
             "cache": False,
             "body": {
                 "query": {
