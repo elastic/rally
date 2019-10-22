@@ -236,7 +236,7 @@ class HeapdumpTests(TestCase):
         node = cluster.Node(pid="1234", host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.detach_from_node(node, running=True)
-        run_subprocess_with_logging.assert_called_with("jmap -dump:live,format=b,file=/var/log/heap_at_exit_1234.hprof 1234")
+        run_subprocess_with_logging.assert_called_with("jmap -dump:format=b,file=/var/log/heap_at_exit_1234.hprof 1234")
 
 
 class CcrStatsTests(TestCase):
