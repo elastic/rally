@@ -46,7 +46,7 @@ long_description = str_from_file("README.rst")
 install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
-    "elasticsearch==6.2.0",
+    "elasticsearch==7.0.5",
     # License: BSD
     "psutil==5.4.0",
     # License: MIT
