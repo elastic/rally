@@ -91,32 +91,6 @@ def format_as_csv(headers, data):
         return out.getvalue()
 
 
-# TODO #792: Remove duplication
-# helper function for encoding and decoding float keys so that the Elasticsearch metrics store can safe it.
-def encode_float_key(k):
-    # ensure that the key is indeed a float to unify the representation (e.g. 50 should be represented as "50_0")
-    return str(float(k)).replace(".", "_")
-
-
-# TODO #792: Remove duplication
-def percentiles_for_sample_size(sample_size):
-    # if needed we can come up with something smarter but it'll do for now
-    if sample_size < 1:
-        raise AssertionError("Percentiles require at least one sample")
-    elif sample_size == 1:
-        return [100]
-    elif 1 < sample_size < 10:
-        return [50, 100]
-    elif 10 <= sample_size < 100:
-        return [50, 90, 100]
-    elif 100 <= sample_size < 1000:
-        return [50, 90, 99, 100]
-    elif 1000 <= sample_size < 10000:
-        return [50, 90, 99, 99.9, 100]
-    else:
-        return [50, 90, 99, 99.9, 99.99, 100]
-
-
 class SummaryReporter:
     def __init__(self, results, config):
         self.results = results
@@ -191,8 +165,9 @@ class SummaryReporter:
     def report_percentiles(self, name, task, value):
         lines = []
         if value:
-            for percentile in percentiles_for_sample_size(sys.maxsize):
-                a_line = self.line("%sth percentile %s" % (percentile, name), task, value.get(encode_float_key(percentile)), "ms",
+            for percentile in metrics.percentiles_for_sample_size(sys.maxsize):
+                percentile_value = value.get(metrics.encode_float_key(percentile))
+                a_line = self.line("%sth percentile %s" % (percentile, name), task, percentile_value, "ms",
                                    force=self.report_all_percentile_values)
                 self.append_non_empty(lines, a_line)
         return lines
@@ -261,8 +236,6 @@ class SummaryReporter:
         return self.join(
             self.line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
             self.line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
-            self.line("Index size", "", stats.index_size, "GB", convert.bytes_to_gb),
-            self.line("Total written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
         )
 
     def report_segment_memory(self, stats):
@@ -308,8 +281,8 @@ class ComparisonReporter:
 
     def report(self, r1, r2):
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_stats = metrics.Stats(r1.results)
-        contender_stats = metrics.Stats(r2.results)
+        baseline_stats = metrics.GlobalStats(r1.results)
+        contender_stats = metrics.GlobalStats(r2.results)
 
         print_internal("")
         print_internal("Comparing baseline")
@@ -389,9 +362,9 @@ class ComparisonReporter:
 
     def report_percentiles(self, name, task, baseline_values, contender_values):
         lines = []
-        for percentile in percentiles_for_sample_size(sys.maxsize):
-            baseline_value = baseline_values.get(encode_float_key(percentile))
-            contender_value = contender_values.get(encode_float_key(percentile))
+        for percentile in metrics.percentiles_for_sample_size(sys.maxsize):
+            baseline_value = baseline_values.get(metrics.encode_float_key(percentile))
+            contender_value = contender_values.get(metrics.encode_float_key(percentile))
             self.append_non_empty(lines, self.line("%sth percentile %s" % (percentile, name),
                                                    baseline_value, contender_value, task, "ms", treat_increase_as_improvement=False))
         return lines
@@ -529,10 +502,6 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             self.line("Translog size", baseline_stats.translog_size, contender_stats.translog_size, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
-                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self.line("Total written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
-                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
         )
 
     def report_segment_memory(self, baseline_stats, contender_stats):

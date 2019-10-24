@@ -132,6 +132,8 @@ class BenchmarkActor(actor.RallyActor):
         self.race.distribution_flavor = msg.distribution_flavor
         self.race.distribution_version = msg.distribution_version
         self.race.revision = msg.revision
+        # store race initially (without any results) so other components can retrieve full metadata
+        self.race_store.store_race(self.race)
         if self.race.challenge.auto_generated:
             console.info("Racing on track [{}] and car {} with version [{}].\n"
                          .format(self.race.track_name, self.race.car, self.race.distribution_version))
@@ -167,22 +169,22 @@ class BenchmarkActor(actor.RallyActor):
         self.logger.info("Benchmark is complete.")
         self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(msg.metrics)
-        self.send(self.main_driver, thespian.actors.ActorExitRequest())
-        self.main_driver = None
+        self.metrics_store.flush()
+        if not self.cancelled and not self.error:
+            final_results = metrics.calculate_results(self.metrics_store, self.race)
+            self.race.add_results(final_results)
+            self.race_store.store_race(self.race)
+            metrics.results_store(self.cfg).store_results(self.race)
+            reporter.summarize(final_results, self.cfg)
+        else:
+            self.logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r].", self.cancelled, self.error)
+        self.metrics_store.close()
+
         self.teardown()
 
     @actor.no_retry("race control")
     def receiveMsg_EngineStopped(self, msg, sender):
         self.logger.info("Mechanic has stopped engine successfully.")
-        self.metrics_store.flush()
-        if not self.cancelled and not self.error:
-            final_results = metrics.calculate_results(self.metrics_store, self.race)
-            self.race.add_results(final_results)
-            reporter.summarize(final_results, self.cfg)
-            self.race_store.store_race(self.race)
-        else:
-            self.logger.info("Suppressing output of summary report. Cancelled = [%r], Error = [%r].", self.cancelled, self.error)
-        self.metrics_store.close()
         self.send(self.start_sender, Success())
 
     def setup(self, msg, sender):
@@ -227,6 +229,8 @@ class BenchmarkActor(actor.RallyActor):
         self.send(self.main_driver, driver.StartBenchmark())
 
     def teardown(self):
+        self.send(self.main_driver, thespian.actors.ActorExitRequest())
+        self.main_driver = None
         self.logger.info("Asking mechanic to stop the engine.")
         self.send(self.mechanic, mechanic.StopEngine())
 

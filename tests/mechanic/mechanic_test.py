@@ -18,7 +18,7 @@
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import exceptions
+from esrally import config, exceptions
 from esrally.mechanic import mechanic
 
 
@@ -87,4 +87,47 @@ class HostHandlingTests(TestCase):
                             mechanic.extract_all_node_ips(ip_port))
 
 
+class MechanicTests(TestCase):
+    class Node:
+        def __init__(self, node_name):
+            self.node_name = node_name
 
+    class TestLauncher:
+        def __init__(self):
+            self.started = False
+
+        def start(self, node_configs):
+            self.started = True
+            return [MechanicTests.Node("rally-node-{}".format(n)) for n in range(len(node_configs))]
+
+        def stop(self, nodes):
+            self.started = False
+
+    # We stub irrelevant methods for the test
+    class TestMechanic(mechanic.Mechanic):
+        def __init__(self, cfg, metrics_store, supply, provisioners, launcher):
+            super().__init__(cfg, metrics_store, supply, provisioners, launcher)
+
+        def _current_race(self):
+            return "race 17"
+
+        def _add_results(self, current_race, node):
+            pass
+
+    def test_start_stop_nodes(self):
+        supplier = lambda: "/home/user/src/elasticsearch/es.tar.gz"
+        provisioners = [mock.Mock(), mock.Mock()]
+        launcher = MechanicTests.TestLauncher()
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "race.id", "17")
+        metrics_store = mock.Mock()
+        m = MechanicTests.TestMechanic(cfg, metrics_store, supplier, provisioners, launcher)
+        m.start_engine()
+        self.assertTrue(launcher.started)
+        for p in provisioners:
+            self.assertTrue(p.prepare.called)
+
+        m.stop_engine()
+        self.assertFalse(launcher.started)
+        for p in provisioners:
+            self.assertTrue(p.cleanup.called)

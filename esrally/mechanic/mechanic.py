@@ -113,13 +113,7 @@ class StartNodes:
 
 
 class NodesStarted:
-    def __init__(self, system_meta_info):
-        """
-        Creates a new NodesStarted message.
-
-        :param system_meta_info:
-        """
-        self.system_meta_info = system_meta_info
+    pass
 
 
 class StopNodes:
@@ -407,10 +401,7 @@ class NodeMechanicActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.config = None
-        self.metrics_store = None
         self.mechanic = None
-        self.running = False
         self.host = None
 
     def receiveMsg_StartNodes(self, msg, sender):
@@ -422,7 +413,7 @@ class NodeMechanicActor(actor.RallyActor):
                 self.logger.info("Starting node(s) %s on [%s].", msg.node_ids, msg.ip)
 
             # Load node-specific configuration
-            self.config = config.auto_load_local_config(msg.cfg, additional_sections=[
+            cfg = config.auto_load_local_config(msg.cfg, additional_sections=[
                 # only copy the relevant bits
                 "track", "mechanic", "client", "telemetry",
                 # allow metrics store to extract race meta-data
@@ -430,24 +421,23 @@ class NodeMechanicActor(actor.RallyActor):
                 "source"
             ])
             # set root path (normally done by the main entry point)
-            self.config.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+            cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
             if not msg.external:
-                self.config.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
+                cfg.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
                 # we need to override the port with the value that the user has specified instead of using the default value (39200)
-                self.config.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
-                self.config.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
+                cfg.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
+                cfg.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
 
-            cls = metrics.metrics_store_class(self.config)
-            self.metrics_store = cls(self.config)
-            self.metrics_store.open(ctx=msg.open_metrics_context)
+            cls = metrics.metrics_store_class(cfg)
+            metrics_store = cls(cfg)
+            metrics_store.open(ctx=msg.open_metrics_context)
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
 
-            self.mechanic = create(self.config, self.metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
+            self.mechanic = create(cfg, metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
                                    msg.distribution, msg.external, msg.docker)
-            nodes = self.mechanic.start_engine()
-            self.running = True
+            self.mechanic.start_engine()
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-            self.send(getattr(msg, "reply_to", sender), NodesStarted(self.metrics_store.meta_info))
+            self.send(getattr(msg, "reply_to", sender), NodesStarted())
         except Exception:
             self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
@@ -468,38 +458,20 @@ class NodeMechanicActor(actor.RallyActor):
         # noinspection PyBroadException
         try:
             self.logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
-            if isinstance(msg, ResetRelativeTime):
-                self.logger.info("Resetting relative time of system metrics store on host [%s].", self.host)
-                self.metrics_store.reset_relative_time()
-            elif isinstance(msg, thespian.actors.WakeupMessage):
-                if self.running:
-                    self.logger.debug("Flushing system metrics store on host [%s].", self.host)
-                    self.metrics_store.flush(refresh=False)
-                    self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
+            if isinstance(msg, ResetRelativeTime) and self.mechanic:
+                self.mechanic.reset_relative_time()
+            elif isinstance(msg, thespian.actors.WakeupMessage) and self.mechanic:
+                self.mechanic.flush_metrics()
+                self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             elif isinstance(msg, StopNodes):
-                self.logger.info("Stopping nodes %s.", self.mechanic.nodes)
                 self.mechanic.stop_engine()
-                self.metrics_store.flush()
-
-                race_id = self.config.opts("system", "race.id")
-                current_race = metrics.race_store(self.config).find_by_race_id(race_id)
-
-                results = metrics.calculate_results(self.metrics_store, current_race)
-                # TODO: Store results
                 self.send(sender, NodesStopped())
-                # clear all state as the mechanic might get reused later
-                self.metrics_store.close()
-                self.running = False
-                self.config = None
                 self.mechanic = None
-                self.metrics_store = None
             elif isinstance(msg, thespian.actors.ActorExitRequest):
-                if self.running:
-                    self.logger.info("Stopping nodes %s (due to ActorExitRequest)", self.mechanic.nodes)
+                if self.mechanic:
                     self.mechanic.stop_engine()
-                    self.running = False
+                    self.mechanic = None
         except BaseException as e:
-            self.running = False
             self.logger.exception("Cannot process message [%s]", msg)
             self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure("Error on host %s" % str(self.host), e))
 
@@ -548,7 +520,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         # It is a programmer error (and not a user error) if this function is called with wrong parameters
         raise RuntimeError("One of sources, distribution, docker or external must be True")
 
-    return Mechanic(s, p, l)
+    return Mechanic(cfg, metrics_store, s, p, l)
 
 
 class Mechanic:
@@ -557,11 +529,14 @@ class Mechanic:
     running the benchmark).
     """
 
-    def __init__(self, supply, provisioners, l):
+    def __init__(self, cfg, metrics_store, supply, provisioners, launcher):
+        self.cfg = cfg
+        self.metrics_store = metrics_store
         self.supply = supply
         self.provisioners = provisioners
-        self.launcher = l
+        self.launcher = launcher
         self.nodes = []
+        self.logger = logging.getLogger(__name__)
 
     def start_engine(self):
         binaries = self.supply()
@@ -571,8 +546,35 @@ class Mechanic:
         self.nodes = self.launcher.start(node_configs)
         return self.nodes
 
+    def reset_relative_time(self):
+        self.logger.info("Resetting relative time of system metrics store.")
+        self.metrics_store.reset_relative_time()
+
+    def flush_metrics(self, refresh=False):
+        self.logger.debug("Flushing system metrics.")
+        self.metrics_store.flush(refresh=refresh)
+
     def stop_engine(self):
+        self.logger.info("Stopping nodes %s.", self.nodes)
         self.launcher.stop(self.nodes)
+        self.flush_metrics(refresh=True)
+        try:
+            current_race = self._current_race()
+            for node in self.nodes:
+                self._add_results(current_race, node)
+        except exceptions.NotFound as e:
+            self.logger.warning("Cannot store system metrics: %s.", str(e))
+
+        self.metrics_store.close()
         self.nodes = []
         for p in self.provisioners:
             p.cleanup()
+
+    def _current_race(self):
+        race_id = self.cfg.opts("system", "race.id")
+        return metrics.race_store(self.cfg).find_by_race_id(race_id)
+
+    def _add_results(self, current_race, node):
+        results = metrics.calculate_system_results(self.metrics_store, node.node_name)
+        current_race.add_results(results)
+        metrics.results_store(self.cfg).store_results(current_race)

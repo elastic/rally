@@ -539,6 +539,55 @@ class EsMetricsTests(TestCase):
 
         self.assertEqual(throughput, actual_throughput)
 
+    def test_get_per_node_value(self):
+        index_size = 5000
+        search_result = {
+            "hits": {
+                "total": 1,
+                "hits": [
+                    {
+                        "_source": {
+                            "@timestamp": StaticClock.NOW * 1000,
+                            "value": index_size
+                        }
+                    }
+                ]
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "trial-id": EsMetricsTests.RACE_ID
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "final_index_size_bytes"
+                            }
+                        },
+                        {
+                            "term": {
+                                "meta.node_name": "rally-node-3"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        actual_index_size = self.metrics_store.get_one("final_index_size_bytes", node_name="rally-node-3")
+
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+
+        self.assertEqual(index_size, actual_index_size)
+
     def test_get_mean(self):
         mean_throughput = 1734
         search_result = {
@@ -927,7 +976,10 @@ class EsRaceStoreTests(TestCase):
                 ]
             }
         }
-        self.es_mock.index.assert_called_with(index="rally-races-2016-01", doc_type="_doc", item=expected_doc)
+        self.es_mock.index.assert_called_with(index="rally-races-2016-01",
+                                              doc_type="_doc",
+                                              id=EsRaceStoreTests.RACE_ID,
+                                              item=expected_doc)
 
 
 class EsResultsStoreTests(TestCase):
@@ -938,12 +990,12 @@ class EsResultsStoreTests(TestCase):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.RACE_TIMESTAMP)
-        self.race_store = metrics.EsResultsStore(self.cfg,
-                                                 client_factory_class=MockClientFactory,
-                                                 index_template_provider_class=DummyIndexTemplateProvider,
-                                                 )
+        self.results_store = metrics.EsResultsStore(self.cfg,
+                                                    client_factory_class=MockClientFactory,
+                                                    index_template_provider_class=DummyIndexTemplateProvider,
+                                                    )
         # get hold of the mocked client...
-        self.es_mock = self.race_store.client
+        self.es_mock = self.results_store.client
 
     def test_store_results(self):
         schedule = [
@@ -961,7 +1013,7 @@ class EsResultsStoreTests(TestCase):
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
                             track_revision="abc1", team_revision="123ab", distribution_version="5.0.0",
-                            distribution_flavor="oss", results=metrics.Stats(
+                            distribution_flavor="oss", results=metrics.GlobalStats(
                                 {
                                     "young_gc_time": 100,
                                     "old_gc_time": 5,
@@ -982,17 +1034,11 @@ class EsResultsStoreTests(TestCase):
                                                 "unit": "docs/s"
                                             }
                                         }
-                                    ],
-                                    "node_metrics": [
-                                        {
-                                            "node": "rally-node-0",
-                                            "startup_time": 3.4
-                                        }
                                     ]
                                 })
                             )
 
-        self.race_store.store_results(race)
+        self.results_store.store_results(race)
 
         expected_docs = [
             {
@@ -1020,38 +1066,6 @@ class EsResultsStoreTests(TestCase):
                 "name": "old_gc_time",
                 "value": {
                     "single": 5
-                },
-                "meta": {
-                    "track-type": "saturation-degree",
-                    "saturation": "70% saturated"
-                }
-            },
-            {
-                "rally-version": "0.4.4",
-                "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
-                "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
-                "distribution-flavor": "oss",
-                "distribution-version": "5.0.0",
-                "distribution-major-version": 5,
-                "user-tags": {
-                    "os": "Linux"
-                },
-                "track": "unittest-track",
-                "team-revision": "123ab",
-                "track-revision": "abc1",
-                "challenge": "index",
-                "car": "4gheap",
-                "plugin-params": {
-                    "some-param": True
-                },
-                "active": True,
-                "node": "rally-node-0",
-                "name": "startup_time",
-                "value": {
-                    "single": 3.4
                 },
                 "meta": {
                     "track-type": "saturation-degree",
@@ -1371,7 +1385,7 @@ class FileRaceStoreTests(TestCase):
 
 
 class StatsCalculatorTests(TestCase):
-    def test_calculate_simple_index_stats(self):
+    def test_calculate_global_stats(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now())
@@ -1418,8 +1432,6 @@ class StatsCalculatorTests(TestCase):
             "max": 36.0,
             "unit": "ms"
         }, level=metrics.MetaInfoScope.cluster)
-        store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
-        store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
 
         stats = metrics.calculate_results(store, metrics.create_race(cfg, t, challenge))
 
@@ -1432,7 +1444,6 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 210), ("mean", 200)]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
-        self.assertEqual(6144, stats.index_size)
         self.assertEqual(1, len(stats.ml_processing_time))
         self.assertEqual("benchmark_ml_job_1", stats.ml_processing_time[0]["job"])
         self.assertEqual(2.2, stats.ml_processing_time[0]["min"])
@@ -1440,6 +1451,42 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(17.2, stats.ml_processing_time[0]["median"])
         self.assertEqual(36.0, stats.ml_processing_time[0]["max"])
         self.assertEqual("ms", stats.ml_processing_time[0]["unit"])
+
+    def test_calculate_system_stats(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now())
+        cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
+        cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
+        cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
+        cfg.add(config.Scope.application, "mechanic", "car.params", {})
+        cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
+        cfg.add(config.Scope.application, "race", "user.tag", "")
+        cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        index = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))
+        challenge = track.Challenge(name="unittest", schedule=[index], default=True)
+        t = track.Track("unittest", "unittest-track", challenges=[challenge])
+
+        store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
+        store.add_meta_info(metrics.MetaInfoScope.node, "rally-node-0", "node_name", "rally-node-0")
+
+        store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
+        # ensure this value will be filtered as it does not belong to our node
+        store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
+
+        stats = metrics.calculate_system_results(store, "rally-node-0")
+
+        del store
+
+        self.assertEqual([
+            {
+                "node": "rally-node-0",
+                "name": "index_size",
+                "value": 2048
+            }
+        ], stats.node_metrics)
 
 
 def select(l, name, operation=None, job=None, node=None):
@@ -1449,7 +1496,7 @@ def select(l, name, operation=None, job=None, node=None):
     return None
 
 
-class StatsTests(TestCase):
+class GlobalStatsTests(TestCase):
     def test_as_flat_list(self):
         d = {
             "op_metrics": [
@@ -1496,16 +1543,6 @@ class StatsTests(TestCase):
                     "error_rate": 0.1
                 }
             ],
-            "node_metrics": [
-                {
-                    "node": "rally-node-0",
-                    "startup_time": 3.4
-                },
-                {
-                    "node": "rally-node-1",
-                    "startup_time": 4.2
-                }
-            ],
             "ml_processing_time": [
                 {
                     "job": "job_1",
@@ -1545,7 +1582,7 @@ class StatsTests(TestCase):
             "flush_count": 0
         }
 
-        s = metrics.Stats(d)
+        s = metrics.GlobalStats(d)
         metric_list = s.as_flat_list()
         self.assertEqual({
             "name": "throughput",
@@ -1646,22 +1683,6 @@ class StatsTests(TestCase):
         }, select(metric_list, "error_rate", operation="search"))
 
         self.assertEqual({
-            "node": "rally-node-0",
-            "name": "startup_time",
-            "value": {
-                "single": 3.4
-            }
-        }, select(metric_list, "startup_time", node="rally-node-0"))
-
-        self.assertEqual({
-            "node": "rally-node-1",
-            "name": "startup_time",
-            "value": {
-                "single": 4.2
-            }
-        }, select(metric_list, "startup_time", node="rally-node-1"))
-
-        self.assertEqual({
             "name": "ml_processing_time",
             "job": "job_1",
             "value": {
@@ -1753,3 +1774,92 @@ class StatsTests(TestCase):
                 "single": 0
             }
         }, select(metric_list, "flush_count"))
+
+
+class SystemStatsTests(TestCase):
+    def test_as_flat_list(self):
+        d = {
+            "node_metrics": [
+                {
+                    "node": "rally-node-0",
+                    "name": "startup_time",
+                    "value": 3.4
+                },
+                {
+                    "node": "rally-node-1",
+                    "name": "startup_time",
+                    "value": 4.2
+                },
+                {
+                    "node": "rally-node-0",
+                    "name": "index_size",
+                    "value": 300 * 1024 * 1024
+                },
+                {
+                    "node": "rally-node-1",
+                    "name": "index_size",
+                    "value": 302 * 1024 * 1024
+                },
+                {
+                    "node": "rally-node-0",
+                    "name": "bytes_written",
+                    "value": 817 * 1024 * 1024
+                },
+                {
+                    "node": "rally-node-1",
+                    "name": "bytes_written",
+                    "value": 833 * 1024 * 1024
+                },
+            ],
+        }
+
+        s = metrics.SystemStats(d)
+        metric_list = s.as_flat_list()
+
+        self.assertEqual({
+            "node": "rally-node-0",
+            "name": "startup_time",
+            "value": {
+                "single": 3.4
+            }
+        }, select(metric_list, "startup_time", node="rally-node-0"))
+
+        self.assertEqual({
+            "node": "rally-node-1",
+            "name": "startup_time",
+            "value": {
+                "single": 4.2
+            }
+        }, select(metric_list, "startup_time", node="rally-node-1"))
+
+        self.assertEqual({
+            "node": "rally-node-0",
+            "name": "index_size",
+            "value": {
+                "single": 300 * 1024 * 1024
+            }
+        }, select(metric_list, "index_size", node="rally-node-0"))
+
+        self.assertEqual({
+            "node": "rally-node-1",
+            "name": "index_size",
+            "value": {
+                "single": 302 * 1024 * 1024
+            }
+        }, select(metric_list, "index_size", node="rally-node-1"))
+
+        self.assertEqual({
+            "node": "rally-node-0",
+            "name": "bytes_written",
+            "value": {
+                "single": 817 * 1024 * 1024
+            }
+        }, select(metric_list, "bytes_written", node="rally-node-0"))
+
+        self.assertEqual({
+            "node": "rally-node-1",
+            "name": "bytes_written",
+            "value": {
+                "single": 833 * 1024 * 1024
+            }
+        }, select(metric_list, "bytes_written", node="rally-node-1"))
