@@ -163,6 +163,7 @@ class ProcessLauncher:
             telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
             telemetry.JitCompiler(node_telemetry_dir),
             telemetry.Gc(node_telemetry_dir, java_major_version),
+            telemetry.Heapdump(node_telemetry_dir),
             telemetry.DiskIo(self.metrics_store, node_count_on_host, node_telemetry_dir, node_name),
             telemetry.IndexSize(data_paths, self.metrics_store),
             telemetry.StartupTime(self.metrics_store),

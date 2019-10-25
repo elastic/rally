@@ -21,6 +21,7 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    jit             JIT Compiler Profiler  Enables JIT compiler logs.
    gc              GC log                 Enables GC logs.
    jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+   heapdump        Heap Dump              Captures a heap dump.
    node-stats      Node Stats             Regularly samples node stats
    recovery-stats  Recovery Stats         Regularly samples shard recovery stats
    ccr-stats       CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
@@ -65,6 +66,11 @@ gc
 --
 
 The ``gc`` telemetry device enables GC logs for the benchmark candidate. You can use tools like `GCViewer <https://github.com/chewiebug/GCViewer>`_ to analyze the GC logs.
+
+heapdump
+--------
+
+The ``heapdump`` telemetry device will capture a heap dump after a benchmark has finished and right before the node is shutdown.
 
 node-stats
 ----------
