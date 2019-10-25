@@ -23,6 +23,8 @@ import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
 
+import elasticsearch
+
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
@@ -1027,7 +1029,19 @@ class CreateMlDatafeed(Runner):
     def __call__(self, es, params):
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
-        es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+        try:
+            es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+        except elasticsearch.TransportError as e:
+            # fallback to old path
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "PUT",
+                    "/_xpack/ml/datafeeds/" + datafeed_id,
+                    params=params,
+                    body=body,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "create-ml-datafeed"
@@ -1041,8 +1055,19 @@ class DeleteMlDatafeed(Runner):
     def __call__(self, es, params):
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
-        # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
-        es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+        try:
+            # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
+            es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "DELETE",
+                    "/_xpack/ml/datafeeds/" + datafeed_id,
+                    params=params,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "delete-ml-datafeed"
@@ -1059,7 +1084,19 @@ class StartMlDatafeed(Runner):
         start = params.get("start")
         end = params.get("end")
         timeout = params.get("timeout")
-        es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+        try:
+            es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "POST",
+                    "/_xpack/ml/datafeeds/%s/_start" % datafeed_id,
+                    params=params,
+                    body=body,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "start-ml-datafeed"
@@ -1074,7 +1111,18 @@ class StopMlDatafeed(Runner):
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
-        es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+        try:
+            es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "POST",
+                    "/_xpack/ml/datafeeds/%s/_stop" % datafeed_id,
+                    params=params
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "stop-ml-datafeed"
@@ -1088,7 +1136,19 @@ class CreateMlJob(Runner):
     def __call__(self, es, params):
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
-        es.xpack.ml.put_job(job_id=job_id, body=body)
+        try:
+            es.xpack.ml.put_job(job_id=job_id, body=body)
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "PUT",
+                    "/_xpack/ml/anomaly_detectors/" + job_id,
+                    params=params,
+                    body=body,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "create-ml-job"
@@ -1103,7 +1163,18 @@ class DeleteMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
-        es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+        try:
+            es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "DELETE",
+                    "/_xpack/ml/anomaly_detectors/" + job_id,
+                    params=params,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "delete-ml-job"
@@ -1116,7 +1187,18 @@ class OpenMlJob(Runner):
 
     def __call__(self, es, params):
         job_id = mandatory(params, "job-id", self)
-        es.xpack.ml.open_job(job_id=job_id)
+        try:
+            es.xpack.ml.open_job(job_id=job_id)
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "POST",
+                    "/_xpack/ml/anomaly_detectors/%s/_open" % job_id,
+                    params=params,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "open-ml-job"
@@ -1131,7 +1213,18 @@ class CloseMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
-        es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+        try:
+            es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                es.transport.perform_request(
+                    "POST",
+                    "/_xpack/ml/anomaly_detectors/%s/_close" % job_id,
+                    params=params,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "close-ml-job"

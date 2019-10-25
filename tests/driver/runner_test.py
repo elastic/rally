@@ -1750,6 +1750,26 @@ class CreateMlDatafeedTests(TestCase):
         r(es, params)
 
         es.xpack.ml.put_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_ml_datafeed_fallback(self, es):
+        es.xpack.ml.put_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+        datafeed_id = "some-data-feed"
+        body = {
+                "job_id": "total-requests",
+                "indices": ["server-metrics"]
+            }
+        params = {
+            "datafeed-id": datafeed_id,
+            "body": body
+        }
+
+        r = runner.CreateMlDatafeed()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("PUT",
+                                                             "/_xpack/ml/datafeeds/" + datafeed_id,
+                                                             body=body,
+                                                             params=params)
 
 
 class DeleteMlDatafeedTests(TestCase):
