@@ -47,6 +47,7 @@ class BareProvisionerTests(TestCase):
             node_name="rally-node-0",
             node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
+            all_node_names=["rally-node-0", "rally-node-1"],
             ip="10.17.22.23",
             http_port=9200)
 
@@ -81,6 +82,7 @@ class BareProvisionerTests(TestCase):
             "http_port": "9200-9300",
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
+            "all_node_names": "[\"rally-node-0\",\"rally-node-1\"]",
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-5.0.0"
         }, config_vars)
@@ -152,6 +154,7 @@ class BareProvisionerTests(TestCase):
             node_name="rally-node-0",
             node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
+            all_node_names=["rally-node-0", "rally-node-1"],
             ip="10.17.22.23",
             http_port=9200)
 
@@ -195,6 +198,7 @@ class BareProvisionerTests(TestCase):
             "http_port": "9200-9300",
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
+            "all_node_names": "[\"rally-node-0\",\"rally-node-1\"]",
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-5.0.0",
             "plugin_name": "x-pack-security",
@@ -229,6 +233,7 @@ class BareProvisionerTests(TestCase):
             node_name="rally-node-0",
             node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
             all_node_ips=["10.17.22.22", "10.17.22.23"],
+            all_node_names=["rally-node-0", "rally-node-1"],
             ip="10.17.22.23",
             http_port=9200)
 
@@ -272,6 +277,7 @@ class BareProvisionerTests(TestCase):
             "http_port": "9200-9300",
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
+            "all_node_names": "[\"rally-node-0\",\"rally-node-1\"]",
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-6.3.0",
             "plugin_name": "x-pack-security",
@@ -304,6 +310,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips={"127.0.0.1"},
+                                                       all_node_names=["rally-node-0"],
                                                        ip="127.0.0.1",
                                                        http_port=9200,
                                                        node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest")
@@ -324,6 +331,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips={"127.0.0.1"},
+                                                       all_node_names=["rally-node-0"],
                                                        ip="127.0.0.1",
                                                        http_port=9200,
                                                        node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest")
@@ -344,6 +352,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
+                                                       all_node_names=["rally-node-0", "rally-node-1"],
                                                        ip="10.17.22.23",
                                                        http_port=9200,
                                                        node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest")
@@ -362,6 +371,7 @@ class ElasticsearchInstallerTests(TestCase):
             "http_port": "9200-9300",
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
+            "all_node_names": "[\"rally-node-0\",\"rally-node-1\"]",
             "minimum_master_nodes": 2,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT"
         }, installer.variables)
@@ -380,6 +390,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
+                                                       all_node_names=["rally-node-0", "rally-node-1"],
                                                        ip="10.17.22.23",
                                                        http_port=9200,
                                                        node_root_dir="~/.rally/benchmarks/races/unittest")
@@ -398,6 +409,7 @@ class ElasticsearchInstallerTests(TestCase):
             "http_port": "9200-9300",
             "transport_port": "9300-9400",
             "all_node_ips": "[\"10.17.22.22\",\"10.17.22.23\"]",
+            "all_node_names": "[\"rally-node-0\",\"rally-node-1\"]",
             "minimum_master_nodes": 2,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT"
         }, installer.variables)
@@ -412,6 +424,7 @@ class ElasticsearchInstallerTests(TestCase):
                                                        java_home="/usr/local/javas/java8",
                                                        node_name="rally-node-0",
                                                        all_node_ips=["10.17.22.22", "10.17.22.23"],
+                                                       all_node_names=["rally-node-0", "rally-node-1"],
                                                        ip="10.17.22.23",
                                                        http_port=9200,
                                                        node_root_dir="~/.rally/benchmarks/races/unittest",
