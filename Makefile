@@ -85,11 +85,16 @@ python-caches-clean:
 tox-env-clean:
 	rm -rf .tox
 
+lint: check-venv
+	@find esbench tests -name "*.py" -exec pylint -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
+
 docs: check-venv
 	cd docs && $(MAKE) html
 
 test: check-venv
 	$(VEPYTHON) setup.py test
+
+precommit: lint test
 
 it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox
