@@ -86,7 +86,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	@find esbench tests -name "*.py" -exec pylint -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@find rally tests -name "*.py" -exec pylint -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
 
 docs: check-venv
 	cd docs && $(MAKE) html
