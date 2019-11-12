@@ -1591,7 +1591,7 @@ class NoopResultsStore:
         pass
 
 
-# helper function for encoding and decoding float keys so that the Elasticsearch metrics store can safe it.
+# helper function for encoding and decoding float keys so that the Elasticsearch metrics store can save them.
 def encode_float_key(k):
     # ensure that the key is indeed a float to unify the representation (e.g. 50 should be represented as "50_0")
     return str(float(k)).replace(".", "_")
