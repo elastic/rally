@@ -618,6 +618,15 @@ class NodeStats(Runner):
         return "node-stats"
 
 
+def search_type_fallback(es, doc_type, index, body, params):
+    if doc_type and not index:
+        index = "_all"
+    path = "/%s/%s/_search" % (index, doc_type)
+    return es.transport.perform_request(
+        "GET", path, params=params, body=body
+    )
+
+
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -665,11 +674,15 @@ class Query(Runner):
 
     def request_body_query(self, es, params):
         request_params = self._default_request_params(params)
-        r = es.search(
-            index=params.get("index", "_all"),
-            doc_type=params.get("type"),
-            body=mandatory(params, "body", self),
-            params=request_params)
+        index = params.get("index", "_all")
+        body = mandatory(params, "body", self)
+        doc_type = params.get("type")
+        params = request_params
+
+        if doc_type is not None:
+            r = search_type_fallback(es, doc_type, index, body, params)
+        else:
+            r = es.search(index=index, body=body, params=params)
         hits = r["hits"]["total"]
         if isinstance(hits, dict):
             hits_total = hits["value"]
@@ -699,15 +712,20 @@ class Query(Runner):
 
         for page in range(total_pages):
             if page == 0:
-                r = es.search(
-                    index=params.get("index", "_all"),
-                    doc_type=params.get("type"),
-                    body=mandatory(params, "body", self),
-                    sort="_doc",
-                    scroll="10s",
-                    size=size,
-                    params=request_params
-                )
+                index = params.get("index", "_all")
+                body = mandatory(params, "body", self)
+                sort = "_doc"
+                scroll = "10s"
+                size = size
+                doc_type = params.get("type")
+                params = request_params
+                if doc_type is not None:
+                    params["sort"] = sort
+                    params["scroll"] = scroll
+                    params["size"] = size
+                    r = search_type_fallback(es, doc_type, index, body, params)
+                else:
+                    r = es.search(index=index, body=body, params=params, sort=sort, scroll=scroll, size=size)
                 # This should only happen if we concurrently create an index and start searching
                 self.scroll_id = r.get("_scroll_id", None)
             else:

@@ -58,19 +58,20 @@ class StartEngine:
         self.port = port
         self.node_id = node_id
 
-    def for_nodes(self, all_node_ips=None, ip=None, port=None, node_ids=None):
+    def for_nodes(self, all_node_ips=None, all_node_ids=None, ip=None, port=None, node_ids=None):
         """
 
         Creates a StartNodes instance for a concrete IP, port and their associated node_ids.
 
         :param all_node_ips: The IPs of all nodes in the cluster (including the current one).
+        :param all_node_ids: The numeric id of all nodes in the cluster (including the current one).
         :param ip: The IP to set.
         :param port: The port number to set.
         :param node_ids: A list of node id to set.
         :return: A corresponding ``StartNodes`` message with the specified IP, port number and node ids.
         """
         return StartNodes(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.build, self.distribution,
-                          self.external, self.docker, all_node_ips, ip, port, node_ids)
+                          self.external, self.docker, all_node_ips, all_node_ids, ip, port, node_ids)
 
 
 class EngineStarted:
@@ -97,7 +98,7 @@ class ResetRelativeTime:
 
 class StartNodes:
     def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker,
-                 all_node_ips, ip, port, node_ids):
+                 all_node_ips, all_node_ids, ip, port, node_ids):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.cluster_settings = cluster_settings
@@ -107,6 +108,7 @@ class StartNodes:
         self.external = external
         self.docker = docker
         self.all_node_ips = all_node_ips
+        self.all_node_ids = all_node_ids
         self.ip = ip
         self.port = port
         self.node_ids = node_ids
@@ -164,6 +166,13 @@ def extract_all_node_ips(ip_port_pairs):
     for ip, port in ip_port_pairs:
         all_node_ips.add(ip)
     return all_node_ips
+
+
+def extract_all_node_ids(all_nodes_by_host):
+    all_node_ids = set()
+    for node_ids_per_host in all_nodes_by_host.values():
+        all_node_ids.update(node_ids_per_host)
+    return all_node_ids
 
 
 def nodes_by_host(ip_port_pairs):
@@ -336,9 +345,11 @@ class Dispatcher(actor.RallyActor):
         self.remotes = defaultdict(list)
         all_ips_and_ports = to_ip_port(startmsg.hosts)
         all_node_ips = extract_all_node_ips(all_ips_and_ports)
+        all_nodes_by_host = nodes_by_host(all_ips_and_ports)
+        all_node_ids = extract_all_node_ids(all_nodes_by_host)
 
-        for (ip, port), node in nodes_by_host(all_ips_and_ports).items():
-            submsg = startmsg.for_nodes(all_node_ips, ip, port, node)
+        for (ip, port), node in all_nodes_by_host.items():
+            submsg = startmsg.for_nodes(all_node_ips, all_node_ids, ip, port, node)
             submsg.reply_to = sender
             if '127.0.0.1' == ip:
                 m = self.createActor(NodeMechanicActor,
@@ -433,8 +444,8 @@ class NodeMechanicActor(actor.RallyActor):
             metrics_store.open(ctx=msg.open_metrics_context)
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
 
-            self.mechanic = create(cfg, metrics_store, msg.all_node_ips, msg.cluster_settings, msg.sources, msg.build,
-                                   msg.distribution, msg.external, msg.docker)
+            self.mechanic = create(cfg, metrics_store, msg.all_node_ips, msg.all_node_ids, msg.cluster_settings,
+                                   msg.sources, msg.build, msg.distribution, msg.external, msg.docker)
             self.mechanic.start_engine()
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             self.send(getattr(msg, "reply_to", sender), NodesStarted())
@@ -492,7 +503,7 @@ def load_team(cfg, external):
     return car, plugins
 
 
-def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
+def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
            docker=False):
     races_root = paths.races_root(cfg)
     challenge_root_path = paths.race_root(cfg)
@@ -503,7 +514,7 @@ def create(cfg, metrics_store, all_node_ips, cluster_settings=None, sources=Fals
         s = supplier.create(cfg, sources, distribution, build, challenge_root_path, car, plugins)
         p = []
         for node_id in node_ids:
-            p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, challenge_root_path, node_id))
+            p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, challenge_root_path, node_id))
         l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")

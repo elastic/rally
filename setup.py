@@ -46,7 +46,7 @@ long_description = str_from_file("README.rst")
 install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
-    "elasticsearch==6.2.0",
+    "elasticsearch==7.0.5",
     # License: BSD
     "psutil==5.4.0",
     # License: MIT
@@ -86,7 +86,9 @@ develop_require = [
     "sphinx_rtd_theme==0.4.3",
     "twine==1.15.0",
     "wheel==0.33.6",
-    "github3.py==1.3.0"
+    "github3.py==1.3.0",
+    "pylint==2.4.2",
+    "pylint-quotes==0.2.1"
 ]
 
 # we call the tool rally, but it will be published as esrally on pypi

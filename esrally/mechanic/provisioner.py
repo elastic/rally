@@ -27,7 +27,7 @@ from esrally.mechanic import team, java_resolver
 from esrally.utils import console, io, process, versions
 
 
-def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_root, node_id):
+def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, target_root, node_id):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
@@ -36,10 +36,11 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, target_
 
     node_name = "%s-%d" % (node_name_prefix, node_id)
     node_root_dir = "%s/%s" % (target_root, node_name)
+    all_node_names = ["%s-%d" % (node_name_prefix, n) for n in all_node_ids]
 
     _, java_home = java_resolver.java_home(car, cfg)
     
-    es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port)
+    es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
@@ -219,7 +220,7 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, java_home, node_name, node_root_dir, all_node_ips, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
+    def __init__(self, car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port, hook_handler_class=team.BootstrapHookHandler):
         self.car = car
         self.java_home = java_home
         self.node_name = node_name
@@ -228,6 +229,7 @@ class ElasticsearchInstaller:
         self.node_log_dir = "%s/logs/server" % node_root_dir
         self.heap_dump_dir = "%s/heapdump" % node_root_dir
         self.all_node_ips = all_node_ips
+        self.all_node_names = all_node_names
         self.node_ip = ip
         self.http_port = http_port
         self.hook_handler = hook_handler_class(self.car)
@@ -278,6 +280,7 @@ class ElasticsearchInstaller:
             "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
             "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
             "all_node_ips": "[\"%s\"]" % "\",\"".join(self.all_node_ips),
+            "all_node_names": "[\"%s\"]" % "\",\"".join(self.all_node_names),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
             "minimum_master_nodes": len(self.all_node_ips),
             "install_root_path": self.es_home_path

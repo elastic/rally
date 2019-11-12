@@ -25,13 +25,14 @@ import tabulate
 
 from esrally import metrics, time, exceptions
 from esrally.metrics import MetaInfoScope
-from esrally.utils import io, sysstats, console, opts
+from esrally.utils import io, sysstats, console, opts, process
 
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
     devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
-                                                                               NodeStats, RecoveryStats, CcrStats]]
+                                                                               Heapdump, NodeStats, RecoveryStats,
+                                                                               CcrStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -241,6 +242,25 @@ class Gc(TelemetryDevice):
         else:
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
             return ["-Xlog:gc*=info,safepoint=info,age*=trace:file={}:utctime,uptimemillis,level,tags:filecount=0".format(log_file)]
+
+
+class Heapdump(TelemetryDevice):
+    internal = False
+    command = "heapdump"
+    human_name = "Heap Dump"
+    help = "Captures a heap dump."
+
+    def __init__(self, log_root):
+        super().__init__()
+        self.log_root = log_root
+
+    def detach_from_node(self, node, running):
+        if running:
+            heap_dump_file = os.path.join(self.log_root, "heap_at_exit_{}.hprof".format(node.pid))
+            console.info("{}: Writing heap dump to [{}]".format(self.human_name, heap_dump_file), logger=self.logger)
+            cmd = "jmap -dump:format=b,file={} {}".format(heap_dump_file, node.pid)
+            if process.run_subprocess_with_logging(cmd):
+                self.logger.warning("Could not write heap dump to [%s]", heap_dump_file)
 
 
 class CcrStats(TelemetryDevice):
