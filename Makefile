@@ -108,6 +108,9 @@ it36: check-venv python-caches-clean tox-env-clean
 it37: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py37
 
+it38: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e py38
+
 benchmark: check-venv
 	$(VEPYTHON) setup.py pytest --addopts="-s benchmarks"
 
