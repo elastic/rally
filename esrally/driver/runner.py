@@ -23,8 +23,6 @@ import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
 
-import elasticsearch
-
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
@@ -1027,6 +1025,7 @@ class CreateMlDatafeed(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
         try:
@@ -1036,7 +1035,7 @@ class CreateMlDatafeed(Runner):
             if e.status_code == 400:
                 es.transport.perform_request(
                     "PUT",
-                    "/_xpack/ml/datafeeds/" + datafeed_id,
+                    "/_xpack/ml/datafeeds/%s" % datafeed_id,
                     params=params,
                     body=body,
                 )
@@ -1053,6 +1052,7 @@ class DeleteMlDatafeed(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
         try:
@@ -1063,7 +1063,7 @@ class DeleteMlDatafeed(Runner):
             if e.status_code == 400:
                 es.transport.perform_request(
                     "DELETE",
-                    "/_xpack/ml/datafeeds/" + datafeed_id,
+                    "/_xpack/ml/datafeeds/%s" %datafeed_id,
                     params=params,
                 )
             else:
@@ -1079,6 +1079,7 @@ class StartMlDatafeed(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = params.get("body")
         start = params.get("start")
@@ -1108,6 +1109,7 @@ class StopMlDatafeed(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
@@ -1134,6 +1136,7 @@ class CreateMlJob(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
         try:
@@ -1143,7 +1146,7 @@ class CreateMlJob(Runner):
             if e.status_code == 400:
                 es.transport.perform_request(
                     "PUT",
-                    "/_xpack/ml/anomaly_detectors/" + job_id,
+                    "/_xpack/ml/anomaly_detectors/%s" % job_id,
                     params=params,
                     body=body,
                 )
@@ -1160,6 +1163,7 @@ class DeleteMlJob(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
@@ -1170,7 +1174,7 @@ class DeleteMlJob(Runner):
             if e.status_code == 400:
                 es.transport.perform_request(
                     "DELETE",
-                    "/_xpack/ml/anomaly_detectors/" + job_id,
+                    "/_xpack/ml/anomaly_detectors/%s" % job_id,
                     params=params,
                 )
             else:
@@ -1186,6 +1190,7 @@ class OpenMlJob(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         job_id = mandatory(params, "job-id", self)
         try:
             es.xpack.ml.open_job(job_id=job_id)
@@ -1210,6 +1215,7 @@ class CloseMlJob(Runner):
     """
 
     def __call__(self, es, params):
+        import elasticsearch
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
