@@ -1750,6 +1750,7 @@ class CreateMlDatafeedTests(TestCase):
         r(es, params)
 
         es.xpack.ml.put_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
+
     @mock.patch("elasticsearch.Elasticsearch")
     def test_create_ml_datafeed_fallback(self, es):
         es.xpack.ml.put_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
@@ -1785,6 +1786,21 @@ class DeleteMlDatafeedTests(TestCase):
 
         es.xpack.ml.delete_datafeed.assert_called_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_delete_ml_datafeed_fallback(self, es):
+        es.xpack.ml.delete_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+        datafeed_id = "some-data-feed"
+        params = {
+            "datafeed-id": datafeed_id,
+        }
+
+        r = runner.DeleteMlDatafeed()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("DELETE",
+                                                             "/_xpack/ml/datafeeds/%s" % datafeed_id,
+                                                             params=params)
+
 
 class StartMlDatafeedTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1804,6 +1820,25 @@ class StartMlDatafeedTests(TestCase):
                                                            start=None,
                                                            end=None,
                                                            timeout=None)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_start_ml_datafeed_with_body_fallback(self, es):
+        es.xpack.ml.start_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+        body = {
+                "end": "now"
+            }
+        params = {
+            "datafeed-id": "some-data-feed",
+            "body": body
+        }
+
+        r = runner.StartMlDatafeed()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("POST",
+                                                             "/_xpack/ml/datafeeds/%s/_start" % params["datafeed-id"],
+                                                             body=body,
+                                                             params=params)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_start_ml_datafeed_with_params(self, es):
@@ -1840,6 +1875,22 @@ class StopMlDatafeedTests(TestCase):
                                                           force=params["force"],
                                                           timeout=params["timeout"])
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_stop_ml_datafeed_fallback(self, es):
+        es.xpack.ml.stop_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+        params = {
+            "datafeed-id": "some-data-feed",
+            "force": random.choice([False, True]),
+            "timeout": "5s"
+        }
+
+        r = runner.StopMlDatafeed()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("POST",
+                                                             "/_xpack/ml/datafeeds/%s/_stop" % params["datafeed-id"],
+                                                             params=params)
+
 
 class CreateMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1870,6 +1921,39 @@ class CreateMlJobTests(TestCase):
 
         es.xpack.ml.put_job.assert_called_once_with(job_id=params["job-id"], body=params["body"])
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_create_ml_job_fallback(self, es):
+        es.xpack.ml.put_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+        body = {
+                "description": "Total sum of requests",
+                "analysis_config": {
+                    "bucket_span": "10m",
+                    "detectors": [
+                        {
+                            "detector_description": "Sum of total",
+                            "function": "sum",
+                            "field_name": "total"
+                        }
+                    ]
+                },
+                "data_description": {
+                    "time_field": "timestamp",
+                    "time_format": "epoch_ms"
+                }
+            }
+        params = {
+            "job-id": "an-ml-job",
+            "body": body
+        }
+
+        r = runner.CreateMlJob()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("PUT",
+                                                             "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
+                                                             params=params,
+                                                             body=body)
+
 
 class DeleteMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1883,6 +1967,22 @@ class DeleteMlJobTests(TestCase):
         r(es, params)
 
         es.xpack.ml.delete_job.assert_called_once_with(job_id=job_id, force=False, ignore=[404])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_delete_ml_job_fallback(self, es):
+        es.xpack.ml.delete_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+
+        job_id = "an-ml-job"
+        params = {
+            "job-id": job_id
+        }
+
+        r = runner.DeleteMlJob()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("DELETE",
+                                                             "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
+                                                             params=params)
 
 
 class OpenMlJobTests(TestCase):
@@ -1898,6 +1998,22 @@ class OpenMlJobTests(TestCase):
 
         es.xpack.ml.open_job.assert_called_once_with(job_id=job_id)
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_open_ml_job_fallback(self, es):
+        es.xpack.ml.open_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+
+        job_id = "an-ml-job"
+        params = {
+            "job-id": job_id
+        }
+
+        r = runner.OpenMlJob()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("POST",
+                                                             "/_xpack/ml/anomaly_detectors/%s/_open" % params["job-id"],
+                                                             params=params)
+
 
 class CloseMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1912,6 +2028,23 @@ class CloseMlJobTests(TestCase):
         r(es, params)
 
         es.xpack.ml.close_job.assert_called_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_close_ml_job_fallback(self, es):
+        es.xpack.ml.close_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+
+        params = {
+            "job-id": "an-ml-job",
+            "force": random.choice([False, True]),
+            "timeout": "5s"
+        }
+
+        r = runner.CloseMlJob()
+        r(es, params)
+
+        es.transport.perform_request.assert_called_once_with("POST",
+                                                             "/_xpack/ml/anomaly_detectors/%s/_close" % params["job-id"],
+                                                             params=params)
 
 
 class RawRequestRunnerTests(TestCase):
