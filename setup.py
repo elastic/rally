@@ -54,7 +54,7 @@ install_requires = [
     # License: MIT
     "tabulate==0.8.1",
     # License: MIT
-    "jsonschema==2.5.1",
+    "jsonschema==3.1.1",
     # License: BSD
     # transitive dependency Markupsafe: BSD
     "Jinja2==2.10.1",
